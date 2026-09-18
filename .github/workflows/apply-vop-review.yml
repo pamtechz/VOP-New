@@ -40,7 +40,7 @@ jobs:
       - name: Lint source
         run: npm run lint
       - name: Regression tests
-        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts
+        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts
       - name: Commit verified source changes
         shell: bash
         run: |
