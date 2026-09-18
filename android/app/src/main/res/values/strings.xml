@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">VOP App</string>
-    <string name="title_activity_main">VOP App</string>
-    <string name="package_name">com.rvc.vopapp</string>
-    <string name="custom_url_scheme">com.rvc.vopapp</string>
+    <string name="app_name">Voice of Prophecy</string>
+    <string name="title_activity_main">Voice of Prophecy</string>
+    <string name="package_name">com.sda.vop</string>
+    <string name="custom_url_scheme">com.sda.vop</string>
 </resources>
