@@ -34,7 +34,7 @@ function validScore(score: number | undefined): score is number {
   return typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 100;
 }
 
-/** Legacy completion stores only lesson IDs. Duplicate IDs can grant false credit. */
+/** Legacy completion and grading keys must identify one item unambiguously. */
 function validateRequiredIds(guides: DiscoverGuide[]): string | undefined {
   const guideIds = new Set<string>();
   const lessonIds = new Set<string>();
@@ -52,6 +52,21 @@ function validateRequiredIds(guides: DiscoverGuide[]): string | undefined {
         return 'A required guide contains an unknown lesson or assessment type.';
       }
       lessonIds.add(lesson.id);
+    }
+  }
+
+  // The legacy store uses both bare guide IDs and `${guideId}:${testId}`.
+  // Distinct IDs can therefore still address the SAME stored score. Refuse to
+  // reuse that score rather than guessing which assessment it belongs to.
+  const scoreKeys = new Set<string>();
+  for (const guide of guides) {
+    for (const lesson of guide.lessons) {
+      if (lesson.type !== 'Test') continue;
+      const key = `${guide.id}:${lesson.id}`;
+      if (guideIds.has(key) || scoreKeys.has(key)) {
+        return 'Required assessments have ambiguous score identifiers. Assign distinct IDs before reporting progress.';
+      }
+      scoreKeys.add(key);
     }
   }
   return undefined;
