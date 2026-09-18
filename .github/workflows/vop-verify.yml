@@ -3,10 +3,9 @@ on:
   push:
     branches:
       - fix/reference-design-and-certification-integrity
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 concurrency:
-  group: vop-verify-${{ github.head_ref || github.ref }}
+  group: vop-verify-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -15,12 +14,25 @@ jobs:
     runs-on: [self-hosted, KASAINSTITUTE]
     timeout-minutes: 20
     steps:
+      # The shared Windows runner sometimes changes service accounts between
+      # runs. Never reuse a checkout potentially owned by another account.
       - uses: actions/checkout@v4
+        with:
+          path: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npm run lint
-      - run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts
+          cache-dependency-path: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}/package-lock.json
+      - name: Install locked dependencies
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm ci
+      - name: Typecheck and build
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run build
+      - name: Lint
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run lint
+      - name: Regression tests
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts
