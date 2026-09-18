@@ -18,6 +18,7 @@ export interface CurriculumProgress {
   totalItems: number;
   percent: number;
   certificateEligible: boolean;
+  configurationError?: string;
 }
 
 /** Only a single-test guide can reuse a historical aggregate score. */
@@ -32,21 +33,46 @@ function validScore(score: number | undefined): score is number {
 }
 
 /**
- * Derive display progress from the active language's administrator-selected
- * certificate guides; never trust stored completion counters for eligibility.
- * This is a local preview calculation, not authorization to issue a credential.
+ * The legacy completedLessons array contains only lesson IDs, without guide IDs.
+ * Reusing an ID across required guides can otherwise complete multiple lessons
+ * with a single stored event. Refuse eligibility until an administrator fixes it.
+ */
+function validateRequiredIds(guides: DiscoverGuide[]): string | undefined {
+  const guideIds = new Set<string>();
+  const lessonIds = new Set<string>();
+  for (const guide of guides) {
+    if (typeof guide.id !== 'string' || !guide.id.trim() || guideIds.has(guide.id)) {
+      return 'Required guides must have unique, nonempty identifiers.';
+    }
+    guideIds.add(guide.id);
+    if (!Array.isArray(guide.lessons)) return 'A required guide has no valid lesson collection.';
+    for (const lesson of guide.lessons) {
+      if (typeof lesson.id !== 'string' || !lesson.id.trim() || lessonIds.has(lesson.id)) {
+        return 'Required lessons must have unique, nonempty identifiers across the selected curriculum.';
+      }
+      lessonIds.add(lesson.id);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Display-only progress from the selected language's administrator-required
+ * guides. Never authorize official certificate issuance using browser records.
  */
 export function calculateCurriculumProgress(
   guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
+  const configurationError = validateRequiredIds(required);
   const completed = new Set(user.progress.completedLessons ?? []);
   const scores = user.progress.guideScores ?? {};
   const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100;
 
   const guideProgress = required.map(guide => {
-    const lessons = guide.lessons.filter(lesson => lesson.type === 'Lesson');
-    const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
+    const items = Array.isArray(guide.lessons) ? guide.lessons : [];
+    const lessons = items.filter(lesson => lesson.type === 'Lesson');
+    const tests = items.filter(lesson => lesson.type === 'Test');
     const finishedLessons = lessons.filter(lesson => completed.has(lesson.id)).length;
     const passedTests = tests.filter(test => {
       if (!validThreshold) return false;
@@ -62,7 +88,7 @@ export function calculateCurriculumProgress(
       passedTests,
       totalTests: tests.length,
       percent: total ? Math.round(done * 100 / total) : 0,
-      qualified: validThreshold && lessons.length > 0 && tests.length > 0 && done === total,
+      qualified: !configurationError && validThreshold && lessons.length > 0 && tests.length > 0 && done === total,
     };
   });
 
@@ -76,16 +102,18 @@ export function calculateCurriculumProgress(
     completedItems,
     totalItems,
     percent: totalItems ? Math.round(completedItems * 100 / totalItems) : 0,
-    certificateEligible: validThreshold && required.length > 0 && completedGuides === required.length,
+    certificateEligible: !configurationError && validThreshold && required.length > 0 && completedGuides === required.length,
+    configurationError,
   };
 }
 
-/** A display-only mean of actual required assessment marks, not the last test score. */
+/** A display-only mean of actual required assessment marks, not the last result. */
 export function calculateCurriculumAverageScore(
   guides: DiscoverGuide[], user: User, language: LanguageCode,
 ): number | null {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  if (!required.length || required.some(guide => !guide.lessons.some(lesson => lesson.type === 'Test'))) return null;
+  if (!required.length || validateRequiredIds(required) ||
+      required.some(guide => !guide.lessons.some(lesson => lesson.type === 'Test'))) return null;
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
     .filter(lesson => lesson.type === 'Test')
