@@ -2,7 +2,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 /** One-shot source migration: assert every original anchor before writing any file. */
 const pending = new Map();
-const load = path => pending.get(path) ?? readFileSync(path, 'utf8');
+// Windows checkouts can use CRLF. Match source anchors against normalized LF
+// in memory, then write only the three files that passed every guard.
+const load = path => (pending.get(path) ?? readFileSync(path, 'utf8')).replace(/\r\n/g, '\n');
 const replace = (source, before, after, name) => {
   if (!source.includes(before)) throw new Error(`Missing expected source anchor: ${name}`);
   if (source.indexOf(before) !== source.lastIndexOf(before)) throw new Error(`Ambiguous source anchor: ${name}`);
