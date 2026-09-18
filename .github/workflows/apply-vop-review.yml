@@ -42,14 +42,21 @@ jobs:
       - name: Regression tests
         run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts
       - name: Commit verified source changes
-        shell: bash
+        shell: powershell
         run: |
           git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git add src/services/storage.ts src/pages/ProfilePage.tsx src/pages/AdminPage.tsx src/types/index.ts
-          if git diff --cached --quiet; then
-            echo 'No changes to commit.'
-          else
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $changed = @(git diff --cached --name-only)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($changed.Count -eq 0) {
+            Write-Output 'No changes to commit.'
+          } else {
             git commit -m 'Apply verified VOP progress and configuration corrections'
-            git push origin HEAD:fix/reference-design-and-certification-integrity
-          fi
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git push origin HEAD:refs/heads/fix/reference-design-and-certification-integrity
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
