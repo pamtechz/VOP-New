@@ -12,10 +12,10 @@ function findUnambiguousItem(
   type: Lesson['type'],
 ): Lesson | null {
   const selectedGuides = guides.filter(guide => guide.language === language && guide.id === guideId);
-  if (selectedGuides.length !== 1) return null;
+  if (selectedGuides.length !== 1 || !Array.isArray(selectedGuides[0].lessons)) return null;
   const matches = guides.filter(guide => guide.language === language)
     .flatMap(guide => Array.isArray(guide.lessons) ? guide.lessons : [])
-    .filter(lesson => lesson.id === lessonId);
+    .filter(lesson => lesson?.id === lessonId);
   if (matches.length !== 1 || matches[0].type !== type) return null;
   return selectedGuides[0].lessons.some(lesson => lesson === matches[0]) ? matches[0] : null;
 }
