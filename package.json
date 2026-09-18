@@ -10,10 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "8.5.2",
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
     "canvas-confetti": "^1.9.4",
+    "firebase": "12.19.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^1.47.0",
     "react": "^19.2.8",
