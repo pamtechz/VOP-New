@@ -23,9 +23,10 @@ test('does not borrow an approval from an unrelated guide or candidate', () => {
   assert.equal(canShowLocalCertificatePreview(completed, [{ ...approval, candidateId: 'other' }], candidate), false);
 });
 
-test('undated or rejected approvals cannot authorize a preview', () => {
+test('undated, future-dated or rejected approvals cannot authorize a preview', () => {
   assert.equal(canShowLocalCertificatePreview(completed, [{ ...approval, approvedAt: undefined }], candidate), false);
   assert.equal(canShowLocalCertificatePreview(completed, [{ ...approval, approvedAt: 'bad date' }], candidate), false);
+  assert.equal(canShowLocalCertificatePreview(completed, [{ ...approval, approvedAt: '2999-01-01T00:00:00Z' }], candidate), false);
   assert.equal(canShowLocalCertificatePreview(completed, [{ ...approval, status: 'rejected' }], candidate), false);
 });
 
@@ -33,4 +34,9 @@ test('a user graduation flag and required curriculum are both mandatory', () => 
   assert.equal(canShowLocalCertificatePreview({ ...completed, certificateEligible: false }, [approval], candidate), false);
   assert.equal(canShowLocalCertificatePreview({ ...completed, guides: [] }, [approval], candidate), false);
   assert.equal(canShowLocalCertificatePreview(completed, [approval], { ...candidate, information: { ...candidate.information, graduated: false } }), false);
+});
+
+test('configuration errors and duplicate required guide IDs block preview even if eligibility is stale', () => {
+  assert.equal(canShowLocalCertificatePreview({ ...completed, configurationError: 'Invalid assessment.' }, [approval], candidate), false);
+  assert.equal(canShowLocalCertificatePreview({ ...completed, guides: [{ guideId: 'required-guide' }, { guideId: 'required-guide' }] }, [approval], candidate), false);
 });
