@@ -1,4 +1,5 @@
 import type { DiscoverGuide, User, LanguageCode, Lesson } from '../types';
+import { isQuizConfigured } from './quiz';
 
 export interface GuideProgress {
   guideId: string;
@@ -32,11 +33,7 @@ function validScore(score: number | undefined): score is number {
   return typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 100;
 }
 
-/**
- * The legacy completedLessons array contains only lesson IDs, without guide IDs.
- * Reusing an ID across required guides can otherwise complete multiple lessons
- * with a single stored event. Refuse eligibility until an administrator fixes it.
- */
+/** Legacy completion stores only lesson IDs. Duplicate IDs can grant false credit. */
 function validateRequiredIds(guides: DiscoverGuide[]): string | undefined {
   const guideIds = new Set<string>();
   const lessonIds = new Set<string>();
@@ -56,6 +53,17 @@ function validateRequiredIds(guides: DiscoverGuide[]): string | undefined {
   return undefined;
 }
 
+/** All required test questions and answer keys must remain valid after edits. */
+function validateRequiredQuizzes(guides: DiscoverGuide[]): string | undefined {
+  for (const guide of guides) {
+    const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
+    if (tests.some(test => !isQuizConfigured(test.questions ?? []))) {
+      return 'A required assessment has missing or invalid questions or answer keys.';
+    }
+  }
+  return undefined;
+}
+
 /**
  * Display-only progress from the selected language's administrator-required
  * guides. Never authorize official certificate issuance using browser records.
@@ -64,7 +72,7 @@ export function calculateCurriculumProgress(
   guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  const configurationError = validateRequiredIds(required);
+  const configurationError = validateRequiredIds(required) ?? validateRequiredQuizzes(required);
   const completed = new Set(user.progress.completedLessons ?? []);
   const scores = user.progress.guideScores ?? {};
   const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100;
@@ -75,7 +83,7 @@ export function calculateCurriculumProgress(
     const tests = items.filter(lesson => lesson.type === 'Test');
     const finishedLessons = lessons.filter(lesson => completed.has(lesson.id)).length;
     const passedTests = tests.filter(test => {
-      if (!validThreshold) return false;
+      if (!validThreshold || !isQuizConfigured(test.questions ?? [])) return false;
       const score = getTestScore(guide, test, scores);
       return validScore(score) && score >= passThreshold;
     }).length;
@@ -112,7 +120,7 @@ export function calculateCurriculumAverageScore(
   guides: DiscoverGuide[], user: User, language: LanguageCode,
 ): number | null {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  if (!required.length || validateRequiredIds(required) ||
+  if (!required.length || validateRequiredIds(required) || validateRequiredQuizzes(required) ||
       required.some(guide => !guide.lessons.some(lesson => lesson.type === 'Test'))) return null;
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
