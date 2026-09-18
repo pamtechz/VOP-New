@@ -1,4 +1,4 @@
-import type { DiscoverGuide, User } from '../types';
+import type { DiscoverGuide, User, LanguageCode } from '../types';
 
 export interface GuideProgress {
   guideId: string;
@@ -20,25 +20,24 @@ export interface CurriculumProgress {
   certificateEligible: boolean;
 }
 
-/** One source of truth for account, menu, guide and certificate progress. */
+/** Derived progress for the active language, never cached user-facing counters. */
 export function calculateCurriculumProgress(
-  guides: DiscoverGuide[],
-  user: User,
-  passThreshold: number,
+  guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
-  const eligibleGuides = guides.filter(guide => guide.certificateEligible);
+  const eligibleGuides = guides.filter(guide => guide.certificateEligible && guide.language === language);
   const completed = new Set(user.progress.completedLessons ?? []);
   const scores = user.progress.guideScores ?? {};
   const threshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100
     ? passThreshold
-    : 100; // Invalid settings must never accidentally make a certificate easier to obtain.
+    : 100; // Invalid settings cannot accidentally make certificates easier to obtain.
 
   const guideProgress = eligibleGuides.map(guide => {
     const lessons = guide.lessons.filter(lesson => lesson.type === 'Lesson');
     const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
     const finishedLessons = lessons.filter(lesson => completed.has(lesson.id)).length;
-    // Scores are currently stored per guide, not per test. Multiple tests cannot be
-    // certified from a single score: require a future per-test score record.
+    // The existing schema stores a single score per guide. It cannot prove
+    // passing multiple tests, so multi-test guides remain ineligible until
+    // individual test results are stored and verified.
     const passedTests = tests.length === 1 && Number.isFinite(scores[guide.id]) && scores[guide.id] >= threshold ? 1 : 0;
     const done = finishedLessons + passedTests;
     const total = lessons.length + tests.length;
