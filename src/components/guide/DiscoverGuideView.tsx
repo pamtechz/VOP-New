@@ -12,11 +12,14 @@ interface DiscoverGuideViewProps {
   onOpenCertificate: () => void;
 }
 
-/** The lean, numbered vertical lesson roadmap in the reference Android screenshots. */
+/**
+ * The reference Android timeline. The administrator's published lessons define
+ * the available content. Do not invent a sequential lock without configurable
+ * prerequisites; that gate previously stranded guides containing several tests.
+ */
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   guide, currentUser, onBack, onSelectLesson, onOpenCertificate,
 }) => {
-  const completed = new Set(currentUser.progress.completedLessons ?? []);
   const { certificateEligible } = calculateCurriculumProgress(
     getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,
   );
@@ -39,30 +42,22 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
           <p>No lessons have been published for this guide.</p>
         ) : (
           <ol className="vop-timeline">
-            {guide.lessons.map((lesson, index) => {
-              const isTest = lesson.type === 'Test';
-              const previous = guide.lessons[index - 1];
-              const canOpen = index === 0 || completed.has(previous.id) ||
-                (previous.type === 'Test' && Number.isFinite(currentUser.progress.guideScores?.[guide.id]));
-              return (
-                <li className="vop-step" key={lesson.id}>
-                  <span className="vop-step-marker" aria-hidden="true">
-                    {isTest ? <Trophy size={18} color="#f7c52b" /> : index}
-                  </span>
-                  <button
-                    className="vop-step-copy"
-                    type="button"
-                    onClick={() => onSelectLesson(lesson)}
-                    disabled={!canOpen}
-                    aria-label={`${lesson.lessonNumber} ${lesson.type}: ${lesson.title}${canOpen ? '' : ', locked'}`}
-                    style={{ opacity: canOpen ? 1 : 0.55, cursor: canOpen ? 'pointer' : 'not-allowed' }}
-                  >
-                    <span className="vop-step-label">{lesson.lessonNumber} {lesson.type.toUpperCase()}</span>
-                    <span className="vop-step-title">{lesson.title}</span>
-                  </button>
-                </li>
-              );
-            })}
+            {guide.lessons.map((lesson, index) => (
+              <li className="vop-step" key={lesson.id}>
+                <span className="vop-step-marker" aria-hidden="true">
+                  {lesson.type === 'Test' ? <Trophy size={18} color="#f7c52b" /> : index}
+                </span>
+                <button
+                  className="vop-step-copy"
+                  type="button"
+                  onClick={() => onSelectLesson(lesson)}
+                  aria-label={`${lesson.lessonNumber} ${lesson.type}: ${lesson.title}`}
+                >
+                  <span className="vop-step-label">{lesson.lessonNumber} {lesson.type.toUpperCase()}</span>
+                  <span className="vop-step-title">{lesson.title}</span>
+                </button>
+              </li>
+            ))}
           </ol>
         )}
       </div>
