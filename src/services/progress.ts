@@ -1,5 +1,6 @@
 import type { DiscoverGuide, User, LanguageCode, Lesson } from '../types';
 import { isQuizConfigured } from './quiz.ts';
+import { isLessonConfigured } from './lesson.ts';
 
 export interface GuideProgress {
   guideId: string;
@@ -44,10 +45,23 @@ function validateRequiredIds(guides: DiscoverGuide[]): string | undefined {
     guideIds.add(guide.id);
     if (!Array.isArray(guide.lessons)) return 'A required guide has no valid lesson collection.';
     for (const lesson of guide.lessons) {
-      if (typeof lesson.id !== 'string' || !lesson.id.trim() || lessonIds.has(lesson.id)) {
+      if (!lesson || typeof lesson.id !== 'string' || !lesson.id.trim() || lessonIds.has(lesson.id)) {
         return 'Required lessons must have unique, nonempty identifiers across the selected curriculum.';
       }
+      if (lesson.type !== 'Lesson' && lesson.type !== 'Test') {
+        return 'A required guide contains an unknown lesson or assessment type.';
+      }
       lessonIds.add(lesson.id);
+    }
+  }
+  return undefined;
+}
+
+/** A blank study page must not earn course credit, even if its ID was completed before an edit. */
+function validateRequiredLessons(guides: DiscoverGuide[]): string | undefined {
+  for (const guide of guides) {
+    if (guide.lessons.some(lesson => lesson.type === 'Lesson' && !isLessonConfigured(lesson))) {
+      return 'A required lesson has missing or invalid study content.';
     }
   }
   return undefined;
@@ -72,7 +86,7 @@ export function calculateCurriculumProgress(
   guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  const configurationError = validateRequiredIds(required) ?? validateRequiredQuizzes(required);
+  const configurationError = validateRequiredIds(required) ?? validateRequiredLessons(required) ?? validateRequiredQuizzes(required);
   const completed = new Set(user.progress.completedLessons ?? []);
   const scores = user.progress.guideScores ?? {};
   const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100;
@@ -81,7 +95,7 @@ export function calculateCurriculumProgress(
     const items = Array.isArray(guide.lessons) ? guide.lessons : [];
     const lessons = items.filter(lesson => lesson.type === 'Lesson');
     const tests = items.filter(lesson => lesson.type === 'Test');
-    const finishedLessons = lessons.filter(lesson => completed.has(lesson.id)).length;
+    const finishedLessons = lessons.filter(lesson => isLessonConfigured(lesson) && completed.has(lesson.id)).length;
     const passedTests = tests.filter(test => {
       if (!validThreshold || !isQuizConfigured(test.questions ?? [])) return false;
       const score = getTestScore(guide, test, scores);
@@ -120,7 +134,8 @@ export function calculateCurriculumAverageScore(
   guides: DiscoverGuide[], user: User, language: LanguageCode,
 ): number | null {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  if (!required.length || validateRequiredIds(required) || validateRequiredQuizzes(required) ||
+  if (!required.length || validateRequiredIds(required) || validateRequiredLessons(required) ||
+      validateRequiredQuizzes(required) ||
       required.some(guide => !guide.lessons.some(lesson => lesson.type === 'Test'))) return null;
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
