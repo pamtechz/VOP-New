@@ -18,8 +18,10 @@ export function isQuizConfigured(questions: Question[]): boolean {
   if (!Array.isArray(questions) || questions.length === 0) return false;
   const keys = new Set<string>();
   for (const question of questions) {
-    if (!isQuestionConfigured(question) || keys.has(question.key)) return false;
-    keys.add(question.key);
+    if (!isQuestionConfigured(question)) return false;
+    const key = question.key.trim();
+    if (keys.has(key)) return false;
+    keys.add(key);
   }
   return true;
 }
