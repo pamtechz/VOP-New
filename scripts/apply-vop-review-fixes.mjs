@@ -41,7 +41,7 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
   const user = getCurrentUser();
   const updatedScores = {
     ...(user.progress.guideScores || {}),
-    [\`\${guideId}:\${lessonId}\`]: scorePercentage,
+    [guideId + ':' + lessonId]: scorePercentage,
     // Maintain a guide-level score only when this guide has a single test.
     ...(guide.lessons.filter(l => l.type === 'Test').length === 1 ? { [guideId]: scorePercentage } : {})
   };
@@ -71,44 +71,14 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
   pending.set(path, file);
 }
 
+// The old ProfilePage is no longer routed. Do not mutate its stale JSX or
+// attempt to fix its old account-switching controls. retire-legacy-profile.mjs
+// replaces the entire file only after the storage migration is complete.
 {
   const path = 'src/pages/ProfilePage.tsx';
-  let file = load(path);
-  file = replace(file, "import { updateUser, setCurrentUserId } from '../services/storage';", "import { updateUser, setCurrentUserId } from '../services/storage';\nimport { calculateCurriculumProgress } from '../services/progress';", 'profile progress import');
-  file = section(file,
-    '  // ---- Dynamic Progress Computation ----',
-    '\n  return (',
-    `  // Active-language guides represent the current curriculum, not translated duplicates.
-  const activeGuides = guides.filter(g => g.language === activeLanguage && g.certificateEligible);
-  const courseProgress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
-  const completedSet = new Set(currentUser.progress.completedLessons || []);
-  const totalLessonsAcrossAllGuides = courseProgress.totalItems;
-  const totalCompletedAcrossAllGuides = courseProgress.completedItems;
-  const overallPct = courseProgress.percent;
-`,
-    'profile course summary');
-  // These are the only two progress lists; all other guide data remains unchanged.
-  file = file.replaceAll('guides.length === 0 ? (', 'activeGuides.length === 0 ? (');
-  file = file.replaceAll('guides.map((guide) => {', 'activeGuides.map((guide) => {');
-  file = replace(file,
-    "const isCompleted = completedSet.has(lesson.id);\n                            const score = currentUser.progress.guideScores?.[guide.id];",
-    "const score = currentUser.progress.guideScores?.[`${guide.id}:${lesson.id}`] ?? currentUser.progress.guideScores?.[guide.id];\n                            const isCompleted = lesson.type === 'Test' ? Number.isFinite(score) && score >= settings.quizPassThreshold : completedSet.has(lesson.id);\n                            const pageCount = Math.max(1, lesson.type === 'Test' ? lesson.questions?.length ?? 0 : lesson.contentPages?.length ?? 0);",
-    'lesson progress counts');
-  file = replace(file,
-    "                                      : <Check size={20} strokeWidth={3} style={{ color: '#2e7d32' }} />",
-    '                                      : `${pageCount}/${pageCount}`',
-    'completed lesson numerators');
-  file = replace(file,
-    '<span className="text-slate-400">—</span>',
-    '<span className="text-slate-400">{`0/${pageCount}`}</span>',
-    'incomplete lesson numerators');
-  file = replace(file,
-    "const total = guide.lessons.length;\n                    const done = guide.lessons.filter(l => completedSet.has(l.id)).length;\n                    const pct = total > 0 ? Math.round((done / total) * 100) : 0;",
-    "const tally = courseProgress.guides.find(p => p.guideId === guide.id);\n                    const total = tally?.total ?? guide.lessons.length;\n                    const done = tally?.completed ?? 0;\n                    const pct = tally?.percent ?? 0;",
-    'guide numerators');
-  file = replace(file, "{pct === 100 && ' · Certificate eligible!'}", "{pct === 100 && ' · Guide requirements complete'}", 'certificate label');
-  file = replace(file, "              { key: 'switch_user', label: 'Switch Persona' }", "              // Account switching is disabled until authenticated sessions exist.", 'remove account switching tab');
-  pending.set(path, file);
+  if (!load(path).includes('export const ProfilePage: React.FC<ProfilePageProps>')) {
+    throw new Error('Unexpected legacy ProfilePage source; refusing VOP migration.');
+  }
 }
 
 {
@@ -147,4 +117,4 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
 }
 
 for (const [path, text] of pending) writeFileSync(path, text);
-console.log(`Applied guarded changes to ${pending.size} VOP source files.`);
+console.log(`Applied guarded changes to ${pending.size} VOP source files; obsolete profile will be retired separately.`);
