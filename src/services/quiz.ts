@@ -26,7 +26,12 @@ export function isQuizConfigured(questions: Question[]): boolean {
   return true;
 }
 
-/** Return null, not a score, for missing, malformed or unanswered assessments. */
+/**
+ * Return null for invalid or unanswered assessments. Keep the exact percentage:
+ * rounding BEFORE comparing a configured threshold can incorrectly grant a pass
+ * (for example, 159/200 = 79.5%, rounded to 80%). Round only for display.
+ * This calculation is device-local and does not constitute a trusted grade.
+ */
 export function gradeQuiz(
   questions: Question[],
   answers: Record<number, number | boolean>,
@@ -46,5 +51,5 @@ export function gradeQuiz(
       if (answer === question.answer) correct += 1;
     }
   }
-  return Math.round(correct * 100 / questions.length);
+  return correct * 100 / questions.length;
 }
