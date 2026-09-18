@@ -48,6 +48,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes to commit.'
           else
-            git commit -m 'Apply verified VOP progress and configuration corrections [skip ci]'
+            git commit -m 'Apply verified VOP progress and configuration corrections'
             git push origin HEAD:fix/reference-design-and-certification-integrity
           fi
