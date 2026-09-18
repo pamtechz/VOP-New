@@ -4,6 +4,8 @@ on:
     branches: [fix/reference-design-and-certification-integrity]
     paths:
       - scripts/apply-vop-review-fixes.mjs
+      - scripts/run-vop-review-once.mjs
+      - scripts/finalize-vop-progress.mjs
       - .github/workflows/apply-vop-review.yml
 permissions:
   contents: write
@@ -20,10 +22,13 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Validate migration script
-        run: node --check scripts/apply-vop-review-fixes.mjs
-      - name: Apply guarded source changes
-        run: node scripts/apply-vop-review-fixes.mjs
+      - name: Validate VOP-only migration scripts
+        run: |
+          node --check scripts/apply-vop-review-fixes.mjs
+          node --check scripts/finalize-vop-progress.mjs
+          node --check scripts/run-vop-review-once.mjs
+      - name: Apply guarded source changes, once
+        run: node scripts/run-vop-review-once.mjs
       - name: Check whitespace and install
         run: |
           git diff --check
@@ -33,7 +38,7 @@ jobs:
       - name: Lint source
         run: npm run lint
       - name: Regression tests
-        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts
+        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts
       - name: Commit verified source changes
         shell: bash
         run: |
