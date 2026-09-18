@@ -16,7 +16,10 @@ const question = (key: string) => [{ key, question: 'Configured?', answer: true,
 const guides = [{
   id: 'guide', discoverNumber: 1, title: 'Guide', subtitle: 'Guide', description: '', language: 'en', image: '', certificateEligible: true,
   lessons: [
-    { id: 'lesson', lessonNumber: '1', title: 'Lesson', type: 'Lesson', description: '', estimatedMinutes: 1 },
+    {
+      id: 'lesson', lessonNumber: '1', title: 'Lesson', type: 'Lesson', description: '', estimatedMinutes: 1,
+      contentPages: [{ pageNumber: 1, title: 'Bible lesson', content: 'Actual study content.' }],
+    },
     { id: 'test-1', lessonNumber: '2', title: 'Test 1', type: 'Test', description: '', estimatedMinutes: 1, questions: question('one') },
     { id: 'test-2', lessonNumber: '3', title: 'Test 2', type: 'Test', description: '', estimatedMinutes: 1, questions: question('two') },
   ],
