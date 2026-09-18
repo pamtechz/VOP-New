@@ -122,6 +122,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   // Localization studio state
   const [localizationActiveLang, setLocalizationActiveLang] = useState<string>('bem');
   const [localizationSearch, setLocalizationSearch] = useState('');
+  const [translationDrafts, setTranslationDrafts] = useState<Record<string, string>>({});
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -349,16 +350,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     e.preventDefault();
     if (!newOrgName.trim()) return;
 
-    const dist = districts.find(d => d.id === newOrgDistrictId) || districts[0];
+    const dist = districts.find(d => d.id === newOrgDistrictId);
+    if (!dist) { notify('Select a valid district before creating the organization.'); return; }
     addChurch({
       name: newOrgName.trim(),
-      type: newOrgType as any,
+      type: newOrgType,
       leaderName: newOrgLeader.trim() || 'VOP Coordinator',
       leaderPhone: newOrgPhone.trim(),
       location: newOrgLocation.trim() || 'Central',
-      districtId: dist?.id || 'dist-1',
-      conferenceId: dist?.conferenceId || 'conf-1',
-      unionId: dist?.unionId || 'union-szuc'
+      districtId: dist.id,
+      conferenceId: dist.conferenceId,
+      unionId: dist.unionId
     });
 
     setNewOrgName('');
@@ -1659,7 +1661,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        notify('All translations saved successfully!');
+                        const changes = Object.entries(translationDrafts);
+                        changes.forEach(([compound, value]) => {
+                          const separator = compound.indexOf(':');
+                          updateLocalizationTranslation(compound.slice(separator + 1), compound.slice(0, separator), value);
+                        });
+                        setTranslationDrafts({});
+                        notify(changes.length ? `Saved ${changes.length} translations.` : 'No unsaved translation changes.');
                       }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#002d72] hover:bg-[#002257] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
                     >
@@ -1731,10 +1739,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                             ) : (
                               <input
                                 type="text"
-                                defaultValue={entry.translations[localizationActiveLang] || ''}
-                                onBlur={(e) => {
-                                  updateLocalizationTranslation(entry.key, localizationActiveLang, e.target.value);
-                                }}
+                                value={translationDrafts[`${localizationActiveLang}:${entry.key}`] ?? entry.translations[localizationActiveLang] ?? ''}
+                                onChange={(e) => setTranslationDrafts(previous => ({ ...previous, [`${localizationActiveLang}:${entry.key}`]: e.target.value }))}
                                 placeholder={`Enter ${activeLangMeta?.name} translation...`}
                                 className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-900 focus:border-[#002d72] focus:outline-none"
                               />

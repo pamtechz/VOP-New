@@ -80,7 +80,7 @@ export interface ChurchOrganization {
   conferenceId: string;
   districtId: string;
   name: string;
-  type: 'Church' | 'Company' | 'Campus Ministry' | 'Prison Ministry' | 'Community Center';
+  type: string; // Admin-configured ministry organization type.
   leaderName: string;
   leaderPhone?: string;
   location: string;

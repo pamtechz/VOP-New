@@ -36,6 +36,7 @@ import {
   INITIAL_PRAYER_REQUESTS,
   INITIAL_RADIO_BROADCASTS
 } from '../data/initialData';
+import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
   SETTINGS: 'vop_settings',
@@ -636,7 +637,8 @@ export const getCurrentUserId = (): string => {
   const id = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
   if (id) return id;
   const users = getStoredUsers();
-  const defaultId = users[0]?.uid || 'user-aubrey-matende';
+  const defaultId = users[0]?.uid;
+  if (!defaultId) throw new Error('No account has been provisioned. Configure authentication before production use.');
   localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, defaultId);
   return defaultId;
 };
@@ -719,52 +721,47 @@ export const assignCandidateToChurch = (
 // ---------------- Candidate Progress Tracking ---------------- //
 
 export const recordLessonCompletion = (lessonId: string) => {
-  const currentUser = getCurrentUser();
-  const completed = new Set(currentUser.progress.completedLessons || []);
-  completed.add(lessonId);
-
-  const guides = getStoredGuides();
-  const allLessonIds = guides.flatMap(g => g.lessons.map(l => l.id));
-  const totalLessons = allLessonIds.length || 1;
-  const progressPercent = Math.min(100, Math.round((completed.size / totalLessons) * 100));
-
-  const updated: User = {
-    ...currentUser,
-    progress: {
-      ...currentUser.progress,
-      completedLessons: Array.from(completed),
-      discoverProgress: progressPercent
-    }
-  };
-
-  updateUser(updated);
+  const user = getCurrentUser();
+  const guide = getStoredGuides().find(g => g.lessons.some(l => l.id === lessonId && l.type === 'Lesson'));
+  if (!guide) return;
+  const completedLessons = [...new Set([...(user.progress.completedLessons || []), lessonId])];
+  const candidate: User = { ...user, progress: { ...user.progress, completedLessons } };
+  const state = calculateCurriculumProgress(getStoredGuides(), candidate, getStoredSettings().quizPassThreshold, getActiveLanguage());
+  updateUser({ ...candidate, progress: {
+    ...candidate.progress, discoverProgress: state.percent,
+    completedGuidesCount: state.completedGuides, totalGuidesCount: state.totalGuides
+  } });
 };
 
-export const recordQuizScore = (guideId: string, scorePercentage: number) => {
-  const currentUser = getCurrentUser();
-  const updatedScores = {
-    ...(currentUser.progress.guideScores || {}),
-    [guideId]: scorePercentage
-  };
-
+export const recordQuizScore = (guideId: string, lessonId: string, scorePercentage: number) => {
   const guides = getStoredGuides();
-  const completedGuides = guides.filter(g => (updatedScores[g.id] || 0) >= 80).length;
-
-  const updated: User = {
-    ...currentUser,
-    progress: {
-      ...currentUser.progress,
-      guideScores: updatedScores,
-      completedGuidesCount: completedGuides,
-      totalGuidesCount: guides.length
-    }
+  const guide = guides.find(g => g.id === guideId);
+  const assessment = guide?.lessons.find(l => l.id === lessonId && l.type === 'Test');
+  if (!guide || !assessment || !Number.isFinite(scorePercentage) || scorePercentage < 0 || scorePercentage > 100) return;
+  const user = getCurrentUser();
+  const updatedScores = {
+    ...(user.progress.guideScores || {}),
+    [guideId + ':' + lessonId]: scorePercentage,
+    // Maintain a guide-level score only when this guide has a single test.
+    ...(guide.lessons.filter(l => l.type === 'Test').length === 1 ? { [guideId]: scorePercentage } : {})
   };
-
-  if (completedGuides === guides.length && !updated.information.graduated) {
-    updated.information.graduating = true;
-    submitGraduationRequest(updated, guides[0], scorePercentage);
+  const candidate: User = { ...user, progress: { ...user.progress, guideScores: updatedScores } };
+  const language = getActiveLanguage();
+  const state = calculateCurriculumProgress(guides, candidate, getStoredSettings().quizPassThreshold, language);
+  const updated: User = { ...candidate, progress: {
+    ...candidate.progress, discoverProgress: state.percent,
+    completedGuidesCount: state.completedGuides, totalGuidesCount: state.totalGuides
+  } };
+  const firstRequired = guides.find(g => g.certificateEligible && g.language === language);
+  const requestExists = getStoredGraduationRequests().some(request =>
+    request.candidateId === user.uid && request.guideId === firstRequired?.id && request.status !== 'rejected'
+  );
+  const averageScore = calculateCurriculumAverageScore(guides, updated, language);
+  if (state.certificateEligible && averageScore !== null && firstRequired &&
+      !updated.information.graduated && !updated.information.graduating && !requestExists) {
+    updated.information = { ...updated.information, graduating: true };
+    submitGraduationRequest(updated, firstRequired, averageScore);
   }
-
   updateUser(updated);
 };
 
@@ -863,7 +860,7 @@ export const completeLessonForCurrentUser = (guideId: string, lessonId: string) 
 };
 
 export const submitQuizScore = (guideId: string, lessonId: string, scorePercent: number) => {
-  recordQuizScore(guideId, scorePercent);
+  recordQuizScore(guideId, lessonId, scorePercent);
 };
 
 export const addGuide = addDiscoverGuide;
