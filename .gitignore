@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Firebase project settings are public, but local environment files may
+# contain other credentials. Never commit them; commit .env.example only.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
