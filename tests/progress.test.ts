@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateCurriculumProgress } from '../src/services/progress.ts';
+import { calculateCurriculumProgress, calculateCurriculumAverageScore } from '../src/services/progress.ts';
 import type { DiscoverGuide, User } from '../src/types/index.ts';
 
 const learner = (done: string[], scores: Record<string, number>): User => ({
@@ -134,4 +134,32 @@ test('an unknown required item type blocks eligibility', () => {
   const result = calculateCurriculumProgress([course], learner(['a-lesson'], { a: 100 }), 80, 'en');
   assert.equal(result.certificateEligible, false);
   assert.match(result.configurationError ?? '', /unknown/i);
+});
+
+test('two different tests cannot share a composite score key', () => {
+  const first = guide('alpha:beta');
+  const second = guide('alpha');
+  first.lessons[1].id = 'gamma';
+  second.lessons[1].id = 'beta:gamma';
+  const candidate = learner(['alpha:beta-lesson', 'alpha-lesson'], { 'alpha:beta:gamma': 100 });
+  const courses = [first, second];
+  const result = calculateCurriculumProgress(courses, candidate, 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.equal(result.completedGuides, 0);
+  assert.match(result.configurationError ?? '', /ambiguous score identifiers/i);
+  assert.equal(calculateCurriculumAverageScore(courses, candidate, 'en'), null);
+});
+
+test('a test score key cannot impersonate a historical guide-wide score', () => {
+  const first = guide('a');
+  const second = guide('a:b:c');
+  first.lessons[1].id = 'b:c';
+  const candidate = learner(['a-lesson', 'a:b:c-lesson'], {
+    'a:b:c': 100, 'a:b:c:a:b:c-test-0': 100,
+  });
+  const courses = [first, second];
+  const result = calculateCurriculumProgress(courses, candidate, 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.match(result.configurationError ?? '', /ambiguous score identifiers/i);
+  assert.equal(calculateCurriculumAverageScore(courses, candidate, 'en'), null);
 });
