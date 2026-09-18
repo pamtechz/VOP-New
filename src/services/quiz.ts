@@ -2,7 +2,8 @@ import type { Question } from '../types';
 
 /** A misconfigured question cannot silently change from multiple-choice to true/false. */
 export function isQuestionConfigured(question: Question): boolean {
-  if (!question || typeof question.question !== 'string' || !question.question.trim()) return false;
+  if (!question || typeof question.key !== 'string' || !question.key.trim() ||
+      typeof question.question !== 'string' || !question.question.trim()) return false;
   if (question.options !== undefined || question.correctOptionIndex !== undefined) {
     return Array.isArray(question.options) && question.options.length >= 2 &&
       question.options.every(option => typeof option === 'string' && option.trim().length > 0) &&
@@ -12,8 +13,15 @@ export function isQuestionConfigured(question: Question): boolean {
   return typeof question.answer === 'boolean';
 }
 
+/** Question IDs must be stable and unambiguous within each assessment. */
 export function isQuizConfigured(questions: Question[]): boolean {
-  return Array.isArray(questions) && questions.length > 0 && questions.every(isQuestionConfigured);
+  if (!Array.isArray(questions) || questions.length === 0) return false;
+  const keys = new Set<string>();
+  for (const question of questions) {
+    if (!isQuestionConfigured(question) || keys.has(question.key)) return false;
+    keys.add(question.key);
+  }
+  return true;
 }
 
 /** Return null, not a score, for missing, malformed or unanswered assessments. */
