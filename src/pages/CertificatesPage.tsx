@@ -4,6 +4,7 @@ import { ArrowLeft, Award, Download, Share2, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { getStoredGuides, getStoredGraduationRequests } from '../services/storage';
 import { calculateCurriculumProgress } from '../services/progress';
+import { canShowLocalCertificatePreview } from '../services/certificatePreview';
 import { getTranslation } from '../services/i18n';
 
 interface CertificatesPageProps {
@@ -22,10 +23,9 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
   const progress = calculateCurriculumProgress(
     getStoredGuides(), currentUser, settings.quizPassThreshold, activeLanguage,
   );
-  const localApproval = getStoredGraduationRequests().some(request =>
-    request.candidateId === currentUser.uid && request.status === 'approved',
+  const canDisplayPreview = canShowLocalCertificatePreview(
+    progress, getStoredGraduationRequests(), currentUser,
   );
-  const canDisplayPreview = progress.certificateEligible && localApproval && currentUser.information.graduated;
   const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate;
   const t = (key: string, fallback: string) =>
     getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
@@ -105,7 +105,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
             <strong>No certificate has been issued.</strong>
             <p style={{ fontSize: '.85rem', marginTop: '.6rem' }}>
               {progress.certificateEligible
-                ? 'Your curriculum requirements are met. An approved graduation record and completed graduation status are required.'
+                ? 'Your curriculum requirements are met. An approved graduation record linked to this curriculum and completed graduation status are required.'
                 : 'Your progress is shown below. A passing test result and completion of every required lesson are needed.'}
             </p>
           </div>
