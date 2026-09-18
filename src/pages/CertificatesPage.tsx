@@ -76,7 +76,9 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
         <h2>{canDisplayPreview ? 'Congratulations!' : 'Certificate status'}</h2>
         <p>{canDisplayPreview
           ? 'Your recorded Bible Correspondence Course has been completed.'
-          : 'Complete the required lessons and tests, then await graduation approval.'}</p>
+          : progress.configurationError
+            ? 'The required curriculum needs an administrator to correct its configuration.'
+            : 'Complete the required lessons and tests, then await graduation approval.'}</p>
       </div>
       <div className="vop-certificate-body">
         {canDisplayPreview ? (
@@ -103,10 +105,12 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
         ) : (
           <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'white', boxShadow: '0 2px 12px #0001' }}>
             <strong>No certificate has been issued.</strong>
-            <p style={{ fontSize: '.85rem', marginTop: '.6rem' }}>
-              {progress.certificateEligible
-                ? 'Your curriculum requirements are met. An approved graduation record linked to this curriculum and completed graduation status are required.'
-                : 'Your progress is shown below. A passing test result and completion of every required lesson are needed.'}
+            <p style={{ fontSize: '.85rem', marginTop: '.6rem' }} role={progress.configurationError ? 'alert' : undefined}>
+              {progress.configurationError
+                ? `Curriculum configuration issue: ${progress.configurationError} Ask an administrator to correct the source records; existing progress has not been deleted.`
+                : progress.certificateEligible
+                  ? 'Your curriculum requirements are met. An approved graduation record linked to this curriculum and completed graduation status are required.'
+                  : 'Your progress is shown below. A passing test result and completion of every required lesson are needed.'}
             </p>
           </div>
         )}
