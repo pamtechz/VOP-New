@@ -5,6 +5,9 @@ on:
       - fix/reference-design-and-certification-integrity
   pull_request:
     branches: [main]
+concurrency:
+  group: vop-verify-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
