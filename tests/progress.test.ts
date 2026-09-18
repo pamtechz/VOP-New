@@ -67,3 +67,30 @@ test('scores outside 0 through 100 never count as a pass', () => {
     assert.equal(result.certificateEligible, false);
   }
 });
+
+test('duplicate required guide identifiers cannot inflate completion', () => {
+  const one = guide('same');
+  const result = calculateCurriculumProgress([one, { ...one }], learner(['same-lesson'], { same: 100 }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.equal(result.completedGuides, 0);
+  assert.match(result.configurationError ?? '', /unique/);
+});
+
+test('one lesson completion cannot satisfy two required guides with a shared lesson ID', () => {
+  const first = guide('first');
+  const second = guide('second');
+  second.lessons[0].id = first.lessons[0].id;
+  const result = calculateCurriculumProgress([first, second], learner(['first-lesson'], {
+    first: 90, second: 90,
+  }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.match(result.configurationError ?? '', /lesson/i);
+});
+
+test('collisions outside the selected language do not block valid progress', () => {
+  const first = guide('en');
+  const translation = { ...first, language: 'bem' };
+  const result = calculateCurriculumProgress([first, translation], learner(['en-lesson'], { en: 100 }), 80, 'en');
+  assert.equal(result.configurationError, undefined);
+  assert.equal(result.certificateEligible, true);
+});
