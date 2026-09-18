@@ -36,3 +36,17 @@ test('only answer values of the correct question type are accepted', () => {
   assert.equal(gradeQuiz([multipleChoice], { 0: true }), null);
   assert.equal(gradeQuiz([multipleChoice], { 0: 100 }), null);
 });
+
+test('missing and blank question IDs are invalid', () => {
+  for (const key of ['', '  ', undefined]) {
+    const question = { ...trueFalse, key } as Question;
+    assert.equal(isQuizConfigured([question]), false);
+    assert.equal(gradeQuiz([question], { 0: false }), null);
+  }
+});
+
+test('duplicate question IDs cannot produce a passing result', () => {
+  const duplicate = { ...multipleChoice, key: trueFalse.key };
+  assert.equal(isQuizConfigured([trueFalse, duplicate]), false);
+  assert.equal(gradeQuiz([trueFalse, duplicate], { 0: false, 1: 1 }), null);
+});
