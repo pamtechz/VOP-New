@@ -20,7 +20,7 @@ export interface CurriculumProgress {
   certificateEligible: boolean;
 }
 
-/** Derived progress for the active language, never cached user-facing counters. */
+/** Progress for configured certificate guides in the active course language. */
 export function calculateCurriculumProgress(
   guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
@@ -29,26 +29,23 @@ export function calculateCurriculumProgress(
   const scores = user.progress.guideScores ?? {};
   const threshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100
     ? passThreshold
-    : 100; // Invalid settings cannot accidentally make certificates easier to obtain.
+    : 100;
 
   const guideProgress = eligibleGuides.map(guide => {
     const lessons = guide.lessons.filter(lesson => lesson.type === 'Lesson');
     const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
     const finishedLessons = lessons.filter(lesson => completed.has(lesson.id)).length;
-    // The existing schema stores a single score per guide. It cannot prove
-    // passing multiple tests, so multi-test guides remain ineligible until
-    // individual test results are stored and verified.
-    const passedTests = tests.length === 1 && Number.isFinite(scores[guide.id]) && scores[guide.id] >= threshold ? 1 : 0;
+    const passedTests = tests.filter(test => {
+      const individual = scores[`${guide.id}:${test.id}`];
+      const result = Number.isFinite(individual) ? individual : tests.length === 1 ? scores[guide.id] : undefined;
+      return Number.isFinite(result) && result! >= threshold;
+    }).length;
     const done = finishedLessons + passedTests;
     const total = lessons.length + tests.length;
     return {
-      guideId: guide.id,
-      completed: done,
-      total,
-      passedTests,
-      totalTests: tests.length,
+      guideId: guide.id, completed: done, total, passedTests, totalTests: tests.length,
       percent: total ? Math.round(done * 100 / total) : 0,
-      qualified: lessons.length > 0 && tests.length === 1 && done === total,
+      qualified: lessons.length > 0 && tests.length > 0 && done === total,
     };
   });
 
@@ -57,10 +54,8 @@ export function calculateCurriculumProgress(
   const completedGuides = guideProgress.filter(guide => guide.qualified).length;
   return {
     guides: guideProgress,
-    completedGuides,
-    totalGuides: eligibleGuides.length,
-    completedItems,
-    totalItems,
+    completedGuides, totalGuides: eligibleGuides.length,
+    completedItems, totalItems,
     percent: totalItems ? Math.round(completedItems * 100 / totalItems) : 0,
     certificateEligible: eligibleGuides.length > 0 && completedGuides === eligibleGuides.length,
   };
