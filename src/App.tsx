@@ -17,7 +17,7 @@ import { DiscoverGuideView } from './components/guide/DiscoverGuideView';
 import { LessonReaderModal } from './components/reader/LessonReaderModal';
 import { QuizModal } from './components/quiz/QuizModal';
 import { AboutPage } from './pages/AboutPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { ReferenceProfilePage } from './pages/ReferenceProfilePage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { PrayerPage } from './pages/PrayerPage';
 import { RadioPage } from './pages/RadioPage';
@@ -78,8 +78,7 @@ export const App: React.FC = () => {
     setActiveGuide(null);
     setActiveLesson(null);
     setIsMenuOpen(false);
-    // This is a display constraint, not authorization. Privileged server APIs
-    // must still verify a signed-in identity and its current role.
+    // Display checks are not security. Server APIs must authorize roles and scopes.
     if (route === 'admin' && (!currentUser.role || currentUser.role === 'student')) return;
     setCurrentRoute(route);
   };
@@ -109,7 +108,7 @@ export const App: React.FC = () => {
         <main style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'profile' && (
-            <ProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences}
+            <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences}
               districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage}
               onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />
           )}
@@ -133,7 +132,7 @@ export const App: React.FC = () => {
       </div>
       <MenuDrawer
         isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser}
-        allUsers={[]} onSelectUser={() => { /* Impersonation disabled without authentication. */ }}
+        allUsers={[]} onSelectUser={() => { /* No unauthenticated account impersonation. */ }}
         onNavigate={navigate}
       />
       {activeLesson?.type === 'Lesson' && activeGuide && (
