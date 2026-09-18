@@ -1,8 +1,8 @@
 # Voice of Prophecy — Bible Correspondence School
 
-This repository contains a React/TypeScript/Vite interface packaged for Android with Capacitor. It includes Discover Bible study guides, a lesson reader, assessments, candidate progress, an administration interface and certificate **previews**.
+React/TypeScript/Vite interface packaged for Android with Capacitor. The app includes Discover Bible study guides, lessons, assessments, progress tracking, administrator demo screens and explicitly unverified certificate previews.
 
-> **Development / demo status:** All operational records currently live in browser `localStorage`. The seeded people, organisations, curriculum and approvals in `src/data/initialData.ts` are demo fixtures, **not trustworthy production records**. Browser-stored role flags are not authentication. No official credential should be issued from the present client. Certificate imagery is intentionally marked **UNVERIFIED PREVIEW** until a secure server is integrated.
+> **Not production ready:** Operational records, admin roles and approval records still live in editable browser `localStorage`. `src/data/initialData.ts` contains demonstration people, organisations, curriculum and approvals; these are **fixtures**, not real identities or authoritative records. No official certificate is issued by this frontend.
 
 ## Run and check
 
@@ -11,30 +11,31 @@ npm ci
 npm run dev
 npm run build
 npm run lint
-node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts
+node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts
 ```
 
-For Android packaging, use the Capacitor/Android configuration under `android/` and `capacitor.config.ts` after a successful web build. No APK or release build is automatically published by this repository's verification workflow.
+For Android packaging, use the Capacitor/Android configuration under `android/` after a successful web build. These workflows do not publish an APK or a production deployment.
 
-## Source layout
+## Implementation
 
-- `src/components/guide/DiscoverGuideView.tsx`: simple mobile lesson timeline.
-- `src/pages/ProfilePage.tsx` and `src/components/layout/MenuDrawer.tsx`: candidate profile and account view.
-- `src/services/progress.ts`: derived, language-scoped required-guide progress and eligibility.
-- `src/pages/CertificatesPage.tsx`: local-only, explicitly unverified completion preview.
-- `src/pages/AdminPage.tsx`: administrator demo functions; **not** a secure role boundary.
-- `src/data/initialData.ts`: legacy demo seed content; replace via reviewed migration before public release.
-- `src/services/storage.ts`: temporary device-local persistence; replace with authenticated server APIs.
-- `src/reference.css`: reference-screen styling supplementary to the existing CSS.
+- `src/components/guide/DiscoverGuideView.tsx`: compact mobile numbered lesson timeline.
+- `src/pages/ReferenceProfilePage.tsx`: reference-screen profile and dynamically derived lesson/guide progress. Only phone and address can be edited in the demo; identity and organisation assignments are read-only for learners.
+- `src/components/layout/MenuDrawer.tsx`: account sheet without an account-impersonation action.
+- `src/services/progress.ts`: active-language required curriculum calculations, validated per-test scores and derived graduation average across required assessments.
+- `src/services/certificatePreview.ts`: local preview gate requiring completed curriculum plus a matching approved and dated graduation record. All such records remain untrusted until server verification.
+- `src/pages/CertificatesPage.tsx`: responsive **UNVERIFIED PREVIEW**; no official certificate may be inferred from its appearance, downloads or shares.
+- `src/pages/AdminPage.tsx`: administrator demo, **not a security boundary**.
+- `src/services/storage.ts`: temporary device-local persistence. An atomic queued migration changes stale completion counts, last-test-only grading and organization defaults; this source is still legacy until that migration's verified commit appears in the branch.
+- `scripts/run-vop-review-once.mjs`: guarded retry-safe migration wrapper for the VOP-only runner.
 
-## Production readiness — blocking work
+## Production release blockers
 
-1. Provision a **VOP-specific** backend and identity provider; never use credentials or data belonging to another repository or service. Confirm costs and the target organisation before provisioning anything.
-2. Migrate operational settings, languages, translations, organizations, users, curriculum and grades into authoritative administrator-managed storage. Preserve stable IDs and audit provenance; do not promote seeded demo users as real accounts.
-3. Enforce roles, organization scope, grading and graduation approval in trusted server functions with database row-level policies. Students must not be able to write scores, approved status or their own roles.
-4. Issue immutable server-generated certificates with identity, unique ID, issuance date and verification endpoint only after the server independently verifies all required guides, per-test marks and approved graduation records. Never use browser-generated 'verification' links as proof.
-5. Add authenticated integration tests, device screenshots at representative widths, backup/restore and failure/recovery checks. Run `npm run build`, lint, unit, authorization and Android tests before merge or release.
+1. Provision a **dedicated VOP backend** and identity provider; do not use data or credentials from another project. The destination organization and any cost must be confirmed before provisioning.
+2. Move all operational settings, languages, translations, church structure, users, curriculum, progress and assessment results into authoritative administrator-managed persistence. Preserve stable IDs; do not promote demo accounts into production.
+3. Enforce role and organization scope on the server. Students cannot write scores, privileges, graduation approvals, verified identities or organizational assignments. All privileged mutations need an audit trail.
+4. Require server-side recomputation of all required-guide progress and passing grades, approved graduation workflow, immutable certificate ID and verification endpoint before issuing any official credential.
+5. Verify build, lint, unit tests, authorization and Android/device rendering before merge/release. Visual comparisons to the supplied reference screenshots remain outstanding.
 
-### Scope and isolation
+### Isolation and release gate
 
-Work for this project must stay in `Pamtech-Zambia/VOP-New`. The VOP-only CI uses the `KASAINSTITUTE` self-hosted runner label without terminating or modifying other repositories' jobs. This branch must not be merged simply because its UI renders; an official certification release requires the server work above.
+All code here is for `Pamtech-Zambia/VOP-New` only. CI is configured for the organization's `KASAINSTITUTE` self-hosted runner and must not cancel, modify or interfere with unrelated repositories' jobs. The draft PR must not merge simply because the UI renders; the backend/security requirements above and automated checks remain release blockers.
