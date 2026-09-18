@@ -11,16 +11,17 @@ npm ci
 npm run dev
 npm run build
 npm run lint
-node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts
+node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts
 ```
 
 For Android packaging, use the Capacitor/Android configuration under `android/` after a successful web build. These workflows do not publish an APK or a production deployment.
 
 ## Implementation
 
-- `src/components/guide/DiscoverGuideView.tsx`: compact mobile numbered lesson timeline.
+- `src/components/guide/DiscoverGuideView.tsx`: compact mobile numbered lesson timeline. Published lessons are accessible without a hardcoded sequential prerequisite gate; configurable prerequisites would require a separate admin-managed policy.
 - `src/pages/ReferenceProfilePage.tsx`: reference-screen profile and dynamically derived lesson/guide progress. Only phone and address can be edited in the demo; identity and organisation assignments are read-only for learners.
 - `src/components/layout/MenuDrawer.tsx`: account sheet without an account-impersonation action.
+- `src/services/quiz.ts`: validates both true/false and administrator-configured multiple-choice questions, rejecting missing options, answer keys, malformed answers and empty quizzes before scores can be saved.
 - `src/services/progress.ts`: active-language required curriculum calculations, validated per-test scores and derived graduation average across required assessments.
 - `src/services/certificatePreview.ts`: local preview gate requiring completed curriculum plus a matching approved and dated graduation record. All such records remain untrusted until server verification.
 - `src/pages/CertificatesPage.tsx`: responsive **UNVERIFIED PREVIEW**; no official certificate may be inferred from its appearance, downloads or shares.
