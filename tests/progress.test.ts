@@ -12,7 +12,10 @@ const learner = (done: string[], scores: Record<string, number>): User => ({
 const guide = (id: string, language = 'en', tests = 1): DiscoverGuide => ({
   id, discoverNumber: 1, title: id, subtitle: id, description: '', language, image: '', certificateEligible: true,
   lessons: [
-    { id: `${id}-lesson`, lessonNumber: '1', title: 'Study', type: 'Lesson', description: '', estimatedMinutes: 1 },
+    {
+      id: `${id}-lesson`, lessonNumber: '1', title: 'Study', type: 'Lesson', description: '', estimatedMinutes: 1,
+      contentPages: [{ pageNumber: 1, title: 'Study page', content: 'Meaningful Bible study material.' }],
+    },
     ...Array.from({ length: tests }, (_, i) => ({
       id: `${id}-test-${i}`, lessonNumber: `2.${i}`, title: 'Test', type: 'Test' as const,
       description: '', estimatedMinutes: 1,
@@ -114,4 +117,21 @@ test('an invalid answer key fails closed even with a historical passing score', 
   const result = calculateCurriculumProgress([course], learner(['a-lesson'], { a: 100 }), 80, 'en');
   assert.equal(result.certificateEligible, false);
   assert.match(result.configurationError ?? '', /answer keys/i);
+});
+
+test('an empty lesson cannot earn credit from a saved completion flag', () => {
+  const course = guide('a');
+  course.lessons[0].contentPages = [];
+  const result = calculateCurriculumProgress([course], learner(['a-lesson'], { a: 100 }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.equal(result.completedItems, 1);
+  assert.match(result.configurationError ?? '', /study content/i);
+});
+
+test('an unknown required item type blocks eligibility', () => {
+  const course = guide('a');
+  course.lessons[0].type = 'Unsupported' as 'Lesson';
+  const result = calculateCurriculumProgress([course], learner(['a-lesson'], { a: 100 }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.match(result.configurationError ?? '', /unknown/i);
 });
