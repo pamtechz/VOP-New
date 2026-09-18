@@ -39,12 +39,13 @@ export function calculateCurriculumProgress(
     const finishedLessons = lessons.filter(lesson => completed.has(lesson.id)).length;
     const passedTests = tests.filter(test => {
       if (!validThreshold) return false;
-      const individual = scores[`${guide.id}:${test.id}`];
-      // A historical guide-level score can represent exactly one test, never two.
-      const result = Number.isFinite(individual)
-        ? individual
+      const scoreKey = `${guide.id}:${test.id}`;
+      const result = Object.hasOwn(scores, scoreKey)
+        ? scores[scoreKey]
         : tests.length === 1 ? scores[guide.id] : undefined;
-      return Number.isFinite(result) && result! >= passThreshold;
+      // A historical guide-level score can attest to one test only. An invalid
+      // newer score must never be silently overridden by that historical value.
+      return Number.isFinite(result) && result! >= 0 && result! <= 100 && result! >= passThreshold;
     }).length;
     const done = finishedLessons + passedTests;
     const total = lessons.length + tests.length;
