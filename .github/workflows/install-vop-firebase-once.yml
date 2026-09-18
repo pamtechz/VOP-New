@@ -1,0 +1,47 @@
+name: Install VOP Firebase dependencies once
+on:
+  push:
+    branches: [fix/reference-design-and-certification-integrity]
+    paths: [.github/workflows/install-vop-firebase-once.yml]
+permissions:
+  contents: write
+jobs:
+  install:
+    runs-on: [self-hosted, KASAINSTITUTE]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/reference-design-and-certification-integrity
+          persist-credentials: true
+          path: vop-firebase-deps-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned Firebase packages and generate lockfile
+        working-directory: vop-firebase-deps-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: powershell
+        run: |
+          npm install --save-exact firebase@12.19.0 @capacitor-firebase/authentication@8.5.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit exact dependency graph to VOP branch only
+        working-directory: vop-firebase-deps-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: powershell
+        run: |
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add package.json package-lock.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $changed = @(git diff --cached --name-only)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($changed.Count -eq 0) { Write-Output 'Firebase dependencies already installed.'; exit 0 }
+          git commit -m 'Install pinned Firebase SDK and Capacitor Google authentication plugin'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/fix/reference-design-and-certification-integrity
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
