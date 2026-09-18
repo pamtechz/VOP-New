@@ -13,7 +13,11 @@ const guide = (id: string, language = 'en', tests = 1): DiscoverGuide => ({
   id, discoverNumber: 1, title: id, subtitle: id, description: '', language, image: '', certificateEligible: true,
   lessons: [
     { id: `${id}-lesson`, lessonNumber: '1', title: 'Study', type: 'Lesson', description: '', estimatedMinutes: 1 },
-    ...Array.from({ length: tests }, (_, i) => ({ id: `${id}-test-${i}`, lessonNumber: `2.${i}`, title: 'Test', type: 'Test' as const, description: '', estimatedMinutes: 1 })),
+    ...Array.from({ length: tests }, (_, i) => ({
+      id: `${id}-test-${i}`, lessonNumber: `2.${i}`, title: 'Test', type: 'Test' as const,
+      description: '', estimatedMinutes: 1,
+      questions: [{ key: `${id}-question-${i}`, question: 'A configured question?', answer: true, explanation: '' }],
+    })),
   ],
 });
 
@@ -93,4 +97,21 @@ test('collisions outside the selected language do not block valid progress', () 
   const result = calculateCurriculumProgress([first, translation], learner(['en-lesson'], { en: 100 }), 80, 'en');
   assert.equal(result.configurationError, undefined);
   assert.equal(result.certificateEligible, true);
+});
+
+test('a saved passing score cannot certify a test whose questions were deleted', () => {
+  const course = guide('a');
+  course.lessons[1].questions = [];
+  const result = calculateCurriculumProgress([course], learner(['a-lesson'], { a: 100 }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.equal(result.completedItems, 1);
+  assert.match(result.configurationError ?? '', /assessment/i);
+});
+
+test('an invalid answer key fails closed even with a historical passing score', () => {
+  const course = guide('a');
+  course.lessons[1].questions = [{ key: 'broken', question: 'Choose', answer: true, options: ['One', 'Two'], correctOptionIndex: 4, explanation: '' }];
+  const result = calculateCurriculumProgress([course], learner(['a-lesson'], { a: 100 }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.match(result.configurationError ?? '', /answer keys/i);
 });
