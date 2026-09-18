@@ -18,7 +18,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
 }) => {
   const completed = new Set(currentUser.progress.completedLessons ?? []);
   const { certificateEligible } = calculateCurriculumProgress(
-    getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold,
+    getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,
   );
 
   return (
