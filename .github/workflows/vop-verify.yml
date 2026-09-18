@@ -35,4 +35,4 @@ jobs:
         run: npm run lint
       - name: Regression tests
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts
+        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts tests/snapshots.test.mjs
