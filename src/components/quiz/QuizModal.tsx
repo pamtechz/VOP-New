@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import type { Lesson, DiscoverGuide, Question } from '../../types';
+import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getStoredSettings } from '../../services/storage';
+import { gradeQuiz, isQuizConfigured } from '../../services/quiz';
 
 interface QuizModalProps {
   lesson: Lesson;
@@ -16,32 +17,36 @@ export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, on
   const questions = lesson.questions ?? [];
   const threshold = getStoredSettings().quizPassThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 100;
+  const validQuiz = isQuizConfigured(questions);
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
   const [score, setScore] = useState<number | null>(null);
+  const [error, setError] = useState('');
   const question = questions[index];
-  const hasOptions = (q: Question) => Array.isArray(q.options) && q.options.length >= 2 &&
-    Number.isInteger(q.correctOptionIndex) && q.correctOptionIndex! >= 0 && q.correctOptionIndex! < q.options.length;
-  const isCorrect = (q: Question, value: number | boolean) =>
-    hasOptions(q) ? value === q.correctOptionIndex : value === q.answer;
+
   const choose = (answer: number | boolean) => {
-    if (Object.hasOwn(answers, index)) return;
+    if (!validQuiz || Object.hasOwn(answers, index)) return;
     setAnswers(previous => ({ ...previous, [index]: answer }));
   };
   const next = () => {
-    if (!question || !Object.hasOwn(answers, index)) return;
+    if (!validQuiz || !validThreshold || !question || !Object.hasOwn(answers, index)) return;
     if (index < questions.length - 1) { setIndex(value => value + 1); return; }
-    if (!validThreshold || questions.length === 0) return;
-    const correct = questions.filter((item, i) => isCorrect(item, answers[i])).length;
-    const percent = Math.round(correct * 100 / questions.length);
-    setScore(percent);
+    const result = gradeQuiz(questions, answers);
+    if (result === null) {
+      setError('Some assessment questions or answers are invalid. Contact your course administrator.');
+      return;
+    }
+    setScore(result);
     setStage('result');
-    onSubmitScore(percent);
-    if (percent >= threshold) confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+    onSubmitScore(result);
+    if (result >= threshold) confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
   };
-  const restart = () => { setAnswers({}); setScore(null); setIndex(0); setStage('quiz'); };
-  const button: React.CSSProperties = { borderRadius: '1rem', border: '1px solid #cbd5e1', background: '#fff', padding: '1rem', minHeight: '3.3rem', font: '600 1rem var(--font-sans)', cursor: 'pointer' };
+  const restart = () => { setAnswers({}); setScore(null); setIndex(0); setError(''); setStage('quiz'); };
+  const button: React.CSSProperties = {
+    borderRadius: '1rem', border: '1px solid #cbd5e1', background: '#fff',
+    padding: '1rem', minHeight: '3.3rem', font: '600 1rem var(--font-sans)', cursor: 'pointer',
+  };
 
   return (
     <div className="modal-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
@@ -59,25 +64,27 @@ export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, on
             <Trophy size={45} color="#ff9900" style={{ marginBottom: '1rem' }} />
             <h3 style={{ marginBottom: '.65rem' }}>Ready for the test?</h3>
             <p style={{ color: '#475569' }}>{questions.length} questions · Required score: {validThreshold ? `${threshold}%` : 'Not configured'}</p>
-            {questions.length === 0 && <p role="alert" style={{ color: '#a11a1a' }}>This test has no questions. Ask an administrator to publish questions.</p>}
+            {!validQuiz && <p role="alert" style={{ color: '#a11a1a' }}>This assessment has missing or invalid questions or answer keys. An administrator must complete it before it can be taken.</p>}
             {!validThreshold && <p role="alert" style={{ color: '#a11a1a' }}>The pass mark must be configured between 0 and 100.</p>}
-            <button type="button" className="vop-cert-action" style={{ marginTop: '1.5rem' }} disabled={!questions.length || !validThreshold} onClick={() => setStage('quiz')}>Begin test</button>
+            <button type="button" className="vop-cert-action" style={{ marginTop: '1.5rem' }} disabled={!validQuiz || !validThreshold} onClick={() => setStage('quiz')}>Begin test</button>
           </div>
         )}
-        {stage === 'quiz' && question && (
+        {stage === 'quiz' && validQuiz && question && (
           <div style={{ padding: '1.5rem' }}>
             <p style={{ color: '#64748b', fontSize: '.8rem', marginBottom: '.7rem' }}>Question {index + 1} of {questions.length}</p>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '1.3rem', lineHeight: 1.5 }}>{question.question}</h3>
             <div style={{ display: 'grid', gap: '.7rem' }}>
-              {(hasOptions(question) ? question.options!.map((option, optionIndex) => ({ value: optionIndex, label: option })) : [
-                { value: true, label: 'True' }, { value: false, label: 'False' },
-              ]).map(option => {
+              {(Array.isArray(question.options)
+                ? question.options.map((option, optionIndex) => ({ value: optionIndex, label: option }))
+                : [{ value: true, label: 'True' }, { value: false, label: 'False' }]
+              ).map(option => {
                 const selected = answers[index] === option.value;
                 const answered = Object.hasOwn(answers, index);
                 return <button type="button" key={String(option.value)} onClick={() => choose(option.value)} disabled={answered} style={{ ...button, textAlign: 'left', background: selected ? '#fff1d6' : 'white', borderColor: selected ? '#ff9900' : '#cbd5e1' }} aria-pressed={selected}>{option.label}</button>;
               })}
             </div>
             {Object.hasOwn(answers, index) && <p role="status" style={{ fontSize: '.83rem', marginTop: '1rem', color: '#475569' }}>Answer recorded. Continue when ready.</p>}
+            {error && <p role="alert" style={{ color: '#a11a1a', marginTop: '.7rem' }}>{error}</p>}
             <button type="button" className="vop-cert-action" style={{ marginTop: '1.5rem' }} disabled={!Object.hasOwn(answers, index)} onClick={next}>{index + 1 === questions.length ? 'Submit test' : 'Next question'} <ArrowRight size={16} style={{ verticalAlign: 'middle' }}/></button>
           </div>
         )}
