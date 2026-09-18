@@ -4,11 +4,12 @@ import type {
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast,
 } from './types';
 import {
-  getStoredGuides, getStoredUsers, getCurrentUser, completeLessonForCurrentUser,
-  submitQuizScore, getStoredAnnouncements, getStoredBooks, getStoredSettings,
+  getStoredGuides, getStoredUsers, getCurrentUser,
+  getStoredAnnouncements, getStoredBooks, getStoredSettings,
   getActiveLanguage, setActiveLanguage, getStoredUnions, getStoredConferences,
   getStoredDistricts, getStoredChurches, getStoredPrayerRequests, getStoredRadioBroadcasts,
 } from './services/storage';
+import { completeDemoLesson, submitDemoQuizScore } from './services/localStudy';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [studyError, setStudyError] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileShell, setIsMobileShell] = useState(false);
@@ -77,6 +79,7 @@ export const App: React.FC = () => {
   const navigate = (route: AppRoute) => {
     setActiveGuide(null);
     setActiveLesson(null);
+    setStudyError('');
     setIsMenuOpen(false);
     // Display checks are not security. Server APIs must authorize roles and scopes.
     if (route === 'admin' && (!currentUser.role || currentUser.role === 'student')) return;
@@ -95,7 +98,7 @@ export const App: React.FC = () => {
             currentUser={currentUser}
             settings={settings}
             activeLanguage={activeLanguage}
-            onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); }}
+            onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setStudyError(''); }}
             isDarkMode={isDarkMode}
             onToggleDarkMode={() => setIsDarkMode(value => !value)}
             isMobileShell={isMobileShell}
@@ -105,6 +108,7 @@ export const App: React.FC = () => {
             onNavigate={navigate}
           />
         )}
+        {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'profile' && (
@@ -119,7 +123,7 @@ export const App: React.FC = () => {
           {currentRoute === 'admin' && currentUser.role && currentUser.role !== 'student' && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
           {showCourse && activeGuide && (
             <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
-              onBack={() => setActiveGuide(null)} onSelectLesson={setActiveLesson}
+              onBack={() => setActiveGuide(null)} onSelectLesson={lesson => { setStudyError(''); setActiveLesson(lesson); }}
               onOpenCertificate={() => navigate('certificates')} />
           )}
           {showDashboardShell && (
@@ -137,11 +141,21 @@ export const App: React.FC = () => {
       />
       {activeLesson?.type === 'Lesson' && activeGuide && (
         <LessonReaderModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
-          onComplete={() => { completeLessonForCurrentUser(activeGuide.id, activeLesson.id); setActiveLesson(null); }} />
+          onComplete={() => {
+            const accepted = completeDemoLesson(activeGuide.id, activeLesson.id);
+            if (!accepted) setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
+            setActiveLesson(null);
+          }} />
       )}
       {activeLesson?.type === 'Test' && activeGuide && (
         <QuizModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
-          onSubmitScore={score => submitQuizScore(activeGuide.id, activeLesson.id, score)}
+          onSubmitScore={score => {
+            const accepted = submitDemoQuizScore(activeGuide.id, activeLesson.id, score);
+            if (!accepted) {
+              setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
+              setActiveLesson(null);
+            }
+          }}
           onOpenCertificate={() => navigate('certificates')} />
       )}
     </div>
