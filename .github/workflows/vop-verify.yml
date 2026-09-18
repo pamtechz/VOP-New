@@ -20,4 +20,4 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run lint
-      - run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts
+      - run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts
