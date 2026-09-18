@@ -6,6 +6,7 @@ on:
       - scripts/apply-vop-review-fixes.mjs
       - scripts/run-vop-review-once.mjs
       - scripts/finalize-vop-progress.mjs
+      - scripts/retire-legacy-profile.mjs
       - .github/workflows/apply-vop-review.yml
 permissions:
   contents: write
@@ -26,6 +27,7 @@ jobs:
         run: |
           node --check scripts/apply-vop-review-fixes.mjs
           node --check scripts/finalize-vop-progress.mjs
+          node --check scripts/retire-legacy-profile.mjs
           node --check scripts/run-vop-review-once.mjs
       - name: Apply guarded source changes, once
         run: node scripts/run-vop-review-once.mjs
