@@ -5,7 +5,10 @@ import type { DiscoverGuide, User } from '../src/types/index.ts';
 
 const guide = (id: string, language: string, testCount: number): DiscoverGuide => ({
   id, language, certificateEligible: true,
-  lessons: Array.from({ length: testCount }, (_, i) => ({ id: `${id}-test-${i}`, type: 'Test' as const })),
+  lessons: Array.from({ length: testCount }, (_, i) => ({
+    id: `${id}-test-${i}`, type: 'Test' as const,
+    questions: [{ key: `${id}-q-${i}`, question: 'Configured?', answer: true, explanation: '' }],
+  })),
 }) as DiscoverGuide;
 const user = (scores: Record<string, number>): User => ({ progress: { guideScores: scores } }) as User;
 
@@ -35,4 +38,10 @@ test('ambiguous guide or lesson identifiers cannot contribute to a graduation sc
   const second = guide('two', 'en', 1);
   second.lessons[0].id = first.lessons[0].id;
   assert.equal(calculateCurriculumAverageScore([first, second], user({ one: 100, two: 100 }), 'en'), null);
+});
+
+test('a deleted or malformed quiz cannot contribute a historical result', () => {
+  const course = guide('one', 'en', 1);
+  course.lessons[0].questions = [];
+  assert.equal(calculateCurriculumAverageScore([course], user({ one: 100 }), 'en'), null);
 });
