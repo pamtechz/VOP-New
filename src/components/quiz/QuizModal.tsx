@@ -39,6 +39,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, on
     }
     setScore(result);
     setStage('result');
+    // Store the exact score; eligibility must not depend on a rounded display.
     onSubmitScore(result);
     if (result >= threshold) confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
   };
@@ -91,7 +92,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, on
         {stage === 'result' && score !== null && (
           <div style={{ textAlign: 'center', padding: '2rem 1.4rem' }}>
             <Trophy size={43} color="#ff9900" />
-            <h3 style={{ margin: '.7rem 0' }}>Result: {score}%</h3>
+            <h3 style={{ margin: '.7rem 0' }}>Result: {Math.floor(score * 100) / 100}%</h3>
             <p role="status" style={{ color: '#475569' }}>{score >= threshold ? `Passed the configured ${threshold}% requirement.` : `The configured pass mark is ${threshold}%. You can retake this test.`}</p>
             <div style={{ display: 'grid', gap: '.8rem', marginTop: '1.6rem' }}>
               <button type="button" className="vop-cert-action" onClick={restart}><RotateCcw size={16} style={{ verticalAlign: 'middle' }}/> Retake</button>
