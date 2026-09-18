@@ -52,3 +52,18 @@ test('the legacy single guide score cannot attest to multiple tests', () => {
 test('invalid threshold fails closed at 100 percent', () => {
   assert.equal(calculateCurriculumProgress([guide('a')], learner(['a-lesson'], { a: 99 }), Number.NaN, 'en').certificateEligible, false);
 });
+
+test('a malformed individual score does not fall back to a historical pass', () => {
+  const result = calculateCurriculumProgress([guide('a')], learner(['a-lesson'], {
+    a: 100, 'a:a-test-0': Number.NaN,
+  }), 80, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.equal(result.completedItems, 1);
+});
+
+test('scores outside 0 through 100 never count as a pass', () => {
+  for (const score of [-1, 101, Infinity, Number.NaN]) {
+    const result = calculateCurriculumProgress([guide('a')], learner(['a-lesson'], { 'a:a-test-0': score }), 80, 'en');
+    assert.equal(result.certificateEligible, false);
+  }
+});
