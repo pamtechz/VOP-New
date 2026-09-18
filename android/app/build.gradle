@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.rvc.vopapp"
+    namespace = "com.sda.vop"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.rvc.vopapp"
+        applicationId "com.sda.vop"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
