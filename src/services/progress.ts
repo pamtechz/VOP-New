@@ -1,5 +1,5 @@
 import type { DiscoverGuide, User, LanguageCode, Lesson } from '../types';
-import { isQuizConfigured } from './quiz';
+import { isQuizConfigured } from './quiz.ts';
 
 export interface GuideProgress {
   guideId: string;
