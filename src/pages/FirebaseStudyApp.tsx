@@ -60,6 +60,9 @@ export function FirebaseStudyApp() {
     }
   }
 
+  const languageIndex = manifest?.languages.indexOf(language) ?? -1;
+  const selectedTitles = languageIndex >= 0 ? manifest?.titles[languageIndex] : undefined;
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <header style={{ padding: '1rem', borderBottom: '1px solid var(--border-color, #d3d9e2)' }}>
@@ -86,7 +89,8 @@ export function FirebaseStudyApp() {
           {manifest && lessonId && (
             <LessonViewer key={`${language}/${lessonId}`} lang={language} lessonId={lessonId} onBack={() => setLessonId(null)} />
           )}
-          {manifest && !lessonId && (
+          {manifest && !lessonId && !selectedTitles && <p role="status">Selecting your study language…</p>}
+          {manifest && !lessonId && selectedTitles && (
             <>
               <label htmlFor="vop-study-language">Study language</label>{' '}
               <select id="vop-study-language" value={language} onChange={event => {
@@ -100,7 +104,7 @@ export function FirebaseStudyApp() {
                 {manifest.lessonIds.map((id, index) => (
                   <li key={id}>
                     <button type="button" onClick={() => setLessonId(id)}>
-                      Lesson {index + 1}: {id}
+                      {selectedTitles[index]}
                     </button>
                   </li>
                 ))}
