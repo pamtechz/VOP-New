@@ -18,7 +18,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Check installed Java for local emulator only
+      # The Firebase Firestore emulator requires Java 21+. This job-scoped
+      # installation must not modify the shared runner's system Java.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify job-local Java runtime
         shell: powershell
         working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
