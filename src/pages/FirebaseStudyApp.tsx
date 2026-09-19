@@ -2,38 +2,13 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { firebaseSignOut } from '../services/firebaseAuth';
+import { readOfflineManifest, type OfflineManifest } from '../services/offlineManifest';
 import { LessonViewer } from './LessonViewer';
 import { SignInPage } from './SignInPage';
 
-type Manifest = {
-  schemaVersion: 1;
-  languages: string[];
-  lessonIds: string[];
-  count: number;
-  version: string;
-};
-
-const languagePattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
-const lessonPattern = /^[A-Za-z0-9_-]{1,80}$/;
-
-function readManifest(value: unknown): Manifest {
-  if (!value || typeof value !== 'object') throw new Error('Invalid offline lesson manifest.');
-  const manifest = value as Partial<Manifest>;
-  if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.languages) ||
-      !Array.isArray(manifest.lessonIds) || manifest.languages.length !== 80 ||
-      manifest.lessonIds.length !== 26 || manifest.count !== 2080 ||
-      !manifest.languages.every(lang => typeof lang === 'string' && languagePattern.test(lang)) ||
-      !manifest.lessonIds.every(id => typeof id === 'string' && lessonPattern.test(id)) ||
-      new Set(manifest.languages).size !== 80 || new Set(manifest.lessonIds).size !== 26 ||
-      typeof manifest.version !== 'string' || !/^[a-f0-9]{64}$/.test(manifest.version)) {
-    throw new Error('Incomplete or invalid offline lesson manifest. This build must not be distributed.');
-  }
-  return manifest as Manifest;
-}
-
 /** Only APK-bundled assets are used for lesson discovery and reading; no Firestore content queries. */
 export function FirebaseStudyApp() {
-  const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [manifest, setManifest] = useState<OfflineManifest | null>(null);
   const [manifestError, setManifestError] = useState('');
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [language, setLanguage] = useState('');
@@ -61,7 +36,7 @@ export function FirebaseStudyApp() {
         const response = await fetch(`${base}lessons/manifest.json`, { signal: controller.signal });
         if (!response.ok) throw new Error('The approved offline lesson bundle is not installed.');
         const content: unknown = await response.json();
-        const catalog = readManifest(content);
+        const catalog = readOfflineManifest(content);
         if (controller.signal.aborted) return;
         setManifest(catalog);
         setLanguage(previous => catalog.languages.includes(previous) ? previous : catalog.languages[0]);
