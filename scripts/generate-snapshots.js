@@ -8,10 +8,9 @@ import { fileURLToPath } from 'node:url';
 // Build-time only: this script never connects to Firestore or executes in the APK.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const source = resolve(root, process.env.LESSONS_MASTER_PATH || 'content/lessons.master.json');
+const policyPath = join(root, 'config/curriculum-policy.json');
 const publicDir = join(root, 'public');
 const destination = join(publicDir, 'lessons');
-const expectedLanguages = Number(process.env.SNAPSHOT_EXPECTED_LANGUAGES ?? 80);
-const expectedLessons = Number(process.env.SNAPSHOT_EXPECTED_LESSONS ?? 26);
 const requireValue = (ok, message) => { if (!ok) throw new Error(message); };
 const languagePattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 const lessonPattern = /^[a-zA-Z0-9_-]{1,80}$/;
@@ -27,8 +26,16 @@ const uniqueStrings = (values, name, pattern) => {
 };
 
 async function run() {
-  requireValue(Number.isSafeInteger(expectedLanguages) && expectedLanguages > 0, 'Invalid SNAPSHOT_EXPECTED_LANGUAGES');
-  requireValue(Number.isSafeInteger(expectedLessons) && expectedLessons > 0, 'Invalid SNAPSHOT_EXPECTED_LESSONS');
+  let policy;
+  try { policy = JSON.parse(await readFile(policyPath, 'utf8')); }
+  catch (error) { throw new Error(`Cannot read approved curriculum policy at ${policyPath}: ${error.message}`); }
+  requireValue(policy && typeof policy === 'object' && !Array.isArray(policy) &&
+    policy.schemaVersion === 1 && Object.keys(policy).length === 3 &&
+    Number.isSafeInteger(policy.expectedLanguageCount) && policy.expectedLanguageCount > 0 &&
+    Number.isSafeInteger(policy.expectedLessonCount) && policy.expectedLessonCount > 0,
+  'Curriculum policy must configure valid language and lesson counts');
+  const expectedLanguages = policy.expectedLanguageCount;
+  const expectedLessons = policy.expectedLessonCount;
   let master;
   try { master = JSON.parse(await readFile(source, 'utf8')); }
   catch (error) { throw new Error(`Cannot read complete translation master at ${source}: ${error.message}`); }
@@ -38,6 +45,7 @@ async function run() {
   requireValue(languages.length === expectedLanguages, `Expected ${expectedLanguages} languages, found ${languages.length}`);
   requireValue(lessonIds.length === expectedLessons, `Expected ${expectedLessons} lesson IDs, found ${lessonIds.length}`);
   const count = languages.length * lessonIds.length;
+  requireValue(Number.isSafeInteger(count), 'Invalid curriculum policy inventory product');
   requireValue(Array.isArray(master.lessons) && master.lessons.length === count, `Expected ${count} lesson translations, found ${master.lessons?.length ?? 0}`);
   const allowedLanguages = new Set(languages);
   const allowedLessons = new Set(lessonIds);
