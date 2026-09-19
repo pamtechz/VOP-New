@@ -1,0 +1,57 @@
+name: Install and prove VOP Firestore emulator rules once
+on:
+  push:
+    branches: [fix/reference-design-and-certification-integrity]
+    paths: [.github/workflows/install-vop-rule-tests-once.yml]
+permissions:
+  contents: write
+jobs:
+  rules:
+    runs-on: [self-hosted, KASAINSTITUTE]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/reference-design-and-certification-integrity
+          persist-credentials: true
+          path: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check installed Java for local emulator only
+        shell: powershell
+        working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          java -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install emulator test tooling and run security tests
+        shell: powershell
+        working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          npm install --save-dev --save-exact @firebase/rules-unit-testing firebase-tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm audit --omit=dev --audit-level=moderate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx firebase emulators:exec --project demo-vop-security-rules --only firestore 'node --test tests/firestoreRules.test.mjs'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit reproducible VOP security-test dependencies only
+        shell: powershell
+        working-directory: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add package.json package-lock.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $changed = @(git diff --cached --name-only)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($changed.Count -eq 0) { Write-Output 'Emulator tooling already installed.'; exit 0 }
+          git commit -m 'Add locked Firebase Emulator security rules test tooling'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/fix/reference-design-and-certification-integrity
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
