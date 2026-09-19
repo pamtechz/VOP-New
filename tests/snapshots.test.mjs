@@ -21,7 +21,7 @@ function master() {
   };
 }
 
-test('complete snapshots generate while incomplete and duplicate data fail without replacing the prior bundle', () => {
+test('complete snapshots and localized titles generate; incomplete data cannot replace approved output', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'vop-snapshots-'));
   try {
     mkdirSync(join(workspace, 'scripts'));
@@ -41,8 +41,14 @@ test('complete snapshots generate while incomplete and duplicate data fail witho
     assert.equal(run().status, 0);
     const manifestPath = join(workspace, 'public/lessons/manifest.json');
     const manifest = readFileSync(manifestPath, 'utf8');
-    assert.equal(JSON.parse(manifest).count, 4);
+    const catalog = JSON.parse(manifest);
+    assert.equal(catalog.count, 4);
+    assert.deepEqual(catalog.titles, [
+      ['en lesson-01', 'en lesson-02'],
+      ['bem lesson-01', 'bem lesson-02'],
+    ]);
     const snapshot = JSON.parse(readFileSync(join(workspace, 'public/lessons/bem/lesson-02.json'), 'utf8'));
+    assert.equal(snapshot.title, catalog.titles[1][1]);
     assert.equal(snapshot.pages.length, 20);
     assert.equal(snapshot.quiz.length, 5);
     assert.match(snapshot.revision, /^[a-f0-9]{64}$/);
