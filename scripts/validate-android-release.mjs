@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Project and Android package are pinned deployment identities, not learner data.
 const EXPECTED_PROJECT = 'voiceofprophecy';
 const EXPECTED_PACKAGE = 'com.sda.vop';
 const languagePattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
@@ -106,17 +107,26 @@ export async function validateAndroidRelease(root, environment) {
     /namespace\s*=\s*['"]com\.sda\.vop['"]/.test(gradle),
     'Android applicationId and namespace must both be com.sda.vop.');
 
+  const policy = await jsonFile(join(root, 'config/curriculum-policy.json'), 'approved curriculum release policy');
+  requireValid(exactKeys(policy, ['schemaVersion', 'expectedLanguageCount', 'expectedLessonCount']) &&
+    policy.schemaVersion === 1 &&
+    Number.isSafeInteger(policy.expectedLanguageCount) && policy.expectedLanguageCount > 0 &&
+    Number.isSafeInteger(policy.expectedLessonCount) && policy.expectedLessonCount > 0 &&
+    Number.isSafeInteger(policy.expectedLanguageCount * policy.expectedLessonCount),
+  'approved curriculum release policy has invalid language or lesson counts.');
   const manifest = await jsonFile(join(root, 'public/lessons/manifest.json'), 'approved offline lesson manifest');
   const languages = manifest?.languages;
   const lessonIds = manifest?.lessonIds;
   requireValid(exactKeys(manifest, ['schemaVersion', 'languages', 'lessonIds', 'count', 'version']) &&
-    manifest.schemaVersion === 1 && Array.isArray(languages) && languages.length === 80 &&
-    Array.isArray(lessonIds) && lessonIds.length === 26 && manifest.count === 2080 &&
+    manifest.schemaVersion === 1 && Array.isArray(languages) &&
+    languages.length === policy.expectedLanguageCount &&
+    Array.isArray(lessonIds) && lessonIds.length === policy.expectedLessonCount &&
+    manifest.count === languages.length * lessonIds.length &&
     digestPattern.test(manifest.version ?? '') &&
     languages.every(lang => typeof lang === 'string' && languagePattern.test(lang)) &&
     lessonIds.every(id => typeof id === 'string' && lessonPattern.test(id)) &&
-    new Set(languages).size === 80 && new Set(lessonIds).size === 26,
-    'an approved manifest with exactly 80 languages and 26 lessons is required.');
+    new Set(languages).size === languages.length && new Set(lessonIds).size === lessonIds.length,
+    `an approved manifest with exactly ${policy.expectedLanguageCount} languages and ${policy.expectedLessonCount} lessons is required.`);
   const revisions = [];
   for (const lang of languages) {
     for (const lessonId of lessonIds) {
@@ -127,7 +137,7 @@ export async function validateAndroidRelease(root, environment) {
   }
   requireValid(hash(revisions.sort()) === manifest.version,
     'offline lesson manifest integrity check failed; regenerate from the approved master.');
-  return { project: EXPECTED_PROJECT, packageName: EXPECTED_PACKAGE, snapshotCount: 2080 };
+  return { project: EXPECTED_PROJECT, packageName: EXPECTED_PACKAGE, snapshotCount: manifest.count };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
