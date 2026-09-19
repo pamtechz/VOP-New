@@ -30,6 +30,9 @@ const googleRegistration = {
 
 function setUp(root) {
   mkdirSync(join(root, 'android/app'), { recursive: true });
+  mkdirSync(join(root, 'config'), { recursive: true });
+  const policyPath = join(root, 'config/curriculum-policy.json');
+  writeFileSync(policyPath, JSON.stringify({ schemaVersion: 1, expectedLanguageCount: 80, expectedLessonCount: 26 }));
   writeFileSync(join(root, 'android/app/google-services.json'), JSON.stringify(googleRegistration));
   writeFileSync(join(root, 'android/app/build.gradle'), 'namespace = "com.sda.vop"\napplicationId "com.sda.vop"\n');
   writeFileSync(join(root, 'capacitor.config.ts'), "appId: 'com.sda.vop',\n");
@@ -58,13 +61,13 @@ function setUp(root) {
   writeFileSync(manifestPath, JSON.stringify({
     schemaVersion: 1, languages, lessonIds, count: 2080, version: digest(revisions.sort()),
   }));
-  return { languages, lessonIds, manifestPath };
+  return { languages, lessonIds, manifestPath, policyPath };
 }
 
 test('Android release validates registration and every complete snapshot and rejects tampering', async () => {
   const root = mkdtempSync(join(tmpdir(), 'vop-android-release-'));
   try {
-    const { languages, lessonIds, manifestPath } = setUp(root);
+    const { languages, lessonIds, manifestPath, policyPath } = setUp(root);
     const validate = () => validateAndroidRelease(root, publicEnvironment);
     assert.deepEqual(await validate(), {
       project: 'voiceofprophecy', packageName: 'com.sda.vop', snapshotCount: 2080,
@@ -87,6 +90,13 @@ test('Android release validates registration and every complete snapshot and rej
     writeFileSync(registration, JSON.stringify(noFingerprint));
     await assert.rejects(validate(), /SHA-1 fingerprint/);
     writeFileSync(registration, saved);
+
+    const approvedPolicy = readFileSync(policyPath, 'utf8');
+    unlinkSync(policyPath);
+    await assert.rejects(validate(), /missing approved curriculum release policy/);
+    writeFileSync(policyPath, JSON.stringify({ schemaVersion: 1, expectedLanguageCount: 79, expectedLessonCount: 26 }));
+    await assert.rejects(validate(), /exactly 79 languages and 26 lessons/);
+    writeFileSync(policyPath, approvedPolicy);
 
     const first = join(root, 'public/lessons', languages[0], `${lessonIds[0]}.json`);
     const original = readFileSync(first, 'utf8');
