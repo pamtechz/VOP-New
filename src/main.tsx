@@ -3,12 +3,12 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import './reference.css';
 
-// Import the Firebase runtime only when the VOP Web configuration is complete.
-// Never expose the old browser-editable demo as a production authentication fallback.
+// Production must not even bundle the browser-editable demonstration application.
+// The import is guarded at compile time by Vite's import.meta.env.DEV constant.
 const FirebaseStudyApp = lazy(async () => ({
   default: (await import('./pages/FirebaseStudyApp')).FirebaseStudyApp,
 }));
-const DevelopmentDemo = lazy(() => import('./App'));
+const DevelopmentDemo = import.meta.env.DEV ? lazy(() => import('./App')) : null;
 
 const firebaseConfigured = Boolean(
   import.meta.env.VITE_FIREBASE_API_KEY &&
@@ -30,7 +30,7 @@ function Root() {
   }
   return (
     <Suspense fallback={<main aria-busy="true"><p>Opening Voice of Prophecy…</p></main>}>
-      {demoEnabled ? <DevelopmentDemo /> : <FirebaseStudyApp />}
+      {demoEnabled && DevelopmentDemo ? <DevelopmentDemo /> : <FirebaseStudyApp />}
     </Suspense>
   );
 }
