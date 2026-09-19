@@ -84,6 +84,9 @@ async function run() {
   for (const lang of languages) for (const lessonId of lessonIds) {
     requireValue(snapshots.has(`${lang}/${lessonId}`), `Missing translation: ${lang}/${lessonId}`);
   }
+  // The locale-specific catalog is derived from validated material; never
+  // replace missing translations with generic titles or embedded demo text.
+  const titles = languages.map(lang => lessonIds.map(lessonId => snapshots.get(`${lang}/${lessonId}`).title));
   await mkdir(publicDir, { recursive: true });
   const stage = await mkdtemp(join(publicDir, '.lessons-stage-'));
   const backup = join(publicDir, `.lessons-backup-${randomUUID()}`);
@@ -99,6 +102,7 @@ async function run() {
       schemaVersion: 1,
       languages,
       lessonIds,
+      titles,
       count,
       // Deterministic version; do not regenerate the APK when source is unchanged.
       version: createHash('sha256').update(JSON.stringify([...snapshots].map(([key, data]) => [key, data.revision]).sort())).digest('hex'),
