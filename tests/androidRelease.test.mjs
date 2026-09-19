@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { validateAndroidRelease } from '../scripts/validate-android-release.mjs';
 
+const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const publicEnvironment = {
   VITE_FIREBASE_API_KEY: 'TEST_PUBLIC_WEB_KEY_NOT_A_REAL_CREDENTIAL',
   VITE_FIREBASE_AUTH_DOMAIN: 'voiceofprophecy.firebaseapp.com',
@@ -36,21 +38,35 @@ function setUp(root) {
   const lessonIds = Array.from({ length: 26 }, (_, index) => `lesson-${String(index + 1).padStart(2, '0')}`);
   const lessonDir = join(root, 'public/lessons');
   mkdirSync(lessonDir, { recursive: true });
-  writeFileSync(join(lessonDir, 'manifest.json'), JSON.stringify({
-    schemaVersion: 1, languages, lessonIds, count: 2080, version: 'b'.repeat(64),
+  const pages = Array.from({ length: 20 }, (_, index) => ({
+    pageNumber: index + 1, title: `Reading page ${index + 1}`, content: `Substantive approved test fixture page ${index + 1}.`,
   }));
+  const quiz = Array.from({ length: 5 }, (_, index) => ({
+    id: `q${index + 1}`, prompt: `Question ${index + 1}`, options: ['Option one', 'Option two'], correctOptionIndex: 0,
+  }));
+  const revisions = [];
   for (const language of languages) {
     mkdirSync(join(lessonDir, language));
-    for (const lesson of lessonIds) writeFileSync(join(lessonDir, language, `${lesson}.json`), '{}');
+    for (const lesson of lessonIds) {
+      const payload = { schemaVersion: 1, language, lessonId: lesson, title: `${language} ${lesson}`, pages, quiz };
+      const revision = digest(payload);
+      writeFileSync(join(lessonDir, language, `${lesson}.json`), JSON.stringify({ ...payload, revision }));
+      revisions.push([`${language}/${lesson}`, revision]);
+    }
   }
-  return { languages, lessonIds };
+  const manifestPath = join(lessonDir, 'manifest.json');
+  writeFileSync(manifestPath, JSON.stringify({
+    schemaVersion: 1, languages, lessonIds, count: 2080, version: digest(revisions.sort()),
+  }));
+  return { languages, lessonIds, manifestPath };
 }
 
-test('Android release validates registration, configuration and entire packaged lesson matrix', async () => {
+test('Android release validates registration and every complete snapshot and rejects tampering', async () => {
   const root = mkdtempSync(join(tmpdir(), 'vop-android-release-'));
   try {
-    const { languages, lessonIds } = setUp(root);
-    assert.deepEqual(await validateAndroidRelease(root, publicEnvironment), {
+    const { languages, lessonIds, manifestPath } = setUp(root);
+    const validate = () => validateAndroidRelease(root, publicEnvironment);
+    assert.deepEqual(await validate(), {
       project: 'voiceofprophecy', packageName: 'com.sda.vop', snapshotCount: 2080,
     });
     await assert.rejects(validateAndroidRelease(root, { ...publicEnvironment, VITE_FIREBASE_PROJECT_ID: 'other-project' }),
@@ -61,20 +77,38 @@ test('Android release validates registration, configuration and entire packaged 
     const registration = join(root, 'android/app/google-services.json');
     const saved = readFileSync(registration, 'utf8');
     unlinkSync(registration);
-    await assert.rejects(validateAndroidRelease(root, publicEnvironment), /missing Firebase Android registration/);
+    await assert.rejects(validate(), /missing Firebase Android registration/);
     const mismatch = structuredClone(googleRegistration);
     mismatch.client[0].client_info.android_client_info.package_name = 'com.other.app';
     writeFileSync(registration, JSON.stringify(mismatch));
-    await assert.rejects(validateAndroidRelease(root, publicEnvironment), /register Android package/);
+    await assert.rejects(validate(), /register Android package/);
     const noFingerprint = structuredClone(googleRegistration);
     noFingerprint.client[0].oauth_client = noFingerprint.client[0].oauth_client.filter(client => client.client_type !== 1);
     writeFileSync(registration, JSON.stringify(noFingerprint));
-    await assert.rejects(validateAndroidRelease(root, publicEnvironment), /SHA-1 fingerprint/);
+    await assert.rejects(validate(), /SHA-1 fingerprint/);
     writeFileSync(registration, saved);
 
-    const missingLesson = join(root, 'public/lessons', languages[0], `${lessonIds[0]}.json`);
-    unlinkSync(missingLesson);
-    await assert.rejects(validateAndroidRelease(root, publicEnvironment), /snapshot .* is missing/);
+    const first = join(root, 'public/lessons', languages[0], `${lessonIds[0]}.json`);
+    const original = readFileSync(first, 'utf8');
+    unlinkSync(first);
+    await assert.rejects(validate(), /missing snapshot .*json/);
+    writeFileSync(first, '{}');
+    await assert.rejects(validate(), /invalid schema or identity/);
+    writeFileSync(first, '{broken json');
+    await assert.rejects(validate(), /invalid JSON in snapshot/);
+    const tampered = JSON.parse(original);
+    tampered.pages[0].content = 'Changed after approval';
+    writeFileSync(first, JSON.stringify(tampered));
+    await assert.rejects(validate(), /does not match its revision hash/);
+    writeFileSync(first, original);
+
+    const originalManifest = readFileSync(manifestPath, 'utf8');
+    const changedManifest = JSON.parse(originalManifest);
+    changedManifest.version = 'b'.repeat(64);
+    writeFileSync(manifestPath, JSON.stringify(changedManifest));
+    await assert.rejects(validate(), /manifest integrity check failed/);
+    writeFileSync(manifestPath, originalManifest);
+    assert.equal((await validate()).snapshotCount, 2080);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
