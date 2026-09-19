@@ -29,8 +29,8 @@ function exactKeys(value, keys) {
     Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 }
 
-/** Only allow the generated schema, not arbitrary metadata or an empty placeholder file. */
-function validateSnapshot(snapshot, language, lessonId) {
+/** Only allow the generated schema; title, revision and content must all agree. */
+function validateSnapshot(snapshot, language, lessonId, approvedTitle) {
   const label = `snapshot ${language}/${lessonId}.json`;
   requireValid(exactKeys(snapshot, ['schemaVersion', 'language', 'lessonId', 'title', 'pages', 'quiz', 'revision']) &&
     snapshot.schemaVersion === 1 && snapshot.language === language && snapshot.lessonId === lessonId &&
@@ -38,6 +38,8 @@ function validateSnapshot(snapshot, language, lessonId) {
     Array.isArray(snapshot.pages) && snapshot.pages.length === 20 &&
     Array.isArray(snapshot.quiz) && snapshot.quiz.length === 5 && digestPattern.test(snapshot.revision),
   `${label} has an invalid schema or identity.`);
+  requireValid(snapshot.title === approvedTitle,
+    `${label} title does not match the approved localized catalog.`);
   snapshot.pages.forEach((page, index) => {
     requireValid(exactKeys(page, ['pageNumber', 'title', 'content']) && page.pageNumber === index + 1 &&
       typeof page.title === 'string' && !!page.title.trim() &&
@@ -56,7 +58,7 @@ function validateSnapshot(snapshot, language, lessonId) {
     `${label}: quiz question ${index + 1} is invalid.`);
     ids.add(question.id);
   });
-  // Match the generator's canonical object property order and SHA-256 calculation.
+  // Match the generator's canonical property order and SHA-256 calculation.
   const payload = {
     schemaVersion: 1, language, lessonId, title: snapshot.title,
     pages: snapshot.pages, quiz: snapshot.quiz,
@@ -117,7 +119,8 @@ export async function validateAndroidRelease(root, environment) {
   const manifest = await jsonFile(join(root, 'public/lessons/manifest.json'), 'approved offline lesson manifest');
   const languages = manifest?.languages;
   const lessonIds = manifest?.lessonIds;
-  requireValid(exactKeys(manifest, ['schemaVersion', 'languages', 'lessonIds', 'count', 'version']) &&
+  const titles = manifest?.titles;
+  requireValid(exactKeys(manifest, ['schemaVersion', 'languages', 'lessonIds', 'titles', 'count', 'version']) &&
     manifest.schemaVersion === 1 && Array.isArray(languages) &&
     languages.length === policy.expectedLanguageCount &&
     Array.isArray(lessonIds) && lessonIds.length === policy.expectedLessonCount &&
@@ -125,14 +128,17 @@ export async function validateAndroidRelease(root, environment) {
     digestPattern.test(manifest.version ?? '') &&
     languages.every(lang => typeof lang === 'string' && languagePattern.test(lang)) &&
     lessonIds.every(id => typeof id === 'string' && lessonPattern.test(id)) &&
-    new Set(languages).size === languages.length && new Set(lessonIds).size === lessonIds.length,
-    `an approved manifest with exactly ${policy.expectedLanguageCount} languages and ${policy.expectedLessonCount} lessons is required.`);
+    new Set(languages).size === languages.length && new Set(lessonIds).size === lessonIds.length &&
+    Array.isArray(titles) && titles.length === languages.length &&
+    titles.every(row => Array.isArray(row) && row.length === lessonIds.length &&
+      row.every(title => typeof title === 'string' && title.trim().length > 0)),
+    `an approved manifest with exactly ${policy.expectedLanguageCount} languages, ${policy.expectedLessonCount} lessons and complete localized titles is required.`);
   const revisions = [];
-  for (const lang of languages) {
-    for (const lessonId of lessonIds) {
+  for (const [languageIndex, lang] of languages.entries()) {
+    for (const [lessonIndex, lessonId] of lessonIds.entries()) {
       const path = join(root, 'public/lessons', lang, `${lessonId}.json`);
       const snapshot = await jsonFile(path, `snapshot ${lang}/${lessonId}.json`);
-      revisions.push([`${lang}/${lessonId}`, validateSnapshot(snapshot, lang, lessonId)]);
+      revisions.push([`${lang}/${lessonId}`, validateSnapshot(snapshot, lang, lessonId, titles[languageIndex][lessonIndex])]);
     }
   }
   requireValid(hash(revisions.sort()) === manifest.version,
