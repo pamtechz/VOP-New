@@ -19,11 +19,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+      # No setup-node cache: this Windows runner has no gzip executable and
+      # post-job tar cache saving fails. npm retains its own local cache.
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-          cache-dependency-path: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}/package-lock.json
       - name: Install locked dependencies
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm ci
@@ -35,4 +35,4 @@ jobs:
         run: npm run lint
       - name: Regression tests
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts tests/snapshots.test.mjs tests/androidRelease.test.mjs
+        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts tests/snapshots.test.mjs tests/androidRelease.test.mjs tests/productionAssets.test.mjs
