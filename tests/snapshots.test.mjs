@@ -26,13 +26,15 @@ test('complete snapshots generate while incomplete and duplicate data fail witho
   try {
     mkdirSync(join(workspace, 'scripts'));
     mkdirSync(join(workspace, 'content'));
+    mkdirSync(join(workspace, 'config'));
     copyFileSync(generator, join(workspace, 'scripts/generate-snapshots.js'));
     writeFileSync(join(workspace, 'package.json'), '{"type":"module"}');
+    const policyPath = join(workspace, 'config/curriculum-policy.json');
+    const approvedPolicy = { schemaVersion: 1, expectedLanguageCount: 2, expectedLessonCount: 2 };
+    writeFileSync(policyPath, JSON.stringify(approvedPolicy));
     const source = join(workspace, 'content/lessons.master.json');
     const run = () => spawnSync(process.execPath, ['scripts/generate-snapshots.js'], {
-      cwd: workspace,
-      env: { ...process.env, SNAPSHOT_EXPECTED_LANGUAGES: '2', SNAPSHOT_EXPECTED_LESSONS: '2' },
-      encoding: 'utf8',
+      cwd: workspace, encoding: 'utf8',
     });
     const good = master();
     writeFileSync(source, JSON.stringify(good));
@@ -45,6 +47,10 @@ test('complete snapshots generate while incomplete and duplicate data fail witho
     assert.equal(snapshot.quiz.length, 5);
     assert.match(snapshot.revision, /^[a-f0-9]{64}$/);
 
+    writeFileSync(policyPath, JSON.stringify({ ...approvedPolicy, expectedLanguageCount: 3 }));
+    assert.notEqual(run().status, 0, 'mismatched approved inventory must fail');
+    assert.equal(readFileSync(manifestPath, 'utf8'), manifest);
+    writeFileSync(policyPath, JSON.stringify(approvedPolicy));
     good.lessons.pop();
     writeFileSync(source, JSON.stringify(good));
     assert.notEqual(run().status, 0, 'missing translation must fail');
