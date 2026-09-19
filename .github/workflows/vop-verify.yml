@@ -35,7 +35,7 @@ jobs:
         run: npm run lint
       - name: Regression tests
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts tests/snapshots.test.mjs tests/androidRelease.test.mjs tests/productionAssets.test.mjs
+        run: node --experimental-strip-types --test tests/offlineManifest.test.ts tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts tests/snapshots.test.mjs tests/androidRelease.test.mjs tests/productionAssets.test.mjs
       - name: Reject moderate or worse production dependency vulnerabilities
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm audit --omit=dev --audit-level=moderate
