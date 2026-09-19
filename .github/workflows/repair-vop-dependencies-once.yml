@@ -1,0 +1,55 @@
+name: Repair VOP dependency lockfile once
+on:
+  push:
+    branches: [fix/reference-design-and-certification-integrity]
+    paths: [.github/workflows/repair-vop-dependencies-once.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: [self-hosted, KASAINSTITUTE]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/reference-design-and-certification-integrity
+          persist-credentials: true
+          path: vop-lock-repair-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Regenerate lockfile, validate clean install, audit and Capacitor CLI
+        shell: powershell
+        working-directory: vop-lock-repair-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ls uuid xcode @capacitor/cli
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm audit --omit=dev --audit-level=moderate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx cap --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit audited lockfile only to VOP branch
+        shell: powershell
+        working-directory: vop-lock-repair-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add package-lock.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $changed = @(git diff --cached --name-only)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($changed.Count -eq 0) { Write-Output 'No lockfile changes required.'; exit 0 }
+          git commit -m 'Pin patched uuid in Capacitor CLI dependency graph'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/fix/reference-design-and-certification-integrity
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
