@@ -2,6 +2,8 @@ export type OfflineManifest = {
   schemaVersion: 1;
   languages: string[];
   lessonIds: string[];
+  /** Localized titles indexed by [languages index][lessonIds index]. */
+  titles: string[][];
   count: number;
   version: string;
 };
@@ -11,9 +13,9 @@ const lessonPattern = /^[A-Za-z0-9_-]{1,80}$/;
 const digestPattern = /^[a-f0-9]{64}$/;
 
 /**
- * The learner catalog is sourced entirely from an approved bundled manifest.
- * Release-time checks independently enforce the expected curriculum size;
- * this parser must never invent or hardcode language or lesson records.
+ * The learner catalog comes exclusively from the approved, APK-bundled manifest.
+ * No lesson names, translations, languages, IDs or counts are substituted from code.
+ * Release checks separately validate its inventory and each title against the JSON.
  */
 export function readOfflineManifest(value: unknown): OfflineManifest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -22,11 +24,15 @@ export function readOfflineManifest(value: unknown): OfflineManifest {
   const manifest = value as Partial<OfflineManifest>;
   const languages = manifest.languages;
   const lessonIds = manifest.lessonIds;
+  const titles = manifest.titles;
   if (manifest.schemaVersion !== 1 || !Array.isArray(languages) ||
       !Array.isArray(lessonIds) || languages.length === 0 || lessonIds.length === 0 ||
       !languages.every(lang => typeof lang === 'string' && languagePattern.test(lang)) ||
       !lessonIds.every(id => typeof id === 'string' && lessonPattern.test(id)) ||
       new Set(languages).size !== languages.length || new Set(lessonIds).size !== lessonIds.length ||
+      !Array.isArray(titles) || titles.length !== languages.length ||
+      !titles.every(row => Array.isArray(row) && row.length === lessonIds.length &&
+        row.every(title => typeof title === 'string' && title.trim().length > 0)) ||
       !Number.isSafeInteger(manifest.count) ||
       manifest.count !== languages.length * lessonIds.length ||
       typeof manifest.version !== 'string' || !digestPattern.test(manifest.version)) {
