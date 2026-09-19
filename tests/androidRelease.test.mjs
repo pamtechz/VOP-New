@@ -48,18 +48,24 @@ function setUp(root) {
     id: `q${index + 1}`, prompt: `Question ${index + 1}`, options: ['Option one', 'Option two'], correctOptionIndex: 0,
   }));
   const revisions = [];
+  const titles = [];
   for (const language of languages) {
     mkdirSync(join(lessonDir, language));
+    const row = [];
     for (const lesson of lessonIds) {
-      const payload = { schemaVersion: 1, language, lessonId: lesson, title: `${language} ${lesson}`, pages, quiz };
+      const title = `${language} ${lesson}`;
+      const payload = { schemaVersion: 1, language, lessonId: lesson, title, pages, quiz };
       const revision = digest(payload);
       writeFileSync(join(lessonDir, language, `${lesson}.json`), JSON.stringify({ ...payload, revision }));
+      row.push(title);
       revisions.push([`${language}/${lesson}`, revision]);
     }
+    titles.push(row);
   }
   const manifestPath = join(lessonDir, 'manifest.json');
   writeFileSync(manifestPath, JSON.stringify({
-    schemaVersion: 1, languages, lessonIds, count: 2080, version: digest(revisions.sort()),
+    schemaVersion: 1, languages, lessonIds, titles, count: languages.length * lessonIds.length,
+    version: digest(revisions.sort()),
   }));
   return { languages, lessonIds, manifestPath, policyPath };
 }
@@ -95,7 +101,7 @@ test('Android release validates registration and every complete snapshot and rej
     unlinkSync(policyPath);
     await assert.rejects(validate(), /missing approved curriculum release policy/);
     writeFileSync(policyPath, JSON.stringify({ schemaVersion: 1, expectedLanguageCount: 79, expectedLessonCount: 26 }));
-    await assert.rejects(validate(), /exactly 79 languages and 26 lessons/);
+    await assert.rejects(validate(), /exactly 79 languages, 26 lessons/);
     writeFileSync(policyPath, approvedPolicy);
 
     const first = join(root, 'public/lessons', languages[0], `${lessonIds[0]}.json`);
@@ -113,6 +119,14 @@ test('Android release validates registration and every complete snapshot and rej
     writeFileSync(first, original);
 
     const originalManifest = readFileSync(manifestPath, 'utf8');
+    const noTitles = JSON.parse(originalManifest);
+    delete noTitles.titles;
+    writeFileSync(manifestPath, JSON.stringify(noTitles));
+    await assert.rejects(validate(), /complete localized titles/);
+    const changedTitles = JSON.parse(originalManifest);
+    changedTitles.titles[0][0] = 'Unapproved replacement title';
+    writeFileSync(manifestPath, JSON.stringify(changedTitles));
+    await assert.rejects(validate(), /title does not match the approved localized catalog/);
     const changedManifest = JSON.parse(originalManifest);
     changedManifest.version = 'b'.repeat(64);
     writeFileSync(manifestPath, JSON.stringify(changedManifest));
