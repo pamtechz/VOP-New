@@ -18,6 +18,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Download this from the existing voiceofprophecy Firebase Android app
+# registered as com.sda.vop. Supply it in release CI through an approved secret.
+android/app/google-services.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
