@@ -1,4 +1,4 @@
-name: Install VOP Firebase rule test tooling once
+name: Lock VOP Firebase rule test tooling once
 on:
   push:
     branches: [fix/reference-design-and-certification-integrity]
@@ -6,50 +6,43 @@ on:
 permissions:
   contents: write
 jobs:
-  install:
+  lock:
     runs-on: [self-hosted, KASAINSTITUTE]
-    timeout-minutes: 25
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/reference-design-and-certification-integrity
           persist-credentials: true
-          path: vop-rule-deps-${{ github.run_id }}-${{ github.run_attempt }}
+          path: vop-rule-lock-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      # Dependency installation is independent of downloading/running emulators.
-      # The emulator proof belongs in a separate read-only workflow.
-      - name: Install and validate locked tooling
+      - name: Update dependency manifests only
         shell: powershell
-        working-directory: vop-rule-deps-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: vop-rule-lock-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          npm install --save-dev --save-exact @firebase/rules-unit-testing firebase-tools
+          npm install --package-lock-only --ignore-scripts --save-dev --save-exact @firebase/rules-unit-testing@5.0.2 firebase-tools@15.30.2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm ci
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm ls @firebase/rules-unit-testing firebase-tools
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm audit --omit=dev --audit-level=moderate
+          npm pkg get devDependencies."@firebase/rules-unit-testing" devDependencies.firebase-tools
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Commit only VOP dependency manifests
+      - name: Commit only dependency manifests
         shell: powershell
-        working-directory: vop-rule-deps-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: vop-rule-lock-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           git config user.name 'github-actions[bot]'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git add package.json package-lock.json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $changed = @(git diff --cached --name-only)
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($changed.Count -eq 0) { Write-Output 'Locked tooling is already present.'; exit 0 }
-          git commit -m 'Lock Firebase emulator rule testing dependencies'
+          if ($changed.Count -eq 0) { Write-Output 'Locked Firebase rule tooling already present.'; exit 0 }
+          if (($changed | Where-Object { $_ -notin @('package.json', 'package-lock.json') }).Count -gt 0) {
+            Write-Error 'Refusing to commit files outside dependency manifests.'
+            exit 1
+          }
+          git commit -m 'Lock Firebase security rule test tooling'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push origin HEAD:refs/heads/fix/reference-design-and-certification-integrity
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
