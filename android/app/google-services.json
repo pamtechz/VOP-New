@@ -1,29 +1,13 @@
 {
-  "project_info": {
-    "project_number": "895527572069",
-    "project_id": "voiceofprophecy",
-    "storage_bucket": "voiceofprophecy.firebasestorage.app"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:895527572069:android:9ecea5b39689d30d75ec8c",
-        "android_client_info": {
-          "package_name": "com.sda.vop"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCW4o_q47JSPFxX8NOcw89LlYHZKhIOAio"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
+  "type": "service_account",
+  "project_id": "voiceofprophecy",
+  "private_key_id": "3e7399198ef649a89589e9db7a65abb611516394",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCzxWYVpbrn2hvq\n0ED/JhS+kz6RlhfDyMnLf7vylELp1A6kR1XRMIMeywoM2EnThjcEEW4rGyYVjjdD\nnHzJB5DutaPyJRgvOMLM75xZauJdb5L6KthB9x1Q/nb6tp99WhnNZzO95Y+132Ob\nvIcdP0Tb1CjdJTJUB/IAUh6ZvFkgmEalCjjjvoAjoiP0BkA99ewoXadekcLz2B1a\n7tWP+rA009WHMjsV5vzvcsLEs+hSGL+ttknXiOhopw2lfVj99rAc9xcueHDiwle4\nULb6zNvXXCIqiJm4PKntVTcdBcKUOhiZVTq7ZESon1l36r2ojZjqQu/85vZO6Ijc\nkYqQmwadAgMBAAECggEAPOX9DA5Ff69ST7xWmFiVJG4K/xSiXk+RlJ9j0uxIsp+E\nikAkISZW9MKBWBKZB8/qqTUiZfXfc+Pmcr/7QbqPbV4Y+Ll6NNz8mKH/DAd6QX6/\ngoGrGsWUp9BcC9h7tOIl5YA1dfnjMhBH1QULnGvHbtSzNx8XqoG6iENJXHkClFiQ\nEMuTYxl7dQ0KI7UVH/cYRc5UPJ369HVMfM2Q5g8XbeC21E0SWzYonSBNvzxtdeKl\n7xxs9Nv0IGGdCL6rAwYg6DYItU/9EHuSHb4dAwqiKVbUIdedDBcao1zwLlISWlVb\nMqkB2aK1qAXP+jD079PRRkT59K/8NUKhzEQFwPZGXQKBgQDZ7gD0C36eEwYA5xQk\ndhCKQU7WWannt1eNfkcsaZ8X2U3xh89hdebz3ZaNRuWCgNcqH0blvdIS5e3vXRVn\n41/lG5eMP35KtGJr6MewAn8eH3XdVcUyQwN1+IkfFoRGwhDwctlAzUqubb5bSMxb\n8HhqSG+ej2AgInGlUxPyiG124wKBgQDTLOkMlrJ+si09sKwJV5rAQB3RXZ9vXsT5\n4HuL6VjqEQ3YOWlMxTpTozWlGvvDpELMCw7jH29C3ezFvlw0v5K5LKw/eHcDngWs\nKtu1GRQy8WSqmJjvyt/CkQBPwHao6f+sdPwsFSMzSRRl7bQ5yieYk/xAJY/1d01y\nGJ2XmwCEfwKBgFLR2lbkj2fvftaU+tiobby8+QMI7EL9MC67kLzWHvnnQXHK1QsK\nzYxb570k9k/UOvDtFfp1WwKHkxbmXx4uEOF2zO8lqg8l4kl0G39OU5TVC+vjjp99\nTDFnFGVWH0rssZdPbjTsT7deSXtTfSZrireJc7Hkdvl/XYUgv3HqWv9VAoGAHp1L\nJ+0M8XspPeFH/464u5hP+lNFUuL9UXBu2Mi6gCx6wlcIYf3Rx+BIXag8yY8ds/EC\ndoDPI3WC5uQDAA6p2biVPBpdvqOBFQWdlnKNUBlYy7aVrWXO7KkSz30KdtB9pWXM\nTSO/V6cHkwNT9nDNLrx9fFs1tJNYIetZpWnuOEcCgYAVXiTnN+GfwhQsoYYBjR6H\nBUWZnLCutu2ugshg+/AfF794ZYbfksQCOKffBEp5R+L1e2qHToMPh02k04o6bEvu\npsmnecuzadlW2Pp3wyqZ8iXn8fKqIj9zlv0c6DQ8qQjt61b11UiBrqnY2Gw/PUWw\nms5+omWjmgPo0dboUqxBlg==\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@voiceofprophecy.iam.gserviceaccount.com",
+  "client_id": "100998284022032183613",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40voiceofprophecy.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
 }
