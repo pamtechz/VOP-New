@@ -63,6 +63,7 @@ export function FirebaseStudyApp() {
 
   const languageIndex = manifest?.languages.indexOf(language) ?? -1;
   const selectedTitles = languageIndex >= 0 ? manifest?.titles[languageIndex] : undefined;
+  const languageLabel = languageIndex >= 0 ? manifest?.languageLabels[languageIndex] : undefined;
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
@@ -91,13 +92,13 @@ export function FirebaseStudyApp() {
         <main style={{ padding: '1rem', maxWidth: '70rem', margin: '0 auto' }}>
           {catalogLoading && <p role="status">Opening packaged lesson catalog…</p>}
           {manifestError && <p role="alert">{manifestError} No demonstration lessons or accounts will be substituted.</p>}
-          {manifest && lessonId && (
+          {manifest && lessonId && languageLabel && (
             <Suspense fallback={<p role="status">Opening lesson reader…</p>}>
-              <LessonViewer key={`${language}/${lessonId}`} lang={language} lessonId={lessonId} onBack={() => setLessonId(null)} />
+              <LessonViewer key={`${language}/${lessonId}`} lang={language} languageLabel={languageLabel} lessonId={lessonId} onBack={() => setLessonId(null)} />
             </Suspense>
           )}
-          {manifest && !lessonId && !selectedTitles && <p role="status">Selecting your study language…</p>}
-          {manifest && !lessonId && selectedTitles && (
+          {manifest && !lessonId && (!selectedTitles || !languageLabel) && <p role="status">Selecting your study language…</p>}
+          {manifest && !lessonId && selectedTitles && languageLabel && (
             <>
               <label htmlFor="vop-study-language">Study language</label>{' '}
               <select id="vop-study-language" value={language} onChange={event => {
