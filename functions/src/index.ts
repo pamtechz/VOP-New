@@ -69,7 +69,6 @@ export const vopAdminSetup = onCall(
       });
 
       await authAdmin.setCustomUserClaims(actorUid, {
-        ...(request.auth.token ?? {}),
         role: 'super_admin',
         adminNodeType: 'super',
         adminNodeId: 'super',
