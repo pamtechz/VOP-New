@@ -11,26 +11,30 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
-/** Authentication never derives role, grade, or approval data from editable client profiles. */
+function requireAuth() {
+  if (!auth) throw new Error('Firebase authentication is not configured for this deployment.');
+  return auth;
+}
+
 export const emailSignIn = (email: string, password: string) =>
-  signInWithEmailAndPassword(auth, email.trim(), password);
+  signInWithEmailAndPassword(requireAuth(), email.trim(), password);
 
 export const emailSignUp = (email: string, password: string) =>
-  createUserWithEmailAndPassword(auth, email.trim(), password);
+  createUserWithEmailAndPassword(requireAuth(), email.trim(), password);
 
 export const resetPassword = (email: string) =>
-  sendPasswordResetEmail(auth, email.trim());
+  sendPasswordResetEmail(requireAuth(), email.trim());
 
-/** Android Google sign-in must use native account selection, not an embedded OAuth WebView. */
+/** Android Google sign-in uses native account selection; the Web SDK consumes the returned ID token. */
 export async function googleSignIn() {
+  const firebaseAuth = requireAuth();
   if (!Capacitor.isNativePlatform()) {
-    return signInWithPopup(auth, new GoogleAuthProvider());
+    return signInWithPopup(firebaseAuth, new GoogleAuthProvider());
   }
   const result = await FirebaseAuthentication.signInWithGoogle();
   const idToken = result.credential?.idToken;
-  if (!idToken) throw new Error('Google sign-in returned no ID token. Check Android registration, SHA fingerprints and provider configuration.');
-  // The plugin's skipNativeAuth=true supplies a Google token; sign in the Web SDK explicitly.
-  return signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+  if (!idToken) throw new Error('Google sign-in returned no ID token. Check Android Firebase registration, SHA fingerprints and provider configuration.');
+  return signInWithCredential(firebaseAuth, GoogleAuthProvider.credential(idToken));
 }
 
-export const firebaseSignOut = () => signOut(auth);
+export const firebaseSignOut = () => signOut(requireAuth());
