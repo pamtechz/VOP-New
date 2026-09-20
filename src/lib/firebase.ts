@@ -47,10 +47,12 @@ let firestorePromise: Promise<Firestore> | undefined;
  */
 export function getProgressFirestore(): Promise<Firestore> {
   if (!app) return Promise.reject(new Error('Firebase is not configured for this deployment.'));
+  const firebaseApp = app;
+  if (!firebaseApp) return Promise.reject(new Error('Firebase is not configured for this deployment.'));
   if (!firestorePromise) {
     firestorePromise = import('firebase/firestore').then(module => {
       try {
-        return module.initializeFirestore(app, {
+        return module.initializeFirestore(firebaseApp, {
           localCache: module.persistentLocalCache({ tabManager: module.persistentMultipleTabManager() }),
         });
       } catch (error) {
