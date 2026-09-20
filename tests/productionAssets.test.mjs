@@ -5,8 +5,25 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const runtimeFiles = [
+  'src/main.tsx',
+  'src/pages/FirebaseStudyApp.tsx',
+  'src/pages/LessonViewer.tsx',
+  'src/pages/SignInPage.tsx',
+  'src/services/firebaseAuth.ts',
+  'src/services/offlineManifest.ts',
+  'src/lib/firebase.ts',
+];
 
-test('runtime entry cannot select the legacy hardcoded-data demo', () => {
+test('Firebase runtime cannot select or import legacy hardcoded operational data', () => {
+  for (const relative of runtimeFiles) {
+    const source = readFileSync(join(root, relative), 'utf8');
+    assert.ok(!source.includes("from '../data/initialData'"), `${relative} must not import initialData.`);
+    assert.ok(!source.includes("from './data/initialData'"), `${relative} must not import initialData.`);
+    assert.ok(!source.includes("from '../services/storage'"), `${relative} must not import legacy storage.`);
+    assert.ok(!source.includes("from './services/storage'"), `${relative} must not import legacy storage.`);
+    assert.ok(!source.includes('localStorage.'), `${relative} must not use localStorage as operational authority.`);
+  }
   const entry = readFileSync(join(root, 'src/main.tsx'), 'utf8');
   assert.ok(!entry.includes("import('./App')"), 'Runtime entry must never import the legacy demonstration application.');
   assert.ok(!entry.includes('VITE_VOP_ENABLE_DEMO'), 'No environment flag may re-enable hardcoded demo operational data.');
