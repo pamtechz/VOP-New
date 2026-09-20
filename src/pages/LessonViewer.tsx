@@ -151,7 +151,7 @@ function LessonContent({ lang, languageLabel, lessonId, onBack }: Props) {
     try {
       // The only Firestore write path. Discovery, reading and navigation use packaged JSON.
       const [db, firestore] = await Promise.all([getProgressFirestore(), import('firebase/firestore')]);
-      const progressRef = firestore.doc(firestore.collection(db, 'users', account.uid, 'progress'));
+      const progressRef = firestore.doc(firestore.collection(db, 'users', account.uid, 'progress'), account.uid);
       await firestore.setDoc(progressRef, {
         ownerUid: account.uid,
         language: lesson.language,
