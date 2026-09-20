@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { auth, getProgressFirestore } from '../lib/firebase';
 
 type Page = { pageNumber: number; title: string; content: string };
 type Question = {
@@ -109,7 +108,7 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
     Number.isInteger(answers[q.id]) && answers[q.id] >= 0 && answers[q.id] < q.options.length,
   );
 
-  const submit = () => {
+  async function submit() {
     if (submitting.current || !lesson || !allAnswered) return;
     const account = auth.currentUser;
     if (!authReady || !account || account.uid !== user?.uid) {
@@ -122,24 +121,31 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
     const correct = lesson.quiz.filter((q, i) => selections[i] === q.correctOptionIndex).length;
     const score = (correct / lesson.quiz.length) * 100;
     setPracticeScore(score);
-    const progressRef = doc(collection(db, 'users', account.uid, 'progress'));
-    // One write per click; promise resolves after backend acknowledgement, not local queuing.
     setSubmitState('queued');
-    void setDoc(progressRef, {
-      ownerUid: account.uid,
-      language: lesson.language,
-      lessonId: lesson.lessonId,
-      revision: lesson.revision,
-      answers: selections,
-      practiceScore: score,
-      status: 'practice_unverified',
-      submittedAt: serverTimestamp(),
-    }).then(() => setSubmitState('synced')).catch(error => {
+    try {
+      // Firestore code is loaded from the APK only on Submit; lesson reading never initializes it.
+      const [db, firestore] = await Promise.all([
+        getProgressFirestore(),
+        import('firebase/firestore'),
+      ]);
+      const progressRef = firestore.doc(firestore.collection(db, 'users', account.uid, 'progress'));
+      await firestore.setDoc(progressRef, {
+        ownerUid: account.uid,
+        language: lesson.language,
+        lessonId: lesson.lessonId,
+        revision: lesson.revision,
+        answers: selections,
+        practiceScore: score,
+        status: 'practice_unverified',
+        submittedAt: firestore.serverTimestamp(),
+      });
+      setSubmitState('synced');
+    } catch (error) {
       submitting.current = false;
       setSubmitState('failed');
       setSubmitError(error instanceof Error ? error.message : 'Progress was rejected; try again while online.');
-    });
-  };
+    }
+  }
 
   if (loading) return <main aria-busy="true"><p>Opening bundled lesson…</p></main>;
   if (loadError || !lesson) return <main role="alert"><p>{loadError || 'Lesson unavailable.'}</p>{onBack && <button type="button" onClick={onBack}>Back</button>}</main>;
@@ -173,7 +179,7 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
         ))}
         {!authReady && <p role="status">Checking sign-in…</p>}
         {authReady && !user && <p>Sign in while online to save progress. You can still read offline.</p>}
-        <button type="button" disabled={!allAnswered || !user || submitState === 'queued' || submitState === 'synced'} onClick={submit}>
+        <button type="button" disabled={!allAnswered || !user || submitState === 'queued' || submitState === 'synced'} onClick={() => void submit()}>
           Submit Quiz
         </button>
         {practiceScore !== null && <p>Practice score: {practiceScore}% (unverified).</p>}
