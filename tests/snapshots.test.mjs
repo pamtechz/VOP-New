@@ -10,9 +10,10 @@ const generator = join(dirname(fileURLToPath(import.meta.url)), '../scripts/gene
 
 function master() {
   const languages = ['en', 'bem'];
+  const languageLabels = ['English', 'Icibemba'];
   const lessonIds = ['lesson-01', 'lesson-02'];
   return {
-    languages, lessonIds,
+    languages, languageLabels, lessonIds,
     lessons: languages.flatMap(lang => lessonIds.map(lessonId => ({
       lang, lessonId, title: `${lang} ${lessonId}`,
       pages: Array.from({ length: 20 }, (_, i) => ({ pageNumber: i + 1, title: `Page ${i + 1}`, content: 'Approved sample text.' })),
@@ -21,7 +22,7 @@ function master() {
   };
 }
 
-test('complete snapshots and localized titles generate; incomplete data cannot replace approved output', () => {
+test('complete snapshots and data-driven catalog labels generate; incomplete data cannot replace approved output', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'vop-snapshots-'));
   try {
     mkdirSync(join(workspace, 'scripts'));
@@ -43,6 +44,7 @@ test('complete snapshots and localized titles generate; incomplete data cannot r
     const manifest = readFileSync(manifestPath, 'utf8');
     const catalog = JSON.parse(manifest);
     assert.equal(catalog.count, 4);
+    assert.deepEqual(catalog.languageLabels, ['English', 'Icibemba']);
     assert.deepEqual(catalog.titles, [
       ['en lesson-01', 'en lesson-02'],
       ['bem lesson-01', 'bem lesson-02'],
@@ -53,7 +55,14 @@ test('complete snapshots and localized titles generate; incomplete data cannot r
     assert.equal(snapshot.quiz.length, 5);
     assert.match(snapshot.revision, /^[a-f0-9]{64}$/);
 
+    const withoutLabels = structuredClone(good);
+    delete withoutLabels.languageLabels;
+    writeFileSync(source, JSON.stringify(withoutLabels));
+    assert.notEqual(run().status, 0, 'missing language labels must fail');
+    assert.equal(readFileSync(manifestPath, 'utf8'), manifest);
+
     writeFileSync(policyPath, JSON.stringify({ ...approvedPolicy, expectedLanguageCount: 3 }));
+    writeFileSync(source, JSON.stringify(good));
     assert.notEqual(run().status, 0, 'mismatched approved inventory must fail');
     assert.equal(readFileSync(manifestPath, 'utf8'), manifest);
     writeFileSync(policyPath, JSON.stringify(approvedPolicy));
