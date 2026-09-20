@@ -5,6 +5,7 @@ import { readOfflineManifest } from '../src/services/offlineManifest.ts';
 const valid = () => ({
   schemaVersion: 1,
   languages: ['en', 'bem'],
+  languageLabels: ['English', 'Icibemba'],
   lessonIds: ['lesson-01', 'lesson-02', 'lesson-03'],
   titles: [
     ['English title one', 'English title two', 'English title three'],
@@ -14,9 +15,10 @@ const valid = () => ({
   version: 'a'.repeat(64),
 });
 
-test('learner inventory and localized lesson titles come from manifest without fixed counts', () => {
+test('learner inventory, language names and localized lesson titles come from manifest without fixed counts', () => {
   const catalog = readOfflineManifest(valid());
   assert.deepEqual(catalog.languages, ['en', 'bem']);
+  assert.deepEqual(catalog.languageLabels, ['English', 'Icibemba']);
   assert.deepEqual(catalog.lessonIds, ['lesson-01', 'lesson-02', 'lesson-03']);
   assert.deepEqual(catalog.titles[0], ['English title one', 'English title two', 'English title three']);
   assert.deepEqual(catalog.titles[1], ['Bemba title one', 'Bemba title two', 'Bemba title three']);
@@ -27,6 +29,10 @@ test('empty, inconsistent, missing or malformed localized catalogs fail closed',
   const invalid = [
     null, [], {},
     { ...valid(), languages: [] },
+    { ...valid(), languageLabels: undefined },
+    { ...valid(), languageLabels: [] },
+    { ...valid(), languageLabels: ['English'] },
+    { ...valid(), languageLabels: ['English', ''] },
     { ...valid(), lessonIds: [] },
     { ...valid(), count: 2080 },
     { ...valid(), count: '6' },
