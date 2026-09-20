@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, firebaseConfigured } from '../lib/firebase';
 import { firebaseSignOut } from '../services/firebaseAuth';
 import { readOfflineManifest, type OfflineManifest } from '../services/offlineManifest';
 
@@ -20,14 +20,20 @@ export function FirebaseStudyApp() {
   const [showSignIn, setShowSignIn] = useState(false);
   const [signOutError, setSignOutError] = useState('');
 
-  useEffect(() => onAuthStateChanged(auth, account => {
-    setUser(account);
-    setAuthReady(true);
-    if (account) setShowSignIn(false);
-  }, () => {
-    setAuthReady(true);
-    setAuthError('Authentication could not be restored. Reading remains available offline.');
-  }), []);
+  useEffect(() => {
+    if (!auth) {
+      setAuthReady(true);
+      return;
+    }
+    return onAuthStateChanged(auth, account => {
+      setUser(account);
+      setAuthReady(true);
+      if (account) setShowSignIn(false);
+    }, () => {
+      setAuthReady(true);
+      setAuthError('Authentication could not be restored. Reading remains available offline.');
+    });
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,13 +77,14 @@ export function FirebaseStudyApp() {
         <h1>Voice of Prophecy</h1>
         <p>Offline Bible studies · Firebase-synchronized practice progress</p>
         {!authReady && <p role="status">Restoring your sign-in…</p>}
+        {!firebaseConfigured && <p role="status">Account synchronization is not configured yet. Offline lessons remain available.</p>}
         {authError && <p role="alert">{authError}</p>}
         {user ? (
           <div>
             <p>Signed in: {user.email || user.displayName || 'Your account'}</p>
             <button type="button" onClick={() => void signOut()}>Sign out</button>
           </div>
-        ) : authReady ? (
+        ) : authReady && firebaseConfigured ? (
           <button type="button" onClick={() => setShowSignIn(value => !value)}>
             {showSignIn ? 'Return to lessons' : 'Sign in or register to save progress'}
           </button>
@@ -119,7 +126,7 @@ export function FirebaseStudyApp() {
                   </li>
                 ))}
               </ol>
-              {!user && authReady && <p>Reading is available without signing in. Sign in to save practice progress to your account.</p>}
+              {!user && authReady && <p>Reading is available without signing in. {firebaseConfigured ? 'Sign in to save practice progress to your account.' : 'Account synchronization will be available after Firebase is configured.'}</p>}
             </>
           )}
         </main>
