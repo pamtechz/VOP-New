@@ -3,51 +3,54 @@ import test from 'node:test';
 import { readOfflineManifest } from '../src/services/offlineManifest.ts';
 
 const valid = () => ({
-  schemaVersion: 1,
-  languages: ['en', 'bem'],
-  languageLabels: ['English', 'Icibemba'],
+  schemaVersion: 2,
+  languages: ['bem', 'toi'],
+  languageLabels: ['Bemba', 'Tonga'],
   lessonIds: ['lesson-01', 'lesson-02', 'lesson-03'],
   titles: [
-    ['English title one', 'English title two', 'English title three'],
-    ['Bemba title one', 'Bemba title two', 'Bemba title three'],
+    ['Bemba source title one', 'Bemba source title two', 'Bemba source title three'],
+    ['Tonga source title one', 'Tonga source title two', 'Tonga source title three'],
   ],
   count: 6,
   version: 'a'.repeat(64),
+  assetHashes: { 'approved.jpg': 'b'.repeat(64) },
 });
 
-test('learner inventory, language names and localized lesson titles come from manifest without fixed counts', () => {
+test('real language names, variable lesson inventory, titles and image checksums come only from manifest', () => {
   const catalog = readOfflineManifest(valid());
-  assert.deepEqual(catalog.languages, ['en', 'bem']);
-  assert.deepEqual(catalog.languageLabels, ['English', 'Icibemba']);
+  assert.deepEqual(catalog.languages, ['bem', 'toi']);
+  assert.deepEqual(catalog.languageLabels, ['Bemba', 'Tonga']);
   assert.deepEqual(catalog.lessonIds, ['lesson-01', 'lesson-02', 'lesson-03']);
-  assert.deepEqual(catalog.titles[0], ['English title one', 'English title two', 'English title three']);
-  assert.deepEqual(catalog.titles[1], ['Bemba title one', 'Bemba title two', 'Bemba title three']);
+  assert.deepEqual(catalog.titles[0], ['Bemba source title one', 'Bemba source title two', 'Bemba source title three']);
+  assert.equal(catalog.assetHashes['approved.jpg'], 'b'.repeat(64));
   assert.equal(catalog.count, catalog.languages.length * catalog.lessonIds.length);
 });
 
-test('empty, inconsistent, missing or malformed localized catalogs fail closed', () => {
+test('missing, inconsistent, unsafe or old-schema catalogs fail closed', () => {
   const invalid = [
     null, [], {},
     { ...valid(), languages: [] },
     { ...valid(), languageLabels: undefined },
     { ...valid(), languageLabels: [] },
-    { ...valid(), languageLabels: ['English'] },
-    { ...valid(), languageLabels: ['English', ''] },
+    { ...valid(), languageLabels: ['Bemba'] },
+    { ...valid(), languageLabels: ['Bemba', ''] },
     { ...valid(), lessonIds: [] },
     { ...valid(), count: 2080 },
     { ...valid(), count: '6' },
-    { ...valid(), languages: ['en', 'en'] },
+    { ...valid(), languages: ['bem', 'bem'] },
     { ...valid(), lessonIds: ['lesson-01', 'lesson-01', 'lesson-03'] },
-    { ...valid(), languages: ['en', '../secret'] },
+    { ...valid(), languages: ['bem', '../secret'] },
     { ...valid(), lessonIds: ['../../admin', 'lesson-02', 'lesson-03'] },
     { ...valid(), titles: undefined },
     { ...valid(), titles: [] },
     { ...valid(), titles: [['Only one language']] },
-    { ...valid(), titles: [['Too few'], ['Bemba one', 'Bemba two', 'Bemba three']] },
-    { ...valid(), titles: [['English one', '', 'English three'], ['Bemba one', 'Bemba two', 'Bemba three']] },
-    { ...valid(), titles: [['English one', 123, 'English three'], ['Bemba one', 'Bemba two', 'Bemba three']] },
+    { ...valid(), titles: [['Too few'], ['Tonga one', 'Tonga two', 'Tonga three']] },
+    { ...valid(), titles: [['Bemba one', '', 'Bemba three'], ['Tonga one', 'Tonga two', 'Tonga three']] },
     { ...valid(), version: 'not-a-digest' },
-    { ...valid(), schemaVersion: 2 },
+    { ...valid(), assetHashes: undefined },
+    { ...valid(), assetHashes: { '../escape.jpg': 'a'.repeat(64) } },
+    { ...valid(), assetHashes: { 'approved.jpg': 'wrong' } },
+    { ...valid(), schemaVersion: 1 },
   ];
   for (const value of invalid) assert.throws(() => readOfflineManifest(value));
 });
