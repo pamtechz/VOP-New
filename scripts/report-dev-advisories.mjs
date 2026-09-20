@@ -1,12 +1,14 @@
 import { spawnSync } from 'node:child_process';
 
 // Diagnostic only: never run npm audit fix or modify the lockfile on a shared runner.
-const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const result = spawnSync(command, ['audit', '--json'], {
-  encoding: 'utf8',
-  maxBuffer: 20 * 1024 * 1024,
-  windowsHide: true,
-});
+// Node 24 cannot spawn .cmd scripts directly on Windows; use the command shell.
+const windows = process.platform === 'win32';
+const result = spawnSync(windows ? (process.env.ComSpec || 'cmd.exe') : 'npm',
+  windows ? ['/d', '/s', '/c', 'npm audit --json'] : ['audit', '--json'], {
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+    windowsHide: true,
+  });
 
 if (result.error) throw result.error;
 let report;
@@ -35,7 +37,7 @@ if (report) {
     }));
   }
   // This step identifies findings; the separate production audit enforces its gate.
-  // A non-audit failure (network or invalid invocation) must not be disguised as clean.
+  // Network and invocation failures must not be disguised as a clean result.
   if (result.status !== 0 && !Object.keys(vulnerabilities).length) {
     console.error(result.stderr || 'npm audit failed without reporting vulnerabilities.');
     process.exitCode = 1;
