@@ -33,7 +33,7 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
       match /progress/{recordId} {
         allow get, list: if isOwner(uid);
-        allow create: if isOwner(uid) && validProgress(uid);
+        allow create: if isOwner(uid) && recordId == uid && validProgress(uid);
         allow update, delete: if false;
       }
     }
