@@ -1,6 +1,8 @@
 export type OfflineManifest = {
   schemaVersion: 1;
   languages: string[];
+  /** Human-readable names aligned with languages; supplied by the approved master. */
+  languageLabels: string[];
   lessonIds: string[];
   /** Localized titles indexed by [languages index][lessonIds index]. */
   titles: string[][];
@@ -14,7 +16,7 @@ const digestPattern = /^[a-f0-9]{64}$/;
 
 /**
  * The learner catalog comes exclusively from the approved, APK-bundled manifest.
- * No lesson names, translations, languages, IDs or counts are substituted from code.
+ * No lesson names, language names, translations, IDs or counts are substituted from code.
  * Release checks separately validate its inventory and each title against the JSON.
  */
 export function readOfflineManifest(value: unknown): OfflineManifest {
@@ -23,11 +25,14 @@ export function readOfflineManifest(value: unknown): OfflineManifest {
   }
   const manifest = value as Partial<OfflineManifest>;
   const languages = manifest.languages;
+  const languageLabels = manifest.languageLabels;
   const lessonIds = manifest.lessonIds;
   const titles = manifest.titles;
   if (manifest.schemaVersion !== 1 || !Array.isArray(languages) ||
+      !Array.isArray(languageLabels) || languageLabels.length !== languages.length ||
       !Array.isArray(lessonIds) || languages.length === 0 || lessonIds.length === 0 ||
       !languages.every(lang => typeof lang === 'string' && languagePattern.test(lang)) ||
+      !languageLabels.every(label => typeof label === 'string' && label.trim().length > 0) ||
       !lessonIds.every(id => typeof id === 'string' && lessonPattern.test(id)) ||
       new Set(languages).size !== languages.length || new Set(lessonIds).size !== lessonIds.length ||
       !Array.isArray(titles) || titles.length !== languages.length ||
