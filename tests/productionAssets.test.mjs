@@ -7,6 +7,7 @@ import test from 'node:test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeFiles = [
   'src/main.tsx',
+  'src/config/deployment.ts',
   'src/pages/FirebaseStudyApp.tsx',
   'src/pages/LessonViewer.tsx',
   'src/pages/SignInPage.tsx',
@@ -27,6 +28,8 @@ test('Firebase runtime cannot select or import legacy hardcoded operational data
   const entry = readFileSync(join(root, 'src/main.tsx'), 'utf8');
   assert.ok(!entry.includes("import('./App')"), 'Runtime entry must never import the legacy demonstration application.');
   assert.ok(!entry.includes('VITE_VOP_ENABLE_DEMO'), 'No environment flag may re-enable hardcoded demo operational data.');
+  const firebaseClient = readFileSync(join(root, 'src/lib/firebase.ts'), 'utf8');
+  assert.ok(!firebaseClient.includes("=== 'voiceofprophecy'"), 'Firebase project identity belongs in deployment policy, not runtime literals.');
 });
 
 test('production bundle does not ship legacy demo UI or its hardcoded users', () => {
