@@ -49,12 +49,18 @@ function isSnapshot(value: unknown, lang: string, lessonId: string): value is Sn
 
 interface LessonViewerProps {
   lang: string;
+  languageLabel: string;
   lessonId: string;
   onBack?: () => void;
 }
 
-/** Lesson content is only fetched from APK-packaged Vite public/ assets, never Firestore. */
-export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
+/** A new lesson is a new component instance: no stale quiz answers or old content. */
+export function LessonViewer(props: LessonViewerProps) {
+  return <LessonViewerContent key={`${props.lang}/${props.lessonId}`} {...props} />;
+}
+
+/** Reading only uses APK-packaged Vite assets, never the lesson database. */
+function LessonViewerContent({ lang, languageLabel, lessonId, onBack }: LessonViewerProps) {
   const [lesson, setLesson] = useState<Snapshot | null>(null);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -65,27 +71,19 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
   const [submitError, setSubmitError] = useState('');
   const [practiceScore, setPracticeScore] = useState<number | null>(null);
   const submitting = useRef(false);
+  const invalidIdentifier = !langPattern.test(lang) || !lessonPattern.test(lessonId);
 
   useEffect(() => onAuthStateChanged(auth, account => {
     setUser(account);
+    setAuthReady(true);
+  }, () => {
+    setUser(null);
     setAuthReady(true);
   }), []);
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setLesson(null);
-    setLoadError('');
-    setAnswers({});
-    setPracticeScore(null);
-    setSubmitState('idle');
-    setSubmitError('');
-    submitting.current = false;
-    if (!langPattern.test(lang) || !lessonPattern.test(lessonId)) {
-      setLoadError('Invalid lesson or language identifier.');
-      setLoading(false);
-      return () => controller.abort();
-    }
+    if (invalidIdentifier) return () => controller.abort();
     const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
     const url = `${base}lessons/${lang}/${lessonId}.json`;
     void (async () => {
@@ -102,7 +100,7 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
       }
     })();
     return () => controller.abort();
-  }, [lang, lessonId]);
+  }, [invalidIdentifier, lang, lessonId]);
 
   const allAnswered = lesson !== null && lesson.quiz.every(q =>
     Number.isInteger(answers[q.id]) && answers[q.id] >= 0 && answers[q.id] < q.options.length,
@@ -123,7 +121,7 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
     setPracticeScore(score);
     setSubmitState('queued');
     try {
-      // Firestore code is loaded from the APK only on Submit; lesson reading never initializes it.
+      // Load Firestore only on Submit; reading requires no content database reads.
       const [db, firestore] = await Promise.all([
         getProgressFirestore(),
         import('firebase/firestore'),
@@ -147,6 +145,7 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
     }
   }
 
+  if (invalidIdentifier) return <main role="alert"><p>Invalid lesson or language identifier.</p>{onBack && <button type="button" onClick={onBack}>Back</button>}</main>;
   if (loading) return <main aria-busy="true"><p>Opening bundled lesson…</p></main>;
   if (loadError || !lesson) return <main role="alert"><p>{loadError || 'Lesson unavailable.'}</p>{onBack && <button type="button" onClick={onBack}>Back</button>}</main>;
 
@@ -154,7 +153,7 @@ export function LessonViewer({ lang, lessonId, onBack }: LessonViewerProps) {
     <main className="lesson-viewer">
       {onBack && <button type="button" onClick={onBack}>Back</button>}
       <h1>{lesson.title}</h1>
-      <p>{lesson.language.toUpperCase()} · Offline study · {lesson.pages.length} pages</p>
+      <p>{languageLabel} · Offline study · {lesson.pages.length} pages</p>
       {lesson.pages.map(page => (
         <section key={page.pageNumber} aria-labelledby={`page-${page.pageNumber}`}>
           <h2 id={`page-${page.pageNumber}`}>{page.pageNumber}. {page.title}</h2>
