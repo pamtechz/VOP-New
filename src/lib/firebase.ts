@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, initializeAuth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { deploymentPolicy } from '../config/deployment';
 
 // Firebase Web configuration is public. NEVER put service-account credentials in VITE_*.
@@ -16,7 +16,6 @@ const firebaseConfig = {
   appId: required(import.meta.env.VITE_FIREBASE_APP_ID, 'VITE_FIREBASE_APP_ID'),
 };
 
-// Fail closed if a release points learner data to a Firebase project other than the build policy.
 if (firebaseConfig.projectId !== deploymentPolicy.firebaseProjectId) {
   throw new Error('Firebase project does not match the Voice of Prophecy deployment policy.');
 }
@@ -31,8 +30,25 @@ export const auth = (() => {
   }
 })();
 
-// On Capacitor Android, the Web SDK persists in WebView IndexedDB, not native SQLite.
-// Offline writes may queue; only server acknowledgement means they are synchronized.
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-});
+let firestorePromise: Promise<Firestore> | undefined;
+
+/**
+ * Firestore is loaded only when progress synchronization is needed. Lesson text
+ * never depends on this function and always comes from APK-bundled snapshots.
+ * Capacitor Android persistence is WebView IndexedDB, not native SQLite.
+ */
+export function getProgressFirestore(): Promise<Firestore> {
+  if (!firestorePromise) {
+    firestorePromise = import('firebase/firestore').then(module => {
+      try {
+        return module.initializeFirestore(app, {
+          localCache: module.persistentLocalCache({ tabManager: module.persistentMultipleTabManager() }),
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === 'failed-precondition') return module.getFirestore(app);
+        throw error;
+      }
+    });
+  }
+  return firestorePromise;
+}
