@@ -31,7 +31,6 @@ function regexEscape(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Only allow the generated schema; title, revision and content must all agree. */
 function validateSnapshot(snapshot, language, lessonId, approvedTitle) {
   const label = `snapshot ${language}/${lessonId}.json`;
   requireValid(exactKeys(snapshot, ['schemaVersion', 'language', 'lessonId', 'title', 'pages', 'quiz', 'revision']) &&
@@ -130,11 +129,14 @@ export async function validateAndroidRelease(root, environment) {
   'approved curriculum release policy has invalid language or lesson counts.');
   const manifest = await jsonFile(join(root, 'public/lessons/manifest.json'), 'approved offline lesson manifest');
   const languages = manifest?.languages;
+  const languageLabels = manifest?.languageLabels;
   const lessonIds = manifest?.lessonIds;
   const titles = manifest?.titles;
-  requireValid(exactKeys(manifest, ['schemaVersion', 'languages', 'lessonIds', 'titles', 'count', 'version']) &&
+  requireValid(exactKeys(manifest, ['schemaVersion', 'languages', 'languageLabels', 'lessonIds', 'titles', 'count', 'version']) &&
     manifest.schemaVersion === 1 && Array.isArray(languages) &&
     languages.length === policy.expectedLanguageCount &&
+    Array.isArray(languageLabels) && languageLabels.length === languages.length &&
+    languageLabels.every(label => typeof label === 'string' && label.trim().length > 0) &&
     Array.isArray(lessonIds) && lessonIds.length === policy.expectedLessonCount &&
     manifest.count === languages.length * lessonIds.length &&
     digestPattern.test(manifest.version ?? '') &&
@@ -144,7 +146,7 @@ export async function validateAndroidRelease(root, environment) {
     Array.isArray(titles) && titles.length === languages.length &&
     titles.every(row => Array.isArray(row) && row.length === lessonIds.length &&
       row.every(title => typeof title === 'string' && title.trim().length > 0)),
-    `an approved manifest with exactly ${policy.expectedLanguageCount} languages, ${policy.expectedLessonCount} lessons and complete localized titles is required.`);
+    `an approved manifest with exactly ${policy.expectedLanguageCount} languages, ${policy.expectedLessonCount} lessons, language labels and complete localized titles is required.`);
   const revisions = [];
   for (const [languageIndex, lang] of languages.entries()) {
     for (const [lessonIndex, lessonId] of lessonIds.entries()) {
