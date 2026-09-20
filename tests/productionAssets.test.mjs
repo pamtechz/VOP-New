@@ -7,6 +7,7 @@ import test from 'node:test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeFiles = [
   'src/main.tsx',
+  'src/Root.tsx',
   'src/config/deployment.ts',
   'src/pages/FirebaseStudyApp.tsx',
   'src/pages/LessonViewer.tsx',
@@ -24,10 +25,9 @@ test('Firebase runtime cannot select or import legacy hardcoded operational data
     assert.ok(!source.includes("from '../services/storage'"), `${relative} must not import legacy storage.`);
     assert.ok(!source.includes("from './services/storage'"), `${relative} must not import legacy storage.`);
     assert.ok(!source.includes('localStorage.'), `${relative} must not use localStorage as operational authority.`);
+    assert.ok(!source.includes("import('./App')"), `${relative} must not load the legacy demonstration application.`);
+    assert.ok(!source.includes('VITE_VOP_ENABLE_DEMO'), `${relative} must not re-enable demonstration identities.`);
   }
-  const entry = readFileSync(join(root, 'src/main.tsx'), 'utf8');
-  assert.ok(!entry.includes("import('./App')"), 'Runtime entry must never import the legacy demonstration application.');
-  assert.ok(!entry.includes('VITE_VOP_ENABLE_DEMO'), 'No environment flag may re-enable hardcoded demo operational data.');
   const firebaseClient = readFileSync(join(root, 'src/lib/firebase.ts'), 'utf8');
   assert.ok(!firebaseClient.includes("=== 'voiceofprophecy'"), 'Firebase project identity belongs in deployment policy, not runtime literals.');
 });
