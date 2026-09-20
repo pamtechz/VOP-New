@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged, type Auth, type User } from 'firebase/auth';
 import { auth, getProgressFirestore } from '../lib/firebase';
 
 type TextBlock = { type: 'text'; text: string };
@@ -82,13 +82,21 @@ function LessonContent({ lang, languageLabel, lessonId, onBack }: Props) {
   const invalidIdentifier = !langPattern.test(lang) || !lessonPattern.test(lessonId);
   const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 
-  useEffect(() => onAuthStateChanged(auth, account => {
-    setUser(account);
-    setAuthReady(true);
-  }, () => {
-    setUser(null);
-    setAuthReady(true);
-  }), []);
+  useEffect(() => {
+    if (!auth) {
+      setUser(null);
+      setAuthReady(true);
+      return;
+    }
+    const authInstance: Auth = auth;
+    return onAuthStateChanged(authInstance, account => {
+      setUser(account);
+      setAuthReady(true);
+    }, () => {
+      setUser(null);
+      setAuthReady(true);
+    });
+  }, []);
 
   useEffect(() => () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -136,7 +144,7 @@ function LessonContent({ lang, languageLabel, lessonId, onBack }: Props) {
 
   async function submitQuiz() {
     if (submitting.current || !lesson || !allAnswered) return;
-    const account = auth.currentUser;
+    const account = auth?.currentUser;
     if (!authReady || !account || account.uid !== user?.uid) {
       setSubmitError('Sign in to synchronize practice progress. Reading remains available offline.');
       return;
