@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { firebaseSignOut } from '../services/firebaseAuth';
 import { readOfflineManifest, type OfflineManifest } from '../services/offlineManifest';
-import { LessonViewer } from './LessonViewer';
-import { SignInPage } from './SignInPage';
+
+const LessonViewer = lazy(async () => ({ default: (await import('./LessonViewer')).LessonViewer }));
+const SignInPage = lazy(async () => ({ default: (await import('./SignInPage')).SignInPage }));
 
 /** Only APK-bundled assets are used for lesson discovery and reading; no Firestore content queries. */
 export function FirebaseStudyApp() {
@@ -82,12 +83,18 @@ export function FirebaseStudyApp() {
         ) : null}
         {signOutError && <p role="alert">{signOutError}</p>}
       </header>
-      {showSignIn && !user ? <SignInPage /> : (
+      {showSignIn && !user ? (
+        <Suspense fallback={<main aria-busy="true"><p>Opening sign-in…</p></main>}>
+          <SignInPage />
+        </Suspense>
+      ) : (
         <main style={{ padding: '1rem', maxWidth: '70rem', margin: '0 auto' }}>
           {catalogLoading && <p role="status">Opening packaged lesson catalog…</p>}
           {manifestError && <p role="alert">{manifestError} No demonstration lessons or accounts will be substituted.</p>}
           {manifest && lessonId && (
-            <LessonViewer key={`${language}/${lessonId}`} lang={language} lessonId={lessonId} onBack={() => setLessonId(null)} />
+            <Suspense fallback={<p role="status">Opening lesson reader…</p>}>
+              <LessonViewer key={`${language}/${lessonId}`} lang={language} lessonId={lessonId} onBack={() => setLessonId(null)} />
+            </Suspense>
           )}
           {manifest && !lessonId && !selectedTitles && <p role="status">Selecting your study language…</p>}
           {manifest && !lessonId && selectedTitles && (
