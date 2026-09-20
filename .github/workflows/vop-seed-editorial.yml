@@ -1,0 +1,82 @@
+name: Seed VOP editorial lessons
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: Firebase project ID to seed
+        required: true
+        type: string
+      database_id:
+        description: Firestore database ID
+        required: true
+        default: "(default)"
+        type: string
+      acknowledge_source_headings:
+        description: Confirm review of the Bemba 11/12 visible lesson-number discrepancy
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vop-editorial-seed
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: [self-hosted, KASAINSTITUTE]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout VOP source
+        uses: actions/checkout@v4
+        with:
+          path: vop-seed-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install isolated seeder dependencies
+        working-directory: vop-seed-${{ github.run_id }}-${{ github.run_attempt }}/tools/seed
+        shell: powershell
+        run: npm ci --ignore-scripts
+
+      - name: Dry-run exact editorial inventory
+        working-directory: vop-seed-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: powershell
+        run: node tools/seed/seed-firestore.mjs --project-id "${{ inputs.project_id }}" --database-id "${{ inputs.database_id }}"
+
+      - name: Write temporary Google credentials
+        shell: powershell
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOP }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:FIREBASE_SERVICE_ACCOUNT)) {
+            throw "Required repository secret FIREBASE_SERVICE_ACCOUNT_VOP is not configured."
+          }
+          $credentialPath = Join-Path $env:RUNNER_TEMP "vop-firebase-service-account-${{ github.run_id }}.json"
+          [System.IO.File]::WriteAllText($credentialPath, $env:FIREBASE_SERVICE_ACCOUNT)
+          "GOOGLE_APPLICATION_CREDENTIALS=$credentialPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+
+      - name: Apply editorial lesson seed
+        working-directory: vop-seed-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: powershell
+        run: |
+          $ack = if ("${{ inputs.acknowledge_source_headings }}" -eq "true") { "--acknowledge-source-headings" } else { "" }
+          if (-not $ack) { throw "Live seeding requires explicit acknowledgement of the source-heading discrepancy." }
+          node tools/seed/seed-firestore.mjs --project-id "${{ inputs.project_id }}" --database-id "${{ inputs.database_id }}" --apply --acknowledge-source-headings
+
+      - name: Remove temporary credentials and checkout
+        if: always()
+        shell: powershell
+        run: |
+          if ($env:GOOGLE_APPLICATION_CREDENTIALS -and (Test-Path $env:GOOGLE_APPLICATION_CREDENTIALS)) {
+            Remove-Item -Force $env:GOOGLE_APPLICATION_CREDENTIALS
+          }
+          $checkout = Join-Path $env:GITHUB_WORKSPACE "vop-seed-${{ github.run_id }}-${{ github.run_attempt }}"
+          if (Test-Path $checkout) {
+            Remove-Item -Recurse -Force $checkout
+          }
