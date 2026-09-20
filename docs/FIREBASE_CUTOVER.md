@@ -4,9 +4,9 @@
 
 ## Approved lesson source and ingestion
 
-The original 80-language and 20-page assumptions were test fixtures, **not product requirements**. The user supplied the authoritative archive `sunday lessons-20260920T085104Z-1-001.zip`. Do not download lesson text from the earlier Drive URL or use legacy demonstration content as the production curriculum. The approved scope for this import is the archive's `bemba/` and `tonga/` lesson HTML only: 26 numbered lessons each, **52 localized lessons**. The extractor produces **362 actual numbered reading sections** and copies **170 referenced images**, preserving source text order. Exclude indexes, navigation scripts, signup pages and unrelated `40facts`, `60facts`, and `about` files.
+The original 80-language and 20-page assumptions were test fixtures, **not product requirements**. The user supplied the authoritative archive `sunday lessons-20260920T085104Z-1-001.zip`. Do not download lesson text from the earlier Drive URL or use legacy demonstration content as the production curriculum. The approved scope for this import is the archive's `bemba/` and `tonga/` lesson HTML only: 26 numbered lessons each, **52 localized lessons**. The extractor produces **364 actual reading pages** (each introduction plus the source's top-level numbered sections) and copies **170 referenced images**, preserving source text order. Exclude indexes, navigation scripts, signup pages and unrelated `40facts`, `60facts`, and `about` files.
 
-The distributable content-import overlay supplied with this work contains `scripts/import_lessons.py`, `config/approved-languages.json`, `content/lessons.master.json`, `content/lessons.seed.json`, `content/import-report.json`, `content/assets/`, `public/lessons/`, and `tools/seed/`. **Large extracted JSON and binary assets have NOT been committed to this private repository through the text-only GitHub connector.** Overlay and commit this package to the dedicated VOP branch, never another repository. Without these genuine files, `npm run build:android` must fail closed; successful app-only CI does not prove the real lessons have been packaged.
+The dedicated VOP branch contains the reproducible importer (`scripts/import_lessons.py`), approved-language metadata, source-derived master/seed/report files, exact referenced assets, packaged offline snapshots, and the optional editorial seeder under `tools/seed/`. The raw source archive is intentionally not committed. `npm run verify:content` regenerates the offline package from the committed master/assets and verifies the imported inventory and hashes. Without these genuine files, `npm run build:android` must fail closed; successful app-only CI does not prove the real lessons have been packaged.
 
 The source filenames for Bemba lessons 11 and 12 conflict with visible headers that both say lesson 10. Preserve the original text; review this discrepancy rather than silently altering lesson titles. The seeder blocks a live apply until this is explicitly acknowledged. The HTML source contains no independently verified quiz answer keys. Store `quiz: []` and render reading only; never invent five questions, issue pass/fail grades, or award credentials from these source files.
 
@@ -16,8 +16,7 @@ Run after placing the package contents in the VOP working tree:
 python -m pip install -r requirements-import.txt
 python scripts/import_lessons.py "/path/to/sunday lessons-20260920T085104Z-1-001.zip" --metadata config/approved-languages.json --output /tmp/vop-extracted
 # Place the extractor's generated content/ files and referenced assets into their repository paths.
-node scripts/generate-snapshots.js
-node --test tests/ingestion.test.mjs
+npm run verify:content
 npm ci
 npm run build
 npm run lint
@@ -47,6 +46,6 @@ Firestore Web persistence uses WebView IndexedDB, not SQLite. Owner-scoped, appe
 
 ## Verified repository checks and remaining gates
 
-[Exact-head VOP verification run 35501663370](https://github.com/Pamtech-Zambia/VOP-New/actions/runs/35501663370) passed `npm ci`, TypeScript/Vite production build, active-runtime lint (0 warnings/errors), **51/51 regression tests**, and production dependency audit (0 findings). The test fixtures prove schema behavior and rollback; they are **synthetic** and are not a test of a real APK build with the large imported content. The full development audit reports three moderate `firebase-tools` dependency-chain findings (`csv-parse`, `stream-json`, aggregate `firebase-tools`), and Vite reports a Firebase chunk around 556 kB. Review compatible fixes and profile on-device performance.
+[Exact-head VOP verification run 35501663370](https://github.com/Pamtech-Zambia/VOP-New/actions/runs/35501663370) validated the application-only refactor before the source import. The current branch must pass fresh content generation/hash checks, TypeScript/Vite production build, active-runtime lint, regression tests, and dependency audit with the committed real curriculum. A repository check is still not a signed APK or physical-device test. The full development audit previously reported three moderate `firebase-tools` dependency-chain findings (`csv-parse`, `stream-json`, aggregate `firebase-tools`), and Vite reported a Firebase chunk around 556 kB. Review compatible fixes and profile on-device performance.
 
-Keep PR #1 draft and unmerged until extracted content is committed and reviewed, Firebase/Android registration and rules deployment are authorized and verified, real on-device tests pass, and any requested official certification has a trusted backend. No unrelated repository jobs should be touched.
+Keep PR #1 draft and unmerged until the committed extracted content is reviewed, Firebase/Android registration and rules deployment are authorized and verified, real on-device tests pass, and any requested official certification has a trusted backend. No unrelated repository jobs should be touched.
