@@ -44,6 +44,9 @@ async function run() {
   const lessonIds = uniqueStrings(master.lessonIds, 'lessonIds', lessonPattern);
   requireValue(languages.length === expectedLanguages, `Expected ${expectedLanguages} languages, found ${languages.length}`);
   requireValue(lessonIds.length === expectedLessons, `Expected ${expectedLessons} lesson IDs, found ${lessonIds.length}`);
+  requireValue(Array.isArray(master.languageLabels) && master.languageLabels.length === languages.length,
+    `Expected ${languages.length} language display labels`);
+  const languageLabels = master.languageLabels.map((label, index) => cleanText(label, `languageLabels[${index}]`));
   const count = languages.length * lessonIds.length;
   requireValue(Number.isSafeInteger(count), 'Invalid curriculum policy inventory product');
   requireValue(Array.isArray(master.lessons) && master.lessons.length === count, `Expected ${count} lesson translations, found ${master.lessons?.length ?? 0}`);
@@ -84,8 +87,6 @@ async function run() {
   for (const lang of languages) for (const lessonId of lessonIds) {
     requireValue(snapshots.has(`${lang}/${lessonId}`), `Missing translation: ${lang}/${lessonId}`);
   }
-  // The locale-specific catalog is derived from validated material; never
-  // replace missing translations with generic titles or embedded demo text.
   const titles = languages.map(lang => lessonIds.map(lessonId => snapshots.get(`${lang}/${lessonId}`).title));
   await mkdir(publicDir, { recursive: true });
   const stage = await mkdtemp(join(publicDir, '.lessons-stage-'));
@@ -101,10 +102,10 @@ async function run() {
     const manifest = {
       schemaVersion: 1,
       languages,
+      languageLabels,
       lessonIds,
       titles,
       count,
-      // Deterministic version; do not regenerate the APK when source is unchanged.
       version: createHash('sha256').update(JSON.stringify([...snapshots].map(([key, data]) => [key, data.revision]).sort())).digest('hex'),
     };
     await writeFile(join(stage, 'manifest.json'), JSON.stringify(manifest), 'utf8');
