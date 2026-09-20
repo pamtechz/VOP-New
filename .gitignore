@@ -39,3 +39,6 @@ android/build
 android/app/build
 android/local.properties
 .gradle
+
+# Firebase Functions compiled output
+functions/lib
