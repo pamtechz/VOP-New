@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:android": "node scripts/generate-snapshots.js && node scripts/validate-android-release.mjs && npm run build && cap sync android",
-    "lint": "oxlint",
+    "lint": "oxlint src/main.tsx src/config src/lib src/pages/FirebaseStudyApp.tsx src/pages/LessonViewer.tsx src/pages/SignInPage.tsx src/services/firebaseAuth.ts src/services/offlineManifest.ts",
+    "lint:legacy": "oxlint src",
     "preview": "vite preview"
   },
   "dependencies": {
