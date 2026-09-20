@@ -14,13 +14,11 @@ jobs:
     runs-on: [self-hosted, KASAINSTITUTE]
     timeout-minutes: 20
     steps:
-      # The shared Windows runner sometimes changes service accounts between
-      # runs. Never reuse a checkout potentially owned by another account.
+      # Never reuse a checkout potentially owned by a different runner account.
       - uses: actions/checkout@v4
         with:
           path: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
-      # No setup-node cache: this Windows runner has no gzip executable and
-      # post-job tar cache saving fails. npm retains its own local cache.
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -39,3 +37,6 @@ jobs:
       - name: Reject moderate or worse production dependency vulnerabilities
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm audit --omit=dev --audit-level=moderate
+      - name: Report exact development-tool advisory chains
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node scripts/report-dev-advisories.mjs
