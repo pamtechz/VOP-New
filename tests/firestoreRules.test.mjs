@@ -39,7 +39,7 @@ test('Firestore rules enforce authenticated ownership and append-only unverified
     const path = id => `users/alice/progress/${id}`;
 
     await t.test('valid owner submission, own reads and own progress list work', async () => {
-      const record = alice.doc(path('valid'));
+      const record = alice.doc(path('alice'));
       await assertSucceeds(record.set(submission()));
       const snapshot = await assertSucceeds(record.get());
       assert.equal(snapshot.data()?.ownerUid, 'alice');
@@ -48,7 +48,7 @@ test('Firestore rules enforce authenticated ownership and append-only unverified
     });
 
     await t.test('cross-user and unauthenticated reads, writes and lists fail', async () => {
-      await assertFails(bob.doc(path('valid')).get());
+      await assertFails(bob.doc(path('alice')).get());
       await assertFails(bob.collection('users/alice/progress').get());
       await assertFails(bob.doc(path('bob-write')).set(submission('bob')));
       await assertFails(anonymous.doc(path('valid')).get());
@@ -59,11 +59,12 @@ test('Firestore rules enforce authenticated ownership and append-only unverified
     });
 
     await t.test('owner cannot overwrite or delete history or create privileged profile', async () => {
-      await assertFails(alice.doc(path('valid')).set(submission()));
-      await assertFails(alice.doc(path('valid')).update({ practiceScore: 100 }));
-      await assertFails(alice.doc(path('valid')).delete());
+      await assertFails(alice.doc(path('alice')).set(submission()));
+      await assertFails(alice.doc(path('alice')).update({ practiceScore: 100 }));
+      await assertFails(alice.doc(path('alice')).delete());
       await assertFails(alice.doc('users/alice').set({ role: 'admin' }));
       await assertFails(alice.doc('users/alice/grades/official').set({ score: 100 }));
+      await assertFails(alice.doc(path('not-alice')).set(submission()));
       await assertFails(alice.doc('certificates/cert-1').set({ uid: 'alice' }));
     });
 
