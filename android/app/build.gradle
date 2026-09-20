@@ -16,10 +16,35 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing is environment-driven. Never commit keystore credentials.
+    signingConfigs {
+        release {
+            def storeFilePath = System.getenv("VOP_RELEASE_STORE_FILE")
+            def storePasswordValue = System.getenv("VOP_RELEASE_STORE_PASSWORD")
+            def keyAliasValue = System.getenv("VOP_RELEASE_KEY_ALIAS")
+            def keyPasswordValue = System.getenv("VOP_RELEASE_KEY_PASSWORD")
+
+            if (storeFilePath && storePasswordValue && keyAliasValue && keyPasswordValue) {
+                storeFile file(storeFilePath)
+                storePassword storePasswordValue
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (System.getenv("VOP_RELEASE_STORE_FILE") &&
+                    System.getenv("VOP_RELEASE_STORE_PASSWORD") &&
+                    System.getenv("VOP_RELEASE_KEY_ALIAS") &&
+                    System.getenv("VOP_RELEASE_KEY_PASSWORD")) {
+                signingConfig signingConfigs.release
+            } else {
+                throw new GradleException("Release signing is not configured. Set VOP_RELEASE_STORE_FILE, VOP_RELEASE_STORE_PASSWORD, VOP_RELEASE_KEY_ALIAS, and VOP_RELEASE_KEY_PASSWORD before assembling a release build.")
+            }
         }
     }
     compileOptions {
