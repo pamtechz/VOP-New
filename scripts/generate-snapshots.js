@@ -1,126 +1,124 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from 'node:crypto';
-import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Build-time only: this script never connects to Firestore or executes in the APK.
+// Build-time only. The Android reader never fetches Firestore lesson content.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const source = resolve(root, process.env.LESSONS_MASTER_PATH || 'content/lessons.master.json');
+const masterPath = resolve(root, process.env.LESSONS_MASTER_PATH || 'content/lessons.master.json');
+const assetPath = resolve(root, process.env.LESSONS_ASSET_PATH || 'content/assets');
 const policyPath = join(root, 'config/curriculum-policy.json');
 const publicDir = join(root, 'public');
 const destination = join(publicDir, 'lessons');
-const requireValue = (ok, message) => { if (!ok) throw new Error(message); };
-const languagePattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
-const lessonPattern = /^[a-zA-Z0-9_-]{1,80}$/;
-const cleanText = (value, name) => {
-  requireValue(typeof value === 'string' && value.trim().length > 0, `${name} must be nonempty text`);
+const langPattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
+const idPattern = /^[A-Za-z0-9_-]{1,80}$/;
+const shaPattern = /^[a-f0-9]{64}$/;
+const assetPattern = /^assets\/([A-Za-z0-9_.-]{1,100}\.(?:jpg|jpeg|png|gif|webp))$/i;
+const requireValid = (valid, message) => { if (!valid) throw new Error(message); };
+const digest = data => createHash('sha256').update(data).digest('hex');
+const clean = (value, field) => {
+  requireValid(typeof value === 'string' && value.trim(), `${field} must be nonempty text`);
   return value.trim();
 };
-const uniqueStrings = (values, name, pattern) => {
-  requireValue(Array.isArray(values) && values.length > 0, `${name} must be a nonempty array`);
-  for (const value of values) requireValue(typeof value === 'string' && pattern.test(value), `Invalid ${name}: ${String(value)}`);
-  requireValue(new Set(values).size === values.length, `Duplicate ${name}`);
-  return values;
+const readJson = async (path, name) => {
+  try { return JSON.parse(await readFile(path, 'utf8')); }
+  catch (error) { throw new Error(`Cannot load ${name} from ${path}: ${error.message}`); }
+};
+const unique = (items, field, pattern) => {
+  requireValid(Array.isArray(items) && items.length > 0 && items.every(item => typeof item === 'string' && pattern.test(item)) && new Set(items).size === items.length, `Invalid ${field}`);
+  return items;
 };
 
 async function run() {
-  let policy;
-  try { policy = JSON.parse(await readFile(policyPath, 'utf8')); }
-  catch (error) { throw new Error(`Cannot read approved curriculum policy at ${policyPath}: ${error.message}`); }
-  requireValue(policy && typeof policy === 'object' && !Array.isArray(policy) &&
-    policy.schemaVersion === 1 && Object.keys(policy).length === 3 &&
-    Number.isSafeInteger(policy.expectedLanguageCount) && policy.expectedLanguageCount > 0 &&
-    Number.isSafeInteger(policy.expectedLessonCount) && policy.expectedLessonCount > 0,
-  'Curriculum policy must configure valid language and lesson counts');
-  const expectedLanguages = policy.expectedLanguageCount;
-  const expectedLessons = policy.expectedLessonCount;
-  let master;
-  try { master = JSON.parse(await readFile(source, 'utf8')); }
-  catch (error) { throw new Error(`Cannot read complete translation master at ${source}: ${error.message}`); }
-  requireValue(master && typeof master === 'object' && !Array.isArray(master), 'Master must be an object');
-  const languages = uniqueStrings(master.languages, 'languages', languagePattern);
-  const lessonIds = uniqueStrings(master.lessonIds, 'lessonIds', lessonPattern);
-  requireValue(languages.length === expectedLanguages, `Expected ${expectedLanguages} languages, found ${languages.length}`);
-  requireValue(lessonIds.length === expectedLessons, `Expected ${expectedLessons} lesson IDs, found ${lessonIds.length}`);
-  requireValue(Array.isArray(master.languageLabels) && master.languageLabels.length === languages.length,
-    `Expected ${languages.length} language display labels`);
-  const languageLabels = master.languageLabels.map((label, index) => cleanText(label, `languageLabels[${index}]`));
-  const count = languages.length * lessonIds.length;
-  requireValue(Number.isSafeInteger(count), 'Invalid curriculum policy inventory product');
-  requireValue(Array.isArray(master.lessons) && master.lessons.length === count, `Expected ${count} lesson translations, found ${master.lessons?.length ?? 0}`);
+  const [policy, master] = await Promise.all([readJson(policyPath, 'approved curriculum policy'), readJson(masterPath, 'approved lesson master')]);
+  requireValid(policy?.schemaVersion === 1 && Number.isSafeInteger(policy.expectedLanguageCount) && Number.isSafeInteger(policy.expectedLessonCount) && policy.expectedLanguageCount > 0 && policy.expectedLessonCount > 0, 'Invalid curriculum policy');
+  requireValid(master?.schemaVersion === 2, 'Source master must use validated variable-length schema 2');
+  const languages = unique(master.languages, 'languages', langPattern);
+  const lessonIds = unique(master.lessonIds, 'lesson IDs', idPattern);
+  requireValid(languages.length === policy.expectedLanguageCount && lessonIds.length === policy.expectedLessonCount, 'Approved curriculum inventory mismatch');
+  requireValid(Array.isArray(master.languageLabels) && master.languageLabels.length === languages.length, 'Language labels must be source-approved');
+  const languageLabels = master.languageLabels.map((value, index) => clean(value, `languageLabels[${index}]`));
+  const expected = languages.length * lessonIds.length;
+  requireValid(Number.isSafeInteger(expected) && Array.isArray(master.lessons) && master.lessons.length === expected, `Expected ${expected} authentic lesson translations`);
   const allowedLanguages = new Set(languages);
   const allowedLessons = new Set(lessonIds);
   const snapshots = new Map();
-  for (const entry of master.lessons) {
-    requireValue(entry && typeof entry === 'object', 'Invalid lesson entry');
-    const { lang, lessonId } = entry;
-    requireValue(allowedLanguages.has(lang) && allowedLessons.has(lessonId), `Unexpected language/lesson pair: ${lang}/${lessonId}`);
+  const assetNames = new Set();
+  for (const source of master.lessons) {
+    const { lang, lessonId } = source ?? {};
+    requireValid(allowedLanguages.has(lang) && allowedLessons.has(lessonId), `Unexpected lesson ${lang}/${lessonId}`);
     const key = `${lang}/${lessonId}`;
-    requireValue(!snapshots.has(key), `Duplicate translation: ${key}`);
-    const title = cleanText(entry.title, `${key}.title`);
-    requireValue(Array.isArray(entry.pages) && entry.pages.length === 20, `${key} must contain exactly 20 reading pages`);
-    const pages = entry.pages.map((page, index) => {
-      requireValue(page && page.pageNumber === index + 1, `${key}: page numbers must be 1 through 20 in order`);
-      return {
-        pageNumber: page.pageNumber,
-        title: cleanText(page.title, `${key}.pages[${index}].title`),
-        content: cleanText(page.content, `${key}.pages[${index}].content`),
-      };
+    requireValid(!snapshots.has(key), `Duplicate translation ${key}`);
+    const title = clean(source.title, `${key}.title`);
+    requireValid(Array.isArray(source.pages) && source.pages.length > 0, `${key}: no source-derived reading sections`);
+    const pages = source.pages.map((page, index) => {
+      requireValid(page?.pageNumber === index + 1 && Array.isArray(page.blocks) && page.blocks.length > 0, `${key}: invalid section ${index + 1}`);
+      const blocks = page.blocks.map((block, blockIndex) => {
+        if (block?.type === 'text') return { type: 'text', text: clean(block.text, `${key}.pages[${index}].blocks[${blockIndex}]`) };
+        const match = block?.type === 'image' && typeof block.src === 'string' && assetPattern.exec(block.src);
+        requireValid(match && typeof block.alt === 'string', `${key}: unsafe image reference`);
+        assetNames.add(match[1]);
+        return { type: 'image', src: `assets/${match[1]}`, alt: block.alt };
+      });
+      requireValid(blocks.some(block => block.type === 'text'), `${key}: empty reading section ${index + 1}`);
+      return { pageNumber: page.pageNumber, title: clean(page.title, `${key}.pages[${index}].title`), blocks };
     });
-    requireValue(Array.isArray(entry.quiz) && entry.quiz.length === 5, `${key} must contain exactly 5 quiz questions`);
-    const ids = new Set();
-    const quiz = entry.quiz.map((question, index) => {
-      const id = cleanText(question?.id, `${key}.quiz[${index}].id`);
-      requireValue(lessonPattern.test(id) && !ids.has(id), `${key}: invalid or duplicate question ID ${id}`);
-      ids.add(id);
-      requireValue(Array.isArray(question.options) && question.options.length >= 2 && question.options.length <= 6, `${key}: question options must have 2–6 entries`);
-      const options = question.options.map((option, i) => cleanText(option, `${key}.quiz[${index}].options[${i}]`));
-      requireValue(Number.isInteger(question.correctOptionIndex) && question.correctOptionIndex >= 0 && question.correctOptionIndex < options.length, `${key}: invalid answer key`);
-      return { id, prompt: cleanText(question.prompt, `${key}.quiz[${index}].prompt`), options, correctOptionIndex: question.correctOptionIndex };
+    requireValid(Array.isArray(source.quiz), `${key}: quiz must be an array (empty when no verified questions exist)`);
+    const questionIds = new Set();
+    const quiz = source.quiz.map((question, index) => {
+      const id = clean(question?.id, `${key}.quiz[${index}].id`);
+      requireValid(idPattern.test(id) && !questionIds.has(id), `${key}: invalid or duplicate quiz ID`);
+      questionIds.add(id);
+      requireValid(Array.isArray(question.options) && question.options.length >= 2 && question.options.length <= 6 && Number.isInteger(question.correctOptionIndex) && question.correctOptionIndex >= 0 && question.correctOptionIndex < question.options.length, `${key}: quiz answer must be verified`);
+      return { id, prompt: clean(question.prompt, `${key}.quiz[${index}].prompt`), options: question.options.map((option, i) => clean(option, `${key}.quiz[${index}].options[${i}]`)), correctOptionIndex: question.correctOptionIndex };
     });
-    const payload = { schemaVersion: 1, language: lang, lessonId, title, pages, quiz };
-    const revision = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-    snapshots.set(key, { ...payload, revision });
+    requireValid(source.source && shaPattern.test(source.source.sha256) && typeof source.source.file === 'string' && source.source.file.trim(), `${key}: missing source provenance`);
+    requireValid(source.attribution === null || typeof source.attribution === 'string', `${key}: invalid source attribution`);
+    const payload = { schemaVersion: 2, language: lang, lessonId, title, pages, quiz, attribution: source.attribution, source: { file: source.source.file, sha256: source.source.sha256, reportedLessonNumber: source.source.reportedLessonNumber } };
+    snapshots.set(key, { ...payload, revision: digest(JSON.stringify(payload)) });
   }
-  for (const lang of languages) for (const lessonId of lessonIds) {
-    requireValue(snapshots.has(`${lang}/${lessonId}`), `Missing translation: ${lang}/${lessonId}`);
+  for (const lang of languages) for (const lessonId of lessonIds) requireValid(snapshots.has(`${lang}/${lessonId}`), `Missing approved lesson ${lang}/${lessonId}`);
+  const assetHashes = {};
+  for (const name of [...assetNames].sort()) {
+    const bytes = await readFile(join(assetPath, name));
+    const extension = name.split('.').at(-1).toLowerCase();
+    const valid = (['jpg', 'jpeg'].includes(extension) && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) ||
+      (extension === 'png' && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) ||
+      (extension === 'gif' && ['GIF87a','GIF89a'].includes(bytes.toString('ascii', 0, 6))) ||
+      (extension === 'webp' && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP');
+    requireValid(valid, `Invalid or corrupted source image: ${name}`);
+    assetHashes[name] = digest(bytes);
   }
   const titles = languages.map(lang => lessonIds.map(lessonId => snapshots.get(`${lang}/${lessonId}`).title));
+  const versions = [...snapshots].map(([key, snapshot]) => [key, snapshot.revision]).sort();
+  const manifest = { schemaVersion: 2, languages, languageLabels, lessonIds, titles, count: expected, version: digest(JSON.stringify(versions)), assetHashes };
   await mkdir(publicDir, { recursive: true });
   const stage = await mkdtemp(join(publicDir, '.lessons-stage-'));
   const backup = join(publicDir, `.lessons-backup-${randomUUID()}`);
-  let oldRenamed = false;
+  let backedUp = false;
   let promoted = false;
   try {
     for (const [key, snapshot] of snapshots) {
-      const output = join(stage, `${key}.json`);
-      await mkdir(dirname(output), { recursive: true });
-      await writeFile(output, JSON.stringify(snapshot), 'utf8');
+      const file = join(stage, `${key}.json`);
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, JSON.stringify(snapshot), 'utf8');
     }
-    const manifest = {
-      schemaVersion: 1,
-      languages,
-      languageLabels,
-      lessonIds,
-      titles,
-      count,
-      version: createHash('sha256').update(JSON.stringify([...snapshots].map(([key, data]) => [key, data.revision]).sort())).digest('hex'),
-    };
+    await mkdir(join(stage, 'assets'), { recursive: true });
+    for (const name of Object.keys(assetHashes)) await copyFile(join(assetPath, name), join(stage, 'assets', name));
     await writeFile(join(stage, 'manifest.json'), JSON.stringify(manifest), 'utf8');
-    try { await access(destination, constants.F_OK); await rename(destination, backup); oldRenamed = true; }
+    try { await access(destination, constants.F_OK); await rename(destination, backup); backedUp = true; }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     await rename(stage, destination);
     promoted = true;
-    if (oldRenamed) await rm(backup, { recursive: true, force: true });
-    console.log(`Generated ${count} complete snapshots in public/lessons (zero runtime content database reads).`);
+    if (backedUp) await rm(backup, { recursive: true, force: true });
   } catch (error) {
-    if (oldRenamed && !promoted) await rename(backup, destination);
+    if (backedUp && !promoted) await rename(backup, destination);
     throw error;
   } finally {
     if (!promoted) await rm(stage, { recursive: true, force: true });
   }
+  console.log(`Bundled ${expected} authentic lessons, ${Object.keys(assetHashes).length} images and ${master.lessons.reduce((n, lesson) => n + lesson.pages.length, 0)} source sections; zero runtime lesson database reads.`);
 }
-
 run().catch(error => { console.error(error.message); process.exitCode = 1; });
