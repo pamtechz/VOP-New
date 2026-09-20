@@ -104,7 +104,9 @@ export function FirebaseStudyApp() {
                 setLanguage(event.target.value);
                 setLessonId(null);
               }}>
-                {manifest.languages.map(code => <option key={code} value={code}>{code.toUpperCase()}</option>)}
+                {manifest.languages.map((code, index) => (
+                  <option key={code} value={code}>{manifest.languageLabels[index]}</option>
+                ))}
               </select>
               <p>{manifest.lessonIds.length} lessons available without internet. Choose a lesson to begin.</p>
               <ol>
