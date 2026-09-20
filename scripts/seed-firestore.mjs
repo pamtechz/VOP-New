@@ -16,6 +16,7 @@ if (master.schemaVersion !== 2 || !Array.isArray(master.lessons) || master.lesso
   throw new Error('Invalid lesson master: expected schemaVersion 2 with lessons.');
 }
 
+const labels = new Map((master.languages || []).map((lang, index) => [lang, master.languageLabels?.[index] || lang]));
 const collection = process.env.FIRESTORE_LESSONS_COLLECTION || 'lessons';
 const batch = db.batch();
 
@@ -27,6 +28,7 @@ for (const lesson of master.lessons) {
   batch.set(ref, {
     schemaVersion: master.schemaVersion,
     language: lesson.lang,
+    languageLabel: labels.get(lesson.lang),
     lessonId: lesson.lessonId,
     title: lesson.title,
     pages: lesson.pages,
