@@ -26,13 +26,51 @@ const readJson = async (path, name) => {
   try { return JSON.parse(await readFile(path, 'utf8')); }
   catch (error) { throw new Error(`Cannot load ${name} from ${path}: ${error.message}`); }
 };
+async function loadLessonMaster() {
+  if ((process.env.LESSONS_SOURCE || 'local') !== 'firestore') {
+    return readJson(masterPath, 'approved lesson master');
+  }
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  requireValid(projectId, 'FIREBASE_PROJECT_ID is required when LESSONS_SOURCE=firestore');
+  const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  if (!getApps().length) initializeApp({ credential: applicationDefault(), projectId });
+  const db = getFirestore();
+  const collection = process.env.FIRESTORE_LESSONS_COLLECTION || 'lessons';
+  const snapshot = await db.collection(collection).get();
+  requireValid(!snapshot.empty, `Firestore collection ${collection} is empty`);
+  const lessons = snapshot.docs.map(doc => doc.data());
+  const languages = [...new Set(lessons.map(lesson => lesson.language))].sort();
+  const lessonIds = [...new Set(lessons.map(lesson => String(lesson.lessonId).padStart(2, '0')))].sort();
+  const languageLabels = languages.map(lang => {
+    const record = lessons.find(lesson => lesson.language === lang && typeof lesson.languageLabel === 'string' && lesson.languageLabel.trim());
+    return record?.languageLabel?.trim() || lang;
+  });
+  return {
+    schemaVersion: 2,
+    languages,
+    languageLabels,
+    lessonIds,
+    lessons: lessons.map(lesson => ({
+      lang: lesson.language,
+      lessonId: String(lesson.lessonId).padStart(2, '0'),
+      title: lesson.title,
+      pages: lesson.pages,
+      quiz: Array.isArray(lesson.quiz) ? lesson.quiz : [],
+      attribution: lesson.attribution ?? null,
+      source: lesson.source
+    }))
+  };
+}
+
 const unique = (items, field, pattern) => {
   requireValid(Array.isArray(items) && items.length > 0 && items.every(item => typeof item === 'string' && pattern.test(item)) && new Set(items).size === items.length, `Invalid ${field}`);
   return items;
 };
 
 async function run() {
-  const [policy, master] = await Promise.all([readJson(policyPath, 'approved curriculum policy'), readJson(masterPath, 'approved lesson master')]);
+  const policy = await readJson(policyPath, 'approved curriculum policy');
+  const master = await loadLessonMaster();
   requireValid(policy?.schemaVersion === 1 && Number.isSafeInteger(policy.expectedLanguageCount) && Number.isSafeInteger(policy.expectedLessonCount) && policy.expectedLanguageCount > 0 && policy.expectedLessonCount > 0, 'Invalid curriculum policy');
   requireValid(master?.schemaVersion === 2, 'Source master must use validated variable-length schema 2');
   const languages = unique(master.languages, 'languages', langPattern);
