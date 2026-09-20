@@ -2,68 +2,76 @@ import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, getProgressFirestore } from '../lib/firebase';
 
-type Page = { pageNumber: number; title: string; content: string };
-type Question = {
-  id: string;
-  prompt: string;
-  options: string[];
-  correctOptionIndex: number;
-};
+type TextBlock = { type: 'text'; text: string };
+type ImageBlock = { type: 'image'; src: string; alt: string };
+type Block = TextBlock | ImageBlock;
+type Page = { pageNumber: number; title: string; blocks: Block[] };
+type Question = { id: string; prompt: string; options: string[]; correctOptionIndex: number };
 type Snapshot = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   language: string;
   lessonId: string;
   revision: string;
   title: string;
   pages: Page[];
   quiz: Question[];
+  attribution: string | null;
+  source: { file: string; sha256: string; reportedLessonNumber: number | null };
 };
 type SubmitState = 'idle' | 'queued' | 'synced' | 'failed';
 
 const langPattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 const lessonPattern = /^[A-Za-z0-9_-]{1,80}$/;
-const revisionPattern = /^[a-f0-9]{64}$/;
+const shaPattern = /^[a-f0-9]{64}$/;
+const imagePattern = /^assets\/[A-Za-z0-9_.-]{1,100}\.(?:jpg|jpeg|png|gif|webp)$/i;
 
 function isSnapshot(value: unknown, lang: string, lessonId: string): value is Snapshot {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as Partial<Snapshot>;
-  if (item.schemaVersion !== 1 || item.language !== lang || item.lessonId !== lessonId ||
-      !revisionPattern.test(item.revision ?? '') || typeof item.title !== 'string' || !item.title.trim() ||
-      !Array.isArray(item.pages) || item.pages.length !== 20 ||
-      !Array.isArray(item.quiz) || item.quiz.length !== 5) return false;
-  if (!item.pages.every((page, i) => page && page.pageNumber === i + 1 &&
-      typeof page.title === 'string' && !!page.title.trim() &&
-      typeof page.content === 'string' && !!page.content.trim())) return false;
-  const keys = new Set<string>();
-  return item.quiz.every(question => {
-    if (!question || !lessonPattern.test(question.id) || keys.has(question.id) ||
-        typeof question.prompt !== 'string' || !question.prompt.trim() ||
-        !Array.isArray(question.options) || question.options.length < 2 || question.options.length > 6 ||
-        !question.options.every(option => typeof option === 'string' && !!option.trim()) ||
-        !Number.isInteger(question.correctOptionIndex) || question.correctOptionIndex < 0 ||
-        question.correctOptionIndex >= question.options.length) return false;
-    keys.add(question.id);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const lesson = value as Partial<Snapshot>;
+  if (lesson.schemaVersion !== 2 || lesson.language !== lang || lesson.lessonId !== lessonId ||
+    typeof lesson.title !== 'string' || !lesson.title.trim() || !shaPattern.test(lesson.revision ?? '') ||
+    !Array.isArray(lesson.pages) || !lesson.pages.length || !Array.isArray(lesson.quiz) ||
+    !(lesson.attribution === null || typeof lesson.attribution === 'string') ||
+    !shaPattern.test(lesson.source?.sha256 ?? '')) return false;
+  if (!lesson.pages.every((page, i) => page && page.pageNumber === i + 1 &&
+    typeof page.title === 'string' && !!page.title.trim() &&
+    Array.isArray(page.blocks) && !!page.blocks.length &&
+    page.blocks.some(block => block.type === 'text') &&
+    page.blocks.every(block => block && (block.type === 'text' ?
+      typeof block.text === 'string' && !!block.text.trim() :
+      block.type === 'image' && imagePattern.test(block.src) && typeof block.alt === 'string')))) return false;
+  const ids = new Set<string>();
+  return lesson.quiz.every(question => {
+    if (!question || !lessonPattern.test(question.id) || ids.has(question.id) ||
+      typeof question.prompt !== 'string' || !question.prompt.trim() ||
+      !Array.isArray(question.options) || question.options.length < 2 || question.options.length > 6 ||
+      !question.options.every(option => typeof option === 'string' && !!option.trim()) ||
+      !Number.isInteger(question.correctOptionIndex) || question.correctOptionIndex < 0 ||
+      question.correctOptionIndex >= question.options.length) return false;
+    ids.add(question.id);
     return true;
   });
 }
 
-interface LessonViewerProps {
+interface Props {
   lang: string;
   languageLabel: string;
   lessonId: string;
   onBack?: () => void;
 }
 
-/** A new lesson is a new component instance: no stale quiz answers or old content. */
-export function LessonViewer(props: LessonViewerProps) {
-  return <LessonViewerContent key={`${props.lang}/${props.lessonId}`} {...props} />;
+export function LessonViewer(props: Props) {
+  return <LessonContent key={`${props.lang}/${props.lessonId}`} {...props} />;
 }
 
-/** Reading only uses APK-packaged Vite assets, never the lesson database. */
-function LessonViewerContent({ lang, languageLabel, lessonId, onBack }: LessonViewerProps) {
+/** The original VOP reader's page navigation and read-aloud; all reading is from bundled assets. */
+function LessonContent({ lang, languageLabel, lessonId, onBack }: Props) {
   const [lesson, setLesson] = useState<Snapshot | null>(null);
-  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [pageIndex, setPageIndex] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
+  const [showPractice, setShowPractice] = useState(false);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -72,6 +80,7 @@ function LessonViewerContent({ lang, languageLabel, lessonId, onBack }: LessonVi
   const [practiceScore, setPracticeScore] = useState<number | null>(null);
   const submitting = useRef(false);
   const invalidIdentifier = !langPattern.test(lang) || !lessonPattern.test(lessonId);
+  const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 
   useEffect(() => onAuthStateChanged(auth, account => {
     setUser(account);
@@ -81,51 +90,67 @@ function LessonViewerContent({ lang, languageLabel, lessonId, onBack }: LessonVi
     setAuthReady(true);
   }), []);
 
+  useEffect(() => () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     if (invalidIdentifier) return () => controller.abort();
-    const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
-    const url = `${base}lessons/${lang}/${lessonId}.json`;
     void (async () => {
       try {
-        const response = await fetch(url, { signal: controller.signal, cache: 'default' });
-        if (!response.ok) throw new Error(`Bundled lesson missing (${response.status}).`);
-        const payload: unknown = await response.json();
-        if (!isSnapshot(payload, lang, lessonId)) throw new Error('Bundled lesson failed validation.');
-        if (!controller.signal.aborted) setLesson(payload);
+        const response = await fetch(`${base}lessons/${lang}/${lessonId}.json`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`The bundled lesson is unavailable (${response.status}).`);
+        const json: unknown = await response.json();
+        if (!isSnapshot(json, lang, lessonId)) throw new Error('Bundled lesson failed validation.');
+        if (!controller.signal.aborted) setLesson(json);
       } catch (error) {
-        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Could not open lesson.');
+        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Unable to read bundled lesson.');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
     return () => controller.abort();
-  }, [invalidIdentifier, lang, lessonId]);
+  }, [base, invalidIdentifier, lang, lessonId]);
 
-  const allAnswered = lesson !== null && lesson.quiz.every(q =>
-    Number.isInteger(answers[q.id]) && answers[q.id] >= 0 && answers[q.id] < q.options.length,
-  );
+  function stopSpeech() {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }
 
-  async function submit() {
+  function toggleSpeech(page: Page) {
+    if (!('speechSynthesis' in window)) return;
+    if (speaking) { stopSpeech(); return; }
+    const voiceText = [page.title, ...page.blocks.filter((block): block is TextBlock => block.type === 'text').map(block => block.text)].join('. ');
+    const utterance = new SpeechSynthesisUtterance(voiceText);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setSpeaking(true);
+  }
+
+  const quiz = lesson?.quiz ?? [];
+  const allAnswered = quiz.length > 0 && quiz.every(q => Number.isInteger(answers[q.id]) &&
+    answers[q.id] >= 0 && answers[q.id] < q.options.length);
+
+  async function submitQuiz() {
     if (submitting.current || !lesson || !allAnswered) return;
     const account = auth.currentUser;
     if (!authReady || !account || account.uid !== user?.uid) {
-      setSubmitError('Sign in to synchronize quiz progress. Reading remains available offline.');
+      setSubmitError('Sign in to synchronize practice progress. Reading remains available offline.');
       return;
     }
     submitting.current = true;
     setSubmitError('');
-    const selections = lesson.quiz.map(q => answers[q.id]);
-    const correct = lesson.quiz.filter((q, i) => selections[i] === q.correctOptionIndex).length;
-    const score = (correct / lesson.quiz.length) * 100;
+    const selections = quiz.map(q => answers[q.id]);
+    const correct = quiz.filter((q, i) => selections[i] === q.correctOptionIndex).length;
+    const score = correct / quiz.length * 100;
     setPracticeScore(score);
     setSubmitState('queued');
     try {
-      // Load Firestore only on Submit; reading requires no content database reads.
-      const [db, firestore] = await Promise.all([
-        getProgressFirestore(),
-        import('firebase/firestore'),
-      ]);
+      // The only Firestore write path. Discovery, reading and navigation use packaged JSON.
+      const [db, firestore] = await Promise.all([getProgressFirestore(), import('firebase/firestore')]);
       const progressRef = firestore.doc(firestore.collection(db, 'users', account.uid, 'progress'));
       await firestore.setDoc(progressRef, {
         ownerUid: account.uid,
@@ -141,51 +166,63 @@ function LessonViewerContent({ lang, languageLabel, lessonId, onBack }: LessonVi
     } catch (error) {
       submitting.current = false;
       setSubmitState('failed');
-      setSubmitError(error instanceof Error ? error.message : 'Progress was rejected; try again while online.');
+      setSubmitError(error instanceof Error ? error.message : 'Progress could not synchronize.');
     }
   }
 
-  if (invalidIdentifier) return <main role="alert"><p>Invalid lesson or language identifier.</p>{onBack && <button type="button" onClick={onBack}>Back</button>}</main>;
-  if (loading) return <main aria-busy="true"><p>Opening bundled lesson…</p></main>;
-  if (loadError || !lesson) return <main role="alert"><p>{loadError || 'Lesson unavailable.'}</p>{onBack && <button type="button" onClick={onBack}>Back</button>}</main>;
-
+  if (invalidIdentifier) return <main role="alert">Invalid lesson or language identifier.</main>;
+  if (loading) return <main aria-busy="true">Opening bundled lesson…</main>;
+  if (loadError || !lesson) return <main role="alert">{loadError || 'Lesson unavailable.'}{onBack && <button type="button" onClick={onBack}>Back</button>}</main>;
+  const page = lesson.pages[pageIndex];
+  const isFinalPage = pageIndex === lesson.pages.length - 1;
   return (
-    <main className="lesson-viewer">
-      {onBack && <button type="button" onClick={onBack}>Back</button>}
-      <h1>{lesson.title}</h1>
-      <p>{languageLabel} · Offline study · {lesson.pages.length} pages</p>
-      {lesson.pages.map(page => (
-        <section key={page.pageNumber} aria-labelledby={`page-${page.pageNumber}`}>
-          <h2 id={`page-${page.pageNumber}`}>{page.pageNumber}. {page.title}</h2>
-          <p style={{ whiteSpace: 'pre-line' }}>{page.content}</p>
+    <main className="lesson-viewer" style={{ maxWidth: '45rem', margin: 'auto', padding: '1rem' }}>
+      <header style={{ background: 'var(--vop-navy-950)', color: 'white', padding: '1rem', borderRadius: '1rem' }}>
+        {onBack && <button type="button" onClick={() => { stopSpeech(); onBack(); }}>Back to lessons</button>}
+        <p>{languageLabel} · {lesson.lessonId}</p>
+        <h1>{lesson.title}</h1>
+        <p>Offline Bible study · {lesson.pages.length} reading sections</p>
+      </header>
+      {!showPractice ? <>
+        <p role="status">Page {pageIndex + 1} of {lesson.pages.length}</p>
+        <progress value={pageIndex + 1} max={lesson.pages.length} style={{ width: '100%' }} aria-label="Reading progress" />
+        <section aria-labelledby="current-section-title">
+          <h2 id="current-section-title">{page.title}</h2>
+          {page.blocks.map((block, index) => block.type === 'text' ?
+            <p key={index} style={{ whiteSpace: 'pre-line', lineHeight: 1.75 }}>{block.text}</p> :
+            <figure key={index}><img loading="lazy" src={`${base}lessons/${block.src}`} alt={block.alt} style={{ maxWidth: '100%', height: 'auto' }} />{block.alt && <figcaption>{block.alt}</figcaption>}</figure>)}
         </section>
-      ))}
-      <section aria-labelledby="practice-quiz-title">
-        <h2 id="practice-quiz-title">Practice quiz</h2>
-        <p>Results are self-reported practice progress, not a certified grade.</p>
-        {lesson.quiz.map((question, index) => (
-          <fieldset key={question.id} disabled={submitState === 'queued' || submitState === 'synced'}>
-            <legend>{index + 1}. {question.prompt}</legend>
-            {question.options.map((option, optionIndex) => (
-              <label key={optionIndex} style={{ display: 'block' }}>
-                <input type="radio" name={`quiz-${question.id}`}
-                  checked={answers[question.id] === optionIndex}
-                  onChange={() => setAnswers(previous => ({ ...previous, [question.id]: optionIndex }))} />
-                {option}
-              </label>
-            ))}
-          </fieldset>
-        ))}
+        {'speechSynthesis' in window && <button type="button" onClick={() => toggleSpeech(page)}>{speaking ? 'Stop read-aloud' : 'Read this page aloud'}</button>}
+        <nav aria-label="Lesson pages" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem' }}>
+          <button type="button" disabled={pageIndex === 0} onClick={() => { stopSpeech(); setPageIndex(i => Math.max(0, i - 1)); }}>Previous</button>
+          <button type="button" onClick={() => {
+            stopSpeech();
+            if (!isFinalPage) setPageIndex(i => i + 1);
+            else if (quiz.length) setShowPractice(true);
+            else onBack?.();
+          }}>{isFinalPage ? (quiz.length ? 'Proceed to practice' : 'Finish reading') : 'Next page'}</button>
+        </nav>
+        {isFinalPage && !quiz.length && <p>No approved quiz or answer key is available for this lesson. No score or certificate will be generated.</p>}
+      </> : <section aria-labelledby="practice-title">
+        <h2 id="practice-title">Practice quiz</h2>
+        <p>Practice scores are client-generated and cannot authorize certification.</p>
+        {quiz.map((question, index) => <fieldset key={question.id} disabled={submitState === 'queued' || submitState === 'synced'}>
+          <legend>{index + 1}. {question.prompt}</legend>
+          {question.options.map((option, optionIndex) => <label key={optionIndex} style={{ display: 'block' }}>
+            <input type="radio" name={`quiz-${question.id}`} checked={answers[question.id] === optionIndex}
+              onChange={() => setAnswers(old => ({ ...old, [question.id]: optionIndex }))} /> {option}
+          </label>)}
+        </fieldset>)}
+        <button type="button" onClick={() => setShowPractice(false)}>Back to reading</button>
         {!authReady && <p role="status">Checking sign-in…</p>}
-        {authReady && !user && <p>Sign in while online to save progress. You can still read offline.</p>}
-        <button type="button" disabled={!allAnswered || !user || submitState === 'queued' || submitState === 'synced'} onClick={() => void submit()}>
-          Submit Quiz
-        </button>
-        {practiceScore !== null && <p>Practice score: {practiceScore}% (unverified).</p>}
-        {submitState === 'queued' && <p role="status">Queued for synchronization. Keep app data and sign-in active.</p>}
-        {submitState === 'synced' && <p role="status">Progress synchronized successfully.</p>}
+        {authReady && !user && <p>Sign in while online to save your answers.</p>}
+        <button type="button" onClick={() => void submitQuiz()} disabled={!allAnswered || !user || submitState === 'queued' || submitState === 'synced'}>Submit Quiz</button>
+        {practiceScore !== null && <p>Unverified practice score: {practiceScore}%.</p>}
+        {submitState === 'queued' && <p role="status">Waiting for Firestore synchronization. Keep your app data.</p>}
+        {submitState === 'synced' && <p role="status">Practice record synchronized.</p>}
         {submitError && <p role="alert">{submitError}</p>}
-      </section>
+      </section>}
+      {lesson.attribution && <footer style={{ marginTop: '1rem', fontSize: '0.8rem' }}>{lesson.attribution}</footer>}
     </main>
   );
 }
