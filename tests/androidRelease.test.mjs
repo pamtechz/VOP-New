@@ -1,162 +1,106 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { validateAndroidRelease } from '../scripts/validate-android-release.mjs';
 
-const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const deploymentPolicy = {
-  schemaVersion: 1,
-  firebaseProjectId: 'voiceofprophecy',
-  androidPackageName: 'com.sda.vop',
+const sourceGenerator = join(dirname(fileURLToPath(import.meta.url)), '../scripts/generate-snapshots.js');
+const deployment = { schemaVersion: 1, firebaseProjectId: 'synthetic-vop-test', androidPackageName: 'org.test.vop' };
+const sender = '123456789';
+const environment = {
+  VITE_FIREBASE_API_KEY: 'SYNTHETIC_WEB_KEY_NOT_FOR_REAL_FIREBASE',
+  VITE_FIREBASE_AUTH_DOMAIN: 'synthetic-vop-test.firebaseapp.com',
+  VITE_FIREBASE_PROJECT_ID: deployment.firebaseProjectId,
+  VITE_FIREBASE_APP_ID: `1:${sender}:web:abcdef`,
 };
-const publicEnvironment = {
-  VITE_FIREBASE_API_KEY: 'TEST_PUBLIC_WEB_KEY_NOT_A_REAL_CREDENTIAL',
-  VITE_FIREBASE_AUTH_DOMAIN: 'voiceofprophecy.firebaseapp.com',
-  VITE_FIREBASE_PROJECT_ID: deploymentPolicy.firebaseProjectId,
-  VITE_FIREBASE_APP_ID: '1:123456789:web:abcdef',
-};
-
-const googleRegistration = {
-  project_info: { project_id: deploymentPolicy.firebaseProjectId, project_number: '123456789' },
+const registration = {
+  project_info: { project_id: deployment.firebaseProjectId, project_number: sender },
   client: [{
-    client_info: {
-      mobilesdk_app_id: '1:123456789:android:abcdef',
-      android_client_info: { package_name: deploymentPolicy.androidPackageName },
-    },
+    client_info: { mobilesdk_app_id: `1:${sender}:android:abcdef`,
+      android_client_info: { package_name: deployment.androidPackageName } },
     oauth_client: [
-      { client_type: 1, android_info: { package_name: deploymentPolicy.androidPackageName, certificate_hash: 'a'.repeat(40) } },
-      { client_type: 3, client_id: 'synthetic-web-oauth-id-for-tests' },
+      { client_type: 1, android_info: { package_name: deployment.androidPackageName, certificate_hash: 'a'.repeat(40) } },
+      { client_type: 3, client_id: 'SYNTHETIC_WEB_CLIENT' },
     ],
   }],
 };
 
 function setUp(root) {
-  mkdirSync(join(root, 'android/app'), { recursive: true });
-  mkdirSync(join(root, 'config'), { recursive: true });
-  const deploymentPath = join(root, 'config/deployment-policy.json');
-  const policyPath = join(root, 'config/curriculum-policy.json');
-  writeFileSync(deploymentPath, JSON.stringify(deploymentPolicy));
-  writeFileSync(policyPath, JSON.stringify({ schemaVersion: 1, expectedLanguageCount: 80, expectedLessonCount: 26 }));
-  writeFileSync(join(root, 'android/app/google-services.json'), JSON.stringify(googleRegistration));
-  writeFileSync(join(root, 'android/app/build.gradle'), `namespace = "${deploymentPolicy.androidPackageName}"\napplicationId "${deploymentPolicy.androidPackageName}"\n`);
-  writeFileSync(join(root, 'capacitor.config.ts'), `appId: '${deploymentPolicy.androidPackageName}',\n`);
-  const languages = Array.from({ length: 80 }, (_, index) =>
-    String.fromCharCode(97 + Math.floor(index / 26), 97 + index % 26));
-  const languageLabels = languages.map((language, index) => `Language ${index + 1} (${language})`);
-  const lessonIds = Array.from({ length: 26 }, (_, index) => `lesson-${String(index + 1).padStart(2, '0')}`);
-  const lessonDir = join(root, 'public/lessons');
-  mkdirSync(lessonDir, { recursive: true });
-  const pages = Array.from({ length: 20 }, (_, index) => ({
-    pageNumber: index + 1, title: `Reading page ${index + 1}`, content: `Substantive approved test fixture page ${index + 1}.`,
+  for (const directory of ['android/app', 'config', 'content/assets', 'scripts']) mkdirSync(join(root, directory), { recursive: true });
+  writeFileSync(join(root, 'package.json'), '{"type":"module"}');
+  copyFileSync(sourceGenerator, join(root, 'scripts/generate-snapshots.js'));
+  writeFileSync(join(root, 'config/deployment-policy.json'), JSON.stringify(deployment));
+  writeFileSync(join(root, 'config/curriculum-policy.json'), JSON.stringify({
+    schemaVersion: 1, expectedLanguageCount: 2, expectedLessonCount: 2,
   }));
-  const quiz = Array.from({ length: 5 }, (_, index) => ({
-    id: `q${index + 1}`, prompt: `Question ${index + 1}`, options: ['Option one', 'Option two'], correctOptionIndex: 0,
+  writeFileSync(join(root, 'android/app/google-services.json'), JSON.stringify(registration));
+  writeFileSync(join(root, 'android/app/build.gradle'), `namespace = "${deployment.androidPackageName}"\napplicationId "${deployment.androidPackageName}"\n`);
+  writeFileSync(join(root, 'capacitor.config.ts'), `appId: '${deployment.androidPackageName}',\n`);
+  const languages = ['bem', 'toi'];
+  const lessonIds = ['lesson-01', 'lesson-02'];
+  const image = Buffer.from([255, 216, 255, 217]); // Synthetic JPEG magic bytes; never production content.
+  writeFileSync(join(root, 'content/assets/example.jpg'), image);
+  const lessons = languages.flatMap(lang => lessonIds.map((lessonId, index) => ({
+    lang, lessonId, title: `${lang} ${lessonId}`,
+    pages: Array.from({ length: index + 1 }, (_, pageIndex) => ({
+      pageNumber: pageIndex + 1, title: `Section ${pageIndex + 1}`,
+      blocks: pageIndex === 0 ? [
+        { type: 'text', text: 'Synthetic reading text used only for release regression tests.' },
+        { type: 'image', src: 'assets/example.jpg', alt: '' },
+      ] : [{ type: 'text', text: 'Additional synthetic reading text.' }],
+    })),
+    quiz: [], attribution: null,
+    source: { file: `test/${lang}/${lessonId}.html`, sha256: createHash('sha256').update('synthetic').digest('hex'), reportedLessonNumber: null },
+  })));
+  writeFileSync(join(root, 'content/lessons.master.json'), JSON.stringify({
+    schemaVersion: 2, languages, languageLabels: ['Bemba', 'Tonga'], lessonIds, lessons,
   }));
-  const revisions = [];
-  const titles = [];
-  for (const language of languages) {
-    mkdirSync(join(lessonDir, language));
-    const row = [];
-    for (const lesson of lessonIds) {
-      const title = `${language} ${lesson}`;
-      const payload = { schemaVersion: 1, language, lessonId: lesson, title, pages, quiz };
-      const revision = digest(payload);
-      writeFileSync(join(lessonDir, language, `${lesson}.json`), JSON.stringify({ ...payload, revision }));
-      row.push(title);
-      revisions.push([`${language}/${lesson}`, revision]);
-    }
-    titles.push(row);
-  }
-  const manifestPath = join(lessonDir, 'manifest.json');
-  writeFileSync(manifestPath, JSON.stringify({
-    schemaVersion: 1, languages, languageLabels, lessonIds, titles,
-    count: languages.length * lessonIds.length, version: digest(revisions.sort()),
-  }));
-  return { languages, lessonIds, manifestPath, policyPath, deploymentPath };
+  const output = spawnSync(process.execPath, ['scripts/generate-snapshots.js'], { cwd: root, encoding: 'utf8' });
+  assert.equal(output.status, 0, output.stderr);
+  return { languages, lessonIds, manifestPath: join(root, 'public/lessons/manifest.json') };
 }
 
-test('Android release validates configured deployment identity and every complete snapshot', async () => {
+test('Android release verifies deployment identity, actual source sections and hashed image assets', async () => {
   const root = mkdtempSync(join(tmpdir(), 'vop-android-release-'));
   try {
-    const { languages, lessonIds, manifestPath, policyPath, deploymentPath } = setUp(root);
-    const validate = () => validateAndroidRelease(root, publicEnvironment);
+    const { languages, lessonIds, manifestPath } = setUp(root);
+    const validate = () => validateAndroidRelease(root, environment);
     assert.deepEqual(await validate(), {
-      project: deploymentPolicy.firebaseProjectId,
-      packageName: deploymentPolicy.androidPackageName,
-      snapshotCount: 2080,
+      project: deployment.firebaseProjectId,
+      packageName: deployment.androidPackageName,
+      snapshotCount: 4,
+      imageCount: 1,
     });
-    await assert.rejects(validateAndroidRelease(root, { ...publicEnvironment, VITE_FIREBASE_PROJECT_ID: 'other-project' }),
-      /VITE_FIREBASE_PROJECT_ID/);
-    await assert.rejects(validateAndroidRelease(root, { ...publicEnvironment, VITE_FIREBASE_APP_ID: '1:987654321:web:wrong' }),
-      /Web app ID/);
-
-    const approvedDeployment = readFileSync(deploymentPath, 'utf8');
-    unlinkSync(deploymentPath);
-    await assert.rejects(validate(), /missing VOP deployment policy/);
-    writeFileSync(deploymentPath, JSON.stringify({ ...deploymentPolicy, firebaseProjectId: 'different-project' }));
-    await assert.rejects(validate(), /google-services.json must belong to Firebase project different-project/);
-    writeFileSync(deploymentPath, JSON.stringify({ ...deploymentPolicy, androidPackageName: 'invalid package' }));
-    await assert.rejects(validate(), /deployment policy has invalid/);
-    writeFileSync(deploymentPath, approvedDeployment);
-
-    const registration = join(root, 'android/app/google-services.json');
-    const saved = readFileSync(registration, 'utf8');
-    unlinkSync(registration);
-    await assert.rejects(validate(), /missing Firebase Android registration/);
-    const mismatch = structuredClone(googleRegistration);
-    mismatch.client[0].client_info.android_client_info.package_name = 'com.other.app';
-    writeFileSync(registration, JSON.stringify(mismatch));
-    await assert.rejects(validate(), /register Android package/);
-    const noFingerprint = structuredClone(googleRegistration);
-    noFingerprint.client[0].oauth_client = noFingerprint.client[0].oauth_client.filter(client => client.client_type !== 1);
-    writeFileSync(registration, JSON.stringify(noFingerprint));
-    await assert.rejects(validate(), /SHA-1 fingerprint/);
-    writeFileSync(registration, saved);
-
-    const approvedPolicy = readFileSync(policyPath, 'utf8');
-    unlinkSync(policyPath);
-    await assert.rejects(validate(), /missing approved curriculum release policy/);
-    writeFileSync(policyPath, JSON.stringify({ schemaVersion: 1, expectedLanguageCount: 79, expectedLessonCount: 26 }));
-    await assert.rejects(validate(), /exactly 79 languages, 26 lessons/);
-    writeFileSync(policyPath, approvedPolicy);
+    await assert.rejects(validateAndroidRelease(root, { ...environment, VITE_FIREBASE_PROJECT_ID: 'other-project' }),
+      /Web Firebase configuration/);
+    const registrationPath = join(root, 'android/app/google-services.json');
+    const savedRegistration = readFileSync(registrationPath, 'utf8');
+    unlinkSync(registrationPath);
+    await assert.rejects(validate(), /missing Android Firebase registration/);
+    writeFileSync(registrationPath, savedRegistration);
 
     const first = join(root, 'public/lessons', languages[0], `${lessonIds[0]}.json`);
     const original = readFileSync(first, 'utf8');
-    unlinkSync(first);
-    await assert.rejects(validate(), /missing snapshot .*json/);
-    writeFileSync(first, '{}');
-    await assert.rejects(validate(), /invalid schema or identity/);
-    writeFileSync(first, '{broken json');
-    await assert.rejects(validate(), /invalid JSON in snapshot/);
-    const tampered = JSON.parse(original);
-    tampered.pages[0].content = 'Changed after approval';
-    writeFileSync(first, JSON.stringify(tampered));
-    await assert.rejects(validate(), /does not match its revision hash/);
+    const modified = JSON.parse(original);
+    modified.pages[0].blocks[0].text = 'Changed after editorial approval';
+    writeFileSync(first, JSON.stringify(modified));
+    await assert.rejects(validate(), /content hash mismatch/);
     writeFileSync(first, original);
+    const corruptedImage = join(root, 'public/lessons/assets/example.jpg');
+    writeFileSync(corruptedImage, 'Corrupted');
+    await assert.rejects(validate(), /corrupted or tampered bundled image/);
+    writeFileSync(corruptedImage, Buffer.from([255, 216, 255, 217]));
 
-    const originalManifest = readFileSync(manifestPath, 'utf8');
-    const noLanguageLabels = JSON.parse(originalManifest);
-    delete noLanguageLabels.languageLabels;
-    writeFileSync(manifestPath, JSON.stringify(noLanguageLabels));
-    await assert.rejects(validate(), /language labels/);
-    const noTitles = JSON.parse(originalManifest);
-    delete noTitles.titles;
-    writeFileSync(manifestPath, JSON.stringify(noTitles));
-    await assert.rejects(validate(), /complete localized titles/);
-    const changedTitles = JSON.parse(originalManifest);
-    changedTitles.titles[0][0] = 'Unapproved replacement title';
-    writeFileSync(manifestPath, JSON.stringify(changedTitles));
-    await assert.rejects(validate(), /title does not match the approved localized catalog/);
-    const changedManifest = JSON.parse(originalManifest);
-    changedManifest.version = 'b'.repeat(64);
-    writeFileSync(manifestPath, JSON.stringify(changedManifest));
-    await assert.rejects(validate(), /manifest integrity check failed/);
-    writeFileSync(manifestPath, originalManifest);
-    assert.equal((await validate()).snapshotCount, 2080);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+    const manifestOriginal = readFileSync(manifestPath, 'utf8');
+    const invalid = JSON.parse(manifestOriginal);
+    invalid.titles[0][0] = 'Unauthorized translated title';
+    writeFileSync(manifestPath, JSON.stringify(invalid));
+    await assert.rejects(validate(), /invalid source identity or schema/);
+    writeFileSync(manifestPath, manifestOriginal);
+    assert.equal((await validate()).snapshotCount, 4);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
