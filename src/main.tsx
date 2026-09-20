@@ -3,12 +3,11 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import './reference.css';
 
-// Production must not even bundle the browser-editable demonstration application.
-// The import is guarded at compile time by Vite's import.meta.env.DEV constant.
+// The application has one runtime path only: Firebase Auth + approved bundled lessons.
+// Legacy demonstration accounts/content remain migration artifacts and are never imported here.
 const FirebaseStudyApp = lazy(async () => ({
   default: (await import('./pages/FirebaseStudyApp')).FirebaseStudyApp,
 }));
-const DevelopmentDemo = import.meta.env.DEV ? lazy(() => import('./App')) : null;
 
 const firebaseConfigured = Boolean(
   import.meta.env.VITE_FIREBASE_API_KEY &&
@@ -16,10 +15,9 @@ const firebaseConfigured = Boolean(
   import.meta.env.VITE_FIREBASE_APP_ID &&
   import.meta.env.VITE_FIREBASE_PROJECT_ID === 'voiceofprophecy',
 );
-const demoEnabled = import.meta.env.DEV && import.meta.env.VITE_VOP_ENABLE_DEMO === 'true';
 
 function Root() {
-  if (!firebaseConfigured && !demoEnabled) {
+  if (!firebaseConfigured) {
     return (
       <main role="alert" style={{ padding: '2rem', maxWidth: '45rem', margin: '3rem auto' }}>
         <h1>Voice of Prophecy setup required</h1>
@@ -30,7 +28,7 @@ function Root() {
   }
   return (
     <Suspense fallback={<main aria-busy="true"><p>Opening Voice of Prophecy…</p></main>}>
-      {demoEnabled && DevelopmentDemo ? <DevelopmentDemo /> : <FirebaseStudyApp />}
+      <FirebaseStudyApp />
     </Suspense>
   );
 }
