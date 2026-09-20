@@ -4,12 +4,10 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Project and Android package are pinned deployment identities, not learner data.
-const EXPECTED_PROJECT = 'voiceofprophecy';
-const EXPECTED_PACKAGE = 'com.sda.vop';
 const languagePattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/;
 const lessonPattern = /^[A-Za-z0-9_-]{1,80}$/;
 const digestPattern = /^[a-f0-9]{64}$/;
+const packagePattern = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 function requireValid(condition, reason) {
@@ -27,6 +25,10 @@ async function jsonFile(path, description) {
 function exactKeys(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
     Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+}
+
+function regexEscape(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Only allow the generated schema; title, revision and content must all agree. */
@@ -58,7 +60,6 @@ function validateSnapshot(snapshot, language, lessonId, approvedTitle) {
     `${label}: quiz question ${index + 1} is invalid.`);
     ids.add(question.id);
   });
-  // Match the generator's canonical property order and SHA-256 calculation.
   const payload = {
     schemaVersion: 1, language, lessonId, title: snapshot.title,
     pages: snapshot.pages, quiz: snapshot.quiz,
@@ -69,14 +70,23 @@ function validateSnapshot(snapshot, language, lessonId, approvedTitle) {
 
 /** Read-only checks. Never create a Firebase app, deploy rules, or copy an untrusted config. */
 export async function validateAndroidRelease(root, environment) {
+  const deployment = await jsonFile(join(root, 'config/deployment-policy.json'), 'VOP deployment policy');
+  requireValid(exactKeys(deployment, ['schemaVersion', 'firebaseProjectId', 'androidPackageName']) &&
+    deployment.schemaVersion === 1 &&
+    typeof deployment.firebaseProjectId === 'string' && deployment.firebaseProjectId.trim().length > 0 &&
+    typeof deployment.androidPackageName === 'string' && packagePattern.test(deployment.androidPackageName),
+  'deployment policy has invalid Firebase project or Android package identity.');
+  const expectedProject = deployment.firebaseProjectId.trim();
+  const expectedPackage = deployment.androidPackageName;
+
   const configPath = join(root, 'android/app/google-services.json');
   const config = await jsonFile(configPath, 'Firebase Android registration');
-  requireValid(config?.project_info?.project_id === EXPECTED_PROJECT,
-    `google-services.json must belong to Firebase project ${EXPECTED_PROJECT}.`);
+  requireValid(config?.project_info?.project_id === expectedProject,
+    `google-services.json must belong to Firebase project ${expectedProject}.`);
   const senderId = String(config.project_info.project_number ?? '');
   requireValid(/^\d+$/.test(senderId), 'Firebase Android project number is missing.');
-  const matchingClient = config.client?.find(client => client?.client_info?.android_client_info?.package_name === EXPECTED_PACKAGE);
-  requireValid(Boolean(matchingClient), `register Android package ${EXPECTED_PACKAGE} in the existing Firebase project and download its matching google-services.json.`);
+  const matchingClient = config.client?.find(client => client?.client_info?.android_client_info?.package_name === expectedPackage);
+  requireValid(Boolean(matchingClient), `register Android package ${expectedPackage} in the existing Firebase project and download its matching google-services.json.`);
   requireValid(/^1:\d+:android:[a-zA-Z0-9]+$/.test(matchingClient.client_info.mobilesdk_app_id ?? ''), 'Android Firebase app ID is invalid.');
   requireValid(matchingClient.client_info.mobilesdk_app_id.startsWith(`1:${senderId}:android:`), 'Android app ID belongs to another Firebase project.');
   const clients = [
@@ -84,14 +94,14 @@ export async function validateAndroidRelease(root, environment) {
     ...(matchingClient.services?.appinvite_service?.other_platform_oauth_client ?? []),
   ];
   requireValid(clients.some(client => client.client_type === 1 &&
-    client.android_info?.package_name === EXPECTED_PACKAGE &&
+    client.android_info?.package_name === expectedPackage &&
     /^[a-fA-F0-9]{40}$/.test(client.android_info?.certificate_hash ?? '')),
   'register the Android app signing SHA-1 fingerprint and download updated google-services.json.');
   requireValid(clients.some(client => client.client_type === 3 && typeof client.client_id === 'string' && client.client_id.length > 0),
     'Google sign-in requires a Web OAuth client in google-services.json.');
 
-  requireValid(environment.VITE_FIREBASE_PROJECT_ID === EXPECTED_PROJECT,
-    `VITE_FIREBASE_PROJECT_ID must be ${EXPECTED_PROJECT}.`);
+  requireValid(environment.VITE_FIREBASE_PROJECT_ID === expectedProject,
+    `VITE_FIREBASE_PROJECT_ID must be ${expectedProject}.`);
   requireValid(typeof environment.VITE_FIREBASE_API_KEY === 'string' && environment.VITE_FIREBASE_API_KEY.trim().length > 0,
     'the public Firebase Web API key is missing.');
   requireValid(typeof environment.VITE_FIREBASE_AUTH_DOMAIN === 'string' && environment.VITE_FIREBASE_AUTH_DOMAIN.trim().length > 0,
@@ -104,10 +114,12 @@ export async function validateAndroidRelease(root, environment) {
     readFile(join(root, 'capacitor.config.ts'), 'utf8'),
     readFile(join(root, 'android/app/build.gradle'), 'utf8'),
   ]);
-  requireValid(/appId:\s*['"]com\.sda\.vop['"]/.test(capacitor), 'Capacitor app ID is not com.sda.vop.');
-  requireValid(/applicationId\s+['"]com\.sda\.vop['"]/.test(gradle) &&
-    /namespace\s*=\s*['"]com\.sda\.vop['"]/.test(gradle),
-    'Android applicationId and namespace must both be com.sda.vop.');
+  const escapedPackage = regexEscape(expectedPackage);
+  requireValid(new RegExp(`appId:\\s*['\"]${escapedPackage}['\"]`).test(capacitor),
+    `Capacitor app ID is not ${expectedPackage}.`);
+  requireValid(new RegExp(`applicationId\\s+['\"]${escapedPackage}['\"]`).test(gradle) &&
+    new RegExp(`namespace\\s*=\\s*['\"]${escapedPackage}['\"]`).test(gradle),
+    `Android applicationId and namespace must both be ${expectedPackage}.`);
 
   const policy = await jsonFile(join(root, 'config/curriculum-policy.json'), 'approved curriculum release policy');
   requireValid(exactKeys(policy, ['schemaVersion', 'expectedLanguageCount', 'expectedLessonCount']) &&
@@ -143,12 +155,11 @@ export async function validateAndroidRelease(root, environment) {
   }
   requireValid(hash(revisions.sort()) === manifest.version,
     'offline lesson manifest integrity check failed; regenerate from the approved master.');
-  return { project: EXPECTED_PROJECT, packageName: EXPECTED_PACKAGE, snapshotCount: manifest.count };
+  return { project: expectedProject, packageName: expectedPackage, snapshotCount: manifest.count };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-  // Use Vite's exact production env-file precedence and expansion.
   const { loadEnv } = await import('vite');
   const environment = loadEnv('production', root, 'VITE_');
   validateAndroidRelease(root, environment)
