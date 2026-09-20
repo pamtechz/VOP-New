@@ -7,22 +7,27 @@ import test from 'node:test';
 import { validateAndroidRelease } from '../scripts/validate-android-release.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const deploymentPolicy = {
+  schemaVersion: 1,
+  firebaseProjectId: 'voiceofprophecy',
+  androidPackageName: 'com.sda.vop',
+};
 const publicEnvironment = {
   VITE_FIREBASE_API_KEY: 'TEST_PUBLIC_WEB_KEY_NOT_A_REAL_CREDENTIAL',
   VITE_FIREBASE_AUTH_DOMAIN: 'voiceofprophecy.firebaseapp.com',
-  VITE_FIREBASE_PROJECT_ID: 'voiceofprophecy',
+  VITE_FIREBASE_PROJECT_ID: deploymentPolicy.firebaseProjectId,
   VITE_FIREBASE_APP_ID: '1:123456789:web:abcdef',
 };
 
 const googleRegistration = {
-  project_info: { project_id: 'voiceofprophecy', project_number: '123456789' },
+  project_info: { project_id: deploymentPolicy.firebaseProjectId, project_number: '123456789' },
   client: [{
     client_info: {
       mobilesdk_app_id: '1:123456789:android:abcdef',
-      android_client_info: { package_name: 'com.sda.vop' },
+      android_client_info: { package_name: deploymentPolicy.androidPackageName },
     },
     oauth_client: [
-      { client_type: 1, android_info: { package_name: 'com.sda.vop', certificate_hash: 'a'.repeat(40) } },
+      { client_type: 1, android_info: { package_name: deploymentPolicy.androidPackageName, certificate_hash: 'a'.repeat(40) } },
       { client_type: 3, client_id: 'synthetic-web-oauth-id-for-tests' },
     ],
   }],
@@ -31,11 +36,13 @@ const googleRegistration = {
 function setUp(root) {
   mkdirSync(join(root, 'android/app'), { recursive: true });
   mkdirSync(join(root, 'config'), { recursive: true });
+  const deploymentPath = join(root, 'config/deployment-policy.json');
   const policyPath = join(root, 'config/curriculum-policy.json');
+  writeFileSync(deploymentPath, JSON.stringify(deploymentPolicy));
   writeFileSync(policyPath, JSON.stringify({ schemaVersion: 1, expectedLanguageCount: 80, expectedLessonCount: 26 }));
   writeFileSync(join(root, 'android/app/google-services.json'), JSON.stringify(googleRegistration));
-  writeFileSync(join(root, 'android/app/build.gradle'), 'namespace = "com.sda.vop"\napplicationId "com.sda.vop"\n');
-  writeFileSync(join(root, 'capacitor.config.ts'), "appId: 'com.sda.vop',\n");
+  writeFileSync(join(root, 'android/app/build.gradle'), `namespace = "${deploymentPolicy.androidPackageName}"\napplicationId "${deploymentPolicy.androidPackageName}"\n`);
+  writeFileSync(join(root, 'capacitor.config.ts'), `appId: '${deploymentPolicy.androidPackageName}',\n`);
   const languages = Array.from({ length: 80 }, (_, index) =>
     String.fromCharCode(97 + Math.floor(index / 26), 97 + index % 26));
   const lessonIds = Array.from({ length: 26 }, (_, index) => `lesson-${String(index + 1).padStart(2, '0')}`);
@@ -67,21 +74,32 @@ function setUp(root) {
     schemaVersion: 1, languages, lessonIds, titles, count: languages.length * lessonIds.length,
     version: digest(revisions.sort()),
   }));
-  return { languages, lessonIds, manifestPath, policyPath };
+  return { languages, lessonIds, manifestPath, policyPath, deploymentPath };
 }
 
-test('Android release validates registration and every complete snapshot and rejects tampering', async () => {
+test('Android release validates configured deployment identity and every complete snapshot', async () => {
   const root = mkdtempSync(join(tmpdir(), 'vop-android-release-'));
   try {
-    const { languages, lessonIds, manifestPath, policyPath } = setUp(root);
+    const { languages, lessonIds, manifestPath, policyPath, deploymentPath } = setUp(root);
     const validate = () => validateAndroidRelease(root, publicEnvironment);
     assert.deepEqual(await validate(), {
-      project: 'voiceofprophecy', packageName: 'com.sda.vop', snapshotCount: 2080,
+      project: deploymentPolicy.firebaseProjectId,
+      packageName: deploymentPolicy.androidPackageName,
+      snapshotCount: 2080,
     });
     await assert.rejects(validateAndroidRelease(root, { ...publicEnvironment, VITE_FIREBASE_PROJECT_ID: 'other-project' }),
       /VITE_FIREBASE_PROJECT_ID/);
     await assert.rejects(validateAndroidRelease(root, { ...publicEnvironment, VITE_FIREBASE_APP_ID: '1:987654321:web:wrong' }),
       /Web app ID/);
+
+    const approvedDeployment = readFileSync(deploymentPath, 'utf8');
+    unlinkSync(deploymentPath);
+    await assert.rejects(validate(), /missing VOP deployment policy/);
+    writeFileSync(deploymentPath, JSON.stringify({ ...deploymentPolicy, firebaseProjectId: 'different-project' }));
+    await assert.rejects(validate(), /google-services.json must belong to Firebase project different-project/);
+    writeFileSync(deploymentPath, JSON.stringify({ ...deploymentPolicy, androidPackageName: 'invalid package' }));
+    await assert.rejects(validate(), /deployment policy has invalid/);
+    writeFileSync(deploymentPath, approvedDeployment);
 
     const registration = join(root, 'android/app/google-services.json');
     const saved = readFileSync(registration, 'utf8');
