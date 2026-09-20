@@ -38,6 +38,10 @@
   "overrides": {
     "xcode": {
       "uuid": "11.1.1"
+    },
+    "@opentelemetry/core": "2.8.0",
+    "gaxios": {
+      "uuid": "11.1.1"
     }
   }
 }
