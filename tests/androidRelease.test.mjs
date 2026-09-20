@@ -45,6 +45,7 @@ function setUp(root) {
   writeFileSync(join(root, 'capacitor.config.ts'), `appId: '${deploymentPolicy.androidPackageName}',\n`);
   const languages = Array.from({ length: 80 }, (_, index) =>
     String.fromCharCode(97 + Math.floor(index / 26), 97 + index % 26));
+  const languageLabels = languages.map((language, index) => `Language ${index + 1} (${language})`);
   const lessonIds = Array.from({ length: 26 }, (_, index) => `lesson-${String(index + 1).padStart(2, '0')}`);
   const lessonDir = join(root, 'public/lessons');
   mkdirSync(lessonDir, { recursive: true });
@@ -71,8 +72,8 @@ function setUp(root) {
   }
   const manifestPath = join(lessonDir, 'manifest.json');
   writeFileSync(manifestPath, JSON.stringify({
-    schemaVersion: 1, languages, lessonIds, titles, count: languages.length * lessonIds.length,
-    version: digest(revisions.sort()),
+    schemaVersion: 1, languages, languageLabels, lessonIds, titles,
+    count: languages.length * lessonIds.length, version: digest(revisions.sort()),
   }));
   return { languages, lessonIds, manifestPath, policyPath, deploymentPath };
 }
@@ -137,6 +138,10 @@ test('Android release validates configured deployment identity and every complet
     writeFileSync(first, original);
 
     const originalManifest = readFileSync(manifestPath, 'utf8');
+    const noLanguageLabels = JSON.parse(originalManifest);
+    delete noLanguageLabels.languageLabels;
+    writeFileSync(manifestPath, JSON.stringify(noLanguageLabels));
+    await assert.rejects(validate(), /language labels/);
     const noTitles = JSON.parse(originalManifest);
     delete noTitles.titles;
     writeFileSync(manifestPath, JSON.stringify(noTitles));
