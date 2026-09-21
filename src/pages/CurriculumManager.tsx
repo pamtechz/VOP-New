@@ -78,7 +78,7 @@ type EditorState = {
 };
 
 async function adminContent(
-  action: 'list' | 'upsert' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'upsert' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
@@ -317,6 +317,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons' }:
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
   const [drafts, setDrafts] = useState<RecordItem[]>([]);
   const [records, setRecords] = useState<RecordItem[]>([]);
+  const [collectionCounts, setCollectionCounts] = useState({ paths: 0, topics: 0, seasons: 0 });
   const [search, setSearch] = useState('');
   const [languageFilter, setLanguageFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -454,9 +455,23 @@ export default function CurriculumManager({ languages, initialTab = 'lessons' }:
       setDrafts((draftResponse.items || []) as RecordItem[]);
       setGuideRecords((guideResponse.items || []) as RecordItem[]);
 
+      const [pathsResponse, topicsResponse, seasonsResponse] = await Promise.all([
+        adminContent('list', COLLECTIONS.paths),
+        adminContent('list', COLLECTIONS.topics),
+        adminContent('list', COLLECTIONS.seasons),
+      ]);
+      const nextCollections = {
+        paths: (pathsResponse.items || []) as RecordItem[],
+        topics: (topicsResponse.items || []) as RecordItem[],
+        seasons: (seasonsResponse.items || []) as RecordItem[],
+      };
+      setCollectionCounts({
+        paths: nextCollections.paths.length,
+        topics: nextCollections.topics.length,
+        seasons: nextCollections.seasons.length,
+      });
       if (tab === 'paths' || tab === 'topics' || tab === 'seasons') {
-        const response = await adminContent('list', COLLECTIONS[tab]);
-        setRecords((response.items || []) as RecordItem[]);
+        setRecords(nextCollections[tab]);
       } else {
         setRecords([]);
       }
@@ -469,10 +484,10 @@ export default function CurriculumManager({ languages, initialTab = 'lessons' }:
 
   useEffect(() => { void load(); }, [tab]);
 
-  const guideCount = guideRecords.length;
+  const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
   const quizCount = allQuizRows.length;
-  const currentCollectionCount = tab === 'paths' || tab === 'topics' || tab === 'seasons' ? pathCount : 0;
+  const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
   const openLesson = (row: LessonRow) => {
     setEditor(editorFromLesson(row));
@@ -785,7 +800,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons' }:
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;
-          const count = item.id === 'lessons' ? lessonCount : item.id === 'guides' ? guideCount : item.id === 'quizzes' ? quizCount : 0;
+          const count = item.id === 'lessons' ? lessonCount : item.id === 'guides' ? guideCount : item.id === 'quizzes' ? quizCount : item.id === 'paths' ? collectionCounts.paths : item.id === 'topics' ? collectionCounts.topics : collectionCounts.seasons;
           return <button key={item.id} type="button" className={'vop-reference-tab ' + (tab === item.id ? 'active' : '')} onClick={() => { setTab(item.id); setSearch(''); }}><Icon size={18}/>{item.label} ({count})</button>;
         })}
       </div>
