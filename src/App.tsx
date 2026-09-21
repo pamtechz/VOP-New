@@ -239,8 +239,13 @@ export const App: React.FC = () => {
               setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.');
               return false;
             }
-            const refreshedUser = getCurrentUser();
-            if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
+            if (auth?.currentUser) {
+              const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
+              if (refreshedUser) {
+                setCurrentUser(refreshedUser);
+                setAllUsers([refreshedUser]);
+              }
+            }
             if (!nextLesson) setActiveLesson(null);
             return true;
           }}
@@ -261,8 +266,13 @@ export const App: React.FC = () => {
               setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
               return;
             }
-            const refreshedUser = getCurrentUser();
-            if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
+            if (auth?.currentUser) {
+              const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
+              if (refreshedUser) {
+                setCurrentUser(refreshedUser);
+                setAllUsers([refreshedUser]);
+              }
+            }
           }}
           onOpenCertificate={() => navigate('certificates')}
         />
