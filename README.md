@@ -16,6 +16,10 @@ node --experimental-strip-types --test tests/progress.test.ts tests/multitest.te
 
 For Android packaging, use the Capacitor/Android configuration under `android/` after a successful web build. These workflows do not publish an APK or a production deployment.
 
+## Firestore curriculum
+
+The production lesson seed script writes approved lessons to the canonical `curricula/discover/languages/{language}/lessons/{lessonId}` hierarchy used by the web reader.
+
 ## Implementation
 
 - `src/components/guide/DiscoverGuideView.tsx`: compact mobile numbered lesson timeline. Published lessons are accessible without a hardcoded sequential prerequisite gate; configurable prerequisites require a separate admin-managed policy.
