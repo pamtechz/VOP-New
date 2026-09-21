@@ -263,15 +263,8 @@ export const deleteChurch = (id: string) => {
 
 export const getStoredHierarchyConfig = (): HierarchyConfig => {
   const data = localStorage.getItem(STORAGE_KEYS.HIERARCHY_CONFIG);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(INITIAL_HIERARCHY_CONFIG));
-    return INITIAL_HIERARCHY_CONFIG;
-  }
-  try {
-    return JSON.parse(data);
-  } catch {
-    return INITIAL_HIERARCHY_CONFIG;
-  }
+  if (!data) return { unions: [], conferences: [], districts: [], churches: [] } as unknown as HierarchyConfig;
+  try { return JSON.parse(data); } catch { return { unions: [], conferences: [], districts: [], churches: [] } as unknown as HierarchyConfig; }
 };
 
 export const saveHierarchyConfig = (config: HierarchyConfig) => {
