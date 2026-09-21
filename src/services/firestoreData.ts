@@ -12,7 +12,7 @@ export async function loadFirestoreGuides(language?: LanguageCode): Promise<Disc
   const snapshot = await getDocs(collection(firestore, 'curriculum'));
   return snapshot.docs
     .map(item => ({ id: item.id, ...item.data() } as unknown as DiscoverGuide))
-    .filter(guide => Boolean(guide.id) && Boolean(guide.title) && Boolean(guide.language) && guide.published !== false)
+    .filter(guide => Boolean(guide.id) && Boolean(guide.title) && Boolean(guide.language) && (guide as any).published === true)
     .filter(guide => !language || guide.language === language)
     .map(guide => ({
       ...guide,
