@@ -18,6 +18,7 @@ import {
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
+import CurriculumManager from './CurriculumManager';
 
 interface AdminPageProps {
   currentUser: User;
@@ -672,7 +673,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     </div>
   </div>;
 
-  const renderStudio = () => {
+  const renderLegacyStudio = () => {
     if (editorMode) return renderLessonEditor();
     const tabCounts: Record<StudioTab, number> = {lessons:totalLessons,guides:guides.length,quizzes:quizCount,paths:0,topics:0,seasons:0};
     const tabs: Array<{id:StudioTab;label:string;icon:React.ComponentType<{size?:number}>}> = [
@@ -699,6 +700,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       {studioTab!=='lessons' && studioTab!=='guides' && studioTab!=='quizzes' && <div className="vop-empty"><Layers size={32}/><h2 style={{color:'#09275f'}}>No {tabs.find(tab=>tab.id===studioTab)?.label.toLowerCase()} configured</h2><p>These records are intentionally data-driven and will appear here when configured by an administrator.</p><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={17}/>Create Content</button></div>}
     </div>;
   };
+
+  const renderStudio = () => <CurriculumManager languages={languages} />;
 
   const renderLessonEditor = () => <div>
     <div className="vop-breadcrumb"><button type="button" style={{border:0,background:'transparent',color:'#58719a'}} onClick={()=>setEditorMode(false)}>Curriculum Studio</button><ChevronRight size={15}/><span>Lessons</span><ChevronRight size={15}/><span>{selectedLesson ? 'Edit Lesson' : 'Create Lesson'}</span></div>
