@@ -7,7 +7,7 @@ import type {
 import {
   getCurrentUser, getActiveLanguage, setActiveLanguage,
 } from './services/storage';
-import { createPrayerRequest, loadPublicContent, updatePrayerRequestStatus, emptySettings } from './services/publicFirestore';
+import { createPrayerRequest, loadPublicContent, updateOwnProfile, updatePrayerRequestStatus, emptySettings } from './services/publicFirestore';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -160,7 +160,8 @@ export const App: React.FC = () => {
           {currentRoute === 'profile' && (
             <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences}
               districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage}
-              onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />
+              onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')}
+              onSaveProfile={async patch => { await updateOwnProfile(currentUser.uid, patch); setCurrentUser({ ...currentUser, ...patch }); }} />
           )}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome}
