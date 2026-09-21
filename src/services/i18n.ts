@@ -62,6 +62,7 @@ export const getTranslation = (
   lang: LanguageCode = 'en',
   customTranslations?: Record<string, Record<string, string>>,
   defaultFallback?: string,
+  _componentName?: string,
 ): string => {
   if (customTranslations?.[lang]?.[key]) return customTranslations[lang][key];
   if (DEFAULT_TRANSLATIONS.en[key]) return lang === 'en'
