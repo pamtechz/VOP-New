@@ -392,7 +392,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </p>
 
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          Copyright © 2023–2026 | RVC | {settings.appName} v3.5
+          {settings.copyrightText || settings.versionLabel ? `${settings.copyrightText || ''}${settings.copyrightText && settings.versionLabel ? ' | ' : ''}${settings.versionLabel || ''}` : ''}
         </p>
       </footer>
     </div>
