@@ -53,3 +53,4 @@ The learner account, certificate, and administrator overview screens use the sup
 
 <!-- CI validation: curriculum studio manager -->
 <!-- CI rerun after curriculum studio integration fix -->
+<!-- CI rerun after candidate block fix -->
