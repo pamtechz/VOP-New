@@ -250,11 +250,12 @@ export const App: React.FC = () => {
             const accepted = completeLesson(activeGuide.id, activeLesson.id);
             if (!accepted) {
               setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
-              return;
+              return false;
             }
             const refreshedUser = getCurrentUser();
             if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
             if (!nextLesson) setActiveLesson(null);
+            return true;
           }}
         />
       )}
