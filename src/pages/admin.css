@@ -499,7 +499,7 @@
   .vop-cert-pager{align-items:flex-start;flex-direction:column}
   .vop-cert-pager>div{width:100%;overflow:auto}
   .vop-cert-preview-grid{gap:10px}
-  .vop-cert-artwork{border-width:3px}
+  .vop-certificate-artwork{border-width:3px}
 }
 @media print{
   body *{visibility:hidden!important}
