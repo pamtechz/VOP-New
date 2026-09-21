@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Book, BookOpen, CalendarDays, Check, CheckCircle, ChevronDown,
+  ArrowLeft, Book, BookOpen, CalendarDays, CheckCircle, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Clock, Edit3, Eye, FileText,
   Filter, Globe, Image as ImageIcon, Layers, MoreVertical, Plus, RefreshCw,
   Save, Search, Send, Settings, Trash2, Video, Volume2, X
