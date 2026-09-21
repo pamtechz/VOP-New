@@ -157,7 +157,7 @@ export function calculateCurriculumAverageScore(
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
     .filter(lesson => lesson.type === 'Test')
-    .map(test => getTestScore(guide, test, scores)));
+    .map(test => getTestScore(guide, test, scores, language)));
   if (!marks.length || !marks.every(validScore)) return null;
   return Math.round(marks.reduce((sum, mark) => sum + mark!, 0) / marks.length);
 }
