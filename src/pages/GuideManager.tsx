@@ -47,6 +47,7 @@ type Props = {
   languages: CustomLanguage[];
   guides: DiscoverGuide[];
   onSaved?: () => void;
+  onOpenSettings?: () => void;
 };
 
 async function guideAdmin(
@@ -153,7 +154,7 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
   return [...groups.values()].sort((a, b) => a.discoverNumber - b.discoverNumber || a.title.localeCompare(b.title));
 }
 
-export default function GuideManager({ languages, guides, onSaved }: Props) {
+export default function GuideManager({ languages, guides, onSaved, onOpenSettings }: Props) {
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
   const [search, setSearch] = useState('');
@@ -308,7 +309,7 @@ export default function GuideManager({ languages, guides, onSaved }: Props) {
         </div>
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button>
-          <button className="vop-secondary" type="button" disabled><span><span aria-hidden="true">⚙</span> Guide Settings</span></button>
+          <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><span><span aria-hidden="true">⚙</span> Guide Settings</span></button>
           <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>New Guide</button>
         </div>
       </div>
