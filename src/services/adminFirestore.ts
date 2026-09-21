@@ -301,3 +301,104 @@ export const subscribeAnnouncements = (
     }
   );
 };
+
+
+export type AdminRecordCollection =
+  | 'announcements'
+  | 'books'
+  | 'radioBroadcasts'
+  | 'unions'
+  | 'conferences'
+  | 'districts'
+  | 'churches';
+
+export interface AdminTranslationRecord {
+  id: string;
+  values: Record<string, string>;
+  updatedAt?: string;
+}
+
+export const subscribeAdminCollection = (
+  collectionName: AdminRecordCollection,
+  callback: (records: Array<Record<string, unknown> & { id: string }>) => void,
+  onError?: (error: Error) => void
+): Unsubscribe => {
+  const firestore = getDb();
+  return onSnapshot(
+    collection(firestore, collectionName),
+    snapshot => {
+      callback(snapshot.docs.map(item => ({
+        id: item.id,
+        ...(item.data() as Record<string, unknown>),
+      })));
+    },
+    err => {
+      console.error('Firestore admin collection subscription error:', err);
+      onError?.(err);
+    }
+  );
+};
+
+export const saveAdminRecord = async (
+  collectionName: AdminRecordCollection,
+  id: string,
+  data: Record<string, unknown>
+): Promise<void> => {
+  const firestore = getDb();
+  await setDoc(doc(firestore, collectionName, id), {
+    ...data,
+    id,
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+};
+
+export const deleteAdminRecord = async (
+  collectionName: AdminRecordCollection,
+  id: string
+): Promise<void> => {
+  const firestore = getDb();
+  await deleteDoc(doc(firestore, collectionName, id));
+};
+
+export const subscribeTranslations = (
+  callback: (records: AdminTranslationRecord[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe => {
+  const firestore = getDb();
+  return onSnapshot(
+    collection(firestore, 'translations'),
+    snapshot => {
+      callback(snapshot.docs.map(item => {
+        const raw = item.data();
+        const values = raw.values && typeof raw.values === 'object'
+          ? Object.fromEntries(
+              Object.entries(raw.values as Record<string, unknown>)
+                .map(([key, value]) => [key, String(value ?? '')])
+            )
+          : {};
+        return {
+          id: item.id,
+          values,
+          updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+        };
+      }));
+    },
+    err => {
+      console.error('Firestore translations subscription error:', err);
+      onError?.(err);
+    }
+  );
+};
+
+export const saveTranslation = async (
+  language: string,
+  values: Record<string, string>
+): Promise<void> => {
+  const firestore = getDb();
+  const id = language.trim().toLowerCase();
+  if (!id) throw new Error('A language code is required.');
+  await setDoc(doc(firestore, 'translations', id), {
+    values,
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+};
