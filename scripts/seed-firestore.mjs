@@ -17,14 +17,14 @@ if (master.schemaVersion !== 2 || !Array.isArray(master.lessons) || master.lesso
 }
 
 const labels = new Map((master.languages || []).map((lang, index) => [lang, master.languageLabels?.[index] || lang]));
-const collection = process.env.FIRESTORE_LESSONS_COLLECTION || 'lessons';
 const batch = db.batch();
+const curriculum = db.collection('curricula').doc('discover');
 
 for (const lesson of master.lessons) {
   if (!lesson.lang || !lesson.lessonId || !Array.isArray(lesson.pages)) {
     throw new Error(`Invalid lesson record: ${JSON.stringify(lesson)}`);
   }
-  const ref = db.collection(collection).doc(`${lesson.lang}_${lesson.lessonId}`);
+  const ref = curriculum.collection('languages').doc(lesson.lang).collection('lessons').doc(String(lesson.lessonId));
   batch.set(ref, {
     schemaVersion: master.schemaVersion,
     language: lesson.lang,
@@ -56,4 +56,4 @@ for (const lesson of master.lessons) {
 }
 
 await batch.commit();
-console.log(`Seeded ${master.lessons.length} source-derived lessons into ${collection} for project ${projectId}.`);
+console.log(`Seeded ${master.lessons.length} source-derived lessons into curricula/discover/languages/{language}/lessons for project ${projectId}.`);
