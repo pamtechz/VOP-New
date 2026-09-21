@@ -89,6 +89,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /curriculum/{guideId} {
+      allow get, list: if resource.data.published == true;
+      allow write: if false;
+    }
+
+    match /system/certification {
+      allow get: if resource.data.enabled == true;
+      allow list: if false;
+      allow write: if false;
+    }
+
     // Lessons remain protected and are served only to authenticated learners/admins.
     match /{path=**}/lessons/{lessonId} {
       allow get, list: if request.auth != null;
