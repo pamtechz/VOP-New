@@ -293,7 +293,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     updateUserLocal(user, {
       role,
       adminNodeType: role === 'super_admin' ? 'super' : nodeType,
-      adminNodeId: role === 'super_admin' ? undefined : (nodeId || undefined),
+      adminNodeId: role === 'super_admin' || role === 'student' ? undefined : (nodeId || undefined),
       privileges: {
         ...user.privileges,
         admin: role !== 'student',
