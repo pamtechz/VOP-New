@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   Check,
-  ChevronDown,
   Globe,
   Landmark,
   Megaphone,
@@ -12,16 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
-import type {
-  Announcement,
-  BookResource,
-  ChurchOrganization,
-  Conference,
-  CustomLanguage,
-  District,
-  RadioBroadcast,
-  Union,
-} from '../../types';
+import type { CustomLanguage } from '../../types';
 
 type CollectionName =
   | 'languages'
@@ -159,13 +149,17 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     [state.languages],
   );
 
-  function startNew() {
+  function startNewFor(collection: CollectionName = active) {
     setEditingId('');
-    const record = newRecord(active, state);
+    const record = newRecord(collection, state);
     setDraft(record);
     setTranslationText(JSON.stringify(record.values ?? {}, null, 2));
     setMessage('');
     setError('');
+  }
+
+  function startNew() {
+    startNewFor(active);
   }
 
   function editItem(item: ContentItem) {
@@ -280,7 +274,6 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
           <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '.76rem' }}>
             Translation keys are stored as Firestore data. Add only keys you actually want translated; there is no hardcoded language catalog.
           </p>
-          {area('Translation values (JSON object)', 'values', 12)}
           <textarea
             rows={12}
             value={translationText}
@@ -388,7 +381,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
               key={tab.id}
               type="button"
               className={`btn ${activeTab ? 'btn-gold' : 'btn-outline'}`}
-              onClick={() => { setActive(tab.id); startNew(); }}
+              onClick={() => { setActive(tab.id); startNewFor(tab.id); }}
               disabled={pending}
               style={{ flex: '0 0 auto' }}
             >
@@ -435,7 +428,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
               <strong>{editingId ? 'Edit record' : 'Create record'}</strong>
               <div style={{ fontSize: '.72rem', color: 'var(--text-secondary)' }}>{TAB_CONFIG.find(tab => tab.id === active)?.label}</div>
             </div>
-            <ChevronDown size={15} />
+
           </div>
 
           {renderEditor()}
