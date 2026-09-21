@@ -53,7 +53,7 @@ import {
   importDatabaseBackup,
   isSuperAdminAllowedOnPlatform
 } from '../services/storage';
-import { getAvailableLanguages, DEFAULT_LANGUAGES } from '../services/i18n';
+import { getAvailableLanguages } from '../services/i18n';
 import {
   Shield,
   Users,
@@ -142,10 +142,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('student');
-  const [newUserUnionId, setNewUserUnionId] = useState('union-szuc');
-  const [newUserConfId, setNewUserConfId] = useState('conf-1');
-  const [newUserDistId, setNewUserDistId] = useState('dist-1');
-  const [newUserChurchId, setNewUserChurchId] = useState('church-1');
+  const [newUserUnionId, setNewUserUnionId] = useState('');
+  const [newUserConfId, setNewUserConfId] = useState('');
+  const [newUserDistId, setNewUserDistId] = useState('');
+  const [newUserChurchId, setNewUserChurchId] = useState('');
 
   // Edit Candidate Profile Modal State
   const [editingCandidate, setEditingCandidate] = useState<User | null>(null);
@@ -161,15 +161,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   // Add & Edit Lesson State
   const [activeGuideForLesson, setActiveGuideForLesson] = useState<string | null>(null);
   const [editingLessonInfo, setEditingLessonInfo] = useState<{ guideId: string; lesson: Lesson } | null>(null);
-  const [newLessonNumber, setNewLessonNumber] = useState('1.1');
+  const [newLessonNumber, setNewLessonNumber] = useState('');
   const [newLessonTitle, setNewLessonTitle] = useState('');
   const [newLessonType, setNewLessonType] = useState<'Lesson' | 'Test'>('Lesson');
   const [newLessonMinutes, setNewLessonMinutes] = useState(15);
   const [newLessonDesc, setNewLessonDesc] = useState('');
-  const [newLessonSectionHeading, setNewLessonSectionHeading] = useState('Key Truth');
+  const [newLessonSectionHeading, setNewLessonSectionHeading] = useState('');
   const [newLessonSectionContent, setNewLessonSectionContent] = useState('');
   const [newLessonQuestionText, setNewLessonQuestionText] = useState('');
-  const [newLessonOptions, setNewLessonOptions] = useState(['Option A', 'Option B', 'Option C', 'Option D']);
+  const [newLessonOptions, setNewLessonOptions] = useState(['', '', '', '']);
   const [newLessonCorrectIdx, setNewLessonCorrectIdx] = useState(0);
 
   // Organizations management tab sub-selection & modals
@@ -185,18 +185,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [newOrgLeader, setNewOrgLeader] = useState('');
   const [newOrgPhone, setNewOrgPhone] = useState('');
   const [newOrgLocation, setNewOrgLocation] = useState('');
-  const [newOrgDistrictId, setNewOrgDistrictId] = useState('dist-1');
+  const [newOrgDistrictId, setNewOrgDistrictId] = useState('');
 
   // District Form
   const [newDistName, setNewDistName] = useState('');
-  const [newDistConfId, setNewDistConfId] = useState('conf-1');
+  const [newDistConfId, setNewDistConfId] = useState('');
   const [newDistPastor, setNewDistPastor] = useState('');
   const [newDistPhone, setNewDistPhone] = useState('');
 
   // Conference Form
   const [newConfName, setNewConfName] = useState('');
   const [newConfCode, setNewConfCode] = useState('');
-  const [newConfUnionId, setNewConfUnionId] = useState('union-szuc');
+  const [newConfUnionId, setNewConfUnionId] = useState('');
   const [newConfRegion, setNewConfRegion] = useState('');
   const [newConfDirector, setNewConfDirector] = useState('');
   const [newConfEmail, setNewConfEmail] = useState('');
@@ -205,7 +205,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [newUnionName, setNewUnionName] = useState('');
   const [newUnionCode, setNewUnionCode] = useState('');
   const [newUnionHQ, setNewUnionHQ] = useState('');
-  const [newUnionDivision, setNewUnionDivision] = useState('Southern Africa-Indian Ocean Division (SID)');
+  const [newUnionDivision, setNewUnionDivision] = useState('');
 
   // Platform constraint check
   const isWebOnlyViolation = currentUser.role === 'super_admin' && !isSuperAdminAllowedOnPlatform();
@@ -287,7 +287,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       discoverNumber: guides.length + 1,
       title: newGuideTitle.trim(),
       subtitle: newGuideSubtitle.trim() || `Guide ${guides.length + 1}`,
-      description: newGuideDesc.trim() || 'Comprehensive Bible study curriculum.',
+      description: newGuideDesc.trim(),
       language: newGuideLang,
       image: '/assets/lesson_preview.png',
       lessons: [],
@@ -311,15 +311,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       title: newLessonTitle.trim(),
       type: newLessonType,
       estimatedMinutes: Number(newLessonMinutes) || 15,
-      description: newLessonDesc.trim() || 'Bible investigation lesson.',
+      description: newLessonDesc.trim(),
       contentPages: [
         {
           pageNumber: 1,
           title: newLessonSectionHeading,
-          content: newLessonSectionContent || 'Study this truth carefully with prayer.',
+          content: newLessonSectionContent,
           scriptureQuote: {
-            text: 'For God so loved the world that he gave his one and only Son.',
-            reference: 'John 3:16'
+            text: '',
+            reference: ''
           }
         }
       ],
@@ -331,7 +331,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               answer: true,
               options: newLessonOptions,
               correctOptionIndex: newLessonCorrectIdx,
-              explanation: 'Scriptural explanation for the right answer.'
+              explanation: ''
             }
           ]
         : []
@@ -355,9 +355,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     addChurch({
       name: newOrgName.trim(),
       type: newOrgType,
-      leaderName: newOrgLeader.trim() || 'VOP Coordinator',
+      leaderName: newOrgLeader.trim(),
       leaderPhone: newOrgPhone.trim(),
-      location: newOrgLocation.trim() || 'Central',
+      location: newOrgLocation.trim(),
       districtId: dist.id,
       conferenceId: dist.conferenceId,
       unionId: dist.unionId
