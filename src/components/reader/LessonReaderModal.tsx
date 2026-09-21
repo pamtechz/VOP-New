@@ -176,23 +176,28 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, gu
             </div>
           ) : (
             <>
-              <h3 style={{ fontSize: '1.25rem' }}>{currentPage.title}</h3>
-              {currentPage.imageUrl && (
-                <img src={currentPage.imageUrl} alt="" loading="lazy"
-                  style={{ width: '100%', maxHeight: '22rem', objectFit: 'contain', borderRadius: 'var(--radius-lg)', background: 'var(--vop-navy-50)' }} />
-              )}
-              <p style={{ fontSize: '1rem', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{currentPage.content}</p>
-              {currentPage.scriptureQuote && (
-                <blockquote style={{ background: 'var(--vop-gold-50)', borderLeft: '4px solid var(--vop-gold-500)',
-                  padding: '1rem', borderRadius: '.4rem', color: 'var(--vop-navy-950)' }}>
-                  <p style={{ fontSize: '.78rem', fontWeight: 800, marginBottom: '.45rem' }}><Quote size={15} style={{ verticalAlign: 'middle' }}/> HOLY SCRIPTURE</p>
-                  <p style={{ fontFamily: 'var(--font-serif)', lineHeight: 1.6 }}>{currentPage.scriptureQuote.text}</p>
-                  <cite style={{ display: 'block', textAlign: 'right', fontStyle: 'normal', fontWeight: 700 }}>— {currentPage.scriptureQuote.reference}</cite>
-                </blockquote>
-              )}
+              <h3 style={{ fontSize: '1.25rem' }}>{renderInlineText(currentPage.title)}</h3>
+              {currentPage.blocks?.length
+                ? currentPage.blocks.map((block, index) => renderBlock(block, block.id || String(index)))
+                : <>
+                    {currentPage.imageUrl && (
+                      <img src={currentPage.imageUrl} alt="" loading="lazy"
+                        style={{ width: '100%', maxHeight: '22rem', objectFit: 'contain', borderRadius: 'var(--radius-lg)', background: 'var(--vop-navy-50)' }} />
+                    )}
+                    <p style={{ fontSize: '1rem', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{renderInlineText(currentPage.content)}</p>
+                    {currentPage.scriptureQuote && (
+                      <blockquote style={{ background: 'var(--vop-gold-50)', borderLeft: '4px solid var(--vop-gold-500)',
+                        padding: '1rem', borderRadius: '.4rem', color: 'var(--vop-navy-950)' }}>
+                        <p style={{ fontSize: '.78rem', fontWeight: 800, marginBottom: '.45rem' }}><Quote size={15} style={{ verticalAlign: 'middle' }}/> HOLY SCRIPTURE</p>
+                        <p style={{ fontFamily: 'var(--font-serif)', lineHeight: 1.6 }}>{renderInlineText(currentPage.scriptureQuote.text)}</p>
+                        <cite style={{ display: 'block', textAlign: 'right', fontStyle: 'normal', fontWeight: 700 }}>— {currentPage.scriptureQuote.reference}</cite>
+                      </blockquote>
+                    )}
+                  </>
+              }
               {currentPage.keyTakeaway && (
                 <div style={{ background: 'var(--vop-navy-50)', padding: '1rem', borderRadius: '.65rem' }}>
-                  <Sparkles size={17} style={{ verticalAlign: 'middle' }}/> <strong>Key truth: </strong>{currentPage.keyTakeaway}
+                  <Sparkles size={17} style={{ verticalAlign: 'middle' }}/> <strong>Key truth: </strong>{renderInlineText(currentPage.keyTakeaway)}
                 </div>
               )}
             </>
