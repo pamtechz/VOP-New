@@ -116,11 +116,11 @@ export const setActiveLanguage = (lang: LanguageCode) => {
 
 export const getStoredUnions = (): Union[] => {
   const data = localStorage.getItem(STORAGE_KEYS.UNIONS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -153,11 +153,11 @@ export const deleteUnion = (id: string) => {
 
 export const getStoredConferences = (): Conference[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CONFERENCES);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -190,11 +190,11 @@ export const deleteConference = (id: string) => {
 
 export const getStoredDistricts = (): District[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DISTRICTS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -227,11 +227,11 @@ export const deleteDistrict = (id: string) => {
 
 export const getStoredChurches = (): ChurchOrganization[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHURCHES);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -264,11 +264,11 @@ export const deleteChurch = (id: string) => {
 
 export const getStoredHierarchyConfig = (): HierarchyConfig => {
   const data = localStorage.getItem(STORAGE_KEYS.HIERARCHY_CONFIG);
-  if (!data) {
-  }
+  if (!data) return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: false, divisionName: '' };
   try {
     return JSON.parse(data);
   } catch {
+    return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: false, divisionName: '' };
   }
 };
 
@@ -281,11 +281,11 @@ export const saveHierarchyConfig = (config: HierarchyConfig) => {
 
 export const getStoredGraduationRequests = (): GraduationRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.GRADUATION_REQUESTS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -342,11 +342,11 @@ export const advanceGraduationStatus = (
 
 export const getStoredPrayerRequests = (): PrayerRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PRAYER_REQUESTS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -375,11 +375,11 @@ export const updatePrayerStatus = (id: string, status: PrayerRequest['status']) 
 
 export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RADIO_BROADCASTS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -570,11 +570,11 @@ export const addQuestionToLesson = (
 
 export const getStoredUsers = (): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -719,11 +719,11 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
 
 export const getStoredAnnouncements = (): Announcement[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
@@ -734,11 +734,11 @@ export const saveAnnouncements = (announcements: Announcement[]) => {
 
 export const getStoredBooks = (): BookResource[] => {
   const data = localStorage.getItem(STORAGE_KEYS.BOOKS);
-  if (!data) {
-  }
+  if (!data) return [];
   try {
     return JSON.parse(data);
   } catch {
+    return [];
   }
 };
 
