@@ -56,8 +56,10 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
   );
 
   const getTestScore = (guide: DiscoverGuide, lesson: Lesson): number | undefined => {
-    const key = `${guide.id}:${lesson.id}`;
     const scores = currentUser.progress.guideScores ?? {};
+    const languageKey = `${activeLanguage}:${guide.id}:${lesson.id}`;
+    const key = `${guide.id}:${lesson.id}`;
+    if (Object.hasOwn(scores, languageKey)) return scores[languageKey];
     if (Object.hasOwn(scores, key)) return scores[key];
     return guide.lessons.filter(item => item.type === 'Test').length === 1
       ? scores[guide.id]
@@ -152,7 +154,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
                       && settings.quizPassThreshold >= 0 && settings.quizPassThreshold <= 100;
                     const success = lesson.type === 'Test'
                       ? Boolean(validScore && validThreshold && score! >= settings.quizPassThreshold)
-                      : completed.has(lesson.id);
+                      : (completed.has(lesson.id) || completed.has(`${activeLanguage}:${guide.id}:${lesson.id}`));
                     const total = Math.max(
                       1,
                       lesson.type === 'Test'
@@ -161,7 +163,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
                     );
                     const value = lesson.type === 'Test' && validScore
                       ? `${score}%`
-                      : `${success ? total : (completed.has(lesson.id) ? total : 1)}/${total}`;
+                      : `${success ? total : 0}/${total}`;
 
                     const rawNumber = lesson.lessonNumber || `${gIdx + 1}.${idx}`;
                     const formattedLabel = rawNumber.includes('.') ? `${rawNumber} LESSON` : `${rawNumber}.0 LESSON`;
@@ -175,19 +177,8 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
                   }))}
                 </div>
               ) : (
-                <div className="vop-lesson-progress-row">
-                  <div className="vop-progress-item">
-                    <div className="vop-progress-ring">1/1</div>
-                    <span className="vop-progress-label">1.0 LESSON</span>
-                  </div>
-                  <div className="vop-progress-item">
-                    <div className="vop-progress-ring">4/4</div>
-                    <span className="vop-progress-label">1.1 LESSON</span>
-                  </div>
-                  <div className="vop-progress-item">
-                    <div className="vop-progress-ring">6/6</div>
-                    <span className="vop-progress-label">1.2 LESSON</span>
-                  </div>
+                <div className="vop-reference-empty">
+                  {t('no_lesson_progress', 'No published lesson progress is available yet.')}
                 </div>
               )}
             </section>

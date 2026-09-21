@@ -5,10 +5,10 @@ import type {
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, Announcement, BookResource,
 } from './types';
 import {
-  getActiveLanguage, setActiveLanguage, getCurrentUser,
+  getActiveLanguage, setActiveLanguage,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
-import { completeLesson, submitQuizScore } from './services/localStudy';
+import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth } from './lib/firebase';
@@ -62,32 +62,19 @@ export const App: React.FC = () => {
         return;
       }
       void loadFirestoreUser(firebaseUser.uid).then(profile => {
-        const stored = getCurrentUser();
-        const next = profile || (stored && stored.uid === firebaseUser.uid ? stored : null) || {
-          ...EMPTY_USER,
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || 'obsndyxd@gmail.com',
-          displayName: firebaseUser.displayName || 'Aubrey Matende',
-          photoURL: firebaseUser.photoURL || '/assets/profile.png',
-          role: 'super_admin',
-          privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true },
-        };
-        setCurrentUser(next);
-        setAllUsers([next]);
+        if (!profile) {
+          setCurrentUser(EMPTY_USER);
+          setAllUsers([]);
+          setStudyError('Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
+          return;
+        }
+        setCurrentUser(profile);
+        setAllUsers([profile]);
       }).catch(error => {
         console.error('VOP user profile load failed', error);
-        const stored = getCurrentUser();
-        const next = (stored && stored.uid === firebaseUser.uid ? stored : null) || {
-          ...EMPTY_USER,
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || 'obsndyxd@gmail.com',
-          displayName: firebaseUser.displayName || 'Aubrey Matende',
-          photoURL: firebaseUser.photoURL || '/assets/profile.png',
-          role: 'super_admin',
-          privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true },
-        };
-        setCurrentUser(next);
-        setAllUsers([next]);
+        setCurrentUser(EMPTY_USER);
+        setAllUsers([]);
+        setStudyError('Your VOP account profile could not be loaded from Firestore.');
       });
     });
   }, []);
@@ -252,8 +239,13 @@ export const App: React.FC = () => {
               setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.');
               return false;
             }
-            const refreshedUser = getCurrentUser();
-            if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
+            if (auth?.currentUser) {
+              const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
+              if (refreshedUser) {
+                setCurrentUser(refreshedUser);
+                setAllUsers([refreshedUser]);
+              }
+            }
             if (!nextLesson) setActiveLesson(null);
             return true;
           }}
@@ -268,14 +260,21 @@ export const App: React.FC = () => {
           onContinue={() => {
             if (nextLesson) setActiveLesson(nextLesson);
           }}
-          onSubmitScore={score => {
-            const accepted = submitQuizScore(activeGuide.id, activeLesson.id, score);
-            if (!accepted) {
-              setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
-              return;
+          onSubmitScore={async answers => {
+            const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers);
+            if (score === null) {
+              setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.');
+              return null;
             }
-            const refreshedUser = getCurrentUser();
-            if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
+            setStudyError('');
+            if (auth?.currentUser) {
+              const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
+              if (refreshedUser) {
+                setCurrentUser(refreshedUser);
+                setAllUsers([refreshedUser]);
+              }
+            }
+            return score;
           }}
           onOpenCertificate={() => navigate('certificates')}
         />

@@ -22,7 +22,6 @@ import {
   CustomLanguage
 } from '../types';
 
-import { INITIAL_LANGUAGES } from '../data/initialData';
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
@@ -110,15 +109,12 @@ export const setActiveLanguage = (lang: LanguageCode) => {
 
 export const getStoredLanguages = (): CustomLanguage[] => {
   const data = localStorage.getItem(STORAGE_KEYS.LANGUAGES);
-  if (!data) {
-    saveLanguages(INITIAL_LANGUAGES);
-    return INITIAL_LANGUAGES;
-  }
+  if (!data) return [];
   try {
     const list = JSON.parse(data);
-    return Array.isArray(list) && list.length > 0 ? list : INITIAL_LANGUAGES;
+    return Array.isArray(list) ? list : [];
   } catch {
-    return INITIAL_LANGUAGES;
+    return [];
   }
 };
 

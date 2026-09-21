@@ -24,7 +24,9 @@ export interface CurriculumProgress {
 }
 
 /** Only a single-test guide can reuse a historical aggregate score. */
-function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string, number>): number | undefined {
+function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string, number>, language: LanguageCode): number | undefined {
+  const languageKey = `${language}:${guide.id}:${test.id}`;
+  if (Object.hasOwn(scores, languageKey)) return scores[languageKey];
   const key = `${guide.id}:${test.id}`;
   if (Object.hasOwn(scores, key)) return scores[key];
   return guide.lessons.filter(lesson => lesson.type === 'Test').length === 1 ? scores[guide.id] : undefined;
@@ -110,10 +112,10 @@ export function calculateCurriculumProgress(
     const items = Array.isArray(guide.lessons) ? guide.lessons : [];
     const lessons = items.filter(lesson => lesson.type === 'Lesson');
     const tests = items.filter(lesson => lesson.type === 'Test');
-    const finishedLessons = lessons.filter(lesson => isLessonConfigured(lesson) && completed.has(lesson.id)).length;
+    const finishedLessons = lessons.filter(lesson => isLessonConfigured(lesson) && (completed.has(lesson.id) || completed.has(`${language}:${guide.id}:${lesson.id}`))).length;
     const passedTests = tests.filter(test => {
       if (!validThreshold || !isQuizConfigured(test.questions ?? [])) return false;
-      const score = getTestScore(guide, test, scores);
+      const score = getTestScore(guide, test, scores, language);
       return validScore(score) && score >= passThreshold;
     }).length;
     const done = finishedLessons + passedTests;
@@ -155,7 +157,7 @@ export function calculateCurriculumAverageScore(
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
     .filter(lesson => lesson.type === 'Test')
-    .map(test => getTestScore(guide, test, scores)));
+    .map(test => getTestScore(guide, test, scores, language)));
   if (!marks.length || !marks.every(validScore)) return null;
   return Math.round(marks.reduce((sum, mark) => sum + mark!, 0) / marks.length);
 }
