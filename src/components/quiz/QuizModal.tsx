@@ -11,9 +11,13 @@ interface QuizModalProps {
   onClose: () => void;
   onSubmitScore: (scorePercent: number) => void;
   onOpenCertificate: () => void;
+  onContinue?: () => void;
+  hasNextLesson?: boolean;
 }
 
-export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, onSubmitScore, onOpenCertificate }) => {
+export const QuizModal: React.FC<QuizModalProps> = ({
+  lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false,
+}) => {
   const questions = lesson.questions ?? [];
   const threshold = getStoredSettings().quizPassThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 100;
@@ -375,7 +379,25 @@ export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, on
                 <RotateCcw size={16} /> Retake Test
               </button>
 
-              {score >= threshold && (
+              {score >= threshold && hasNextLesson && onContinue && (
+                <button
+                  type="button"
+                  onClick={onContinue}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                    padding: '0.8rem',
+                    background: 'linear-gradient(135deg, #002d72, #1d4ed8)',
+                    border: 'none', borderRadius: '9999px',
+                    color: '#fff', fontWeight: 700, fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,45,114,0.3)',
+                  }}
+                >
+                  Continue to Next Lesson <ChevronRight size={16} />
+                </button>
+              )}
+
+              {score >= threshold && !hasNextLesson && (
                 <button
                   type="button"
                   onClick={onOpenCertificate}
