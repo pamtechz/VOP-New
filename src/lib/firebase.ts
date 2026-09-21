@@ -28,6 +28,8 @@ export const app = firebaseConfigured
   ? (getApps().length ? getApp() : initializeApp(firebaseConfig))
   : null;
 
+export const db: Firestore | null = app ? getFirestore(app) : null;
+
 export const auth: Auth | null = app
   ? (() => {
       try {
