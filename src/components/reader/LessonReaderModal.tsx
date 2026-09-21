@@ -1,7 +1,70 @@
 import React, { useEffect, useState } from 'react';
-import type { Lesson, DiscoverGuide } from '../../types';
+import type { Lesson, DiscoverGuide, LessonContentBlock } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
+
+function renderInlineText(value: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|\[[^\]]+\]\(https?:\/\/[^)]+\))/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > last) nodes.push(value.slice(last, match.index));
+    const token = match[0];
+    if (token.startsWith('**')) nodes.push(<strong key={nodes.length}>{token.slice(2, -2)}</strong>);
+    else if (token.startsWith('*')) nodes.push(<em key={nodes.length}>{token.slice(1, -1)}</em>);
+    else if (token.startsWith('__')) nodes.push(<u key={nodes.length}>{token.slice(2, -2)}</u>);
+    else {
+      const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+      if (link) nodes.push(<a key={nodes.length} href={link[2]} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--vop-navy-700)', textDecoration: 'underline', fontWeight: 700 }}>{link[1]}</a>);
+    }
+    last = match.index + token.length;
+  }
+  if (last < value.length) nodes.push(value.slice(last));
+  return nodes;
+}
+
+function renderBlock(block: LessonContentBlock, key: string): React.ReactNode {
+  const align = block.align || 'left';
+  const text = block.text || '';
+  if (block.type === 'divider') return <hr key={key} style={{ border: 0, borderTop: '1px solid var(--border-subtle)', margin: '.75rem 0' }} />;
+  if (block.type === 'heading') {
+    const props = { style: { textAlign: align as 'left' | 'center' | 'right', margin: '.35rem 0', lineHeight: 1.3 } };
+    if (block.level === 2) return <h2 key={key} {...props}>{renderInlineText(text)}</h2>;
+    if (block.level === 4) return <h4 key={key} {...props}>{renderInlineText(text)}</h4>;
+    return <h3 key={key} {...props}>{renderInlineText(text)}</h3>;
+  }
+  if (block.type === 'scripture' || block.type === 'quote') {
+    return <blockquote key={key} style={{ textAlign: align, background: 'var(--vop-gold-50)', borderLeft: '4px solid var(--vop-gold-500)', padding: '1rem', borderRadius: '.45rem' }}>
+      <div style={{ fontFamily: 'var(--font-serif)', lineHeight: 1.7 }}>{renderInlineText(text)}</div>
+      {block.reference && <cite style={{ display: 'block', marginTop: '.45rem', textAlign: 'right', fontStyle: 'normal', fontWeight: 700 }}>— {block.reference}</cite>}
+    </blockquote>;
+  }
+  if (block.type === 'callout') {
+    return <div key={key} style={{ textAlign: align, padding: '1rem', borderRadius: '.7rem', background: block.tone === 'gold' ? 'var(--vop-gold-50)' : 'var(--vop-navy-50)', border: '1px solid var(--border-subtle)' }}>{renderInlineText(text)}</div>;
+  }
+  if (block.type === 'image' && block.imageUrl) {
+    return <figure key={key} style={{ margin: 0, textAlign: align }}>
+      <img src={block.imageUrl} alt={block.alt || ''} loading="lazy" style={{ width: '100%', maxHeight: '24rem', objectFit: 'contain', borderRadius: 'var(--radius-lg)', background: 'var(--vop-navy-50)' }} />
+      {block.caption && <figcaption style={{ marginTop: '.4rem', fontSize: '.82rem', color: 'var(--text-secondary)' }}>{renderInlineText(block.caption)}</figcaption>}
+    </figure>;
+  }
+  if (block.type === 'video' && block.url) {
+    const url = block.url.trim();
+    const isDirect = /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
+    const youtube = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    const vimeo = url.match(/vimeo\.com\/(\d+)/);
+    return <div key={key} style={{ textAlign: align }}>
+      {isDirect ? <video controls preload="metadata" style={{ width: '100%', borderRadius: 'var(--radius-lg)' }} src={url} /> :
+        youtube ? <iframe title="Lesson video" src={`https://www.youtube.com/embed/${youtube[1]}`} style={{ width: '100%', aspectRatio: '16/9', border: 0, borderRadius: 'var(--radius-lg)' }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> :
+        vimeo ? <iframe title="Lesson video" src={`https://player.vimeo.com/video/${vimeo[1]}`} style={{ width: '100%', aspectRatio: '16/9', border: 0, borderRadius: 'var(--radius-lg)' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen /> :
+        <a href={url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--vop-navy-700)', textDecoration: 'underline' }}>Open video</a>}
+    </div>;
+  }
+  if (block.type === 'link' && block.url) return <p key={key} style={{ textAlign: align }}><a href={block.url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--vop-navy-700)', fontWeight: 700, textDecoration: 'underline' }}>{renderInlineText(text || block.url)}</a></p>;
+  if (block.type === 'list') return <ul key={key} style={{ textAlign: align, paddingLeft: '1.4rem', lineHeight: 1.75 }}>{(block.items || []).filter(Boolean).map((item, index) => <li key={index}>{renderInlineText(item)}</li>)}</ul>;
+  return <p key={key} style={{ textAlign: align, fontSize: '1rem', lineHeight: 1.75, whiteSpace: 'pre-line' }}>{renderInlineText(text)}</p>;
+}
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -39,7 +102,8 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, gu
       return;
     }
     if (isSpeaking) { stopSpeech(); return; }
-    const text = `${currentPage.title}. ${currentPage.content} ${currentPage.scriptureQuote
+    const blockText = (currentPage.blocks || []).map(block => [block.text, block.reference, ...(block.items || [])].filter(Boolean).join(' ')).join(' ');
+    const text = `${currentPage.title}. ${blockText || currentPage.content} ${currentPage.scriptureQuote
       ? `Scripture: ${currentPage.scriptureQuote.text}. ${currentPage.scriptureQuote.reference}` : ''}`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.95;
