@@ -163,10 +163,10 @@ export const App: React.FC = () => {
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} onBack={returnHome} />}
-          {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
+          {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} guides={guides} onBack={returnHome} />}
           {currentRoute === 'admin' && currentUser.role && currentUser.role !== 'student' && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
           {showCourse && activeGuide && (
-            <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
+            <DiscoverGuideView guide={activeGuide} currentUser={currentUser} settings={settings}
               onBack={() => setActiveGuide(null)} onSelectLesson={lesson => { setStudyError(''); setActiveLesson(lesson); }}
               onOpenCertificate={() => navigate('certificates')} />
           )}
@@ -181,7 +181,7 @@ export const App: React.FC = () => {
       <MenuDrawer
         isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser}
         allUsers={[]} onSelectUser={() => { /* No unauthenticated account impersonation. */ }}
-        onNavigate={navigate}
+        onNavigate={navigate} settings={settings} activeLanguage={activeLanguage} guides={guides}
       />
       {activeLesson?.type === 'Lesson' && activeGuide && (
         <LessonReaderModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
@@ -191,7 +191,7 @@ export const App: React.FC = () => {
           }} />
       )}
       {activeLesson?.type === 'Test' && activeGuide && (
-        <QuizModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
+        <QuizModal lesson={activeLesson} guide={activeGuide} settings={settings} onClose={() => setActiveLesson(null)}
           onSubmitScore={score => {
             setStudyError('Test submission is not yet connected to the authenticated Firestore assessment record.');
             setActiveLesson(null);
