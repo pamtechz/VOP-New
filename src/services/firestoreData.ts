@@ -7,12 +7,36 @@ import {
   type DocumentData,
   type DocumentReference,
 } from 'firebase/firestore';
-import type { DiscoverGuide, Lesson, User, LanguageCode } from '../types';
+import type { DiscoverGuide, Lesson, LessonContentBlock, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
 function requireDb() {
   if (!db) throw new Error('Firestore is not configured for this deployment.');
   return db;
+}
+
+function normalizeContentBlocks(value: unknown): LessonContentBlock[] {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set(['paragraph','heading','scripture','quote','callout','image','video','link','list','divider']);
+  return value
+    .filter(item => item && typeof item === 'object' && allowed.has(String((item as { type?: unknown }).type)))
+    .map(item => {
+      const block = item as Record<string, unknown>;
+      return {
+        id: typeof block.id === 'string' ? block.id : undefined,
+        type: String(block.type) as LessonContentBlock['type'],
+        text: typeof block.text === 'string' ? block.text : undefined,
+        reference: typeof block.reference === 'string' ? block.reference : undefined,
+        url: typeof block.url === 'string' ? block.url : undefined,
+        imageUrl: typeof block.imageUrl === 'string' ? block.imageUrl : undefined,
+        alt: typeof block.alt === 'string' ? block.alt : undefined,
+        caption: typeof block.caption === 'string' ? block.caption : undefined,
+        items: Array.isArray(block.items) ? block.items.map(item => String(item)) : undefined,
+        tone: ['default','info','success','warning','gold'].includes(String(block.tone)) ? block.tone as LessonContentBlock['tone'] : undefined,
+        level: [2,3,4].includes(Number(block.level)) ? Number(block.level) as LessonContentBlock['level'] : undefined,
+        align: ['left','center','right'].includes(String(block.align)) ? block.align as LessonContentBlock['align'] : undefined,
+      };
+    });
 }
 
 function blocksToContentPages(pages: unknown): Lesson['contentPages'] {
@@ -49,7 +73,14 @@ function normalizeLesson(id: string, data: DocumentData): Lesson {
     description: String(data.description ?? ''),
     type: data.type === 'Test' ? 'Test' : 'Lesson',
     contentPages: Array.isArray(data.contentPages)
-      ? data.contentPages
+      ? data.contentPages.map((page) => {
+          const value = page as Record<string, unknown>;
+          return {
+            ...value,
+            blocks: normalizeContentBlocks(value.blocks),
+            content: String(value.content ?? ''),
+          };
+        })
       : blocksToContentPages(data.pages),
     questions: Array.isArray(data.questions) ? data.questions : Array.isArray(data.quiz) ? data.quiz : [],
     estimatedMinutes: Number(data.estimatedMinutes ?? 0),
