@@ -60,17 +60,22 @@ export const DEFAULT_SETTINGS: AppSettings = {
   appName: 'Voice of Prophecy',
   organizationName: 'Seventh-day Adventist Church',
   schoolName: 'Bible Correspondence School',
-  directorName: 'Pst. Ernesto Ricci',
-  directorTitle: 'RZUC PM Director',
-  contactPhone: '+260 97 7206617',
-  whatsappNumber: '260977206617',
-  contactEmail: 'vop@rzuc.adventist.org',
+  directorName: '',
+  directorTitle: '',
+  contactPhone: '',
+  whatsappNumber: '',
+  contactEmail: '',
   quizPassThreshold: 80,
   defaultLanguage: 'en',
   themeColor: '#0a192f',
   certificateTitle: 'COURSE CERTIFICATE',
   certificateBodyText: 'has successfully completed the BIBLE CORRESPONDENCE COURSE as outlined by the Seventh-day Adventist Church',
-  detailPages: INITIAL_DETAIL_PAGES
+  detailPages: {
+    aboutUsMission: '', aboutUsHistory: '', aboutUsLeadership: '',
+    aboutAppDescription: '', aboutAppVersion: '', aboutAppCredits: '',
+    contactOfficeAddress: '', contactOfficeHours: '',
+    contactPhoneNumbers: [], contactEmails: [], contactWhatsAppNumbers: [], socialLinks: {}
+  }
 };
 
 // ---------------- Platform Security Check ---------------- //
@@ -137,13 +142,12 @@ export const setActiveLanguage = (lang: LanguageCode) => {
 export const getStoredUnions = (): Union[] => {
   const data = localStorage.getItem(STORAGE_KEYS.UNIONS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.UNIONS, JSON.stringify(INITIAL_UNIONS));
-    return INITIAL_UNIONS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_UNIONS;
+    return [];
   }
 };
 
@@ -177,13 +181,12 @@ export const deleteUnion = (id: string) => {
 export const getStoredConferences = (): Conference[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CONFERENCES);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.CONFERENCES, JSON.stringify(INITIAL_CONFERENCES));
-    return INITIAL_CONFERENCES;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_CONFERENCES;
+    return [];
   }
 };
 
@@ -217,13 +220,12 @@ export const deleteConference = (id: string) => {
 export const getStoredDistricts = (): District[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DISTRICTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.DISTRICTS, JSON.stringify(INITIAL_DISTRICTS));
-    return INITIAL_DISTRICTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_DISTRICTS;
+    return [];
   }
 };
 
@@ -257,13 +259,12 @@ export const deleteDistrict = (id: string) => {
 export const getStoredChurches = (): ChurchOrganization[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHURCHES);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.CHURCHES, JSON.stringify(INITIAL_CHURCHES));
-    return INITIAL_CHURCHES;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_CHURCHES;
+    return [];
   }
 };
 
@@ -317,13 +318,12 @@ export const saveHierarchyConfig = (config: HierarchyConfig) => {
 export const getStoredGraduationRequests = (): GraduationRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.GRADUATION_REQUESTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.GRADUATION_REQUESTS, JSON.stringify(INITIAL_GRADUATION_REQUESTS));
-    return INITIAL_GRADUATION_REQUESTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_GRADUATION_REQUESTS;
+    return [];
   }
 };
 
@@ -381,13 +381,12 @@ export const advanceGraduationStatus = (
 export const getStoredPrayerRequests = (): PrayerRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PRAYER_REQUESTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(INITIAL_PRAYER_REQUESTS));
-    return INITIAL_PRAYER_REQUESTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_PRAYER_REQUESTS;
+    return [];
   }
 };
 
@@ -417,13 +416,12 @@ export const updatePrayerStatus = (id: string, status: PrayerRequest['status']) 
 export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RADIO_BROADCASTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(INITIAL_RADIO_BROADCASTS));
-    return INITIAL_RADIO_BROADCASTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_RADIO_BROADCASTS;
+    return [];
   }
 };
 
@@ -615,13 +613,12 @@ export const addQuestionToLesson = (
 export const getStoredUsers = (): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_USERS;
+    return [];
   }
 };
 
@@ -767,13 +764,12 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
 export const getStoredAnnouncements = (): Announcement[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
-    return INITIAL_ANNOUNCEMENTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_ANNOUNCEMENTS;
+    return [];
   }
 };
 
@@ -785,13 +781,12 @@ export const saveAnnouncements = (announcements: Announcement[]) => {
 export const getStoredBooks = (): BookResource[] => {
   const data = localStorage.getItem(STORAGE_KEYS.BOOKS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(INITIAL_BOOKS));
-    return INITIAL_BOOKS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_BOOKS;
+    return [];
   }
 };
 
