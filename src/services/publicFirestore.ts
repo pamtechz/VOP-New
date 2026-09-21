@@ -78,7 +78,7 @@ export async function loadPublicContent(currentUser: User): Promise<PublicConten
   const firestore = requireDb();
   const [
     settingsSnap, languagesSnap, translationsSnap, announcementsSnap, booksSnap, radioSnap,
-    unionsSnap, conferencesSnap, districtsSnap, churchesSnap,
+    unionsSnap, conferencesSnap, districtsSnap, churchesSnap, prayerSnap,
   ] = await Promise.all([
     getDoc(doc(firestore, 'system', 'settings')),
     getDocs(query(collection(firestore, 'languages'), where('enabled', '==', true))),
