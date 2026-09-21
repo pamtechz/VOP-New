@@ -30,11 +30,27 @@ for (const lesson of master.lessons) {
     language: lesson.lang,
     languageLabel: labels.get(lesson.lang),
     lessonId: lesson.lessonId,
+    lessonNumber: lesson.lessonId.replace('lesson-', ''),
     title: lesson.title,
+    description: lesson.description ?? '',
+    type: lesson.type === 'Test' ? 'Test' : 'Lesson',
     pages: lesson.pages,
+    contentPages: Array.isArray(lesson.pages) ? lesson.pages.map((page, index) => ({
+      pageNumber: Number.isSafeInteger(page.pageNumber) ? page.pageNumber : index + 1,
+      title: String(page.title ?? ''),
+      content: Array.isArray(page.blocks) ? page.blocks.filter(block => block?.type === 'text').map(block => String(block.text ?? '').trim()).filter(Boolean).join('\\n\\n') : '',
+      imageUrl: Array.isArray(page.blocks) ? ((page.blocks.find(block => block?.type === 'image')?.src) ? '/' + String(page.blocks.find(block => block?.type === 'image')?.src).replace(/^\\//, '') : null) : null
+    })) : [],
     quiz: Array.isArray(lesson.quiz) ? lesson.quiz : [],
+    guideId: 'guide-' + lesson.lang,
+    discoverNumber: 1,
+    guideTitle: 'Voice of Prophecy — ' + (labels.get(lesson.lang) || lesson.lang),
+    guideSubtitle: labels.get(lesson.lang) || lesson.lang,
+    guideDescription: 'Voice of Prophecy Bible study lessons.',
+    guideImage: '/assets/guide_2.jpg',
+    certificateEligible: false,
     attribution: lesson.attribution ?? null,
-    source: lesson.source,
+    source: lesson.source ?? null,
     seededAt: new Date().toISOString()
   });
 }
