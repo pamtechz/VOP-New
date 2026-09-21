@@ -390,7 +390,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
             <button className="vop-secondary" type="button" onClick={() => setEditor(null)}><Eye size={17}/>Close</button>
             <button className="vop-secondary" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>Save Draft</button>
             {editor.published && <button className="vop-secondary" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>Unpublish</button>}
-            <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving || editor.published}><Send size={17}/>{editor.published ? 'Published' : 'Publish'}</button>
+            <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}><Send size={17}/>{editor.published ? 'Update & Publish' : 'Publish'}</button>
           </div>
         </div>
         <div className="vop-form-grid" style={{gridTemplateColumns:'1.3fr 1fr .8fr 1fr 1fr',marginBottom:14}}>
