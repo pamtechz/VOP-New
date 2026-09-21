@@ -4,7 +4,6 @@ import {
   Filter, GraduationCap, Info, Mail, MoreVertical, Printer, Search, Share2, Users, X
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import type { CustomLanguage, User } from '../types';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
 
@@ -48,7 +47,6 @@ interface CertificationConfig {
 }
 
 interface Props {
-  currentUser: User;
   settings: {
     appName?: string;
     organizationName?: string;
@@ -56,7 +54,6 @@ interface Props {
     certificateTitle?: string;
     certificateBodyText?: string;
   } | null;
-  languages: CustomLanguage[];
   onBack: () => void;
   adminContent: (
     action: 'list' | 'upsert' | 'delete',
@@ -154,7 +151,7 @@ const CertificateArtwork: React.FC<{
 };
 
 export const CertificationManager: React.FC<Props> = ({
-  currentUser, settings, languages, onBack, adminContent, showMessage,
+  settings, onBack, adminContent, showMessage,
 }) => {
   const [view, setView] = useState<'list' | 'preview'>('list');
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
