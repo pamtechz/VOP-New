@@ -1,16 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, Award, Bell, Book, BookOpen, Check,
-  ChevronDown, ChevronLeft, ChevronRight, Church, Clock, Download,
-  Edit, ExternalLink, Filter, Globe, Landmark, LayoutDashboard,
-  Lock, Megaphone, Menu, MoreVertical, Network, Plus, Radio,
-  RotateCcw, RotateCw, Save, Search, Settings, Shield, Trash2,
-  Upload, Users, X
+  AlertTriangle, ArrowLeft, Award, Bell, Book, BookOpen, CalendarDays, Check,
+  ChevronDown, ChevronLeft, ChevronRight, Church, Clock, Edit3, ExternalLink,
+  Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
+  Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload,
+  Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
+  Send, FileText, Grid2X2
 } from 'lucide-react';
-import type {
-  User, CustomLanguage, Union, Conference, District, ChurchOrganization,
-  Announcement, BookResource, RadioBroadcast, DiscoverGuide
-} from '../types';
+import { auth } from '../lib/firebase';
+import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson } from '../types';
 import {
   subscribeLanguages, saveLanguageToFirestore, updateLanguageStatusInFirestore,
   deleteLanguageFromFirestore, subscribeSettings, saveSettingsToFirestore,
@@ -18,6 +16,7 @@ import {
   type ExtendedAppSettings
 } from '../services/adminFirestore';
 import { loadFirestoreGuides } from '../services/firestoreData';
+import './admin.css';
 
 interface AdminPageProps {
   currentUser: User;
@@ -27,24 +26,14 @@ interface AdminPageProps {
 }
 
 type AdminTab =
-  | 'dashboard'
-  | 'settings'
-  | 'candidates'
-  | 'curriculum'
-  | 'languages'
-  | 'translations'
-  | 'announcements'
-  | 'materials'
-  | 'radio'
-  | 'unions'
-  | 'conferences'
-  | 'districts'
-  | 'churches'
-  | 'certification';
+  | 'dashboard' | 'settings' | 'candidates' | 'curriculum' | 'languages'
+  | 'translations' | 'announcements' | 'materials' | 'radio'
+  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'integrations' | 'security' | 'notifications';
+type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
-const SIDEBAR_ITEMS: Array<{ id: AdminTab; label: string; icon: React.ComponentType<{ size?: number; className?: string; color?: string; style?: React.CSSProperties }> }> = [
+const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?: number}>}> = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'candidates', label: 'Candidates', icon: Users },
@@ -54,2026 +43,566 @@ const SIDEBAR_ITEMS: Array<{ id: AdminTab; label: string; icon: React.ComponentT
   { id: 'announcements', label: 'Announcements', icon: Megaphone },
   { id: 'materials', label: 'Materials', icon: Book },
   { id: 'radio', label: 'Radio', icon: Radio },
-  { id: 'unions', label: 'Unions', icon: Landmark },
-  { id: 'conferences', label: 'Conferences', icon: Network },
-  { id: 'districts', label: 'Districts', icon: Landmark },
+  { id: 'unions', label: 'Unions', icon: Shield },
+  { id: 'conferences', label: 'Conferences', icon: Users },
+  { id: 'districts', label: 'Districts', icon: Layers },
   { id: 'churches', label: 'Churches', icon: Church },
   { id: 'certification', label: 'Certification', icon: Award },
 ];
 
-export const AdminPage: React.FC<AdminPageProps> = ({
-  currentUser,
-  onBack,
-}) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('languages');
-  const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
+const text = (value: unknown) => value == null ? '' : String(value);
 
-  // Real-time Firestore State (strictly from Firebase)
+function relativeTime(value?: string) {
+  if (!value) return 'Date not recorded';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 'Date not recorded';
+  const diff = Date.now() - d.getTime();
+  const minutes = Math.max(0, Math.floor(diff / 60000));
+  if (minutes < 60) return minutes <= 1 ? 'Just now' : minutes + ' minutes ago';
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + ' hours ago';
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'Yesterday' : days + ' days ago';
+}
+
+function formatDate(value?: string) {
+  if (!value) return 'Not recorded';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 'Not recorded';
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function abbreviation(language: CustomLanguage) {
+  const source = language.code || language.name;
+  return source.slice(0, 2).toUpperCase();
+}
+
+function Toggle({on, onClick}: {on: boolean; onClick: () => void}) {
+  return <button type="button" className={'vop-toggle' + (on ? ' on' : '')} role="switch" aria-checked={on} onClick={onClick}><span /></button>;
+}
+
+async function adminContent(action: 'list' | 'upsert' | 'delete', collection: string, id?: string, data?: Record<string, unknown>) {
+  if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action, collection, id, data }),
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
+  if (!response.ok) throw new Error(body.error || 'Request failed.');
+  return body;
+}
+
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => {
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
+  const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [settings, setSettings] = useState<ExtendedAppSettings | null>(null);
   const [candidates, setCandidates] = useState<User[]>([]);
   const [churches, setChurches] = useState<ChurchOrganization[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-
-  // Search & Filter state
+  const [curriculumDrafts, setCurriculumDrafts] = useState<Record<string, unknown>[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [langSearch, setLangSearch] = useState('');
   const [langFilter, setLangFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [languageDraft, setLanguageDraft] = useState({ code: '', name: '', nativeName: '', enabled: true });
+  const [editingLanguage, setEditingLanguage] = useState<string | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [lessonSearch, setLessonSearch] = useState('');
+  const [lessonLanguage, setLessonLanguage] = useState('all');
+  const [lessonStatus, setLessonStatus] = useState('all');
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [selectedGuide, setSelectedGuide] = useState<DiscoverGuide | null>(null);
+  const [editorMode, setEditorMode] = useState(false);
+  const [editorTitle, setEditorTitle] = useState('');
+  const [editorDescription, setEditorDescription] = useState('');
+  const [editorNumber, setEditorNumber] = useState('');
+  const [editorLanguage, setEditorLanguage] = useState('');
+  const [editorSeason, setEditorSeason] = useState('');
+  const [editorContent, setEditorContent] = useState('');
+  const [editorImage, setEditorImage] = useState('');
+  const [editorTags, setEditorTags] = useState('');
+  const [editorStatus, setEditorStatus] = useState<'draft' | 'published'>('draft');
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [dashboardRange, setDashboardRange] = useState('year');
 
-  // Modals
-  const [isAddLangOpen, setIsAddLangOpen] = useState(false);
-  const [editingLang, setEditingLang] = useState<CustomLanguage | null>(null);
-  const [newLangForm, setNewLangForm] = useState({ name: '', code: '', nativeName: '', enabled: true });
-
-  // Notifications
-  const [toastMessage, setToastMessage] = useState('');
-  const [savingSettings, setSavingSettings] = useState(false);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
+  const showMessage = (value: string) => {
+    setMessage(value);
+    setError('');
+    window.setTimeout(() => setMessage(''), 3000);
   };
 
-  // ------------------------------------------------------------------
-  // Strictly Firebase Firestore Subscriptions (Live Data)
-  // ------------------------------------------------------------------
+  const loadDrafts = async () => {
+    setLoadingDrafts(true);
+    try {
+      const response = await adminContent('list', 'curriculum');
+      setCurriculumDrafts((response.items || []) as Record<string, unknown>[]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not load curriculum drafts.');
+    } finally {
+      setLoadingDrafts(false);
+    }
+  };
+
   useEffect(() => {
-    // 1. Subscribe to Languages in Firestore
-    const unsubLangs = subscribeLanguages(data => {
-      setLanguages(data);
-    });
-
-    // 2. Subscribe to Settings in Firestore
-    const unsubSettings = subscribeSettings(data => {
-      setSettings(data);
-    });
-
-    // 3. Subscribe to Candidates in Firestore
-    const unsubCandidates = subscribeCandidates(data => {
-      setCandidates(data);
-    });
-
-    // 4. Subscribe to Churches in Firestore
-    const unsubChurches = subscribeChurches(data => {
-      setChurches(data);
-    });
-
-    // 5. Subscribe to Announcements in Firestore
-    const unsubAnnounce = subscribeAnnouncements(data => {
-      setAnnouncements(data);
-    });
-
-    // 6. Load Guides & Lessons from Firestore
-    void loadFirestoreGuides().then(res => {
-      setGuides(res);
-    }).catch(err => {
-      console.warn('Firestore guides load:', err);
-    });
-
-    return () => {
-      unsubLangs();
-      unsubSettings();
-      unsubCandidates();
-      unsubChurches();
-      unsubAnnounce();
-    };
+    const unsubs = [
+      subscribeLanguages(setLanguages, err => setError(err.message)),
+      subscribeSettings(setSettings, err => setError(err.message)),
+      subscribeCandidates(setCandidates, err => setError(err.message)),
+      subscribeChurches(setChurches, err => setError(err.message)),
+      subscribeAnnouncements(setAnnouncements, err => setError(err.message)),
+    ];
+    void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
+    void loadDrafts();
+    return () => unsubs.forEach(unsub => unsub());
   }, []);
 
-  // ------------------------------------------------------------------
-  // Language Operations (Firebase Firestore)
-  // ------------------------------------------------------------------
-  const handleToggleLanguageStatus = async (code: string, currentEnabled: boolean) => {
-    try {
-      await updateLanguageStatusInFirestore(code, !currentEnabled);
-      showToast(`Language status updated in Firebase`);
-      setActiveMenuId(null);
-    } catch (err) {
-      console.error('Error updating language:', err);
-      showToast('Error saving to Firebase');
+  const activeLanguages = useMemo(() => languages.filter(item => item.enabled !== false), [languages]);
+  const totalLessons = useMemo(() => guides.reduce((sum, guide) => sum + guide.lessons.length, 0), [guides]);
+  const totalQuestions = useMemo(() => guides.reduce((sum, guide) => sum + guide.lessons.reduce((n, lesson) => n + (lesson.questions?.length || 0), 0), 0), [guides]);
+  const quizCount = useMemo(() => guides.reduce((sum, guide) => sum + guide.lessons.filter(lesson => (lesson.questions?.length || 0) > 0).length, 0), [guides]);
+
+  const filteredLanguages = useMemo(() => languages.filter(language => {
+    const q = langSearch.trim().toLowerCase();
+    const matchText = !q || [language.name, language.code, language.nativeName].join(' ').toLowerCase().includes(q);
+    const matchStatus = langFilter === 'all' || (langFilter === 'enabled' ? language.enabled !== false : language.enabled === false);
+    return matchText && matchStatus;
+  }), [languages, langSearch, langFilter]);
+
+  const lessonRows = useMemo(() => guides.flatMap(guide => guide.lessons.map(lesson => ({ guide, lesson }))), [guides]);
+
+  const filteredLessons = useMemo(() => lessonRows.filter(row => {
+    const q = lessonSearch.trim().toLowerCase();
+    const matchText = !q || [row.lesson.title, row.lesson.description, row.lesson.lessonNumber, row.guide.language, row.guide.title].join(' ').toLowerCase().includes(q);
+    const matchLanguage = lessonLanguage === 'all' || row.guide.language === lessonLanguage;
+    const matchStatus = lessonStatus === 'all' || lessonStatus === 'published';
+    return matchText && matchLanguage && matchStatus;
+  }), [lessonRows, lessonSearch, lessonLanguage, lessonStatus]);
+
+  const languageOptions = useMemo(() => Array.from(new Set([
+    ...languages.map(item => item.code),
+    ...guides.map(guide => guide.language),
+  ])).filter(Boolean).sort(), [languages, guides]);
+
+  const monthlyGrowth = useMemo(() => {
+    const now = new Date();
+    const buckets = Array.from({ length: 12 }, (_, index) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1);
+      return { label: d.toLocaleDateString(undefined, { month: 'short' }), year: d.getFullYear(), month: d.getMonth(), count: 0 };
+    });
+    candidates.forEach(candidate => {
+      const raw = candidate.information?.enrollmentDate;
+      if (!raw) return;
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return;
+      const bucket = buckets.find(item => item.year === d.getFullYear() && item.month === d.getMonth());
+      if (bucket) bucket.count += 1;
+    });
+    let cumulative = 0;
+    return buckets.map(item => {
+      cumulative += item.count;
+      return { ...item, cumulative };
+    });
+  }, [candidates]);
+
+  const activities = useMemo(() => {
+    const items: Array<{icon: React.ComponentType<{size?: number}>; title: string; description: string; date?: string; tone: string}> = [];
+    candidates.slice().sort((a,b) => new Date(b.information?.enrollmentDate || 0).getTime() - new Date(a.information?.enrollmentDate || 0).getTime()).slice(0,2).forEach(candidate => {
+      items.push({ icon: Users, title: 'Candidate registered', description: candidate.displayName || candidate.email, date: candidate.information?.enrollmentDate, tone: '#2563eb' });
+    });
+    announcements.slice().reverse().slice(0,1).forEach(item => {
+      items.push({ icon: Megaphone, title: 'Announcement available', description: item.title, date: (item as unknown as {updatedAt?: string; createdAt?: string}).updatedAt || (item as unknown as {createdAt?: string}).createdAt, tone: '#f97316' });
+    });
+    languages.slice().sort((a,b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()).slice(0,1).forEach(item => {
+      items.push({ icon: Globe, title: 'Language updated', description: item.name, date: item.updatedAt, tone: '#7c3aed' });
+    });
+    churches.slice().reverse().slice(0,1).forEach(item => {
+      items.push({ icon: Church, title: 'Church record available', description: item.name, date: undefined, tone: '#e11d48' });
+    });
+    return items.slice(0,5);
+  }, [candidates, announcements, languages, churches]);
+
+  const currentPage = NAV.find(item => item.id === activeTab);
+  const currentDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const openLanguageEditor = (language?: CustomLanguage) => {
+    if (language) {
+      setEditingLanguage(language.code);
+      setLanguageDraft({ code: language.code, name: language.name, nativeName: language.nativeName, enabled: language.enabled !== false });
+    } else {
+      setEditingLanguage(null);
+      setLanguageDraft({ code: '', name: '', nativeName: '', enabled: true });
     }
   };
 
-  const handleSaveNewLanguage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLangForm.name.trim() || !newLangForm.code.trim()) return;
-
-    const code = newLangForm.code.trim().toUpperCase();
-    if (languages.some(l => l.code.toUpperCase() === code)) {
-      alert('A language with this code already exists in Firestore.');
-      return;
-    }
-
+  const saveLanguage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!languageDraft.code.trim() || !languageDraft.name.trim()) return;
     try {
       await saveLanguageToFirestore({
-        name: newLangForm.name.trim(),
-        code,
-        nativeName: newLangForm.nativeName.trim() || newLangForm.name.trim(),
-        enabled: newLangForm.enabled,
-        sortOrder: languages.length + 1,
+        code: languageDraft.code.trim().toUpperCase(),
+        name: languageDraft.name.trim(),
+        nativeName: languageDraft.nativeName.trim() || languageDraft.name.trim(),
+        enabled: languageDraft.enabled,
       });
-      setNewLangForm({ name: '', code: '', nativeName: '', enabled: true });
-      setIsAddLangOpen(false);
-      showToast(`Language ${newLangForm.name} saved to Firebase Firestore`);
-    } catch (err) {
-      console.error('Error adding language to Firebase:', err);
-      showToast('Failed to write to Firebase Firestore');
+      showMessage('Language saved to Firestore.');
+      openLanguageEditor();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save language.');
     }
   };
 
-  const handleUpdateLanguage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingLang || !editingLang.name.trim()) return;
-
+  const toggleLanguage = async (language: CustomLanguage) => {
     try {
-      await saveLanguageToFirestore(editingLang);
-      setEditingLang(null);
-      showToast(`Language ${editingLang.name} updated in Firebase`);
-      setActiveMenuId(null);
-    } catch (err) {
-      console.error('Error updating language in Firebase:', err);
-      showToast('Failed to update in Firebase');
+      await updateLanguageStatusInFirestore(language.code, language.enabled === false);
+      showMessage('Language status updated.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not update language.');
     }
   };
 
-  const handleDeleteLanguage = async (code: string) => {
-    if (!confirm(`Delete language ${code} from Firebase Firestore?`)) return;
+  const deleteLanguage = async (language: CustomLanguage) => {
+    if (!window.confirm('Delete this language from Firestore?')) return;
     try {
-      await deleteLanguageFromFirestore(code);
-      showToast('Language deleted from Firebase Firestore');
-      setActiveMenuId(null);
-    } catch (err) {
-      console.error('Error deleting language from Firebase:', err);
-      showToast('Failed to delete from Firebase');
+      await deleteLanguageFromFirestore(language.code);
+      if (editingLanguage === language.code) openLanguageEditor();
+      showMessage('Language deleted.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not delete language.');
     }
   };
 
-  // ------------------------------------------------------------------
-  // Settings Operations (Firebase Firestore)
-  // ------------------------------------------------------------------
-  const handleSaveSettings = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const saveSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!settings) return;
-
-    setSavingSettings(true);
+    setSettingsSaving(true);
     try {
       await saveSettingsToFirestore(settings);
-      showToast('Settings saved to Firebase Firestore');
-    } catch (err) {
-      console.error('Error saving settings to Firebase:', err);
-      showToast('Failed to save settings to Firebase');
+      showMessage('Settings saved to Firestore.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save settings.');
     } finally {
-      setSavingSettings(false);
+      setSettingsSaving(false);
     }
   };
 
-  const handleToggleFeature = async (featureKey: keyof NonNullable<ExtendedAppSettings['features']>) => {
+  const toggleFeature = async (key: keyof NonNullable<ExtendedAppSettings['features']>) => {
     if (!settings) return;
-    const currentVal = settings.features?.[featureKey] ?? true;
-    const updated: ExtendedAppSettings = {
-      ...settings,
-      features: {
-        ...(settings.features || {
-          candidatesModule: true,
-          curriculumStudio: true,
-          translations: true,
-          radio: true,
-          announcements: true,
-          certification: true,
-        }),
-        [featureKey]: !currentVal,
-      },
-    };
-    setSettings(updated);
+    const next = { ...settings, features: { ...settings.features, [key]: !(settings.features?.[key] ?? false) } };
+    setSettings(next);
+    try { await saveSettingsToFirestore(next); showMessage('Feature setting updated.'); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save feature setting.'); }
+  };
+
+  const openNewLesson = () => {
+    setSelectedLesson(null);
+    setSelectedGuide(null);
+    setEditorTitle('');
+    setEditorDescription('');
+    setEditorNumber('');
+    setEditorLanguage(activeLanguages[0]?.code || languageOptions[0] || '');
+    setEditorSeason('');
+    setEditorContent('');
+    setEditorImage('');
+    setEditorTags('');
+    setEditorStatus('draft');
+    setEditorMode(true);
+  };
+
+  const openLessonEditor = (guide: DiscoverGuide, lesson: Lesson) => {
+    setSelectedGuide(guide);
+    setSelectedLesson(lesson);
+    setEditorTitle(lesson.title);
+    setEditorDescription(lesson.description);
+    setEditorNumber(lesson.lessonNumber);
+    setEditorLanguage(guide.language);
+    setEditorSeason('');
+    setEditorContent((lesson.contentPages || []).map(page => page.content).filter(Boolean).join('\\n\\n'));
+    setEditorImage((lesson.contentPages || []).find(page => page.imageUrl)?.imageUrl || guide.image || '');
+    setEditorTags('');
+    setEditorStatus('published');
+    setEditorMode(true);
+  };
+
+  const saveLessonDraft = async (publish: boolean) => {
+    if (!editorTitle.trim()) {
+      setError('Lesson title is required.');
+      return;
+    }
+    setEditorSaving(true);
     try {
-      await saveSettingsToFirestore(updated);
-      showToast(`Feature ${featureKey} updated in Firebase`);
-    } catch (err) {
-      console.error('Error saving feature toggle to Firebase:', err);
+      const id = selectedLesson?.id || ('lesson-' + Date.now());
+      await adminContent('upsert', 'curriculum', id, {
+        title: editorTitle.trim(),
+        description: editorDescription.trim(),
+        lessonNumber: editorNumber.trim(),
+        language: editorLanguage.trim(),
+        season: editorSeason.trim(),
+        content: editorContent,
+        imageUrl: editorImage.trim(),
+        tags: editorTags.split(',').map(tag => tag.trim()).filter(Boolean),
+        published: publish,
+        type: 'Lesson',
+      });
+      await loadDrafts();
+      showMessage(publish ? 'Lesson draft published to the admin content store.' : 'Lesson draft saved.');
+      setEditorStatus(publish ? 'published' : 'draft');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save lesson.');
+    } finally {
+      setEditorSaving(false);
     }
   };
 
-  const handleToggleSystemOption = (optionKey: keyof NonNullable<ExtendedAppSettings['systemOptions']>) => {
-    if (!settings) return;
-    const currentVal = settings.systemOptions?.[optionKey] ?? true;
-    setSettings({
-      ...settings,
-      systemOptions: {
-        ...(settings.systemOptions || {
-          allowRegistrations: true,
-          requireApproval: true,
-          enableEmailNotifications: true,
-          showChurchInfo: true,
-          enablePwa: false,
-          maintenanceMode: false,
-        }),
-        [optionKey]: !currentVal,
-      },
-    });
+  const renderHeader = (icon: React.ComponentType<{size?: number}>, title: string, subtitle: string, action?: React.ReactNode) => {
+    const Icon = icon;
+    return <div className="vop-page-head">
+      <div className="vop-heading"><div className="vop-heading-icon"><Icon size={31}/></div><div><h1>{title}</h1><p>{subtitle}</p></div></div>
+      {action}
+    </div>;
   };
 
-  // ------------------------------------------------------------------
-  // Computed & Filtered
-  // ------------------------------------------------------------------
-  const filteredLanguages = useMemo(() => {
-    return languages.filter(lang => {
-      const q = langSearch.toLowerCase().trim();
-      const matchesSearch = !q ||
-        lang.name.toLowerCase().includes(q) ||
-        lang.code.toLowerCase().includes(q) ||
-        (lang.nativeName && lang.nativeName.toLowerCase().includes(q));
-
-      const matchesStatus =
-        langFilter === 'all' ? true :
-        langFilter === 'enabled' ? lang.enabled !== false :
-        langFilter === 'disabled' ? lang.enabled === false : true;
-
-      return matchesSearch && matchesStatus;
+  const renderDashboard = () => {
+    const chartMax = Math.max(1, ...monthlyGrowth.map(item => item.cumulative));
+    const points = monthlyGrowth.map((item, index) => {
+      const x = 35 + index * 43;
+      const y = 205 - (item.cumulative / chartMax) * 160;
+      return { x, y, item };
     });
-  }, [languages, langSearch, langFilter]);
-
-  const totalLessonsCount = useMemo(() => {
-    return guides.reduce((acc, g) => acc + (g.lessons?.length || 0), 0);
-  }, [guides]);
-
-  const activeLanguagesCount = useMemo(() => {
-    return languages.filter(l => l.enabled !== false).length;
-  }, [languages]);
-
-  const getAbbreviation = (lang: CustomLanguage): string => {
-    if (lang.code.length === 2) return lang.code.charAt(0).toUpperCase() + lang.code.charAt(1).toLowerCase();
-    if (lang.name.length >= 2) return lang.name.substring(0, 2);
-    return lang.code.substring(0, 2);
-  };
-
-  // Close menus on outside click
-  useEffect(() => {
-    const handleWindowClick = () => {
-      setActiveMenuId(null);
-      setIsFilterDropdownOpen(false);
-    };
-    window.addEventListener('click', handleWindowClick);
-    return () => window.removeEventListener('click', handleWindowClick);
-  }, []);
-
-  const activeTabMeta = SIDEBAR_ITEMS.find(i => i.id === activeTab);
-
-  // Formatted current date for dashboard
-  const currentDateFormatted = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  }, []);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', background: '#f0f4f9', fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      {/* ======================================================== */}
-      {/* 1. TOP HEADER (DEEP NAVY)                                 */}
-      {/* ======================================================== */}
-      <header
-        style={{
-          height: '68px',
-          background: '#0b1a30',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          color: '#ffffff',
-          position: 'sticky',
-          top: 0,
-          zIndex: 40,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        }}
-      >
-        {/* Left: VOP Shield Logo + Motto + Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '38px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="34" height="38" viewBox="0 0 34 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17 2L3 7V17C3 26.5 8.9 35.2 17 37C25.1 35.2 31 26.5 31 17V7L17 2Z" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M17 12C15.3 12 14 13.3 14 15C14 16.7 15.3 18 17 18C18.7 18 20 16.7 20 15C20 13.3 18.7 12 17 12Z" stroke="#ffffff" strokeWidth="2" />
-                <path d="M11 25C11 21.7 13.7 19 17 19C20.3 19 23 21.7 23 25" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.01em', lineHeight: 1.1 }}>VOP Admin</div>
-              <div style={{ fontSize: '0.68rem', color: '#94a3b8', letterSpacing: '0.04em' }}>Manage · Equip · Empower</div>
-            </div>
-          </div>
-
-          <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.12)', margin: '0 6px' }} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <button
-              type="button"
-              style={{ background: 'transparent', border: 0, color: '#ffffff', cursor: 'pointer', padding: '4px', display: 'flex' }}
-              aria-label="Toggle navigation menu"
-            >
-              <Menu size={22} />
-            </button>
-            <div>
-              <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500, lineHeight: 1 }}>Administration</div>
-              <div style={{ fontSize: '1.12rem', fontWeight: 700, color: '#ffffff', lineHeight: 1.3 }}>{activeTabMeta?.label || 'Dashboard'}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Bell + User Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-          <div style={{ position: 'relative', cursor: 'pointer', padding: '6px' }}>
-            <Bell size={20} color="#cbd5e1" />
-            <span
-              style={{
-                position: 'absolute',
-                top: '4px',
-                right: '4px',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: '#f97316',
-                border: '1.5px solid #0b1a30',
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '4px 10px',
-              borderRadius: '9999px',
-              cursor: 'pointer',
-              background: 'rgba(255,255,255,0.06)',
-            }}
-          >
-            <img
-              src="/assets/profile.png"
-              alt="Avatar"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80';
-              }}
-              style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(255,255,255,0.2)' }}
-            />
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#ffffff', lineHeight: 1.1 }}>
-                {currentUser.displayName || 'Aubrey Matende'}
-              </div>
-              <div style={{ fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.2 }}>
-                {currentUser.role === 'super_admin' ? 'Super Admin' : 'Administrator'}
-              </div>
-            </div>
-            <ChevronDown size={14} color="#94a3b8" />
-          </div>
-        </div>
-      </header>
-
-      {/* ======================================================== */}
-      {/* 2. MAIN LAYOUT (SIDEBAR + MAIN CONTENT)                   */}
-      {/* ======================================================== */}
-      <div style={{ display: 'flex', flex: 1 }}>
-        {/* SIDEBAR (WHITE) */}
-        <aside
-          style={{
-            width: '240px',
-            background: '#ffffff',
-            borderRight: '1px solid #e2e8f0',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            padding: '16px 12px 20px',
-            flexShrink: 0,
-          }}
-        >
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            {SIDEBAR_ITEMS.map(item => {
-              const isActive = activeTab === item.id;
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  style={{
-                    position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px',
-                    width: '100%',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    border: 0,
-                    cursor: 'pointer',
-                    background: isActive ? '#0d2146' : 'transparent',
-                    color: isActive ? '#ffffff' : '#334155',
-                    fontWeight: isActive ? 700 : 600,
-                    fontSize: '0.86rem',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isActive) (e.currentTarget as HTMLElement).style.background = '#f8fafc';
-                  }}
-                  onMouseLeave={e => {
-                    if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent';
-                  }}
-                >
-                  {/* Active orange left bar */}
-                  {isActive && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: '0px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: '4px',
-                        height: '24px',
-                        background: '#ea580c',
-                        borderTopRightRadius: '4px',
-                        borderBottomRightRadius: '4px',
-                      }}
-                    />
-                  )}
-                  <Icon size={18} color={isActive ? '#ffffff' : '#334155'} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Back to App */}
-          <button
-            type="button"
-            onClick={onBack}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '12px',
-              background: '#eef2f8',
-              color: '#0d2146',
-              border: 0,
-              borderRadius: '12px',
-              fontWeight: 700,
-              fontSize: '0.86rem',
-              cursor: 'pointer',
-              marginTop: '20px',
-              transition: 'background 0.15s ease',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#e2e8f0'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#eef2f8'; }}
-          >
-            <ArrowLeft size={16} />
-            <span>Back to App</span>
-          </button>
-        </aside>
-
-        {/* MAIN BODY AREA */}
-        <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto' }}>
-          {/* Toast Notification */}
-          {toastMessage && (
-            <div
-              style={{
-                position: 'fixed',
-                bottom: '24px',
-                right: '24px',
-                background: '#0d2146',
-                color: '#ffffff',
-                padding: '12px 20px',
-                borderRadius: '10px',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
-                fontSize: '0.88rem',
-                fontWeight: 600,
-                zIndex: 100,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <Check size={18} color="#22c55e" />
-              {toastMessage}
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* TAB 1: DASHBOARD (SCREENSHOT 2)                          */}
-          {/* ======================================================== */}
-          {activeTab === 'dashboard' && (
-            <div>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div
-                    style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '12px',
-                      background: '#ea580c',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      boxShadow: '0 4px 10px rgba(234, 88, 12, 0.25)',
-                    }}
-                  >
-                    <LayoutDashboard size={24} color="#ffffff" />
-                  </div>
-                  <div>
-                    <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                      Dashboard
-                    </h1>
-                    <p style={{ fontSize: '0.86rem', color: '#64748b', margin: '3px 0 0', fontWeight: 500 }}>
-                      Overview of the VOP system
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '0.85rem', fontWeight: 600 }}>
-                  <span role="img" aria-label="calendar">📅</span>
-                  <span>{currentDateFormatted}</span>
-                </div>
-              </div>
-
-              {/* 4 Top Metric Cards (Live Firestore Metrics) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                {/* 1. Total Candidates */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Users size={24} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
-                      {candidates.length > 0 ? candidates.length.toLocaleString() : '1,248'}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>
-                      Total Candidates
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700, marginTop: '4px' }}>
-                      ↗ +12% from last month
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Lessons */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f0fdf4', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <BookOpen size={24} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
-                      {totalLessonsCount > 0 ? totalLessonsCount : '320'}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>
-                      Lessons
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700, marginTop: '4px' }}>
-                      ↗ +8% from last month
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Languages */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#faf5ff', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Globe size={24} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
-                      {languages.length > 0 ? activeLanguagesCount : '6'}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>
-                      Languages
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700, marginTop: '4px' }}>
-                      ↗ +0 Active languages
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Churches */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Church size={24} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
-                      {churches.length > 0 ? churches.length : '24'}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>
-                      Churches
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700, marginTop: '4px' }}>
-                      ↗ +3 from last month
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Middle Row: Candidate Growth Chart & Recent Activities */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px', marginBottom: '24px' }}>
-                {/* Candidate Growth Chart */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '22px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ color: '#2563eb' }}>📊</span>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Candidate Growth</h3>
-                      </div>
-                      <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '3px 0 0' }}>Total registered candidates over the past 12 months.</p>
-                    </div>
-
-                    <button
-                      type="button"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 12px',
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '8px',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        color: '#0f172a',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>📅 This Year</span>
-                      <ChevronDown size={14} />
-                    </button>
-                  </div>
-
-                  {/* SVG Chart */}
-                  <div style={{ width: '100%', height: '220px', position: 'relative' }}>
-                    <svg viewBox="0 0 540 180" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                      <defs>
-                        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                        </linearGradient>
-                      </defs>
-
-                      {/* Grid lines */}
-                      {[0, 45, 90, 135].map((y, i) => (
-                        <g key={i}>
-                          <line x1="30" y1={y} x2="520" y2={y} stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
-                          <text x="5" y={y + 4} fill="#94a3b8" fontSize="10" fontWeight="600">{250 - (i * 70)}</text>
-                        </g>
-                      ))}
-
-                      {/* Smooth curved chart line */}
-                      <path
-                        d="M 30,150 Q 80,140 120,130 T 210,120 T 300,105 T 390,90 T 450,70 T 520,40 L 520,165 L 30,165 Z"
-                        fill="url(#chartFill)"
-                      />
-                      <path
-                        d="M 30,150 Q 80,140 120,130 T 210,120 T 300,105 T 390,90 T 450,70 T 520,40"
-                        fill="none"
-                        stroke="#2563eb"
-                        strokeWidth="2.5"
-                      />
-
-                      {/* Points */}
-                      {[
-                        [30, 150], [70, 142], [115, 132], [160, 126], [205, 120], [250, 114],
-                        [295, 105], [340, 96], [385, 88], [430, 78], [475, 62], [520, 40]
-                      ].map(([cx, cy], i) => (
-                        <circle key={i} cx={cx} cy={cy} r="3.5" fill="#ffffff" stroke="#2563eb" strokeWidth="2" />
-                      ))}
-
-                      {/* X-axis labels */}
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => (
-                        <text key={i} x={30 + (i * 44.5)} y="178" textAnchor="middle" fill="#94a3b8" fontSize="10" fontWeight="600">
-                          {month}
-                        </text>
-                      ))}
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Recent Activities */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '22px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Clock size={16} color="#0d2146" />
-                      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent Activities</h3>
-                    </div>
-                    <button type="button" style={{ border: 0, background: 'transparent', color: '#2563eb', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>
-                      View All
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {[
-                      { icon: Users, color: '#2563eb', title: 'New candidate registered', desc: 'Chanda Mumba (Riverside SDA)', time: '10 minutes ago' },
-                      { icon: BookOpen, color: '#16a34a', title: 'Lesson published', desc: 'Lesson 1.2 – Faith and Life', time: '2 hours ago' },
-                      { icon: Megaphone, color: '#ea580c', title: 'Announcement added', desc: 'New Sabbath School update', time: '4 hours ago' },
-                      { icon: Globe, color: '#8b5cf6', title: 'Translation updated', desc: 'English → Bemba (Lesson 1)', time: '6 hours ago' },
-                      { icon: Church, color: '#dc2626', title: 'New church added', desc: 'Kabwe Central SDA', time: '1 day ago' },
-                    ].map((act, i) => {
-                      const Icon = act.icon;
-                      return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: `${act.color}15`, color: act.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <Icon size={16} />
-                            </div>
-                            <div>
-                              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</div>
-                              <div style={{ fontSize: '0.74rem', color: '#64748b' }}>{act.desc}</div>
-                            </div>
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>{act.time}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Quick Action Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                <div
-                  onClick={() => setActiveTab('candidates')}
-                  style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: '16px',
-                    padding: '16px 20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ffffff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Users size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#1e3a8a' }}>Manage Candidates</div>
-                      <div style={{ fontSize: '0.76rem', color: '#3b82f6' }}>Add, edit and track candidates.</div>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="#2563eb" />
-                </div>
-
-                <div
-                  onClick={() => setActiveTab('curriculum')}
-                  style={{
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '16px',
-                    padding: '16px 20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ffffff', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <BookOpen size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#14532d' }}>Create Lessons</div>
-                      <div style={{ fontSize: '0.76rem', color: '#16a34a' }}>Build and publish content.</div>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="#16a34a" />
-                </div>
-
-                <div
-                  onClick={() => setActiveTab('announcements')}
-                  style={{
-                    background: '#fff7ed',
-                    border: '1px solid #fed7aa',
-                    borderRadius: '16px',
-                    padding: '16px 20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ffffff', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Megaphone size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#7c2d12' }}>Send Announcement</div>
-                      <div style={{ fontSize: '0.76rem', color: '#ea580c' }}>Reach all users instantly.</div>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="#ea580c" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* TAB 2: SETTINGS (SCREENSHOTS 1, 4, 5)                    */}
-          {/* ======================================================== */}
-          {activeTab === 'settings' && (
-            <div>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '22px' }}>
-                <div
-                  style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '12px',
-                    background: '#ea580c',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    boxShadow: '0 4px 10px rgba(234, 88, 12, 0.25)',
-                  }}
-                >
-                  <Settings size={24} color="#ffffff" />
-                </div>
-                <div>
-                  <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                    Settings
-                  </h1>
-                  <p style={{ fontSize: '0.86rem', color: '#64748b', margin: '3px 0 0', fontWeight: 500 }}>
-                    Configure system settings and preferences
-                  </p>
-                </div>
-              </div>
-
-              {/* Subtabs bar (General, App Info, Features, Integrations, Security, Notifications) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
-                {[
-                  { id: 'general', label: 'General', icon: Settings },
-                  { id: 'appInfo', label: 'App Info', icon: Book },
-                  { id: 'features', label: 'Features', icon: Award },
-                  { id: 'integrations', label: 'Integrations', icon: ExternalLink },
-                  { id: 'security', label: 'Security', icon: Lock },
-                  { id: 'notifications', label: 'Notifications', icon: Bell },
-                ].map(sub => {
-                  const isActive = settingsSubtab === sub.id;
-                  const Icon = sub.icon;
-                  return (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => setSettingsSubtab(sub.id as SettingsSubtab)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '10px 20px',
-                        borderRadius: '10px',
-                        border: 0,
-                        cursor: 'pointer',
-                        background: isActive ? '#0d2146' : '#ffffff',
-                        color: isActive ? '#ffffff' : '#334155',
-                        fontWeight: 700,
-                        fontSize: '0.86rem',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <Icon size={16} color={isActive ? '#ffffff' : '#64748b'} />
-                      <span>{sub.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* SUBTAB CONTENT: GENERAL */}
-              {settingsSubtab === 'general' && settings && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '24px' }}>
-                  {/* Left Column: General Settings Form */}
-                  <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Settings size={18} />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>General Settings</h3>
-                        <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0' }}>Basic information about your VOP application.</p>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {/* Row 1: App Name & Tagline */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div>
-                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>App Name</label>
-                          <input
-                            type="text"
-                            value={settings.appName}
-                            onChange={e => setSettings({ ...settings, appName: e.target.value })}
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>App Tagline</label>
-                          <input
-                            type="text"
-                            value={settings.appTagline || 'Manage · Equip · Empower'}
-                            onChange={e => setSettings({ ...settings, appTagline: e.target.value })}
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Row 2: Default Language & Timezone */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div>
-                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Default Language</label>
-                          <select
-                            value={settings.defaultLanguage}
-                            onChange={e => setSettings({ ...settings, defaultLanguage: e.target.value })}
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem', background: '#ffffff' }}
-                          >
-                            <option value="English">English</option>
-                            {languages.map(l => (
-                              <option key={l.code} value={l.name}>{l.name} ({l.code})</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Timezone</label>
-                          <select
-                            value={settings.timezone || '(GMT+02:00) Lusaka'}
-                            onChange={e => setSettings({ ...settings, timezone: e.target.value })}
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem', background: '#ffffff' }}
-                          >
-                            <option value="(GMT+02:00) Lusaka">(GMT+02:00) Lusaka</option>
-                            <option value="(GMT+02:00) Harare">(GMT+02:00) Harare</option>
-                            <option value="(GMT+00:00) UTC">(GMT+00:00) UTC</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Row 3: Support Email & Website */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div>
-                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Support Email</label>
-                          <input
-                            type="email"
-                            value={settings.contactEmail}
-                            onChange={e => setSettings({ ...settings, contactEmail: e.target.value })}
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Website (Optional)</label>
-                          <input
-                            type="url"
-                            value={settings.website || 'https://vop.org'}
-                            onChange={e => setSettings({ ...settings, website: e.target.value })}
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Row 4: Organization Name */}
-                      <div>
-                        <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Organization Name</label>
-                        <input
-                          type="text"
-                          value={settings.organizationName}
-                          onChange={e => setSettings({ ...settings, organizationName: e.target.value })}
-                          style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                        />
-                      </div>
-
-                      {/* System Options Checkboxes */}
-                      <div style={{ marginTop: '6px' }}>
-                        <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a', marginBottom: '10px' }}>System Options</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                          {[
-                            { key: 'allowRegistrations', label: 'Allow new registrations' },
-                            { key: 'requireApproval', label: 'Require admin approval' },
-                            { key: 'enableEmailNotifications', label: 'Enable email notifications' },
-                            { key: 'showChurchInfo', label: 'Show church information' },
-                            { key: 'enablePwa', label: 'Enable offline access (PWA)' },
-                            { key: 'maintenanceMode', label: 'Maintenance mode', sub: 'Temporarily disable access to the app' },
-                          ].map(opt => {
-                            const isChecked = settings.systemOptions?.[opt.key as keyof NonNullable<ExtendedAppSettings['systemOptions']>] ?? false;
-                            return (
-                              <label key={opt.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => handleToggleSystemOption(opt.key as any)}
-                                  style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: '#0d2146' }}
-                                />
-                                <div>
-                                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#1e293b' }}>{opt.label}</div>
-                                  {opt.sub && <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{opt.sub}</div>}
-                                </div>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Save Settings Button */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
-                        <button
-                          type="submit"
-                          disabled={savingSettings}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '11px 26px',
-                            background: '#0d2146',
-                            color: '#ffffff',
-                            borderRadius: '10px',
-                            border: 0,
-                            fontWeight: 700,
-                            fontSize: '0.88rem',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(13, 33, 70, 0.2)',
-                          }}
-                        >
-                          <Save size={16} />
-                          <span>{savingSettings ? 'Saving...' : 'Save Settings'}</span>
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* Right Column: App Logo, System Info, Danger Zone */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    {/* App Logo Card */}
-                    <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '22px 24px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                      <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', margin: '0 0 2px' }}>App Logo</h4>
-                      <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0 0 16px' }}>Update your application logo and icon.</p>
-
-                      <div style={{ width: '90px', height: '100px', margin: '0 auto 16px', background: '#0b1a30', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Shield size={46} color="#ffffff" strokeWidth={2} />
-                      </div>
-
-                      <button
-                        type="button"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          width: '100%',
-                          padding: '9px',
-                          background: '#ffffff',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          color: '#0f172a',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Upload size={14} />
-                        <span>Change Logo</span>
-                      </button>
-                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '6px' }}>Recommended size: 512 × 512 px PNG or JPG</div>
-                    </div>
-
-                    {/* System Information Card */}
-                    <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                      <h4 style={{ fontSize: '0.96rem', fontWeight: 800, color: '#0f172a', margin: '0 0 14px' }}>System Information</h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.82rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#64748b' }}>Version</span>
-                          <span style={{ fontWeight: 700, color: '#0f172a' }}>1.0.0</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ color: '#64748b' }}>Environment</span>
-                          <span style={{ background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.74rem' }}>Production</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#64748b' }}>Last Updated</span>
-                          <span style={{ fontWeight: 600, color: '#0f172a' }}>21 Sept 2026, 10:24</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#64748b' }}>Updated By</span>
-                          <span style={{ fontWeight: 700, color: '#0f172a' }}>Aubrey Matende</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Danger Zone */}
-                    <div style={{ background: '#fef2f2', borderRadius: '16px', border: '1px solid #fecaca', padding: '20px 24px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#dc2626', fontWeight: 800, fontSize: '0.92rem' }}>
-                        <AlertTriangle size={18} />
-                        <span>Danger Zone</span>
-                      </div>
-                      <p style={{ fontSize: '0.76rem', color: '#7f1d1d', margin: '4px 0 14px' }}>Reset all settings to default values.</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm('Reset system settings to defaults in Firebase Firestore?')) {
-                            handleSaveSettings();
-                          }
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          width: '100%',
-                          padding: '8px',
-                          background: '#ffffff',
-                          border: '1px solid #ef4444',
-                          color: '#dc2626',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <RotateCcw size={14} />
-                        <span>Reset to Defaults</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SUBTAB CONTENT: FEATURES (SCREENSHOT 4) */}
-              {settingsSubtab === 'features' && settings && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                  {/* Feature Toggles Card */}
-                  <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ marginBottom: '18px' }}>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Feature Toggles</h3>
-                      <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '2px 0 0' }}>Enable or disable app features in real-time Firestore.</p>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {[
-                        { key: 'candidatesModule', label: 'Candidates Module', icon: Users },
-                        { key: 'curriculumStudio', label: 'Curriculum Studio', icon: BookOpen },
-                        { key: 'translations', label: 'Translations', icon: Globe },
-                        { key: 'radio', label: 'Radio', icon: Radio },
-                        { key: 'announcements', label: 'Announcements', icon: Megaphone },
-                        { key: 'certification', label: 'Certification', icon: Award },
-                      ].map(item => {
-                        const isEnabled = settings.features?.[item.key as keyof NonNullable<ExtendedAppSettings['features']>] ?? true;
-                        const Icon = item.icon;
-                        return (
-                          <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <Icon size={18} color="#0d2146" />
-                              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{item.label}</span>
-                            </div>
-
-                            {/* Toggle switch */}
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={isEnabled}
-                              onClick={() => handleToggleFeature(item.key as any)}
-                              style={{
-                                position: 'relative',
-                                width: '46px',
-                                height: '26px',
-                                borderRadius: '13px',
-                                border: 0,
-                                cursor: 'pointer',
-                                background: isEnabled ? '#16a34a' : '#cbd5e1',
-                                transition: 'background 0.2s ease',
-                                padding: '2px',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: '22px',
-                                  height: '22px',
-                                  borderRadius: '50%',
-                                  background: '#ffffff',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-                                  transform: isEnabled ? 'translateX(20px)' : 'translateX(0px)',
-                                  transition: 'transform 0.2s ease',
-                                }}
-                              />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Danger Zone (Reset All Data) */}
-                  <div>
-                    <div style={{ background: '#fef2f2', borderRadius: '16px', border: '1px solid #fecaca', padding: '24px 28px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontWeight: 800, fontSize: '1rem' }}>
-                        <AlertTriangle size={20} />
-                        <span>Danger Zone</span>
-                      </div>
-                      <p style={{ fontSize: '0.8rem', color: '#7f1d1d', margin: '6px 0 18px' }}>
-                        These actions are irreversible.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm('Are you sure you want to reset all data? This action is permanent.')) {
-                            showToast('Operation cancelled for safety.');
-                          }
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          width: '100%',
-                          padding: '10px',
-                          background: '#ffffff',
-                          border: '1.5px solid #ef4444',
-                          color: '#dc2626',
-                          borderRadius: '10px',
-                          fontWeight: 700,
-                          fontSize: '0.86rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Trash2 size={16} />
-                        <span>Reset All Data</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Other Settings subtabs */}
-              {['appInfo', 'integrations', 'security', 'notifications'].includes(settingsSubtab) && (
-                <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '32px', textAlign: 'center' }}>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', textTransform: 'capitalize' }}>{settingsSubtab} Configuration</h3>
-                  <p style={{ fontSize: '0.86rem', color: '#64748b', maxWidth: '420px', margin: '4px auto 18px' }}>
-                    Configure {settingsSubtab} parameters synchronized in Firebase Firestore.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsSubtab('general')}
-                    style={{ padding: '8px 20px', background: '#0d2146', color: '#ffffff', borderRadius: '8px', border: 0, fontWeight: 700, cursor: 'pointer', fontSize: '0.84rem' }}
-                  >
-                    Return to General Settings
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* TAB 3: LANGUAGES (SCREENSHOT 3 - FIRESTORE LIVE)          */}
-          {/* ======================================================== */}
-          {activeTab === 'languages' && (
-            <div>
-              {/* Header: Orange Square + Title + "+ Add Language" */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div
-                    style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '12px',
-                      background: '#ea580c',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      boxShadow: '0 4px 10px rgba(234, 88, 12, 0.25)',
-                    }}
-                  >
-                    <Globe size={24} color="#ffffff" />
-                  </div>
-                  <div>
-                    <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                      Languages
-                    </h1>
-                    <p style={{ fontSize: '0.86rem', color: '#64748b', margin: '3px 0 0', fontWeight: 500 }}>
-                      Manage app languages and their settings.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsAddLangOpen(true)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    background: '#0d2146',
-                    color: '#ffffff',
-                    padding: '10px 20px',
-                    borderRadius: '10px',
-                    fontWeight: 700,
-                    fontSize: '0.86rem',
-                    border: 0,
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(13, 33, 70, 0.2)',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#132d5e'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#0d2146'; }}
-                >
-                  <Plus size={16} strokeWidth={2.5} />
-                  <span>Add Language</span>
-                </button>
-              </div>
-
-              {/* Search & Filter Toolbar */}
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '18px' }}>
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '12px',
-                    padding: '0 16px',
-                    height: '44px',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                  }}
-                >
-                  <Search size={18} color="#94a3b8" />
-                  <input
-                    type="text"
-                    value={langSearch}
-                    onChange={e => setLangSearch(e.target.value)}
-                    placeholder="Search languages ..."
-                    style={{
-                      border: 0,
-                      outline: 'none',
-                      background: 'transparent',
-                      width: '100%',
-                      padding: '0 10px',
-                      fontSize: '0.88rem',
-                      color: '#0f172a',
-                    }}
-                  />
-                  {langSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setLangSearch('')}
-                      style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#94a3b8' }}
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Filter Dropdown */}
-                <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      height: '44px',
-                      padding: '0 18px',
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '12px',
-                      fontSize: '0.86rem',
-                      fontWeight: 700,
-                      color: '#0d2146',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Filter size={15} color="#0d2146" />
-                    <span>
-                      {langFilter === 'all' ? 'All records' : langFilter === 'enabled' ? 'Enabled only' : 'Disabled only'}
-                    </span>
-                    <ChevronDown size={14} color="#0d2146" />
-                  </button>
-
-                  {isFilterDropdownOpen && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '50px',
-                        right: 0,
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '10px',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-                        width: '160px',
-                        zIndex: 50,
-                        overflow: 'hidden',
-                        padding: '4px',
-                      }}
-                    >
-                      {(['all', 'enabled', 'disabled'] as const).map(option => (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => {
-                            setLangFilter(option);
-                            setIsFilterDropdownOpen(false);
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            width: '100%',
-                            padding: '8px 12px',
-                            background: langFilter === option ? '#f1f5f9' : 'transparent',
-                            border: 0,
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '0.84rem',
-                            fontWeight: langFilter === option ? 700 : 500,
-                            color: '#0f172a',
-                            textAlign: 'left',
-                          }}
-                        >
-                          {option === 'all' ? 'All records' : option === 'enabled' ? 'Enabled only' : 'Disabled only'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Refresh Button */}
-                <button
-                  type="button"
-                  onClick={() => showToast('Syncing with Firebase Firestore...')}
-                  aria-label="Refresh list"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '44px',
-                    height: '44px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    color: '#0d2146',
-                  }}
-                  title="Reload from Firestore"
-                >
-                  <RotateCw size={16} />
-                </button>
-              </div>
-
-              {/* Language Cards List (Live from Firestore) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-                {filteredLanguages.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '48px 16px', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', color: '#64748b' }}>
-                    No languages found in Firebase Firestore. Click <strong>+ Add Language</strong> above to add one.
-                  </div>
-                ) : (
-                  filteredLanguages.map(lang => {
-                    const isEnabled = lang.enabled !== false;
-                    const abbr = getAbbreviation(lang);
-
-                    return (
-                      <div
-                        key={lang.code}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: '#ffffff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '16px',
-                          padding: '14px 22px',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-                          <div
-                            style={{
-                              width: '44px',
-                              height: '44px',
-                              borderRadius: '50%',
-                              background: '#0d2146',
-                              color: '#ffffff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 700,
-                              fontSize: '1.05rem',
-                              letterSpacing: '-0.02em',
-                            }}
-                          >
-                            {abbr}
-                          </div>
-
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.96rem', color: '#0f172a' }}>
-                              {lang.name}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', marginTop: '2px' }}>
-                              <span style={{ color: '#94a3b8', fontWeight: 600 }}>{lang.code.toUpperCase()}</span>
-                              <span style={{ color: '#cbd5e1' }}>•</span>
-                              <span style={{ color: isEnabled ? '#16a34a' : '#ef4444', fontWeight: 700 }}>
-                                {isEnabled ? 'Enabled' : 'Disabled'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                          {/* Toggle Switch */}
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={isEnabled}
-                            onClick={() => handleToggleLanguageStatus(lang.code, isEnabled)}
-                            style={{
-                              position: 'relative',
-                              width: '46px',
-                              height: '26px',
-                              borderRadius: '13px',
-                              border: 0,
-                              cursor: 'pointer',
-                              background: isEnabled ? '#16a34a' : '#cbd5e1',
-                              transition: 'background 0.2s ease',
-                              padding: '2px',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: '22px',
-                                height: '22px',
-                                borderRadius: '50%',
-                                background: '#ffffff',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-                                transform: isEnabled ? 'translateX(20px)' : 'translateX(0px)',
-                                transition: 'transform 0.2s ease',
-                              }}
-                            />
-                          </button>
-
-                          {/* 3 Dots Menu */}
-                          <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => setActiveMenuId(activeMenuId === lang.code ? null : lang.code)}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: '34px',
-                                height: '34px',
-                                borderRadius: '8px',
-                                border: '1px solid #e2e8f0',
-                                background: '#ffffff',
-                                color: '#64748b',
-                                cursor: 'pointer',
-                              }}
-                              aria-label="More actions"
-                            >
-                              <MoreVertical size={16} />
-                            </button>
-
-                            {activeMenuId === lang.code && (
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  top: '40px',
-                                  right: 0,
-                                  background: '#ffffff',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '10px',
-                                  boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
-                                  width: '150px',
-                                  zIndex: 50,
-                                  overflow: 'hidden',
-                                  padding: '4px',
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingLang(lang);
-                                    setActiveMenuId(null);
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '8px 10px',
-                                    border: 0,
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    fontSize: '0.82rem',
-                                    color: '#1e293b',
-                                    borderRadius: '6px',
-                                    textAlign: 'left',
-                                  }}
-                                >
-                                  <Edit size={14} />
-                                  <span>Edit details</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleLanguageStatus(lang.code, isEnabled)}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '8px 10px',
-                                    border: 0,
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    fontSize: '0.82rem',
-                                    color: '#1e293b',
-                                    borderRadius: '6px',
-                                    textAlign: 'left',
-                                  }}
-                                >
-                                  <RotateCw size={14} />
-                                  <span>{isEnabled ? 'Disable' : 'Enable'}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteLanguage(lang.code)}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '8px 10px',
-                                    border: 0,
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    fontSize: '0.82rem',
-                                    color: '#ef4444',
-                                    borderRadius: '6px',
-                                    textAlign: 'left',
-                                  }}
-                                >
-                                  <Trash2 size={14} />
-                                  <span>Delete</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Pagination */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#64748b', fontSize: '0.84rem' }}>
-                <div>
-                  Showing 1 to {filteredLanguages.length} of {languages.length} languages
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <button
-                    type="button"
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      color: '#64748b',
-                    }}
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '8px',
-                      border: 0,
-                      background: '#0d2146',
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    1
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      color: '#64748b',
-                    }}
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* OTHER TABS                                               */}
-          {/* ======================================================== */}
-          {activeTab === 'candidates' && (
-            <div>
-              <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Candidate Management</h1>
-                <p style={{ fontSize: '0.86rem', color: '#64748b', margin: '3px 0 0' }}>Live registered students from Firebase Firestore.</p>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {candidates.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px', background: '#ffffff', borderRadius: '16px', color: '#64748b' }}>
-                    No candidates registered yet.
-                  </div>
-                ) : (
-                  candidates.map((u, idx) => (
-                    <div key={`${u.uid}-${idx}`} style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '16px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#0d2146', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
-                          {u.displayName?.charAt(0) || 'U'}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{u.displayName}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{u.email} • Role: <strong>{u.role || 'student'}</strong></div>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: u.information?.graduated ? '#16a34a' : '#0d2146' }}>
-                        {u.information?.graduated ? 'Graduated ✅' : `Progress: ${u.progress?.discoverProgress || 0}%`}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'curriculum' && (
-            <div>
-              <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Curriculum Studio</h1>
-                <p style={{ fontSize: '0.86rem', color: '#64748b', margin: '3px 0 0' }}>Approved Bible courses and lessons loaded directly from Firestore.</p>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {guides.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px', background: '#ffffff', borderRadius: '16px', color: '#64748b' }}>
-                    No curriculum guides found in Firestore.
-                  </div>
-                ) : (
-                  guides.map((guide, idx) => (
-                    <div key={guide.id || idx} style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '16px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{guide.title} ({guide.language.toUpperCase()})</div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{guide.lessons?.length || 0} lessons • ID: {guide.id}</div>
-                      </div>
-                      <span style={{ fontSize: '0.8rem', padding: '4px 10px', background: '#dcfce7', color: '#16a34a', borderRadius: '6px', fontWeight: 700 }}>Published</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {!['dashboard', 'settings', 'languages', 'candidates', 'curriculum'].includes(activeTab) && (
-            <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '36px', textAlign: 'center' }}>
-              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: '#0d214610', color: '#0d2146', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                {activeTabMeta ? <activeTabMeta.icon size={26} /> : <Globe size={26} />}
-              </div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>
-                {activeTabMeta?.label} Management
-              </h2>
-              <p style={{ fontSize: '0.86rem', color: '#64748b', maxWidth: '460px', margin: '0 auto 20px' }}>
-                Live management for {activeTabMeta?.label.toLowerCase()} synchronized in Firebase Firestore.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveTab('languages')}
-                style={{ padding: '8px 18px', background: '#0d2146', color: '#ffffff', borderRadius: '8px', border: 0, fontWeight: 700, cursor: 'pointer', fontSize: '0.84rem' }}
-              >
-                Return to Languages
-              </button>
-            </div>
-          )}
-        </main>
+    const path = points.map((p, index) => (index === 0 ? 'M ' : 'L ') + p.x + ' ' + p.y).join(' ');
+    return <div>
+      {renderHeader(LayoutDashboard, 'Dashboard', 'Overview of the VOP system', <div className="vop-secondary"><CalendarDays size={17}/>{currentDate}<ChevronDown size={14}/></div>)}
+      <div className="vop-grid-4">
+        {[
+          { label: 'Total Candidates', value: candidates.length, tone: '#e9f2ff', color: '#1261cf', icon: Users },
+          { label: 'Lessons', value: totalLessons, tone: '#e5fbf4', color: '#099568', icon: BookOpen },
+          { label: 'Languages', value: activeLanguages.length, tone: '#f2eaff', color: '#7135d5', icon: Globe },
+          { label: 'Churches', value: churches.length, tone: '#fff0dc', color: '#f27b00', icon: Church },
+        ].map(metric => {
+          const Icon = metric.icon;
+          return <div className="vop-card vop-metric" key={metric.label}>
+            <div className="vop-metric-icon" style={{background:metric.tone,color:metric.color}}><Icon size={29}/></div>
+            <div><div className="vop-metric-value">{metric.value.toLocaleString()}</div><div className="vop-metric-label">{metric.label}</div><div className="vop-metric-trend">Live Firestore data</div></div>
+          </div>;
+        })}
       </div>
-
-      {/* ======================================================== */}
-      {/* MODAL: ADD LANGUAGE (FIRESTORE)                          */}
-      {/* ======================================================== */}
-      {isAddLangOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            backdropFilter: 'blur(3px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: '16px',
-          }}
-          onClick={() => setIsAddLangOpen(false)}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '20px',
-              maxWidth: '440px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Add Language</h3>
-              <button type="button" onClick={() => setIsAddLangOpen(false)} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveNewLanguage} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Language Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Swahili, French, Lunda"
-                  value={newLangForm.name}
-                  onChange={e => setNewLangForm({ ...newLangForm, name: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Language Code</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. SWA, FRA, LUN"
-                  value={newLangForm.code}
-                  onChange={e => setNewLangForm({ ...newLangForm, code: e.target.value.toUpperCase() })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Native Name (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Kiswahili, Français"
-                  value={newLangForm.nativeName}
-                  onChange={e => setNewLangForm({ ...newLangForm, nativeName: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                <input
-                  type="checkbox"
-                  id="enabledCheck"
-                  checked={newLangForm.enabled}
-                  onChange={e => setNewLangForm({ ...newLangForm, enabled: e.target.checked })}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#0d2146' }}
-                />
-                <label htmlFor="enabledCheck" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                  Enable language immediately
-                </label>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsAddLangOpen(false)}
-                  style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#334155', borderRadius: '8px', border: 0, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{ flex: 1, padding: '10px', background: '#0d2146', color: '#ffffff', borderRadius: '8px', border: 0, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Save to Firebase
-                </button>
-              </div>
-            </form>
+      <div style={{height:20}} />
+      <div className="vop-grid-2">
+        <div className="vop-card vop-section-card">
+          <div className="vop-section-title"><div><h2>System Growth</h2><p>Registered candidates from the selected period.</p></div><select className="vop-filter" value={dashboardRange} onChange={e=>setDashboardRange(e.target.value)}><option value="year">This Year</option><option value="all">All Available Data</option></select></div>
+          {candidates.length === 0 ? <div className="vop-empty">No candidate enrollment history is available yet.</div> : <svg className="vop-chart" viewBox="0 0 540 250" preserveAspectRatio="none">
+            {[0,1,2,3,4].map(index => <line key={index} x1="35" y1={45 + index*40} x2="520" y2={45 + index*40} stroke="#e9eff7" strokeDasharray="3 4"/>)}
+            <path d={path} fill="none" stroke="#1467d8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+            {points.map(point => <g key={point.item.label}><circle cx={point.x} cy={point.y} r="4" fill="#fff" stroke="#1467d8" strokeWidth="2.5"/><text x={point.x} y="238" textAnchor="middle" fill="#7a8ba8" fontSize="11">{point.item.label}</text></g>)}
+          </svg>}
+        </div>
+        <div className="vop-card vop-section-card">
+          <div className="vop-section-title"><div><h2>Recent Activities</h2><p>Latest updates available in Firestore.</p></div><button className="vop-secondary" type="button" onClick={()=>void loadDrafts()}><RefreshCw size={15}/><span>Refresh</span></button></div>
+          <div className="vop-activity">
+            {activities.length === 0 ? <div className="vop-empty">No recent activity is available.</div> : activities.map((activity,index)=>{
+              const Icon = activity.icon;
+              return <div className="vop-activity-row" key={activity.title + index}><div className="vop-activity-left"><div className="vop-activity-icon" style={{background:activity.tone+'18',color:activity.tone}}><Icon size={18}/></div><div><div className="vop-activity-title">{activity.title}</div><div className="vop-activity-desc">{activity.description}</div></div></div><div className="vop-activity-time">{relativeTime(activity.date)}</div></div>;
+            })}
           </div>
         </div>
-      )}
+      </div>
+      <div style={{height:18}} />
+      <div className="vop-grid-4">
+        {[
+          {label:'Manage Candidates',desc:'Add, edit and track candidates.',icon:Users,tab:'candidates' as AdminTab},
+          {label:'Create Lesson',desc:'Build and publish content.',icon:BookOpen,tab:'curriculum' as AdminTab},
+          {label:'Add Announcement',desc:'Share news and updates.',icon:Megaphone,tab:'announcements' as AdminTab},
+          {label:'Manage Radio',desc:'Add and schedule broadcasts.',icon:Radio,tab:'radio' as AdminTab},
+        ].map((item,index)=>{const Icon=item.icon;return <button key={item.label} type="button" className="vop-card vop-quick" onClick={()=>setActiveTab(item.tab)} style={{background:index===0?'#eef6ff':index===1?'#ecfbf4':index===2?'#f7efff':'#fff4e7'}}><div style={{display:'flex',alignItems:'center',gap:12}}><Icon size={25}/><div><div className="vop-quick-title">{item.label}</div><div className="vop-quick-desc">{item.desc}</div></div></div><ChevronRight size={20}/></button>;})}
+      </div>
+    </div>;
+  };
 
-      {/* ======================================================== */}
-      {/* MODAL: EDIT LANGUAGE (FIRESTORE)                         */}
-      {/* ======================================================== */}
-      {editingLang && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            backdropFilter: 'blur(3px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: '16px',
-          }}
-          onClick={() => setEditingLang(null)}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '20px',
-              maxWidth: '440px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Edit Language</h3>
-              <button type="button" onClick={() => setEditingLang(null)} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateLanguage} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Language Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editingLang.name}
-                  onChange={e => setEditingLang({ ...editingLang, name: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>Native Name</label>
-                <input
-                  type="text"
-                  value={editingLang.nativeName || ''}
-                  onChange={e => setEditingLang({ ...editingLang, nativeName: e.target.value })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginTop: '4px', fontSize: '0.88rem' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
-                <input
-                  type="checkbox"
-                  id="editEnabledCheck"
-                  checked={editingLang.enabled !== false}
-                  onChange={e => setEditingLang({ ...editingLang, enabled: e.target.checked })}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#0d2146' }}
-                />
-                <label htmlFor="editEnabledCheck" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                  Language enabled
-                </label>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setEditingLang(null)}
-                  style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#334155', borderRadius: '8px', border: 0, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{ flex: 1, padding: '10px', background: '#0d2146', color: '#ffffff', borderRadius: '8px', border: 0, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Save to Firebase
-                </button>
-              </div>
-            </form>
+  const renderSettings = () => {
+    if (!settings) return <div className="vop-empty">Loading settings from Firestore…</div>;
+    const featureRows: Array<{key:keyof NonNullable<ExtendedAppSettings['features']>;label:string;icon:React.ComponentType<{size?:number}>}> = [
+      {key:'candidatesModule',label:'Candidates Module',icon:Users},
+      {key:'curriculumStudio',label:'Curriculum Studio',icon:BookOpen},
+      {key:'translations',label:'Translations',icon:Globe},
+      {key:'radio',label:'Radio',icon:Radio},
+      {key:'announcements',label:'Announcements',icon:Megaphone},
+      {key:'certification',label:'Certification',icon:Award},
+    ];
+    return <div>
+      {renderHeader(Settings,'Settings','Configure system settings and preferences.')}
+      <div className="vop-settings-tabs">
+        {[
+          {id:'general',label:'General',icon:Settings},{id:'appInfo',label:'App Info',icon:Book},{id:'features',label:'Features',icon:Grid2X2},
+          {id:'integrations',label:'Integrations',icon:Link2},{id:'security',label:'Security',icon:Lock},{id:'notifications',label:'Notifications',icon:Bell},
+        ].map(item=>{const Icon=item.icon;return <button key={item.id} className={'vop-tab '+(settingsSubtab===item.id?'active':'')} type="button" onClick={()=>setSettingsSubtab(item.id as SettingsSubtab)}><Icon size={17}/>{item.label}</button>;})}
+      </div>
+      {settingsSubtab === 'general' && <div className="vop-grid-2">
+        <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+          <div className="vop-section-title"><div><h2>General Settings</h2><p>Basic information about the configured VOP application.</p></div></div>
+          <div className="vop-form-grid">
+            <div className="vop-field"><label>App Name</label><input value={settings.appName} onChange={e=>setSettings({...settings,appName:e.target.value})}/></div>
+            <div className="vop-field"><label>Support Email</label><input type="email" value={settings.contactEmail} onChange={e=>setSettings({...settings,contactEmail:e.target.value})}/></div>
+            <div className="vop-field"><label>App Tagline</label><input value={settings.appTagline || ''} onChange={e=>setSettings({...settings,appTagline:e.target.value})}/></div>
+            <div className="vop-field"><label>Organization Name</label><input value={settings.organizationName} onChange={e=>setSettings({...settings,organizationName:e.target.value})}/></div>
+            <div className="vop-field"><label>Default Language</label><select value={settings.defaultLanguage} onChange={e=>setSettings({...settings,defaultLanguage:e.target.value})}><option value="">Not configured</option>{languages.map(item=><option key={item.code} value={item.name}>{item.name}</option>)}</select></div>
+            <div className="vop-field"><label>Timezone</label><input value={settings.timezone || ''} onChange={e=>setSettings({...settings,timezone:e.target.value})}/></div>
+            <div className="vop-field"><label>Website</label><input value={settings.website || ''} onChange={e=>setSettings({...settings,website:e.target.value})}/></div>
+            <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>
           </div>
+          <div style={{height:18}} />
+          <div className="vop-section-title"><div><h3>System Options</h3><p>Configuration is stored in Firestore.</p></div></div>
+          <div className="vop-setting-list">
+            {[
+              {key:'allowRegistrations',label:'Allow new registrations',help:'Permit new candidate accounts.'},
+              {key:'requireApproval',label:'Require admin approval',help:'Require an administrator to approve applicable records.'},
+              {key:'enableEmailNotifications',label:'Enable email notifications',help:'Enable configured notification workflows.'},
+              {key:'showChurchInfo',label:'Show church information',help:'Expose configured church information to the application.'},
+              {key:'enablePwa',label:'Enable offline access (PWA)',help:'Enable the configured offline application mode.'},
+              {key:'maintenanceMode',label:'Maintenance mode',help:'Temporarily restrict access to the application.'},
+            ].map(option=>{const on=Boolean(settings.systemOptions?.[option.key as keyof NonNullable<ExtendedAppSettings['systemOptions']>]);return <div className="vop-setting-row" key={option.key}><div><div className="vop-setting-name">{option.label}</div><div className="vop-setting-help">{option.help}</div></div><Toggle on={on} onClick={()=>setSettings({...settings,systemOptions:{...settings.systemOptions,[option.key]:!on}} as ExtendedAppSettings)}/></div>;})}
+          </div>
+          <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" disabled={settingsSaving} type="submit"><Save size={17}/>{settingsSaving?'Saving…':'Save Settings'}</button></div>
+        </form>
+        <div style={{display:'flex',flexDirection:'column',gap:18}}>
+          <div className="vop-card vop-section-card">
+            <div className="vop-section-title"><div><h3>App Identity</h3><p>Configured identity and branding values.</p></div></div>
+            <div className="vop-featured"><div className="vop-heading-icon" style={{width:92,height:92}}><Shield size={46}/></div><div><strong>{settings.appName}</strong><div style={{color:'#7183a4',marginTop:4}}>{settings.organizationName}</div><div style={{color:'#7183a4',fontSize:13,marginTop:5}}>{settings.versionLabel || 'Version not configured'}</div></div></div>
+          </div>
+          <div className="vop-card vop-section-card">
+            <div className="vop-section-title"><div><h3>System Information</h3><p>Current application configuration state.</p></div></div>
+            <div className="vop-setting-list"><div className="vop-setting-row"><span className="vop-setting-name">Languages</span><strong>{languages.length}</strong></div><div className="vop-setting-row"><span className="vop-setting-name">Lessons</span><strong>{totalLessons}</strong></div><div className="vop-setting-row"><span className="vop-setting-name">Candidates</span><strong>{candidates.length}</strong></div></div>
+          </div>
+          <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>Use configuration controls carefully. Destructive data operations are intentionally not exposed by this screen.</p><button type="button" onClick={()=>showMessage('No destructive reset was performed.')}>Reset to Defaults</button></div>
         </div>
-      )}
+      </div>}
+      {settingsSubtab === 'features' && <div className="vop-grid-2">
+        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is stored in Firestore.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
+        <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
+      </div>}
+      {settingsSubtab !== 'general' && settingsSubtab !== 'features' && <div className="vop-card vop-empty"><Settings size={30}/><h2 style={{color:'#09275f'}}> {settingsSubtab} configuration</h2><p>This configuration area is ready for Firestore-backed settings.</p></div>}
+    </div>;
+  };
+
+  const renderLanguages = () => <div>
+    {renderHeader(Globe,'Languages','Manage application languages and their settings.',<button className="vop-primary" type="button" onClick={()=>openLanguageEditor()}><Plus size={18}/>Add Language</button>)}
+    <div className="vop-stat-row">
+      <div className="vop-card vop-mini-stat"><div className="vop-mini-stat-icon" style={{background:'#eaf3ff',color:'#1768d7'}}><Globe size={23}/></div><div><div className="vop-mini-value">{languages.length}</div><div className="vop-mini-label">Total Languages</div></div></div>
+      <div className="vop-card vop-mini-stat"><div className="vop-mini-stat-icon" style={{background:'#e5faef',color:'#13a665'}}><Check size={23}/></div><div><div className="vop-mini-value">{activeLanguages.length}</div><div className="vop-mini-label">Enabled</div></div></div>
+      <div className="vop-card vop-mini-stat"><div className="vop-mini-stat-icon" style={{background:'#ffeaea',color:'#dc3535'}}><X size={23}/></div><div><div className="vop-mini-value">{languages.length-activeLanguages.length}</div><div className="vop-mini-label">Disabled</div></div></div>
     </div>
-  );
+    <div className="vop-language-layout">
+      <div>
+        <div className="vop-toolbar"><div className="vop-search"><Search size={18} color="#7a8da9"/><input value={langSearch} onChange={e=>setLangSearch(e.target.value)} placeholder="Search languages by name or code…"/>{langSearch && <button type="button" onClick={()=>setLangSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div><select className="vop-filter" value={langFilter} onChange={e=>setLangFilter(e.target.value as typeof langFilter)}><option value="all">All Status</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select><button className="vop-secondary" type="button" onClick={()=>showMessage('Language list is live from Firestore.')}><RefreshCw size={17}/></button></div>
+        <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Code</th><th>Display Name</th><th>Native Name</th><th>Status</th><th>Default</th><th>Actions</th></tr></thead><tbody>{filteredLanguages.map((language,index)=><tr key={language.code}><td>{index+1}</td><td><div className="vop-avatar-code">{abbreviation(language)}</div></td><td><strong>{language.name}</strong></td><td>{language.nativeName || 'Not configured'}</td><td><span className={'vop-status '+(language.enabled===false?'disabled':'enabled')}>{language.enabled===false?'Disabled':'Enabled'}</span></td><td><input type="radio" name="defaultLanguage" checked={settings?.defaultLanguage === language.name || settings?.defaultLanguage === language.code} onChange={()=>settings && setSettings({...settings,defaultLanguage:language.name})}/></td><td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" onClick={()=>openLanguageEditor(language)}><Edit3 size={16}/></button><button className="vop-actions" type="button" onClick={()=>void toggleLanguage(language)}><RefreshCw size={15}/></button><button className="vop-actions" type="button" onClick={()=>void deleteLanguage(language)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>
+        {filteredLanguages.length===0 && <div className="vop-empty" style={{marginTop:12}}>No language records match the current filter.</div>}
+        <div className="vop-pager"><span>Showing {filteredLanguages.length} of {languages.length} languages</span><div className="vop-pager-controls"><button className="vop-page-btn"><ChevronLeft size={17}/></button><button className="vop-page-btn active">1</button><button className="vop-page-btn"><ChevronRight size={17}/></button></div></div>
+      </div>
+      <form className="vop-card vop-form-card" onSubmit={saveLanguage}>
+        <div className="vop-section-title"><div><h2>{editingLanguage ? 'Edit Language' : 'Add New Language'}</h2><p>Fill in the details to manage a language.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={23}/></div></div>
+        <div className="vop-field"><label>Language code *</label><input value={languageDraft.code} onChange={e=>setLanguageDraft({...languageDraft,code:e.target.value.toUpperCase()})} placeholder="Short code"/></div><div style={{height:13}}/>
+        <div className="vop-field"><label>Display name *</label><input value={languageDraft.name} onChange={e=>setLanguageDraft({...languageDraft,name:e.target.value})} placeholder="Display name"/></div><div style={{height:13}}/>
+        <div className="vop-field"><label>Native name</label><input value={languageDraft.nativeName} onChange={e=>setLanguageDraft({...languageDraft,nativeName:e.target.value})} placeholder="Native name"/></div><div style={{height:18}}/>
+        <div className="vop-setting-row"><div><div className="vop-setting-name">Status</div><div className="vop-setting-help">Disable to hide this language from learners.</div></div><Toggle on={languageDraft.enabled} onClick={()=>setLanguageDraft({...languageDraft,enabled:!languageDraft.enabled})}/></div>
+        <div style={{display:'flex',gap:10,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={()=>openLanguageEditor()}>Clear</button><button className="vop-primary" style={{flex:1,justifyContent:'center'}} type="submit"><Save size={16}/>{editingLanguage?'Save Changes':'Save Language'}</button></div>
+      </form>
+    </div>
+  </div>;
+
+  const renderStudio = () => {
+    if (editorMode) return renderLessonEditor();
+    const tabCounts: Record<StudioTab, number> = {lessons:totalLessons,guides:guides.length,quizzes:quizCount,paths:0,topics:0,seasons:0};
+    const tabs: Array<{id:StudioTab;label:string;icon:React.ComponentType<{size?:number}>}> = [
+      {id:'lessons',label:'Lessons',icon:FileText},{id:'guides',label:'Guides',icon:BookOpen},{id:'quizzes',label:'Quizzes',icon:CircleHelp},
+      {id:'paths',label:'Learning Paths',icon:Layers},{id:'topics',label:'Bible Topics',icon:Book},{id:'seasons',label:'Seasons',icon:CalendarDays},
+    ];
+    return <div>
+      {renderHeader(FileText,'Curriculum Studio','Create and manage VOP content, lessons, guides and learning paths.',<div style={{display:'flex',gap:10}}><button className="vop-secondary" type="button"><Settings size={16}/>Curriculum Settings</button><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={18}/>New Content</button></div>)}
+      <div className="vop-studio-tabs">{tabs.map(tab=>{const Icon=tab.icon;return <button key={tab.id} className={'vop-tab '+(studioTab===tab.id?'active':'')} type="button" onClick={()=>setStudioTab(tab.id)}><Icon size={17}/>{tab.label} ({tabCounts[tab.id]})</button>;})}</div>
+      {studioTab==='lessons' && <div>
+        <div className="vop-toolbar"><div className="vop-search"><Search size={18}/><input value={lessonSearch} onChange={e=>setLessonSearch(e.target.value)} placeholder="Search lessons, topics or descriptions…"/></div><select className="vop-filter" value={lessonLanguage} onChange={e=>setLessonLanguage(e.target.value)}><option value="all">All Languages</option>{languageOptions.map(language=><option key={language} value={language}>{language.toUpperCase()}</option>)}</select><select className="vop-filter" value={lessonStatus} onChange={e=>setLessonStatus(e.target.value)}><option value="all">All Status</option><option value="published">Published</option></select><button className="vop-secondary" type="button" onClick={()=>void loadDrafts()}><RefreshCw size={17}/><span>Refresh</span></button></div>
+        <div className="vop-studio-list">
+          {filteredLessons.map(row=><button key={row.guide.id+'-'+row.lesson.id} className="vop-lesson-row" type="button" onClick={()=>openLessonEditor(row.guide,row.lesson)}>
+            <img className="vop-thumb" src={(row.lesson.contentPages||[]).find(page=>page.imageUrl)?.imageUrl || row.guide.image || ''} alt="" />
+            <div style={{minWidth:0,textAlign:'left'}}><div className="vop-row-title">{row.lesson.lessonNumber}. {row.lesson.title}</div><div className="vop-row-desc">{row.lesson.description || 'No description configured.'}</div><div className="vop-row-meta"><span><BookOpen size={13}/> {row.guide.title}</span><span><CircleHelp size={13}/> {row.lesson.questions?.length || 0}</span><span><Clock size={13}/> {row.lesson.estimatedMinutes} mins</span></div></div>
+            <span className="vop-status published">Published</span><span className="vop-chip"><Globe size={12}/>{row.guide.language.toUpperCase()}</span><span className="vop-actions"><MoreVertical size={16}/></span>
+          </button>)}
+          {filteredLessons.length===0 && <div className="vop-empty">No approved lessons match the current filters.</div>}
+        </div>
+        <div className="vop-pager"><span>Showing {filteredLessons.length} of {totalLessons} lessons</span><div className="vop-pager-controls"><button className="vop-page-btn"><ChevronLeft size={17}/></button><button className="vop-page-btn active">1</button><button className="vop-page-btn"><ChevronRight size={17}/></button></div></div>
+      </div>}
+      {studioTab==='guides' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Guide</th><th>Languages</th><th>Lessons</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{guides.map((guide,index)=><tr key={guide.id}><td>{index+1}</td><td><div style={{display:'flex',alignItems:'center',gap:12}}>{guide.image ? <img className="vop-thumb" style={{width:72,height:48}} src={guide.image} alt="" />:<div className="vop-avatar-code"><BookOpen size={18}/></div>}<div><strong>{guide.title}</strong><div style={{fontSize:12,color:'#7183a4'}}>{guide.description || guide.subtitle || 'No description configured.'}</div></div></div></td><td><span className="vop-chip">{guide.language.toUpperCase()}</span></td><td>{guide.lessons.length}</td><td><span className="vop-status published">Published</span></td><td>Not recorded</td><td><button className="vop-actions" type="button" onClick={()=>{setStudioTab('lessons');setLessonLanguage(guide.language)}}><MoreVertical size={16}/></button></td></tr>)}</tbody></table>{guides.length===0&&<div className="vop-empty">No guides are currently configured.</div>}</div>}
+      {studioTab==='quizzes' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Quiz / Lesson</th><th>Guide</th><th>Questions</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>{lessonRows.filter(row=>(row.lesson.questions?.length||0)>0).map((row,index)=><tr key={row.guide.id+'-'+row.lesson.id}><td>{index+1}</td><td><strong>{row.lesson.title}</strong><div style={{fontSize:12,color:'#7183a4'}}>{row.lesson.lessonNumber}</div></td><td>{row.guide.title}</td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-chip">Configured</span></td><td><span className="vop-status published">Published</span></td><td><button className="vop-actions" type="button" onClick={()=>openLessonEditor(row.guide,row.lesson)}><Edit3 size={16}/></button></td></tr>)}</tbody></table>{quizCount===0&&<div className="vop-empty">No quiz-bearing lessons are configured.</div>}</div>}
+      {studioTab!=='lessons' && studioTab!=='guides' && studioTab!=='quizzes' && <div className="vop-empty"><Layers size={32}/><h2 style={{color:'#09275f'}}>No {tabs.find(tab=>tab.id===studioTab)?.label.toLowerCase()} configured</h2><p>These records are intentionally data-driven and will appear here when configured by an administrator.</p><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={17}/>Create Content</button></div>}
+    </div>;
+  };
+
+  const renderLessonEditor = () => <div>
+    <div className="vop-breadcrumb"><button type="button" style={{border:0,background:'transparent',color:'#58719a'}} onClick={()=>setEditorMode(false)}>Curriculum Studio</button><ChevronRight size={15}/><span>Lessons</span><ChevronRight size={15}/><span>{selectedLesson ? 'Edit Lesson' : 'Create Lesson'}</span></div>
+    {renderHeader(FileText,'Lesson Editor','Create and edit lesson content, text, images, audio, video and quiz questions.',<div style={{display:'flex',gap:9}}><button className="vop-secondary" type="button" onClick={()=>setEditorMode(false)}><Eye size={17}/>Preview</button><button className="vop-secondary" type="button" onClick={()=>void saveLessonDraft(false)} disabled={editorSaving}><Save size={17}/>Save Draft</button><button className="vop-primary" type="button" onClick={()=>void saveLessonDraft(true)} disabled={editorSaving}><Send size={17}/>Publish</button></div>)}
+    <div className="vop-form-grid" style={{gridTemplateColumns:'1.15fr 1fr .8fr 1fr 1fr',marginBottom:14}}>
+      <div className="vop-field"><label>Title *</label><input value={editorTitle} onChange={e=>setEditorTitle(e.target.value)}/></div>
+      <div className="vop-field"><label>Guide</label><select value={selectedGuide?.id || ''} onChange={e=>{const guide=guides.find(item=>item.id===e.target.value);setSelectedGuide(guide||null);setEditorLanguage(guide?.language||editorLanguage)}}><option value="">Not selected</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select></div>
+      <div className="vop-field"><label>Lesson Number *</label><input value={editorNumber} onChange={e=>setEditorNumber(e.target.value)}/></div>
+      <div className="vop-field"><label>Season / Quarter</label><input value={editorSeason} onChange={e=>setEditorSeason(e.target.value)}/></div>
+      <div className="vop-field"><label>Language</label><select value={editorLanguage} onChange={e=>setEditorLanguage(e.target.value)}><option value="">Not configured</option>{languageOptions.map(language=><option key={language} value={language}>{language.toUpperCase()}</option>)}</select></div>
+    </div>
+    <div className="vop-grid-2">
+      <div className="vop-card vop-editor">
+        <div className="vop-settings-tabs" style={{marginBottom:10}}>{['Content','Media','Bible References','Quiz','Teacher Notes','Settings'].map((label,index)=><button key={label} type="button" className={'vop-tab '+(index===0?'active':'')}><span>{label}</span></button>)}</div>
+        <div className="vop-field" style={{marginBottom:12}}><label>Lesson Content *</label><div className="vop-editor-preview"><div className="vop-editor-toolbar"><button type="button"><strong>B</strong></button><button type="button"><em>I</em></button><button type="button"><u>U</u></button><button type="button"><Tag size={15}/></button><button type="button"><Link2 size={15}/></button><button type="button"><ImageIcon size={15}/></button><button type="button"><Grid2X2 size={15}/></button></div><textarea className="vop-editor-body" value={editorContent} onChange={e=>setEditorContent(e.target.value)} placeholder="Write the lesson content here. Use the curriculum editor to structure paragraphs, headings, lists, scripture references and media."></textarea></div></div>
+        <div className="vop-field"><label>Description</label><textarea value={editorDescription} onChange={e=>setEditorDescription(e.target.value)} /></div>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:16}}>
+        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h3>Featured Image</h3><p>Use a configured media URL.</p></div></div><div className="vop-featured">{editorImage ? <img src={editorImage} alt="" />:<div className="vop-thumb" style={{width:145,height:92}}/>}<div style={{flex:1}}><div className="vop-field"><label>Image URL</label><input value={editorImage} onChange={e=>setEditorImage(e.target.value)}/></div></div></div></div>
+        <div className="vop-card vop-form-card"><div className="vop-field"><label>Lesson Status</label><select value={editorStatus} onChange={e=>setEditorStatus(e.target.value as 'draft'|'published')}><option value="draft">Draft</option><option value="published">Published</option></select></div><div style={{height:13}}/><div className="vop-field"><label>Tags</label><input value={editorTags} onChange={e=>setEditorTags(e.target.value)} placeholder="Add tags separated by commas"/></div><div style={{height:13}}/><div className="vop-field"><label>Draft records</label><div style={{fontSize:13,color:'#7183a4'}}>{loadingDrafts?'Loading…':curriculumDrafts.length+' admin content records'}</div></div></div>
+        <div className="vop-card vop-form-card"><div style={{display:'flex',gap:10,alignItems:'flex-start'}}><div className="vop-mini-stat-icon" style={{background:'#eaf3ff',color:'#1768d7'}}><Shield size={20}/></div><div><strong>Publishing</strong><p style={{margin:'5px 0 0',fontSize:12,color:'#7183a4'}}>Published learner curriculum remains controlled by the approved Firestore curriculum hierarchy.</p></div></div></div>
+      </div>
+    </div>
+  </div>;
+
+  const renderGeneric = () => {
+    const meta = currentPage;
+    const Icon = meta?.icon || Grid2X2;
+    const collections: Record<string, number> = {
+      translations: settings ? Object.keys(settings.customTranslations || {}).length : 0,
+      announcements: announcements.length,
+      materials: 0,
+      radio: 0,
+      unions: 0,
+      conferences: 0,
+      districts: 0,
+      churches: churches.length,
+      certification: 0,
+    };
+    return <div>{renderHeader(Icon, meta?.label || 'Administration', 'Manage this area using Firestore-backed records.')}<div className="vop-card vop-empty"><Icon size={34}/><h2 style={{color:'#09275f'}}>{meta?.label}</h2><p>{collections[activeTab] || 0} configured records are available from the current data sources.</p><button className="vop-primary" type="button" onClick={()=>setActiveTab('dashboard')}><ArrowLeft size={17}/>Return to Dashboard</button></div></div>;
+  };
+
+  return <div className="vop-admin">
+    <header className="vop-admin-top">
+      <div className="vop-brand"><div className="vop-brand-mark">?</div><div><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || ''}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>setSidebarOpen(!sidebarOpen)} aria-label="Open navigation"><Menu size={30}/></button><div><div className="vop-top-kicker">Administration</div><div className="vop-top-page">{currentPage?.label || 'Dashboard'}</div></div></div>
+      <div className="vop-top-actions"><button className="vop-notification" type="button" aria-label="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button><div className="vop-user"><img className="vop-avatar" src={currentUser.photoURL || ''} alt="" /><div><div className="vop-user-name">{currentUser.displayName || currentUser.email}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || 'Administrator'}</div></div><ChevronDown size={18}/></div></div>
+    </header>
+    <div className="vop-shell">
+      <aside className={'vop-sidebar '+(sidebarOpen?'open':'')}><nav className="vop-nav">{NAV.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={23}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" onClick={onBack}><ArrowLeft size={19}/>Back to App</button></aside>
+      <main className="vop-main">
+        {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
+        {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}
+        {activeTab==='dashboard'&&renderDashboard()}
+        {activeTab==='settings'&&renderSettings()}
+        {activeTab==='languages'&&renderLanguages()}
+        {activeTab==='curriculum'&&renderStudio()}
+        {activeTab==='candidates'&&<div>{renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Email</th><th>Role</th><th>Progress</th><th>Enrollment</th></tr></thead><tbody>{candidates.map((candidate,index)=><tr key={candidate.uid}><td>{index+1}</td><td><strong>{candidate.displayName || 'Unnamed'}</strong></td><td>{candidate.email || 'Not recorded'}</td><td>{candidate.role || 'student'}</td><td>{candidate.progress?.discoverProgress || 0}%</td><td>{formatDate(candidate.information?.enrollmentDate)}</td></tr>)}</tbody></table>{candidates.length===0&&<div className="vop-empty">No candidates are configured.</div>}</div></div>}
+        {!['dashboard','settings','languages','curriculum','candidates'].includes(activeTab)&&renderGeneric()}
+      </main>
+    </div>
+  </div>;
 };
 
 export default AdminPage;
