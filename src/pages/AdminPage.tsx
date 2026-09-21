@@ -10,6 +10,7 @@ import type {
   District,
   LanguageCode,
   Lesson,
+  LessonContentBlock,
   RadioBroadcast,
   Union,
   User,
@@ -125,6 +126,17 @@ function emptyLesson(): Lesson {
     contentPages: [],
     questions: [],
   };
+}
+
+function newContentBlock(type: LessonContentBlock['type'] = 'paragraph'): LessonContentBlock {
+  const base: LessonContentBlock = { id: crypto.randomUUID(), type, text: '' };
+  if (type === 'heading') return { ...base, level: 3 };
+  if (type === 'scripture' || type === 'quote') return { ...base, reference: '' };
+  if (type === 'callout') return { ...base, tone: 'gold' };
+  if (type === 'image') return { ...base, imageUrl: '', alt: '', caption: '' };
+  if (type === 'video' || type === 'link') return { ...base, url: '' };
+  if (type === 'list') return { ...base, items: [''] };
+  return base;
 }
 
 function emptyAnnouncement(): Announcement {
@@ -394,6 +406,35 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const pages = (lessonEditor.lesson.contentPages || [])
       .filter((_, i) => i !== index)
       .map((page, i) => ({ ...page, pageNumber: i + 1 }));
+    setLessonEditor({ ...lessonEditor, lesson: { ...lessonEditor.lesson, contentPages: pages } });
+  };
+
+  const updateBlock = (pageIndex: number, blockIndex: number, patch: Partial<LessonContentBlock>) => {
+    if (!lessonEditor) return;
+    const pages = [...(lessonEditor.lesson.contentPages || [])];
+    const blocks = [...(pages[pageIndex].blocks || [])];
+    blocks[blockIndex] = { ...blocks[blockIndex], ...patch };
+    pages[pageIndex] = { ...pages[pageIndex], blocks };
+    setLessonEditor({ ...lessonEditor, lesson: { ...lessonEditor.lesson, contentPages: pages } });
+  };
+
+  const addBlock = (pageIndex: number, type: LessonContentBlock['type']) => {
+    if (!lessonEditor) return;
+    const pages = [...(lessonEditor.lesson.contentPages || [])];
+    pages[pageIndex] = {
+      ...pages[pageIndex],
+      blocks: [...(pages[pageIndex].blocks || []), newContentBlock(type)],
+    };
+    setLessonEditor({ ...lessonEditor, lesson: { ...lessonEditor.lesson, contentPages: pages } });
+  };
+
+  const removeBlock = (pageIndex: number, blockIndex: number) => {
+    if (!lessonEditor) return;
+    const pages = [...(lessonEditor.lesson.contentPages || [])];
+    pages[pageIndex] = {
+      ...pages[pageIndex],
+      blocks: (pages[pageIndex].blocks || []).filter((_, index) => index !== blockIndex),
+    };
     setLessonEditor({ ...lessonEditor, lesson: { ...lessonEditor.lesson, contentPages: pages } });
   };
 
@@ -902,7 +943,57 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
                       <label className="vop-admin-full"><span className="vop-admin-label">Content</span><textarea className="vop-admin-textarea" value={page.content} onChange={e => updatePage(index, { content: e.target.value })} /></label>
                       <label className="vop-admin-full"><span className="vop-admin-label">Scripture text</span><textarea className="vop-admin-textarea" value={page.scriptureQuote?.text || ''} onChange={e => updatePage(index, { scriptureQuote: { reference: page.scriptureQuote?.reference || '', text: e.target.value } })} /></label>
                       <label className="vop-admin-full"><span className="vop-admin-label">Key takeaway</span><textarea className="vop-admin-textarea" value={page.keyTakeaway || ''} onChange={e => updatePage(index, { keyTakeaway: e.target.value })} /></label>
-                      <label className="vop-admin-full"><span className="vop-admin-label">Image URL / path</span><input className="vop-admin-input" value={page.imageUrl || ''} onChange={e => updatePage(index, { imageUrl: e.target.value })} /></label>
+                      <label className="vop-admin-full"><span className="vop-admin-label">Legacy image URL / path</span><input className="vop-admin-input" value={page.imageUrl || ''} onChange={e => updatePage(index, { imageUrl: e.target.value })} /></label>
+                    </div>
+
+                    <div className="vop-admin-content-builder">
+                      <div className="vop-admin-section-title">
+                        <span>Content blocks</span>
+                        <div className="vop-admin-actions">
+                          {(['paragraph','heading','scripture','quote','callout','image','video','link','list','divider'] as LessonContentBlock['type'][]).map(type => (
+                            <button key={type} type="button" className="vop-admin-btn" onClick={() => addBlock(index, type)}>
+                              <Plus size={11} />{type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="vop-admin-muted">Build the page visually from independent blocks. Inline text supports <strong>**bold**</strong>, <em>*italic*</em>, <u>__underline__</u> and <code>[text](https://...)</code> links.</p>
+                      {(page.blocks || []).map((block, blockIndex) => (
+                        <div className="vop-admin-card" key={block.id || blockIndex} style={{ marginTop: 10 }}>
+                          <div className="vop-admin-section-title">
+                            <span>{block.type.toUpperCase()} BLOCK {blockIndex + 1}</span>
+                            <button type="button" className="vop-admin-btn danger" onClick={() => removeBlock(index, blockIndex)}><Trash2 size={12} />Remove</button>
+                          </div>
+                          <div className="vop-admin-formgrid" style={{ marginTop: 10 }}>
+                            {['paragraph','heading','scripture','quote','callout'].includes(block.type) && (
+                              <label className="vop-admin-full"><span className="vop-admin-label">Text</span><textarea className="vop-admin-textarea" value={block.text || ''} onChange={e => updateBlock(index, blockIndex, { text: e.target.value })} /></label>
+                            )}
+                            {['scripture','quote'].includes(block.type) && (
+                              <label><span className="vop-admin-label">Reference</span><input className="vop-admin-input" value={block.reference || ''} onChange={e => updateBlock(index, blockIndex, { reference: e.target.value })} /></label>
+                            )}
+                            {block.type === 'heading' && (
+                              <label><span className="vop-admin-label">Heading level</span><select className="vop-admin-select" value={String(block.level || 3)} onChange={e => updateBlock(index, blockIndex, { level: Number(e.target.value) as 2 | 3 | 4 })}><option value="2">H2</option><option value="3">H3</option><option value="4">H4</option></select></label>
+                            )}
+                            {block.type === 'callout' && (
+                              <label><span className="vop-admin-label">Callout style</span><select className="vop-admin-select" value={block.tone || 'gold'} onChange={e => updateBlock(index, blockIndex, { tone: e.target.value as LessonContentBlock['tone'] })}><option value="default">Default</option><option value="info">Info</option><option value="success">Success</option><option value="warning">Warning</option><option value="gold">Gold</option></select></label>
+                            )}
+                            {['image','video','link'].includes(block.type) && (
+                              <label className="vop-admin-full"><span className="vop-admin-label">{block.type === 'image' ? 'Image URL / path' : 'URL'}</span><input className="vop-admin-input" value={block.type === 'image' ? block.imageUrl || '' : block.url || ''} onChange={e => updateBlock(index, blockIndex, block.type === 'image' ? { imageUrl: e.target.value } : { url: e.target.value })} /></label>
+                            )}
+                            {block.type === 'image' && <>
+                              <label><span className="vop-admin-label">Alt text</span><input className="vop-admin-input" value={block.alt || ''} onChange={e => updateBlock(index, blockIndex, { alt: e.target.value })} /></label>
+                              <label><span className="vop-admin-label">Caption</span><input className="vop-admin-input" value={block.caption || ''} onChange={e => updateBlock(index, blockIndex, { caption: e.target.value })} /></label>
+                            </>}
+                            {block.type === 'list' && (
+                              <label className="vop-admin-full"><span className="vop-admin-label">List items (one per line)</span><textarea className="vop-admin-textarea" value={(block.items || []).join('\n')} onChange={e => updateBlock(index, blockIndex, { items: e.target.value.split('\n') })} /></label>
+                            )}
+                            {block.type !== 'divider' && (
+                              <label><span className="vop-admin-label">Alignment</span><select className="vop-admin-select" value={block.align || 'left'} onChange={e => updateBlock(index, blockIndex, { align: e.target.value as LessonContentBlock['align'] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {!(page.blocks || []).length && <div className="vop-admin-empty">No blocks yet. Add paragraph, heading, Scripture, image, video, list, callout or link blocks.</div>}
                     </div>
                   </div>
                 ))}
