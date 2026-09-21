@@ -83,11 +83,11 @@ function guideFromDoc(language: string, data: Record<string, unknown>): Discover
   return {
     id: String(data.id ?? `discover-${language}`),
     discoverNumber: Number(data.discoverNumber ?? 1),
-    title: String(data.title ?? `Discover Bible Guides — ${languageLabel(language)}`),
-    subtitle: String(data.subtitle ?? languageLabel(language)),
+    title: String(data.title ?? ''),
+    subtitle: String(data.subtitle ?? ''),
     description: String(data.description ?? ''),
     language,
-    image: String(data.image ?? '/assets/guide_2.jpg'),
+    image: String(data.image ?? ''),
     certificateEligible: data.certificateEligible !== false,
     lessons: [],
   };
