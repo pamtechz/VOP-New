@@ -25,6 +25,9 @@ const COLLECTIONS = new Set([
   'churches',
   'users',
   'curriculum',
+  'learningPaths',
+  'bibleTopics',
+  'seasons',
   'certificationConfig',
   'graduationRequests',
   'settings',
@@ -76,8 +79,14 @@ export default async function handler(request: Request, response: Response) {
     const db = getFirestore(admin());
     const actor = await db.doc(`users/${decoded.uid}`).get();
     const role = actor.exists ? actor.data()?.role : null;
+    const canEditCurriculum = role === 'super_admin'
+      || (['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(role))
+        && actor.data()?.privileges?.editor === true);
     if (!role || role === 'student') {
       return response.status(403).json({ error: 'Administrator privileges are required.' });
+    }
+    if (['curriculum', 'learningPaths', 'bibleTopics', 'seasons'].includes(collection) && !canEditCurriculum) {
+      return response.status(403).json({ error: 'Curriculum editor privileges are required.' });
     }
     if ((collection === 'settings' || collection === 'certificationConfig') && role !== 'super_admin') {
       return response.status(403).json({ error: 'Only a super administrator can manage this configuration.' });
@@ -98,6 +107,69 @@ export default async function handler(request: Request, response: Response) {
     }
 
     const id = safeDocumentId(body.id);
+
+    if (action === 'publishLesson') {
+      if (collection !== 'curriculum') {
+        return response.status(400).json({ error: 'Lesson publishing requires the curriculum collection.' });
+      }
+      if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
+        return response.status(400).json({ error: 'Lesson data must be an object.' });
+      }
+
+      const lesson = body.data as Record<string, unknown>;
+      const language = typeof lesson.language === 'string' ? lesson.language.trim() : '';
+      const lessonId = typeof lesson.lessonId === 'string' && lesson.lessonId.trim()
+        ? lesson.lessonId.trim()
+        : id;
+      if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(language)) {
+        return response.status(400).json({ error: 'A valid language code is required for publication.' });
+      }
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(lessonId)) {
+        return response.status(400).json({ error: 'A valid lesson ID is required for publication.' });
+      }
+
+      const canonical = db.doc(
+        `curricula/discover/languages/${language}/lessons/${lessonId}`
+      );
+      const canonicalData = {
+        schemaVersion: 2,
+        curriculumId: 'discover',
+        language,
+        lessonId,
+        lessonNumber: String(lesson.lessonNumber ?? lessonId),
+        title: String(lesson.title ?? ''),
+        description: String(lesson.description ?? ''),
+        type: lesson.type === 'Test' ? 'Test' : 'Lesson',
+        pages: Array.isArray(lesson.pages) ? lesson.pages : [],
+        contentPages: Array.isArray(lesson.contentPages) ? lesson.contentPages : [],
+        quiz: Array.isArray(lesson.quiz) ? lesson.quiz : [],
+        questions: Array.isArray(lesson.questions) ? lesson.questions : [],
+        guideId: String(lesson.guideId ?? 'guide-' + language),
+        discoverNumber: Number(lesson.discoverNumber ?? 1),
+        guideTitle: String(lesson.guideTitle ?? ('Voice of Prophecy — ' + language)),
+        guideSubtitle: String(lesson.guideSubtitle ?? language),
+        guideDescription: String(lesson.guideDescription ?? ''),
+        guideImage: String(lesson.guideImage ?? ''),
+        certificateEligible: Boolean(lesson.certificateEligible),
+        season: String(lesson.season ?? ''),
+        media: lesson.media && typeof lesson.media === 'object' ? lesson.media : {},
+        bibleReferences: Array.isArray(lesson.bibleReferences) ? lesson.bibleReferences : [],
+        teacherNotes: String(lesson.teacherNotes ?? ''),
+        tags: Array.isArray(lesson.tags) ? lesson.tags : [],
+        estimatedMinutes: Math.max(1, Number(lesson.estimatedMinutes ?? 15) || 15),
+        published: true,
+        publishedAt: FieldValue.serverTimestamp(),
+        publishedBy: decoded.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: decoded.uid,
+      };
+      await canonical.set(canonicalData, { merge: true });
+      return response.status(200).json({
+        ok: true,
+        item: { id: lessonId, path: canonical.path, published: true },
+      });
+    }
+
     const ref = collection === 'settings'
       ? db.doc('system/settings')
       : collection === 'certificationConfig'
