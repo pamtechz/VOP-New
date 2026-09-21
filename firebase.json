@@ -12,8 +12,5 @@
     "ui": {
       "enabled": false
     }
-  },
-  "functions": {
-    "source": "functions"
   }
 }
