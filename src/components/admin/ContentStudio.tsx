@@ -1,66 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  BookOpen,
-  Check,
-  Globe,
-  Landmark,
-  Megaphone,
-  Plus,
-  Radio,
-  Save,
-  Trash2,
-} from 'lucide-react';
+import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
 
 type CollectionName =
-  | 'languages'
-  | 'translations'
-  | 'announcements'
-  | 'books'
-  | 'radioBroadcasts'
-  | 'unions'
-  | 'conferences'
-  | 'districts'
-  | 'churches';
+  | 'languages' | 'translations' | 'announcements' | 'books' | 'radioBroadcasts'
+  | 'unions' | 'conferences' | 'districts' | 'churches';
 
 type Props = { activeLanguage: string };
-
 type ContentItem = Record<string, unknown> & { id?: string };
-
 type ContentState = Record<CollectionName, ContentItem[]>;
 
 const emptyState: ContentState = {
-  languages: [],
-  translations: [],
-  announcements: [],
-  books: [],
-  radioBroadcasts: [],
-  unions: [],
-  conferences: [],
-  districts: [],
-  churches: [],
+  languages: [], translations: [], announcements: [], books: [], radioBroadcasts: [],
+  unions: [], conferences: [], districts: [], churches: [],
 };
 
-async function adminContent(
-  action: 'list' | 'upsert' | 'delete',
-  collection: CollectionName,
-  id?: string,
-  data?: Record<string, unknown>,
-) {
-  if (!auth?.currentUser) throw new Error('Sign in again before managing VOP content.');
-  const token = await auth.currentUser.getIdToken();
-  const response = await fetch('/api/admin/content', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action, collection, id, data }),
-  });
-  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
-  if (!response.ok) throw new Error(body.error || `Content request failed (${response.status}).`);
-  return body;
-}
-
-const TAB_CONFIG: Array<{ id: CollectionName; label: string; icon: typeof Globe }> = [
+const TABS: Array<{ id: CollectionName; label: string; icon: typeof Globe }> = [
   { id: 'languages', label: 'Languages', icon: Globe },
   { id: 'translations', label: 'Translations', icon: Globe },
   { id: 'announcements', label: 'Announcements', icon: Megaphone },
@@ -72,116 +28,129 @@ const TAB_CONFIG: Array<{ id: CollectionName; label: string; icon: typeof Globe 
   { id: 'churches', label: 'Churches', icon: Landmark },
 ];
 
-function text(value: unknown): string {
-  return value == null ? '' : String(value);
-}
+const requiredFields: Record<CollectionName, string[]> = {
+  languages: ['code', 'name'],
+  translations: ['id'],
+  announcements: ['title'],
+  books: ['name'],
+  radioBroadcasts: ['title'],
+  unions: ['name', 'code'],
+  conferences: ['name', 'code', 'region'],
+  districts: ['name', 'conferenceId'],
+  churches: ['name', 'conferenceId', 'districtId', 'type', 'leaderName', 'location'],
+};
+
+const text = (value: unknown) => value == null ? '' : String(value);
 
 function newRecord(collection: CollectionName, state: ContentState): ContentItem {
   switch (collection) {
-    case 'languages':
-      return { code: '', name: '', nativeName: '', enabled: true, sortOrder: state.languages.length, rtl: false };
-    case 'translations':
-      return { id: '', values: {} };
-    case 'announcements':
-      return { id: '', title: '', tag: '', description: '', published: false, imageUrl: '', actionText: '', actionUrl: '' };
-    case 'books':
-      return { id: '', name: '', category: '', author: '', imageUrl: '', description: '', published: false, downloadUrl: '' };
-    case 'radioBroadcasts':
-      return { id: '', title: '', speaker: '', series: '', durationMinutes: 0, audioUrl: '', broadcastTime: '', description: '', published: false };
-    case 'unions':
-      return { id: '', name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
-    case 'conferences':
-      return { id: '', unionId: '', name: '', code: '', region: '', directorName: '', contactEmail: '' };
-    case 'districts':
-      return { id: '', unionId: '', conferenceId: '', name: '', pastorName: '', contactPhone: '' };
-    case 'churches':
-      return { id: '', unionId: '', conferenceId: '', districtId: '', name: '', type: '', leaderName: '', leaderPhone: '', location: '' };
+    case 'languages': return { code: '', name: '', nativeName: '', enabled: true, sortOrder: state.languages.length, rtl: false };
+    case 'translations': return { id: '', values: {} };
+    case 'announcements': return { id: '', title: '', tag: '', description: '', imageUrl: '', actionText: '', actionUrl: '', published: false };
+    case 'books': return { id: '', name: '', category: '', author: '', imageUrl: '', description: '', downloadUrl: '', published: false };
+    case 'radioBroadcasts': return { id: '', title: '', speaker: '', series: '', durationMinutes: 0, audioUrl: '', broadcastTime: '', description: '', published: false };
+    case 'unions': return { id: '', name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
+    case 'conferences': return { id: '', unionId: '', name: '', code: '', region: '', directorName: '', contactEmail: '' };
+    case 'districts': return { id: '', unionId: '', conferenceId: '', name: '', pastorName: '', contactPhone: '' };
+    case 'churches': return { id: '', unionId: '', conferenceId: '', districtId: '', name: '', type: '', leaderName: '', leaderPhone: '', location: '' };
   }
 }
 
-function displayTitle(collection: CollectionName, item: ContentItem): string {
+function identity(collection: CollectionName, item: ContentItem) {
+  return text(collection === 'languages' ? item.code : item.id);
+}
+
+function title(collection: CollectionName, item: ContentItem) {
   if (collection === 'languages') return text(item.name) || 'Unnamed language';
   if (collection === 'translations') return text(item.id) || 'Unnamed translation';
   if (collection === 'books') return text(item.name) || 'Untitled material';
-  if (collection === 'radioBroadcasts' || collection === 'announcements') return text(item.title) || 'Untitled';
+  if (collection === 'announcements' || collection === 'radioBroadcasts') return text(item.title) || 'Untitled';
   return text(item.name) || 'Unnamed organization';
 }
 
-function identity(collection: CollectionName, item: ContentItem): string {
-  return text(collection === 'languages' ? item.code : item.id);
+async function adminContent(action: 'list' | 'upsert' | 'delete', collection: CollectionName, id?: string, data?: ContentItem) {
+  if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action, collection, id, data }),
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
+  if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
+  return body;
 }
 
 export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const [active, setActive] = useState<CollectionName>('languages');
   const [state, setState] = useState<ContentState>(emptyState);
-  const [editingId, setEditingId] = useState('');
   const [draft, setDraft] = useState<ContentItem>(newRecord('languages', emptyState));
+  const [editingId, setEditingId] = useState('');
   const [translationText, setTranslationText] = useState('{}');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'enabled' | 'disabled'>('all');
+  const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [pending, setPending] = useState(false);
 
-  async function reload() {
+  const reload = async () => {
     setPending(true);
     setError('');
     try {
-      const results = await Promise.all(
-        TAB_CONFIG.map(tab => adminContent('list', tab.id)),
-      );
-      const next = { ...emptyState };
-      TAB_CONFIG.forEach((tab, index) => {
-        next[tab.id] = (results[index].items ?? []) as ContentItem[];
-      });
+      const results = await Promise.all(TABS.map(tab => adminContent('list', tab.id)));
+      const next: ContentState = { ...emptyState };
+      TABS.forEach((tab, index) => { next[tab.id] = (results[index].items ?? []) as ContentItem[]; });
       setState(next);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load content.');
-    } finally {
-      setPending(false);
-    }
-  }
+      setError(reason instanceof Error ? reason.message : 'Could not load Firestore content.');
+    } finally { setPending(false); }
+  };
 
   useEffect(() => { void reload(); }, []);
 
-  const activeItems = state[active];
+  const languages = useMemo(() => state.languages as unknown as CustomLanguage[], [state.languages]);
+  const unions = state.unions;
+  const conferences = state.conferences;
+  const districts = state.districts;
 
-  const languages = useMemo(
-    () => state.languages as unknown as CustomLanguage[],
-    [state.languages],
-  );
+  const activeItems = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return state[active].filter(item => {
+      const haystack = Object.values(item).filter(v => typeof v === 'string' || typeof v === 'number').join(' ').toLowerCase();
+      if (needle && !haystack.includes(needle)) return false;
+      if (statusFilter === 'published' && item.published !== true) return false;
+      if (statusFilter === 'draft' && item.published === true) return false;
+      if (statusFilter === 'enabled' && item.enabled === false) return false;
+      if (statusFilter === 'disabled' && item.enabled !== false) return false;
+      return true;
+    });
+  }, [active, search, state, statusFilter]);
 
-  function startNewFor(collection: CollectionName = active) {
+  const startNew = (collection = active) => {
+    setActive(collection);
     setEditingId('');
     const record = newRecord(collection, state);
     setDraft(record);
     setTranslationText(JSON.stringify(record.values ?? {}, null, 2));
     setMessage('');
     setError('');
-  }
+  };
 
-  function startNew() {
-    startNewFor(active);
-  }
-
-  function editItem(item: ContentItem) {
-    const id = identity(active, item);
-    setEditingId(id);
+  const edit = (item: ContentItem) => {
+    setEditingId(identity(active, item));
     setDraft({ ...item });
     setTranslationText(JSON.stringify(item.values ?? {}, null, 2));
     setMessage('');
     setError('');
-  }
+  };
 
-  function setField(key: string, value: unknown) {
-    setDraft(current => ({ ...current, [key]: value }));
-  }
+  const setField = (key: string, value: unknown) => setDraft(current => ({ ...current, [key]: value }));
 
-  async function saveCurrent() {
-    setPending(true);
-    setError('');
-    setMessage('');
+  const save = async () => {
+    setPending(true); setError(''); setMessage('');
     try {
-      let id = editingId;
-      let data: Record<string, unknown> = { ...draft };
+      let id = editingId || text(draft.id).trim();
+      let data: ContentItem = { ...draft };
 
       if (active === 'languages') {
         id = text(draft.code).trim().toLowerCase();
@@ -189,261 +158,138 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         data = { ...draft, id, code: id, name: text(draft.name).trim(), nativeName: text(draft.nativeName).trim() || text(draft.name).trim() };
       } else if (active === 'translations') {
         id = text(draft.id).trim().toLowerCase();
-        if (!id) throw new Error('Select or enter a language code.');
+        if (!id) throw new Error('Translation language code is required.');
         let values: unknown;
         try { values = JSON.parse(translationText || '{}'); } catch { throw new Error('Translation values must be valid JSON.'); }
         if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Translation values must be a JSON object.');
         data = { id, languageCode: id, values };
       } else {
-        id = text(draft.id).trim() || `${active}-${Date.now()}`;
-        const required: Record<CollectionName, string[]> = {
-          languages: [],
-          translations: [],
-          announcements: ['title'],
-          books: ['name'],
-          radioBroadcasts: ['title'],
-          unions: ['name', 'code'],
-          conferences: ['name', 'code', 'region'],
-          districts: ['name', 'conferenceId'],
-          churches: ['name', 'conferenceId', 'districtId', 'type', 'leaderName', 'location'],
-        };
-        for (const field of required[active]) {
-          if (!text(draft[field]).trim()) throw new Error(`${field} is required.`);
-        }
+        id = id || `${active}-${Date.now()}`;
+        for (const key of requiredFields[active]) if (!text(draft[key]).trim()) throw new Error(`${key} is required.`);
         data = { ...draft, id };
       }
 
       await adminContent('upsert', active, id, data);
-      setMessage('Saved to Firestore. Public content is controlled by its enabled/published state.');
-      await reload();
       setEditingId(id);
+      setMessage('Saved to Firestore.');
+      await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save content.');
-    } finally {
-      setPending(false);
-    }
-  }
+      setError(reason instanceof Error ? reason.message : 'Could not save the record.');
+    } finally { setPending(false); }
+  };
 
-  async function remove(id: string) {
-    if (!window.confirm('Delete this record permanently from Firestore?')) return;
-    setPending(true);
-    setError('');
+  const remove = async (id: string) => {
+    if (!id || !window.confirm('Delete this record permanently from Firestore?')) return;
+    setPending(true); setError(''); setMessage('');
     try {
       await adminContent('delete', active, id);
       setMessage('Record deleted.');
-      startNew();
+      startNew(active);
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete record.');
-    } finally {
-      setPending(false);
-    }
-  }
+      setError(reason instanceof Error ? reason.message : 'Could not delete the record.');
+    } finally { setPending(false); }
+  };
 
   const field = (label: string, key: string, type = 'text') => (
-    <label style={{ display: 'grid', gap: '.35rem' }}>
-      <span style={{ fontSize: '.78rem', fontWeight: 800 }}>{label}</span>
-      <input
-        type={type}
-        value={text(draft[key])}
+    <label className="grid gap-1.5 text-xs font-bold">
+      <span>{label}</span>
+      <input type={type} value={text(draft[key])} disabled={pending}
         onChange={event => setField(key, type === 'number' ? Number(event.target.value) || 0 : event.target.value)}
-        disabled={pending}
-        style={{ width: '100%', padding: '.7rem .75rem', border: '1px solid var(--border-strong)', borderRadius: '.65rem', background: 'var(--bg-card)' }}
-      />
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal outline-none focus:border-slate-500" />
     </label>
   );
 
   const area = (label: string, key: string, rows = 5) => (
-    <label style={{ display: 'grid', gap: '.35rem' }}>
-      <span style={{ fontSize: '.78rem', fontWeight: 800 }}>{label}</span>
-      <textarea
-        rows={rows}
-        value={text(draft[key])}
+    <label className="grid gap-1.5 text-xs font-bold">
+      <span>{label}</span>
+      <textarea rows={rows} value={text(draft[key])} disabled={pending}
         onChange={event => setField(key, event.target.value)}
-        disabled={pending}
-        style={{ width: '100%', padding: '.7rem .75rem', border: '1px solid var(--border-strong)', borderRadius: '.65rem', background: 'var(--bg-card)', resize: 'vertical' }}
-      />
+        className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal outline-none focus:border-slate-500" />
     </label>
   );
 
-  function renderEditor() {
-    if (active === 'translations') {
-      return (
-        <div style={{ display: 'grid', gap: '.8rem' }}>
-          {field('Language code', 'id')}
-          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '.76rem' }}>
-            Translation keys are stored as Firestore data. Add only keys you actually want translated; there is no hardcoded language catalog.
-          </p>
-          <textarea
-            rows={12}
-            value={translationText}
-            onChange={event => setTranslationText(event.target.value)}
-            disabled={pending}
-            spellCheck={false}
-            style={{ width: '100%', padding: '.7rem .75rem', border: '1px solid var(--border-strong)', borderRadius: '.65rem', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '.78rem', resize: 'vertical' }}
-            aria-label="Translation values JSON"
-          />
-        </div>
-      );
-    }
+  const select = (label: string, key: string, options: Array<{ value: string; label: string }>) => (
+    <label className="grid gap-1.5 text-xs font-bold">
+      <span>{label}</span>
+      <select value={text(draft[key])} disabled={pending} onChange={event => setField(key, event.target.value)}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal">
+        <option value="">Not configured</option>
+        {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
 
-    if (active === 'languages') {
-      return (
-        <div style={{ display: 'grid', gap: '.8rem' }}>
-          {field('Language code', 'code')}
-          {field('Display name', 'name')}
-          {field('Native name', 'nativeName')}
-          {field('Sort order', 'sortOrder', 'number')}
-          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', fontSize: '.82rem' }}>
-            <input type="checkbox" checked={draft.enabled !== false} onChange={event => setField('enabled', event.target.checked)} />
-            Enabled for learners
-          </label>
-          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', fontSize: '.82rem' }}>
-            <input type="checkbox" checked={draft.rtl === true} onChange={event => setField('rtl', event.target.checked)} />
-            Right-to-left
-          </label>
-        </div>
-      );
-    }
+  const publicationToggle = () => (
+    <label className="flex items-center gap-2 text-xs font-bold">
+      <input type="checkbox" checked={draft.published === true} disabled={pending} onChange={event => setField('published', event.target.checked)} />
+      Published
+    </label>
+  );
 
-    if (active === 'announcements') {
-      return <div style={{ display: 'grid', gap: '.8rem' }}>
-        {field('Title', 'title')}{field('Tag', 'tag')}{area('Description', 'description')}
-        {field('Image URL', 'imageUrl')}{field('Action text', 'actionText')}{field('Action URL', 'actionUrl')}
-        <label><input type="checkbox" checked={draft.published === true} onChange={event => setField('published', event.target.checked)} /> Published</label>
-      </div>;
-    }
-
-    if (active === 'books') {
-      return <div style={{ display: 'grid', gap: '.8rem' }}>
-        {field('Material title', 'name')}{field('Category', 'category')}{field('Author', 'author')}
-        {field('Cover image URL', 'imageUrl')}{field('Download URL', 'downloadUrl')}{area('Description', 'description')}
-        <label><input type="checkbox" checked={draft.published === true} onChange={event => setField('published', event.target.checked)} /> Published</label>
-      </div>;
-    }
-
-    if (active === 'radioBroadcasts') {
-      return <div style={{ display: 'grid', gap: '.8rem' }}>
-        {field('Broadcast title', 'title')}{field('Speaker', 'speaker')}{field('Series', 'series')}
-        {field('Duration (minutes)', 'durationMinutes', 'number')}{field('Audio URL', 'audioUrl')}{field('Broadcast time', 'broadcastTime')}
-        {area('Description', 'description')}
-        <label><input type="checkbox" checked={draft.published === true} onChange={event => setField('published', event.target.checked)} /> Published</label>
-      </div>;
-    }
-
-    if (active === 'unions') {
-      return <div style={{ display: 'grid', gap: '.8rem' }}>
-        {field('Name', 'name')}{field('Code', 'code')}{field('Division name', 'divisionName')}
-        {field('Director name', 'directorName')}{field('Contact email', 'contactEmail')}{field('Contact phone', 'contactPhone')}{field('Headquarters', 'headquarters')}
-      </div>;
-    }
-
-    if (active === 'conferences') {
-      return <div style={{ display: 'grid', gap: '.8rem' }}>
-        {field('Name', 'name')}{field('Code', 'code')}{field('Region', 'region')}{field('Union ID', 'unionId')}
-        {field('Director name', 'directorName')}{field('Contact email', 'contactEmail')}
-      </div>;
-    }
-
-    if (active === 'districts') {
-      return <div style={{ display: 'grid', gap: '.8rem' }}>
-        {field('Name', 'name')}{field('Union ID', 'unionId')}{field('Conference ID', 'conferenceId')}{field('Pastor name', 'pastorName')}{field('Contact phone', 'contactPhone')}
-      </div>;
-    }
-
-    return <div style={{ display: 'grid', gap: '.8rem' }}>
-      {field('Name', 'name')}{field('Type', 'type')}{field('Union ID', 'unionId')}{field('Conference ID', 'conferenceId')}
-      {field('District ID', 'districtId')}{field('Leader name', 'leaderName')}{field('Leader phone', 'leaderPhone')}{field('Location', 'location')}
-    </div>;
-  }
+  const renderEditor = () => {
+    if (active === 'translations') return (
+      <div className="grid gap-3">
+        {field('Language code', 'id')}
+        <textarea rows={14} value={translationText} disabled={pending} spellCheck={false}
+          onChange={event => setTranslationText(event.target.value)}
+          className="w-full rounded-lg border border-slate-300 p-3 font-mono text-xs" aria-label="Translation values JSON" />
+        <p className="text-xs text-slate-500">Translations are stored per language in Firestore. Only configured languages should be published.</p>
+      </div>
+    );
+    if (active === 'languages') return (
+      <div className="grid gap-3">
+        {field('Language code', 'code')}{field('Display name', 'name')}{field('Native name', 'nativeName')}{field('Sort order', 'sortOrder', 'number')}
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} onChange={e => setField('enabled', e.target.checked)} />Enabled for learners</label>
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.rtl === true} onChange={e => setField('rtl', e.target.checked)} />Right-to-left</label>
+      </div>
+    );
+    if (active === 'announcements') return <div className="grid gap-3">{field('Title','title')}{field('Tag','tag')}{area('Description','description')}{field('Image URL','imageUrl')}{field('Action text','actionText')}{field('Action URL','actionUrl')}{publicationToggle()}</div>;
+    if (active === 'books') return <div className="grid gap-3">{field('Material title','name')}{field('Category','category')}{field('Author','author')}{field('Cover image URL','imageUrl')}{field('Download URL','downloadUrl')}{area('Description','description')}{publicationToggle()}</div>;
+    if (active === 'radioBroadcasts') return <div className="grid gap-3">{field('Broadcast title','title')}{field('Speaker','speaker')}{field('Series','series')}{field('Duration (minutes)','durationMinutes','number')}{field('Audio URL','audioUrl')}{field('Broadcast time','broadcastTime')}{area('Description','description')}{publicationToggle()}</div>;
+    if (active === 'unions') return <div className="grid gap-3">{field('Name','name')}{field('Code','code')}{field('Division name','divisionName')}{field('Director name','directorName')}{field('Contact email','contactEmail')}{field('Contact phone','contactPhone')}{field('Headquarters','headquarters')}</div>;
+    if (active === 'conferences') return <div className="grid gap-3">{field('Name','name')}{field('Code','code')}{field('Region','region')}{select('Union','unionId',unions.map(u => ({ value:text(u.id), label:text(u.name) })).filter(o => o.value))}{field('Director name','directorName')}{field('Contact email','contactEmail')}</div>;
+    if (active === 'districts') return <div className="grid gap-3">{field('Name','name')}{select('Union','unionId',unions.map(u => ({ value:text(u.id), label:text(u.name) })).filter(o => o.value))}{select('Conference','conferenceId',conferences.map(c => ({ value:text(c.id), label:text(c.name) })).filter(o => o.value))}{field('Pastor name','pastorName')}{field('Contact phone','contactPhone')}</div>;
+    return <div className="grid gap-3">{field('Name','name')}{field('Type','type')}{select('Union','unionId',unions.map(u => ({ value:text(u.id), label:text(u.name) })).filter(o => o.value))}{select('Conference','conferenceId',conferences.map(c => ({ value:text(c.id), label:text(c.name) })).filter(o => o.value))}{select('District','districtId',districts.map(d => ({ value:text(d.id), label:text(d.name) })).filter(o => o.value))}{field('Leader name','leaderName')}{field('Leader phone','leaderPhone')}{field('Location','location')}</div>;
+  };
 
   return (
-    <section style={{ display: 'grid', gap: '1rem' }}>
-      <div style={{ display: 'grid', gap: '.3rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div>
-            <h4 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 850 }}>Content Studio</h4>
-            <p style={{ margin: '.25rem 0 0', color: 'var(--text-secondary)', fontSize: '.82rem' }}>
-              One Firestore-managed control surface for languages, translations, public content and ministry organization records.
-            </p>
-          </div>
-          <button className="btn btn-primary" type="button" onClick={startNew} disabled={pending}><Plus size={15} /> New</button>
-        </div>
-        <div style={{ color: 'var(--text-muted)', fontSize: '.72rem' }}>Admin language: {activeLanguage || 'not configured'}</div>
+    <section className="grid gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><h2 className="text-xl font-black">Content Studio</h2><p className="mt-1 text-xs text-slate-500">Firestore-managed languages, translations, public content and organizational records.</p></div>
+        <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} />New</button></div>
       </div>
 
-      <div style={{ display: 'flex', gap: '.45rem', overflowX: 'auto', paddingBottom: '.25rem', WebkitOverflowScrolling: 'touch' }}>
-        {TAB_CONFIG.map(tab => {
-          const Icon = tab.icon;
-          const activeTab = active === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`btn ${activeTab ? 'btn-gold' : 'btn-outline'}`}
-              onClick={() => { setActive(tab.id); startNewFor(tab.id); }}
-              disabled={pending}
-              style={{ flex: '0 0 auto' }}
-            >
-              <Icon size={14} /> {tab.label} ({state[tab.id].length})
-            </button>
-          );
-        })}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {TABS.map(tab => { const Icon = tab.icon; return <button key={tab.id} type="button" onClick={() => startNew(tab.id)} disabled={pending} className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold ${active === tab.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}><Icon size={14} />{tab.label}<span className="opacity-60">({state[tab.id].length})</span></button>; })}
       </div>
 
-      {message && <div style={{ padding: '.75rem', borderRadius: '.65rem', background: 'var(--vop-success-bg)', color: 'var(--vop-success)', display: 'flex', gap: '.5rem', alignItems: 'center' }}><Check size={17} /> {message}</div>}
-      {error && <div role="alert" style={{ padding: '.75rem', borderRadius: '.65rem', background: '#fff1f2', color: '#9f1239' }}>{error}</div>}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${TABS.find(t => t.id === active)?.label.toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
+        <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3"><Filter size={14} className="text-slate-500" /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-transparent py-2.5 text-xs font-bold outline-none"><option value="all">All records</option><option value="published">Published</option><option value="draft">Draft</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></div>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, .85fr)', gap: '1rem', alignItems: 'start' }}>
-        <div style={{ display: 'grid', gap: '.55rem', minWidth: 0 }}>
+      {(message || error) && <div role={error ? 'alert' : undefined} className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || <><Check size={16} />{message}</>}</div>}
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,.82fr)]">
+        <div className="grid gap-2 min-w-0">
           {activeItems.map(item => {
             const id = identity(active, item);
-            return (
-              <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', padding: '.8rem', border: '1px solid var(--border-subtle)', borderRadius: '.75rem', background: 'var(--bg-card)', minWidth: 0 }}>
-                <div style={{ minWidth: 0 }}>
-                  <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayTitle(active, item)}</strong>
-                  <span style={{ fontSize: '.72rem', color: 'var(--text-secondary)' }}>
-                    {active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? 'Disabled' : 'Enabled'}`
-                      : active === 'translations' ? text(item.id)
-                      : ('published' in item ? (item.published === true ? 'Published' : 'Draft') : text(item.id))}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '.35rem', flex: '0 0 auto' }}>
-                  <button className="btn btn-outline" type="button" onClick={() => editItem(item)} disabled={pending}>Edit</button>
-                  <button className="btn btn-outline" type="button" onClick={() => void remove(id)} disabled={pending} aria-label={`Delete ${displayTitle(active, item)}`}><Trash2 size={14} /></button>
-                </div>
-              </div>
-            );
+            return <div key={id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? 'Disabled' : 'Enabled'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? 'Published' : 'Draft') : text(item.id))}</div></button>
+              <button type="button" onClick={() => void remove(id)} disabled={pending} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50" aria-label={`Delete ${title(active,item)}`}><Trash2 size={14} /></button>
+            </div>;
           })}
-          {!pending && activeItems.length === 0 && (
-            <div style={{ padding: '2rem 1rem', border: '1px dashed var(--border-strong)', borderRadius: '.8rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              No records configured. Create the first one with New.
-            </div>
-          )}
+          {!pending && activeItems.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">{search || statusFilter !== 'all' ? 'No records match the current filter.' : 'No records configured. Create the first record with New.'}</div>}
         </div>
 
-        <div style={{ padding: '1rem', border: '1px solid var(--border-subtle)', borderRadius: '.9rem', background: 'var(--bg-card)', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.9rem' }}>
-            <div>
-              <strong>{editingId ? 'Edit record' : 'Create record'}</strong>
-              <div style={{ fontSize: '.72rem', color: 'var(--text-secondary)' }}>{TAB_CONFIG.find(tab => tab.id === active)?.label}</div>
-            </div>
-
-          </div>
-
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? 'Edit record' : 'Create record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is persisted in Firestore</p></div></div>
           {renderEditor()}
-
-          <button className="btn btn-primary" type="button" onClick={() => void saveCurrent()} disabled={pending} style={{ width: '100%', marginTop: '1rem' }}>
-            <Save size={15} /> {pending ? 'Saving…' : editingId ? 'Save Changes' : 'Create'}
-          </button>
+          <button type="button" onClick={() => void save()} disabled={pending} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? 'Save changes' : 'Create record'}</button>
         </div>
       </div>
-
-      {active === 'translations' && languages.length > 0 && (
-        <div style={{ padding: '.8rem 1rem', borderRadius: '.7rem', background: 'var(--vop-navy-50)', color: 'var(--text-secondary)', fontSize: '.75rem' }}>
-          Configured languages: {languages.map(language => language.code).join(', ')}
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-[11px] text-slate-500"><Globe size={13} />Admin language: {activeLanguage || 'not configured'} · {languages.length} configured languages</div>
     </section>
   );
 };
