@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { googleSignIn } from '../services/firebaseAuth';
+import { firebaseSignOut, googleSignIn } from '../services/firebaseAuth';
 
 type BootstrapPageProps = {
   account: FirebaseUser | null;
@@ -26,6 +26,20 @@ export function BootstrapPage({ account: initialAccount }: BootstrapPageProps) {
       await googleSignIn();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Google sign-in failed.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function switchAccount() {
+    setPending(true);
+    setError('');
+    setMessage('');
+    try {
+      await firebaseSignOut();
+      await googleSignIn();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not switch the Google account.');
     } finally {
       setPending(false);
     }
@@ -94,6 +108,10 @@ export function BootstrapPage({ account: initialAccount }: BootstrapPageProps) {
               <strong>{account.displayName || 'Signed-in account'}</strong>
               <span>{account.email || account.uid}</span>
             </div>
+
+            <button className="btn btn-secondary vop-admin-button" type="button" onClick={() => void switchAccount()} disabled={pending}>
+              {pending ? 'Switching account…' : 'Use a different Google account'}
+            </button>
 
             <label htmlFor="vop-bootstrap-secret">Bootstrap setup secret</label>
             <input
