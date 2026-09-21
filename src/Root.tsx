@@ -5,7 +5,7 @@ import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
-import { loadFirestoreGuides } from './services/firestoreData';
+import { loadFirestoreGuides, loadFirestoreSettings } from './services/firestoreData';
 import { App } from './App';
 import { getStoredUsers, saveUsers } from './services/storage';
 import type { User } from './types';
@@ -76,8 +76,9 @@ export function Root() {
 
             // Lessons are optional application content. An empty Firestore curriculum
             // must not prevent the rest of the authenticated VOP application from loading.
-            const guides = await loadFirestoreGuides();
+            const [guides, settings] = await Promise.all([loadFirestoreGuides(), loadFirestoreSettings()]);
             localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
+            if (settings) localStorage.setItem('vop_settings', JSON.stringify(settings));
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
             console.error(error);
