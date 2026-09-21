@@ -234,13 +234,15 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() || districtAdminForDelete();
     }
 
-    // ------------------------------------------------------------------
+    // Canonical Discover guide metadata.
+    // A guide is visible to learners only after the admin explicitly publishes it.
+    match /curricula/discover/languages/{language} {
+      allow get, list: if isAdmin()
+        || (signedIn() && resource.data.published == true && resource.data.archived != true);
+      allow create, update, delete: if canEditCurriculum();
+    }
+
     // Canonical approved VOP Discover lesson path.
-    //
-    // The application reads these documents with collectionGroup('lessons').
-    // Keep this explicit match in addition to the recursive collection-group
-    // match below so the canonical VOP path is unambiguous.
-    // ------------------------------------------------------------------
     match /curricula/discover/languages/{language}/lessons/{lessonId} {
       allow get, list: if signedIn();
       allow create, update, delete: if canEditCurriculum();
