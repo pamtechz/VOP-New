@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, getDoc, getDocs, query, where, type Firestore } from 'firebase/firestore';
+import { collectionGroup, doc, getDoc, getDocs } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
 import { db } from '../lib/firebase';
 
@@ -22,7 +22,7 @@ type FirestoreLesson = Record<string, unknown> & {
 };
 
 function normalizeLesson(item: FirestoreLesson): Lesson | null {
-  const id = String(item.lessonId ?? '');
+  const id = String(item.lessonId ?? '').trim();
   const title = String(item.title ?? '').trim();
   if (!id || !title) return null;
 
@@ -64,20 +64,17 @@ function normalizeLesson(item: FirestoreLesson): Lesson | null {
   };
 }
 
-export async function loadFirestoreGuides(language?: LanguageCode): Promise<DiscoverGuide[]> {
+export async function loadFirestoreGuides(_language?: LanguageCode): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
 
-  // The approved VOP content is stored in the canonical imported structure:
+  // Canonical approved VOP lessons:
   // curricula/discover/languages/{language}/lessons/{lessonId}
-  // Use collectionGroup so the loader reads the actual Firestore source of truth.
-  const lessonsQuery = language
-    ? query(
-        collectionGroup(firestore, 'lessons'),
-        where('lang', '==', language),
-      )
-    : query(collectionGroup(firestore, 'lessons'));
+  //
+  // Do not require an optional lang field in the Firestore query. The language
+  // is encoded in the canonical document path, and older approved imports may
+  // not contain every optional metadata field.
+  const snapshot = await getDocs(collectionGroup(firestore, 'lessons'));
 
-  const snapshot = await getDocs(lessonsQuery);
   const groups = new Map<string, {
     language: string;
     curriculumId: string;
@@ -87,10 +84,29 @@ export async function loadFirestoreGuides(language?: LanguageCode): Promise<Disc
   for (const item of snapshot.docs) {
     const data = item.data() as FirestoreLesson;
     const lesson = normalizeLesson(data);
-    const languageCode = String(data.lang ?? '');
-    const curriculumId = String(data.curriculumId ?? 'discover');
+
+    const pathSegments = item.ref.path.split('/');
+    const curriculaIndex = pathSegments.indexOf('curricula');
+
+    // Only lessons under the approved VOP Discover hierarchy are accepted.
+    if (
+      curriculaIndex < 0 ||
+      pathSegments[curriculaIndex + 1] !== 'discover' ||
+      pathSegments[curriculaIndex + 2] !== 'languages' ||
+      !pathSegments[curriculaIndex + 3]
+    ) {
+      continue;
+    }
+
+    const languageCode = String(
+      data.lang ?? pathSegments[curriculaIndex + 3] ?? '',
+    ).trim();
 
     if (!lesson || !languageCode) continue;
+
+    const curriculumId = String(
+      data.curriculumId ?? pathSegments[curriculaIndex + 1] ?? 'discover',
+    ).trim();
 
     const groupKey = `${curriculumId}:${languageCode}`;
     const group = groups.get(groupKey) ?? {
