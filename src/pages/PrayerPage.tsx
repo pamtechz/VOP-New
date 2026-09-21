@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { PrayerRequest, User } from '../types';
-import { addPrayerRequest, updatePrayerStatus } from '../services/storage';
+import { createPrayerRequest, updatePrayerRequestStatus } from '../services/publicFirestore';
 import { ArrowLeft, HeartHandshake, Plus, Check, Clock } from 'lucide-react';
 
 interface PrayerPageProps {
   currentUser: User;
   prayerRequests: PrayerRequest[];
   onBack: () => void;
+  onCreatePrayerRequest: (request: Omit<PrayerRequest, 'id' | 'createdAt'>) => Promise<void>;
+  onUpdatePrayerStatus: (id: string, status: PrayerRequest['status']) => Promise<void>;
 }
 
 export const PrayerPage: React.FC<PrayerPageProps> = ({
   currentUser,
   prayerRequests,
-  onBack
+  onBack,
+  onCreatePrayerRequest,
+  onUpdatePrayerStatus,
 }) => {
   const [requestText, setRequestText] = useState('');
   const [category, setCategory] = useState<PrayerRequest['category']>('Spiritual');
@@ -43,14 +47,14 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({
     e.preventDefault();
     if (!requestText.trim()) return;
 
-    addPrayerRequest({
+    void onCreatePrayerRequest({
       candidateId: currentUser.uid,
       candidateName: currentUser.displayName,
       churchId: currentUser.churchId,
       category,
       isPrivate,
       status: 'Received',
-      requestText: requestText.trim()
+      requestText: requestText.trim(),
     });
 
     setRequestText('');
@@ -179,13 +183,13 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({
                 {currentUser.privileges?.admin && (
                   <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                     <button
-                      onClick={() => updatePrayerStatus(req.id, 'Praying')}
+                      onClick={() => void onUpdatePrayerStatus(req.id, 'Praying')}
                       className="px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-xs font-bold text-[#002d72] transition-colors cursor-pointer"
                     >
                       Mark Praying
                     </button>
                     <button
-                      onClick={() => updatePrayerStatus(req.id, 'Answered')}
+                      onClick={() => void onUpdatePrayerStatus(req.id, 'Answered')}
                       className="px-3 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-xs font-bold text-emerald-700 transition-colors cursor-pointer"
                     >
                       Mark Answered
