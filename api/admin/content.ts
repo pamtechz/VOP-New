@@ -25,6 +25,7 @@ const COLLECTIONS = new Set([
   'churches',
   'users',
   'curriculum',
+  'guides',
   'learningPaths',
   'bibleTopics',
   'seasons',
@@ -61,6 +62,15 @@ function safeDocumentId(value: unknown): string {
   return id;
 }
 
+function validLanguage(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(value.trim());
+}
+
+function guideRef(db: FirebaseFirestore.Firestore, language: string) {
+  return db.doc(`curricula/discover/languages/${language}`);
+}
+
 export default async function handler(request: Request, response: Response) {
   if (request.method !== 'POST') return response.status(405).json({ error: 'Method not allowed.' });
 
@@ -85,11 +95,79 @@ export default async function handler(request: Request, response: Response) {
     if (!role || role === 'student') {
       return response.status(403).json({ error: 'Administrator privileges are required.' });
     }
-    if (['curriculum', 'learningPaths', 'bibleTopics', 'seasons'].includes(collection) && !canEditCurriculum) {
+    if (['curriculum', 'guides', 'learningPaths', 'bibleTopics', 'seasons'].includes(collection) && !canEditCurriculum) {
       return response.status(403).json({ error: 'Curriculum editor privileges are required.' });
     }
     if ((collection === 'settings' || collection === 'certificationConfig') && role !== 'super_admin') {
       return response.status(403).json({ error: 'Only a super administrator can manage this configuration.' });
+    }
+
+    if (action === 'listGuides') {
+      if (collection !== 'guides') {
+        return response.status(400).json({ error: 'Guide listing requires the guides collection.' });
+      }
+      const snapshot = await db.collection('curricula/discover/languages').get();
+      const items = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+      return response.status(200).json({ ok: true, items });
+    }
+
+    if (action === 'upsertGuide') {
+      if (collection !== 'guides') {
+        return response.status(400).json({ error: 'Guide management requires the guides collection.' });
+      }
+      if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
+        return response.status(400).json({ error: 'Guide data must be an object.' });
+      }
+      const data = body.data as Record<string, unknown>;
+      const language = typeof data.language === 'string' ? data.language.trim() : '';
+      if (!validLanguage(language)) {
+        return response.status(400).json({ error: 'A valid language code is required for a guide.' });
+      }
+      const title = typeof data.title === 'string' ? data.title.trim() : '';
+      if (!title) return response.status(400).json({ error: 'Guide title is required.' });
+      const id = typeof data.id === 'string' && data.id.trim()
+        ? safeDocumentId(data.id)
+        : `discover-${language}`;
+
+      const ref = guideRef(db, language);
+      await ref.set({
+        id,
+        curriculumId: 'discover',
+        discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
+        title,
+        subtitle: typeof data.subtitle === 'string' ? data.subtitle.trim() : '',
+        description: typeof data.description === 'string' ? data.description.trim() : '',
+        language,
+        image: typeof data.image === 'string' ? data.image.trim() : '',
+        certificateEligible: data.certificateEligible === true,
+        published: data.published === true,
+        archived: data.archived === true,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: decoded.uid,
+      }, { merge: true });
+
+      const saved = await ref.get();
+      return response.status(200).json({ ok: true, item: { id: language, ...saved.data() } });
+    }
+
+    if (action === 'archiveGuide') {
+      if (collection !== 'guides') {
+        return response.status(400).json({ error: 'Guide archiving requires the guides collection.' });
+      }
+      const language = typeof body.data === 'object' && body.data && !Array.isArray(body.data)
+        && typeof (body.data as Record<string, unknown>).language === 'string'
+        ? String((body.data as Record<string, unknown>).language).trim()
+        : '';
+      if (!validLanguage(language)) {
+        return response.status(400).json({ error: 'A valid language code is required.' });
+      }
+      await guideRef(db, language).set({
+        published: false,
+        archived: true,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: decoded.uid,
+      }, { merge: true });
+      return response.status(200).json({ ok: true, item: { id: language, published: false, archived: true } });
     }
 
     if (action === 'list') {
@@ -121,16 +199,19 @@ export default async function handler(request: Request, response: Response) {
       const lessonId = typeof lesson.lessonId === 'string' && lesson.lessonId.trim()
         ? lesson.lessonId.trim()
         : id;
-      if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(language)) {
+      if (!validLanguage(language)) {
         return response.status(400).json({ error: 'A valid language code is required for publication.' });
       }
       if (!/^[A-Za-z0-9_-]{1,80}$/.test(lessonId)) {
         return response.status(400).json({ error: 'A valid lesson ID is required for publication.' });
       }
 
-      const canonical = db.doc(
-        `curricula/discover/languages/${language}/lessons/${lessonId}`
-      );
+      const guide = await guideRef(db, language).get();
+      if (!guide.exists || guide.data()?.published !== true || guide.data()?.archived === true) {
+        return response.status(400).json({ error: 'Create and publish a guide for this language before publishing lessons.' });
+      }
+      const guideData = guide.data() || {};
+      const canonical = db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
       const canonicalData = {
         schemaVersion: 2,
         curriculumId: 'discover',
@@ -144,13 +225,13 @@ export default async function handler(request: Request, response: Response) {
         contentPages: Array.isArray(lesson.contentPages) ? lesson.contentPages : [],
         quiz: Array.isArray(lesson.quiz) ? lesson.quiz : [],
         questions: Array.isArray(lesson.questions) ? lesson.questions : [],
-        guideId: String(lesson.guideId ?? 'guide-' + language),
-        discoverNumber: Number(lesson.discoverNumber ?? 1),
-        guideTitle: String(lesson.guideTitle ?? ('Voice of Prophecy — ' + language)),
-        guideSubtitle: String(lesson.guideSubtitle ?? language),
-        guideDescription: String(lesson.guideDescription ?? ''),
-        guideImage: String(lesson.guideImage ?? ''),
-        certificateEligible: Boolean(lesson.certificateEligible),
+        guideId: String(guideData.id ?? ''),
+        discoverNumber: Number(guideData.discoverNumber ?? 1),
+        guideTitle: String(guideData.title ?? ''),
+        guideSubtitle: String(guideData.subtitle ?? ''),
+        guideDescription: String(guideData.description ?? ''),
+        guideImage: String(guideData.image ?? ''),
+        certificateEligible: Boolean(guideData.certificateEligible),
         season: String(lesson.season ?? ''),
         media: lesson.media && typeof lesson.media === 'object' ? lesson.media : {},
         bibleReferences: Array.isArray(lesson.bibleReferences) ? lesson.bibleReferences : [],
@@ -179,11 +260,8 @@ export default async function handler(request: Request, response: Response) {
         && typeof (body.data as Record<string, unknown>).language === 'string'
         ? String((body.data as Record<string, unknown>).language).trim()
         : '';
-      if (!lessonId || !language) {
-        return response.status(400).json({ error: 'Lesson ID and language are required.' });
-      }
-      if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(language)) {
-        return response.status(400).json({ error: 'A valid language code is required.' });
+      if (!lessonId || !validLanguage(language)) {
+        return response.status(400).json({ error: 'Lesson ID and a valid language are required.' });
       }
       const canonical = db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
       await canonical.delete();
