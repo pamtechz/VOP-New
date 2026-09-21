@@ -1,0 +1,46 @@
+
+.vop-admin-page{min-height:100dvh;background:#eef2f8;color:#111827}
+.vop-admin-shell{max-width:1600px;margin:0 auto;background:#fff;min-height:100dvh;box-shadow:0 12px 45px rgba(15,35,65,.08)}
+.vop-admin-top{background:#071a32;color:#fff;padding:14px 18px 0;position:sticky;top:0;z-index:30}
+.vop-admin-brand{display:flex;align-items:center;gap:12px}
+.vop-admin-brand-logo{width:38px;height:38px;border:1px solid rgba(255,255,255,.2);border-radius:11px;background:rgba(255,255,255,.08);display:grid;place-items:center}
+.vop-admin-brand-logo img{width:27px;height:27px;object-fit:contain}
+.vop-admin-title{font-weight:800;font-size:18px;line-height:1.1}
+.vop-admin-subtitle{font-size:12px;color:rgba(255,255,255,.72);margin-top:3px}
+.vop-admin-toprow{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.vop-admin-close{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:#fff;border-radius:50%;width:38px;height:38px;display:grid;place-items:center;cursor:pointer}
+.vop-admin-tabs{display:flex;overflow:auto;margin-top:14px}
+.vop-admin-tab{border:1px solid rgba(255,255,255,.14);border-bottom:0;background:rgba(255,255,255,.04);color:#dbe5f5;padding:11px 17px;font-weight:750;font-size:13px;white-space:nowrap;cursor:pointer}
+.vop-admin-tab:first-child{border-radius:10px 0 0 0}.vop-admin-tab:last-child{border-radius:0 10px 0 0}
+.vop-admin-tab.active{background:#f2ad24;color:#fff;border-color:#f2ad24}
+.vop-admin-body{padding:26px}
+.vop-admin-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.vop-admin-heading h2{font-size:21px;margin:0;font-weight:850}.vop-admin-heading p{margin:5px 0 0;color:#64748b;font-size:13px}
+.vop-admin-actions{display:flex;gap:9px;flex-wrap:wrap}
+.vop-admin-btn{border:1px solid #d6deea;background:#fff;color:#13294b;border-radius:10px;padding:9px 13px;font-weight:750;font-size:12px;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.vop-admin-btn.primary{background:#0b2549;color:#fff;border-color:#0b2549}.vop-admin-btn.gold{background:#f2ad24;color:#fff;border-color:#f2ad24}.vop-admin-btn.danger{color:#b42318;border-color:#f0b4ae}.vop-admin-btn:disabled{opacity:.5;cursor:not-allowed}
+.vop-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.vop-admin-card{background:#fff;border:1px solid #dbe3ef;border-radius:15px;padding:17px;box-shadow:0 4px 15px rgba(15,35,65,.04)}
+.vop-admin-card h3{font-size:15px;margin:0 0 6px}.vop-admin-muted{font-size:12px;color:#64748b}
+.vop-admin-stat{font-size:27px;font-weight:850;color:#0b3674}
+.vop-admin-tablewrap{border:1px solid #dbe3ef;border-radius:14px;overflow:auto;background:#fff}
+.vop-admin-table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}.vop-admin-table th{background:#f3f6fb;text-align:left;padding:11px;color:#334155}.vop-admin-table td{padding:10px;border-top:1px solid #e7edf5;vertical-align:top}
+.vop-admin-input,.vop-admin-select,.vop-admin-textarea{width:100%;border:1px solid #cfd8e5;border-radius:9px;padding:9px 10px;background:#fff;color:#111827;font:inherit;font-size:13px;box-sizing:border-box}
+.vop-admin-textarea{min-height:110px;resize:vertical}.vop-admin-label{font-size:11px;font-weight:800;color:#334155;display:block;margin:0 0 5px}
+.vop-admin-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.vop-admin-formgrid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.vop-admin-full{grid-column:1/-1}
+.vop-admin-section{margin-top:18px}.vop-admin-section-title{font-size:15px;font-weight:850;margin-bottom:10px}
+.vop-admin-modal{position:fixed;inset:0;background:rgba(3,15,31,.65);display:grid;place-items:center;padding:20px;z-index:100}
+.vop-admin-modal-panel{width:min(1050px,100%);max-height:92dvh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+.vop-admin-modal-head{position:sticky;top:0;background:#071a32;color:#fff;padding:15px 18px;display:flex;justify-content:space-between;align-items:center;z-index:2}.vop-admin-modal-head h3{margin:0;font-size:16px}
+.vop-admin-modal-body{padding:18px}
+.vop-admin-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid #d6deea;background:#f8fafc;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;color:#334155}
+.vop-admin-guide{border:1px solid #dbe3ef;border-radius:14px;background:#fff;overflow:hidden}
+.vop-admin-guide-head{padding:15px;display:flex;justify-content:space-between;gap:15px;align-items:flex-start}.vop-admin-guide-title{font-size:16px;font-weight:850}.vop-admin-lessons{border-top:1px solid #e5ebf3;background:#f8fafc;padding:11px 15px}
+.vop-admin-lesson{background:#fff;border:1px solid #dbe3ef;border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.vop-admin-lesson:last-child{margin-bottom:0}
+.vop-admin-empty{border:1px dashed #cbd5e1;border-radius:14px;padding:28px;text-align:center;color:#64748b;background:#fafcff}
+.vop-admin-alert{padding:10px 12px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;font-size:12px}
+.vop-admin-alert.error{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
+.vop-admin-search{max-width:360px}
+@media(max-width:1050px){.vop-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.vop-admin-body{padding:16px}.vop-admin-grid,.vop-admin-formgrid,.vop-admin-formgrid.three{grid-template-columns:1fr}.vop-admin-tab{padding:10px 12px}.vop-admin-top{padding-left:12px;padding-right:12px}.vop-admin-title{font-size:16px}.vop-admin-subtitle{font-size:10px}.vop-admin-actions{width:100%}.vop-admin-actions .vop-admin-btn{flex:1;justify-content:center}}
