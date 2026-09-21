@@ -224,7 +224,7 @@ export const subscribeCandidates = (
           displayName: String(data.displayName || data.name || 'Student'),
           email: String(data.email || ''),
           phoneNumber: data.phoneNumber ? String(data.phoneNumber) : undefined,
-          photoURL: data.photoURL ? String(data.photoURL) : null,
+          photoURL: data.photoURL ? String(data.photoURL) : undefined,
           role: data.role || 'student',
           adminNodeType: data.adminNodeType || null,
           adminNodeId: data.adminNodeId || null,
