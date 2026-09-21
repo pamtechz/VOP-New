@@ -57,7 +57,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     setIsSpeaking(true);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!configured || !currentPage) return;
     stopSpeech();
     if (currentPageIndex < pages.length - 1) {
