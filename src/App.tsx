@@ -9,7 +9,7 @@ import {
   getActiveLanguage, setActiveLanguage, getStoredUnions, getStoredConferences,
   getStoredDistricts, getStoredChurches, getStoredPrayerRequests, getStoredRadioBroadcasts,
 } from './services/storage';
-import { completeDemoLesson, submitDemoQuizScore } from './services/localStudy';
+import { completeLesson, submitTestScore } from './services/studyApi';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -142,19 +142,29 @@ export const App: React.FC = () => {
       {activeLesson?.type === 'Lesson' && activeGuide && (
         <LessonReaderModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
           onComplete={() => {
-            const accepted = completeDemoLesson(activeGuide.id, activeLesson.id);
-            if (!accepted) setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
-            setActiveLesson(null);
+            void completeLesson(activeLesson.id).then(progress => {
+              const updated = { ...currentUser, progress };
+              setCurrentUser(updated);
+              saveUsers([updated]);
+              setActiveLesson(null);
+            }).catch(error => {
+              setStudyError(error instanceof Error ? error.message : 'Lesson completion could not be saved.');
+              setActiveLesson(null);
+            });
           }} />
       )}
       {activeLesson?.type === 'Test' && activeGuide && (
         <QuizModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
           onSubmitScore={score => {
-            const accepted = submitDemoQuizScore(activeGuide.id, activeLesson.id, score);
-            if (!accepted) {
-              setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
+            void submitTestScore(activeLesson.id, score).then(progress => {
+              const updated = { ...currentUser, progress };
+              setCurrentUser(updated);
+              saveUsers([updated]);
               setActiveLesson(null);
-            }
+            }).catch(error => {
+              setStudyError(error instanceof Error ? error.message : 'Test results could not be saved.');
+              setActiveLesson(null);
+            });
           }}
           onOpenCertificate={() => navigate('certificates')} />
       )}
