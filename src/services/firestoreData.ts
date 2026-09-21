@@ -44,18 +44,26 @@ function blocksToContentPages(pages: unknown): Lesson['contentPages'] {
   return pages.map((page, index) => {
     const item = page as { pageNumber?: number; title?: string; blocks?: unknown[] };
     const blocks = Array.isArray(item.blocks) ? item.blocks : [];
-    const content = blocks
-      .filter(block => (block as { type?: string })?.type === 'text')
-      .map(block => String((block as { text?: string }).text ?? '').trim())
+    const normalizedBlocks = blocks.map(block => {
+      const value = block as Record<string, unknown>;
+      const type = String(value.type ?? '');
+      if (type === 'text') return { type: 'paragraph' as const, text: String(value.text ?? '') };
+      if (type === 'image') return { type: 'image' as const, imageUrl: String(value.src ?? ''), alt: String(value.alt ?? ''), caption: String(value.caption ?? '') };
+      return null;
+    }).filter(Boolean) as LessonContentBlock[];
+    const content = normalizedBlocks
+      .filter(block => block.type === 'paragraph')
+      .map(block => String(block.text ?? '').trim())
       .filter(Boolean)
       .join('\n\n');
-    const image = blocks.find(block => (block as { type?: string })?.type === 'image') as { src?: string } | undefined;
+    const image = normalizedBlocks.find(block => block.type === 'image');
 
     return {
       pageNumber: Number.isSafeInteger(item.pageNumber) ? item.pageNumber! : index + 1,
       title: String(item.title ?? '').trim(),
       content,
-      imageUrl: image?.src ? `/lessons/${image.src.replace(/^\\//, '')}` : undefined,
+      blocks: normalizedBlocks,
+      imageUrl: image?.imageUrl ? image.imageUrl : undefined,
     };
   }).filter(page => page.title && page.content);
 }
