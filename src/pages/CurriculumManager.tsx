@@ -18,6 +18,7 @@ type Props = {
   languages: CustomLanguage[];
   initialTab?: CurriculumStudioTab;
   onBack?: () => void;
+  onTabChange?: (tab: CurriculumStudioTab) => void;
 };
 
 const COLLECTIONS: Record<'paths' | 'topics' | 'seasons', string> = {
@@ -311,7 +312,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
   );
 }
 
-export default function CurriculumManager({ languages, initialTab = 'lessons' }: Props) {
+export default function CurriculumManager({ languages, initialTab = 'lessons', onTabChange }: Props) {
   const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
@@ -801,7 +802,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons' }:
         {tabs.map(item => {
           const Icon = item.icon;
           const count = item.id === 'lessons' ? lessonCount : item.id === 'guides' ? guideCount : item.id === 'quizzes' ? quizCount : item.id === 'paths' ? collectionCounts.paths : item.id === 'topics' ? collectionCounts.topics : collectionCounts.seasons;
-          return <button key={item.id} type="button" className={'vop-reference-tab ' + (tab === item.id ? 'active' : '')} onClick={() => { setTab(item.id); setSearch(''); }}><Icon size={18}/>{item.label} ({count})</button>;
+          return <button key={item.id} type="button" className={'vop-reference-tab ' + (tab === item.id ? 'active' : '')} onClick={() => { setTab(item.id); setSearch(''); onTabChange?.(item.id); }}><Icon size={18}/>{item.label} ({count})</button>;
         })}
       </div>
 
