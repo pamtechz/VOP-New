@@ -74,9 +74,9 @@ export function Root() {
             ]);
             localStorage.setItem('vop_current_user_id', firebaseUser.uid);
 
+            // Lessons are optional application content. An empty Firestore curriculum
+            // must not prevent the rest of the authenticated VOP application from loading.
             const guides = await loadFirestoreGuides();
-            if (!guides.length) throw new Error('No approved VOP lessons are available in Firestore.');
-
             localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
