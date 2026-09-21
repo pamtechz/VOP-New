@@ -1,8 +1,8 @@
 # Voice of Prophecy — Bible Correspondence School
 
-React/TypeScript/Vite interface packaged for Android with Capacitor. The app includes Discover Bible study guides, lessons, assessments, progress tracking, administrator demo screens and explicitly unverified certificate previews.
+React/TypeScript/Vite interface packaged for Android with Capacitor. The app includes Discover Bible study guides, lessons, assessments, progress tracking, Firebase-backed administrator command center, authenticated roles, curriculum management and unverified certificate previews.
 
-> **Not production ready:** Operational records, admin roles and approval records still live in editable browser `localStorage`. `src/data/initialData.ts` contains demonstration people, organisations, curriculum and approvals; these are **fixtures**, not real identities or authoritative records. No official certificate is issued by this frontend.
+Administrator authority and management records are now server-backed through Firebase Admin APIs. Published curriculum is read from Firestore, study completion/test practice writes are authenticated server operations, and the frontend contains no bundled operational people, organisations or approval fixtures. Official certification remains subject to server-side approval and issuance rules.
 
 ## Run and check
 
