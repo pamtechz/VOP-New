@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Book, BookOpen, CalendarDays, CircleHelp, Clock, Edit3,
   Eye, FileText, Globe, Image as ImageIcon, Layers, Plus, RefreshCw,
-  Save, Search, Send, Trash2, Video, Volume2, X
+  Save, Search, Send, Trash2, Video, Volume2, X, ChevronUp, ChevronDown
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
 import { auth } from '../lib/firebase';
@@ -219,6 +219,15 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     setEditorTab('content');
   };
 
+  const moveBlock = (index: number, direction: -1 | 1) => {
+    if (!editor) return;
+    const target = index + direction;
+    if (target < 0 || target >= editor.blocks.length) return;
+    const blocks = [...editor.blocks];
+    [blocks[index], blocks[target]] = [blocks[target], blocks[index]];
+    setEditor({ ...editor, blocks });
+  };
+
   const saveLesson = async (publish: boolean) => {
     if (!editor?.title.trim()) {
       setError('Lesson title is required.');
@@ -234,8 +243,17 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     }
 
     const guide = guides.find(item => item.id === editor.guideId);
-    if (publish && !guide) {
-      setError('Select a published guide before publishing this lesson.');
+    if (!guide) {
+      setError('Select a published guide before saving this lesson.');
+      return;
+    }
+    const duplicate = lessonRows.some(row =>
+      row.guide.id === guide.id
+      && row.lesson.id !== editor.id
+      && row.lesson.lessonNumber.trim().toLowerCase() === editor.lessonNumber.trim().toLowerCase()
+    );
+    if (duplicate) {
+      setError(`Lesson number ${editor.lessonNumber.trim()} is already used in this guide.`);
       return;
     }
 
@@ -402,8 +420,8 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         </div>
         <div className="vop-form-grid" style={{gridTemplateColumns:'1.3fr 1fr .8fr 1fr 1fr',marginBottom:14}}>
           <div className="vop-field"><label>Title *</label><input value={editor.title} onChange={e=>setEditor({...editor,title:e.target.value})}/></div>
-          <div className="vop-field"><label>Guide</label><select value={editor.guideId} onChange={e=>{const guide=guides.find(item=>item.id===e.target.value);setEditor({...editor,guideId:e.target.value,guideTitle:guide?.title||editor.guideTitle,language:guide?.language||editor.language})}}><option value="">Select guide</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select></div>
-          <div className="vop-field"><label>Lesson Number *</label><input value={editor.lessonNumber} onChange={e=>setEditor({...editor,lessonNumber:e.target.value})}/></div>
+          <div className="vop-field"><label>Guide *</label><select value={editor.guideId} onChange={e=>{const guide=guides.find(item=>item.id===e.target.value);setEditor({...editor,guideId:e.target.value,guideTitle:guide?.title||editor.guideTitle,language:guide?.language||editor.language})}}><option value="">Select guide</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select></div>
+          <div className="vop-field"><label>Lesson Number * <span style={{fontWeight:400,color:'#7183a4'}}>unique within guide</span></label><input value={editor.lessonNumber} onChange={e=>setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Season / Quarter</label><input value={editor.season} onChange={e=>setEditor({...editor,season:e.target.value})}/></div>
           <div className="vop-field"><label>Language</label><select value={editor.language} onChange={e=>setEditor({...editor,language:e.target.value})}><option value="">Select language</option>{languagesEnabled.map(language=><option key={language.code} value={language.code}>{language.name} · {language.code}</option>)}</select></div>
         </div>
@@ -419,7 +437,9 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
                     <select value={block.type} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],type:e.target.value as LessonBlock['type']};setEditor({...editor,blocks:next})}}>
                       <option value="paragraph">Paragraph</option><option value="heading">Heading</option><option value="quote">Quote</option><option value="image">Image</option><option value="video">Video</option><option value="audio">Audio</option>
                     </select>
-                    <button className="vop-actions" type="button" onClick={()=>setEditor({...editor,blocks:editor.blocks.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button>
+                    <button className="vop-actions" type="button" title="Move up" onClick={()=>moveBlock(index,-1)} disabled={index===0}><ChevronUp size={15}/></button>
+                    <button className="vop-actions" type="button" title="Move down" onClick={()=>moveBlock(index,1)} disabled={index===editor.blocks.length-1}><ChevronDown size={15}/></button>
+                    <button className="vop-actions" type="button" title="Delete block" onClick={()=>setEditor({...editor,blocks:editor.blocks.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button>
                   </div>
                   {(block.type==='paragraph'||block.type==='heading'||block.type==='quote') && <textarea className="vop-editor-body" value={block.text || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],text:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='heading'?'Section heading…':'Write this block…'} />}
                   {(block.type==='image'||block.type==='video'||block.type==='audio') && <input value={block.src || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],src:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='image'?'Image URL…':block.type==='video'?'Video URL…':'Audio URL…'} />}
