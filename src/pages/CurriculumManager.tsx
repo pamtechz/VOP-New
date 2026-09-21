@@ -19,6 +19,7 @@ type Props = {
   initialTab?: CurriculumStudioTab;
   onBack?: () => void;
   onTabChange?: (tab: CurriculumStudioTab) => void;
+  onOpenSettings?: () => void;
 };
 
 const COLLECTIONS: Record<'paths' | 'topics' | 'seasons', string> = {
@@ -312,7 +313,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
   );
 }
 
-export default function CurriculumManager({ languages, initialTab = 'lessons', onTabChange }: Props) {
+export default function CurriculumManager({ languages, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
   const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
@@ -799,7 +800,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         <div className="vop-heading"><div className="vop-heading-icon vop-icon-orange"><FileText size={31}/></div><div><h1>{tab === 'quizzes' ? 'Quizzes Management' : 'Curriculum Studio'}</h1><p>{tab === 'quizzes' ? 'Create and manage quiz questions for each lesson and guide.' : 'Create and manage VOP content, lessons, guides and learning paths.'}</p></div></div>
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button>
-          <button className="vop-secondary" type="button"><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
+          <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
           <button className="vop-primary" type="button" onClick={() => openNewLesson(tab === 'quizzes')}><Plus size={18}/>{tab === 'quizzes' ? 'New Quiz' : 'New Content'}</button>
         </div>
       </div>
