@@ -115,6 +115,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'quiz' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
+  const [lessonFilterGuide, setLessonFilterGuide] = useState('all');
 
   const languagesEnabled = useMemo(
     () => languages.filter(item => item.enabled !== false),
@@ -133,14 +134,15 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
 
   const filteredLessons = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return lessonRows;
-    return lessonRows.filter(row =>
+    const scoped = lessonFilterGuide === 'all' ? lessonRows : lessonRows.filter(row => row.guide.id === lessonFilterGuide);
+    if (!q) return scoped;
+    return scoped.filter(row =>
       [row.lesson.title, row.lesson.description, row.lesson.lessonNumber, row.guide.title, row.guide.language]
         .join(' ')
         .toLowerCase()
         .includes(q)
     );
-  }, [lessonRows, search]);
+  }, [lessonRows, search, lessonFilterGuide]);
 
   const filteredRecords = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -507,7 +509,11 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         <div style={{display:'flex',gap:9,flexWrap:'wrap'}}><button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={18}/>New Lesson</button></div>
       </div>
       <div className="vop-studio-tabs">{tabs.map(item=>{const Icon=item.icon;const count=item.id==='lessons'?lessonRows.length:item.id==='guides'?guides.length:item.id==='quizzes'?quizRows.length:0;return <button key={item.id} className={'vop-tab '+(tab===item.id?'active':'')} type="button" onClick={()=>{setTab(item.id);setSearch('')}}><Icon size={17}/>{item.label} ({count})</button>})}</div>
-      <div className="vop-toolbar"><div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search curriculum…"/></div><div className="vop-chip"><Globe size={12}/>{languagesEnabled.length} languages configured</div></div>
+      <div className="vop-toolbar">
+        <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search curriculum…"/></div>
+        {tab === 'lessons' && <select value={lessonFilterGuide} onChange={e=>setLessonFilterGuide(e.target.value)} aria-label="Filter lessons by guide"><option value="all">All guides</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select>}
+        <div className="vop-chip"><Globe size={12}/>{languagesEnabled.length} languages configured</div>
+      </div>
       {loading ? <div className="vop-empty">Loading curriculum from Firestore…</div> : tab==='lessons' ? (
         <div className="vop-studio-list">{filteredLessons.map(row=><button key={row.guide.id+'-'+row.lesson.id} className="vop-lesson-row" type="button" onClick={()=>openLesson(row.guide,row.lesson)}><div className="vop-thumb">{(row.lesson.contentPages||[]).find(page=>page.imageUrl)?.imageUrl && <img src={(row.lesson.contentPages||[]).find(page=>page.imageUrl)?.imageUrl} alt="" />}</div><div style={{minWidth:0,textAlign:'left'}}><div className="vop-row-title">{row.lesson.lessonNumber}. {row.lesson.title}</div><div className="vop-row-desc">{row.lesson.description || 'No description configured.'}</div><div className="vop-row-meta"><span><BookOpen size={13}/>{row.guide.title}</span><span><CircleHelp size={13}/>{row.lesson.questions?.length || 0}</span><span><Clock size={13}/>{row.lesson.estimatedMinutes} mins</span></div></div><span className="vop-status published">Published</span><span className="vop-chip"><Globe size={12}/>{row.guide.language.toUpperCase()}</span><span className="vop-actions"><Edit3 size={16}/></span></button>)}{filteredLessons.length===0&&<div className="vop-empty">No approved lessons match the current search.</div>}</div>
       ) : tab === 'guides' ? (
