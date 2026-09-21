@@ -4,6 +4,11 @@ export interface CustomLanguage {
   code: string;
   name: string;
   nativeName: string;
+  enabled?: boolean;
+  sortOrder?: number;
+  rtl?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface DetailPagesSettings {
@@ -233,6 +238,7 @@ export interface Announcement {
   title: string;
   tag: string;
   description: string;
+  published?: boolean;
   imageUrl?: string;
   actionText?: string;
   actionUrl?: string;
@@ -245,6 +251,7 @@ export interface BookResource {
   author: string;
   imageUrl: string;
   description: string;
+  published?: boolean;
   downloadUrl?: string;
 }
 
@@ -269,6 +276,7 @@ export interface RadioBroadcast {
   audioUrl: string;
   broadcastTime: string;
   description: string;
+  published?: boolean;
 }
 
 export type AppRoute = 

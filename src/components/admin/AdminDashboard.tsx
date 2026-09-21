@@ -13,6 +13,8 @@ import {
   ChurchOrganization,
   DetailPagesSettings
 } from '../../types';
+import { ContentStudio } from './ContentStudio';
+
 import {
   X,
   Shield,
@@ -95,7 +97,7 @@ interface AdminDashboardProps {
 }
 
 type FilterCategory = 'all' | 'admin' | 'graduating' | 'graduated' | 'baptism' | 'baptized';
-type AdminTab = 'candidates' | 'organizations' | 'curriculum' | 'languages' | 'settings';
+type AdminTab = 'candidates' | 'organizations' | 'curriculum' | 'languages' | 'content' | 'settings';
 type OrgSubTab = 'conferences' | 'districts' | 'churches';
 
 const THEME_PRESETS = [
@@ -723,6 +725,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('content')}
+              className={`btn ${activeTab === 'content' ? 'btn-gold' : 'btn-outline'}`}
+              style={{
+                borderRadius: 'var(--radius-full)',
+                padding: '0.45rem 1.15rem',
+                fontSize: '0.82rem',
+                color: activeTab === 'content' ? '#ffffff' : 'rgba(255, 255, 255, 0.9)',
+                borderColor: 'rgba(255, 255, 255, 0.2)'
+              }}
+            >
+              <FileText size={15} />
+              Content Studio
+            </button>
+
+            <button
               onClick={() => setActiveTab('settings')}
               className={`btn ${activeTab === 'settings' ? 'btn-gold' : 'btn-outline'}`}
               style={{
@@ -741,6 +758,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Tab Content Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.75rem 2rem' }}>
+          {activeTab === 'content' && <ContentStudio activeLanguage={activeLanguage} />}
+
           {/* TAB 1: CANDIDATES MANAGEMENT */}
           {activeTab === 'candidates' && (
             <>

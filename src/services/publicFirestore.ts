@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, type Firestore } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, type Firestore } from 'firebase/firestore';
 import type {
   Announcement,
   AppSettings,
@@ -101,7 +101,7 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
     ...fallback,
     ...data,
     id: String(data.id ?? id),
-    published: data.published !== false,
+    published: data.published === true,
   } as T;
 }
 
@@ -120,11 +120,11 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     churchesSnap,
   ] = await Promise.all([
     getDoc(doc(firestore, 'system', 'settings')),
-    getDocs(collection(firestore, 'languages')),
+    getDocs(query(collection(firestore, 'languages'), where('enabled', '==', true))),
     getDocs(collection(firestore, 'translations')),
-    getDocs(collection(firestore, 'announcements')),
-    getDocs(collection(firestore, 'books')),
-    getDocs(collection(firestore, 'radioBroadcasts')),
+    getDocs(query(collection(firestore, 'announcements'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'books'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'radioBroadcasts'), where('published', '==', true))),
     getDocs(collection(firestore, 'unions')),
     getDocs(collection(firestore, 'conferences')),
     getDocs(collection(firestore, 'districts')),
@@ -134,7 +134,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const languages = languagesSnap.docs
     .map(item => normalizeLanguage(item.id, item.data()))
     .filter(item => item.enabled)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 
   const translations: Record<string, Record<string, string>> = {};
   translationsSnap.docs.forEach(item => {
@@ -148,20 +148,20 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     .map(item => published<Announcement>(item.data(), item.id, {
       id: item.id, title: '', tag: '', description: '',
     }))
-    .filter(item => item.published !== false && item.title.trim());
+    .filter(item => item.published === true && item.title.trim());
 
   const books = booksSnap.docs
     .map(item => published<BookResource>(item.data(), item.id, {
       id: item.id, name: '', category: '', author: '', imageUrl: '', description: '',
     }))
-    .filter(item => item.published !== false && item.name.trim());
+    .filter(item => item.published === true && item.name.trim());
 
   const radioBroadcasts = radioSnap.docs
     .map(item => published<RadioBroadcast>(item.data(), item.id, {
       id: item.id, title: '', speaker: '', series: '', durationMinutes: 0,
       audioUrl: '', broadcastTime: '', description: '',
     }))
-    .filter(item => item.published !== false && item.title.trim());
+    .filter(item => item.published === true && item.title.trim());
 
   const guides = await loadFirestoreGuides();
 
