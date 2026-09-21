@@ -10,7 +10,7 @@ import {
   getStoredDistricts, getStoredChurches, getStoredPrayerRequests, getStoredRadioBroadcasts,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
-import { completeLesson, submitQuizScore } from './services/studyTransactions';
+import { completeLesson, submitQuizScore } from './services/localStudy';
 import { loadPublicContent } from './services/publicFirestore';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
