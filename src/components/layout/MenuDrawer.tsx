@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import type { User, AppRoute } from '../../types';
+import type { AppSettings, AppRoute, DiscoverGuide, LanguageCode, User } from '../../types';
 import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck } from 'lucide-react';
-import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { getTranslation } from '../../services/i18n';
@@ -13,16 +12,17 @@ interface MenuDrawerProps {
   allUsers: User[];
   onSelectUser: (user: User) => void;
   onNavigate: (route: AppRoute) => void;
+  settings: AppSettings;
+  activeLanguage: LanguageCode;
+  guides: DiscoverGuide[];
 }
 
-export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, currentUser, onNavigate }) => {
+export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, currentUser, onNavigate, settings, activeLanguage: language, guides }) => {
   const [expanded, setExpanded] = useState(false);
   const [showNews, setShowNews] = useState(false);
   if (!isOpen) return null;
 
-  const settings = getStoredSettings();
-  const language = getActiveLanguage();
-  const progress = { percent: currentUser.progress?.discoverProgress ?? 0, completedGuides: currentUser.progress?.completedGuidesCount ?? 0, totalGuides: currentUser.progress?.totalGuidesCount ?? 0 };
+  const progress = { percent: currentUser.progress?.discoverProgress ?? 0, completedGuides: currentUser.progress?.completedGuidesCount ?? 0, totalGuides: guides.filter(guide => guide.language === language).length };
   const t = (key: string, english: string) => getTranslation(key, language, settings.customTranslations, english, 'MenuDrawer');
   const isAdmin = currentUser.role !== 'student' && Boolean(currentUser.role);
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
@@ -66,7 +66,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
         </div>
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('my_certificate', 'My Certificate')}</button>
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>What's New</button>
-        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management and graduation progress. The app currently stores records on this device; official certification needs a secure server.</p>}
+        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management and graduation progress are managed from the live VOP database.</p>}
         <button type="button" style={{ ...itemStyle, borderTop: '1px solid #e5e7eb' }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><BookOpen size={24}/>More ministry services {expanded ? '−' : '+'}</button>
         {expanded && <div style={{ borderRadius: '1rem', background: '#fff' }}>
           <button type="button" style={itemStyle} onClick={() => navigate('resources')}><BookOpen size={22}/>Library & Books</button>
