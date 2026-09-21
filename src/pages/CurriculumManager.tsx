@@ -25,7 +25,7 @@ const COLLECTIONS: Record<'paths' | 'topics' | 'seasons', string> = {
 };
 
 async function adminContent(
-  action: 'list' | 'upsert' | 'delete' | 'publishLesson',
+  action: 'list' | 'upsert' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>
@@ -50,6 +50,13 @@ function text(value: unknown) {
   return value == null ? '' : String(value);
 }
 
+type LessonBlock = {
+  id: string;
+  type: 'paragraph' | 'heading' | 'quote' | 'image' | 'video' | 'audio';
+  text?: string;
+  src?: string;
+};
+
 type EditorState = {
   id: string;
   title: string;
@@ -60,6 +67,7 @@ type EditorState = {
   guideTitle: string;
   season: string;
   content: string;
+  blocks: LessonBlock[];
   imageUrl: string;
   audioUrl: string;
   videoUrl: string;
@@ -81,6 +89,7 @@ const blankEditor = (language = ''): EditorState => ({
   guideTitle: '',
   season: '',
   content: '',
+  blocks: [],
   imageUrl: '',
   audioUrl: '',
   videoUrl: '',
@@ -183,6 +192,9 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       guideTitle: guide.title,
       season: '',
       content: (lesson.contentPages || []).map(page => page.content).filter(Boolean).join('\n\n'),
+      blocks: (lesson.contentPages || []).flatMap((page, pageIndex) => page.content
+        ? [{ id: 'p-' + pageIndex, type: 'paragraph' as const, text: page.content }]
+        : []),
       imageUrl: firstImage,
       audioUrl: '',
       videoUrl: '',
@@ -235,6 +247,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         season: editor.season.trim(),
         content: editor.content,
         contentPages: [{
+
           pageNumber: 1,
           title: editor.title.trim(),
           content: editor.content,
@@ -243,10 +256,11 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         pages: [{
           pageNumber: 1,
           title: editor.title.trim(),
-          blocks: [
-            ...(editor.content.trim() ? [{ type: 'text', text: editor.content }] : []),
-            ...(editor.imageUrl.trim() ? [{ type: 'image', src: editor.imageUrl.trim() }] : []),
-          ],
+          blocks: editor.blocks.map(block => ({
+            type: block.type,
+            ...(block.text ? { text: block.text } : {}),
+            ...(block.src ? { src: block.src } : {}),
+          })),
         }],
         quiz: editor.questions.map((question, index) => ({
           key: id + '-q' + (index + 1),
@@ -286,6 +300,23 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       notify(publish ? 'Lesson published to the canonical Firestore curriculum.' : 'Lesson draft saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save lesson.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const unpublishLesson = async () => {
+    if (!editor?.id || !editor.published) return;
+    if (!window.confirm('Unpublish this lesson from the learner curriculum? The draft will remain available for editing.')) return;
+    setSaving(true);
+    try {
+      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language });
+      await adminContent('upsert', 'curriculum', editor.id, { published: false });
+      setEditor({ ...editor, published: false });
+      await load();
+      notify('Lesson unpublished. The draft remains in the admin content store.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not unpublish lesson.');
     } finally {
       setSaving(false);
     }
@@ -358,7 +389,8 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           <div style={{display:'flex',gap:9,flexWrap:'wrap'}}>
             <button className="vop-secondary" type="button" onClick={() => setEditor(null)}><Eye size={17}/>Close</button>
             <button className="vop-secondary" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>Save Draft</button>
-            <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}><Send size={17}/>Publish</button>
+            {editor.published && <button className="vop-secondary" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>Unpublish</button>}
+            <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving || editor.published}><Send size={17}/>{editor.published ? 'Published' : 'Publish'}</button>
           </div>
         </div>
         <div className="vop-form-grid" style={{gridTemplateColumns:'1.3fr 1fr .8fr 1fr 1fr',marginBottom:14}}>
@@ -372,9 +404,24 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           <div className="vop-card vop-editor">
             <div className="vop-settings-tabs" style={{marginBottom:10}}>{editorTabs.map(([id,label])=><button key={id} type="button" className={'vop-tab '+(editorTab===id?'active':'')} onClick={()=>setEditorTab(id)}>{label}</button>)}</div>
             {editorTab === 'content' && <div>
-              <div className="vop-field"><label>Lesson Content *</label><div className="vop-editor-preview"><div className="vop-editor-toolbar"><button type="button"><b>B</b></button><button type="button"><i>I</i></button><button type="button"><u>U</u></button><button type="button"><Link2 size={15}/></button><button type="button"><ImageIcon size={15}/></button></div><textarea className="vop-editor-body" value={editor.content} onChange={e=>setEditor({...editor,content:e.target.value})} placeholder="Write the lesson content here..."/></div></div>
+              <div className="vop-section-title"><div><h3>Lesson Content</h3><p>Build the lesson from ordered content blocks. Nothing is inserted automatically.</p></div><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>Add Block</button></div>
+              <div style={{display:'grid',gap:10}}>
+                {editor.blocks.map((block,index)=><div className="vop-card" key={block.id} style={{padding:14}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+                    <strong>Block {index+1}</strong>
+                    <select value={block.type} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],type:e.target.value as LessonBlock['type']};setEditor({...editor,blocks:next})}}>
+                      <option value="paragraph">Paragraph</option><option value="heading">Heading</option><option value="quote">Quote</option><option value="image">Image</option><option value="video">Video</option><option value="audio">Audio</option>
+                    </select>
+                    <button className="vop-actions" type="button" onClick={()=>setEditor({...editor,blocks:editor.blocks.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button>
+                  </div>
+                  {(block.type==='paragraph'||block.type==='heading'||block.type==='quote') && <textarea className="vop-editor-body" value={block.text || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],text:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='heading'?'Section heading…':'Write this block…'} />}
+                  {(block.type==='image'||block.type==='video'||block.type==='audio') && <input value={block.src || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],src:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='image'?'Image URL…':block.type==='video'?'Video URL…':'Audio URL…'} />}
+                </div>)}
+                {editor.blocks.length===0 && <div className="vop-empty">No content blocks yet. Add a paragraph, heading, quote or media block.</div>}
+              </div>
+              <div className="vop-field" style={{marginTop:14}}><label>Plain-text fallback</label><textarea value={editor.content} onChange={e=>setEditor({...editor,content:e.target.value})} placeholder="Optional plain-text fallback for older readers."/></div>
               <div className="vop-field"><label>Description</label><textarea value={editor.description} onChange={e=>setEditor({...editor,description:e.target.value})}/></div>
-            </div>}
+            </div>
             {editorTab === 'media' && <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
               <div className="vop-field"><label>Featured image URL</label><input value={editor.imageUrl} onChange={e=>setEditor({...editor,imageUrl:e.target.value})}/></div>
               <div className="vop-field"><label>Audio URL</label><div style={{display:'flex',gap:8,alignItems:'center'}}><Volume2 size={18}/><input value={editor.audioUrl} onChange={e=>setEditor({...editor,audioUrl:e.target.value})}/></div></div>
