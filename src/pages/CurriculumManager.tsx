@@ -190,7 +190,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       questions: (lesson.questions || []).map(question => ({
         question: text(question.question),
         options: Array.isArray(question.options) ? question.options.map(text) : ['', '', '', '', ''],
-        answer: Number(question.correctOptionIndex ?? question.correctAnswer ?? 0),
+        answer: Number(question.correctOptionIndex ?? 0),
       })),
       teacherNotes: '',
       tags: '',
