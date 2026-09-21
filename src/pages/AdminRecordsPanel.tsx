@@ -45,7 +45,7 @@ const LABELS: Record<ManagedAdminCollection, string> = {
   churches: 'Churches',
 };
 
-const COLLECTIONS: Record<RecordManagedCollection, string> = {
+const COLLECTIONS: Record<RecordManagedCollection, import('../services/adminFirestore').AdminRecordCollection> = {
   announcements: 'announcements',
   materials: 'books',
   radio: 'radioBroadcasts',
