@@ -205,7 +205,7 @@ service cloud.firestore {
       allow get: if signedIn() && (
         resource.data.candidateId == request.auth.uid || isAdmin()
       );
-      allow list: if signedIn();
+      allow list: if isAdmin() || (signedIn() && resource.data.candidateId == request.auth.uid);
       allow create: if signedIn() && request.resource.data.candidateId == request.auth.uid;
       allow update: if signedIn() && (
         resource.data.candidateId == request.auth.uid || isAdmin()
