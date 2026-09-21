@@ -134,7 +134,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const languages = languagesSnap.docs
     .map(item => normalizeLanguage(item.id, item.data()))
     .filter(item => item.enabled)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 
   const translations: Record<string, Record<string, string>> = {};
   translationsSnap.docs.forEach(item => {
@@ -161,7 +161,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
       id: item.id, title: '', speaker: '', series: '', durationMinutes: 0,
       audioUrl: '', broadcastTime: '', description: '',
     }))
-    .filter(item => item.published !== false && item.title.trim());
+    .filter(item => item.published === true && item.title.trim());
 
   const guides = await loadFirestoreGuides();
 
