@@ -1,7 +1,7 @@
 import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where, type Firestore } from 'firebase/firestore';
 import type {
   Announcement, AppSettings, BookResource, ChurchOrganization, Conference,
-  CustomLanguage, District, RadioBroadcast, Union,
+  CustomLanguage, District, RadioBroadcast, Union, PrayerRequest, User,
 } from '../types';
 import { db } from '../lib/firebase';
 import { loadFirestoreGuides } from './firestoreData';
