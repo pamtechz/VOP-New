@@ -102,7 +102,7 @@ function emptyLanguage(code = ''): CustomLanguage {
 
 function emptyGuide(language = ''): DiscoverGuide {
   return {
-    id: language ? \`discover-\${language}\` : '',
+    id: language ? `discover-${language}` : '',
     discoverNumber: 0,
     title: '',
     subtitle: '',
@@ -332,7 +332,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
 
   const removeLanguage = async (language: CustomLanguage) => {
-    if (!isSuperAdmin || !confirm(\`Remove language "\${language.name || language.code}"?\`)) return;
+    if (!isSuperAdmin || !confirm(`Remove language "${language.name || language.code}"?`)) return;
     await runSave(() => deleteLanguage(language), 'Language removed from Firestore.');
   };
 
@@ -350,7 +350,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
 
   const removeGuide = async (guide: DiscoverGuide) => {
-    if (!confirm(\`Delete "\${guide.title || guide.language}" and all of its lessons?\`)) return;
+    if (!confirm(`Delete "${guide.title || guide.language}" and all of its lessons?`)) return;
     await runSave(() => deleteFirestoreGuide(guide), 'Guide and its lessons deleted from Firestore.');
   };
 
@@ -367,7 +367,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
 
   const removeLesson = async (language: string, lesson: Lesson) => {
-    if (!confirm(\`Delete lesson "\${lesson.title}"?\`)) return;
+    if (!confirm(`Delete lesson "${lesson.title}"?`)) return;
     await runSave(() => deleteLesson(language, lesson.id), 'Lesson deleted from Firestore.');
   };
 
@@ -451,7 +451,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = \`VOP-Firestore-backup-\${new Date().toISOString().slice(0, 10)}.json\`;
+    anchor.download = `VOP-Firestore-backup-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -462,15 +462,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   });
 
   const tabs: Array<[Tab, string, React.ReactNode]> = [
-    ['candidates', \`Candidates (\${students.length})\`, <Users size={15} />],
-    ['curriculum', \`Curriculum Studio (\${guides.length})\`, <BookOpen size={15} />],
-    ['languages', \`Languages (\${languages.length})\`, <Globe size={15} />],
-    ['radio', \`Radio (\${snapshot?.radioBroadcasts.length || 0})\`, <Radio size={15} />],
-    ['materials', \`Materials (\${snapshot?.books.length || 0})\`, <BookOpen size={15} />],
-    ['announcements', \`Announcements (\${snapshot?.announcements.length || 0})\`, <Megaphone size={15} />],
+    ['candidates', `Candidates (${students.length})`, <Users size={15} />],
+    ['curriculum', `Curriculum Studio (${guides.length})`, <BookOpen size={15} />],
+    ['languages', `Languages (${languages.length})`, <Globe size={15} />],
+    ['radio', `Radio (${snapshot?.radioBroadcasts.length || 0})`, <Radio size={15} />],
+    ['materials', `Materials (${snapshot?.books.length || 0})`, <BookOpen size={15} />],
+    ['announcements', `Announcements (${snapshot?.announcements.length || 0})`, <Megaphone size={15} />],
     ['branding', 'Ministry Branding & Setup', <Settings size={15} />],
     ['backup', 'Database & Backup', <Database size={15} />],
-    ['roles', \`Admin Roles (\${admins.length})\`, <Shield size={15} />],
+    ['roles', `Admin Roles (${admins.length})`, <Shield size={15} />],
     ['hierarchy', 'Hierarchy & Flow', <ChevronDown size={15} />],
   ];
 
@@ -515,7 +515,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       {!filteredStudents.length && <div className="vop-admin-empty">No Firebase user profiles match the current filter.</div>}
       <div className="vop-admin-section">
         {filteredStudents.map(user => (
-          <div className="vop-admin-card" key={\`edit-\${user.uid}\`} style={{ marginBottom: 10 }}>
+          <div className="vop-admin-card" key={`edit-${user.uid}`} style={{ marginBottom: 10 }}>
             <div className="vop-admin-section-title"><span>{user.displayName || 'Unnamed user'}</span><span className="vop-admin-pill">{user.email}</span></div>
             <div className="vop-admin-formgrid" style={{ marginTop: 10 }}>
               <label><span className="vop-admin-label">Display name</span><input className="vop-admin-input" value={user.displayName || ''} onChange={e => updateUserLocal(user, { displayName: e.target.value })} /></label>
@@ -567,7 +567,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               {expanded && (
                 <div className="vop-admin-lessons">
                   <div className="vop-admin-actions" style={{ marginBottom: 10 }}>
-                    <button className="vop-admin-btn primary" onClick={() => setLessonEditor({ language: guide.language, lesson: { ...emptyLesson(), id: \`lesson-\${guide.lessons.length + 1}\`, lessonNumber: String(guide.lessons.length + 1) } })}><Plus size={14} />Add Lesson</button>
+                    <button className="vop-admin-btn primary" onClick={() => setLessonEditor({ language: guide.language, lesson: { ...emptyLesson(), id: `lesson-${guide.lessons.length + 1}`, lessonNumber: String(guide.lessons.length + 1) } })}><Plus size={14} />Add Lesson</button>
                   </div>
                   {guide.lessons.map(lesson => (
                     <div className="vop-admin-lesson" key={lesson.id}>
@@ -815,13 +815,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               <div className="vop-admin-brand-logo"><img src="/assets/vop_logo_2.png" alt="VOP" /></div>
               <div>
                 <div className="vop-admin-title">{settingsDraft.appName || 'VOP Administration'}</div>
-                <div className="vop-admin-subtitle">{settingsDraft.schoolName || ''}{settingsDraft.organizationName ? \` • \${settingsDraft.organizationName}\` : ''}</div>
+                <div className="vop-admin-subtitle">{settingsDraft.schoolName || ''}{settingsDraft.organizationName ? ` • ${settingsDraft.organizationName}` : ''}</div>
               </div>
             </div>
             <button className="vop-admin-close" type="button" onClick={() => void handleLogout()} title="Log out"><LogOut size={18} /></button>
           </div>
           <div className="vop-admin-tabs" role="tablist">
-            {tabs.map(([key, label, icon]) => <button key={key} className={\`vop-admin-tab \${tab === key ? 'active' : ''}\`} onClick={() => setTab(key)} type="button">{icon}{label}</button>)}
+            {tabs.map(([key, label, icon]) => <button key={key} className={`vop-admin-tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)} type="button">{icon}{label}</button>)}
           </div>
         </header>
 
@@ -866,7 +866,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             <div className="vop-admin-modal-head"><h3>{guides.some(guide => guide.id === guideEditor.id) ? 'Edit Guide' : 'Create Guide'}</h3><button className="vop-admin-close" onClick={() => setGuideEditor(null)}><X size={17} /></button></div>
             <div className="vop-admin-modal-body">
               <div className="vop-admin-formgrid">
-                <label><span className="vop-admin-label">Language</span><select className="vop-admin-select" value={guideEditor.language} onChange={e => setGuideEditor({ ...guideEditor, language: e.target.value, id: \`discover-\${e.target.value}\` })}><option value="">Select language</option>{languages.map(language => <option key={language.code} value={language.code}>{language.name || language.code}</option>)}</select></label>
+                <label><span className="vop-admin-label">Language</span><select className="vop-admin-select" value={guideEditor.language} onChange={e => setGuideEditor({ ...guideEditor, language: e.target.value, id: `discover-${e.target.value}` })}><option value="">Select language</option>{languages.map(language => <option key={language.code} value={language.code}>{language.name || language.code}</option>)}</select></label>
                 <label><span className="vop-admin-label">Guide number</span><input className="vop-admin-input" type="number" min="0" value={guideEditor.discoverNumber || 0} onChange={e => setGuideEditor({ ...guideEditor, discoverNumber: Number(e.target.value) })} /></label>
                 <label><span className="vop-admin-label">Title</span><input className="vop-admin-input" value={guideEditor.title} onChange={e => setGuideEditor({ ...guideEditor, title: e.target.value })} /></label>
                 <label><span className="vop-admin-label">Subtitle</span><input className="vop-admin-input" value={guideEditor.subtitle} onChange={e => setGuideEditor({ ...guideEditor, subtitle: e.target.value })} /></label>
