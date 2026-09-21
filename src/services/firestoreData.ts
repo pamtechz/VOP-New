@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, where, type DocumentData } from 'firebase/firestore';
+import { collectionGroup, doc, getDoc, getDocs, type DocumentData } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
@@ -25,6 +25,7 @@ export async function loadFirestoreGuides(language?: LanguageCode): Promise<Disc
   const grouped = new Map<string, { language: string; lessons: Lesson[]; discoverNumber: number; title: string; subtitle: string; description: string; image: string; certificateEligible: boolean }>();
   snapshot.docs.forEach(item => {
     const data = item.data(); const lang = String(data.language ?? ''); if (!lang) return;
+    if (language && lang !== language) return;
     const group = String(data.guideId ?? `firebase-${lang}`);
     const current = grouped.get(group) ?? { language: lang, lessons: [], discoverNumber: Number(data.discoverNumber ?? 1), title: String(data.guideTitle ?? `Voice of Prophecy — ${String(data.languageLabel ?? lang)}`), subtitle: String(data.guideSubtitle ?? String(data.languageLabel ?? lang)), description: String(data.guideDescription ?? 'Voice of Prophecy Bible study lessons.'), image: String(data.guideImage ?? '/assets/guide_2.jpg'), certificateEligible: Boolean(data.certificateEligible) };
     current.lessons.push(normalizeLesson(item.id, data)); grouped.set(group, current);
