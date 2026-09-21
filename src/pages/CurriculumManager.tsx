@@ -694,3 +694,5 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     </div>
   );
 }
+
+// validation marker
