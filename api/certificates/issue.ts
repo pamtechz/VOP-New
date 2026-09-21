@@ -63,7 +63,7 @@ export default async function handler(request: Request, response: Response) {
       : {};
     const candidateId = typeof body.candidateId === 'string' ? body.candidateId.trim() : '';
 
-    if (!candidateId || !/^[A-Za-z0-9_-]{1,128}$/.test(candidateId)) {
+    if (!candidateId || candidateId.length > 128 || candidateId.includes('/')) {
       return response.status(400).json({ error: 'A valid candidate ID is required.' });
     }
 
@@ -161,8 +161,10 @@ export default async function handler(request: Request, response: Response) {
         return response.status(409).json({ error: `Guide "${String(data.title ?? guideSnapshotItem.id)}" must contain lessons and an assessment before certification.` });
       }
 
+      const guideId = String(data.id ?? guideSnapshotItem.id);
+
       for (const lesson of studyLessons) {
-        if (!completed.has(completionKey(approvedLanguage, guideSnapshotItem.id, lesson.id))) {
+        if (!completed.has(completionKey(approvedLanguage, guideId, lesson.id))) {
           return response.status(409).json({ error: `The candidate has not completed all required lessons in "${String(data.title ?? guideSnapshotItem.id)}".` });
         }
       }
@@ -171,14 +173,14 @@ export default async function handler(request: Request, response: Response) {
         if (!Array.isArray(test.questions) || test.questions.length === 0) {
           return response.status(409).json({ error: `Guide "${String(data.title ?? guideSnapshotItem.id)}" has an invalid assessment configuration.` });
         }
-        const score = normalizeScore(scores[scoreKey(approvedLanguage, guideSnapshotItem.id, test.id)]);
+        const score = normalizeScore(scores[scoreKey(approvedLanguage, guideId, test.id)]);
         if (score === null || score < threshold) {
           return response.status(409).json({ error: `The candidate has not passed all required assessments in "${String(data.title ?? guideSnapshotItem.id)}".` });
         }
       }
 
       configuredGuides.push({
-        id: guideSnapshotItem.id,
+        id: guideId,
         title: String(data.title ?? ''),
         language: approvedLanguage,
       });
