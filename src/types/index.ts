@@ -34,6 +34,8 @@ export interface AppSettings {
   appName: string;
   organizationName: string;
   schoolName: string;
+  copyrightText?: string;
+  versionLabel?: string;
   directorName: string;
   directorTitle: string;
   contactPhone: string;
