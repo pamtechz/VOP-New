@@ -183,7 +183,7 @@ function questionsFromUnknown(value: unknown): EditorQuestion[] {
   });
 }
 
-function blocksFromRaw(raw: RecordItem): LessonBlock[] {
+function blocksFromRaw(raw: { pages?: unknown; contentPages?: unknown }): LessonBlock[] {
   const pages = Array.isArray(raw.pages) ? raw.pages : [];
   if (pages.length) {
     const blocks: LessonBlock[] = [];
@@ -218,7 +218,7 @@ function blocksFromRaw(raw: RecordItem): LessonBlock[] {
 
 function editorFromLesson(row: LessonRow): EditorState {
   const raw = row.raw || {};
-  const lessonRecord = row.lesson as unknown as Record<string, unknown>;
+  const lessonRecord = row.lesson as unknown as { pages?: unknown; contentPages?: unknown };
   const pages = Array.isArray(raw.pages) ? raw.pages : lessonRecord.pages;
   const contentPages = Array.isArray(raw.contentPages) ? raw.contentPages : lessonRecord.contentPages;
   const firstImage = valueText(raw.imageUrl)
@@ -370,7 +370,14 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         description: valueText(draft.description),
         type: valueText(draft.type) === 'Test' ? 'Test' : 'Lesson',
         contentPages: Array.isArray(draft.contentPages) ? draft.contentPages as Lesson['contentPages'] : [],
-        questions: questionsFromUnknown(draft.questions),
+        questions: questionsFromUnknown(draft.questions).map((question, index) => ({
+          key: lessonId + '-q' + (index + 1),
+          question: question.question,
+          answer: false,
+          options: question.options,
+          correctOptionIndex: question.answer,
+          explanation: '',
+        })),
         estimatedMinutes: Number(draft.estimatedMinutes ?? 15) || 15,
       };
       map.set(existingKey, {
@@ -824,7 +831,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           <div className="vop-reference-table-wrap">
             {loading ? <div className="vop-empty">Loading quizzes from Firestore…</div> : quizPageRows.length === 0 ? <div className="vop-empty">No quizzes are configured.</div> : (
               <table className="vop-reference-table vop-quiz-table"><thead><tr><th>#</th><th>Quiz Title</th><th>Guide / Lesson</th><th>Questions</th><th>Type</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
-                <tbody>{quizPageRows.map((row,index) => <tr key={row.key}><td>{(quizPage - 1) * quizPageSize + index + 1}</td><td><div className="vop-quiz-title"><span><FileText size={18}/></span><div><strong>{row.lesson.title}</strong><small>{row.lesson.description}</small></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.lesson.lessonNumber}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-type-pill">{questionType(row.lesson.questions as EditorQuestion[])}</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><div className="vop-reference-updated">{formatDate(row.updatedAt)}{row.updatedBy && <small>by {row.updatedBy}</small>}</div></td><td><button className="vop-actions" type="button" onClick={() => openLesson(row)}><MoreVertical size={18}/></button></td></tr>)}</tbody>
+                <tbody>{quizPageRows.map((row,index) => <tr key={row.key}><td>{(quizPage - 1) * quizPageSize + index + 1}</td><td><div className="vop-quiz-title"><span><FileText size={18}/></span><div><strong>{row.lesson.title}</strong><small>{row.lesson.description}</small></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.lesson.lessonNumber}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-type-pill">{questionType(questionsFromUnknown(row.lesson.questions))}</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><div className="vop-reference-updated">{formatDate(row.updatedAt)}{row.updatedBy && <small>by {row.updatedBy}</small>}</div></td><td><button className="vop-actions" type="button" onClick={() => openLesson(row)}><MoreVertical size={18}/></button></td></tr>)}</tbody>
               </table>
             )}
             <div className="vop-reference-pager"><span>Showing {quizRows.length ? ((quizPage - 1) * quizPageSize + 1) : 0}–{Math.min(quizPage * quizPageSize, quizRows.length)} of {quizRows.length} quizzes</span><div><button className="vop-page-btn" type="button" onClick={() => setQuizPage(value => Math.max(1,value-1))} disabled={quizPage===1}><ChevronLeft size={17}/></button>{Array.from({length:quizPages},(_,i)=>i+1).slice(0,5).map(item=><button key={item} className={'vop-page-btn '+(item===quizPage?'active':'')} type="button" onClick={() => setQuizPage(item)}>{item}</button>)}<button className="vop-page-btn" type="button" onClick={() => setQuizPage(value => Math.min(quizPages,value+1))} disabled={quizPage===quizPages}><ChevronRight size={17}/></button></div></div>
