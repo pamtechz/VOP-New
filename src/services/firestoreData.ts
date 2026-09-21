@@ -21,9 +21,17 @@ type FirestoreLesson = Record<string, unknown> & {
   questions?: Question[];
 };
 
-function normalizeLesson(item: FirestoreLesson): Lesson | null {
-  const id = String(item.lessonId ?? '').trim();
-  const title = String(item.title ?? '').trim();
+function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | null {
+  // The Firestore document ID is canonical when an imported lesson does not
+  // duplicate it in a lessonId field.
+  const id = String(item.lessonId ?? documentId ?? '').trim();
+  const title = String(
+    item.title
+      ?? item.lessonTitle
+      ?? item.name
+      ?? documentId
+      ?? '',
+  ).trim();
   if (!id || !title) return null;
 
   const rawPages = Array.isArray(item.contentPages)
@@ -83,7 +91,6 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
 
   for (const item of snapshot.docs) {
     const data = item.data() as FirestoreLesson;
-    const lesson = normalizeLesson(data);
 
     const pathSegments = item.ref.path.split('/');
     const curriculaIndex = pathSegments.indexOf('curricula');
@@ -102,6 +109,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       data.lang ?? pathSegments[curriculaIndex + 3] ?? '',
     ).trim();
 
+    const lesson = normalizeLesson(data, item.id);
     if (!lesson || !languageCode) continue;
 
     const curriculumId = String(
