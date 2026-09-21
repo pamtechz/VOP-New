@@ -24,21 +24,28 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,
   );
 
+  const orderedLessons = useMemo(() => [...guide.lessons].sort((a, b) => {
+    const an = Number.parseFloat(a.lessonNumber);
+    const bn = Number.parseFloat(b.lessonNumber);
+    if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
+    return a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true, sensitivity: 'base' });
+  }), [guide.lessons]);
+
   const completedLessons = new Set(currentUser.progress.completedLessons ?? []);
   const guideScores = currentUser.progress.guideScores ?? {};
 
   const lessonStats = useMemo(() => {
-    const completedCount = guide.lessons.filter(l => completedLessons.has(l.id)).length;
-    const totalCount = guide.lessons.length;
+    const completedCount = orderedLessons.filter(l => completedLessons.has(l.id)).length;
+    const totalCount = orderedLessons.length;
     const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
     return { completedCount, totalCount, percent };
-  }, [guide.lessons, completedLessons]);
+  }, [orderedLessons, completedLessons]);
 
   const getLessonScore = (lesson: Lesson): number | undefined => {
     const key = `${guide.id}:${lesson.id}`;
     if (Object.hasOwn(guideScores, key)) return guideScores[key];
     // Fallback for guides with a single test
-    if (guide.lessons.filter(l => l.type === 'Test').length === 1) return guideScores[guide.id];
+    if (orderedLessons.filter(l => l.type === 'Test').length === 1) return guideScores[guide.id];
     return undefined;
   };
 
@@ -122,7 +129,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
 
       {/* Lesson Timeline */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {guide.lessons.length === 0 ? (
+        {orderedLessons.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
             <BookOpen size={36} className="text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 text-sm font-medium">No lessons have been published for this guide yet.</p>
@@ -133,7 +140,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4 px-1">
               Curriculum Modules
             </h2>
-            {guide.lessons.map((lesson, index) => {
+            {orderedLessons.map((lesson, index) => {
               const isCompleted = completedLessons.has(lesson.id);
               const isTest = lesson.type === 'Test';
               const score = isTest ? getLessonScore(lesson) : undefined;
