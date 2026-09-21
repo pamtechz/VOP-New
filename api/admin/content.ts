@@ -143,7 +143,16 @@ export default async function handler(request: Request, response: Response) {
         return response.status(400).json({ error: 'Guide listing requires the guides collection.' });
       }
       const snapshot = await db.collection('curricula/discover/languages').get();
-      const items = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+      const items = await Promise.all(snapshot.docs.map(async item => {
+        const data = item.data();
+        const lessons = await item.ref.collection('lessons').get();
+        return {
+          id: item.id,
+          ...data,
+          lessonCount: lessons.size,
+          languages: [String(data.language ?? item.id)].filter(Boolean),
+        };
+      }));
       return response.status(200).json({ ok: true, items });
     }
 
@@ -175,9 +184,12 @@ export default async function handler(request: Request, response: Response) {
         description: typeof data.description === 'string' ? data.description.trim() : '',
         language,
         image: typeof data.image === 'string' ? data.image.trim() : '',
+        season: typeof data.season === 'string' ? data.season.trim() : '',
+        quarter: typeof data.quarter === 'string' ? data.quarter.trim() : '',
         certificateEligible: data.certificateEligible === true,
         published: data.published === true,
         archived: data.archived === true,
+        createdAt: data.createdAt || FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: decoded.uid,
       }, { merge: true });
