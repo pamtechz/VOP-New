@@ -788,7 +788,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
               <div><strong>Completion</strong><p>{formatDate(selectedCandidate.information?.completionDate)}</p></div>
             </div>
           </div>}
-        </div>
+        </div>}
         {activeTab==='certification'&&<div>
           {renderHeader(Award,'Certification','Configure official certificate presentation and publication controls.')}
           {certificationLoading ? <div className="vop-empty">Loading certification configuration…</div> : (
