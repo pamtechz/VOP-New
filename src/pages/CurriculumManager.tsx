@@ -190,7 +190,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       questions: (lesson.questions || []).map(question => ({
         question: text(question.question),
         options: Array.isArray(question.options) ? question.options.map(text) : ['', '', '', '', ''],
-        answer: Number(question.correctAnswer ?? 0),
+        answer: Number(question.correctOptionIndex ?? question.correctAnswer ?? 0),
       })),
       teacherNotes: '',
       tags: '',
@@ -248,10 +248,13 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
             ...(editor.imageUrl.trim() ? [{ type: 'image', src: editor.imageUrl.trim() }] : []),
           ],
         }],
-        quiz: editor.questions.map(question => ({
+        quiz: editor.questions.map((question, index) => ({
+          key: id + '-q' + (index + 1),
           question: question.question,
+          answer: false,
           options: question.options,
-          correctAnswer: question.answer,
+          correctOptionIndex: question.answer,
+          explanation: '',
         })),
         questions: editor.questions.map(question => ({
           question: question.question,
