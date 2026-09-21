@@ -19,7 +19,6 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
-import CurriculumManager from './CurriculumManager';
 
 interface AdminPageProps {
   currentUser: User;
@@ -601,7 +600,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
           <div className="vop-field"><label>WhatsApp number</label><input value={settings.whatsappNumber} onChange={e=>setSettings({...settings,whatsappNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Theme color</label><input type="text" value={settings.themeColor || ''} onChange={e=>setSettings({...settings,themeColor:e.target.value})} placeholder="CSS color"/></div>
         </div>
-        <div className="vop-field"><label>About app description</label><textarea value={settings.detailPages?.aboutAppDescription || ''} onChange={e=>setSettings({...settings,detailPages:{...settings.detailPages,aboutAppDescription:e.target.value}})}/></div>
+        <div className="vop-field"><label>About app description</label><textarea value={settings.detailPages?.aboutAppDescription || ''} onChange={e=>setSettings({...settings,detailPages:{aboutUsMission:settings.detailPages?.aboutUsMission || '',aboutUsHistory:settings.detailPages?.aboutUsHistory || '',aboutUsLeadership:settings.detailPages?.aboutUsLeadership || '',aboutAppDescription:e.target.value,aboutAppVersion:settings.detailPages?.aboutAppVersion || '',aboutAppCredits:settings.detailPages?.aboutAppCredits || '',contactOfficeAddress:settings.detailPages?.contactOfficeAddress || '',contactOfficeHours:settings.detailPages?.contactOfficeHours || '',contactPhoneNumbers:settings.detailPages?.contactPhoneNumbers || [],contactEmails:settings.detailPages?.contactEmails || [],contactWhatsAppNumbers:settings.detailPages?.contactWhatsAppNumbers || [],socialLinks:settings.detailPages?.socialLinks}})}/></div>
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>{settingsSaving?'Saving…':'Save App Information'}</button></div>
       </form>}
 
