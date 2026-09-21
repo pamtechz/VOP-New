@@ -68,7 +68,7 @@ function lessonFromDoc(id: string, data: Record<string, unknown>): Lesson {
             pageNumber: Number(p.pageNumber ?? 1),
             title: String(p.title ?? '').trim(),
             content: text,
-            imageUrl: image?.src ? `/lessons/${String(image.src).replace(/^\\//, '')}` : undefined,
+            imageUrl: image?.src ? `/lessons/${String(image.src).replace(/^\//, '')}` : undefined,
           };
         }).filter(page => page.title && page.content)
       : [];
