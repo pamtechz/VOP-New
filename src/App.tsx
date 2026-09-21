@@ -54,7 +54,8 @@ export const App: React.FC = () => {
       setContentLoading(true);
       setContentError('');
       try {
-        const data = await loadPublicContent();
+        const liveUser = getCurrentUser();
+        const data = await loadPublicContent(liveUser);
         if (cancelled) return;
 
         const resolvedSettings = {
@@ -74,8 +75,8 @@ export const App: React.FC = () => {
 
         setSettings(resolvedSettings);
         setActiveLang(preferredLanguage);
-        setCurrentUser(getCurrentUser());
-        setAllUsers([getCurrentUser()]);
+        setCurrentUser(liveUser);
+        setAllUsers([liveUser]);
         setGuides(data.guides);
         setAnnouncements(data.announcements);
         setBooks(data.books);
@@ -83,6 +84,7 @@ export const App: React.FC = () => {
         setConferences(data.conferences);
         setDistricts(data.districts);
         setChurches(data.churches);
+        setPrayerRequests(data.prayerRequests);
         setRadioBroadcasts(data.radioBroadcasts);
       } catch (error) {
         if (!cancelled) {
