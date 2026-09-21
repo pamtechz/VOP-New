@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
-  Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast,
+  Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, Announcement, BookResource,
 } from './types';
 import {
   getActiveLanguage, setActiveLanguage,
@@ -37,8 +37,8 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [books, setBooks] = useState([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [books, setBooks] = useState<BookResource[]>([]);
   const [unions, setUnions] = useState<Union[]>([]);
   const [conferences, setConferences] = useState<Conference[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
