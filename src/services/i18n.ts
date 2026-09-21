@@ -59,7 +59,7 @@ export const DEFAULT_TRANSLATIONS: Record<LanguageCode, Record<string, string>> 
 
 export const getTranslation = (
   key: string,
-  lang: LanguageCode = 'en',
+  lang: LanguageCode = '',
   customTranslations?: Record<string, Record<string, string>>,
   defaultFallback?: string,
   _componentName?: string,
