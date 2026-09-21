@@ -21,7 +21,7 @@ import {
   AdminNodeType
 } from '../types';
 
-import { INITIAL_DETAIL_PAGES } from '../data/initialData';
+
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   themeColor: '#0a192f',
   certificateTitle: 'COURSE CERTIFICATE',
   certificateBodyText: 'has successfully completed the BIBLE CORRESPONDENCE COURSE as outlined by the Seventh-day Adventist Church',
-  detailPages: INITIAL_DETAIL_PAGES
+  detailPages: { aboutUsMission:'', aboutUsHistory:'', aboutUsLeadership:'', aboutAppDescription:'', aboutAppVersion:'', aboutAppCredits:'', contactOfficeAddress:'', contactOfficeHours:'', contactPhoneNumbers:[], contactEmails:[], contactWhatsAppNumbers:[], socialLinks:{} }
 };
 
 // ---------------- Platform Security Check ---------------- //
@@ -124,7 +124,6 @@ export const setActiveLanguage = (lang: LanguageCode) => {
 export const getStoredUnions = (): Union[] => {
   const data = localStorage.getItem(STORAGE_KEYS.UNIONS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.UNIONS, JSON.stringify(INITIAL_UNIONS));
     return [];
   }
   try {
@@ -164,7 +163,6 @@ export const deleteUnion = (id: string) => {
 export const getStoredConferences = (): Conference[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CONFERENCES);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.CONFERENCES, JSON.stringify(INITIAL_CONFERENCES));
     return [];
   }
   try {
@@ -204,7 +202,6 @@ export const deleteConference = (id: string) => {
 export const getStoredDistricts = (): District[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DISTRICTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.DISTRICTS, JSON.stringify(INITIAL_DISTRICTS));
     return [];
   }
   try {
@@ -244,7 +241,6 @@ export const deleteDistrict = (id: string) => {
 export const getStoredChurches = (): ChurchOrganization[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHURCHES);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.CHURCHES, JSON.stringify(INITIAL_CHURCHES));
     return [];
   }
   try {
@@ -284,7 +280,6 @@ export const deleteChurch = (id: string) => {
 export const getStoredHierarchyConfig = (): HierarchyConfig => {
   const data = localStorage.getItem(STORAGE_KEYS.HIERARCHY_CONFIG);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(INITIAL_HIERARCHY_CONFIG));
     return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: true, divisionName: '' };
   }
   try {
@@ -304,7 +299,6 @@ export const saveHierarchyConfig = (config: HierarchyConfig) => {
 export const getStoredGraduationRequests = (): GraduationRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.GRADUATION_REQUESTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.GRADUATION_REQUESTS, JSON.stringify(INITIAL_GRADUATION_REQUESTS));
     return [];
   }
   try {
@@ -368,7 +362,6 @@ export const advanceGraduationStatus = (
 export const getStoredPrayerRequests = (): PrayerRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PRAYER_REQUESTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(INITIAL_PRAYER_REQUESTS));
     return [];
   }
   try {
@@ -404,7 +397,6 @@ export const updatePrayerStatus = (id: string, status: PrayerRequest['status']) 
 export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RADIO_BROADCASTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(INITIAL_RADIO_BROADCASTS));
     return [];
   }
   try {
@@ -602,7 +594,6 @@ export const addQuestionToLesson = (
 export const getStoredUsers = (): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
     return [];
   }
   try {
@@ -754,7 +745,6 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
 export const getStoredAnnouncements = (): Announcement[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
     return [];
   }
   try {
@@ -772,7 +762,6 @@ export const saveAnnouncements = (announcements: Announcement[]) => {
 export const getStoredBooks = (): BookResource[] => {
   const data = localStorage.getItem(STORAGE_KEYS.BOOKS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(INITIAL_BOOKS));
     return [];
   }
   try {
