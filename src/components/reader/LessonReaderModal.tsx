@@ -113,6 +113,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, gu
           ) : (
             <>
               <h3 style={{ fontSize: '1.25rem' }}>{currentPage.title}</h3>
+              {currentPage.imageUrl && (
+                <img src={currentPage.imageUrl} alt="" loading="lazy"
+                  style={{ width: '100%', maxHeight: '22rem', objectFit: 'contain', borderRadius: 'var(--radius-lg)', background: 'var(--vop-navy-50)' }} />
+              )}
               <p style={{ fontSize: '1rem', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{currentPage.content}</p>
               {currentPage.scriptureQuote && (
                 <blockquote style={{ background: 'var(--vop-gold-50)', borderLeft: '4px solid var(--vop-gold-500)',
