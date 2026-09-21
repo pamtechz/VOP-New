@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { auth, firebaseConfigured } from './lib/firebase';
 import { SignInPage } from './pages/SignInPage';
+import { loadFirestoreGuides } from './services/firestoreData';
 import { App } from './App';
 import { getStoredUsers, saveUsers } from './services/storage';
 import type { User } from './types';
@@ -51,6 +52,7 @@ function localUserFromFirebase(account: FirebaseUser): User {
 export function Root() {
   const [account, setAccount] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -65,14 +67,25 @@ export function Root() {
         setAuthReady(true);
 
         if (firebaseUser) {
-          const users = getStoredUsers();
-          const mapped = localUserFromFirebase(firebaseUser);
-          if (!users.some(item => item.uid === mapped.uid)) {
-            saveUsers([...users, mapped]);
-          } else {
-            saveUsers(users.map(item => item.uid === mapped.uid ? mapped : item));
-          }
-          localStorage.setItem('vop_current_user_id', mapped.uid);
+          void (async () => {
+            try {
+              const token = await firebaseUser.getIdToken();
+              const response = await fetch('/api/account/profile', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`} });
+              if (!response.ok) throw new Error('Profile synchronization failed.');
+              const payload = await response.json() as { profile: User };
+              saveUsers([...(getStoredUsers().filter(item => item.uid !== firebaseUser.uid)), payload.profile]);
+              localStorage.setItem('vop_current_user_id', firebaseUser.uid);
+              const guides = await loadFirestoreGuides();
+              localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
+              window.dispatchEvent(new Event('vop_data_updated'));
+            } catch (error) {
+              console.error(error);
+            } finally {
+              setDataReady(true);
+            }
+          })();
+        } else {
+          setDataReady(true);
         }
       },
       () => {
@@ -82,7 +95,7 @@ export function Root() {
     );
   }, []);
 
-  if (!authReady) {
+  if (!authReady || !dataReady) {
     return <main className="vop-auth-loading" aria-busy="true"><p>Opening Voice of Prophecy…</p></main>;
   }
 
