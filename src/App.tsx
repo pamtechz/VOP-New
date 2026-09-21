@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
@@ -151,6 +151,24 @@ export const App: React.FC = () => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
 
+  const orderedActiveLessons = useMemo(() => {
+    if (!activeGuide) return [];
+    return [...activeGuide.lessons].sort((a, b) => {
+      const an = Number.parseFloat(a.lessonNumber);
+      const bn = Number.parseFloat(b.lessonNumber);
+      if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
+      return a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [activeGuide]);
+
+  const activeLessonIndex = activeLesson
+    ? orderedActiveLessons.findIndex(lesson => lesson.id === activeLesson.id)
+    : -1;
+  const previousLesson = activeLessonIndex > 0 ? orderedActiveLessons[activeLessonIndex - 1] : undefined;
+  const nextLesson = activeLessonIndex >= 0 && activeLessonIndex < orderedActiveLessons.length - 1
+    ? orderedActiveLessons[activeLessonIndex + 1]
+    : undefined;
+
   const navigate = (route: AppRoute) => {
     setActiveGuide(null);
     setActiveLesson(null);
@@ -216,23 +234,49 @@ export const App: React.FC = () => {
         onLogout={() => void firebaseSignOut()}
       />
       {activeLesson?.type === 'Lesson' && activeGuide && (
-        <LessonReaderModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
+        <LessonReaderModal
+          lesson={activeLesson}
+          guide={activeGuide}
+          onClose={() => setActiveLesson(null)}
+          hasPreviousLesson={Boolean(previousLesson)}
+          hasNextLesson={Boolean(nextLesson)}
+          onPreviousLesson={() => {
+            if (previousLesson) setActiveLesson(previousLesson);
+          }}
+          onNextLesson={() => {
+            if (nextLesson) setActiveLesson(nextLesson);
+          }}
           onComplete={() => {
             const accepted = completeLesson(activeGuide.id, activeLesson.id);
-            if (!accepted) setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
-            setActiveLesson(null);
-          }} />
+            if (!accepted) {
+              setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
+              return;
+            }
+            const refreshedUser = getCurrentUser();
+            if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
+          }}
+        />
       )}
       {activeLesson?.type === 'Test' && activeGuide && (
-        <QuizModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
+        <QuizModal
+          lesson={activeLesson}
+          guide={activeGuide}
+          onClose={() => setActiveLesson(null)}
+          hasNextLesson={Boolean(nextLesson)}
+          onContinue={() => {
+            if (nextLesson) setActiveLesson(nextLesson);
+          }}
           onSubmitScore={score => {
             const accepted = submitQuizScore(activeGuide.id, activeLesson.id, score);
             if (!accepted) {
               setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
-              setActiveLesson(null);
+              return;
             }
+            const refreshedUser = getCurrentUser();
+            if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
           }}
-          onOpenCertificate={() => navigate('certificates')} />
+          onOpenCertificate={() => navigate('certificates')}
+        />
       )}
     </div>
   );
