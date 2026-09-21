@@ -132,6 +132,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   const [editorStatus, setEditorStatus] = useState<'draft' | 'published'>('draft');
   const [editorSaving, setEditorSaving] = useState(false);
   const [dashboardRange, setDashboardRange] = useState('year');
+  const [candidateSearch, setCandidateSearch] = useState('');
+  const [candidateStatus, setCandidateStatus] = useState<'all' | 'active' | 'graduated' | 'graduating'>('all');
+  const [selectedCandidate, setSelectedCandidate] = useState<User | null>(null);
+  const [certification, setCertification] = useState<Record<string, unknown> | null>(null);
+  const [certificationLoading, setCertificationLoading] = useState(false);
+  const [certificationSaving, setCertificationSaving] = useState(false);
 
   const showMessage = (value: string) => {
     setMessage(value);
@@ -161,6 +167,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     ];
     void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
     void loadDrafts();
+    void loadCertification();
     return () => unsubs.forEach(unsub => unsub());
   }, []);
 
@@ -185,6 +192,57 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     const matchStatus = lessonStatus === 'all' || lessonStatus === 'published';
     return matchText && matchLanguage && matchStatus;
   }), [lessonRows, lessonSearch, lessonLanguage, lessonStatus]);
+
+  const filteredCandidates = useMemo(() => {
+    const q = candidateSearch.trim().toLowerCase();
+    return candidates.filter(candidate => {
+      const info = candidate.information;
+      const textValue = [
+        candidate.displayName,
+        candidate.email,
+        candidate.phoneNumber,
+        candidate.role,
+        candidate.churchId,
+        candidate.districtId,
+        candidate.conferenceId,
+        candidate.unionId,
+      ].map(text).join(' ').toLowerCase();
+      const matchesSearch = !q || textValue.includes(q);
+      const matchesStatus =
+        candidateStatus === 'all' ||
+        (candidateStatus === 'graduated' && info?.graduated === true) ||
+        (candidateStatus === 'graduating' && info?.graduating === true) ||
+        (candidateStatus === 'active' && info?.graduated !== true);
+      return matchesSearch && matchesStatus;
+    });
+  }, [candidates, candidateSearch, candidateStatus]);
+
+  const loadCertification = async () => {
+    setCertificationLoading(true);
+    try {
+      const response = await adminContent('list', 'certificationConfig');
+      setCertification(((response.items || [])[0] || null) as Record<string, unknown> | null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not load certification configuration.');
+    } finally {
+      setCertificationLoading(false);
+    }
+  };
+
+  const saveCertification = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!certification) return;
+    setCertificationSaving(true);
+    try {
+      await adminContent('upsert', 'certificationConfig', 'certification', certification);
+      await loadCertification();
+      showMessage('Certification configuration saved to Firestore.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save certification configuration.');
+    } finally {
+      setCertificationSaving(false);
+    }
+  };
 
   const languageOptions = useMemo(() => Array.from(new Set([
     ...languages.map(item => item.code),
@@ -607,7 +665,60 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
         {activeTab==='curriculum'&&renderStudio()}
-        {activeTab==='candidates'&&<div>{renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Email</th><th>Role</th><th>Progress</th><th>Enrollment</th></tr></thead><tbody>{candidates.map((candidate,index)=><tr key={candidate.uid}><td>{index+1}</td><td><strong>{candidate.displayName || 'Unnamed'}</strong></td><td>{candidate.email || 'Not recorded'}</td><td>{candidate.role || 'student'}</td><td>{candidate.progress?.discoverProgress || 0}%</td><td>{formatDate(candidate.information?.enrollmentDate)}</td></tr>)}</tbody></table>{candidates.length===0&&<div className="vop-empty">No candidates are configured.</div>}</div></div>}
+        {activeTab==='candidates'&&<div>
+          {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
+          <div className="vop-toolbar">
+            <div className="vop-search"><Search size={18}/><input value={candidateSearch} onChange={e=>setCandidateSearch(e.target.value)} placeholder="Search by name, email, phone or organization…"/>{candidateSearch&&<button type="button" onClick={()=>setCandidateSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div>
+            <select className="vop-filter" value={candidateStatus} onChange={e=>setCandidateStatus(e.target.value as typeof candidateStatus)}>
+              <option value="all">All Candidates</option><option value="active">Active</option><option value="graduating">Graduating</option><option value="graduated">Graduated</option>
+            </select>
+          </div>
+          <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Contact</th><th>Progress</th><th>Status</th><th>Enrollment</th><th>Action</th></tr></thead><tbody>
+            {filteredCandidates.map((candidate,index)=><tr key={candidate.uid}>
+              <td>{index+1}</td><td><strong>{candidate.displayName || 'Unnamed'}</strong><div className="vop-row-desc">{candidate.role || 'student'}</div></td>
+              <td>{candidate.email || 'Not recorded'}<div className="vop-row-desc">{candidate.phoneNumber || 'No phone recorded'}</div></td>
+              <td>{candidate.progress?.discoverProgress || 0}%<div className="vop-row-desc">{candidate.progress?.completedGuidesCount || 0} / {candidate.progress?.totalGuidesCount || 0} guides</div></td>
+              <td><span className={'vop-status '+(candidate.information?.graduated?'enabled':candidate.information?.graduating?'review':'disabled')}>{candidate.information?.graduated?'Graduated':candidate.information?.graduating?'Graduating':'Active'}</span></td>
+              <td>{formatDate(candidate.information?.enrollmentDate)}</td>
+              <td><button className="vop-actions" type="button" onClick={()=>setSelectedCandidate(candidate)}><Eye size={16}/></button></td>
+            </tr>)}
+          </tbody></table>{filteredCandidates.length===0&&<div className="vop-empty">No candidates match the current filters.</div>}</div>
+          {selectedCandidate&&<div className="vop-card vop-form-card" style={{marginTop:16}}>
+            <div className="vop-section-title"><div><h2>{selectedCandidate.displayName || 'Candidate'}</h2><p>{selectedCandidate.email || 'No email recorded'}</p></div><button className="vop-actions" type="button" onClick={()=>setSelectedCandidate(null)}><X size={16}/></button></div>
+            <div className="vop-grid-3">
+              <div className="vop-card vop-mini-stat"><div><div className="vop-mini-value">{selectedCandidate.progress?.discoverProgress || 0}%</div><div className="vop-mini-label">Discover Progress</div></div></div>
+              <div className="vop-card vop-mini-stat"><div><div className="vop-mini-value">{selectedCandidate.progress?.completedGuidesCount || 0}</div><div className="vop-mini-label">Completed Guides</div></div></div>
+              <div className="vop-card vop-mini-stat"><div><div className="vop-mini-value">{selectedCandidate.progress?.completedLessons?.length || 0}</div><div className="vop-mini-label">Completed Lessons</div></div></div>
+            </div>
+            <div className="vop-form-grid" style={{marginTop:14}}>
+              <div><strong>Church</strong><p>{selectedCandidate.churchId || 'Not assigned'}</p></div>
+              <div><strong>District</strong><p>{selectedCandidate.districtId || 'Not assigned'}</p></div>
+              <div><strong>Conference</strong><p>{selectedCandidate.conferenceId || 'Not assigned'}</p></div>
+              <div><strong>Union</strong><p>{selectedCandidate.unionId || 'Not assigned'}</p></div>
+              <div><strong>Enrollment</strong><p>{formatDate(selectedCandidate.information?.enrollmentDate)}</p></div>
+              <div><strong>Completion</strong><p>{formatDate(selectedCandidate.information?.completionDate)}</p></div>
+            </div>
+          </div>}
+        </div>
+        {activeTab==='certification'&&<div>
+          {renderHeader(Award,'Certification','Configure official certificate presentation and publication controls.')}
+          {certificationLoading ? <div className="vop-empty">Loading certification configuration…</div> : (
+            <form className="vop-card vop-form-card" onSubmit={saveCertification}>
+              {!certification ? <div className="vop-empty"><Award size={34}/><h2 style={{color:'#09275f'}}>Certification is not configured</h2><p>Create the configuration below. No sample certificate data is inserted automatically.</p><button type="button" className="vop-primary" onClick={()=>setCertification({enabled:false,certificateTitle:'',certificateBodyText:'',issuerName:'',minimumScore:80,verificationEnabled:false,verificationBaseUrl:''})}><Plus size={17}/>Create Configuration</button></div> : <>
+                <div className="vop-grid-2">
+                  <div className="vop-field"><label>Certificate title</label><input value={text(certification.certificateTitle)} onChange={e=>setCertification({...certification,certificateTitle:e.target.value})} /></div>
+                  <div className="vop-field"><label>Issuer name</label><input value={text(certification.issuerName)} onChange={e=>setCertification({...certification,issuerName:e.target.value})} /></div>
+                  <div className="vop-field"><label>Minimum score</label><input type="number" min="0" max="100" value={Number(certification.minimumScore ?? 0)} onChange={e=>setCertification({...certification,minimumScore:Number(e.target.value)})} /></div>
+                  <div className="vop-field"><label>Verification base URL</label><input type="url" value={text(certification.verificationBaseUrl)} onChange={e=>setCertification({...certification,verificationBaseUrl:e.target.value})} placeholder="Optional" /></div>
+                </div>
+                <div className="vop-field"><label>Certificate body text</label><textarea value={text(certification.certificateBodyText)} onChange={e=>setCertification({...certification,certificateBodyText:e.target.value})} /></div>
+                <div className="vop-setting-row"><div><div className="vop-setting-name">Enable certification</div><div className="vop-setting-help">Controls whether the public certification configuration is exposed.</div></div><Toggle on={certification.enabled===true} onClick={()=>setCertification({...certification,enabled:certification.enabled!==true})}/></div>
+                <div className="vop-setting-row"><div><div className="vop-setting-name">Verification links</div><div className="vop-setting-help">Allow the configured verification base URL to be used by certificate interfaces.</div></div><Toggle on={certification.verificationEnabled===true} onClick={()=>setCertification({...certification,verificationEnabled:certification.verificationEnabled!==true})}/></div>
+                <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={certificationSaving}><Save size={17}/>{certificationSaving?'Saving…':'Save Certification Settings'}</button></div>
+              </>}
+            </form>
+          )}
+        </div>}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
