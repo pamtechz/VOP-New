@@ -79,6 +79,7 @@ service cloud.firestore {
           'displayName',
           'phoneNumber',
           'photoURL',
+          'address',
           'information',
           'preferences',
           'updatedAt'
