@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { User, AppRoute } from '../../types';
 import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck } from 'lucide-react';
 import { getActiveLanguage, getStoredGuides, getStoredSettings } from '../../services/storage';
+import { firebaseSignOut } from '../../services/firebaseAuth';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation } from '../../services/i18n';
 
@@ -59,13 +60,13 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
             </div>
             <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
           </div>
-          {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('admin_panel', 'Admin Panel')} <span style={{ fontSize: '.65rem', color: '#8b5e04' }}>(local demo)</span></button>}
+          {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('admin_panel', 'Admin Panel')}</button>}
           <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>About</button>
-          <button type="button" style={{ ...itemStyle, color: '#6b7280', cursor: 'not-allowed' }} disabled title="Sign-out requires a real authentication provider"><LogOut size={24}/>Logout (not configured)</button>
+          <button type="button" style={{ ...itemStyle, color: '#b42318' }} onClick={() => { onClose(); void firebaseSignOut(); }}><LogOut size={24}/>Logout</button>
         </div>
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('my_certificate', 'My Certificate')}</button>
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>What's New</button>
-        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management and graduation progress. The app currently stores records on this device; official certification needs a secure server.</p>}
+        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Live ministry updates, curriculum publication and account services are managed through the VOP system.</p>}
         <button type="button" style={{ ...itemStyle, borderTop: '1px solid #e5e7eb' }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><BookOpen size={24}/>More ministry services {expanded ? '−' : '+'}</button>
         {expanded && <div style={{ borderRadius: '1rem', background: '#fff' }}>
           <button type="button" style={itemStyle} onClick={() => navigate('resources')}><BookOpen size={22}/>Library & Books</button>
