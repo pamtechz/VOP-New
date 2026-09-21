@@ -50,3 +50,4 @@ All code here is for `Pamtech-Zambia/VOP-New` only. CI uses the organization's `
 ## UI parity
 
 The learner account, certificate, and administrator overview screens use the supplied VOP mobile visual reference as a presentation guide. Names, progress values, curriculum, languages, users, certificate metadata, radio programmes, and other operational content remain data-driven; the reference images are not used as application data.
+<!-- syntax test -->
