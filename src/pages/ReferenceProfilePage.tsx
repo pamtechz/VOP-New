@@ -5,7 +5,6 @@ import type {
 } from '../types';
 import { ArrowLeft, Award, Pencil, X, Check } from 'lucide-react';
 import { calculateCurriculumProgress } from '../services/progress';
-import { updateUser } from '../services/storage';
 import { getTranslation } from '../services/i18n';
 
 interface ProfileProps {
@@ -20,6 +19,7 @@ interface ProfileProps {
   activeLanguage: LanguageCode;
   onBack: () => void;
   onNavigateToCertificates: () => void;
+  onSaveProfile: (patch: { phoneNumber?: string; address?: string }) => Promise<void>;
 }
 
 const field: React.CSSProperties = {
@@ -30,7 +30,7 @@ const field: React.CSSProperties = {
 
 export const ReferenceProfilePage: React.FC<ProfileProps> = ({
   currentUser, guides, unions, conferences, districts, churches, settings,
-  activeLanguage, onBack, onNavigateToCertificates,
+  activeLanguage, onBack, onNavigateToCertificates, onSaveProfile,
 }) => {
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -66,11 +66,15 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    // Identity and organization scope cannot be self-assigned through this form.
-    // Authoritative authorization still requires a trusted backend.
-    updateUser({ ...currentUser, phoneNumber: phone.trim(), address: address.trim() });
-    setEditing(false);
-    setSaved(true);
+    void onSaveProfile({ phoneNumber: phone.trim(), address: address.trim() })
+      .then(() => {
+        setEditing(false);
+        setSaved(true);
+      })
+      .catch(error => {
+        setSaved(false);
+        console.error(error);
+      });
   };
 
   return (
