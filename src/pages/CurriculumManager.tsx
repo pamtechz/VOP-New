@@ -416,7 +416,6 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   const quizRows = useMemo(() => filteredLessons.filter(row => (row.lesson.questions?.length || 0) > 0), [filteredLessons]);
   const allQuizRows = useMemo(() => lessonRows.filter(row => (row.lesson.questions?.length || 0) > 0), [lessonRows]);
 
-  const pathCount = useMemo(() => records.filter(item => valueText(item.name)).length, [records]);
   const questionBankCount = useMemo(() => allQuizRows.reduce((sum, row) => sum + (row.lesson.questions?.length || 0), 0), [allQuizRows]);
   const publishedQuizCount = useMemo(() => allQuizRows.filter(row => row.status === 'Published').length, [allQuizRows]);
   const draftQuizCount = useMemo(() => allQuizRows.filter(row => row.status === 'Draft').length, [allQuizRows]);
