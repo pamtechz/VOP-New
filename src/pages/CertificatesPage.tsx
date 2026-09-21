@@ -3,7 +3,6 @@ import type { DiscoverGuide, User, AppSettings, LanguageCode } from '../types';
 import { ArrowLeft, Award, Download, Share2, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { calculateCurriculumProgress } from '../services/progress';
-import { canShowLocalCertificatePreview } from '../services/certificatePreview';
 import { getTranslation } from '../services/i18n';
 
 interface CertificatesPageProps {
