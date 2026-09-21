@@ -1,8 +1,7 @@
 import React, { useRef, useState } from 'react';
-import type { User, AppSettings, LanguageCode } from '../types';
+import type { DiscoverGuide, User, AppSettings, LanguageCode } from '../types';
 import { ArrowLeft, Award, Download, Share2, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { getStoredGuides, getStoredGraduationRequests } from '../services/storage';
 import { calculateCurriculumProgress } from '../services/progress';
 import { canShowLocalCertificatePreview } from '../services/certificatePreview';
 import { getTranslation } from '../services/i18n';
@@ -12,20 +11,19 @@ interface CertificatesPageProps {
   settings: AppSettings;
   activeLanguage: LanguageCode;
   onBack: () => void;
+  guides: DiscoverGuide[];
 }
 
 export const CertificatesPage: React.FC<CertificatesPageProps> = ({
-  currentUser, settings, activeLanguage, onBack,
+  currentUser, settings, activeLanguage, onBack, guides,
 }) => {
   const certificateRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const progress = calculateCurriculumProgress(
-    getStoredGuides(), currentUser, settings.quizPassThreshold, activeLanguage,
+    guides, currentUser, settings.quizPassThreshold, activeLanguage,
   );
-  const canDisplayPreview = canShowLocalCertificatePreview(
-    progress, getStoredGraduationRequests(), currentUser,
-  );
+  const canDisplayPreview = false;
   const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate;
   const t = (key: string, fallback: string) =>
     getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
