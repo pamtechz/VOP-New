@@ -44,7 +44,7 @@ service cloud.firestore {
     }
 
     match /languages/{languageId} {
-      allow get, list: if resource.data.enabled == true;
+      allow get, list: if isAdmin() || resource.data.enabled == true;
       allow write: if isAdmin();
     }
 
@@ -54,7 +54,7 @@ service cloud.firestore {
     }
 
     match /announcements/{announcementId} {
-      allow get, list: if resource.data.published == true;
+      allow get, list: if isAdmin() || resource.data.published == true;
       allow write: if isAdmin();
     }
 
