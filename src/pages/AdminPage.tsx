@@ -34,7 +34,7 @@ export const AdminPage:React.FC<AdminPageProps>=({currentUser,onBack,onNavigateT
    const s={...EMPTY,...(a.items?.[0]||{})};setSettings(s);setSd(s);
    setLangs(((b.items||[])as any[]).filter(x=>x.enabled!==false&&str(x.code)&&str(x.name))as CustomLanguage[]);
    setUsers(c.items||[]);setGuides(d.items||[]);setGrads(f.items||[]);
-   const z=e.items?.[0]||{};setCert({enabled:z.enabled===true,minimumGuides:Number(z.minimumGuides||0),minimumAverage:Number(z.minimumAverage||0),requiredStatus:str(z.requiredStatus),certificateTitle:str(z.certificateTitle),certificateBodyText:str(z.certificateBodyText)});
+   const z:any=e.items?.[0]||{};setCert({enabled:z.enabled===true,minimumGuides:Number(z.minimumGuides||0),minimumAverage:Number(z.minimumAverage||0),requiredStatus:str(z.requiredStatus),certificateTitle:str(z.certificateTitle),certificateBodyText:str(z.certificateBodyText)});
   }catch(x){setError(x instanceof Error?x.message:'Could not load Firestore data.')}finally{setLoading(false)}
  };
  useEffect(()=>{void load()},[]);
