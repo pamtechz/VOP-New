@@ -4,6 +4,7 @@ import {
   Filter, GraduationCap, Info, Mail, MoreVertical, Printer, Search, Share2, Users, X
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { auth } from '../lib/firebase';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
 
@@ -44,6 +45,17 @@ interface CertificationConfig {
   backgroundUrl?: string;
   verificationEnabled?: boolean;
   verificationBaseUrl?: string;
+}
+
+interface GraduationCandidate {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  candidateEmail?: string;
+  guideId: string;
+  guideTitle: string;
+  status: string;
+  approvedAt?: string;
 }
 
 interface Props {
@@ -166,18 +178,26 @@ export const CertificationManager: React.FC<Props> = ({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<CertificateRecord | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [approvedCandidates, setApprovedCandidates] = useState<GraduationCandidate[]>([]);
+  const [issuerOpen, setIssuerOpen] = useState(false);
+  const [issuerSearch, setIssuerSearch] = useState('');
+  const [issuingCandidateId, setIssuingCandidateId] = useState<string | null>(null);
   const pageSize = 5;
 
   const load = async () => {
     setLoading(true);
     try {
-      const [certificateResponse, configResponse] = await Promise.all([
+      const [certificateResponse, configResponse, requestResponse] = await Promise.all([
         adminContent('list', 'certificates'),
         adminContent('list', 'certificationConfig'),
+        adminContent('list', 'graduationRequests'),
       ]);
       setCertificates(((certificateResponse.items || []) as CertificateRecord[])
         .filter(item => item && typeof item.id === 'string' && item.status !== 'Revoked'));
       setConfig(((configResponse.items || [])[0] || null) as CertificationConfig | null);
+      setApprovedCandidates(((requestResponse.items || []) as GraduationCandidate[])
+        .filter(item => item && typeof item.candidateId === 'string' && item.status === 'approved')
+        .filter(item => !item.approvedAt || Boolean(toDate(item.approvedAt))));
     } catch (error) {
       console.error('Certification records could not be loaded', error);
     } finally {
@@ -217,6 +237,39 @@ export const CertificationManager: React.FC<Props> = ({
   const downloadRate = totalCertified ? Math.min(100, (downloaded / totalCertified) * 100) : 0;
 
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+
+  const issuerCandidates = useMemo(() => {
+    const q = issuerSearch.trim().toLowerCase();
+    const certifiedIds = new Set(certificates.map(item => item.candidateId));
+    return approvedCandidates
+      .filter(item => !certifiedIds.has(item.candidateId))
+      .filter(item => !q || [item.candidateName, item.candidateEmail, item.guideTitle].filter(Boolean).join(' ').toLowerCase().includes(q))
+      .sort((a, b) => (toDate(b.approvedAt)?.getTime() || 0) - (toDate(a.approvedAt)?.getTime() || 0));
+  }, [approvedCandidates, certificates, issuerSearch]);
+
+  const issueCertificate = async (candidateId: string) => {
+    if (!auth?.currentUser || issuingCandidateId) return;
+    setIssuingCandidateId(candidateId);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/certificates/issue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ candidateId }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string; certificate?: CertificateRecord };
+      if (!response.ok || !body.certificate) throw new Error(body.error || 'Certificate could not be issued.');
+      setIssuerOpen(false);
+      setIssuerSearch('');
+      await load();
+      openPreview(body.certificate);
+      showMessage(response.status === 200 ? 'An official certificate already exists for this candidate.' : 'Official certificate issued and stored in Firestore.');
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : 'Certificate issuance failed.');
+    } finally {
+      setIssuingCandidateId(null);
+    }
+  };
 
   const openPreview = (certificate: CertificateRecord) => {
     setSelected(certificate);
@@ -332,7 +385,10 @@ export const CertificationManager: React.FC<Props> = ({
     <div className="vop-cert-page">
       <div className="vop-cert-list-head">
         <div><div className="vop-cert-kicker">Certification</div><h1>Certified Candidates</h1><p>View and manage candidates who have successfully completed VOP courses.</p></div>
-        <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />Export List (PDF)</button>
+        <div className="vop-cert-head-actions">
+          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />Issue Certificate</button>
+          <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />Export List (PDF)</button>
+        </div>
       </div>
       <div className="vop-cert-title-row">
         <div className="vop-cert-title-icon purple"><Award size={32} /></div>
@@ -371,6 +427,29 @@ export const CertificationManager: React.FC<Props> = ({
           </div>
           <div className="vop-cert-pager"><span>Showing {filtered.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} certified candidates</span><div><button disabled={page === 1} onClick={() => setPage(value => Math.max(1, value - 1))}><ChevronLeft size={18} /></button>{Array.from({ length: Math.min(5, totalPages) }, (_, index) => index + 1).map(number => <button key={number} className={page === number ? 'active' : ''} onClick={() => setPage(number)}>{number}</button>)}<button disabled={page === totalPages} onClick={() => setPage(value => Math.min(totalPages, value + 1))}><ChevronRight size={18} /></button></div></div>
         </>
+      )}
+      {issuerOpen && (
+        <div className="vop-cert-issuer-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setIssuerOpen(false); }}>
+          <section className="vop-cert-issuer-modal" role="dialog" aria-modal="true" aria-labelledby="vop-cert-issuer-title">
+            <div className="vop-cert-issuer-head">
+              <div><div className="vop-cert-kicker">Certification</div><h2 id="vop-cert-issuer-title">Issue Certificate</h2><p>Only candidates with a server-verified approved graduation record are shown.</p></div>
+              <button className="vop-cert-icon-button" type="button" onClick={() => setIssuerOpen(false)} aria-label="Close"><X size={20} /></button>
+            </div>
+            <div className="vop-cert-search vop-cert-issuer-search"><Search size={19} /><input value={issuerSearch} onChange={event => setIssuerSearch(event.target.value)} placeholder="Search approved candidates…" /></div>
+            <div className="vop-cert-issuer-list">
+              {issuerCandidates.map(candidate => (
+                <div className="vop-cert-issuer-row" key={candidate.id || candidate.candidateId}>
+                  <div className="vop-cert-issuer-avatar"><Users size={18} /></div>
+                  <div><strong>{candidate.candidateName || 'Unnamed candidate'}</strong><span>{candidate.candidateEmail || 'No email recorded'} · {candidate.guideTitle || 'Guide not recorded'}</span></div>
+                  <button className="vop-cert-primary-button" type="button" disabled={Boolean(issuingCandidateId)} onClick={() => void issueCertificate(candidate.candidateId)}>
+                    {issuingCandidateId === candidate.candidateId ? 'Verifying…' : 'Issue'}
+                  </button>
+                </div>
+              ))}
+              {issuerCandidates.length === 0 && <div className="vop-cert-empty"><Award size={34} /><strong>No approved candidates are waiting for certification.</strong><span>Certification eligibility is verified on the server when an issue request is submitted.</span></div>}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

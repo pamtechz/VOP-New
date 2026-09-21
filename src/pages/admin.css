@@ -499,8 +499,35 @@
   .vop-cert-pager{align-items:flex-start;flex-direction:column}
   .vop-cert-pager>div{width:100%;overflow:auto}
   .vop-cert-preview-grid{gap:10px}
-  .vop-cert-artwork{border-width:3px}
+  .vop-certificate-artwork{border-width:3px}
 }
+.vop-cert-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vop-cert-issue-trigger{padding:0 18px;min-height:58px}
+.vop-cert-issuer-backdrop{position:fixed;inset:0;z-index:100;background:rgba(8,35,72,.42);display:grid;place-items:center;padding:24px}
+.vop-cert-issuer-modal{width:min(720px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto;background:#fff;border:1px solid #dce6f2;border-radius:16px;box-shadow:0 24px 70px rgba(8,35,72,.25);padding:20px}
+.vop-cert-issuer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:16px}
+.vop-cert-issuer-head h2{margin:3px 0 0;color:#09275f;font-size:24px}
+.vop-cert-issuer-head p{margin:5px 0 0;color:#637a9d;font-size:13px;line-height:1.45}
+.vop-cert-issuer-search{margin-bottom:12px}
+.vop-cert-issuer-list{display:grid;gap:8px}
+.vop-cert-issuer-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:11px;border:1px solid #e1e9f3;border-radius:10px;padding:10px 11px}
+.vop-cert-issuer-row>div:nth-child(2){min-width:0}
+.vop-cert-issuer-row strong,.vop-cert-issuer-row span{display:block}
+.vop-cert-issuer-row strong{color:#0b3478;font-size:14px}
+.vop-cert-issuer-row span{color:#6a80a1;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vop-cert-issuer-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#edf3fa;color:#315d94}
+.vop-cert-issuer-row .vop-cert-primary-button{min-height:38px;padding:0 13px;font-size:12px}
+@media(max-width:900px){
+  .vop-cert-head-actions{width:100%;display:grid;grid-template-columns:1fr}
+  .vop-cert-head-actions .vop-cert-export-button,.vop-cert-head-actions .vop-cert-issue-trigger{width:100%;justify-content:center}
+}
+@media(max-width:640px){
+  .vop-cert-issuer-backdrop{padding:10px}
+  .vop-cert-issuer-modal{padding:15px;border-radius:12px;max-height:calc(100vh - 20px)}
+  .vop-cert-issuer-row{grid-template-columns:38px minmax(0,1fr);gap:9px}
+  .vop-cert-issuer-row .vop-cert-primary-button{grid-column:1/-1;width:100%}
+}
+
 @media print{
   body *{visibility:hidden!important}
   .vop-cert-page,.vop-cert-page *{visibility:visible!important}
