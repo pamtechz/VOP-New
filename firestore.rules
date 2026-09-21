@@ -155,6 +155,11 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    match /languages/{language} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /translations/{language} {
       allow get, list: if signedIn();
       allow create, update, delete: if isAdmin();
