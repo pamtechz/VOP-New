@@ -21,20 +21,6 @@ import {
   AdminNodeType
 } from '../types';
 
-import {
-  INITIAL_USERS,
-  INITIAL_ANNOUNCEMENTS,
-  INITIAL_BOOKS,
-  INITIAL_UNIONS,
-  INITIAL_CONFERENCES,
-  INITIAL_DISTRICTS,
-  INITIAL_CHURCHES,
-  INITIAL_DETAIL_PAGES,
-  INITIAL_HIERARCHY_CONFIG,
-  INITIAL_GRADUATION_REQUESTS,
-  INITIAL_PRAYER_REQUESTS,
-  INITIAL_RADIO_BROADCASTS
-} from '../data/initialData';
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
@@ -57,28 +43,18 @@ const STORAGE_KEYS = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  appName: 'Voice of Prophecy',
-  organizationName: 'Seventh-day Adventist Church',
-  schoolName: 'Bible Correspondence School',
-  directorName: '',
-  directorTitle: '',
-  contactPhone: '',
-  whatsappNumber: '',
-  contactEmail: '',
-  quizPassThreshold: 80,
-  defaultLanguage: 'en',
-  themeColor: '#0a192f',
-  certificateTitle: 'COURSE CERTIFICATE',
-  certificateBodyText: 'has successfully completed the BIBLE CORRESPONDENCE COURSE as outlined by the Seventh-day Adventist Church',
+  appName: '', organizationName: '', schoolName: '', directorName: '', directorTitle: '',
+  contactPhone: '', whatsappNumber: '', contactEmail: '', quizPassThreshold: 0,
+  defaultLanguage: '', customLanguages: [], customTranslations: {}, themeColor: '',
+  certificateTitle: '', certificateBodyText: '',
   detailPages: {
-    aboutUsMission: '', aboutUsHistory: '', aboutUsLeadership: '',
-    aboutAppDescription: '', aboutAppVersion: '', aboutAppCredits: '',
-    contactOfficeAddress: '', contactOfficeHours: '',
+    aboutUsMission: '', aboutUsHistory: '', aboutUsLeadership: '', aboutAppDescription: '',
+    aboutAppVersion: '', aboutAppCredits: '', contactOfficeAddress: '', contactOfficeHours: '',
     contactPhoneNumbers: [], contactEmails: [], contactWhatsAppNumbers: [], socialLinks: {}
   }
 };
 
-// ---------------- Platform Security Check ---------------- //
+// // ---------------- Platform Security Check ---------------- //
 
 export const isNativePlatform = (): boolean => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,22 +74,12 @@ export const isSuperAdminAllowedOnPlatform = (): boolean => {
 
 export const getStoredSettings = (): AppSettings => {
   const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
-    return DEFAULT_SETTINGS;
-  }
+  if (!data) return { ...DEFAULT_SETTINGS };
   try {
     const parsed = JSON.parse(data);
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      detailPages: {
-        ...DEFAULT_SETTINGS.detailPages,
-        ...(parsed.detailPages || {})
-      }
-    };
+    return { ...DEFAULT_SETTINGS, ...parsed, detailPages: { ...DEFAULT_SETTINGS.detailPages, ...(parsed.detailPages || {}) } };
   } catch {
-    return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS };
   }
 };
 
@@ -129,7 +95,7 @@ export const getActiveLanguage = (): LanguageCode => {
   if (lang) {
     return lang;
   }
-  return getStoredSettings().defaultLanguage || 'en';
+  return getStoredSettings().defaultLanguage || '';
 };
 
 export const setActiveLanguage = (lang: LanguageCode) => {
