@@ -147,3 +147,14 @@ export async function createPrayerRequest(request: Omit<PrayerRequest, 'id' | 'c
 export async function updatePrayerRequestStatus(id: string, status: PrayerRequest['status']) {
   await updateDoc(doc(requireDb(), 'prayerRequests', id), { status });
 }
+
+
+export async function updateOwnProfile(
+  uid: string,
+  patch: { phoneNumber?: string; address?: string },
+) {
+  await updateDoc(doc(requireDb(), 'users', uid), {
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+}
