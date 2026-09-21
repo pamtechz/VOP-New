@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, type Firestore } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, type Firestore } from 'firebase/firestore';
 import type { DiscoverGuide, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
@@ -9,7 +9,7 @@ function requireDb() {
 
 export async function loadFirestoreGuides(language?: LanguageCode): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
-  const snapshot = await getDocs(collection(firestore, 'curriculum'));
+  const snapshot = await getDocs(query(collection(firestore, 'curriculum'), where('published', '==', true)));
   return snapshot.docs
     .map(item => ({ id: item.id, ...item.data() } as unknown as DiscoverGuide))
     .filter(guide => Boolean(guide.id) && Boolean(guide.title) && Boolean(guide.language) && (guide as any).published === true)
