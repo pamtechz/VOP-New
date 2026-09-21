@@ -44,23 +44,35 @@ const STORAGE_KEYS = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  appName: 'Voice of Prophecy',
-  organizationName: 'Seventh-day Adventist Church',
-  schoolName: 'Bible Correspondence School',
-  directorName: 'Pst. Ernesto Ricci',
-  directorTitle: 'RZUC PM Director',
-  contactPhone: '+260 97 7206617',
-  whatsappNumber: '260977206617',
-  contactEmail: 'vop@rzuc.adventist.org',
-  quizPassThreshold: 80,
-  defaultLanguage: 'en',
-  themeColor: '#0a192f',
-  certificateTitle: 'COURSE CERTIFICATE',
-  certificateBodyText: 'has successfully completed the BIBLE CORRESPONDENCE COURSE as outlined by the Seventh-day Adventist Church',
-  detailPages: { aboutUsMission:'', aboutUsHistory:'', aboutUsLeadership:'', aboutAppDescription:'', aboutAppVersion:'', aboutAppCredits:'', contactOfficeAddress:'', contactOfficeHours:'', contactPhoneNumbers:[], contactEmails:[], contactWhatsAppNumbers:[], socialLinks:{} }
+  appName: '',
+  organizationName: '',
+  schoolName: '',
+  directorName: '',
+  directorTitle: '',
+  contactPhone: '',
+  whatsappNumber: '',
+  contactEmail: '',
+  quizPassThreshold: 0,
+  defaultLanguage: '',
+  customLanguages: [],
+  customTranslations: {},
+  detailPages: {
+    aboutUsMission: '',
+    aboutUsHistory: '',
+    aboutUsLeadership: '',
+    aboutAppDescription: '',
+    aboutAppVersion: '',
+    aboutAppCredits: '',
+    contactOfficeAddress: '',
+    contactOfficeHours: '',
+    contactPhoneNumbers: [],
+    contactEmails: [],
+    contactWhatsAppNumbers: [],
+    socialLinks: {},
+  },
 };
 
-// ---------------- Platform Security Check ---------------- //
+// // ---------------- Platform Security Check ---------------- //
 
 export const isNativePlatform = (): boolean => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
