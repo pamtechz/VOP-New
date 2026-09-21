@@ -509,3 +509,24 @@
   .vop-cert-table-wrap{box-shadow:none;border:0}
   .vop-cert-table{min-width:0}
 }
+
+
+/* Shared admin density pass: keeps previously built pages aligned with the reference scale. */
+.vop-page-head{margin-bottom:16px}
+.vop-heading{gap:14px}
+.vop-heading-icon{width:58px;height:58px;border-radius:14px}
+.vop-heading h1{font-size:29px}
+.vop-heading p{font-size:15px}
+.vop-section-card{padding:17px 19px}
+.vop-section-title{margin-bottom:13px}
+.vop-section-title h2,.vop-section-title h3{font-size:19px}
+.vop-card{border-radius:13px}
+.vop-form-card{padding:19px}
+.vop-tab{padding:10px 16px;border-radius:10px}
+.vop-nav-item{min-height:46px;padding:0 18px;font-size:15px;border-radius:10px}
+.vop-back{min-height:52px;font-size:15px}
+.vop-table th{padding:11px 13px}
+.vop-table td{padding:10px 13px}
+.vop-lesson-row{padding:8px 11px;border-radius:12px}
+.vop-editor{padding:17px}
+.vop-reference-tab{height:46px;padding:0 17px;font-size:14px}
