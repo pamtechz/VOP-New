@@ -13,4 +13,7 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // Enable only the Google native identity provider for the VOP Android app.
+    rgcfaIncludeGoogle = true
+    androidxCredentialsVersion = '1.3.0'
 }

@@ -1,8 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { User, AppSettings, LanguageCode } from '../types';
-import { getTranslation } from '../services/i18n';
-import { ArrowLeft, Download, Share2, Printer, CheckCircle, Award, Edit3 } from 'lucide-react';
+import type { User, AppSettings, LanguageCode } from '../types';
+import { ArrowLeft, Award, Download, Share2, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { getStoredGuides, getStoredGraduationRequests } from '../services/storage';
+import { calculateCurriculumProgress } from '../services/progress';
+import { canShowLocalCertificatePreview } from '../services/certificatePreview';
+import { getTranslation } from '../services/i18n';
 
 interface CertificatesPageProps {
   currentUser: User;
@@ -12,277 +15,125 @@ interface CertificatesPageProps {
 }
 
 export const CertificatesPage: React.FC<CertificatesPageProps> = ({
-  currentUser,
-  settings,
-  activeLanguage,
-  onBack
+  currentUser, settings, activeLanguage, onBack,
 }) => {
   const certificateRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [customName, setCustomName] = useState(currentUser.displayName);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const progress = calculateCurriculumProgress(
+    getStoredGuides(), currentUser, settings.quizPassThreshold, activeLanguage,
+  );
+  const canDisplayPreview = canShowLocalCertificatePreview(
+    progress, getStoredGraduationRequests(), currentUser,
+  );
+  const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate;
+  const t = (key: string, fallback: string) =>
+    getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
 
-  const t = (key: string) => getTranslation(key, activeLanguage, settings.customTranslations);
-  const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate || '12 June, 2023';
-
-  const handleDownloadImage = async () => {
-    if (!certificateRef.current) return;
+  const savePreview = async () => {
+    if (!canDisplayPreview || !certificateRef.current || isExporting) return;
+    setIsExporting(true);
+    setFeedback('');
     try {
-      setIsExporting(true);
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 2.5,
-        useCORS: true,
-        backgroundColor: '#ffffff'
+        scale: 2, useCORS: true, backgroundColor: '#ffffff',
       });
-      const link = document.createElement('a');
-      link.download = `VOP_Certificate_${customName.replace(/\s+/g, '_')}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3500);
-    } catch (err) {
-      console.error('Failed to export certificate:', err);
-      alert('Could not export certificate image. Please try again.');
+      const file = document.createElement('a');
+      file.download = `VOP_Certificate_PREVIEW_${currentUser.uid.replace(/[^a-zA-Z0-9_-]/g, '')}.png`;
+      file.href = canvas.toDataURL('image/png');
+      file.click();
+      setFeedback('Preview saved. This image is not a verified certificate.');
+    } catch {
+      setFeedback('Could not save this preview. Please try again.');
     } finally {
       setIsExporting(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Voice of Prophecy Course Certificate',
-          text: `I have completed the Voice of Prophecy Bible Correspondence Course! Certified by ${settings.organizationName}.`,
-          url: window.location.href
-        });
-      } catch {
-        // User dismissed
-      }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert('Certificate verification link copied to clipboard!');
+  const sharePreview = async () => {
+    if (!canDisplayPreview) return;
+    if (!navigator.share) {
+      setFeedback('Sharing is not available on this device.');
+      return;
+    }
+    try {
+      await navigator.share({ title: settings.appName, text: 'My Bible study certificate preview (not independently verified).' });
+    } catch {
+      // The user may dismiss the system share sheet.
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6fa] text-slate-800 pb-24 md:pb-12">
-      {/* Top Banner - Deep Royal Blue (#002d72) Matching Original APK Screenshot 1 */}
-      <div className="bg-[#002d72] text-white pt-5 pb-7 px-4 sm:px-6 shadow-md">
-        <div className="max-w-4xl mx-auto">
-          {/* Top Bar with Back Button */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1"
-              aria-label="Back"
-            >
-              <ArrowLeft size={22} />
-              <span className="font-bold text-base sm:text-lg">My Certificate</span>
-            </button>
-
-            <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
-              Verified Credential
-            </span>
-          </div>
-
-          {/* Congratulations Section in Banner (Exact Screenshot 1) */}
-          <div className="text-center py-2">
-            <div className="w-14 h-14 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 flex items-center justify-center mx-auto mb-2 shadow-inner">
-              <Award size={30} />
+    <section className="vop-screen">
+      <header className="vop-screen-header">
+        <button className="vop-screen-back" aria-label="Back" onClick={onBack} type="button">
+          <ArrowLeft size={24} />
+        </button>
+        <h1>{t('my_certificate', 'My Certificate')}</h1>
+      </header>
+      <div className="vop-certificate-hero">
+        <Award size={65} strokeWidth={1.9} aria-hidden="true" />
+        <h2>{canDisplayPreview ? 'Congratulations!' : 'Certificate status'}</h2>
+        <p>{canDisplayPreview
+          ? 'Your recorded Bible Correspondence Course has been completed.'
+          : progress.configurationError
+            ? 'The required curriculum needs an administrator to correct its configuration.'
+            : 'Complete the required lessons and tests, then await graduation approval.'}</p>
+      </div>
+      <div className="vop-certificate-body">
+        {canDisplayPreview ? (
+          <div className="vop-certificate-card" ref={certificateRef} aria-label="Unverified certificate preview">
+            <h3>{settings.certificateTitle || t('course_certificate', 'Course Certificate')}</h3>
+            <div>
+              <p>{t('certified_text', 'This is to certify that')}</p>
+              <h4>{currentUser.displayName}</h4>
+              <p style={{ fontWeight: 700 }}>{settings.certificateBodyText || t('completed_course_text', 'Completed the Bible Correspondence Course')}</p>
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Congratulations!!
-            </h1>
-            <p className="text-xs sm:text-sm text-blue-100/90 mt-1 max-w-md mx-auto">
-              You have successfully completed the Bible Correspondence Course
+            <div style={{ width: '100%', display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                <div className="vop-certificate-stamp">VOP</div>
+                <p>{settings.schoolName}</p>
+              </div>
+              <div style={{ textAlign: 'right', flex: 1, minWidth: 0 }}>
+                <p>{settings.directorName}</p>
+                <p>{settings.directorTitle}</p>
+                {issueDate && <p>{issueDate}</p>}
+              </div>
+            </div>
+            <div className="vop-preview-watermark" aria-hidden="true">UNVERIFIED PREVIEW</div>
+          </div>
+        ) : (
+          <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'white', boxShadow: '0 2px 12px #0001' }}>
+            <strong>No certificate has been issued.</strong>
+            <p style={{ fontSize: '.85rem', marginTop: '.6rem' }} role={progress.configurationError ? 'alert' : undefined}>
+              {progress.configurationError
+                ? `Curriculum configuration issue: ${progress.configurationError} Ask an administrator to correct the source records; existing progress has not been deleted.`
+                : progress.certificateEligible
+                  ? 'Your curriculum requirements are met. An approved graduation record linked to this curriculum and completed graduation status are required.'
+                  : 'Your progress is shown below. A passing test result and completion of every required lesson are needed.'}
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {saveSuccess && (
-          <div className="mb-4 p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs sm:text-sm flex items-center gap-3 animate-fadeIn shadow-xs">
-            <CheckCircle size={18} className="text-emerald-600 flex-shrink-0" />
-            <span>High-resolution Certificate image saved to your device!</span>
-          </div>
         )}
-
-        {/* Certificate Card */}
-        <div className="overflow-x-auto pb-4">
-          <div
-            ref={certificateRef}
-            className="w-[820px] mx-auto min-h-[560px] bg-[#fffdfa] text-slate-900 p-8 sm:p-10 rounded-2xl shadow-xl relative border-[10px] border-double border-[#8b6e38] flex flex-col justify-between"
-            style={{
-              backgroundImage: 'radial-gradient(#f7efe3 1.5px, transparent 1.5px)',
-              backgroundSize: '24px 24px'
-            }}
-          >
-            {/* Top Logos & Header */}
-            <div className="flex items-center justify-between border-b-2 border-[#8b6e38]/30 pb-4">
-              <div className="w-20 h-20 flex items-center justify-center">
-                <img src="/assets/vop_logo.png" alt="VOP" className="w-full h-full object-contain" />
-              </div>
-
-              <div className="text-center flex-1 px-4">
-                <span className="text-[11px] font-bold tracking-[0.25em] text-[#8b6e38] uppercase block mb-0.5">
-                  {settings.organizationName || 'Seventh-day Adventist Church'}
-                </span>
-                <h2 className="text-xl sm:text-2xl font-serif font-black tracking-wider text-[#1e293b] uppercase">
-                  {settings.appName || 'Voice of Prophecy'}
-                </h2>
-                <span className="text-xs font-serif italic text-slate-600 block mt-0.5">
-                  {settings.schoolName || 'Bible Correspondence School'}
-                </span>
-              </div>
-
-              <div className="w-20 h-20 flex items-center justify-center">
-                <img src="/assets/pm_logo.png" alt="PM Logo" className="w-full h-full object-contain" />
-              </div>
-            </div>
-
-            {/* Certificate Title */}
-            <div className="text-center my-6">
-              <div className="inline-block relative">
-                <h3 className="text-2xl sm:text-3xl font-serif font-black tracking-[0.18em] text-[#8b6e38] uppercase px-8 py-1 border-y-2 border-[#8b6e38]/50">
-                  {settings.certificateTitle || t('course_certificate')}
-                </h3>
-              </div>
-              <p className="text-xs font-serif uppercase tracking-widest text-slate-500 mt-4">
-                {t('certified_text')}
-              </p>
-
-              {/* Recipient Name with Edit option */}
-              <div className="my-4 relative group inline-block">
-                {isEditingName ? (
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    onBlur={() => setIsEditingName(false)}
-                    autoFocus
-                    className="text-2xl sm:text-3xl font-serif font-bold text-[#1e293b] border-b-2 border-[#8b6e38] bg-transparent text-center focus:outline-none"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    <h4 className="text-2xl sm:text-4xl font-serif font-bold tracking-wide text-[#1e293b] border-b-2 border-[#8b6e38]/60 pb-1 px-6 min-w-[280px]">
-                      {customName}
-                    </h4>
-                    <button
-                      onClick={() => setIsEditingName(true)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-800 transition-opacity cursor-pointer"
-                      title="Edit Name"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-xs sm:text-sm font-serif max-w-xl mx-auto text-slate-700 leading-relaxed px-4">
-                {settings.certificateBodyText || t('completed_course_text')}
-              </p>
-            </div>
-
-            {/* Bottom Signatures & Seal */}
-            <div className="flex items-end justify-between border-t border-[#8b6e38]/30 pt-4 px-4">
-              <div className="text-center">
-                <span className="text-xs font-serif text-slate-800 font-medium block">
-                  {issueDate}
-                </span>
-                <div className="w-36 border-t border-slate-400 mt-1 pt-1">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-sans">
-                    {t('issue_date')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-center flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full border-4 border-double border-[#8b6e38] flex items-center justify-center bg-[#fbf6ec] shadow-inner mb-1">
-                  <Award className="w-8 h-8 text-[#8b6e38]" />
-                </div>
-                <span className="text-[9px] font-bold uppercase tracking-widest text-[#8b6e38]">
-                  Official Seal
-                </span>
-              </div>
-
-              <div className="text-center">
-                <span className="text-xs font-serif font-semibold text-slate-800 block italic">
-                  {settings.directorName || 'Pst. Ernesto Ricci'}
-                </span>
-                <div className="w-44 border-t border-slate-400 mt-1 pt-1">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-sans">
-                    {settings.directorTitle || 'VOP School Director'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+        <h3 style={{ textAlign: 'center', margin: '1.3rem 0 .7rem', fontSize: '.95rem' }}>Discover Guide Progress</h3>
+        <div className="vop-cert-progress" role="progressbar" aria-label="Course progress" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
+          <div style={{ width: `${progress.percent}%` }} />
         </div>
-
-        {/* Progress & Save Bar Section Matching Screenshot 1 Exactly */}
-        <div className="max-w-md mx-auto mt-6 text-center space-y-4">
-          {/* Solid Orange Progress Bar */}
-          <div>
-            <div className="h-3 bg-slate-200 rounded-full overflow-hidden mb-1.5">
-              <div className="h-full bg-[#ff9900] rounded-full w-full" />
+        <p className="vop-cert-caption">Guides completed: {progress.completedGuides}/{progress.totalGuides}</p>
+        {canDisplayPreview && (
+          <>
+            <p className="vop-cert-caption">Local records are editable and cannot independently verify a credential. A server-issued certificate is required for official use.</p>
+            <button type="button" className="vop-cert-action" onClick={savePreview} disabled={isExporting}>
+              <Download size={16} style={{ verticalAlign: 'middle', marginRight: '.4rem' }} />
+              {isExporting ? 'SAVING PREVIEW...' : 'SAVE PREVIEW'}
+            </button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', padding: '1rem' }}>
+              <button type="button" onClick={() => window.print()}><Printer size={16} /> Print preview</button>
+              <button type="button" onClick={sharePreview}><Share2 size={16} /> Share preview</button>
             </div>
-            <span className="text-xs font-bold text-slate-600">
-              Guides completed: 1/1
-            </span>
-          </div>
-
-          {/* Subtext */}
-          <p className="text-xs text-slate-500 font-medium">
-            Save • Screenshot • Share
-          </p>
-
-          {/* Large Royal Blue SAVE Pill Button (Matching Screenshot 1) */}
-          <button
-            onClick={handleDownloadImage}
-            disabled={isExporting}
-            className="w-full py-3.5 rounded-full bg-[#002d72] hover:bg-[#002257] text-white font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-[#002d72]/25 transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <Download size={18} />
-            <span>{isExporting ? 'GENERATING CERTIFICATE...' : 'SAVE'}</span>
-          </button>
-
-          {/* Secondary Action Links */}
-          <div className="flex items-center justify-center gap-4 pt-2 text-xs font-semibold text-slate-600">
-            <button
-              onClick={handlePrint}
-              className="hover:text-[#002d72] flex items-center gap-1 cursor-pointer"
-            >
-              <Printer size={14} />
-              <span>Print</span>
-            </button>
-            <span>•</span>
-            <button
-              onClick={handleShare}
-              className="hover:text-[#002d72] flex items-center gap-1 cursor-pointer"
-            >
-              <Share2 size={14} />
-              <span>Share</span>
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => setIsEditingName(true)}
-              className="hover:text-[#002d72] flex items-center gap-1 cursor-pointer"
-            >
-              <Edit3 size={14} />
-              <span>Edit Name</span>
-            </button>
-          </div>
-        </div>
+          </>
+        )}
+        {feedback && <p role="status" className="vop-cert-caption">{feedback}</p>}
       </div>
-    </div>
+    </section>
   );
 };

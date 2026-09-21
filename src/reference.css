@@ -1,0 +1,137 @@
+/* Reference-screen primitives. These do not depend on a Tailwind build step. */
+:root { --vop-reference-blue: #0c2d63; --vop-reference-orange: #ff9900; --vop-reference-green: #147d19; }
+.vop-screen { background: #fff; min-height: 100%; color: #17202d; padding-bottom: max(5.5rem, env(safe-area-inset-bottom, 0px)); }
+.vop-screen-header { background: var(--vop-reference-blue); color: white; padding: 1.1rem 1.25rem; display: flex; align-items: center; gap: 1.2rem; min-height: 4.25rem; }
+.vop-screen-header h1 { margin: 0; color: white; font: 600 1.15rem/1.4 var(--font-sans); }
+.vop-screen-back { background: none; border: 0; color: white; cursor: pointer; min-width: 2.75rem; min-height: 2.75rem; display: grid; place-items: center; }
+.vop-screen-body { width: min(100%, 760px); margin: 0 auto; padding: 1.35rem 1.15rem; }
+.vop-timeline { margin: 0; padding: 0; list-style: none; }
+.vop-step { display: grid; grid-template-columns: 2.5rem minmax(0,1fr); gap: 0.7rem; position: relative; padding: 0.25rem 0 1.45rem; align-items: start; }
+.vop-step:not(:last-child)::after { content: ''; position: absolute; left: 1.2rem; top: 2.6rem; bottom: 0.15rem; width: 2px; background: #8aa991; }
+.vop-step-marker { width: 2.5rem; height: 2.5rem; border-radius: 50%; background: var(--vop-reference-green); color: white; display: grid; place-items: center; font-size: 0.9rem; font-weight: 700; z-index: 1; }
+.vop-step-copy { background: none; border: 0; color: #17202d; display: block; text-align: left; padding: 0; min-height: 2.5rem; cursor: pointer; width: 100%; font: inherit; }
+.vop-step-copy:focus-visible, .vop-screen-back:focus-visible { outline: 3px solid var(--vop-reference-orange); outline-offset: 3px; }
+.vop-step-label { font-weight: 800; font-size: 0.93rem; display: block; }
+.vop-step-title { font-weight: 600; font-size: 0.95rem; line-height: 1.23; display: block; margin-top: 0.1rem; }
+.vop-certificate-hero { background: var(--vop-reference-blue); color: white; text-align: center; padding: 1.25rem 1.25rem 4.5rem; }
+.vop-certificate-hero h2 { color: white; margin: 0.5rem 0 0; font-size: 1.25rem; }
+.vop-certificate-hero p { color: #ced9e8; font-size: 0.86rem; margin: 0.1rem auto; max-width: 23rem; }
+.vop-certificate-body { padding: 0 1.15rem 2rem; max-width: 760px; margin: -3.3rem auto 0; position: relative; }
+.vop-certificate-card { position: relative; isolation: isolate; overflow: hidden; width: 100%; aspect-ratio: 1.55; background: #fff; box-shadow: 0 3px 12px #0002; border: 1px solid #dce3ea; padding: clamp(0.6rem, 3vw, 1.5rem); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.vop-certificate-card::before { content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0.24; background: radial-gradient(circle at 10px 10px, #cbd5e1 1px, transparent 1.5px) 0 0/20px 20px; }
+.vop-certificate-card h3 { font-size: clamp(0.68rem, 2vw, 1.1rem); color: #283548; }
+.vop-certificate-card h4 { font-size: clamp(0.85rem, 4vw, 2rem); color: #121826; margin: 0.15rem; overflow-wrap: anywhere; }
+.vop-certificate-card p { font-size: clamp(0.53rem, 1.65vw, 0.9rem); line-height: 1.35; }
+.vop-certificate-card .vop-certificate-stamp { border: 3px solid #e8aa18; border-radius: 50%; background: #f4bf35; color: #243654; width: clamp(2.4rem, 12vw, 4.7rem); height: clamp(2.4rem, 12vw, 4.7rem); display: grid; place-items: center; font-weight: 800; font-size: clamp(0.55rem, 2vw, 0.9rem); }
+.vop-preview-watermark { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-25deg); font-size: clamp(0.8rem, 5vw, 2.2rem); color: #8b2424; font-weight: 900; opacity: 0.3; pointer-events: none; text-align: center; }
+.vop-cert-progress { height: 1rem; background: #e5eaf1; border-radius: 50px; overflow: hidden; }
+.vop-cert-progress > div { height: 100%; background: var(--vop-reference-orange); transition: width .2s ease; }
+.vop-cert-action { border: 0; background: var(--vop-reference-blue); color: #fff; font: 700 0.92rem var(--font-sans); border-radius: 2rem; padding: 1rem; width: 100%; cursor: pointer; min-height: 3rem; }
+.vop-cert-action:disabled { opacity: .45; cursor: not-allowed; }
+.vop-cert-caption { text-align: center; color: #465261; font-size: 0.86rem; margin: 1rem 0; }
+/* Restore frequently used literal-color utilities missing from hand-written CSS. */
+[class~='bg-[#002d72]'] { background: #002d72 !important; }
+[class~='bg-[#f4f6fa]'] { background: #f4f6fa !important; }
+[class~='bg-[#ff9900]'] { background: #ff9900 !important; }
+[class~='bg-[#0a1628]'] { background: #0a1628 !important; }
+[class~='text-[#002d72]'] { color: #002d72 !important; }
+[class~='text-[#ff9900]'] { color: #ff9900 !important; }
+[class~='text-slate-800'] { color: #1e293b !important; }
+[class~='bg-white'] { background: #fff !important; }
+[class~='w-16'] { width: 4rem; } [class~='h-16'] { height: 4rem; }
+[class~='w-20'] { width: 5rem; } [class~='h-20'] { height: 5rem; }
+[class~='w-24'] { width: 6rem; } [class~='h-24'] { height: 6rem; }
+[class~='w-12'] { width: 3rem; } [class~='h-12'] { height: 3rem; }
+[class~='max-w-3xl'] { max-width: 48rem; } [class~='max-w-4xl'] { max-width: 56rem; }
+[class~='rounded-3xl'] { border-radius: 1.5rem; }
+[class~='relative'] { position: relative; } [class~='absolute'] { position: absolute; }
+[class~='overflow-y-auto'] { overflow-y: auto; } [class~='overflow-x-auto'] { overflow-x: auto; }
+[class~='text-center'] { text-align: center; } [class~='text-left'] { text-align: left; }
+[class~='cursor-pointer'] { cursor: pointer; }
+[class~='min-w-0'] { min-width: 0; }
+[class~='-mt-3'] { margin-top: -.75rem; }
+[class~='font-extrabold'] { font-weight: 800; } [class~='font-black'] { font-weight: 900; }
+/* The reference admin dashboard is two columns at phone width. */
+@media (max-width: 639px) {
+  .grid.grid-cols-1.sm\:grid-cols-2.lg\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .grid.grid-cols-1.sm\:grid-cols-2.lg\:grid-cols-3 > * { min-width: 0; padding: .9rem !important; }
+  .grid.grid-cols-1.sm\:grid-cols-2.lg\:grid-cols-3 h3 { font-size: .83rem !important; }
+  .grid.grid-cols-1.sm\:grid-cols-2.lg\:grid-cols-3 p { font-size: .7rem !important; }
+  .vop-certificate-body { margin-top: -3.3rem; }
+}
+@media print { .vop-screen-header, .vop-certificate-hero, .vop-cert-action, .vop-cert-caption { display: none !important; } .vop-certificate-body { margin: 0; padding: 0; max-width: none; } .vop-certificate-card { width: 100%; box-shadow: none; } }
+
+
+/* Firebase account entry, using the same VOP navy/gold visual language as the APK shell. */
+.vop-login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr);
+  background: #f4f6fa;
+}
+.vop-login-brand {
+  min-height: 100dvh;
+  padding: clamp(2rem, 6vw, 5rem);
+  background: linear-gradient(145deg, #07172e 0%, #0a2d63 62%, #123d79 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.vop-login-logo {
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  margin-bottom: 1.25rem;
+}
+.vop-login-logo img { width: 64px; height: 64px; object-fit: contain; }
+.vop-login-brand h1 { margin: 0; color: #fff; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.05; }
+.vop-login-brand p { color: rgba(255,255,255,.76); margin: .45rem 0 0; font-size: 1rem; }
+.vop-login-kicker { color: #ffb52e !important; font-size: .72rem !important; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.vop-login-brand-footer { margin-top: auto; padding-top: 3rem; display: grid; gap: .35rem; color: rgba(255,255,255,.78); }
+.vop-login-brand-footer strong { color: #fff; }
+.vop-login-card { display: grid; place-items: center; padding: 2rem; }
+.vop-login-card-inner {
+  width: min(100%, 460px);
+  background: #fff;
+  border: 1px solid #dce3ec;
+  border-radius: 24px;
+  box-shadow: 0 18px 55px rgba(10,25,47,.13);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+.vop-login-card-inner h2 { margin: .25rem 0 .35rem; color: #10243f; font-size: clamp(1.65rem, 4vw, 2.2rem); }
+.vop-login-subtitle { color: #667085; margin: 0 0 1.5rem; }
+.vop-login-form { display: grid; gap: .55rem; }
+.vop-login-form label { color: #344054; font-size: .86rem; font-weight: 700; margin-top: .35rem; }
+.vop-login-form input {
+  width: 100%; box-sizing: border-box; border: 1px solid #cfd7e3; border-radius: 12px;
+  padding: .82rem .9rem; min-height: 48px; font: inherit; background: #fff; color: #17202d;
+}
+.vop-login-form input:focus { outline: 3px solid rgba(255,153,0,.22); border-color: #0c2d63; }
+.vop-login-primary, .vop-login-google {
+  min-height: 48px; border-radius: 12px; font: 700 .92rem var(--font-sans); cursor: pointer;
+}
+.vop-login-primary { border: 0; margin-top: .8rem; background: #0c2d63; color: #fff; }
+.vop-login-primary:hover { background: #08224d; }
+.vop-login-google { width: 100%; border: 1px solid #cfd7e3; background: #fff; color: #17202d; display: flex; align-items: center; justify-content: center; gap: .7rem; }
+.vop-login-google:hover { background: #f7f9fc; }
+.vop-google-mark { font-weight: 900; font-size: 1.1rem; color: #4285f4; }
+.vop-login-divider { display: flex; align-items: center; gap: .8rem; margin: 1.1rem 0; color: #98a2b3; font-size: .78rem; }
+.vop-login-divider::before, .vop-login-divider::after { content: ''; height: 1px; background: #e4e7ec; flex: 1; }
+.vop-login-links { display: flex; justify-content: space-between; gap: .75rem; margin-top: 1rem; }
+.vop-login-links button { border: 0; background: none; color: #0c2d63; font: 600 .8rem var(--font-sans); padding: .25rem 0; cursor: pointer; }
+.vop-login-error { margin: 1rem 0 0; padding: .8rem .9rem; border-radius: 10px; background: #fff1f2; border: 1px solid #fecdd3; color: #9f1239; font-size: .82rem; line-height: 1.45; }
+.vop-login-success { margin: 1rem 0 0; padding: .8rem .9rem; border-radius: 10px; background: #effdf4; border: 1px solid #bbf7d0; color: #166534; font-size: .82rem; }
+.vop-login-note { margin: 1.5rem 0 0; color: #98a2b3; text-align: center; font-size: .72rem; line-height: 1.4; }
+.vop-auth-loading { min-height: 100dvh; display: grid; place-items: center; color: #475467; }
+@media (max-width: 760px) {
+  .vop-login-page { grid-template-columns: 1fr; }
+  .vop-login-brand { min-height: auto; padding: 2rem 1.25rem; }
+  .vop-login-brand-footer { margin-top: 2rem; padding-top: 0; }
+  .vop-login-card { padding: 1rem; }
+  .vop-login-card-inner { border-radius: 18px; }
+}

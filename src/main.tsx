@@ -1,10 +1,13 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Root } from './Root';
+import './index.css';
+import './reference.css';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// Only the Firebase-backed study app can be mounted; no legacy demo fallback.
+const container = document.getElementById('root');
+if (!container) throw new Error('Voice of Prophecy root element is missing.');
+
+createRoot(container).render(
+  <StrictMode><Root /></StrictMode>,
+);

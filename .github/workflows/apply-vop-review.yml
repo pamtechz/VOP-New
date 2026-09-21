@@ -1,0 +1,73 @@
+name: Apply VOP source repairs
+on:
+  push:
+    branches: [fix/reference-design-and-certification-integrity]
+    paths:
+      - scripts/apply-vop-review-fixes.mjs
+      - scripts/run-vop-review-once.mjs
+      - scripts/finalize-vop-progress.mjs
+      - scripts/retire-legacy-profile.mjs
+      - .github/workflows/apply-vop-review.yml
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: [self-hosted, KASAINSTITUTE]
+    timeout-minutes: 25
+    steps:
+      # An earlier VOP workspace may be owned by a different Windows runner
+      # account. Use a fresh VOP-only checkout; never weaken Git safe.directory.
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/reference-design-and-certification-integrity
+          persist-credentials: true
+          path: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}/package-lock.json
+      - name: Validate VOP-only migration scripts
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          node --check scripts/apply-vop-review-fixes.mjs
+          node --check scripts/finalize-vop-progress.mjs
+          node --check scripts/retire-legacy-profile.mjs
+          node --check scripts/run-vop-review-once.mjs
+      - name: Apply guarded source changes, once
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node scripts/run-vop-review-once.mjs
+      - name: Check whitespace and install
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          git diff --check
+          npm ci
+      - name: Typecheck and bundle
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run build
+      - name: Lint source
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run lint
+      - name: Regression tests
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node --experimental-strip-types --test tests/progress.test.ts tests/multitest.test.ts tests/certificatePreview.test.ts tests/averageScore.test.ts tests/quiz.test.ts tests/lesson.test.ts tests/studyTransactions.test.ts
+      - name: Commit verified source changes
+        shell: powershell
+        working-directory: vop-migration-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add src/services/storage.ts src/pages/ProfilePage.tsx src/pages/AdminPage.tsx src/types/index.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $changed = @(git diff --cached --name-only)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($changed.Count -eq 0) {
+            Write-Output 'No changes to commit.'
+          } else {
+            git commit -m 'Apply verified VOP progress and configuration corrections'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git push origin HEAD:refs/heads/fix/reference-design-and-certification-integrity
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

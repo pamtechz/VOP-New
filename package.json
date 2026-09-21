@@ -6,27 +6,44 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "verify:content": "node scripts/generate-snapshots.js && node --test tests/ingestion.test.mjs tests/snapshots.test.mjs",
+    "build:android": "node scripts/generate-snapshots.js && node scripts/validate-android-release.mjs && npm run build && cap sync android",
+    "lint": "oxlint src/main.tsx src/Root.tsx src/config src/lib src/pages/FirebaseStudyApp.tsx src/pages/LessonViewer.tsx src/pages/SignInPage.tsx src/services/firebaseAuth.ts src/services/offlineManifest.ts",
+    "lint:legacy": "oxlint src",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "8.5.2",
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
     "canvas-confetti": "^1.9.4",
+    "firebase": "12.19.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^1.47.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "firebase-admin": "13.10.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "firebase-tools": "15.30.2",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "11.1.1"
+    },
+    "@opentelemetry/core": "2.8.0",
+    "gaxios": {
+      "uuid": "11.1.1"
+    }
   }
 }

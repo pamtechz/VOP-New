@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Firebase project settings are public, but local environment files may
+# contain other credentials. Never commit them; commit .env.example only.
+.env
+.env.*
+!.env.example
+
+# Download this from the existing voiceofprophecy Firebase Android app
+# registered as com.sda.vop. Supply it in release CI through an approved secret.
+android/app/google-services.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -29,3 +39,6 @@ android/build
 android/app/build
 android/local.properties
 .gradle
+
+# Firebase Functions compiled output
+functions/lib
