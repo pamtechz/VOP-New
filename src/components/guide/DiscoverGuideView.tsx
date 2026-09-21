@@ -1,7 +1,6 @@
 import React from 'react';
-import type { DiscoverGuide, Lesson, User } from '../../types';
+import type { AppSettings, DiscoverGuide, Lesson, User } from '../../types';
 import { ArrowLeft, Award, Trophy } from 'lucide-react';
-import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { calculateCurriculumProgress } from '../../services/progress';
 
 interface DiscoverGuideViewProps {
@@ -10,6 +9,7 @@ interface DiscoverGuideViewProps {
   onBack: () => void;
   onSelectLesson: (lesson: Lesson) => void;
   onOpenCertificate: () => void;
+  settings: AppSettings;
 }
 
 /**
@@ -18,10 +18,10 @@ interface DiscoverGuideViewProps {
  * prerequisites; that gate previously stranded guides containing several tests.
  */
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
-  guide, currentUser, onBack, onSelectLesson, onOpenCertificate,
+  guide, currentUser, onBack, onSelectLesson, onOpenCertificate, settings,
 }) => {
   const { certificateEligible } = calculateCurriculumProgress(
-    getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,
+    [guide], currentUser, settings.quizPassThreshold, guide.language,
   );
 
   return (
