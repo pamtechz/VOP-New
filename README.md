@@ -20,6 +20,8 @@ For Android packaging, use the Capacitor/Android configuration under `android/` 
 
 The production lesson seed script writes approved lessons to the canonical `curricula/discover/languages/{language}/lessons/{lessonId}` hierarchy used by the web reader.
 
+Guide metadata is stored at `curricula/discover/languages/{language}`. Guides must be explicitly published before their lessons can be published to the learner curriculum.
+
 ## Implementation
 
 - `src/components/guide/DiscoverGuideView.tsx`: compact mobile numbered lesson timeline. Published lessons are accessible without a hardcoded sequential prerequisite gate; configurable prerequisites require a separate admin-managed policy.
@@ -34,6 +36,7 @@ The production lesson seed script writes approved lessons to the canonical `curr
 - `src/services/storage.ts`: temporary device-local persistence. A queued migration changes stale completion counts, last-test-only grading and organization defaults; this source is still legacy until that migration's verified commit appears in the branch.
 - `scripts/run-vop-review-once.mjs`: guarded retry-safe migration wrapper for the VOP-only runner.
 - `docs/BACKEND_CONTRACT.md`: requirements for a separate ministry backend, authenticated roles, server-side grading, curriculum revisions and official credential issuance. It does not represent an installed service.
+- `src/pages/GuideManager.tsx`: administrator-managed Discover guide metadata backed by canonical Firestore documents.
 
 ## Production release blockers
 
