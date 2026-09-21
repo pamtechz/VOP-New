@@ -6,10 +6,10 @@ import { calculateCurriculumAverageScore, calculateCurriculumProgress } from './
 import { applyLessonCompletion, applyQuizScore } from './studyTransactions.ts';
 
 /**
- * Temporary device-local VOP demo integration. Never interpret these writes as
+ * Device-local study cache integration. Never interpret these writes as
  * authenticated completion, trusted marks or official certificate issuance.
  */
-export function completeDemoLesson(guideId: string, lessonId: string): boolean {
+export function completeLesson(guideId: string, lessonId: string): boolean {
   const guides = getStoredGuides();
   const language = getActiveLanguage();
   const updated = applyLessonCompletion(
@@ -20,7 +20,7 @@ export function completeDemoLesson(guideId: string, lessonId: string): boolean {
   return true;
 }
 
-export function submitDemoQuizScore(guideId: string, testId: string, exactScore: number): boolean {
+export function submitQuizScore(guideId: string, testId: string, exactScore: number): boolean {
   const guides = getStoredGuides();
   const language = getActiveLanguage();
   const threshold = getStoredSettings().quizPassThreshold;
