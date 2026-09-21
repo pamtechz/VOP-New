@@ -1,5 +1,5 @@
 import { collectionGroup, doc, getDoc, getDocs, type DocumentData, type DocumentReference } from 'firebase/firestore';
-import type { DiscoverGuide, Lesson, User, LanguageCode } from '../types';
+import type { AppSettings, DiscoverGuide, Lesson, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
 function requireDb() {
@@ -110,4 +110,9 @@ export async function loadFirestoreGuides(language?: LanguageCode): Promise<Disc
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
   const snapshot = await getDoc(doc(requireDb(), 'users', uid));
   return snapshot.exists() ? snapshot.data() as User : null;
+}
+
+export async function loadFirestoreSettings(): Promise<AppSettings | null> {
+  const snapshot = await getDoc(doc(requireDb(), 'system', 'settings'));
+  return snapshot.exists() ? snapshot.data() as AppSettings : null;
 }
