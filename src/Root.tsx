@@ -5,7 +5,7 @@ import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
-import { loadFirestoreGuides, loadFirestoreSettings } from './services/firestoreData';
+import { loadFirestoreGuides } from './services/firestoreData';
 import { App } from './App';
 import { getStoredUsers, saveUsers } from './services/storage';
 import type { User } from './types';
