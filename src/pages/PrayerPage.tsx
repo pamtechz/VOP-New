@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { PrayerRequest, User } from '../types';
-import { createPrayerRequest, updatePrayerRequestStatus } from '../services/publicFirestore';
 import { ArrowLeft, HeartHandshake, Plus, Check, Clock } from 'lucide-react';
 
 interface PrayerPageProps {
