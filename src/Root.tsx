@@ -5,7 +5,6 @@ import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
-import { loadFirestoreGuides } from './services/firestoreData';
 import { App } from './App';
 import { getStoredUsers, saveUsers } from './services/storage';
 import type { User } from './types';
@@ -79,8 +78,6 @@ export function Root() {
               'vop_auto_localization'
             ].forEach(key => localStorage.removeItem(key));
 
-            const guides = await loadFirestoreGuides();
-            localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
             console.error(error);
