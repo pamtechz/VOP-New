@@ -839,7 +839,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           </div>
         </>
       ) : tab === 'guides' ? (
-        <GuideManager languages={languages} guides={guides} onSaved={() => void load()} />
+        <GuideManager languages={languages} guides={guides} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
       ) : (
         <>
           <div className="vop-reference-toolbar">
