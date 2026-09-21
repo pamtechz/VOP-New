@@ -30,6 +30,7 @@ const COLLECTIONS = new Set([
   'bibleTopics',
   'seasons',
   'certificationConfig',
+  'certificates',
   'graduationRequests',
   'settings',
 ]);
@@ -134,8 +135,8 @@ export default async function handler(request: Request, response: Response) {
     if (['curriculum', 'guides', 'learningPaths', 'bibleTopics', 'seasons'].includes(collection) && !canEditCurriculum) {
       return response.status(403).json({ error: 'Curriculum editor privileges are required.' });
     }
-    if ((collection === 'settings' || collection === 'certificationConfig') && role !== 'super_admin') {
-      return response.status(403).json({ error: 'Only a super administrator can manage this configuration.' });
+    if ((collection === 'settings' || collection === 'certificationConfig' || collection === 'certificates') && role !== 'super_admin') {
+      return response.status(403).json({ error: 'Only a super administrator can manage certification records and configuration.' });
     }
 
     if (action === 'listGuides') {

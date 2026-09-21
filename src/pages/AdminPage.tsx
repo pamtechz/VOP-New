@@ -19,6 +19,7 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
+import CertificationManager from './CertificationManager';
 
 interface AdminPageProps {
   currentUser: User;
@@ -749,9 +750,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
 
   return <div className="vop-admin">
     <header className="vop-admin-top">
-      <div className="vop-brand"><div className="vop-brand-mark">?</div><div><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || ''}</div></div></div>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>setSidebarOpen(!sidebarOpen)} aria-label="Open navigation"><Menu size={30}/></button><div><div className="vop-top-kicker">Administration</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
-      <div className="vop-top-actions"><button className="vop-notification" type="button" aria-label="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button><div className="vop-user"><img className="vop-avatar" src={currentUser.photoURL || ''} alt="" /><div><div className="vop-user-name">{currentUser.displayName || currentUser.email}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || 'Administrator'}</div></div><ChevronDown size={18}/></div></div>
+      <div className="vop-brand"><div className="vop-brand-mark"><Award size={30}/></div><div><div className="vop-brand-name">{settings?.appName || ''}</div><div className="vop-brand-sub">{settings?.appTagline || ''}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>setSidebarOpen(!sidebarOpen)} aria-label="Open navigation"><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-actions"><button className="vop-notification" type="button" aria-label="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button><div className="vop-user">{currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><div className="vop-user-name">{currentUser.displayName || currentUser.email || ''}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || ''}</div></div><ChevronDown size={18}/></div></div>
     </header>
     <div className="vop-shell">
       <aside className={'vop-sidebar '+(sidebarOpen?'open':'')}><nav className="vop-nav">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={23}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" onClick={onBack}><ArrowLeft size={19}/>Back to App</button></aside>
@@ -797,25 +798,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             </div>
           </div>}
         </div>}
-        {activeTab==='certification'&&<div>
-          {renderHeader(Award,'Certification','Configure official certificate presentation and publication controls.')}
-          {certificationLoading ? <div className="vop-empty">Loading certification configuration…</div> : (
-            <form className="vop-card vop-form-card" onSubmit={saveCertification}>
-              {!certification ? <div className="vop-empty"><Award size={34}/><h2 style={{color:'#09275f'}}>Certification is not configured</h2><p>Create the configuration below. No sample certificate data is inserted automatically.</p><button type="button" className="vop-primary" onClick={()=>setCertification({enabled:false,certificateTitle:'',certificateBodyText:'',issuerName:'',minimumScore:80,verificationEnabled:false,verificationBaseUrl:''})}><Plus size={17}/>Create Configuration</button></div> : <>
-                <div className="vop-grid-2">
-                  <div className="vop-field"><label>Certificate title</label><input value={text(certification.certificateTitle)} onChange={e=>setCertification({...certification,certificateTitle:e.target.value})} /></div>
-                  <div className="vop-field"><label>Issuer name</label><input value={text(certification.issuerName)} onChange={e=>setCertification({...certification,issuerName:e.target.value})} /></div>
-                  <div className="vop-field"><label>Minimum score</label><input type="number" min="0" max="100" value={Number(certification.minimumScore ?? 0)} onChange={e=>setCertification({...certification,minimumScore:Number(e.target.value)})} /></div>
-                  <div className="vop-field"><label>Verification base URL</label><input type="url" value={text(certification.verificationBaseUrl)} onChange={e=>setCertification({...certification,verificationBaseUrl:e.target.value})} placeholder="Optional" /></div>
-                </div>
-                <div className="vop-field"><label>Certificate body text</label><textarea value={text(certification.certificateBodyText)} onChange={e=>setCertification({...certification,certificateBodyText:e.target.value})} /></div>
-                <div className="vop-setting-row"><div><div className="vop-setting-name">Enable certification</div><div className="vop-setting-help">Controls whether the public certification configuration is exposed.</div></div><Toggle on={certification.enabled===true} onClick={()=>setCertification({...certification,enabled:certification.enabled!==true})}/></div>
-                <div className="vop-setting-row"><div><div className="vop-setting-name">Verification links</div><div className="vop-setting-help">Allow the configured verification base URL to be used by certificate interfaces.</div></div><Toggle on={certification.verificationEnabled===true} onClick={()=>setCertification({...certification,verificationEnabled:certification.verificationEnabled!==true})}/></div>
-                <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={certificationSaving}><Save size={17}/>{certificationSaving?'Saving…':'Save Certification Settings'}</button></div>
-              </>}
-            </form>
-          )}
-        </div>}
+        {activeTab==='certification'&&(
+          <CertificationManager
+            settings={settings}
+            adminContent={adminContent}
+            showMessage={showMessage}
+          />
+        )}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
