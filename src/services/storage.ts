@@ -21,6 +21,20 @@ import {
   AdminNodeType
 } from '../types';
 
+import {
+  INITIAL_USERS,
+  INITIAL_ANNOUNCEMENTS,
+  INITIAL_BOOKS,
+  INITIAL_UNIONS,
+  INITIAL_CONFERENCES,
+  INITIAL_DISTRICTS,
+  INITIAL_CHURCHES,
+  INITIAL_DETAIL_PAGES,
+  INITIAL_HIERARCHY_CONFIG,
+  INITIAL_GRADUATION_REQUESTS,
+  INITIAL_PRAYER_REQUESTS,
+  INITIAL_RADIO_BROADCASTS
+} from '../data/initialData';
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
@@ -46,17 +60,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   appName: 'Voice of Prophecy',
   organizationName: 'Seventh-day Adventist Church',
   schoolName: 'Bible Correspondence School',
-  directorName: '',
-  directorTitle: '',
-  contactPhone: '',
-  whatsappNumber: '',
-  contactEmail: '',
+  directorName: 'Pst. Ernesto Ricci',
+  directorTitle: 'RZUC PM Director',
+  contactPhone: '+260 97 7206617',
+  whatsappNumber: '260977206617',
+  contactEmail: 'vop@rzuc.adventist.org',
   quizPassThreshold: 80,
   defaultLanguage: 'en',
   themeColor: '#0a192f',
-  certificateTitle: '',
-  certificateBodyText: '',
-  detailPages: { aboutUsMission: '', aboutUsHistory: '', aboutUsLeadership: '', aboutAppDescription: '', aboutAppVersion: '', aboutAppCredits: '', contactOfficeAddress: '', contactOfficeHours: '', contactPhoneNumbers: [], contactEmails: [], contactWhatsAppNumbers: [] }
+  certificateTitle: 'COURSE CERTIFICATE',
+  certificateBodyText: 'has successfully completed the BIBLE CORRESPONDENCE COURSE as outlined by the Seventh-day Adventist Church',
+  detailPages: INITIAL_DETAIL_PAGES
 };
 
 // ---------------- Platform Security Check ---------------- //
@@ -79,13 +93,19 @@ export const isSuperAdminAllowedOnPlatform = (): boolean => {
 
 export const getStoredSettings = (): AppSettings => {
   const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-  if (!data) return DEFAULT_SETTINGS;
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
+    return DEFAULT_SETTINGS;
+  }
   try {
     const parsed = JSON.parse(data);
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      detailPages: { ...DEFAULT_SETTINGS.detailPages, ...(parsed.detailPages || {}) }
+      detailPages: {
+        ...DEFAULT_SETTINGS.detailPages,
+        ...(parsed.detailPages || {})
+      }
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -116,11 +136,14 @@ export const setActiveLanguage = (lang: LanguageCode) => {
 
 export const getStoredUnions = (): Union[] => {
   const data = localStorage.getItem(STORAGE_KEYS.UNIONS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.UNIONS, JSON.stringify(INITIAL_UNIONS));
+    return INITIAL_UNIONS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_UNIONS;
   }
 };
 
@@ -153,11 +176,14 @@ export const deleteUnion = (id: string) => {
 
 export const getStoredConferences = (): Conference[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CONFERENCES);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.CONFERENCES, JSON.stringify(INITIAL_CONFERENCES));
+    return INITIAL_CONFERENCES;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_CONFERENCES;
   }
 };
 
@@ -190,11 +216,14 @@ export const deleteConference = (id: string) => {
 
 export const getStoredDistricts = (): District[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DISTRICTS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.DISTRICTS, JSON.stringify(INITIAL_DISTRICTS));
+    return INITIAL_DISTRICTS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_DISTRICTS;
   }
 };
 
@@ -227,11 +256,14 @@ export const deleteDistrict = (id: string) => {
 
 export const getStoredChurches = (): ChurchOrganization[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHURCHES);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.CHURCHES, JSON.stringify(INITIAL_CHURCHES));
+    return INITIAL_CHURCHES;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_CHURCHES;
   }
 };
 
@@ -264,11 +296,14 @@ export const deleteChurch = (id: string) => {
 
 export const getStoredHierarchyConfig = (): HierarchyConfig => {
   const data = localStorage.getItem(STORAGE_KEYS.HIERARCHY_CONFIG);
-  if (!data) return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: false, divisionName: '' };
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(INITIAL_HIERARCHY_CONFIG));
+    return INITIAL_HIERARCHY_CONFIG;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: false, divisionName: '' };
+    return INITIAL_HIERARCHY_CONFIG;
   }
 };
 
@@ -281,11 +316,14 @@ export const saveHierarchyConfig = (config: HierarchyConfig) => {
 
 export const getStoredGraduationRequests = (): GraduationRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.GRADUATION_REQUESTS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.GRADUATION_REQUESTS, JSON.stringify(INITIAL_GRADUATION_REQUESTS));
+    return INITIAL_GRADUATION_REQUESTS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_GRADUATION_REQUESTS;
   }
 };
 
@@ -342,11 +380,14 @@ export const advanceGraduationStatus = (
 
 export const getStoredPrayerRequests = (): PrayerRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PRAYER_REQUESTS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(INITIAL_PRAYER_REQUESTS));
+    return INITIAL_PRAYER_REQUESTS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_PRAYER_REQUESTS;
   }
 };
 
@@ -375,11 +416,14 @@ export const updatePrayerStatus = (id: string, status: PrayerRequest['status']) 
 
 export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RADIO_BROADCASTS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(INITIAL_RADIO_BROADCASTS));
+    return INITIAL_RADIO_BROADCASTS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_RADIO_BROADCASTS;
   }
 };
 
@@ -570,11 +614,14 @@ export const addQuestionToLesson = (
 
 export const getStoredUsers = (): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
+    return INITIAL_USERS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_USERS;
   }
 };
 
@@ -602,8 +649,7 @@ export const getCurrentUser = (): User => {
   const users = getStoredUsers();
   const currentId = getCurrentUserId();
   const user = users.find(u => u.uid === currentId);
-  if (!user) throw new Error('Authenticated VOP profile is unavailable. Sign in again or contact an administrator.');
-  return user;
+  return user || users[0];
 };
 
 export const updateUser = (updatedUser: User) => {
@@ -720,11 +766,14 @@ export const recordQuizScore = (guideId: string, lessonId: string, scorePercenta
 
 export const getStoredAnnouncements = (): Announcement[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
+    return INITIAL_ANNOUNCEMENTS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_ANNOUNCEMENTS;
   }
 };
 
@@ -735,11 +784,14 @@ export const saveAnnouncements = (announcements: Announcement[]) => {
 
 export const getStoredBooks = (): BookResource[] => {
   const data = localStorage.getItem(STORAGE_KEYS.BOOKS);
-  if (!data) return [];
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(INITIAL_BOOKS));
+    return INITIAL_BOOKS;
+  }
   try {
     return JSON.parse(data);
   } catch {
-    return [];
+    return INITIAL_BOOKS;
   }
 };
 
