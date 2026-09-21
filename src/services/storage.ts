@@ -123,7 +123,7 @@ export const getActiveLanguage = (): LanguageCode => {
   if (lang) {
     return lang;
   }
-  return getStoredSettings().defaultLanguage || 'en';
+  return getStoredSettings().defaultLanguage || '';
 };
 
 export const setActiveLanguage = (lang: LanguageCode) => {
