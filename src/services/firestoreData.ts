@@ -31,7 +31,7 @@ function blocksToContentPages(pages: unknown): Lesson['contentPages'] {
       pageNumber: Number.isSafeInteger(item.pageNumber) ? item.pageNumber! : index + 1,
       title: String(item.title ?? '').trim(),
       content,
-      imageUrl: image?.src ? \`/lessons/\${image.src.replace(/^\\//, '')}\` : undefined,
+      imageUrl: image?.src ? `/lessons/${image.src.replace(/^\\//, '')}` : undefined,
     };
   }).filter(page => page.title && page.content);
 }
@@ -107,7 +107,7 @@ export async function loadFirestoreGuides(language?: LanguageCode): Promise<Disc
     .map(lang => {
       const info = metadata.get(lang);
       return {
-        id: \`discover-\${lang}\`,
+        id: `discover-${lang}`,
         discoverNumber: info?.discoverNumber ?? 0,
         title: info?.title ?? lang,
         subtitle: info?.subtitle ?? '',
