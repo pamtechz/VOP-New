@@ -433,3 +433,11 @@
     animation: none !important;
   }
 }
+
+.vop-admin-content-builder{margin-top:14px;padding:14px;border:1px solid var(--vop-admin-border,#dbe3ef);border-radius:14px;background:rgba(248,250,252,.72)}
+.vop-admin-content-builder .vop-admin-actions{display:flex;flex-wrap:wrap;gap:6px}
+.vop-admin-content-builder code{padding:.08rem .3rem;border-radius:4px;background:#eef2f7;font-size:.78em}
+@media (max-width:720px){
+  .vop-admin-content-builder{padding:10px}
+  .vop-admin-content-builder .vop-admin-btn{font-size:.72rem;padding:.45rem .58rem}
+}
