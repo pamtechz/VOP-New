@@ -68,7 +68,7 @@ function lessonFromDoc(id: string, data: Record<string, unknown>): Lesson {
             pageNumber: Number(p.pageNumber ?? 1),
             title: String(p.title ?? '').trim(),
             content: text,
-            imageUrl: image?.src ? \`/lessons/\${String(image.src).replace(/^\\//, '')}\` : undefined,
+            imageUrl: image?.src ? `/lessons/${String(image.src).replace(/^\\//, '')}` : undefined,
           };
         }).filter(page => page.title && page.content)
       : [];
@@ -87,7 +87,7 @@ function lessonFromDoc(id: string, data: Record<string, unknown>): Lesson {
 
 function guideFromDoc(language: string, data: Record<string, unknown>): DiscoverGuide {
   return {
-    id: String(data.id ?? \`discover-\${language}\`),
+    id: String(data.id ?? `discover-${language}`),
     discoverNumber: Number(data.discoverNumber ?? 0),
     title: String(data.title ?? ''),
     subtitle: String(data.subtitle ?? ''),
