@@ -254,6 +254,7 @@ export const App: React.FC = () => {
             }
             const refreshedUser = getCurrentUser();
             if (refreshedUser && refreshedUser.uid === currentUser.uid) setCurrentUser(refreshedUser);
+            if (!nextLesson) setActiveLesson(null);
           }}
         />
       )}
