@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { auth, firebaseConfigured } from '../lib/firebase';
 
 type Role = 'union_admin' | 'conference_admin' | 'district_admin' | 'church_admin';
@@ -8,10 +7,15 @@ type SetupResponse = { role?: string; message?: string; email?: string };
 
 async function callSetup(body: Record<string, unknown>): Promise<SetupResponse> {
   if (!firebaseConfigured || !auth?.currentUser) throw new Error('Sign in with a configured Firebase account first.');
-  const functions = getFunctions();
-  const callable = httpsCallable<Record<string, unknown>, SetupResponse>(functions, 'vopAdminSetup');
-  const result = await callable(body);
-  return result.data;
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/admin/bootstrap', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({})) as SetupResponse & { error?: string };
+  if (!response.ok) throw new Error(data.error ?? 'Administrator setup failed.');
+  return data;
 }
 
 export function AdminSetupPage({ onBack }: { onBack: () => void }) {
