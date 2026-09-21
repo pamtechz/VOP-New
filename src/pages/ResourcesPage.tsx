@@ -97,11 +97,15 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
               >
                 <div className="flex gap-3.5 mb-3.5">
                   <div className="w-20 h-28 flex-shrink-0 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center p-2 shadow-xs">
-                    <img
-                      src={book.imageUrl || '/assets/book.png'}
-                      alt={book.name}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                    />
+                    {book.imageUrl ? (
+                      <img
+                        src={book.imageUrl}
+                        alt={book.name}
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <BookOpen size={28} className="text-slate-400" aria-hidden="true" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#002d72] px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 inline-block mb-1">
@@ -122,11 +126,13 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
                   </span>
                   <button
                     onClick={() => {
-                      alert(`Reading "${book.name}" offline study edition.`);
+                      const target = book.readUrl || book.downloadUrl;
+                      if (target) window.open(target, '_blank', 'noopener,noreferrer');
                     }}
-                    className="px-4 py-1.5 rounded-full bg-[#002d72] hover:bg-[#002257] text-white text-xs font-bold transition-colors cursor-pointer"
+                    disabled={!book.readUrl && !book.downloadUrl}
+                    className="px-4 py-1.5 rounded-full bg-[#002d72] hover:bg-[#002257] disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors cursor-pointer"
                   >
-                    Read Online
+                    {book.readUrl ? 'Read Online' : book.downloadUrl ? 'Open Material' : 'Link not configured'}
                   </button>
                 </div>
               </div>
