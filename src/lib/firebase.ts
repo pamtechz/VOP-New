@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, initializeAuth, type Auth } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, setPersistence, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { deploymentPolicy } from '../config/deployment';
 
@@ -29,16 +29,13 @@ export const app = firebaseConfigured
 
 export const db: Firestore | null = app ? getFirestore(app) : null;
 
-export const auth: Auth | null = app
-  ? (() => {
-      try {
-        return initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
-      } catch (error) {
-        if ((error as { code?: string }).code === 'auth/already-initialized') return getAuth(app);
-        throw error;
-      }
-    })()
-  : null;
+export const auth: Auth | null = app ? getAuth(app) : null;
+
+if (auth) {
+  void setPersistence(auth, indexedDBLocalPersistence).catch(() => {
+    void setPersistence(auth, browserLocalPersistence);
+  });
+}
 
 let firestorePromise: Promise<Firestore> | undefined;
 
