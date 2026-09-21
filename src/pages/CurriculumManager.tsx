@@ -53,7 +53,7 @@ function text(value: unknown) {
 
 type LessonBlock = {
   id: string;
-  type: 'paragraph' | 'heading' | 'quote' | 'image' | 'video' | 'audio';
+  type: 'paragraph' | 'heading' | 'quote' | 'image' | 'video' | 'audio' | 'pageBreak';
   text?: string;
   src?: string;
 };
@@ -102,18 +102,41 @@ const blankEditor = (language = ''): EditorState => ({
   published: false,
 });
 
+function splitLessonBlocks(blocks: LessonBlock[]) {
+  const pages: LessonBlock[][] = [[]];
+  blocks.forEach(block => {
+    if (block.type === 'pageBreak') {
+      if (pages[pages.length - 1].length > 0) pages.push([]);
+      return;
+    }
+    pages[pages.length - 1].push(block);
+  });
+  return pages.filter(page => page.length > 0);
+}
+
 function LessonLearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; guideTitle: string; onClose: () => void }) {
   const [section, setSection] = useState(0);
+  const [page, setPage] = useState(0);
+  const lessonPages = useMemo(() => splitLessonBlocks(editor.blocks), [editor.blocks]);
   const sections = ['Lesson', ...(editor.bibleReferences.trim() ? ['Bible References'] : []), ...(editor.questions.length ? ['Quiz'] : [])];
-  const canPrev = section > 0;
-  const canNext = section < sections.length - 1;
+  const canPrev = section > 0 || (section === 0 && page > 0);
+  const canNext = section < sections.length - 1 || (section === 0 && page < lessonPages.length - 1);
 
   useEffect(() => {
     setSection(0);
+    setPage(0);
   }, [editor.id]);
 
-  const goNext = () => setSection(value => Math.min(value + 1, sections.length - 1));
-  const goPrev = () => setSection(value => Math.max(value - 1, 0));
+  const goNext = () => {
+    if (section === 0 && page < lessonPages.length - 1) { setPage(value => value + 1); return; }
+    setSection(value => Math.min(value + 1, sections.length - 1));
+    setPage(0);
+  };
+  const goPrev = () => {
+    if (section === 0 && page > 0) { setPage(value => value - 1); return; }
+    setSection(value => Math.max(value - 1, 0));
+    setPage(0);
+  };
 
   return (
     <div style={{
@@ -162,7 +185,7 @@ function LessonLearnerPreview({ editor, guideTitle, onClose }: { editor: EditorS
                 {editor.audioUrl && <div style={{margin:'0 0 22px'}}><audio controls src={editor.audioUrl} style={{width:'100%'}} /></div>}
                 {editor.videoUrl && <div style={{margin:'0 0 24px'}}><video controls src={editor.videoUrl} style={{width:'100%',maxHeight:420,borderRadius:14,background:'#091a35'}} /></div>}
                 <div style={{display:'grid',gap:18}}>
-                  {editor.blocks.map((block,index)=>{
+                  {(lessonPages[page] || []).map((block,index)=>{
                     if (block.type==='heading') return <h2 key={block.id} style={{margin:'8px 0 0',fontSize:23,color:'#09275f',fontWeight:900}}>{block.text || 'Untitled section'}</h2>;
                     if (block.type==='quote') return <blockquote key={block.id} style={{margin:'4px 0',padding:'15px 18px',borderLeft:'4px solid #ff8a00',background:'#fff8ef',borderRadius:'0 12px 12px 0',color:'#5b4a35',fontSize:17,lineHeight:1.7,fontStyle:'italic'}}>{block.text || 'Empty quote'}</blockquote>;
                     if (block.type==='image') return block.src ? <figure key={block.id} style={{margin:0}}><img src={block.src} alt="" style={{width:'100%',maxHeight:480,objectFit:'contain',borderRadius:14,background:'#f3f6fa'}}/></figure> : null;
@@ -170,8 +193,8 @@ function LessonLearnerPreview({ editor, guideTitle, onClose }: { editor: EditorS
                     if (block.type==='audio') return block.src ? <audio key={block.id} controls src={block.src} style={{width:'100%'}} /> : null;
                     return <p key={block.id} style={{margin:0,whiteSpace:'pre-wrap',fontSize:17,lineHeight:1.85,color:'#334d70'}}>{block.text || ''}</p>;
                   })}
-                  {!editor.blocks.length && editor.content && <p style={{margin:0,whiteSpace:'pre-wrap',fontSize:17,lineHeight:1.85,color:'#334d70'}}>{editor.content}</p>}
-                  {!editor.blocks.length && !editor.content && <div style={{padding:24,textAlign:'center',color:'#8798b1',border:'1px dashed #ccd8e7',borderRadius:14}}>This lesson has no learner-facing content yet.</div>}
+                  {!lessonPages.length && editor.content && <p style={{margin:0,whiteSpace:'pre-wrap',fontSize:17,lineHeight:1.85,color:'#334d70'}}>{editor.content}</p>}
+                  {!lessonPages.length && !editor.content && <div style={{padding:24,textAlign:'center',color:'#8798b1',border:'1px dashed #ccd8e7',borderRadius:14}}>This lesson has no learner-facing content yet.</div>}
                 </div>
                 {editor.tags && <div style={{display:'flex',flexWrap:'wrap',gap:7,marginTop:24}}>{editor.tags.split(',').map(tag=>tag.trim()).filter(Boolean).map(tag=><span key={tag} style={{background:'#f0f4f9',color:'#456181',padding:'6px 9px',borderRadius:999,fontSize:12,fontWeight:800}}>{tag}</span>)}</div>}
               </div>
@@ -228,7 +251,7 @@ function LessonLearnerPreview({ editor, guideTitle, onClose }: { editor: EditorS
             border:'1px solid #dbe4ef',background:'#fff',color:canPrev?'#294a76':'#b7c2d0',
             borderRadius:999,padding:'10px 16px',display:'inline-flex',alignItems:'center',gap:7,fontWeight:800
           }}><ChevronLeft size={17}/> Previous</button>
-          <div style={{fontSize:12,color:'#8293aa',fontWeight:800}}>{section+1} / {sections.length}</div>
+          <div style={{fontSize:12,color:'#8293aa',fontWeight:800}}>{section===0 ? `Page ${page+1} of ${lessonPages.length}` : `${section+1} / ${sections.length}`}</div>
           <button type="button" onClick={goNext} disabled={!canNext} style={{
             border:'0',background:canNext?'#07357c':'#dbe4ef',color:canNext?'#fff':'#9ba8b9',
             borderRadius:999,padding:'10px 17px',display:'inline-flex',alignItems:'center',gap:7,fontWeight:800
@@ -323,6 +346,10 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
 
   const openLesson = (guide: DiscoverGuide, lesson: Lesson) => {
     const firstImage = (lesson.contentPages || []).find(page => page.imageUrl)?.imageUrl || guide.image || '';
+    const existingBlocks = (lesson.contentPages || []).flatMap((page, pageIndex, pages) => [
+      ...(page.content ? [{ id: 'p-' + pageIndex, type: 'paragraph' as const, text: page.content }] : []),
+      ...(pageIndex < pages.length - 1 ? [{ id: 'break-' + pageIndex, type: 'pageBreak' as const }] : []),
+    ]);
     setEditor({
       id: lesson.id,
       title: lesson.title,
@@ -333,9 +360,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       guideTitle: guide.title,
       season: '',
       content: (lesson.contentPages || []).map(page => page.content).filter(Boolean).join('\n\n'),
-      blocks: (lesson.contentPages || []).flatMap((page, pageIndex) => page.content
-        ? [{ id: 'p-' + pageIndex, type: 'paragraph' as const, text: page.content }]
-        : []),
+      blocks: existingBlocks,
       imageUrl: firstImage,
       audioUrl: '',
       videoUrl: '',
@@ -412,21 +437,21 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         guideTitle,
         season: editor.season.trim(),
         content: editor.content,
-        contentPages: [{
-          pageNumber: 1,
-          title: editor.title.trim(),
-          content: editor.content,
-          imageUrl: editor.imageUrl.trim() || null,
-        }],
-        pages: [{
-          pageNumber: 1,
-          title: editor.title.trim(),
-          blocks: editor.blocks.map(block => ({
+        contentPages: splitLessonBlocks(editor.blocks).map((pageBlocks, index) => ({
+          pageNumber: index + 1,
+          title: index === 0 ? editor.title.trim() : (pageBlocks.find(block => block.type === 'heading')?.text || 'Page ' + (index + 1)),
+          content: pageBlocks.filter(block => block.type === 'paragraph' || block.type === 'quote' || block.type === 'heading').map(block => block.text || '').filter(Boolean).join('\n\n') || editor.content,
+          imageUrl: (pageBlocks.find(block => block.type === 'image')?.src || (index === 0 ? editor.imageUrl.trim() : '')) || null,
+        })),
+        pages: splitLessonBlocks(editor.blocks).map((pageBlocks, index) => ({
+          pageNumber: index + 1,
+          title: index === 0 ? editor.title.trim() : (pageBlocks.find(block => block.type === 'heading')?.text || 'Page ' + (index + 1)),
+          blocks: pageBlocks.map(block => ({
             type: block.type,
             ...(block.text ? { text: block.text } : {}),
             ...(block.src ? { src: block.src } : {}),
           })),
-        }],
+        })),
         quiz: editor.questions.map((question, index) => ({
           key: id + '-q' + (index + 1),
           question: question.question,
@@ -573,19 +598,22 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           <div className="vop-card vop-editor">
             <div className="vop-settings-tabs" style={{marginBottom:10}}>{editorTabs.map(([id,label])=><button key={id} type="button" className={'vop-tab '+(editorTab===id?'active':'')} onClick={()=>setEditorTab(id)}>{label}</button>)}</div>
             {editorTab === 'content' && <div>
-              <div className="vop-section-title"><div><h3>Lesson Content</h3><p>Build the lesson from ordered content blocks. Nothing is inserted automatically.</p></div><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>Add Block</button></div>
+              <div className="vop-section-title"><div><h3>Lesson Content</h3><p>Build the lesson from ordered content blocks. Nothing is inserted automatically.</p></div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+<button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>Add Block</button>
+<button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('page'),type:'pageBreak'}]})}>Page Break</button>
+</div></div>
               <div style={{display:'grid',gap:10}}>
                 {editor.blocks.map((block,index)=><div className="vop-card" key={block.id} style={{padding:14}}>
                   <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
                     <strong>Block {index+1}</strong>
                     <select value={block.type} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],type:e.target.value as LessonBlock['type']};setEditor({...editor,blocks:next})}}>
-                      <option value="paragraph">Paragraph</option><option value="heading">Heading</option><option value="quote">Quote</option><option value="image">Image</option><option value="video">Video</option><option value="audio">Audio</option>
+                      <option value="paragraph">Paragraph</option><option value="heading">Heading</option><option value="quote">Quote</option><option value="image">Image</option><option value="video">Video</option><option value="audio">Audio</option><option value="pageBreak">Page Break</option>
                     </select>
                     <button className="vop-actions" type="button" title="Move up" onClick={()=>moveBlock(index,-1)} disabled={index===0}><ChevronUp size={15}/></button>
                     <button className="vop-actions" type="button" title="Move down" onClick={()=>moveBlock(index,1)} disabled={index===editor.blocks.length-1}><ChevronDown size={15}/></button>
                     <button className="vop-actions" type="button" title="Delete block" onClick={()=>setEditor({...editor,blocks:editor.blocks.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button>
                   </div>
-                  {(block.type==='paragraph'||block.type==='heading'||block.type==='quote') && <textarea className="vop-editor-body" value={block.text || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],text:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='heading'?'Section heading…':'Write this block…'} />}
+                  {block.type==='pageBreak' ? <div style={{padding:'12px',background:'#eef4fb',border:'1px dashed #9db5d5',borderRadius:10,color:'#35577f',fontWeight:800}}>Page break — learner will continue on the next page.</div> : (block.type==='paragraph'||block.type==='heading'||block.type==='quote') && <textarea className="vop-editor-body" value={block.text || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],text:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='heading'?'Section heading…':'Write this block…'} />}
                   {(block.type==='image'||block.type==='video'||block.type==='audio') && <input value={block.src || ''} onChange={e=>{const next=[...editor.blocks];next[index]={...next[index],src:e.target.value};setEditor({...editor,blocks:next})}} placeholder={block.type==='image'?'Image URL…':block.type==='video'?'Video URL…':'Audio URL…'} />}
                 </div>)}
                 {editor.blocks.length===0 && <div className="vop-empty">No content blocks yet. Add a paragraph, heading, quote or media block.</div>}
