@@ -9,7 +9,7 @@ interface QuizModalProps {
   lesson: Lesson;
   guide: DiscoverGuide;
   onClose: () => void;
-  onSubmitScore: (scorePercent: number) => void;
+  onSubmitScore: (answers: Record<number, number | boolean>) => Promise<number | null>;
   onOpenCertificate: () => void;
   onContinue?: () => void;
   hasNextLesson?: boolean;
@@ -27,6 +27,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
   const [score, setScore] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const question = questions[index];
 
   const choose = (answer: number | boolean) => {
@@ -34,18 +35,30 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setAnswers(previous => ({ ...previous, [index]: answer }));
   };
 
-  const next = () => {
-    if (!validQuiz || !validThreshold || !question || !Object.hasOwn(answers, index)) return;
+  const next = async () => {
+    if (submitting || !validQuiz || !validThreshold || !question || !Object.hasOwn(answers, index)) return;
     if (index < questions.length - 1) { setIndex(value => value + 1); return; }
-    const result = gradeQuiz(questions, answers);
-    if (result === null) {
+
+    const localValidation = gradeQuiz(questions, answers);
+    if (localValidation === null) {
       setError('Some assessment questions or answers are invalid. Contact your course administrator.');
       return;
     }
-    setScore(result);
-    setStage('result');
-    onSubmitScore(result);
-    if (result >= threshold) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+
+    setSubmitting(true);
+    setError('');
+    try {
+      const serverScore = await onSubmitScore(answers);
+      if (serverScore === null) {
+        setError('Your assessment could not be verified and saved. Check your connection and sign-in status, then try again.');
+        return;
+      }
+      setScore(serverScore);
+      setStage('result');
+      if (serverScore >= threshold) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const restart = () => { setAnswers({}); setScore(null); setIndex(0); setError(''); setStage('quiz'); };
@@ -300,8 +313,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="button"
-                disabled={!Object.hasOwn(answers, index)}
-                onClick={next}
+                disabled={submitting || !Object.hasOwn(answers, index)}
+                onClick={() => void next()}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                   padding: '0.8rem 1.75rem',
@@ -309,7 +322,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                   color: !Object.hasOwn(answers, index) ? '#94a3b8' : '#fff',
                   border: 'none', borderRadius: '9999px',
                   fontWeight: 700, fontSize: '0.88rem',
-                  cursor: !Object.hasOwn(answers, index) ? 'not-allowed' : 'pointer',
+                  cursor: submitting || !Object.hasOwn(answers, index) ? 'not-allowed' : 'pointer',
                   boxShadow: !Object.hasOwn(answers, index) ? 'none' : '0 4px 12px rgba(0,45,114,0.3)',
                   transition: 'all 0.2s',
                 }}
