@@ -61,6 +61,7 @@ interface Props {
     data?: Record<string, unknown>
   ) => Promise<{ items?: unknown[]; item?: unknown }>;
   showMessage: (message: string) => void;
+  onViewChange: (view: 'list' | 'preview') => void;
 }
 
 function toDate(value: unknown): Date | null {
@@ -150,7 +151,7 @@ const CertificateArtwork: React.FC<{
 };
 
 export const CertificationManager: React.FC<Props> = ({
-  settings, adminContent, showMessage,
+  settings, adminContent, showMessage, onViewChange,
 }) => {
   const [view, setView] = useState<'list' | 'preview'>('list');
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
@@ -223,6 +224,7 @@ export const CertificationManager: React.FC<Props> = ({
     setDraft(certificate);
     setEditing(false);
     setView('preview');
+    onViewChange('preview');
     setMenuId(null);
   };
 
@@ -280,7 +282,7 @@ export const CertificationManager: React.FC<Props> = ({
       <div className="vop-cert-page">
         <div className="vop-cert-preview-head">
           <div><div className="vop-cert-kicker">Certification</div><h1>Certificate Preview</h1></div>
-          <button className="vop-cert-icon-button" type="button" onClick={() => setView('list')} aria-label="Close preview"><X size={20} /></button>
+          <button className="vop-cert-icon-button" type="button" onClick={() => { setView('list'); onViewChange('list'); }} aria-label="Close preview"><X size={20} /></button>
         </div>
         <div className="vop-cert-preview-title-row">
           <div className="vop-cert-title-icon orange"><Award size={32} /></div>
