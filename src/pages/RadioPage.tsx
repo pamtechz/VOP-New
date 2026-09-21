@@ -41,6 +41,12 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
     if (!currentPlaying?.audioUrl?.trim()) setIsPlaying(false);
   }, [currentPlaying?.id, currentPlaying?.audioUrl]);
 
+  useEffect(() => {
+    if (!isPlaying || !currentPlaying?.audioUrl?.trim()) return;
+    const timer = window.setTimeout(() => { void playCurrent(); }, 50);
+    return () => window.clearTimeout(timer);
+  }, [currentPlaying?.id, isPlaying]);
+
   const togglePlay = (broadcast: RadioBroadcast) => {
     const hasSource = Boolean(broadcast.audioUrl?.trim());
     if (currentPlaying?.id === broadcast.id) {
