@@ -37,20 +37,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   }, [announcements.length]);
 
   const activeAnnouncement = announcements[carouselIndex];
-  const primaryGuide = guides[0] || {
-    id: 'placeholder',
-    discoverNumber: 1,
-    title: 'Discover Guides',
-    subtitle: 'Guide 1',
-    description: 'Explore Bible truths',
-    image: '',
-    lessons: [],
-    certificateEligible: true
-  };
+  const hasLessons = guides.length > 0;
+  const primaryGuide = guides[0];
 
-  const completedCount = primaryGuide.lessons.filter((l) =>
-    currentUser.progress.completedLessons.includes(l.id)
-  ).length;
+  const completedCount = primaryGuide
+    ? primaryGuide.lessons.filter((l) => currentUser.progress.completedLessons.includes(l.id)).length
+    : 0;
 
   return (
     <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '1.5rem 1.25rem' }}>
@@ -136,14 +128,32 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <button
-                onClick={() => onSelectGuide(primaryGuide)}
-                className="btn btn-gold"
-                style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
-              >
-                {activeAnnouncement.actionText || 'Explore Now'}
-                <ChevronRight size={16} />
-              </button>
+              {hasLessons ? (
+                <button
+                  onClick={() => onSelectGuide(primaryGuide)}
+                  className="btn btn-gold"
+                  style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                >
+                  {activeAnnouncement.actionText || 'Explore Now'}
+                  <ChevronRight size={16} />
+                </button>
+              ) : (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    minHeight: '2.35rem',
+                    padding: '0.45rem 1rem',
+                    borderRadius: 'var(--radius-full)',
+                    background: 'rgba(255,255,255,0.12)',
+                    color: '#ffffff',
+                    fontSize: '0.85rem',
+                    fontWeight: 700
+                  }}
+                >
+                  Lessons coming soon
+                </span>
+              )}
             </div>
           </div>
 
@@ -175,85 +185,129 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
       )}
 
-      {/* Quick Resume Card */}
+      {/* Quick Resume / Lessons Coming Soon */}
       <div style={{ marginBottom: '2.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-          <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('recent_guides')}</h4>
-          <span style={{ fontSize: '0.85rem', color: 'var(--vop-navy-700)', fontWeight: 600, cursor: 'pointer' }} onClick={() => onSelectGuide(primaryGuide)}>
-            View all ({guides.length})
-          </span>
+          <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
+            {hasLessons ? t('recent_guides') : 'Bible Study Lessons'}
+          </h4>
+          {hasLessons && (
+            <span
+              style={{ fontSize: '0.85rem', color: 'var(--vop-navy-700)', fontWeight: 600, cursor: 'pointer' }}
+              onClick={() => onSelectGuide(primaryGuide)}
+            >
+              View all ({guides.length})
+            </span>
+          )}
         </div>
 
-        <div
-          onClick={() => onSelectGuide(primaryGuide)}
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '1.5rem',
-            boxShadow: 'var(--shadow-sm)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1.5rem',
-            flexWrap: 'wrap',
-            transition: 'all var(--transition-normal)'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+        {hasLessons ? (
+          <div
+            onClick={() => onSelectGuide(primaryGuide)}
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.5rem',
+              boxShadow: 'var(--shadow-sm)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1.5rem',
+              flexWrap: 'wrap',
+              transition: 'all var(--transition-normal)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'linear-gradient(135deg, var(--vop-navy-900), var(--vop-navy-800))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <BookOpen size={30} color="var(--vop-gold-400)" />
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                  <span className="badge badge-gold">{primaryGuide.subtitle}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>• {primaryGuide.lessons.length} Modules</span>
+                </div>
+                <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {primaryGuide.title}
+                </h4>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '460px' }}>
+                  {primaryGuide.description}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  {completedCount}/{primaryGuide.lessons.length} {t('completed')}
+                </div>
+                <div style={{ width: '110px', height: '6px', background: 'var(--border-subtle)', borderRadius: '999px', overflow: 'hidden', marginTop: '4px' }}>
+                  <div
+                    style={{
+                      width: `${primaryGuide.lessons.length > 0 ? (completedCount / primaryGuide.lessons.length) * 100 : 0}%`,
+                      height: '100%',
+                      background: completedCount === primaryGuide.lessons.length ? 'var(--vop-success)' : 'var(--vop-gold-500)',
+                      borderRadius: '999px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button className="btn btn-gold" style={{ borderRadius: 'var(--radius-full)', padding: '0.55rem 1.25rem' }}>
+                <Play size={16} fill="currentColor" />
+                <span>{completedCount === primaryGuide.lessons.length ? 'Review' : 'Continue'}</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '2rem 1.5rem',
+              boxShadow: 'var(--shadow-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem'
+            }}
+          >
             <div
               style={{
-                width: '64px',
-                height: '64px',
+                width: '56px',
+                height: '56px',
                 borderRadius: 'var(--radius-md)',
                 background: 'linear-gradient(135deg, var(--vop-navy-900), var(--vop-navy-800))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                display: 'grid',
+                placeItems: 'center',
                 flexShrink: 0
               }}
             >
-              <BookOpen size={30} color="var(--vop-gold-400)" />
+              <BookOpen size={26} color="var(--vop-gold-400)" />
             </div>
-
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
-                <span className="badge badge-gold">{primaryGuide.subtitle}</span>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>• {primaryGuide.lessons.length} Modules</span>
-              </div>
-              <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {primaryGuide.title}
+              <h4 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '.25rem' }}>
+                Lessons coming soon
               </h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '460px' }}>
-                {primaryGuide.description}
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                Bible study lessons are being prepared. You can still use the rest of the VOP application while the curriculum is being published.
               </p>
             </div>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {completedCount}/{primaryGuide.lessons.length} {t('completed')}
-              </div>
-              <div style={{ width: '110px', height: '6px', background: 'var(--border-subtle)', borderRadius: '999px', overflow: 'hidden', marginTop: '4px' }}>
-                <div
-                  style={{
-                    width: `${primaryGuide.lessons.length > 0 ? (completedCount / primaryGuide.lessons.length) * 100 : 0}%`,
-                    height: '100%',
-                    background: completedCount === primaryGuide.lessons.length ? 'var(--vop-success)' : 'var(--vop-gold-500)',
-                    borderRadius: '999px'
-                  }}
-                />
-              </div>
-            </div>
-
-            <button className="btn btn-gold" style={{ borderRadius: 'var(--radius-full)', padding: '0.55rem 1.25rem' }}>
-              <Play size={16} fill="currentColor" />
-              <span>{completedCount === primaryGuide.lessons.length ? 'Review' : 'Continue'}</span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Discover Guides Grid */}
@@ -262,112 +316,136 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <div>
             <h4 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{t('discover_curriculum')}</h4>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Systematic lessons uncovering spiritual truth, prophecy, and salvation.
+              {hasLessons
+                ? 'Systematic lessons uncovering spiritual truth, prophecy, and salvation.'
+                : 'Lessons coming soon.'}
             </p>
           </div>
 
-          {/* Language Filter Pills */}
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button
-              onClick={() => setCurriculumLangFilter('all')}
-              className={`btn ${curriculumLangFilter === 'all' ? 'btn-navy' : 'btn-ghost'}`}
-              style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', borderRadius: 'var(--radius-full)' }}
-            >
-              All ({guides.length})
-            </button>
-            {getAvailableLanguages(settings).map((lang) => {
-              const count = guides.filter((g) => (g.language || 'en') === lang.code).length;
-              if (count === 0 && lang.code !== activeLanguage) return null;
-              return (
-                <button
-                  key={lang.code}
-                  onClick={() => setCurriculumLangFilter(lang.code)}
-                  className={`btn ${curriculumLangFilter === lang.code ? 'btn-navy' : 'btn-ghost'}`}
-                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', borderRadius: 'var(--radius-full)' }}
-                >
-                  {lang.nativeName} ({count})
-                </button>
-              );
-            })}
-          </div>
+          {hasLessons && (
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                onClick={() => setCurriculumLangFilter('all')}
+                className={`btn ${curriculumLangFilter === 'all' ? 'btn-navy' : 'btn-ghost'}`}
+                style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', borderRadius: 'var(--radius-full)' }}
+              >
+                All ({guides.length})
+              </button>
+              {getAvailableLanguages(settings).map((lang) => {
+                const count = guides.filter((g) => (g.language || 'en') === lang.code).length;
+                if (count === 0 && lang.code !== activeLanguage) return null;
+                return (
+                  <button
+                    key={lang.code}
+                    onClick={() => setCurriculumLangFilter(lang.code)}
+                    className={`btn ${curriculumLangFilter === lang.code ? 'btn-navy' : 'btn-ghost'}`}
+                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', borderRadius: 'var(--radius-full)' }}
+                  >
+                    {lang.nativeName} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '1.25rem'
-          }}
-        >
-          {guides
-            .filter((g) => curriculumLangFilter === 'all' || (g.language || 'en') === curriculumLangFilter)
-            .map((g) => {
-            const isDone = g.lessons.length > 0 && g.lessons.every((les) => currentUser.progress.completedLessons.includes(les.id));
-            const doneCount = g.lessons.filter((les) => currentUser.progress.completedLessons.includes(les.id)).length;
-            const langObj = getAvailableLanguages(settings).find((l) => l.code === (g.language || 'en'));
+        {hasLessons ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '1.25rem'
+            }}
+          >
+            {guides
+              .filter((g) => curriculumLangFilter === 'all' || (g.language || 'en') === curriculumLangFilter)
+              .map((g) => {
+              const isDone = g.lessons.length > 0 && g.lessons.every((les) => currentUser.progress.completedLessons.includes(les.id));
+              const doneCount = g.lessons.filter((les) => currentUser.progress.completedLessons.includes(les.id)).length;
+              const langObj = getAvailableLanguages(settings).find((l) => l.code === (g.language || 'en'));
 
-            return (
-              <div
-                key={g.id}
-                onClick={() => onSelectGuide(g)}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '1.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: 'var(--shadow-sm)',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-normal)'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                      <span className="badge badge-navy">Guide {g.discoverNumber}</span>
-                      {langObj && (
-                        <span className="badge badge-gold" style={{ fontSize: '0.65rem' }}>
-                          {langObj.nativeName}
+              return (
+                <div
+                  key={g.id}
+                  onClick={() => onSelectGuide(g)}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '1.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: 'var(--shadow-sm)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-normal)'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <span className="badge badge-navy">Guide {g.discoverNumber}</span>
+                        {langObj && (
+                          <span className="badge badge-gold" style={{ fontSize: '0.65rem' }}>
+                            {langObj.nativeName}
+                          </span>
+                        )}
+                      </div>
+                      {isDone ? (
+                        <span className="badge badge-success">
+                          <CheckCircle2 size={12} />
+                          {t('completed')}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                          {doneCount}/{g.lessons.length} Modules
                         </span>
                       )}
                     </div>
-                    {isDone ? (
-                      <span className="badge badge-success">
-                        <CheckCircle2 size={12} />
-                        {t('completed')}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                        {doneCount}/{g.lessons.length} Modules
-                      </span>
-                    )}
+
+                    <h5 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.4rem' }}>
+                      {g.title}
+                    </h5>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '1.25rem' }}>
+                      {g.description}
+                    </p>
                   </div>
 
-                  <h5 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.4rem' }}>
-                    {g.title}
-                  </h5>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '1.25rem' }}>
-                    {g.description}
-                  </p>
-                </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      <Clock size={14} />
+                      <span>~40 mins total</span>
+                    </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <Clock size={14} />
-                    <span>~40 mins total</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--vop-navy-700)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      {t('open_guide')}
+                      <ChevronRight size={16} />
+                    </span>
                   </div>
-
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--vop-navy-700)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    {t('open_guide')}
-                    <ChevronRight size={16} />
-                  </span>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px dashed var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '2rem 1.5rem',
+              textAlign: 'center',
+              color: 'var(--text-secondary)'
+            }}
+          >
+            <BookOpen size={30} style={{ margin: '0 auto .75rem' }} />
+            <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: '.35rem' }}>
+              Lessons coming soon
+            </strong>
+            <span style={{ fontSize: '.85rem' }}>
+              The VOP Bible study curriculum will appear here when approved lessons are published.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
