@@ -140,6 +140,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   const [certification, setCertification] = useState<Record<string, unknown> | null>(null);
   const [certificationLoading, setCertificationLoading] = useState(false);
   const [certificationSaving, setCertificationSaving] = useState(false);
+  const [certificationView, setCertificationView] = useState<'list' | 'preview'>('list');
 
   const showMessage = (value: string) => {
     setMessage(value);
@@ -320,15 +321,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   }, [currentUser]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
-  const currentPageLabel = activeTab === 'curriculum'
-    ? studioTab === 'quizzes'
-      ? 'Quiz Management'
-      : studioTab === 'guides'
-        ? 'Guides Management'
-        : studioTab === 'lessons'
-          ? 'Curriculum Studio'
-          : 'Curriculum Studio'
-    : currentPage?.label || 'Dashboard';
+  const currentPageLabel = activeTab === 'certification'
+    ? certificationView === 'preview' ? 'Certificate Preview' : 'Certified Candidates'
+    : activeTab === 'curriculum'
+      ? studioTab === 'quizzes'
+        ? 'Quiz Management'
+        : studioTab === 'guides'
+          ? 'Guides Management'
+          : studioTab === 'lessons'
+            ? 'Curriculum Studio'
+            : 'Curriculum Studio'
+      : currentPage?.label || 'Dashboard';
   const currentDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const openLanguageEditor = (language?: CustomLanguage) => {
@@ -803,6 +806,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             settings={settings}
             adminContent={adminContent}
             showMessage={showMessage}
+            onViewChange={setCertificationView}
           />
         )}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
