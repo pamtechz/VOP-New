@@ -1,4 +1,5 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -6,30 +7,35 @@ service cloud.firestore {
     }
 
     function userDoc() {
-      return signedIn()
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid))
-        : null;
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasUserProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return hasUserProfile() ? userDoc().data.get('role', 'student') : 'student';
     }
 
     function isSuperAdmin() {
-      return signedIn() && userDoc().data.role == 'super_admin';
+      return signedIn() && role() == 'super_admin';
     }
 
     function isAdmin() {
-      return signedIn()
-        && userDoc().data.role in [
-          'super_admin',
-          'union_admin',
-          'conference_admin',
-          'district_admin',
-          'church_admin'
-        ];
+      return signedIn() && role() in [
+        'super_admin',
+        'union_admin',
+        'conference_admin',
+        'district_admin',
+        'church_admin'
+      ];
     }
 
     function canEditCurriculum() {
       return isAdmin() && (
-        userDoc().data.role == 'super_admin'
-        || userDoc().data.privileges.editor == true
+        role() == 'super_admin' ||
+        userDoc().data.get('privileges', {}).get('editor', false) == true
       );
     }
 
@@ -56,15 +62,73 @@ service cloud.firestore {
         && d.submittedAt == request.time;
     }
 
+    function canCreateOwnProfile() {
+      return signedIn()
+        && request.auth.uid == request.resource.data.uid
+        && request.resource.data.get('role', 'student') == 'student';
+    }
+
+    function canUpdateOwnProfile() {
+      return signedIn()
+        && request.auth.uid == resource.data.uid
+        && request.resource.data.get('role', 'student') == resource.data.get('role', 'student')
+        && request.resource.data.get('adminNodeType', null) == resource.data.get('adminNodeType', null)
+        && request.resource.data.get('adminNodeId', null) == resource.data.get('adminNodeId', null)
+        && request.resource.data.get('privileges', {}) == resource.data.get('privileges', {})
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'phoneNumber',
+          'photoURL',
+          'information',
+          'preferences',
+          'updatedAt'
+        ]);
+    }
+
+    function canManageUserDocument() {
+      return isSuperAdmin();
+    }
+
+    function unionAdminForCreateUpdate() {
+      return role() == 'union_admin'
+        && request.resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function unionAdminForDelete() {
+      return role() == 'union_admin'
+        && resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function conferenceAdminForCreateUpdate() {
+      return role() == 'conference_admin'
+        && request.resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function conferenceAdminForDelete() {
+      return role() == 'conference_admin'
+        && resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function districtAdminForCreateUpdate() {
+      return role() == 'district_admin'
+        && request.resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function districtAdminForDelete() {
+      return role() == 'district_admin'
+        && resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', '');
+    }
+
     match /users/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
-      allow create: if request.auth.uid == uid;
-      allow update: if request.auth.uid == uid || isAdmin();
+
+      allow create: if canCreateOwnProfile();
+      allow update: if canManageUserDocument() || canUpdateOwnProfile();
       allow delete: if isSuperAdmin();
 
       match /progress/{recordId} {
-        allow get, list: if request.auth.uid == uid || isAdmin();
+        allow get, list: if signedIn() && (request.auth.uid == uid || isAdmin());
         allow create: if request.auth.uid == uid && recordId == uid && validProgress(uid);
         allow update, delete: if false;
       }
@@ -80,6 +144,7 @@ service cloud.firestore {
       }
     }
 
+    // Required for the web app's collectionGroup('lessons') query.
     match /{path=**}/lessons/{lessonId} {
       allow get, list: if signedIn();
       allow create, update, delete: if canEditCurriculum();
@@ -102,26 +167,20 @@ service cloud.firestore {
 
     match /conferences/{id} {
       allow get, list: if signedIn();
-      allow create, update, delete: if isSuperAdmin() || (
-        userDoc().data.role == 'union_admin'
-        && request.resource.data.unionId == userDoc().data.adminNodeId
-      );
+      allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate();
+      allow delete: if isSuperAdmin() || unionAdminForDelete();
     }
 
     match /districts/{id} {
       allow get, list: if signedIn();
-      allow create, update, delete: if isSuperAdmin() || (
-        userDoc().data.role == 'conference_admin'
-        && request.resource.data.conferenceId == userDoc().data.adminNodeId
-      );
+      allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate();
+      allow delete: if isSuperAdmin() || conferenceAdminForDelete();
     }
 
     match /churches/{id} {
       allow get, list: if signedIn();
-      allow create, update, delete: if isSuperAdmin() || (
-        userDoc().data.role == 'district_admin'
-        && request.resource.data.districtId == userDoc().data.adminNodeId
-      );
+      allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate();
+      allow delete: if isSuperAdmin() || districtAdminForDelete();
     }
 
     match /announcements/{id} {
@@ -151,6 +210,7 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Explicit default deny.
     match /{document=**} {
       allow read, write: if false;
     }
