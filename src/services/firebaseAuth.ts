@@ -7,6 +7,7 @@ import {
   signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -29,7 +30,9 @@ export const resetPassword = (email: string) =>
 export async function googleSignIn() {
   const firebaseAuth = requireAuth();
   if (!Capacitor.isNativePlatform()) {
-    return signInWithPopup(firebaseAuth, new GoogleAuthProvider());
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    return signInWithPopup(firebaseAuth, provider);
   }
   const result = await FirebaseAuthentication.signInWithGoogle();
   const idToken = result.credential?.idToken;
