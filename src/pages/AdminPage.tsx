@@ -580,7 +580,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       churches: churches.length,
       certification: 0,
     };
-    return <div>{renderHeader(Icon, meta?.label || 'Administration', 'Manage this area using Firestore-backed records.')}<div className="vop-card vop-empty"><Icon size={34}/><h2 style={{color:'#09275f'}}>{meta?.label}</h2><p>{collections[activeTab] || 0} configured records are available from the current data sources.</p><button className="vop-primary" type="button" onClick={()=>setActiveTab('dashboard')}><ArrowLeft size={17}/>Return to Dashboard</button></div></div>;
+    return <div>{renderHeader(Icon, meta?.label || 'Administration', 'Manage this area using Firestore-backed records.')}<div className="vop-card vop-empty"><Icon size={34}/><h2 style={{color:'#09275f'}}>{meta?.label}</h2><p>{collections[activeTab as keyof typeof collections] || 0} configured records are available from the current data sources.</p><button className="vop-primary" type="button" onClick={()=>setActiveTab('dashboard')}><ArrowLeft size={17}/>Return to Dashboard</button></div></div>;
   };
 
   return <div className="vop-admin">
