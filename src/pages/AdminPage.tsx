@@ -322,12 +322,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
 
   const saveLanguageEditor = async () => {
     if (!languageEditor) return;
-    await runSave(async () => {
-      await saveLanguage(languageEditor);
-      if (!snapshot?.languages.some(item => item.code === languageEditor.code)) {
-        await saveTranslation(languageEditor.code, {});
-      }
-    }, 'Language configuration saved to Firestore.');
+    await runSave(
+      () => saveLanguage(languageEditor),
+      'Language configuration saved to Firestore.',
+    );
     setLanguageEditor(null);
   };
 
