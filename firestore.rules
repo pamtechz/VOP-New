@@ -1,9 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
+    function signedIn() {
+      return request.auth != null;
     }
+
+    function userDoc() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid))
+        : null;
+    }
+
+    function isSuperAdmin() {
+      return signedIn() && userDoc().data.role == 'super_admin';
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && userDoc().data.role in [
+          'super_admin',
+          'union_admin',
+          'conference_admin',
+          'district_admin',
+          'church_admin'
+        ];
+    }
+
+    function canEditCurriculum() {
+      return isAdmin() && (
+        userDoc().data.role == 'super_admin'
+        || userDoc().data.privileges.editor == true
+      );
+    }
+
     function validProgress(uid) {
       let d = request.resource.data;
       return d.keys().hasAll([
@@ -15,32 +44,115 @@ service cloud.firestore {
           'answers', 'practiceScore', 'status', 'submittedAt'
         ])
         && d.ownerUid == uid
-        && d.language is string && d.language.matches('[a-z]{2,3}(-[a-z0-9]{2,8})*')
-        && d.lessonId is string && d.lessonId.matches('[A-Za-z0-9_-]{1,80}')
-        && d.revision is string && d.revision.matches('[a-f0-9]{64}')
+        && d.language is string
+        && d.lessonId is string
+        && d.revision is string
         && d.status == 'practice_unverified'
-        && d.practiceScore is number && d.practiceScore >= 0 && d.practiceScore <= 100
-        && d.answers is list && d.answers.size() == 5
-        && d.answers[0] is int && d.answers[0] >= 0 && d.answers[0] <= 5
-        && d.answers[1] is int && d.answers[1] >= 0 && d.answers[1] <= 5
-        && d.answers[2] is int && d.answers[2] >= 0 && d.answers[2] <= 5
-        && d.answers[3] is int && d.answers[3] >= 0 && d.answers[3] <= 5
-        && d.answers[4] is int && d.answers[4] >= 0 && d.answers[4] <= 5
+        && d.practiceScore is number
+        && d.practiceScore >= 0
+        && d.practiceScore <= 100
+        && d.answers is list
+        && d.answers.size() == 5
         && d.submittedAt == request.time;
     }
-    match /{path=**}/lessons/{lessonId} {
-      allow get, list: if request.auth != null;
-      allow create, update, delete: if false;
-    }
+
     match /users/{uid} {
-      allow get: if isOwner(uid);
-      allow list, create, update, delete: if false;
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if request.auth.uid == uid;
+      allow update: if request.auth.uid == uid || isAdmin();
+      allow delete: if isSuperAdmin();
+
       match /progress/{recordId} {
-        allow get, list: if isOwner(uid);
-        allow create: if isOwner(uid) && recordId == uid && validProgress(uid);
+        allow get, list: if request.auth.uid == uid || isAdmin();
+        allow create: if request.auth.uid == uid && recordId == uid && validProgress(uid);
         allow update, delete: if false;
       }
     }
-    // All other paths are implicitly denied.
+
+    match /curricula/discover/languages/{language} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if canEditCurriculum();
+
+      match /lessons/{lessonId} {
+        allow get, list: if signedIn();
+        allow create, update, delete: if canEditCurriculum();
+      }
+    }
+
+    match /{path=**}/lessons/{lessonId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if canEditCurriculum();
+    }
+
+    match /system/settings {
+      allow get: if signedIn();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /translations/{language} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /unions/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /conferences/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isSuperAdmin() || (
+        userDoc().data.role == 'union_admin'
+        && request.resource.data.unionId == userDoc().data.adminNodeId
+      );
+    }
+
+    match /districts/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isSuperAdmin() || (
+        userDoc().data.role == 'conference_admin'
+        && request.resource.data.conferenceId == userDoc().data.adminNodeId
+      );
+    }
+
+    match /churches/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isSuperAdmin() || (
+        userDoc().data.role == 'district_admin'
+        && request.resource.data.districtId == userDoc().data.adminNodeId
+      );
+    }
+
+    match /announcements/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /books/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /prayerRequests/{id} {
+      allow get: if signedIn() && (
+        resource.data.candidateId == request.auth.uid || isAdmin()
+      );
+      allow list: if signedIn();
+      allow create: if signedIn() && request.resource.data.candidateId == request.auth.uid;
+      allow update: if signedIn() && (
+        resource.data.candidateId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /radioBroadcasts/{id} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
