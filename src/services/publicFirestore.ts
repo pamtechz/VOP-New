@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, where, type Firestore } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where, type Firestore } from 'firebase/firestore';
 import type {
   Announcement, AppSettings, BookResource, ChurchOrganization, Conference,
   CustomLanguage, District, RadioBroadcast, Union,
@@ -17,6 +17,7 @@ export interface PublicContentSnapshot {
   conferences: Conference[];
   districts: District[];
   churches: ChurchOrganization[];
+  prayerRequests: PrayerRequest[];
   guides: Awaited<ReturnType<typeof loadFirestoreGuides>>;
 }
 
@@ -73,7 +74,7 @@ function normalizePublished<T extends { published?: boolean }>(
   return { ...fallback, ...data, id: String(data.id ?? id), published: data.published === true } as T;
 }
 
-export async function loadPublicContent(): Promise<PublicContentSnapshot> {
+export async function loadPublicContent(currentUser: User): Promise<PublicContentSnapshot> {
   const firestore = requireDb();
   const [
     settingsSnap, languagesSnap, translationsSnap, announcementsSnap, booksSnap, radioSnap,
@@ -89,6 +90,9 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     getDocs(collection(firestore, 'conferences')),
     getDocs(collection(firestore, 'districts')),
     getDocs(collection(firestore, 'churches')),
+    currentUser.role && currentUser.role !== 'student'
+      ? getDocs(collection(firestore, 'prayerRequests'))
+      : getDocs(query(collection(firestore, 'prayerRequests'), where('candidateId', '==', currentUser.uid))),
   ]);
 
   const languages = languagesSnap.docs
@@ -126,6 +130,20 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     conferences: conferencesSnap.docs.map(item => item.data() as Conference),
     districts: districtsSnap.docs.map(item => item.data() as District),
     churches: churchesSnap.docs.map(item => item.data() as ChurchOrganization),
+    prayerRequests: prayerSnap.docs.map(item => ({ id: item.id, ...item.data() } as PrayerRequest)),
     guides: await loadFirestoreGuides(),
   };
+}
+
+
+export async function createPrayerRequest(request: Omit<PrayerRequest, 'id' | 'createdAt'>) {
+  const firestore = requireDb();
+  await addDoc(collection(firestore, 'prayerRequests'), {
+    ...request,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export async function updatePrayerRequestStatus(id: string, status: PrayerRequest['status']) {
+  await updateDoc(doc(requireDb(), 'prayerRequests', id), { status });
 }
