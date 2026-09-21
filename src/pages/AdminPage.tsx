@@ -19,6 +19,7 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
+import CurriculumManager from './CurriculumManager';
 
 interface AdminPageProps {
   currentUser: User;
@@ -752,7 +753,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
-        {activeTab==='curriculum'&&renderStudio()}
+        {activeTab==='curriculum'&&<CurriculumManager languages={languages} />}
         {activeTab==='candidates'&&<div>
           {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
           <div className="vop-toolbar">
