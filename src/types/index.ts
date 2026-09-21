@@ -198,10 +198,38 @@ export interface Question {
   scriptureRef?: string;
 }
 
+export type LessonContentBlockType =
+  | 'paragraph'
+  | 'heading'
+  | 'scripture'
+  | 'quote'
+  | 'callout'
+  | 'image'
+  | 'video'
+  | 'link'
+  | 'list'
+  | 'divider';
+
+export interface LessonContentBlock {
+  id?: string;
+  type: LessonContentBlockType;
+  text?: string;
+  reference?: string;
+  url?: string;
+  imageUrl?: string;
+  alt?: string;
+  caption?: string;
+  items?: string[];
+  tone?: 'default' | 'info' | 'success' | 'warning' | 'gold';
+  level?: 2 | 3 | 4;
+  align?: 'left' | 'center' | 'right';
+}
+
 export interface LessonContentPage {
   pageNumber: number;
   title: string;
   content: string;
+  blocks?: LessonContentBlock[];
   scriptureQuote?: {
     text: string;
     reference: string;
