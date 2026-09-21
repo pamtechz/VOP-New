@@ -104,6 +104,23 @@ export interface ExtendedAppSettings extends AppSettings {
     announcements: boolean;
     certification: boolean;
   };
+  integrations?: {
+    firebaseProjectId?: string;
+    analyticsEnabled?: boolean;
+    storageEnabled?: boolean;
+    apiBaseUrl?: string;
+  };
+  security?: {
+    sessionTimeoutMinutes?: number;
+    allowMultipleSessions?: boolean;
+    enforceSecureConnections?: boolean;
+  };
+  notifications?: {
+    emailEnabled?: boolean;
+    enrollmentNotifications?: boolean;
+    announcementNotifications?: boolean;
+    certificateNotifications?: boolean;
+  };
 }
 
 export const subscribeSettings = (
