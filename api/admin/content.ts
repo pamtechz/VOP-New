@@ -23,6 +23,11 @@ const COLLECTIONS = new Set([
   'conferences',
   'districts',
   'churches',
+  'users',
+  'curriculum',
+  'certificationConfig',
+  'graduationRequests',
+  'settings',
 ]);
 
 function header(request: Request, name: string): string {
@@ -74,15 +79,30 @@ export default async function handler(request: Request, response: Response) {
     if (!role || role === 'student') {
       return response.status(403).json({ error: 'Administrator privileges are required.' });
     }
+    if ((collection === 'settings' || collection === 'certificationConfig') && role !== 'super_admin') {
+      return response.status(403).json({ error: 'Only a super administrator can manage this configuration.' });
+    }
 
     if (action === 'list') {
+      if (collection === 'settings') {
+        const snapshot = await db.doc('system/settings').get();
+        return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'settings', ...snapshot.data() }] : [] });
+      }
+      if (collection === 'certificationConfig') {
+        const snapshot = await db.doc('system/certification').get();
+        return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'certification', ...snapshot.data() }] : [] });
+      }
       const snapshot = await db.collection(collection).get();
       const items = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
       return response.status(200).json({ ok: true, items });
     }
 
     const id = safeDocumentId(body.id);
-    const ref = db.doc(`${collection}/${id}`);
+    const ref = collection === 'settings'
+      ? db.doc('system/settings')
+      : collection === 'certificationConfig'
+        ? db.doc('system/certification')
+        : db.doc(`${collection}/${id}`);
 
     if (action === 'delete') {
       await ref.delete();
