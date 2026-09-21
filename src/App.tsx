@@ -8,8 +8,11 @@ import {
   getStoredAnnouncements, getStoredBooks, getStoredSettings,
   getActiveLanguage, setActiveLanguage, getStoredUnions, getStoredConferences,
   getStoredDistricts, getStoredChurches, getStoredPrayerRequests, getStoredRadioBroadcasts,
+  saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
-import { completeDemoLesson, submitDemoQuizScore } from './services/localStudy';
+import { completeLesson, submitQuizScore } from './services/studyTransactions';
+import { loadPublicContent } from './services/publicFirestore';
+import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -65,6 +68,56 @@ export const App: React.FC = () => {
     };
     window.addEventListener('vop_data_updated', update);
     return () => window.removeEventListener('vop_data_updated', update);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadPublicContent().then(snapshot => {
+      if (cancelled) return;
+
+      const customTranslations: Record<string, Record<string, string>> = {};
+      Object.entries(snapshot.translations).forEach(([key, values]) => {
+        Object.entries(values).forEach(([language, value]) => {
+          customTranslations[language] ??= {};
+          customTranslations[language][key] = value;
+        });
+      });
+
+      const nextSettings: AppSettings = {
+        ...snapshot.settings,
+        customLanguages: snapshot.languages,
+        customTranslations,
+      };
+
+      setSettings(nextSettings);
+      setGuides(snapshot.guides);
+      setAnnouncements(snapshot.announcements);
+      setBooks(snapshot.books);
+      setUnions(snapshot.unions);
+      setConferences(snapshot.conferences);
+      setDistricts(snapshot.districts);
+      setChurches(snapshot.churches);
+      setRadioBroadcasts(snapshot.radioBroadcasts);
+
+      // Firestore is the source of truth; localStorage is only a local cache for
+      // components that still need synchronous access during the current session.
+      saveSettings(nextSettings);
+      saveGuides(snapshot.guides);
+      saveAnnouncements(snapshot.announcements);
+      saveBooks(snapshot.books);
+      saveUnions(snapshot.unions);
+      saveConferences(snapshot.conferences);
+      saveDistricts(snapshot.districts);
+      saveChurches(snapshot.churches);
+      saveRadioBroadcasts(snapshot.radioBroadcasts);
+    }).catch(error => {
+      if (!cancelled) {
+        console.error('VOP public content load failed', error);
+        setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded from Firestore.');
+      }
+    });
+
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -142,7 +195,7 @@ export const App: React.FC = () => {
       {activeLesson?.type === 'Lesson' && activeGuide && (
         <LessonReaderModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
           onComplete={() => {
-            const accepted = completeDemoLesson(activeGuide.id, activeLesson.id);
+            const accepted = completeLesson(activeGuide.id, activeLesson.id);
             if (!accepted) setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
             setActiveLesson(null);
           }} />
@@ -150,7 +203,7 @@ export const App: React.FC = () => {
       {activeLesson?.type === 'Test' && activeGuide && (
         <QuizModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
           onSubmitScore={score => {
-            const accepted = submitDemoQuizScore(activeGuide.id, activeLesson.id, score);
+            const accepted = submitQuizScore(activeGuide.id, activeLesson.id, score);
             if (!accepted) {
               setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
               setActiveLesson(null);
