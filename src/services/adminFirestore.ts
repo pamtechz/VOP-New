@@ -166,6 +166,23 @@ export const subscribeSettings = (
             announcements: data.features?.announcements ?? true,
             certification: data.features?.certification ?? true,
           },
+          integrations: {
+            firebaseProjectId: data.integrations?.firebaseProjectId || '',
+            analyticsEnabled: data.integrations?.analyticsEnabled ?? false,
+            storageEnabled: data.integrations?.storageEnabled ?? false,
+            apiBaseUrl: data.integrations?.apiBaseUrl || '',
+          },
+          security: {
+            sessionTimeoutMinutes: Number(data.security?.sessionTimeoutMinutes ?? 60),
+            allowMultipleSessions: data.security?.allowMultipleSessions ?? false,
+            enforceSecureConnections: data.security?.enforceSecureConnections ?? true,
+          },
+          notifications: {
+            emailEnabled: data.notifications?.emailEnabled ?? false,
+            enrollmentNotifications: data.notifications?.enrollmentNotifications ?? false,
+            announcementNotifications: data.notifications?.announcementNotifications ?? false,
+            certificateNotifications: data.notifications?.certificateNotifications ?? false,
+          },
           themeColor: data.themeColor || '#0b1a30',
         });
       } else {
