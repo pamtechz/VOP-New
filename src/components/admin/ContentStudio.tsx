@@ -145,7 +145,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const activeItems = state[active];
 
   const languages = useMemo(
-    () => state.languages as CustomLanguage[],
+    () => state.languages as unknown as CustomLanguage[],
     [state.languages],
   );
 
