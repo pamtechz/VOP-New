@@ -60,3 +60,78 @@
   .vop-certificate-body { margin-top: -3.3rem; }
 }
 @media print { .vop-screen-header, .vop-certificate-hero, .vop-cert-action, .vop-cert-caption { display: none !important; } .vop-certificate-body { margin: 0; padding: 0; max-width: none; } .vop-certificate-card { width: 100%; box-shadow: none; } }
+
+
+/* Firebase account entry, using the same VOP navy/gold visual language as the APK shell. */
+.vop-login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr);
+  background: #f4f6fa;
+}
+.vop-login-brand {
+  min-height: 100dvh;
+  padding: clamp(2rem, 6vw, 5rem);
+  background: linear-gradient(145deg, #07172e 0%, #0a2d63 62%, #123d79 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.vop-login-logo {
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  margin-bottom: 1.25rem;
+}
+.vop-login-logo img { width: 64px; height: 64px; object-fit: contain; }
+.vop-login-brand h1 { margin: 0; color: #fff; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.05; }
+.vop-login-brand p { color: rgba(255,255,255,.76); margin: .45rem 0 0; font-size: 1rem; }
+.vop-login-kicker { color: #ffb52e !important; font-size: .72rem !important; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.vop-login-brand-footer { margin-top: auto; padding-top: 3rem; display: grid; gap: .35rem; color: rgba(255,255,255,.78); }
+.vop-login-brand-footer strong { color: #fff; }
+.vop-login-card { display: grid; place-items: center; padding: 2rem; }
+.vop-login-card-inner {
+  width: min(100%, 460px);
+  background: #fff;
+  border: 1px solid #dce3ec;
+  border-radius: 24px;
+  box-shadow: 0 18px 55px rgba(10,25,47,.13);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+.vop-login-card-inner h2 { margin: .25rem 0 .35rem; color: #10243f; font-size: clamp(1.65rem, 4vw, 2.2rem); }
+.vop-login-subtitle { color: #667085; margin: 0 0 1.5rem; }
+.vop-login-form { display: grid; gap: .55rem; }
+.vop-login-form label { color: #344054; font-size: .86rem; font-weight: 700; margin-top: .35rem; }
+.vop-login-form input {
+  width: 100%; box-sizing: border-box; border: 1px solid #cfd7e3; border-radius: 12px;
+  padding: .82rem .9rem; min-height: 48px; font: inherit; background: #fff; color: #17202d;
+}
+.vop-login-form input:focus { outline: 3px solid rgba(255,153,0,.22); border-color: #0c2d63; }
+.vop-login-primary, .vop-login-google {
+  min-height: 48px; border-radius: 12px; font: 700 .92rem var(--font-sans); cursor: pointer;
+}
+.vop-login-primary { border: 0; margin-top: .8rem; background: #0c2d63; color: #fff; }
+.vop-login-primary:hover { background: #08224d; }
+.vop-login-google { width: 100%; border: 1px solid #cfd7e3; background: #fff; color: #17202d; display: flex; align-items: center; justify-content: center; gap: .7rem; }
+.vop-login-google:hover { background: #f7f9fc; }
+.vop-google-mark { font-weight: 900; font-size: 1.1rem; color: #4285f4; }
+.vop-login-divider { display: flex; align-items: center; gap: .8rem; margin: 1.1rem 0; color: #98a2b3; font-size: .78rem; }
+.vop-login-divider::before, .vop-login-divider::after { content: ''; height: 1px; background: #e4e7ec; flex: 1; }
+.vop-login-links { display: flex; justify-content: space-between; gap: .75rem; margin-top: 1rem; }
+.vop-login-links button { border: 0; background: none; color: #0c2d63; font: 600 .8rem var(--font-sans); padding: .25rem 0; cursor: pointer; }
+.vop-login-error { margin: 1rem 0 0; padding: .8rem .9rem; border-radius: 10px; background: #fff1f2; border: 1px solid #fecdd3; color: #9f1239; font-size: .82rem; line-height: 1.45; }
+.vop-login-success { margin: 1rem 0 0; padding: .8rem .9rem; border-radius: 10px; background: #effdf4; border: 1px solid #bbf7d0; color: #166534; font-size: .82rem; }
+.vop-login-note { margin: 1.5rem 0 0; color: #98a2b3; text-align: center; font-size: .72rem; line-height: 1.4; }
+.vop-auth-loading { min-height: 100dvh; display: grid; place-items: center; color: #475467; }
+@media (max-width: 760px) {
+  .vop-login-page { grid-template-columns: 1fr; }
+  .vop-login-brand { min-height: auto; padding: 2rem 1.25rem; }
+  .vop-login-brand-footer { margin-top: 2rem; padding-top: 0; }
+  .vop-login-card { padding: 1rem; }
+  .vop-login-card-inner { border-radius: 18px; }
+}
