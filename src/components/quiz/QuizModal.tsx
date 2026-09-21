@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import type { Lesson, DiscoverGuide } from '../../types';
+import type { AppSettings, Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { getStoredSettings } from '../../services/storage';
 import { gradeQuiz, isQuizConfigured } from '../../services/quiz';
 
 interface QuizModalProps {
@@ -11,11 +10,12 @@ interface QuizModalProps {
   onClose: () => void;
   onSubmitScore: (scorePercent: number) => void;
   onOpenCertificate: () => void;
+  settings: AppSettings;
 }
 
-export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, onSubmitScore, onOpenCertificate }) => {
+export const QuizModal: React.FC<QuizModalProps> = ({ lesson, guide, onClose, onSubmitScore, onOpenCertificate, settings }) => {
   const questions = lesson.questions ?? [];
-  const threshold = getStoredSettings().quizPassThreshold;
+  const threshold = settings.quizPassThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 100;
   const validQuiz = isQuizConfigured(questions);
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
