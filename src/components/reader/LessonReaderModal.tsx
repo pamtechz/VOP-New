@@ -7,7 +7,7 @@ interface LessonReaderModalProps {
   lesson: Lesson;
   guide: DiscoverGuide;
   onClose: () => void;
-  onComplete: () => boolean | void;
+  onComplete: () => boolean | void | Promise<boolean | void>;
   onPreviousLesson?: () => void;
   onNextLesson?: () => void;
   hasPreviousLesson?: boolean;
@@ -63,7 +63,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     if (currentPageIndex < pages.length - 1) {
       setCurrentPageIndex(index => index + 1);
     } else if (hasNextLesson && onNextLesson) {
-      const accepted = onComplete();
+      const accepted = await onComplete();
       if (accepted === false) return;
       onNextLesson();
     } else {
