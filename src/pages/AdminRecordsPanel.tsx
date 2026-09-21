@@ -45,7 +45,7 @@ const LABELS: Record<ManagedAdminCollection, string> = {
   churches: 'Churches',
 };
 
-const COLLECTIONS: Record<Exclude<ManagedAdminCollection, 'translations'>, string> = {
+const COLLECTIONS: Record<RecordManagedCollection, string> = {
   announcements: 'announcements',
   materials: 'books',
   radio: 'radioBroadcasts',
@@ -65,6 +65,12 @@ const ICONS: Record<ManagedAdminCollection, React.ComponentType<{size?: number}>
   districts: Layers,
   churches: Users,
 };
+
+type RecordManagedCollection = Exclude<ManagedAdminCollection, 'translations'>;
+
+function isRecordKind(kind: ManagedAdminCollection): kind is RecordManagedCollection {
+  return kind !== 'translations';
+}
 
 function makeId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -123,6 +129,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     if (kind === 'translations') {
       return subscribeTranslations(setTranslations, loadError);
     }
+    if (!isRecordKind(kind)) return undefined;
     return subscribeAdminCollection(COLLECTIONS[kind], setRecords, loadError);
   }, [kind]);
 
@@ -186,6 +193,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     setError('');
     try {
       const id = editingId || makeId();
+      if (!isRecordKind(kind)) return;
       const payload = { ...form };
       await saveAdminRecord(COLLECTIONS[kind], id, payload);
       setMessage(editingId ? 'Record updated.' : 'Record created.');
@@ -200,6 +208,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
   const remove = async (id: string) => {
     if (!window.confirm('Delete this record from Firestore?')) return;
     try {
+      if (!isRecordKind(kind)) return;
       await deleteAdminRecord(COLLECTIONS[kind], id);
       if (editingId === id) openNew();
       setMessage('Record deleted.');
