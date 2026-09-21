@@ -178,3 +178,19 @@
   .vop-lesson-row>.vop-actions{grid-column:2;justify-self:end}
   .vop-section-card{padding:16px}
 }
+
+
+.vop-admin-record-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(330px,.75fr);gap:18px;align-items:start}
+.vop-admin-record-layout .vop-form-card{position:sticky;top:98px}
+.vop-translation-list{display:flex;flex-direction:column;gap:9px;max-height:620px;overflow:auto;padding-right:2px}
+.vop-translation-row{display:grid;grid-template-columns:minmax(150px,.85fr) minmax(180px,1.4fr) 40px;gap:8px;align-items:center}
+.vop-translation-row input{min-width:0}
+.vop-form-card textarea{min-height:105px;resize:vertical}
+@media(max-width:1100px){
+  .vop-admin-record-layout{grid-template-columns:1fr}
+  .vop-admin-record-layout .vop-form-card{position:static}
+}
+@media(max-width:640px){
+  .vop-translation-row{grid-template-columns:1fr 40px}
+  .vop-translation-row input:first-child{grid-column:1 / -1}
+}
