@@ -588,7 +588,62 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is stored in Firestore.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
         <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
       </div>}
-      {settingsSubtab !== 'general' && settingsSubtab !== 'features' && <div className="vop-card vop-empty"><Settings size={30}/><h2 style={{color:'#09275f'}}> {settingsSubtab} configuration</h2><p>This configuration area is ready for Firestore-backed settings.</p></div>}
+      {settingsSubtab === 'appInfo' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+        <div className="vop-section-title"><div><h2>App Information</h2><p>Manage public application identity and version metadata.</p></div></div>
+        <div className="vop-form-grid">
+          <div className="vop-field"><label>School name</label><input value={settings.schoolName} onChange={e=>setSettings({...settings,schoolName:e.target.value})}/></div>
+          <div className="vop-field"><label>Version label</label><input value={settings.versionLabel || ''} onChange={e=>setSettings({...settings,versionLabel:e.target.value})}/></div>
+          <div className="vop-field"><label>Director name</label><input value={settings.directorName} onChange={e=>setSettings({...settings,directorName:e.target.value})}/></div>
+          <div className="vop-field"><label>Director title</label><input value={settings.directorTitle} onChange={e=>setSettings({...settings,directorTitle:e.target.value})}/></div>
+          <div className="vop-field"><label>Contact phone</label><input value={settings.contactPhone} onChange={e=>setSettings({...settings,contactPhone:e.target.value})}/></div>
+          <div className="vop-field"><label>WhatsApp number</label><input value={settings.whatsappNumber} onChange={e=>setSettings({...settings,whatsappNumber:e.target.value})}/></div>
+          <div className="vop-field"><label>Theme color</label><input type="text" value={settings.themeColor || ''} onChange={e=>setSettings({...settings,themeColor:e.target.value})} placeholder="CSS color"/></div>
+        </div>
+        <div className="vop-field"><label>About app description</label><textarea value={settings.detailPages?.aboutAppDescription || ''} onChange={e=>setSettings({...settings,detailPages:{...settings.detailPages,aboutAppDescription:e.target.value}})}/></div>
+        <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>{settingsSaving?'Saving…':'Save App Information'}</button></div>
+      </form>}
+
+      {settingsSubtab === 'integrations' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+        <div className="vop-section-title"><div><h2>Integrations</h2><p>Configure optional service connections without embedding credentials in the client.</p></div></div>
+        <div className="vop-form-grid">
+          <div className="vop-field"><label>Firebase project ID</label><input value={settings.integrations?.firebaseProjectId || ''} onChange={e=>setSettings({...settings,integrations:{...settings.integrations,firebaseProjectId:e.target.value}})} /></div>
+          <div className="vop-field"><label>API base URL</label><input type="url" value={settings.integrations?.apiBaseUrl || ''} onChange={e=>setSettings({...settings,integrations:{...settings.integrations,apiBaseUrl:e.target.value}})} /></div>
+        </div>
+        <div className="vop-setting-list">
+          {[
+            ['analyticsEnabled','Analytics', 'Enable configured analytics integration.'],
+            ['storageEnabled','Cloud storage', 'Enable configured storage integration.'],
+          ].map(([key,label,help])=>{const on=Boolean(settings.integrations?.[key as 'analyticsEnabled'|'storageEnabled']);return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">{help}</div></div><Toggle on={on} onClick={()=>setSettings({...settings,integrations:{...settings.integrations,[key]:!on}})}/></div>;})}
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Integrations</button></div>
+      </form>}
+
+      {settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+        <div className="vop-section-title"><div><h2>Security</h2><p>Application-level security preferences. Secrets remain server-side.</p></div></div>
+        <div className="vop-form-grid">
+          <div className="vop-field"><label>Session timeout (minutes)</label><input type="number" min="5" max="1440" value={Number(settings.security?.sessionTimeoutMinutes ?? 60)} onChange={e=>setSettings({...settings,security:{...settings.security,sessionTimeoutMinutes:Number(e.target.value)}})} /></div>
+        </div>
+        <div className="vop-setting-list">
+          {[
+            ['allowMultipleSessions','Allow multiple sessions'],
+            ['enforceSecureConnections','Require secure connections'],
+          ].map(([key,label])=>{const on=Boolean(settings.security?.[key as 'allowMultipleSessions'|'enforceSecureConnections']);return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">Stored as configuration only; authentication enforcement remains controlled by the deployment.</div></div><Toggle on={on} onClick={()=>setSettings({...settings,security:{...settings.security,[key]:!on}})}/></div>;})}
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Security Settings</button></div>
+      </form>}
+
+      {settingsSubtab === 'notifications' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+        <div className="vop-section-title"><div><h2>Notifications</h2><p>Configure which notification categories the system may use.</p></div></div>
+        <div className="vop-setting-list">
+          {[
+            ['emailEnabled','Email notifications'],
+            ['enrollmentNotifications','Enrollment notifications'],
+            ['announcementNotifications','Announcement notifications'],
+            ['certificateNotifications','Certificate notifications'],
+          ].map(([key,label])=>{const on=Boolean(settings.notifications?.[key as keyof NonNullable<ExtendedAppSettings['notifications']>]);return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">This preference does not send email by itself; a configured notification service is required.</div></div><Toggle on={on} onClick={()=>setSettings({...settings,notifications:{...settings.notifications,[key]:!on}})}/></div>;})}
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Notification Settings</button></div>
+      </form>}
     </div>;
   };
 
