@@ -801,7 +801,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='certification'&&(
           <CertificationManager
             settings={settings}
-            onBack={onBack}
             adminContent={adminContent}
             showMessage={showMessage}
           />
