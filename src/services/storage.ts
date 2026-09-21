@@ -602,7 +602,8 @@ export const getCurrentUser = (): User => {
   const users = getStoredUsers();
   const currentId = getCurrentUserId();
   const user = users.find(u => u.uid === currentId);
-  return user || users[0];
+  if (!user) throw new Error('Authenticated VOP profile is unavailable. Sign in again or contact an administrator.');
+  return user;
 };
 
 export const updateUser = (updatedUser: User) => {
