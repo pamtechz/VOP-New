@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Book, BookOpen, CalendarDays, Check, CircleHelp, Clock, Edit3,
-  Eye, FileText, Globe, Image as ImageIcon, Layers, Link2, Plus, RefreshCw,
-  Save, Search, Send, Settings, Trash2, Video, Volume2, X
+  ArrowLeft, Book, BookOpen, CalendarDays, CircleHelp, Clock, Edit3,
+  Eye, FileText, Globe, Image as ImageIcon, Layers, Plus, RefreshCw,
+  Save, Search, Send, Trash2, Video, Volume2, X
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
 import { auth } from '../lib/firebase';
 import { loadFirestoreGuides } from '../services/firestoreData';
+import GuideManager from './GuideManager';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -201,7 +202,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       bibleReferences: '',
       questions: (lesson.questions || []).map(question => ({
         question: text(question.question),
-        options: Array.isArray(question.options) ? question.options.map(text) : ['', '', '', '', ''],
+        options: Array.isArray(question.options) ? question.options.map(text) : ['', '', '', ''],
         answer: Number(question.correctOptionIndex ?? 0),
       })),
       teacherNotes: '',
@@ -231,11 +232,18 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       setError('Select a language before saving.');
       return;
     }
+
+    const guide = guides.find(item => item.id === editor.guideId);
+    if (publish && !guide) {
+      setError('Select a published guide before publishing this lesson.');
+      return;
+    }
+
     setSaving(true);
     try {
       const id = editor.id || newId('lesson');
-      const guideId = editor.guideId || 'guide-' + editor.language;
-      const guideTitle = editor.guideTitle || ('Voice of Prophecy — ' + editor.language);
+      const guideId = editor.guideId;
+      const guideTitle = guide?.title || editor.guideTitle;
       const payload = {
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
@@ -247,7 +255,6 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         season: editor.season.trim(),
         content: editor.content,
         contentPages: [{
-
           pageNumber: 1,
           title: editor.title.trim(),
           content: editor.content,
@@ -296,7 +303,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         await adminContent('publishLesson', 'curriculum', id, payload);
       }
       await load();
-      setEditor({ ...editor, id, published: publish });
+      setEditor({ ...editor, id, guideId, guideTitle, published: publish });
       notify(publish ? 'Lesson published to the canonical Firestore curriculum.' : 'Lesson draft saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save lesson.');
@@ -395,7 +402,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         </div>
         <div className="vop-form-grid" style={{gridTemplateColumns:'1.3fr 1fr .8fr 1fr 1fr',marginBottom:14}}>
           <div className="vop-field"><label>Title *</label><input value={editor.title} onChange={e=>setEditor({...editor,title:e.target.value})}/></div>
-          <div className="vop-field"><label>Guide</label><select value={editor.guideId} onChange={e=>{const guide=guides.find(item=>item.id===e.target.value);setEditor({...editor,guideId:e.target.value,guideTitle:guide?.title||editor.guideTitle,language:guide?.language||editor.language})}}><option value="">New guide</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select></div>
+          <div className="vop-field"><label>Guide</label><select value={editor.guideId} onChange={e=>{const guide=guides.find(item=>item.id===e.target.value);setEditor({...editor,guideId:e.target.value,guideTitle:guide?.title||editor.guideTitle,language:guide?.language||editor.language})}}><option value="">Select guide</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select></div>
           <div className="vop-field"><label>Lesson Number *</label><input value={editor.lessonNumber} onChange={e=>setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Season / Quarter</label><input value={editor.season} onChange={e=>setEditor({...editor,season:e.target.value})}/></div>
           <div className="vop-field"><label>Language</label><select value={editor.language} onChange={e=>setEditor({...editor,language:e.target.value})}><option value="">Select language</option>{languagesEnabled.map(language=><option key={language.code} value={language.code}>{language.name} · {language.code}</option>)}</select></div>
@@ -442,7 +449,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
             {editorTab === 'settings' && <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
               <div className="vop-field"><label>Estimated minutes</label><input type="number" min="1" value={editor.estimatedMinutes} onChange={e=>setEditor({...editor,estimatedMinutes:Number(e.target.value)})}/></div>
               <div className="vop-field"><label>Tags</label><input value={editor.tags} onChange={e=>setEditor({...editor,tags:e.target.value})} placeholder="lesson, faith, study"/></div>
-              <div className="vop-setting-row"><div><div className="vop-setting-name">Publication status</div><div className="vop-setting-help">Publishing writes the approved document to the canonical learner curriculum path.</div></div><select value={editor.published?'published':'draft'} onChange={e=>setEditor({...editor,published:e.target.value==='published'})}><option value="draft">Draft</option><option value="published">Published</option></select></div>
+              <div className="vop-setting-row"><div><div className="vop-setting-name">Publication status</div><div className="vop-setting-help">Publishing requires a published guide for the selected language.</div></div><select value={editor.published?'published':'draft'} onChange={e=>setEditor({...editor,published:e.target.value==='published'})}><option value="draft">Draft</option><option value="published">Published</option></select></div>
             </div>}
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -484,7 +491,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       {loading ? <div className="vop-empty">Loading curriculum from Firestore…</div> : tab==='lessons' ? (
         <div className="vop-studio-list">{filteredLessons.map(row=><button key={row.guide.id+'-'+row.lesson.id} className="vop-lesson-row" type="button" onClick={()=>openLesson(row.guide,row.lesson)}><div className="vop-thumb">{(row.lesson.contentPages||[]).find(page=>page.imageUrl)?.imageUrl && <img src={(row.lesson.contentPages||[]).find(page=>page.imageUrl)?.imageUrl} alt="" />}</div><div style={{minWidth:0,textAlign:'left'}}><div className="vop-row-title">{row.lesson.lessonNumber}. {row.lesson.title}</div><div className="vop-row-desc">{row.lesson.description || 'No description configured.'}</div><div className="vop-row-meta"><span><BookOpen size={13}/>{row.guide.title}</span><span><CircleHelp size={13}/>{row.lesson.questions?.length || 0}</span><span><Clock size={13}/>{row.lesson.estimatedMinutes} mins</span></div></div><span className="vop-status published">Published</span><span className="vop-chip"><Globe size={12}/>{row.guide.language.toUpperCase()}</span><span className="vop-actions"><Edit3 size={16}/></span></button>)}{filteredLessons.length===0&&<div className="vop-empty">No approved lessons match the current search.</div>}</div>
       ) : tab === 'guides' ? (
-        <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Guide</th><th>Language</th><th>Lessons</th><th>Status</th></tr></thead><tbody>{guides.map((guide,index)=><tr key={guide.id}><td>{index+1}</td><td><strong>{guide.title}</strong><div className="vop-row-desc">{guide.description || guide.subtitle || 'No description configured.'}</div></td><td><span className="vop-chip">{guide.language.toUpperCase()}</span></td><td>{guide.lessons.length}</td><td><span className="vop-status published">Published</span></td></tr>)}</tbody></table>{guides.length===0&&<div className="vop-empty">No guides are currently available.</div>}</div>
+        <GuideManager languages={languages} guides={guides} onSaved={() => void load()} />
       ) : (
         <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Lesson</th><th>Guide</th><th>Questions</th><th>Status</th><th>Action</th></tr></thead><tbody>{quizRows.map((row,index)=><tr key={row.guide.id+'-'+row.lesson.id}><td>{index+1}</td><td><strong>{row.lesson.title}</strong><div className="vop-row-desc">{row.lesson.lessonNumber}</div></td><td>{row.guide.title}</td><td>{row.lesson.questions?.length||0}</td><td><span className="vop-status published">Published</span></td><td><button className="vop-actions" type="button" onClick={()=>openLesson(row.guide,row.lesson)}><Edit3 size={15}/></button></td></tr>)}</tbody></table>{quizRows.length===0&&<div className="vop-empty">No quizzes are currently configured.</div>}</div>
       )}
