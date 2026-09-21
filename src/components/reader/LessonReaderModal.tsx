@@ -8,9 +8,16 @@ interface LessonReaderModalProps {
   guide: DiscoverGuide;
   onClose: () => void;
   onComplete: () => void;
+  onPreviousLesson?: () => void;
+  onNextLesson?: () => void;
+  hasPreviousLesson?: boolean;
+  hasNextLesson?: boolean;
 }
 
-export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, guide, onClose, onComplete }) => {
+export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
+  lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson,
+  hasPreviousLesson = false, hasNextLesson = false,
+}) => {
   const configured = isLessonConfigured(lesson);
   const pages = configured ? lesson.contentPages! : [];
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -55,6 +62,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, gu
     stopSpeech();
     if (currentPageIndex < pages.length - 1) {
       setCurrentPageIndex(index => index + 1);
+    } else if (hasNextLesson && onNextLesson) {
+      onComplete();
+      onNextLesson();
     } else {
       onComplete();
     }
@@ -327,21 +337,28 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, gu
         }}>
           <button
             type="button"
-            onClick={handlePrev}
-            disabled={!configured || currentPageIndex === 0}
+            onClick={() => {
+              if (configured && currentPageIndex > 0) {
+                handlePrev();
+              } else if (hasPreviousLesson && onPreviousLesson) {
+                stopSpeech();
+                onPreviousLesson();
+              }
+            }}
+            disabled={!configured || (currentPageIndex === 0 && !hasPreviousLesson)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
               padding: '0.7rem 1.25rem',
               border: '1.5px solid #e2e8f0',
               borderRadius: '9999px',
               background: '#fff',
-              color: currentPageIndex === 0 || !configured ? '#cbd5e1' : '#374151',
+              color: (currentPageIndex === 0 && !hasPreviousLesson) || !configured ? '#cbd5e1' : '#374151',
               fontWeight: 600, fontSize: '0.875rem',
               cursor: currentPageIndex === 0 || !configured ? 'not-allowed' : 'pointer',
               opacity: currentPageIndex === 0 || !configured ? 0.5 : 1,
             }}
           >
-            <ChevronLeft size={18} /> Previous
+            <ChevronLeft size={18} /> {currentPageIndex === 0 && hasPreviousLesson ? 'Previous Lesson' : 'Previous Page'}
           </button>
 
           <button
@@ -366,7 +383,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({ lesson, gu
           >
             {configured && currentPageIndex < pages.length - 1
               ? <><span>Next Page</span><ChevronRight size={18} /></>
-              : <><CheckCircle size={18} /><span>Complete Lesson</span></>}
+              : hasNextLesson
+                ? <><span>Complete & Continue</span><ChevronRight size={18} /></>
+                : <><CheckCircle size={18} /><span>Complete Lesson</span></>}
           </button>
         </footer>
       </section>
