@@ -812,3 +812,168 @@ h1, h2, h3, h4, h5, h6 {
   background-color: #002257;
   transform: translateY(-1px);
 }
+
+
+/* Administrative setup and error states */
+.vop-admin-page,
+.vop-error-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(circle at top left, rgba(245, 176, 38, 0.14), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(30, 79, 148, 0.16), transparent 40%),
+    var(--bg-primary);
+}
+
+.vop-admin-card,
+.vop-error-card {
+  width: min(100%, 620px);
+  padding: clamp(1.75rem, 5vw, 3rem);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+}
+
+.vop-admin-mark {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 1.25rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--vop-navy-900), var(--vop-navy-700));
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.vop-admin-kicker,
+.vop-error-kicker {
+  color: var(--vop-gold-600);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.vop-admin-card h1,
+.vop-error-card h1 {
+  margin-top: .55rem;
+  font-size: clamp(1.8rem, 4vw, 2.55rem);
+}
+
+.vop-admin-lead,
+.vop-error-card > p {
+  margin-top: .8rem;
+  color: var(--text-secondary);
+}
+
+.vop-admin-section {
+  display: grid;
+  gap: .8rem;
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+}
+
+.vop-admin-status,
+.vop-admin-warning {
+  color: var(--text-secondary);
+  font-size: .92rem;
+}
+
+.vop-admin-account {
+  display: grid;
+  gap: .15rem;
+  padding: .9rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--vop-navy-50);
+}
+
+[data-theme="dark"] .vop-admin-account {
+  background: rgba(30, 79, 148, .2);
+}
+
+.vop-admin-account span {
+  color: var(--text-secondary);
+  font-size: .88rem;
+  overflow-wrap: anywhere;
+}
+
+.vop-admin-input {
+  width: 100%;
+  padding: .8rem .9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.vop-admin-button {
+  width: 100%;
+  min-height: 46px;
+}
+
+.vop-admin-message {
+  margin-top: 1rem;
+  padding: .9rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: .92rem;
+}
+
+.vop-admin-message-error {
+  color: #991b1b;
+  background: var(--vop-error-bg);
+  border: 1px solid #fecaca;
+}
+
+.vop-admin-message-success {
+  color: #065f46;
+  background: var(--vop-success-bg);
+  border: 1px solid #a7f3d0;
+}
+
+.vop-admin-back {
+  display: inline-block;
+  margin-top: 1.25rem;
+  color: var(--vop-navy-800);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.vop-error-card {
+  text-align: center;
+}
+
+.vop-error-code {
+  display: inline-flex;
+  padding: .35rem .7rem;
+  border-radius: var(--radius-full);
+  background: var(--vop-error-bg);
+  color: var(--vop-error);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.vop-error-card .btn {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 560px) {
+  .vop-admin-page,
+  .vop-error-page {
+    padding: 1rem;
+  }
+
+  .vop-admin-card,
+  .vop-error-card {
+    border-radius: var(--radius-lg);
+    padding: 1.4rem;
+  }
+}
