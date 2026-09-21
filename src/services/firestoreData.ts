@@ -1,4 +1,4 @@
-import { collectionGroup, doc, getDoc, getDocs, type DocumentData, type DocumentReference } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, type Firestore } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
@@ -12,7 +12,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
   toi: 'Tonga',
 };
 
-function blocksToContentPages(pages: unknown): Lesson['contentPages'] {
+function unused_blocksToContentPages(pages: unknown): Lesson['contentPages'] {
   if (!Array.isArray(pages)) return [];
   return pages.map((page, index) => {
     const item = page as { pageNumber?: number; title?: string; blocks?: unknown[] };
@@ -33,12 +33,12 @@ function blocksToContentPages(pages: unknown): Lesson['contentPages'] {
   }).filter(page => page.title && page.content);
 }
 
-function languageFromReference(reference: DocumentReference<DocumentData>): string {
+function unused_languageFromReference(reference: DocumentReference<DocumentData>): string {
   const languageDocument = reference.parent.parent;
   return languageDocument?.id ?? '';
 }
 
-function normalizeLesson(id: string, data: DocumentData): Lesson {
+function unused_normalizeLesson(id: string, data: DocumentData): Lesson {
   const lessonId = String(data.lessonId ?? id);
   return {
     id: lessonId,
@@ -55,58 +55,23 @@ function normalizeLesson(id: string, data: DocumentData): Lesson {
 }
 
 export async function loadFirestoreGuides(language?: LanguageCode): Promise<DiscoverGuide[]> {
-  const snapshot = await getDocs(collectionGroup(requireDb(), 'lessons'));
-  const grouped = new Map<string, {
-    language: string;
-    lessons: Lesson[];
-    discoverNumber: number;
-    title: string;
-    subtitle: string;
-    description: string;
-    image: string;
-    certificateEligible: boolean;
-  }>();
-
-  snapshot.docs.forEach(item => {
-    const data = item.data();
-    const lang = String(data.lang ?? data.language ?? languageFromReference(item.ref)).trim();
-    if (!lang || (language && lang !== language)) return;
-
-    const guideId = `discover-${lang}`;
-    const languageLabel = String(data.languageLabel ?? LANGUAGE_LABELS[lang] ?? lang).trim();
-    const current = grouped.get(guideId) ?? {
-      language: lang,
-      lessons: [],
-      discoverNumber: 1,
-      title: `Discover Bible Guides — ${languageLabel}`,
-      subtitle: languageLabel,
-      description: `Voice of Prophecy Discover Bible Guides in ${languageLabel}.`,
-      image: '/assets/guide_2.jpg',
-      certificateEligible: true,
-    };
-
-    current.lessons.push(normalizeLesson(item.id, data));
-    grouped.set(guideId, current);
-  });
-
-  return [...grouped.entries()]
-    .map(([id, group]) => ({
-      id,
-      discoverNumber: group.discoverNumber,
-      title: group.title,
-      subtitle: group.subtitle,
-      description: group.description,
-      language: group.language,
-      image: group.image,
-      lessons: group.lessons.sort((a, b) =>
-        a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true }),
-      ),
-      certificateEligible: group.certificateEligible,
+  const firestore = requireDb();
+  const snapshot = await getDocs(collection(firestore, 'curriculum'));
+  return snapshot.docs
+    .map(item => ({ id: item.id, ...item.data() } as unknown as DiscoverGuide))
+    .filter(guide => Boolean(guide.id) && Boolean(guide.title) && Boolean(guide.language) && guide.published !== false)
+    .filter(guide => !language || guide.language === language)
+    .map(guide => ({
+      ...guide,
+      lessons: Array.isArray(guide.lessons) ? guide.lessons : [],
+      certificateEligible: guide.certificateEligible === true,
+      discoverNumber: Number(guide.discoverNumber ?? 0),
+      image: String(guide.image ?? ''),
+      subtitle: String(guide.subtitle ?? ''),
+      description: String(guide.description ?? ''),
     }))
-    .filter(guide => guide.lessons.length > 0)
-    .sort((a, b) => a.language.localeCompare(b.language));
+    .sort((a, b) => a.discoverNumber - b.discoverNumber || a.title.localeCompare(b.title));
 }
-
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
   const snapshot = await getDoc(doc(requireDb(), 'users', uid));
   return snapshot.exists() ? snapshot.data() as User : null;
