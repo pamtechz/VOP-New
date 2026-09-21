@@ -71,6 +71,42 @@ function guideRef(db: FirebaseFirestore.Firestore, language: string) {
   return db.doc(`curricula/discover/languages/${language}`);
 }
 
+function lessonRef(db: FirebaseFirestore.Firestore, language: string, lessonId: string) {
+  return db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
+}
+
+function normalizeLessonNumber(value: unknown): number {
+  const number = Number.parseFloat(String(value ?? '').replace(',', '.'));
+  if (!Number.isFinite(number) || number < 0) return Number.NaN;
+  return number;
+}
+
+async function validateLessonNumber(
+  db: FirebaseFirestore.Firestore,
+  language: string,
+  lessonNumber: unknown,
+  lessonId: string,
+) {
+  const normalized = normalizeLessonNumber(lessonNumber);
+  if (!Number.isFinite(normalized)) {
+    throw new Error('Lesson number must be numeric, for example 1, 1.1 or 1.2.');
+  }
+
+  const guide = await guideRef(db, language).get();
+  if (!guide.exists || guide.data()?.archived === true) {
+    throw new Error('A valid non-archived guide is required.');
+  }
+
+  const snapshot = await db.collection(`curricula/discover/languages/${language}/lessons`).get();
+  const duplicate = snapshot.docs.find(item => {
+    if (item.id === lessonId) return false;
+    return normalizeLessonNumber(item.data().lessonNumber) === normalized;
+  });
+  if (duplicate) {
+    throw new Error(`Lesson number ${String(lessonNumber)} is already used by another published lesson.`);
+  }
+}
+
 export default async function handler(request: Request, response: Response) {
   if (request.method !== 'POST') return response.status(405).json({ error: 'Method not allowed.' });
 
@@ -210,10 +246,12 @@ export default async function handler(request: Request, response: Response) {
       if (!guide.exists || guide.data()?.published !== true || guide.data()?.archived === true) {
         return response.status(400).json({ error: 'Create and publish a guide for this language before publishing lessons.' });
       }
+      await validateLessonNumber(db, language, lesson.lessonNumber, lessonId);
+
       const guideData = guide.data() || {};
-      const canonical = db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
+      const canonical = lessonRef(db, language, lessonId);
       const canonicalData = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         curriculumId: 'discover',
         language,
         lessonId,
@@ -263,8 +301,7 @@ export default async function handler(request: Request, response: Response) {
       if (!lessonId || !validLanguage(language)) {
         return response.status(400).json({ error: 'Lesson ID and a valid language are required.' });
       }
-      const canonical = db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
-      await canonical.delete();
+      await lessonRef(db, language, lessonId).delete();
       return response.status(200).json({ ok: true, item: { id: lessonId, published: false } });
     }
 
@@ -301,7 +338,7 @@ export default async function handler(request: Request, response: Response) {
     const message = error instanceof Error ? error.message : 'Content operation failed.';
     if (message === 'Sign in first.') return response.status(401).json({ error: message });
     if (message.includes('not configured')) return response.status(503).json({ error: message });
-    if (message.includes('valid document ID')) return response.status(400).json({ error: message });
+    if (message.includes('valid document ID') || message.includes('Lesson number') || message.includes('published guide')) return response.status(400).json({ error: message });
     console.error('VOP content administration failed', error);
     return response.status(500).json({ error: 'Content operation failed.' });
   }
