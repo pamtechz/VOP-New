@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { AppSettings, ChurchOrganization, Conference, DiscoverGuide, District, LanguageCode, Lesson, Union, User, UserRole } from '../types';
 import { exportAdminBackup, loadAdminData, saveAdminSettings, saveTranslation, saveAdminUser, saveGuide, deleteGuide as deleteFirestoreGuide, saveLesson, deleteLesson, saveOrganization, deleteOrganization, type AdminDataSnapshot } from '../services/adminFirestore';
 import { MASTER_TRANSLATION_KEYS, DEFAULT_TRANSLATIONS } from '../services/i18n';
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Database, Edit3, Globe, LogOut, Plus, Save, Shield, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Database, Edit3, Globe, LogOut, Plus, Save, Shield, Settings, Trash2, Users, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import '../styles/admin-command-center.css';
