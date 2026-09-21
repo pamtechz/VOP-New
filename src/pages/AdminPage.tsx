@@ -17,6 +17,7 @@ import {
 } from '../services/adminFirestore';
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
+import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 
 interface AdminPageProps {
   currentUser: User;
@@ -580,22 +581,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     </div>
   </div>;
 
-  const renderGeneric = () => {
-    const meta = currentPage;
-    const Icon = meta?.icon || Grid2X2;
-    const collections: Record<string, number> = {
-      translations: settings ? Object.keys(settings.customTranslations || {}).length : 0,
-      announcements: announcements.length,
-      materials: 0,
-      radio: 0,
-      unions: 0,
-      conferences: 0,
-      districts: 0,
-      churches: churches.length,
-      certification: 0,
-    };
-    return <div>{renderHeader(Icon, meta?.label || 'Administration', 'Manage this area using Firestore-backed records.')}<div className="vop-card vop-empty"><Icon size={34}/><h2 style={{color:'#09275f'}}>{meta?.label}</h2><p>{collections[activeTab as keyof typeof collections] || 0} configured records are available from the current data sources.</p><button className="vop-primary" type="button" onClick={()=>setActiveTab('dashboard')}><ArrowLeft size={17}/>Return to Dashboard</button></div></div>;
-  };
+  const managedTabs: ManagedAdminCollection[] = [
+    'translations',
+    'announcements',
+    'materials',
+    'radio',
+    'unions',
+    'conferences',
+    'districts',
+    'churches',
+  ];
 
   return <div className="vop-admin">
     <header className="vop-admin-top">
@@ -613,7 +608,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='languages'&&renderLanguages()}
         {activeTab==='curriculum'&&renderStudio()}
         {activeTab==='candidates'&&<div>{renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Email</th><th>Role</th><th>Progress</th><th>Enrollment</th></tr></thead><tbody>{candidates.map((candidate,index)=><tr key={candidate.uid}><td>{index+1}</td><td><strong>{candidate.displayName || 'Unnamed'}</strong></td><td>{candidate.email || 'Not recorded'}</td><td>{candidate.role || 'student'}</td><td>{candidate.progress?.discoverProgress || 0}%</td><td>{formatDate(candidate.information?.enrollmentDate)}</td></tr>)}</tbody></table>{candidates.length===0&&<div className="vop-empty">No candidates are configured.</div>}</div></div>}
-        {!['dashboard','settings','languages','curriculum','candidates'].includes(activeTab)&&renderGeneric()}
+        {managedTabs.includes(activeTab as ManagedAdminCollection) && (
+          <AdminRecordsPanel
+            kind={activeTab as ManagedAdminCollection}
+            languages={languages}
+          />
+        )}
       </main>
     </div>
   </div>;
