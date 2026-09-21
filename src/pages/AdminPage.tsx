@@ -719,20 +719,20 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <table className="vop-admin-table">
           <thead><tr><th>User</th><th>Role</th><th>Scope</th><th>Node ID</th><th>Privileges</th><th>Save</th></tr></thead>
           <tbody>
-            {admins.map(user => (
+            {users.map(user => (
               <tr key={user.uid}>
                 <td><strong>{user.displayName || 'Unnamed user'}</strong><div className="vop-admin-muted">{user.email}</div></td>
-                <td><select className="vop-admin-select" disabled={!isSuperAdmin} value={user.role} onChange={e => updateAdminRole(user, e.target.value as UserRole, user.adminNodeType, user.adminNodeId || '')}>{Object.entries(ROLE_LABELS).filter(([role]) => role !== 'student').map(([role, label]) => <option key={role} value={role}>{label}</option>)}</select></td>
+                <td><select className="vop-admin-select" disabled={!isSuperAdmin} value={user.role || 'student'} onChange={e => updateAdminRole(user, e.target.value as UserRole, user.adminNodeType, user.adminNodeId || '')}>{Object.entries(ROLE_LABELS).filter(([role]) => role !== 'student').map(([role, label]) => <option key={role} value={role}>{label}</option>)}</select></td>
                 <td><select className="vop-admin-select" disabled={!isSuperAdmin} value={user.adminNodeType || (user.role === 'super_admin' ? 'super' : 'church')} onChange={e => updateAdminRole(user, user.role as UserRole, e.target.value as User['adminNodeType'], user.adminNodeId || '')}><option value="super">Super</option><option value="union">Union</option><option value="conference">Conference</option><option value="district">District</option><option value="church">Church</option></select></td>
                 <td><input className="vop-admin-input" disabled={!isSuperAdmin || user.role === 'super_admin'} value={user.adminNodeId || ''} onChange={e => updateUserLocal(user, { adminNodeId: e.target.value || undefined })} /></td>
-                <td>{user.privileges?.editor ? 'Editor' : 'Manager'}{user.privileges?.developer ? ' · Developer' : ''}</td>
+                <td>{user.role === 'student' ? 'Student account' : user.privileges?.editor ? 'Editor' : 'Manager'}{user.privileges?.developer ? ' · Developer' : ''}</td>
                 <td><button className="vop-admin-btn primary" disabled={!isSuperAdmin || saving} onClick={() => void runSave(() => saveAdminUser(user), 'Administrator role saved to Firestore.')}><Save size={13} />Save</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {!admins.length && <div className="vop-admin-empty">No administrator profiles are configured.</div>}
+      {!users.length && <div className="vop-admin-empty">No authenticated user profiles are configured.</div>}
     </>
   );
 
