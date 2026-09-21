@@ -171,10 +171,13 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
 
   const edit = (record: AdminRecord) => {
     setEditingId(record.id);
-    setForm(blankForm(kind));
-    setTimeout(() => {
-      setForm(current => ({ ...current, ...record }));
-    }, 0);
+    const next: FormState = {};
+    Object.entries(record).forEach(([key, value]) => {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        next[key] = value;
+      }
+    });
+    setForm({ ...blankForm(kind), ...next });
   };
 
   const save = async (event: React.FormEvent) => {
