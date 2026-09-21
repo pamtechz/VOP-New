@@ -38,6 +38,7 @@ import {
   saveTranslation,
   type AdminDataSnapshot,
 } from '../services/adminFirestore';
+import { emptySettings } from '../services/publicFirestore';
 import { DEFAULT_TRANSLATIONS, MASTER_TRANSLATION_KEYS } from '../services/i18n';
 import {
   ArrowLeft,
