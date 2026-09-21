@@ -477,7 +477,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       <div className="vop-admin-heading">
         <div>
           <h2>Candidates & Users</h2>
-          <p>Live Firebase Authentication profiles mirrored to Firestore. No demo accounts are created here.</p>
+          <p>Live Firebase Authentication profiles mirrored to Firestore. Only authenticated Firebase accounts appear here.</p>
         </div>
         <input className="vop-admin-input vop-admin-search" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
@@ -782,7 +782,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
 
   const renderBackup = () => (
     <>
-      <div className="vop-admin-heading"><div><h2>Database & Backup</h2><p>Export the current management snapshot without writing local demo records.</p></div><button className="vop-admin-btn gold" onClick={() => void exportBackup()} disabled={!snapshot}><Database size={14} />Export snapshot</button></div>
+      <div className="vop-admin-heading"><div><h2>Database & Backup</h2><p>Export the current management snapshot without writing browser-side operational records.</p></div><button className="vop-admin-btn gold" onClick={() => void exportBackup()} disabled={!snapshot}><Database size={14} />Export snapshot</button></div>
       <div className="vop-admin-alert">The browser export is read-only. Restore operations remain server-controlled so a downloaded file cannot overwrite production data accidentally.</div>
       {snapshot && <div className="vop-admin-grid" style={{ marginTop: 14 }}>
         {[
