@@ -1,5 +1,5 @@
 import { collectionGroup, doc, getDoc, getDocs, type DocumentData, type DocumentReference } from 'firebase/firestore';
-import type { DiscoverGuide, Lesson, User, LanguageCode } from '../types';
+import type { AppSettings, DiscoverGuide, Lesson, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
 function requireDb() {
@@ -105,6 +105,11 @@ export async function loadFirestoreGuides(language?: LanguageCode): Promise<Disc
     }))
     .filter(guide => guide.lessons.length > 0)
     .sort((a, b) => a.language.localeCompare(b.language));
+}
+
+export async function loadFirestoreSettings(): Promise<AppSettings | null> {
+  const snapshot = await getDoc(doc(requireDb(), 'settings', 'public'));
+  return snapshot.exists() ? snapshot.data() as AppSettings : null;
 }
 
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
