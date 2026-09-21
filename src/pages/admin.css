@@ -530,3 +530,11 @@
 .vop-lesson-row{padding:8px 11px;border-radius:12px}
 .vop-editor{padding:17px}
 .vop-reference-tab{height:46px;padding:0 17px;font-size:14px}
+
+@media(max-width:640px){
+  .vop-heading h1{font-size:25px}
+  .vop-heading p{font-size:14px}
+  .vop-heading-icon{width:54px;height:54px}
+  .vop-section-card{padding:15px}
+  .vop-form-card{padding:16px}
+}
