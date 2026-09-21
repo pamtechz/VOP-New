@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import type { User, AppRoute } from '../../types';
 import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck } from 'lucide-react';
-import { getActiveLanguage, getStoredGuides, getStoredSettings } from '../../services/storage';
-import { calculateCurriculumProgress } from '../../services/progress';
+import { getActiveLanguage, getStoredSettings } from '../../services/storage';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 import { getTranslation } from '../../services/i18n';
 
 interface MenuDrawerProps {
@@ -21,7 +22,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
 
   const settings = getStoredSettings();
   const language = getActiveLanguage();
-  const progress = calculateCurriculumProgress(getStoredGuides(), currentUser, settings.quizPassThreshold, language);
+  const progress = { percent: currentUser.progress?.discoverProgress ?? 0, completedGuides: currentUser.progress?.completedGuidesCount ?? 0, totalGuides: currentUser.progress?.totalGuidesCount ?? 0 };
   const t = (key: string, english: string) => getTranslation(key, language, settings.customTranslations, english, 'MenuDrawer');
   const isAdmin = currentUser.role !== 'student' && Boolean(currentUser.role);
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
@@ -59,9 +60,9 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
             </div>
             <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
           </div>
-          {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('admin_panel', 'Admin Panel')} <span style={{ fontSize: '.65rem', color: '#8b5e04' }}>(local demo)</span></button>}
+          {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('admin_panel', 'Admin Panel')}</button>}
           <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>About</button>
-          <button type="button" style={{ ...itemStyle, color: '#6b7280', cursor: 'not-allowed' }} disabled title="Sign-out requires a real authentication provider"><LogOut size={24}/>Logout (not configured)</button>
+          <button type="button" style={{ ...itemStyle, color: '#7f1d1d' }} onClick={() => { onClose(); void signOut(auth!); }} disabled={!auth}><LogOut size={24}/>Logout</button>
         </div>
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('my_certificate', 'My Certificate')}</button>
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>What's New</button>
