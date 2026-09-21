@@ -21,20 +21,7 @@ import {
   AdminNodeType
 } from '../types';
 
-import {
-  INITIAL_USERS,
-  INITIAL_ANNOUNCEMENTS,
-  INITIAL_BOOKS,
-  INITIAL_UNIONS,
-  INITIAL_CONFERENCES,
-  INITIAL_DISTRICTS,
-  INITIAL_CHURCHES,
-  INITIAL_DETAIL_PAGES,
-  INITIAL_HIERARCHY_CONFIG,
-  INITIAL_GRADUATION_REQUESTS,
-  INITIAL_PRAYER_REQUESTS,
-  INITIAL_RADIO_BROADCASTS
-} from '../data/initialData';
+import { INITIAL_DETAIL_PAGES } from '../data/initialData';
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
@@ -138,12 +125,12 @@ export const getStoredUnions = (): Union[] => {
   const data = localStorage.getItem(STORAGE_KEYS.UNIONS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.UNIONS, JSON.stringify(INITIAL_UNIONS));
-    return INITIAL_UNIONS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_UNIONS;
+    return [];
   }
 };
 
@@ -178,12 +165,12 @@ export const getStoredConferences = (): Conference[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CONFERENCES);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.CONFERENCES, JSON.stringify(INITIAL_CONFERENCES));
-    return INITIAL_CONFERENCES;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_CONFERENCES;
+    return [];
   }
 };
 
@@ -218,12 +205,12 @@ export const getStoredDistricts = (): District[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DISTRICTS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.DISTRICTS, JSON.stringify(INITIAL_DISTRICTS));
-    return INITIAL_DISTRICTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_DISTRICTS;
+    return [];
   }
 };
 
@@ -258,12 +245,12 @@ export const getStoredChurches = (): ChurchOrganization[] => {
   const data = localStorage.getItem(STORAGE_KEYS.CHURCHES);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.CHURCHES, JSON.stringify(INITIAL_CHURCHES));
-    return INITIAL_CHURCHES;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_CHURCHES;
+    return [];
   }
 };
 
@@ -298,12 +285,12 @@ export const getStoredHierarchyConfig = (): HierarchyConfig => {
   const data = localStorage.getItem(STORAGE_KEYS.HIERARCHY_CONFIG);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(INITIAL_HIERARCHY_CONFIG));
-    return INITIAL_HIERARCHY_CONFIG;
+    return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: true, divisionName: '' };
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_HIERARCHY_CONFIG;
+    return { reportingLevels: [], graduationChain: [], allowUnassignedStudents: true, divisionName: '' };
   }
 };
 
@@ -318,12 +305,12 @@ export const getStoredGraduationRequests = (): GraduationRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.GRADUATION_REQUESTS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.GRADUATION_REQUESTS, JSON.stringify(INITIAL_GRADUATION_REQUESTS));
-    return INITIAL_GRADUATION_REQUESTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_GRADUATION_REQUESTS;
+    return [];
   }
 };
 
@@ -382,12 +369,12 @@ export const getStoredPrayerRequests = (): PrayerRequest[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PRAYER_REQUESTS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(INITIAL_PRAYER_REQUESTS));
-    return INITIAL_PRAYER_REQUESTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_PRAYER_REQUESTS;
+    return [];
   }
 };
 
@@ -418,12 +405,12 @@ export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RADIO_BROADCASTS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(INITIAL_RADIO_BROADCASTS));
-    return INITIAL_RADIO_BROADCASTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_RADIO_BROADCASTS;
+    return [];
   }
 };
 
@@ -616,12 +603,12 @@ export const getStoredUsers = (): User[] => {
   const data = localStorage.getItem(STORAGE_KEYS.USERS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_USERS;
+    return [];
   }
 };
 
@@ -768,12 +755,12 @@ export const getStoredAnnouncements = (): Announcement[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
-    return INITIAL_ANNOUNCEMENTS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_ANNOUNCEMENTS;
+    return [];
   }
 };
 
@@ -786,12 +773,12 @@ export const getStoredBooks = (): BookResource[] => {
   const data = localStorage.getItem(STORAGE_KEYS.BOOKS);
   if (!data) {
     localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(INITIAL_BOOKS));
-    return INITIAL_BOOKS;
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_BOOKS;
+    return [];
   }
 };
 
