@@ -101,6 +101,7 @@ function valueOf(record: AdminRecord | undefined, key: string) {
 
 export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
   const [records, setRecords] = useState<AdminRecord[]>([]);
+  const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
   const [translations, setTranslations] = useState<TranslationRecord[]>([]);
   const [form, setForm] = useState<FormState>(() => blankForm(kind));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -137,23 +138,21 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     setTranslationValues(doc?.values || {});
   }, [translations, selectedTranslation]);
 
-  const related = useMemo(() => {
-    const list = (collection: string) => records.filter(item => item.__collection === collection);
-    return {
-      unions: kind === 'unions' ? records : list('unions'),
-      conferences: kind === 'conferences' ? records : list('conferences'),
-      districts: kind === 'districts' ? records : list('districts'),
-    };
-  }, [kind, records]);
-
   // Organization selectors need their parent collections. They are intentionally
   // loaded only while an organization screen is active.
   useEffect(() => {
+    setRelatedRecords([]);
     if (!['conferences', 'districts', 'churches'].includes(kind)) return;
+    const replaceRelated = (collectionName: string, items: AdminRecord[]) => {
+      setRelatedRecords(current => [
+        ...current.filter(item => item.__collection !== collectionName),
+        ...items.map(item => ({...item, __collection: collectionName})),
+      ]);
+    };
     const unsubs = [
-      subscribeAdminCollection('unions', items => setRecords(current => kind === 'unions' ? current : [...current.filter(item => item.__collection !== 'unions'), ...items.map(item => ({...item, __collection:'unions'}))]), loadError),
-      subscribeAdminCollection('conferences', items => setRecords(current => kind === 'conferences' ? current : [...current.filter(item => item.__collection !== 'conferences'), ...items.map(item => ({...item, __collection:'conferences'}))]), loadError),
-      subscribeAdminCollection('districts', items => setRecords(current => kind === 'districts' ? current : [...current.filter(item => item.__collection !== 'districts'), ...items.map(item => ({...item, __collection:'districts'}))]), loadError),
+      subscribeAdminCollection('unions', items => replaceRelated('unions', items), loadError),
+      subscribeAdminCollection('conferences', items => replaceRelated('conferences', items), loadError),
+      subscribeAdminCollection('districts', items => replaceRelated('districts', items), loadError),
     ];
     return () => unsubs.forEach(unsub => unsub());
   }, [kind]);
@@ -310,7 +309,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
         </div>
         <form className="vop-card vop-form-card" onSubmit={save}>
           <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved directly to the configured Firestore collection.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={22}/></div></div>
-          <Fields kind={kind} form={form} setForm={setForm} records={records}/>
+          <Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/>
           <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={openNew}>Clear</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
         </form>
       </div>
@@ -361,19 +360,19 @@ function tableHeaders(kind: ManagedAdminCollection) {
 }
 
 function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
-  const cell = (value: unknown) => <td key={Math.random()}>{String(value ?? 'Not configured')}</td>;
+  const cell = (value: unknown, key: string) => <td key={key}>{String(value ?? 'Not configured')}</td>;
   switch (kind) {
     case 'announcements':
-      return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.tag),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
+      return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.tag, 'tag'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
     case 'materials':
-      return [<td key="name"><strong>{valueOf(record,'name')||'Unnamed'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.category),cell(record.author),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
+      return [<td key="name"><strong>{valueOf(record,'name')||'Unnamed'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.category, 'category'),cell(record.author, 'author'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
     case 'radio':
-      return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.speaker),cell(record.series),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
-    case 'unions': return [cell(record.name),cell(record.code),cell(record.divisionName)];
-    case 'conferences': return [cell(record.name),cell(record.code),cell(record.region),cell(record.unionId)];
-    case 'districts': return [cell(record.name),cell(record.conferenceId),cell(record.pastorName)];
-    case 'churches': return [cell(record.name),cell(record.type),cell(record.leaderName),cell(record.location)];
-    default: return [cell(record.name)];
+      return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.speaker, 'speaker'),cell(record.series, 'series'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
+    case 'unions': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.divisionName, 'division')];
+    case 'conferences': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.region, 'region'),cell(record.unionId, 'union')];
+    case 'districts': return [cell(record.name, 'name'),cell(record.conferenceId, 'conference'),cell(record.pastorName, 'pastor')];
+    case 'churches': return [cell(record.name, 'name'),cell(record.type, 'type'),cell(record.leaderName, 'leader'),cell(record.location, 'location')];
+    default: return [cell(record.name, 'name')];
   }
 }
 
