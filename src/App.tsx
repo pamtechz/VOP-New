@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast,
+  Announcement, BookResource,
 } from './types';
 import {
   getCurrentUser, getActiveLanguage, setActiveLanguage,
