@@ -421,7 +421,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
               </div>
               <div className="vop-field" style={{marginTop:14}}><label>Plain-text fallback</label><textarea value={editor.content} onChange={e=>setEditor({...editor,content:e.target.value})} placeholder="Optional plain-text fallback for older readers."/></div>
               <div className="vop-field"><label>Description</label><textarea value={editor.description} onChange={e=>setEditor({...editor,description:e.target.value})}/></div>
-            </div>
+            </div>}
             {editorTab === 'media' && <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
               <div className="vop-field"><label>Featured image URL</label><input value={editor.imageUrl} onChange={e=>setEditor({...editor,imageUrl:e.target.value})}/></div>
               <div className="vop-field"><label>Audio URL</label><div style={{display:'flex',gap:8,alignItems:'center'}}><Volume2 size={18}/><input value={editor.audioUrl} onChange={e=>setEditor({...editor,audioUrl:e.target.value})}/></div></div>
