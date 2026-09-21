@@ -1,9 +1,9 @@
 import {
-  getActiveLanguage, getCurrentUser, getStoredGraduationRequests,
+  getActiveLanguage, getStoredGraduationRequests,
   getStoredGuides, getStoredSettings, submitGraduationRequest, updateUser,
 } from './storage';
 import { calculateCurriculumAverageScore, calculateCurriculumProgress } from './progress.ts';
-import { applyLessonCompletion, applyQuizScore } from './studyTransactions.ts';
+import { applyQuizScore } from './studyTransactions.ts';
 import { auth } from '../lib/firebase';
 
 /**
@@ -25,15 +25,7 @@ export async function completeLesson(guideId: string, lessonId: string): Promise
     body: JSON.stringify({ action: 'completeLesson', language, guideId, lessonId }),
   });
 
-  if (!response.ok) return false;
-
-  const guides = getStoredGuides();
-  const updated = applyLessonCompletion(
-    getCurrentUser(), guides, getStoredSettings().quizPassThreshold, language, guideId, lessonId,
-  );
-  if (!updated) return false;
-  updateUser(updated);
-  return true;
+  return response.ok;
 }
 
 export function submitQuizScore(guideId: string, testId: string, exactScore: number): boolean {
