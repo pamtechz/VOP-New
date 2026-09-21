@@ -294,7 +294,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
 
   const toggleFeature = async (key: keyof NonNullable<ExtendedAppSettings['features']>) => {
     if (!settings) return;
-    const next = { ...settings, features: { ...settings.features, [key]: !(settings.features?.[key] ?? false) } };
+    const current = settings.features ?? {
+      candidatesModule: false,
+      curriculumStudio: false,
+      translations: false,
+      radio: false,
+      announcements: false,
+      certification: false,
+    };
+    const next: ExtendedAppSettings = {
+      ...settings,
+      features: {
+        ...current,
+        [key]: !Boolean(current[key]),
+      },
+    };
     setSettings(next);
     try { await saveSettingsToFirestore(next); showMessage('Feature setting updated.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save feature setting.'); }
