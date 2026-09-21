@@ -4,6 +4,11 @@ export interface CustomLanguage {
   code: string;
   name: string;
   nativeName: string;
+  enabled: boolean;
+  sortOrder: number;
+  rtl?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface DetailPagesSettings {
@@ -236,6 +241,9 @@ export interface Announcement {
   imageUrl?: string;
   actionText?: string;
   actionUrl?: string;
+  published?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface BookResource {
@@ -246,6 +254,10 @@ export interface BookResource {
   imageUrl: string;
   description: string;
   downloadUrl?: string;
+  readUrl?: string;
+  published?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PrayerRequest {
@@ -269,6 +281,10 @@ export interface RadioBroadcast {
   audioUrl: string;
   broadcastTime: string;
   description: string;
+  published?: boolean;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type AppRoute = 
