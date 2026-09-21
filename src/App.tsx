@@ -191,6 +191,7 @@ export const App: React.FC = () => {
         isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser}
         allUsers={[]} onSelectUser={() => { /* No unauthenticated account impersonation. */ }}
         onNavigate={navigate}
+        onLogout={() => void firebaseSignOut()}
       />
       {activeLesson?.type === 'Lesson' && activeGuide && (
         <LessonReaderModal lesson={activeLesson} guide={activeGuide} onClose={() => setActiveLesson(null)}
