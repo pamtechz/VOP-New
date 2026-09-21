@@ -44,3 +44,392 @@
 .vop-admin-search{max-width:360px}
 @media(max-width:1050px){.vop-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.vop-admin-body{padding:16px}.vop-admin-grid,.vop-admin-formgrid,.vop-admin-formgrid.three{grid-template-columns:1fr}.vop-admin-tab{padding:10px 12px}.vop-admin-top{padding-left:12px;padding-right:12px}.vop-admin-title{font-size:16px}.vop-admin-subtitle{font-size:10px}.vop-admin-actions{width:100%}.vop-admin-actions .vop-admin-btn{flex:1;justify-content:center}}
+
+
+/* Professional responsive management layout */
+.vop-admin-page {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.vop-admin-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+.vop-admin-toprow {
+  min-width: 0;
+}
+
+.vop-admin-brand {
+  min-width: 0;
+}
+
+.vop-admin-brand > div:last-child {
+  min-width: 0;
+}
+
+.vop-admin-title,
+.vop-admin-subtitle {
+  overflow-wrap: anywhere;
+}
+
+.vop-admin-tabs {
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  padding-bottom: 0;
+}
+
+.vop-admin-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 43px;
+  flex: 0 0 auto;
+}
+
+.vop-admin-body {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.vop-admin-heading > * {
+  min-width: 0;
+}
+
+.vop-admin-search {
+  flex: 0 1 360px;
+}
+
+.vop-admin-card,
+.vop-admin-guide,
+.vop-admin-lesson,
+.vop-admin-modal-panel {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.vop-admin-tablewrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.vop-admin-table th,
+.vop-admin-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.vop-admin-table td .vop-admin-btn {
+  white-space: nowrap;
+}
+
+.vop-admin-formgrid > label {
+  min-width: 0;
+}
+
+.vop-admin-input,
+.vop-admin-select,
+.vop-admin-textarea {
+  max-width: 100%;
+}
+
+.vop-admin-actions {
+  align-items: center;
+}
+
+.vop-admin-btn {
+  min-height: 38px;
+  touch-action: manipulation;
+}
+
+.vop-admin-guide-head,
+.vop-admin-lesson {
+  min-width: 0;
+}
+
+.vop-admin-guide-head > :first-child,
+.vop-admin-lesson > :first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.vop-admin-modal {
+  overflow: hidden;
+  padding: clamp(8px, 2vw, 24px);
+}
+
+.vop-admin-modal-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, 100%);
+  max-height: min(94dvh, 980px);
+}
+
+.vop-admin-modal-head {
+  flex: 0 0 auto;
+}
+
+.vop-admin-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vop-admin-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .vop-admin-top {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .vop-admin-body {
+    padding: 20px;
+  }
+
+  .vop-admin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vop-admin-formgrid.three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .vop-admin-top {
+    padding: 10px 10px 0;
+  }
+
+  .vop-admin-toprow {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .vop-admin-brand {
+    gap: 8px;
+    align-items: center;
+  }
+
+  .vop-admin-brand-logo {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .vop-admin-brand-logo img {
+    width: 24px;
+    height: 24px;
+  }
+
+  .vop-admin-title {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .vop-admin-subtitle {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .vop-admin-close {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .vop-admin-tabs {
+    margin-top: 10px;
+    margin-right: -10px;
+    padding-right: 10px;
+  }
+
+  .vop-admin-tab {
+    min-height: 40px;
+    padding: 9px 11px;
+    font-size: 11px;
+  }
+
+  .vop-admin-body {
+    padding: 14px;
+  }
+
+  .vop-admin-heading {
+    gap: 12px;
+    margin-bottom: 15px;
+  }
+
+  .vop-admin-heading h2 {
+    font-size: 19px;
+  }
+
+  .vop-admin-heading p {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .vop-admin-grid,
+  .vop-admin-formgrid,
+  .vop-admin-formgrid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .vop-admin-search {
+    width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+  }
+
+  .vop-admin-actions {
+    width: 100%;
+  }
+
+  .vop-admin-actions .vop-admin-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .vop-admin-card {
+    padding: 14px;
+    border-radius: 13px;
+  }
+
+  .vop-admin-stat {
+    font-size: 24px;
+  }
+
+  .vop-admin-guide-head {
+    flex-direction: column;
+    padding: 13px;
+  }
+
+  .vop-admin-guide-head > .vop-admin-actions {
+    width: 100%;
+  }
+
+  .vop-admin-lesson {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 11px;
+  }
+
+  .vop-admin-lesson > .vop-admin-actions {
+    width: 100%;
+  }
+
+  .vop-admin-tablewrap {
+    border-radius: 11px;
+  }
+
+  .vop-admin-table {
+    min-width: 680px;
+    font-size: 11.5px;
+  }
+
+  .vop-admin-table th,
+  .vop-admin-table td {
+    padding: 9px 8px;
+  }
+
+  .vop-admin-modal {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .vop-admin-modal-panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .vop-admin-modal-head {
+    padding: 12px 14px;
+  }
+
+  .vop-admin-modal-body {
+    padding: 14px;
+  }
+
+  .vop-admin-section {
+    margin-top: 14px;
+  }
+
+  .vop-admin-section-title {
+    align-items: flex-start;
+  }
+
+  .vop-admin-section-title .vop-admin-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .vop-admin-title {
+    font-size: 13px;
+  }
+
+  .vop-admin-subtitle {
+    font-size: 9px;
+  }
+
+  .vop-admin-brand-logo {
+    display: none;
+  }
+
+  .vop-admin-toprow > .vop-admin-close:last-child {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .vop-admin-tab {
+    font-size: 10.5px;
+    padding: 8px 10px;
+  }
+
+  .vop-admin-body {
+    padding: 10px;
+  }
+
+  .vop-admin-btn {
+    min-height: 40px;
+    padding: 9px 10px;
+  }
+
+  .vop-admin-card {
+    padding: 12px;
+  }
+
+  .vop-admin-input,
+  .vop-admin-select,
+  .vop-admin-textarea {
+    font-size: 16px;
+  }
+
+  .vop-admin-modal-body {
+    padding: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vop-admin-btn,
+  .vop-admin-tab,
+  .vop-admin-modal-panel {
+    transition: none !important;
+    animation: none !important;
+  }
+}
