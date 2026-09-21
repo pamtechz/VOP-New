@@ -22,6 +22,6 @@ export function isLessonConfigured(lesson: Lesson): boolean {
     lesson.contentPages.length > 0 && lesson.contentPages.every(page =>
       page !== null && typeof page === 'object' &&
       typeof page.title === 'string' && page.title.trim().length > 0 &&
-      hasRenderablePageContent(page),
+      hasRenderablePageContent(page)
     );
 }
