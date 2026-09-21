@@ -217,7 +217,7 @@ function blocksFromRaw(raw: { pages?: unknown; contentPages?: unknown }): Lesson
 }
 
 function editorFromLesson(row: LessonRow): EditorState {
-  const raw = row.raw || {};
+  const raw: Record<string, unknown> = row.raw || { id: row.lesson.id };
   const lessonRecord = row.lesson as unknown as { pages?: unknown; contentPages?: unknown };
   const pages = Array.isArray(raw.pages) ? raw.pages : lessonRecord.pages;
   const contentPages = Array.isArray(raw.contentPages) ? raw.contentPages : lessonRecord.contentPages;
