@@ -319,6 +319,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   }, [currentUser]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
+  const currentPageLabel = activeTab === 'curriculum'
+    ? studioTab === 'quizzes'
+      ? 'Quiz Management'
+      : studioTab === 'guides'
+        ? 'Guides Management'
+        : studioTab === 'lessons'
+          ? 'Curriculum Studio'
+          : 'Curriculum Studio'
+    : currentPage?.label || 'Dashboard';
   const currentDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const openLanguageEditor = (language?: CustomLanguage) => {
@@ -741,7 +750,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   return <div className="vop-admin">
     <header className="vop-admin-top">
       <div className="vop-brand"><div className="vop-brand-mark">?</div><div><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || ''}</div></div></div>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>setSidebarOpen(!sidebarOpen)} aria-label="Open navigation"><Menu size={30}/></button><div><div className="vop-top-kicker">Administration</div><div className="vop-top-page">{currentPage?.label || 'Dashboard'}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>setSidebarOpen(!sidebarOpen)} aria-label="Open navigation"><Menu size={30}/></button><div><div className="vop-top-kicker">Administration</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions"><button className="vop-notification" type="button" aria-label="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button><div className="vop-user"><img className="vop-avatar" src={currentUser.photoURL || ''} alt="" /><div><div className="vop-user-name">{currentUser.displayName || currentUser.email}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || 'Administrator'}</div></div><ChevronDown size={18}/></div></div>
     </header>
     <div className="vop-shell">
@@ -752,7 +761,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
-        {activeTab==='curriculum'&&<CurriculumManager languages={languages} />}
+        {activeTab==='curriculum'&&<CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} />}
         {activeTab==='candidates'&&<div>
           {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
           <div className="vop-toolbar">
