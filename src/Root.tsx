@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, firebaseConfigured } from './lib/firebase';
 import { SignInPage } from './pages/SignInPage';
@@ -12,6 +12,7 @@ export function Root() {
   const [authReady, setAuthReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
+  const syncingUid = useRef<string | null>(null);
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -33,6 +34,9 @@ export function Root() {
           return;
         }
 
+        if (syncingUid.current === firebaseUser.uid) return;
+        syncingUid.current = firebaseUser.uid;
+
         void (async () => {
           try {
             const token = await firebaseUser.getIdToken();
@@ -43,9 +47,12 @@ export function Root() {
                 Authorization: `Bearer ${token}`,
               },
             });
-            if (!response.ok) throw new Error('Profile synchronization failed.');
+            const body = await response.json().catch(() => ({})) as { error?: string; profile?: User };
+            if (!response.ok) {
+              throw new Error(body.error || `Profile synchronization failed (${response.status}).`);
+            }
 
-            const payload = await response.json() as { profile: User };
+            const payload = body;
             if (!payload.profile?.uid || payload.profile.uid !== firebaseUser.uid) {
               throw new Error('Firebase account and Firestore profile identities do not match.');
             }
@@ -69,6 +76,7 @@ export function Root() {
                 : 'VOP account and lesson data could not be loaded from Firebase.',
             );
           } finally {
+            syncingUid.current = null;
             setDataReady(true);
           }
         })();
