@@ -19,6 +19,7 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
+import CertificationManager from './CertificationManager';
 
 interface AdminPageProps {
   currentUser: User;
@@ -797,25 +798,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             </div>
           </div>}
         </div>}
-        {activeTab==='certification'&&<div>
-          {renderHeader(Award,'Certification','Configure official certificate presentation and publication controls.')}
-          {certificationLoading ? <div className="vop-empty">Loading certification configuration…</div> : (
-            <form className="vop-card vop-form-card" onSubmit={saveCertification}>
-              {!certification ? <div className="vop-empty"><Award size={34}/><h2 style={{color:'#09275f'}}>Certification is not configured</h2><p>Create the configuration below. No sample certificate data is inserted automatically.</p><button type="button" className="vop-primary" onClick={()=>setCertification({enabled:false,certificateTitle:'',certificateBodyText:'',issuerName:'',minimumScore:80,verificationEnabled:false,verificationBaseUrl:''})}><Plus size={17}/>Create Configuration</button></div> : <>
-                <div className="vop-grid-2">
-                  <div className="vop-field"><label>Certificate title</label><input value={text(certification.certificateTitle)} onChange={e=>setCertification({...certification,certificateTitle:e.target.value})} /></div>
-                  <div className="vop-field"><label>Issuer name</label><input value={text(certification.issuerName)} onChange={e=>setCertification({...certification,issuerName:e.target.value})} /></div>
-                  <div className="vop-field"><label>Minimum score</label><input type="number" min="0" max="100" value={Number(certification.minimumScore ?? 0)} onChange={e=>setCertification({...certification,minimumScore:Number(e.target.value)})} /></div>
-                  <div className="vop-field"><label>Verification base URL</label><input type="url" value={text(certification.verificationBaseUrl)} onChange={e=>setCertification({...certification,verificationBaseUrl:e.target.value})} placeholder="Optional" /></div>
-                </div>
-                <div className="vop-field"><label>Certificate body text</label><textarea value={text(certification.certificateBodyText)} onChange={e=>setCertification({...certification,certificateBodyText:e.target.value})} /></div>
-                <div className="vop-setting-row"><div><div className="vop-setting-name">Enable certification</div><div className="vop-setting-help">Controls whether the public certification configuration is exposed.</div></div><Toggle on={certification.enabled===true} onClick={()=>setCertification({...certification,enabled:certification.enabled!==true})}/></div>
-                <div className="vop-setting-row"><div><div className="vop-setting-name">Verification links</div><div className="vop-setting-help">Allow the configured verification base URL to be used by certificate interfaces.</div></div><Toggle on={certification.verificationEnabled===true} onClick={()=>setCertification({...certification,verificationEnabled:certification.verificationEnabled!==true})}/></div>
-                <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={certificationSaving}><Save size={17}/>{certificationSaving?'Saving…':'Save Certification Settings'}</button></div>
-              </>}
-            </form>
-          )}
-        </div>}
+        {activeTab==='certification'&&(
+          <CertificationManager
+            currentUser={currentUser}
+            settings={settings}
+            languages={languages}
+            onBack={onBack}
+            adminContent={adminContent}
+            showMessage={showMessage}
+          />
+        )}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
