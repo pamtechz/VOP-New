@@ -1,4 +1,4 @@
-import { collectionGroup, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, getDocs } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
 import { db } from '../lib/firebase';
 
@@ -6,6 +6,20 @@ function requireDb() {
   if (!db) throw new Error('Firestore is not configured for this deployment.');
   return db;
 }
+
+type FirestoreGuide = Record<string, unknown> & {
+  id?: string;
+  curriculumId?: string;
+  discoverNumber?: number;
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  language?: string;
+  image?: string;
+  certificateEligible?: boolean;
+  published?: boolean;
+  archived?: boolean;
+};
 
 type FirestoreLesson = Record<string, unknown> & {
   lessonId?: string;
@@ -19,11 +33,11 @@ type FirestoreLesson = Record<string, unknown> & {
   contentPages?: LessonContentPage[];
   quiz?: Question[];
   questions?: Question[];
+  guideId?: string;
+  guideTitle?: string;
 };
 
 function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | null {
-  // The Firestore document ID is canonical when an imported lesson does not
-  // duplicate it in a lessonId field.
   const id = String(item.lessonId ?? documentId ?? '').trim();
   const title = String(
     item.title
@@ -75,27 +89,44 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
 export async function loadFirestoreGuides(_language?: LanguageCode): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
 
-  // Canonical approved VOP lessons:
-  // curricula/discover/languages/{language}/lessons/{lessonId}
-  //
-  // Do not require an optional lang field in the Firestore query. The language
-  // is encoded in the canonical document path, and older approved imports may
-  // not contain every optional metadata field.
-  const snapshot = await getDocs(collectionGroup(firestore, 'lessons'));
+  const [guideSnapshot, lessonSnapshot] = await Promise.all([
+    getDocs(collection(firestore, 'curricula/discover/languages')),
+    getDocs(collectionGroup(firestore, 'lessons')),
+  ]);
 
-  const groups = new Map<string, {
-    language: string;
-    curriculumId: string;
-    lessons: Lesson[];
+  const guides = new Map<string, {
+    guide: DiscoverGuide;
+    published: boolean;
+    archived: boolean;
   }>();
 
-  for (const item of snapshot.docs) {
-    const data = item.data() as FirestoreLesson;
+  for (const item of guideSnapshot.docs) {
+    const data = item.data() as FirestoreGuide;
+    const language = String(data.language ?? item.id).trim();
+    if (!language || data.archived === true || data.published !== true) continue;
 
+    const id = String(data.id ?? item.id).trim();
+    const guide: DiscoverGuide = {
+      id,
+      discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
+      title: String(data.title ?? '').trim(),
+      subtitle: String(data.subtitle ?? '').trim(),
+      description: String(data.description ?? '').trim(),
+      language,
+      image: String(data.image ?? '').trim(),
+      lessons: [],
+      certificateEligible: data.certificateEligible === true,
+    };
+    if (!guide.title) continue;
+
+    guides.set(language, { guide, published: true, archived: false });
+  }
+
+  for (const item of lessonSnapshot.docs) {
+    const data = item.data() as FirestoreLesson;
     const pathSegments = item.ref.path.split('/');
     const curriculaIndex = pathSegments.indexOf('curricula');
 
-    // Only lessons under the approved VOP Discover hierarchy are accepted.
     if (
       curriculaIndex < 0 ||
       pathSegments[curriculaIndex + 1] !== 'discover' ||
@@ -105,46 +136,36 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       continue;
     }
 
-    const languageCode = String(
+    const language = String(
       data.lang ?? pathSegments[curriculaIndex + 3] ?? '',
     ).trim();
 
     const lesson = normalizeLesson(data, item.id);
-    if (!lesson || !languageCode) continue;
+    if (!lesson || !language) continue;
 
-    const curriculumId = String(
-      data.curriculumId ?? pathSegments[curriculaIndex + 1] ?? 'discover',
-    ).trim();
+    const guideEntry = guides.get(language);
+    if (!guideEntry) continue;
 
-    const groupKey = `${curriculumId}:${languageCode}`;
-    const group = groups.get(groupKey) ?? {
-      language: languageCode,
-      curriculumId,
-      lessons: [],
-    };
+    const guideId = String(data.guideId ?? '').trim();
+    if (guideId && guideId !== guideEntry.guide.id) continue;
 
-    group.lessons.push(lesson);
-    groups.set(groupKey, group);
+    guideEntry.guide.lessons.push(lesson);
   }
 
-  return [...groups.values()]
-    .map((group): DiscoverGuide => ({
-      id: `${group.curriculumId}-${group.language}`,
-      discoverNumber: 1,
-      title: group.curriculumId === 'discover' ? 'Discover' : group.curriculumId,
-      subtitle: group.language,
-      description: '',
-      language: group.language,
-      image: '',
-      lessons: group.lessons.sort(
+  return [...guides.values()]
+    .map(entry => ({
+      ...entry.guide,
+      lessons: entry.guide.lessons.sort(
         (a, b) =>
           a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true })
           || a.title.localeCompare(b.title),
       ),
-      certificateEligible: false,
     }))
     .filter(guide => guide.lessons.length > 0)
-    .sort((a, b) => a.language.localeCompare(b.language));
+    .sort((a, b) =>
+      a.discoverNumber - b.discoverNumber
+      || a.language.localeCompare(b.language)
+    );
 }
 
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
