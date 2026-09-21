@@ -22,7 +22,6 @@ import {
 } from '../types';
 
 import {
-  INITIAL_DISCOVER_GUIDES,
   INITIAL_USERS,
   INITIAL_ANNOUNCEMENTS,
   INITIAL_BOOKS,
@@ -525,14 +524,12 @@ export const updateLocalizationTranslation = (
 
 export const getStoredGuides = (): DiscoverGuide[] => {
   const data = localStorage.getItem(STORAGE_KEYS.GUIDES);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEYS.GUIDES, JSON.stringify(INITIAL_DISCOVER_GUIDES));
-    return INITIAL_DISCOVER_GUIDES;
-  }
+  if (!data) return [];
   try {
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return INITIAL_DISCOVER_GUIDES;
+    return [];
   }
 };
 
