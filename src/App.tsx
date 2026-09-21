@@ -8,7 +8,7 @@ import {
   getActiveLanguage, setActiveLanguage,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
-import { completeLesson, submitQuizScore } from './services/localStudy';
+import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth } from './lib/firebase';
@@ -260,12 +260,13 @@ export const App: React.FC = () => {
           onContinue={() => {
             if (nextLesson) setActiveLesson(nextLesson);
           }}
-          onSubmitScore={score => {
-            const accepted = submitQuizScore(activeGuide.id, activeLesson.id, score);
-            if (!accepted) {
-              setStudyError('Test results were not saved. Ask an administrator to check the assessment configuration.');
-              return;
+          onSubmitScore={async answers => {
+            const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers);
+            if (score === null) {
+              setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.');
+              return null;
             }
+            setStudyError('');
             if (auth?.currentUser) {
               const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
               if (refreshedUser) {
@@ -273,6 +274,7 @@ export const App: React.FC = () => {
                 setAllUsers([refreshedUser]);
               }
             }
+            return score;
           }}
           onOpenCertificate={() => navigate('certificates')}
         />
