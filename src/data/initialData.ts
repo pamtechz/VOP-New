@@ -11,7 +11,8 @@ import {
   HierarchyConfig,
   GraduationRequest,
   PrayerRequest,
-  RadioBroadcast
+  RadioBroadcast,
+  CustomLanguage
 } from '../types';
 
 export const INITIAL_DISCOVER_GUIDES: DiscoverGuide[] = [
@@ -1116,4 +1117,13 @@ export const INITIAL_DETAIL_PAGES: DetailPagesSettings = {
     youtube: 'https://youtube.com/@vopzambia'
   }
 };
+
+export const INITIAL_LANGUAGES: CustomLanguage[] = [
+  { code: 'BEM', name: 'Bemba', nativeName: 'Ichibemba', enabled: true, sortOrder: 1 },
+  { code: 'ENG', name: 'English', nativeName: 'English', enabled: true, sortOrder: 2 },
+  { code: 'NYA', name: 'Nyanja', nativeName: 'Chinyanja', enabled: true, sortOrder: 3 },
+  { code: 'TON', name: 'Tonga', nativeName: 'Chitonga', enabled: false, sortOrder: 4 },
+  { code: 'LOZ', name: 'Lozi', nativeName: 'Silozi', enabled: false, sortOrder: 5 },
+  { code: 'KAO', name: 'Kaonde', nativeName: 'Kiikaonde', enabled: false, sortOrder: 6 },
+];
 

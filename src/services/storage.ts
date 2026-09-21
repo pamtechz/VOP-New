@@ -18,13 +18,16 @@ import {
   RadioBroadcast,
   AutoLocalizationEntry,
   UserRole,
-  AdminNodeType
+  AdminNodeType,
+  CustomLanguage
 } from '../types';
 
+import { INITIAL_LANGUAGES } from '../data/initialData';
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
 
 const STORAGE_KEYS = {
   SETTINGS: 'vop_settings',
+  LANGUAGES: 'vop_languages',
   GUIDES: 'vop_discover_guides',
   USERS: 'vop_users',
   CURRENT_USER_ID: 'vop_current_user_id',
@@ -100,6 +103,27 @@ export const getActiveLanguage = (): LanguageCode => {
 
 export const setActiveLanguage = (lang: LanguageCode) => {
   localStorage.setItem(STORAGE_KEYS.ACTIVE_LANGUAGE, lang);
+  window.dispatchEvent(new Event('vop_data_updated'));
+};
+
+// ---------------- Languages (CRUD) ---------------- //
+
+export const getStoredLanguages = (): CustomLanguage[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.LANGUAGES);
+  if (!data) {
+    saveLanguages(INITIAL_LANGUAGES);
+    return INITIAL_LANGUAGES;
+  }
+  try {
+    const list = JSON.parse(data);
+    return Array.isArray(list) && list.length > 0 ? list : INITIAL_LANGUAGES;
+  } catch {
+    return INITIAL_LANGUAGES;
+  }
+};
+
+export const saveLanguages = (languages: CustomLanguage[]) => {
+  localStorage.setItem(STORAGE_KEYS.LANGUAGES, JSON.stringify(languages));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 

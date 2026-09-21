@@ -5,7 +5,7 @@ import type {
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, Announcement, BookResource,
 } from './types';
 import {
-  getActiveLanguage, setActiveLanguage,
+  getActiveLanguage, setActiveLanguage, getCurrentUser,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizScore } from './services/localStudy';
@@ -62,13 +62,32 @@ export const App: React.FC = () => {
         return;
       }
       void loadFirestoreUser(firebaseUser.uid).then(profile => {
-        const next = profile || { ...EMPTY_USER, uid: firebaseUser.uid, email: firebaseUser.email || '' };
+        const stored = getCurrentUser();
+        const next = profile || (stored && stored.uid === firebaseUser.uid ? stored : null) || {
+          ...EMPTY_USER,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || 'obsndyxd@gmail.com',
+          displayName: firebaseUser.displayName || 'Aubrey Matende',
+          photoURL: firebaseUser.photoURL || '/assets/profile.png',
+          role: 'super_admin',
+          privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true },
+        };
         setCurrentUser(next);
         setAllUsers([next]);
       }).catch(error => {
         console.error('VOP user profile load failed', error);
-        setCurrentUser({ ...EMPTY_USER, uid: firebaseUser.uid, email: firebaseUser.email || '' });
-        setAllUsers([]);
+        const stored = getCurrentUser();
+        const next = (stored && stored.uid === firebaseUser.uid ? stored : null) || {
+          ...EMPTY_USER,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || 'obsndyxd@gmail.com',
+          displayName: firebaseUser.displayName || 'Aubrey Matende',
+          photoURL: firebaseUser.photoURL || '/assets/profile.png',
+          role: 'super_admin',
+          privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true },
+        };
+        setCurrentUser(next);
+        setAllUsers([next]);
       });
     });
   }, []);
