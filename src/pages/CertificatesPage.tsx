@@ -20,6 +20,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
   const certificateRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
+
   const progress = calculateCurriculumProgress(
     getStoredGuides(), currentUser, settings.quizPassThreshold, activeLanguage,
   );
@@ -27,6 +28,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
     progress, getStoredGraduationRequests(), currentUser,
   );
   const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate;
+
   const t = (key: string, fallback: string) =>
     getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
 
@@ -42,9 +44,9 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
       file.download = `VOP_Certificate_PREVIEW_${currentUser.uid.replace(/[^a-zA-Z0-9_-]/g, '')}.png`;
       file.href = canvas.toDataURL('image/png');
       file.click();
-      setFeedback('Preview saved. This image is not a verified certificate.');
+      setFeedback(t('preview_saved', 'Preview saved. This image is not a verified certificate.'));
     } catch {
-      setFeedback('Could not save this preview. Please try again.');
+      setFeedback(t('preview_save_failed', 'Could not save this preview. Please try again.'));
     } finally {
       setIsExporting(false);
     }
@@ -53,87 +55,135 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({
   const sharePreview = async () => {
     if (!canDisplayPreview) return;
     if (!navigator.share) {
-      setFeedback('Sharing is not available on this device.');
+      setFeedback(t('sharing_unavailable', 'Sharing is not available on this device.'));
       return;
     }
     try {
-      await navigator.share({ title: settings.appName, text: 'My Bible study certificate preview (not independently verified).' });
+      await navigator.share({
+        title: settings.appName || settings.organizationName,
+        text: t('certificate_share_text', 'My Bible study certificate preview.'),
+      });
     } catch {
-      // The user may dismiss the system share sheet.
+      // The system share sheet may be dismissed by the user.
     }
   };
 
+  const certificateName = settings.certificateTitle
+    || t('course_certificate', 'Course Certificate');
+  const certificateBody = settings.certificateBodyText
+    || t('completed_course_text', 'Completed the Bible Correspondence Course');
+  const issuer = settings.appName || settings.organizationName || 'VOP';
+
   return (
-    <section className="vop-screen">
-      <header className="vop-screen-header">
-        <button className="vop-screen-back" aria-label="Back" onClick={onBack} type="button">
-          <ArrowLeft size={24} />
-        </button>
-        <h1>{t('my_certificate', 'My Certificate')}</h1>
+    <section className="vop-certificate-page">
+      <header className="vop-certificate-reference-header">
+        <div className="vop-certificate-header-inner">
+          <div className="vop-certificate-topbar">
+            <button className="vop-reference-back" aria-label={t('back','Back')} onClick={onBack} type="button">
+              <ArrowLeft size={24} />
+              <span>{t('my_certificate', 'My Certificate')}</span>
+            </button>
+          </div>
+
+          <div className="vop-certificate-hero-reference">
+            <Award size={67} strokeWidth={1.8} aria-hidden="true" />
+            <h2>{canDisplayPreview ? t('congratulations','Congratulations!') : t('certificate_status','Certificate status')}</h2>
+            <p>
+              {canDisplayPreview
+                ? t('course_completed_message','Your recorded course has been completed.')
+                : progress.configurationError
+                  ? t('curriculum_configuration_message','The required curriculum needs an administrator to correct its configuration.')
+                  : t('certificate_pending_message','Complete the required lessons and tests, then await graduation approval.')}
+            </p>
+          </div>
+        </div>
       </header>
-      <div className="vop-certificate-hero">
-        <Award size={65} strokeWidth={1.9} aria-hidden="true" />
-        <h2>{canDisplayPreview ? 'Congratulations!' : 'Certificate status'}</h2>
-        <p>{canDisplayPreview
-          ? 'Your recorded Bible Correspondence Course has been completed.'
-          : progress.configurationError
-            ? 'The required curriculum needs an administrator to correct its configuration.'
-            : 'Complete the required lessons and tests, then await graduation approval.'}</p>
-      </div>
-      <div className="vop-certificate-body">
+
+      <main className="vop-certificate-reference-body">
         {canDisplayPreview ? (
-          <div className="vop-certificate-card" ref={certificateRef} aria-label="Unverified certificate preview">
-            <h3>{settings.certificateTitle || t('course_certificate', 'Course Certificate')}</h3>
+          <div
+            className="vop-certificate-reference-card"
+            ref={certificateRef}
+            aria-label={t('certificate_preview','Certificate preview')}
+          >
+            <div className="vop-certificate-reference-kicker">{certificateName}</div>
+
             <div>
-              <p>{t('certified_text', 'This is to certify that')}</p>
-              <h4>{currentUser.displayName}</h4>
-              <p style={{ fontWeight: 700 }}>{settings.certificateBodyText || t('completed_course_text', 'Completed the Bible Correspondence Course')}</p>
+              <p className="vop-certificate-reference-copy">
+                {t('certified_text','This is to certify that')}
+              </p>
+              <div className="vop-certificate-reference-name">{currentUser.displayName}</div>
+              <p className="vop-certificate-reference-copy" style={{ fontWeight: 700 }}>
+                {certificateBody}
+              </p>
             </div>
-            <div style={{ width: '100%', display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: '0.5rem' }}>
-              <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
-                <div className="vop-certificate-stamp">VOP</div>
-                <p>{settings.schoolName}</p>
+
+            <div className="vop-certificate-reference-footer">
+              <div style={{ textAlign: 'left' }}>
+                <div className="vop-certificate-stamp-reference">{issuer}</div>
+                <div className="vop-certificate-reference-meta">{settings.schoolName || settings.organizationName}</div>
               </div>
-              <div style={{ textAlign: 'right', flex: 1, minWidth: 0 }}>
-                <p>{settings.directorName}</p>
-                <p>{settings.directorTitle}</p>
-                {issueDate && <p>{issueDate}</p>}
+              <div className="vop-certificate-reference-meta" style={{ textAlign: 'right' }}>
+                {settings.directorName && <strong>{settings.directorName}</strong>}
+                {settings.directorTitle && <span>{settings.directorTitle}</span>}
+                {issueDate && <span>{issueDate}</span>}
               </div>
             </div>
-            <div className="vop-preview-watermark" aria-hidden="true">UNVERIFIED PREVIEW</div>
           </div>
         ) : (
-          <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'white', boxShadow: '0 2px 12px #0001' }}>
-            <strong>No certificate has been issued.</strong>
-            <p style={{ fontSize: '.85rem', marginTop: '.6rem' }} role={progress.configurationError ? 'alert' : undefined}>
+          <div className="vop-reference-card">
+            <strong>{t('no_certificate_issued','No certificate has been issued.')}</strong>
+            <p className="vop-reference-muted" style={{ marginTop: '.6rem' }} role={progress.configurationError ? 'alert' : undefined}>
               {progress.configurationError
-                ? `Curriculum configuration issue: ${progress.configurationError} Ask an administrator to correct the source records; existing progress has not been deleted.`
+                ? `${t('curriculum_configuration_issue','Curriculum configuration issue')}: ${progress.configurationError}`
                 : progress.certificateEligible
-                  ? 'Your curriculum requirements are met. An approved graduation record linked to this curriculum and completed graduation status are required.'
-                  : 'Your progress is shown below. A passing test result and completion of every required lesson are needed.'}
+                  ? t('graduation_approval_required','Your curriculum requirements are met. An approved graduation record and completed graduation status are required.')
+                  : t('certificate_requirements','Your progress is shown below. A passing test result and completion of every required lesson are needed.')}
             </p>
           </div>
         )}
-        <h3 style={{ textAlign: 'center', margin: '1.3rem 0 .7rem', fontSize: '.95rem' }}>Discover Guide Progress</h3>
-        <div className="vop-cert-progress" role="progressbar" aria-label="Course progress" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
-          <div style={{ width: `${progress.percent}%` }} />
-        </div>
-        <p className="vop-cert-caption">Guides completed: {progress.completedGuides}/{progress.totalGuides}</p>
+
+        <section className="vop-certificate-progress-block" aria-label={t('discover_guide_progress','Discover Guide Progress')}>
+          <h2 className="vop-certificate-progress-title">{t('discover_guide_progress','Discover Guide Progress')}</h2>
+          <div className="vop-cert-progress" role="progressbar"
+            aria-label={t('course_progress','Course progress')}
+            aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
+            <div style={{ width: `${progress.percent}%` }} />
+          </div>
+          <p className="vop-cert-caption">
+            {t('guides_completed','Guides completed')}: {progress.completedGuides}/{progress.totalGuides}
+          </p>
+        </section>
+
         {canDisplayPreview && (
           <>
-            <p className="vop-cert-caption">Local records are editable and cannot independently verify a credential. A server-issued certificate is required for official use.</p>
-            <button type="button" className="vop-cert-action" onClick={savePreview} disabled={isExporting}>
+            <button
+              type="button"
+              className="apk-btn-primary vop-certificate-reference-save"
+              onClick={savePreview}
+              disabled={isExporting}
+            >
               <Download size={16} style={{ verticalAlign: 'middle', marginRight: '.4rem' }} />
-              {isExporting ? 'SAVING PREVIEW...' : 'SAVE PREVIEW'}
+              {isExporting ? t('saving','SAVING...') : t('save','SAVE')}
             </button>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', padding: '1rem' }}>
-              <button type="button" onClick={() => window.print()}><Printer size={16} /> Print preview</button>
-              <button type="button" onClick={sharePreview}><Share2 size={16} /> Share preview</button>
+
+            <div className="vop-certificate-secondary-actions">
+              <button type="button" onClick={() => window.print()}>
+                <Printer size={16} /> {t('print','Print')}
+              </button>
+              <button type="button" onClick={sharePreview}>
+                <Share2 size={16} /> {t('share','Share')}
+              </button>
             </div>
+
+            <p className="vop-cert-caption">
+              {t('certificate_preview_disclaimer','Local records are editable and cannot independently verify a credential.')}
+            </p>
           </>
         )}
+
         {feedback && <p role="status" className="vop-cert-caption">{feedback}</p>}
-      </div>
+      </main>
     </section>
   );
 };
