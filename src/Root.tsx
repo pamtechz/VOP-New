@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, firebaseConfigured } from './lib/firebase';
 import { SignInPage } from './pages/SignInPage';
+import { BootstrapPage } from './pages/BootstrapPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+import { ErrorPage } from './pages/ErrorPage';
 import { loadFirestoreGuides } from './services/firestoreData';
 import { App } from './App';
 import { getStoredUsers, saveUsers } from './services/storage';
@@ -13,6 +16,9 @@ export function Root() {
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
   const syncingUid = useRef<string | null>(null);
+  const pathname = window.location.pathname.replace(/\\/+$/, '') || '/';
+  const isBootstrapRoute = pathname === '/admin/bootstrap';
+  const isKnownRoute = pathname === '/' || isBootstrapRoute;
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -28,6 +34,11 @@ export function Root() {
         setAuthReady(true);
         setDataError('');
         setDataReady(false);
+
+        if (!isKnownRoute || isBootstrapRoute) {
+          setDataReady(true);
+          return;
+        }
 
         if (!firebaseUser) {
           setDataReady(true);
@@ -91,7 +102,19 @@ export function Root() {
     );
   }, []);
 
-  if (!authReady || !dataReady) {
+  if (!authReady) {
+    return (
+      <main className="vop-auth-loading" aria-busy="true">
+        <p>Opening Voice of Prophecy…</p>
+      </main>
+    );
+  }
+
+  if (!isKnownRoute) return <NotFoundPage />;
+
+  if (isBootstrapRoute) return <BootstrapPage account={account} />;
+
+  if (!dataReady) {
     return (
       <main className="vop-auth-loading" aria-busy="true">
         <p>Opening Voice of Prophecy…</p>
@@ -108,13 +131,7 @@ export function Root() {
   }
 
   if (dataError) {
-    return (
-      <main className="vop-auth-loading" role="alert">
-        <h1>Voice of Prophecy</h1>
-        <p>{dataError}</p>
-        <p>Sign out and retry after the Firebase account and curriculum data are available.</p>
-      </main>
-    );
+    return <ErrorPage message={dataError} title="We could not load your VOP data" />;
   }
 
   return <App />;
