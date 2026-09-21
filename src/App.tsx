@@ -7,7 +7,7 @@ import type {
 import {
   getCurrentUser, getActiveLanguage, setActiveLanguage,
 } from './services/storage';
-import { loadPublicContent, emptySettings } from './services/publicFirestore';
+import { createPrayerRequest, loadPublicContent, updatePrayerRequestStatus, emptySettings } from './services/publicFirestore';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -163,7 +163,9 @@ export const App: React.FC = () => {
               onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />
           )}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
-          {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
+          {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome}
+            onCreatePrayerRequest={async request => { await createPrayerRequest(request); window.dispatchEvent(new Event('vop_data_updated')); }}
+            onUpdatePrayerStatus={async (id, status) => { await updatePrayerRequestStatus(id, status); window.dispatchEvent(new Event('vop_data_updated')); }} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} guides={guides} onBack={returnHome} />}
           {currentRoute === 'admin' && currentUser.role && currentUser.role !== 'student' && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
