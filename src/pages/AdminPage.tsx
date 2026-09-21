@@ -761,7 +761,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
-        {activeTab==='curriculum'&&<CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} />}
+        {activeTab==='curriculum'&&<CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setActiveTab('settings')} />}
         {activeTab==='candidates'&&<div>
           {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
           <div className="vop-toolbar">
