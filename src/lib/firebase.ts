@@ -1,10 +1,9 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, initializeAuth, type Auth } from 'firebase/auth';
-import type { Firestore } from 'firebase/firestore';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 import { deploymentPolicy } from '../config/deployment';
 
 // Firebase Web configuration is public. NEVER put service-account credentials in VITE_*.
-// Offline lesson reading must remain usable when Firebase is not configured yet.
 const values = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim() ?? '',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() ?? '',
@@ -43,14 +42,9 @@ export const auth: Auth | null = app
 
 let firestorePromise: Promise<Firestore> | undefined;
 
-/**
- * Firestore is loaded only when authenticated progress synchronization is needed.
- * Lesson text never depends on this function and always comes from APK-bundled snapshots.
- */
 export function getProgressFirestore(): Promise<Firestore> {
   if (!app) return Promise.reject(new Error('Firebase is not configured for this deployment.'));
   const firebaseApp = app;
-  if (!firebaseApp) return Promise.reject(new Error('Firebase is not configured for this deployment.'));
   if (!firestorePromise) {
     firestorePromise = import('firebase/firestore').then(module => {
       try {
@@ -58,7 +52,7 @@ export function getProgressFirestore(): Promise<Firestore> {
           localCache: module.persistentLocalCache({ tabManager: module.persistentMultipleTabManager() }),
         });
       } catch (error) {
-        if ((error as { code?: string }).code === 'failed-precondition') return module.getFirestore(app);
+        if ((error as { code?: string }).code === 'failed-precondition') return module.getFirestore(firebaseApp);
         throw error;
       }
     });
