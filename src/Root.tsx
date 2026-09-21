@@ -53,6 +53,7 @@ export function Root() {
   const [account, setAccount] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -80,6 +81,7 @@ export function Root() {
               window.dispatchEvent(new Event('vop_data_updated'));
             } catch (error) {
               console.error(error);
+              setDataError(error instanceof Error ? error.message : 'VOP account and lesson data could not be loaded from Firebase.');
             } finally {
               setDataReady(true);
             }
@@ -96,7 +98,7 @@ export function Root() {
   }, []);
 
   if (!authReady || !dataReady) {
-    return <main className="vop-auth-loading" aria-busy="true"><p>Opening Voice of Prophecy…</p></main>;
+    return <main className="vop-auth-loading" aria-busy="true"><p>{dataError ? 'Voice of Prophecy could not load its Firebase data.' : 'Opening Voice of Prophecy…'}</p>{dataError && <p>{dataError}</p>}</main>;
   }
 
   if (!firebaseConfigured || !auth) {
