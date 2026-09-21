@@ -256,10 +256,13 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           correctOptionIndex: question.answer,
           explanation: '',
         })),
-        questions: editor.questions.map(question => ({
+        questions: editor.questions.map((question, index) => ({
+          key: id + '-q' + (index + 1),
           question: question.question,
+          answer: false,
           options: question.options,
-          correctAnswer: question.answer,
+          correctOptionIndex: question.answer,
+          explanation: '',
         })),
         media: {
           imageUrl: editor.imageUrl.trim(),
