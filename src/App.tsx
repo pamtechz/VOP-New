@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast,
 } from './types';
 import {
-  getStoredGuides, getStoredUsers, getCurrentUser,
-  getStoredAnnouncements, getStoredBooks, getStoredSettings,
-  getActiveLanguage, setActiveLanguage, getStoredUnions, getStoredConferences,
-  getStoredDistricts, getStoredChurches, getStoredPrayerRequests, getStoredRadioBroadcasts,
+  getActiveLanguage, setActiveLanguage,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizScore } from './services/localStudy';
 import { loadPublicContent } from './services/publicFirestore';
+import { loadFirestoreUser } from './services/firestoreData';
+import { auth } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
@@ -28,20 +28,23 @@ import { RadioPage } from './pages/RadioPage';
 import { CertificatesPage } from './pages/CertificatesPage';
 import { AdminPage } from './pages/AdminPage';
 
+const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
+const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
+
 export const App: React.FC = () => {
-  const [settings, setSettings] = useState<AppSettings>(getStoredSettings());
+  const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
-  const [currentUser, setCurrentUser] = useState<User>(getCurrentUser());
-  const [allUsers, setAllUsers] = useState<User[]>(getStoredUsers());
-  const [guides, setGuides] = useState<DiscoverGuide[]>(getStoredGuides());
-  const [announcements, setAnnouncements] = useState(getStoredAnnouncements());
-  const [books, setBooks] = useState(getStoredBooks());
-  const [unions, setUnions] = useState<Union[]>(getStoredUnions());
-  const [conferences, setConferences] = useState<Conference[]>(getStoredConferences());
-  const [districts, setDistricts] = useState<District[]>(getStoredDistricts());
-  const [churches, setChurches] = useState<ChurchOrganization[]>(getStoredChurches());
-  const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>(getStoredPrayerRequests());
-  const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>(getStoredRadioBroadcasts());
+  const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [guides, setGuides] = useState<DiscoverGuide[]>([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [books, setBooks] = useState([]);
+  const [unions, setUnions] = useState<Union[]>([]);
+  const [conferences, setConferences] = useState<Conference[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [churches, setChurches] = useState<ChurchOrganization[]>([]);
+  const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
+  const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
@@ -51,23 +54,23 @@ export const App: React.FC = () => {
   const [isMobileShell, setIsMobileShell] = useState(false);
 
   useEffect(() => {
-    const update = () => {
-      setSettings(getStoredSettings());
-      setActiveLang(getActiveLanguage());
-      setCurrentUser(getCurrentUser());
-      setAllUsers(getStoredUsers());
-      setGuides(getStoredGuides());
-      setAnnouncements(getStoredAnnouncements());
-      setBooks(getStoredBooks());
-      setUnions(getStoredUnions());
-      setConferences(getStoredConferences());
-      setDistricts(getStoredDistricts());
-      setChurches(getStoredChurches());
-      setPrayerRequests(getStoredPrayerRequests());
-      setRadioBroadcasts(getStoredRadioBroadcasts());
-    };
-    window.addEventListener('vop_data_updated', update);
-    return () => window.removeEventListener('vop_data_updated', update);
+    if (!auth) return;
+    return onAuthStateChanged(auth, firebaseUser => {
+      if (!firebaseUser) {
+        setCurrentUser(EMPTY_USER);
+        setAllUsers([]);
+        return;
+      }
+      void loadFirestoreUser(firebaseUser.uid).then(profile => {
+        const next = profile || { ...EMPTY_USER, uid: firebaseUser.uid, email: firebaseUser.email || '' };
+        setCurrentUser(next);
+        setAllUsers([next]);
+      }).catch(error => {
+        console.error('VOP user profile load failed', error);
+        setCurrentUser({ ...EMPTY_USER, uid: firebaseUser.uid, email: firebaseUser.email || '' });
+        setAllUsers([]);
+      });
+    });
   }, []);
 
   useEffect(() => {
