@@ -101,7 +101,7 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
     ...fallback,
     ...data,
     id: String(data.id ?? id),
-    published: data.published !== false,
+    published: data.published === true,
   } as T;
 }
 
