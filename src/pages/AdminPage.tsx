@@ -167,7 +167,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     ];
     void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
     void loadDrafts();
-    void loadCertification();
+    if (currentUser.role === 'super_admin') void loadCertification();
     return () => unsubs.forEach(unsub => unsub());
   }, []);
 
