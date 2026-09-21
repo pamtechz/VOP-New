@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Book, BookOpen, CalendarDays, CircleHelp, Clock, Edit3,
   Eye, FileText, Globe, Image as ImageIcon, Layers, Plus, RefreshCw,
-  Save, Search, Send, Trash2, Video, Volume2, X, ChevronUp, ChevronDown
+  Save, Search, Send, Trash2, Video, Volume2, X, ChevronUp, ChevronDown, CheckCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
 import { auth } from '../lib/firebase';
@@ -102,6 +102,143 @@ const blankEditor = (language = ''): EditorState => ({
   published: false,
 });
 
+function LessonLearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; guideTitle: string; onClose: () => void }) {
+  const [section, setSection] = useState(0);
+  const sections = ['Lesson', ...(editor.bibleReferences.trim() ? ['Bible References'] : []), ...(editor.questions.length ? ['Quiz'] : [])];
+  const canPrev = section > 0;
+  const canNext = section < sections.length - 1;
+
+  useEffect(() => {
+    setSection(0);
+  }, [editor.id]);
+
+  const goNext = () => setSection(value => Math.min(value + 1, sections.length - 1));
+  const goPrev = () => setSection(value => Math.max(value - 1, 0));
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:200, background:'#eef3f9',
+      display:'flex', flexDirection:'column', overflow:'hidden'
+    }}>
+      <header style={{
+        flexShrink:0, minHeight:72, background:'linear-gradient(100deg,#0a3d91,#063176)',
+        color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between',
+        gap:16, padding:'12px 22px', boxShadow:'0 2px 12px rgba(5,35,85,.18)'
+      }}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:11,fontWeight:800,letterSpacing:'.08em',textTransform:'uppercase',opacity:.82}}>VOP learner preview · not published</div>
+          <div style={{fontSize:20,fontWeight:900,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{guideTitle || 'Curriculum Preview'}</div>
+        </div>
+        <button type="button" onClick={onClose} style={{
+          border:'1px solid rgba(255,255,255,.35)', background:'rgba(255,255,255,.1)',
+          color:'#fff', borderRadius:11, padding:'10px 15px', display:'inline-flex',
+          alignItems:'center', gap:8, fontWeight:800, flexShrink:0
+        }}><X size={17}/>Exit Preview</button>
+      </header>
+
+      <div style={{display:'flex',gap:8,padding:'12px 16px',background:'#fff',borderBottom:'1px solid #dce5f0',overflowX:'auto',flexShrink:0}}>
+        {sections.map((item,index)=>
+          <button key={item} type="button" onClick={()=>setSection(index)} style={{
+            border:'1px solid '+(section===index?'#07357c':'#dbe4ef'),
+            background:section===index?'#07357c':'#fff', color:section===index?'#fff':'#36557f',
+            borderRadius:999,padding:'9px 15px',fontWeight:800,whiteSpace:'nowrap'
+          }}>{index+1}. {item}</button>
+        )}
+      </div>
+
+      <main style={{flex:1,overflowY:'auto',padding:'24px 16px 34px'}}>
+        <div style={{maxWidth:820,margin:'0 auto'}}>
+          {section===0 && (
+            <article style={{background:'#fff',border:'1px solid #dce5f0',borderRadius:20,overflow:'hidden',boxShadow:'0 8px 30px rgba(20,55,100,.07)'}}>
+              {editor.imageUrl && <img src={editor.imageUrl} alt="" style={{width:'100%',maxHeight:300,objectFit:'cover',display:'block'}} />}
+              <div style={{padding:'28px 28px 30px'}}>
+                <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',marginBottom:13}}>
+                  <span style={{background:'#07357c',color:'#fff',borderRadius:999,padding:'6px 11px',fontSize:12,fontWeight:900}}>LESSON {editor.lessonNumber || '—'}</span>
+                  {editor.language && <span style={{background:'#edf4ff',color:'#245ba7',borderRadius:999,padding:'6px 11px',fontSize:12,fontWeight:800}}>{editor.language.toUpperCase()}</span>}
+                  <span style={{display:'inline-flex',alignItems:'center',gap:5,color:'#7183a4',fontSize:12,fontWeight:800}}><Clock size={14}/>{editor.estimatedMinutes || 15} min</span>
+                </div>
+                <h1 style={{margin:'0 0 10px',fontSize:'clamp(28px,4vw,42px)',lineHeight:1.12,color:'#09275f',fontWeight:900}}>{editor.title || 'Untitled lesson'}</h1>
+                {editor.description && <p style={{margin:'0 0 25px',fontSize:17,lineHeight:1.65,color:'#61779e'}}>{editor.description}</p>}
+                {editor.audioUrl && <div style={{margin:'0 0 22px'}}><audio controls src={editor.audioUrl} style={{width:'100%'}} /></div>}
+                {editor.videoUrl && <div style={{margin:'0 0 24px'}}><video controls src={editor.videoUrl} style={{width:'100%',maxHeight:420,borderRadius:14,background:'#091a35'}} /></div>}
+                <div style={{display:'grid',gap:18}}>
+                  {editor.blocks.map((block,index)=>{
+                    if (block.type==='heading') return <h2 key={block.id} style={{margin:'8px 0 0',fontSize:23,color:'#09275f',fontWeight:900}}>{block.text || 'Untitled section'}</h2>;
+                    if (block.type==='quote') return <blockquote key={block.id} style={{margin:'4px 0',padding:'15px 18px',borderLeft:'4px solid #ff8a00',background:'#fff8ef',borderRadius:'0 12px 12px 0',color:'#5b4a35',fontSize:17,lineHeight:1.7,fontStyle:'italic'}}>{block.text || 'Empty quote'}</blockquote>;
+                    if (block.type==='image') return block.src ? <figure key={block.id} style={{margin:0}}><img src={block.src} alt="" style={{width:'100%',maxHeight:480,objectFit:'contain',borderRadius:14,background:'#f3f6fa'}}/></figure> : null;
+                    if (block.type==='video') return block.src ? <video key={block.id} controls src={block.src} style={{width:'100%',maxHeight:480,borderRadius:14,background:'#091a35'}} /> : null;
+                    if (block.type==='audio') return block.src ? <audio key={block.id} controls src={block.src} style={{width:'100%'}} /> : null;
+                    return <p key={block.id} style={{margin:0,whiteSpace:'pre-wrap',fontSize:17,lineHeight:1.85,color:'#334d70'}}>{block.text || ''}</p>;
+                  })}
+                  {!editor.blocks.length && editor.content && <p style={{margin:0,whiteSpace:'pre-wrap',fontSize:17,lineHeight:1.85,color:'#334d70'}}>{editor.content}</p>}
+                  {!editor.blocks.length && !editor.content && <div style={{padding:24,textAlign:'center',color:'#8798b1',border:'1px dashed #ccd8e7',borderRadius:14}}>This lesson has no learner-facing content yet.</div>}
+                </div>
+                {editor.tags && <div style={{display:'flex',flexWrap:'wrap',gap:7,marginTop:24}}>{editor.tags.split(',').map(tag=>tag.trim()).filter(Boolean).map(tag=><span key={tag} style={{background:'#f0f4f9',color:'#456181',padding:'6px 9px',borderRadius:999,fontSize:12,fontWeight:800}}>{tag}</span>)}</div>}
+              </div>
+            </article>
+          )}
+
+          {section===1 && editor.bibleReferences.trim() && (
+            <article style={{background:'#fff',border:'1px solid #dce5f0',borderRadius:20,padding:28,boxShadow:'0 8px 30px rgba(20,55,100,.07)'}}>
+              <div style={{marginBottom:20}}>
+                <div style={{fontSize:12,fontWeight:900,color:'#ff8a00',textTransform:'uppercase',letterSpacing:'.06em'}}>Bible References</div>
+                <h1 style={{margin:'5px 0 0',fontSize:30,color:'#09275f',fontWeight:900}}>Scripture for this lesson</h1>
+              </div>
+              <div style={{display:'grid',gap:10}}>
+                {editor.bibleReferences.split('\n').map(value=>value.trim()).filter(Boolean).map((reference,index)=>
+                  <div key={index} style={{padding:'15px 17px',background:'#f7f9fc',border:'1px solid #e2eaf4',borderRadius:13,fontSize:17,fontWeight:800,color:'#294a76'}}>{reference}</div>
+                )}
+              </div>
+            </article>
+          )}
+
+          {section===sections.length-1 && sections.includes('Quiz') && (
+            <article style={{background:'#fff',border:'1px solid #dce5f0',borderRadius:20,padding:28,boxShadow:'0 8px 30px rgba(20,55,100,.07)'}}>
+              <div style={{marginBottom:22}}>
+                <div style={{fontSize:12,fontWeight:900,color:'#ff8a00',textTransform:'uppercase',letterSpacing:'.06em'}}>Knowledge Check</div>
+                <h1 style={{margin:'5px 0 0',fontSize:30,color:'#09275f',fontWeight:900}}>Lesson Quiz</h1>
+                <p style={{color:'#7183a4'}}>Learner interaction preview. Correct answers are marked for the administrator.</p>
+              </div>
+              <div style={{display:'grid',gap:18}}>
+                {editor.questions.map((question,index)=>
+                  <div key={index} style={{padding:18,border:'1px solid #e1e9f3',borderRadius:15}}>
+                    <div style={{fontWeight:900,color:'#09275f',fontSize:16,lineHeight:1.5,marginBottom:12}}>{index+1}. {question.question || 'Untitled question'}</div>
+                    <div style={{display:'grid',gap:8}}>
+                      {question.options.map((option,optionIndex)=>
+                        <div key={optionIndex} style={{
+                          padding:'11px 13px',borderRadius:10,
+                          border:'1px solid '+(question.answer===optionIndex?'#42a86b':'#dfe7f1'),
+                          background:question.answer===optionIndex?'#ecf9f1':'#fff',
+                          color:question.answer===optionIndex?'#17663b':'#405d88',
+                          fontWeight:question.answer===optionIndex?800:600
+                        }}>{String.fromCharCode(65+optionIndex)}. {option || 'Empty option'}{question.answer===optionIndex?' ✓ Correct':''}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </article>
+          )}
+        </div>
+      </main>
+
+      <footer style={{flexShrink:0,padding:'12px 16px',background:'#fff',borderTop:'1px solid #dce5f0'}}>
+        <div style={{maxWidth:820,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <button type="button" onClick={goPrev} disabled={!canPrev} style={{
+            border:'1px solid #dbe4ef',background:'#fff',color:canPrev?'#294a76':'#b7c2d0',
+            borderRadius:999,padding:'10px 16px',display:'inline-flex',alignItems:'center',gap:7,fontWeight:800
+          }}><ChevronLeft size={17}/> Previous</button>
+          <div style={{fontSize:12,color:'#8293aa',fontWeight:800}}>{section+1} / {sections.length}</div>
+          <button type="button" onClick={goNext} disabled={!canNext} style={{
+            border:'0',background:canNext?'#07357c':'#dbe4ef',color:canNext?'#fff':'#9ba8b9',
+            borderRadius:999,padding:'10px 17px',display:'inline-flex',alignItems:'center',gap:7,fontWeight:800
+          }}>{canNext ? <>Next <ChevronRight size={17}/></> : <><CheckCircle size={17}/> Complete</>}</button>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
 export default function CurriculumManager({ languages, initialTab = 'lessons', onBack }: Props) {
   const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
@@ -116,6 +253,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'quiz' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [lessonFilterGuide, setLessonFilterGuide] = useState('all');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const languagesEnabled = useMemo(
     () => languages.filter(item => item.enabled !== false),
@@ -397,6 +535,9 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   ];
 
   if (editor) {
+    if (previewOpen) {
+      return <LessonLearnerPreview editor={editor} guideTitle={editor.guideTitle} onClose={() => setPreviewOpen(false)} />;
+    }
     const editorTabs = [
       ['content', 'Content'],
       ['media', 'Media'],
@@ -414,7 +555,8 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         <div className="vop-page-head">
           <div className="vop-heading"><div className="vop-heading-icon"><FileText size={31}/></div><div><h1>Lesson Editor</h1><p>Create, edit, review and publish structured VOP lessons.</p></div></div>
           <div style={{display:'flex',gap:9,flexWrap:'wrap'}}>
-            <button className="vop-secondary" type="button" onClick={() => setEditor(null)}><Eye size={17}/>Close</button>
+            <button className="vop-secondary" type="button" onClick={() => setPreviewOpen(true)}><Eye size={17}/>Preview</button>
+            <button className="vop-secondary" type="button" onClick={() => setEditor(null)}><X size={17}/>Close</button>
             <button className="vop-secondary" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>Save Draft</button>
             {editor.published && <button className="vop-secondary" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>Unpublish</button>}
             <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}><Send size={17}/>{editor.published ? 'Update & Publish' : 'Publish'}</button>
