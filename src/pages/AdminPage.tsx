@@ -1102,8 +1102,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                       className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5"
                     >
                       <h4 className="font-bold text-slate-900 text-sm">{u.name} ({u.code})</h4>
-                      <p className="text-xs text-slate-600">Headquarters: {u.headquarters || 'Regional Union'}</p>
-                      <p className="text-xs text-slate-500">Division: {u.divisionName || 'Southern Africa-Indian Ocean Division (SID)'}</p>
+                      <p className="text-xs text-slate-600">Headquarters: {u.headquarters || 'Not configured'}</p>
+                      <p className="text-xs text-slate-500">Division: {u.divisionName || 'Not configured'}</p>
                     </div>
                   ))}
                 </div>
