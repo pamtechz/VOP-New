@@ -54,7 +54,6 @@ interface Props {
     certificateTitle?: string;
     certificateBodyText?: string;
   } | null;
-  onBack: () => void;
   adminContent: (
     action: 'list' | 'upsert' | 'delete',
     collection: string,
@@ -151,7 +150,7 @@ const CertificateArtwork: React.FC<{
 };
 
 export const CertificationManager: React.FC<Props> = ({
-  settings, onBack, adminContent, showMessage,
+  settings, adminContent, showMessage,
 }) => {
   const [view, setView] = useState<'list' | 'preview'>('list');
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
