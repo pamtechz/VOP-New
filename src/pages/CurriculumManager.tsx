@@ -666,3 +666,5 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     </div>
   );
 }
+
+// Validation branch: learner preview build verification.
