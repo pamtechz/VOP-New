@@ -4,14 +4,30 @@ import {
 } from './storage';
 import { calculateCurriculumAverageScore, calculateCurriculumProgress } from './progress.ts';
 import { applyLessonCompletion, applyQuizScore } from './studyTransactions.ts';
+import { auth } from '../lib/firebase';
 
 /**
  * Device-local study cache integration. Never interpret these writes as
  * authenticated completion, trusted marks or official certificate issuance.
  */
-export function completeLesson(guideId: string, lessonId: string): boolean {
-  const guides = getStoredGuides();
+export async function completeLesson(guideId: string, lessonId: string): Promise<boolean> {
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) return false;
+
   const language = getActiveLanguage();
+  const token = await firebaseUser.getIdToken();
+  const response = await fetch('/api/study/progress', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action: 'completeLesson', language, guideId, lessonId }),
+  });
+
+  if (!response.ok) return false;
+
+  const guides = getStoredGuides();
   const updated = applyLessonCompletion(
     getCurrentUser(), guides, getStoredSettings().quizPassThreshold, language, guideId, lessonId,
   );
