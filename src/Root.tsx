@@ -75,8 +75,8 @@ export function Root() {
             localStorage.setItem('vop_current_user_id', firebaseUser.uid);
 
             const guides = await loadFirestoreGuides();
-            if (!guides.length) throw new Error('No approved VOP lessons are available in Firestore.');
-
+            // An empty curriculum is a valid initial production state. The app
+            // should render its empty-state UI rather than fail authentication.
             localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
