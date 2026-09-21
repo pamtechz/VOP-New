@@ -16,7 +16,7 @@ export function Root() {
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
   const syncingUid = useRef<string | null>(null);
-  const pathname = window.location.pathname.replace(/\\/+$/, '') || '/';
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isBootstrapRoute = pathname === '/admin/bootstrap';
   const isKnownRoute = pathname === '/' || isBootstrapRoute;
 
