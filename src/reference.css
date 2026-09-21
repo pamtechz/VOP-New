@@ -135,3 +135,482 @@
   .vop-login-card { padding: 1rem; }
   .vop-login-card-inner { border-radius: 18px; }
 }
+
+
+/* ==========================================================================
+   APK reference UI — visual system only. All labels, counts and records remain
+   data-driven from Firestore/settings; these classes only define presentation.
+   ========================================================================== */
+
+.vop-reference-blue-shell {
+  background: #002d72;
+  color: #fff;
+}
+.vop-account-header {
+  padding: .9rem 1.1rem 5.1rem;
+}
+.vop-account-header-inner,
+.vop-certificate-header-inner,
+.vop-admin-reference-inner {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+.vop-account-topbar,
+.vop-certificate-topbar,
+.vop-admin-reference-topbar {
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+.vop-reference-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 2.75rem;
+  padding: .35rem 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: 700 1.05rem/1.2 var(--font-sans);
+  cursor: pointer;
+}
+.vop-reference-icon-button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.vop-account-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: 1.35rem;
+}
+.vop-account-avatar {
+  width: 8.4rem;
+  height: 8.4rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,.9);
+  box-shadow: 0 5px 18px rgba(0,0,0,.18);
+  background: #284a7d;
+}
+.vop-account-avatar-fallback {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 2.8rem;
+  font-weight: 800;
+}
+.vop-account-name {
+  margin: .65rem 0 .1rem;
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.vop-account-email {
+  margin: 0;
+  color: #c7d1e1;
+  font-size: .92rem;
+  overflow-wrap: anywhere;
+}
+.vop-account-certificate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .55rem;
+  margin-top: 1.15rem;
+  padding: .8rem 1rem .25rem;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font: 700 .82rem/1.2 var(--font-sans);
+}
+.vop-reference-main {
+  width: min(100%, 760px);
+  margin: -3.15rem auto 0;
+  padding: 0 1.1rem max(3.2rem, env(safe-area-inset-bottom));
+  position: relative;
+}
+.vop-reference-card {
+  background: #fff;
+  border: 1px solid #edf2f7;
+  border-radius: 1.35rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,.07);
+  padding: 1.35rem 1.25rem;
+}
+.vop-reference-card + .vop-reference-card { margin-top: 1.25rem; }
+.vop-reference-card-title {
+  margin: 0 0 1.25rem;
+  color: #68717c;
+  font-size: .82rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.vop-lesson-progress-row {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  padding: .15rem .05rem .35rem;
+  scrollbar-width: none;
+}
+.vop-lesson-progress-row::-webkit-scrollbar { display: none; }
+.vop-progress-item {
+  flex: 0 0 5.45rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.vop-progress-ring {
+  width: 4.35rem;
+  height: 4.35rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 4px solid #cbd5e1;
+  background: #fff;
+  color: #17202d;
+  font-size: .86rem;
+  font-weight: 800;
+}
+.vop-progress-ring.is-complete { border-color: #ff9900; }
+.vop-progress-label {
+  margin-top: .65rem;
+  color: #2d3748;
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.vop-guide-progress-list { display: grid; gap: 1.35rem; }
+.vop-guide-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+.vop-guide-progress-copy { flex: 1; min-width: 0; }
+.vop-guide-progress-copy strong {
+  display: block;
+  margin-bottom: .5rem;
+  color: #17202d;
+  font-size: .84rem;
+}
+.vop-reference-muted {
+  color: #64748b;
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.vop-reference-success {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: .8rem;
+  padding: .75rem .85rem;
+  border-radius: .7rem;
+  background: #e6f7ef;
+  color: #166534;
+  font-size: .82rem;
+}
+.vop-reference-form {
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 1.35rem;
+  box-shadow: 0 3px 15px rgba(0,0,0,.08);
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+.vop-reference-field {
+  display: grid;
+  gap: .3rem;
+  color: #17202d;
+  font-size: .83rem;
+  font-weight: 700;
+}
+.vop-reference-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: .7rem;
+  min-height: 2.85rem;
+  padding: .55rem .8rem;
+  background: #fff;
+  color: #14223b;
+  font: inherit;
+}
+.vop-org-card {
+  margin-top: 1.25rem;
+}
+.vop-certificate-page {
+  min-height: 100dvh;
+  background: #fff;
+  color: #17202d;
+  padding-bottom: max(3rem, env(safe-area-inset-bottom));
+}
+.vop-certificate-reference-header {
+  background: #002d72;
+  color: #fff;
+  padding: .9rem 1.1rem 4.7rem;
+}
+.vop-certificate-hero-reference {
+  margin-top: 1.1rem;
+  text-align: center;
+}
+.vop-certificate-hero-reference h2 {
+  margin: .65rem 0 .15rem;
+  color: #fff;
+  font-size: 1.2rem;
+}
+.vop-certificate-hero-reference p {
+  margin: 0 auto;
+  max-width: 25rem;
+  color: #c7d1e1;
+  font-size: .85rem;
+  line-height: 1.25;
+}
+.vop-certificate-reference-body {
+  width: min(100%, 760px);
+  margin: -2.9rem auto 0;
+  padding: 0 1.1rem 2rem;
+  position: relative;
+}
+.vop-certificate-reference-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  aspect-ratio: 1.64;
+  width: 100%;
+  background:
+    linear-gradient(145deg, transparent 0 69%, #002d72 69% 77%, transparent 77%),
+    linear-gradient(25deg, transparent 0 79%, #0c2d63 79% 87%, transparent 87%),
+    #fff;
+  border: 1px solid #dfe5ec;
+  box-shadow: 0 4px 15px rgba(0,0,0,.15);
+  padding: clamp(.7rem, 3.5vw, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+}
+.vop-certificate-reference-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .18;
+  background:
+    radial-gradient(circle at 10px 10px, #cbd5e1 1px, transparent 1.5px) 0 0/20px 20px;
+}
+.vop-certificate-reference-card::after {
+  content: '';
+  position: absolute;
+  right: -2.5rem;
+  top: -2.2rem;
+  width: 8rem;
+  height: 5.5rem;
+  transform: rotate(-33deg);
+  background: #002d72;
+  z-index: -1;
+}
+.vop-certificate-reference-kicker {
+  color: #283548;
+  font-size: clamp(.62rem, 1.9vw, .9rem);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.vop-certificate-reference-name {
+  margin: .15rem 0;
+  color: #121826;
+  font-size: clamp(1rem, 4.5vw, 1.75rem);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.vop-certificate-reference-copy {
+  margin: 0;
+  color: #283548;
+  font-size: clamp(.52rem, 1.8vw, .78rem);
+  line-height: 1.35;
+}
+.vop-certificate-reference-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.vop-certificate-reference-footer > div { flex: 1; min-width: 0; }
+.vop-certificate-stamp-reference {
+  width: clamp(2.45rem, 12vw, 4.25rem);
+  height: clamp(2.45rem, 12vw, 4.25rem);
+  display: grid;
+  place-items: center;
+  border: 3px solid #d89d14;
+  border-radius: 50%;
+  background: #f4bf35;
+  color: #243654;
+  font-size: clamp(.52rem, 2vw, .82rem);
+  font-weight: 900;
+}
+.vop-certificate-reference-meta {
+  color: #283548;
+  font-size: clamp(.48rem, 1.55vw, .72rem);
+  line-height: 1.3;
+}
+.vop-certificate-reference-meta strong { display: block; }
+.vop-certificate-progress-block { margin-top: 1.35rem; }
+.vop-certificate-progress-title {
+  margin: 0 0 .7rem;
+  text-align: center;
+  color: #17202d;
+  font-size: .95rem;
+  font-weight: 800;
+}
+.vop-certificate-reference-save {
+  margin-top: 1.35rem;
+}
+.vop-certificate-secondary-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+.vop-certificate-secondary-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  border: 0;
+  background: transparent;
+  color: #17202d;
+  font: 700 .78rem/1.2 var(--font-sans);
+  cursor: pointer;
+}
+.vop-admin-reference-page {
+  min-height: 100dvh;
+  background: #fff;
+  color: #17202d;
+  padding-bottom: max(3rem, env(safe-area-inset-bottom));
+}
+.vop-admin-reference-header {
+  background: #002d72;
+  color: #fff;
+  padding: .9rem 1.1rem 5.25rem;
+}
+.vop-admin-reference-topbar { justify-content: flex-start; }
+.vop-admin-reference-topbar .vop-reference-back { gap: 1rem; }
+.vop-admin-reference-hero {
+  text-align: center;
+  margin-top: 1.7rem;
+}
+.vop-admin-reference-hero h1 {
+  margin: .7rem 0 .25rem;
+  color: #fff;
+  font-size: 1.25rem;
+}
+.vop-admin-reference-hero p {
+  max-width: 25rem;
+  margin: 0 auto;
+  color: #c7d1e1;
+  font-size: .84rem;
+  line-height: 1.3;
+}
+.vop-admin-reference-body {
+  width: min(100%, 980px);
+  margin: -3.25rem auto 0;
+  padding: 0 1.1rem 2rem;
+  position: relative;
+}
+.vop-admin-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.vop-admin-reference-card {
+  min-height: 11.5rem;
+  padding: 1.25rem 1rem;
+  border: 1px solid #edf2f7;
+  border-radius: 1.4rem;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0,0,0,.07);
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.vop-admin-reference-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,45,114,.12);
+}
+.vop-admin-reference-icon {
+  width: 4.2rem;
+  height: 4.2rem;
+  display: grid;
+  place-items: center;
+  color: #000;
+  margin-bottom: .9rem;
+}
+.vop-admin-reference-card h2 {
+  margin: 0 0 .2rem;
+  color: #17202d;
+  font-size: .92rem;
+  font-weight: 800;
+}
+.vop-admin-reference-card p {
+  margin: 0;
+  color: #4b5563;
+  font-size: .7rem;
+  line-height: 1.35;
+}
+.vop-admin-reference-more {
+  margin-top: 1.1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #edf2f7;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(0,0,0,.05);
+}
+.vop-admin-reference-more-nav {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vop-admin-reference-more-nav::-webkit-scrollbar { display: none; }
+.vop-admin-reference-more-nav button {
+  flex: 0 0 auto;
+  border: 1px solid #dce3ec;
+  border-radius: 999px;
+  background: #fff;
+  color: #002d72;
+  padding: .55rem .8rem;
+  font: 700 .72rem/1 var(--font-sans);
+  cursor: pointer;
+}
+.vop-admin-reference-more-nav button:hover { background: #f4f6fa; }
+@media (min-width: 700px) {
+  .vop-admin-reference-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1000px) {
+  .vop-admin-reference-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 380px) {
+  .vop-admin-reference-card { min-height: 10.5rem; padding: 1rem .8rem; }
+  .vop-admin-reference-icon { width: 3.6rem; height: 3.6rem; }
+}
+.vop-radio-error {
+  margin-top: .7rem;
+  padding: .7rem .85rem;
+  border-radius: .75rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: .8rem;
+}
