@@ -68,15 +68,18 @@ export function Root() {
               throw new Error('Firebase account and Firestore profile identities do not match.');
             }
 
-            saveUsers([
-              ...getStoredUsers().filter(item => item.uid !== firebaseUser.uid),
-              payload.profile,
-            ]);
-            localStorage.setItem('vop_current_user_id', firebaseUser.uid);\n\n            // Remove legacy browser-side operational/demo records. Firestore is authoritative.\n            [\n              'vop_announcements', 'vop_books', 'vop_unions', 'vop_conferences',\n              'vop_districts', 'vop_churches', 'vop_hierarchy_config',\n              'vop_graduation_requests', 'vop_prayer_requests', 'vop_radio_broadcasts',\n              'vop_auto_localization'\n            ].forEach(key => localStorage.removeItem(key));
+            saveUsers([payload.profile]);
+            localStorage.setItem('vop_current_user_id', firebaseUser.uid);
 
-            // Lessons are optional application content. An empty Firestore curriculum
-            // must not prevent the rest of the authenticated VOP application from loading.
-            const firestoreSettings = await loadFirestoreSettings();\n            if (firestoreSettings) {\n              localStorage.setItem('vop_settings', JSON.stringify(firestoreSettings));\n            }\n\n            const guides = await loadFirestoreGuides();
+            // Remove legacy browser-side operational/demo records. Firestore is authoritative.
+            [
+              'vop_announcements', 'vop_books', 'vop_unions', 'vop_conferences',
+              'vop_districts', 'vop_churches', 'vop_hierarchy_config',
+              'vop_graduation_requests', 'vop_prayer_requests', 'vop_radio_broadcasts',
+              'vop_auto_localization'
+            ].forEach(key => localStorage.removeItem(key));
+
+            const guides = await loadFirestoreGuides();
             localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
