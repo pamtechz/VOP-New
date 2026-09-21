@@ -7,7 +7,7 @@ import {
   type DocumentData,
   type DocumentReference,
 } from 'firebase/firestore';
-import type { DiscoverGuide, Lesson, LessonContentBlock, User, LanguageCode } from '../types';
+import type { DiscoverGuide, Lesson, LessonContentBlock, LessonContentPage, User, LanguageCode } from '../types';
 import { db } from '../lib/firebase';
 
 function requireDb() {
@@ -84,10 +84,14 @@ function normalizeLesson(id: string, data: DocumentData): Lesson {
       ? data.contentPages.map((page) => {
           const value = page as Record<string, unknown>;
           return {
-            ...value,
-            blocks: normalizeContentBlocks(value.blocks),
+            pageNumber: Number(value.pageNumber ?? 1),
+            title: String(value.title ?? ''),
             content: String(value.content ?? ''),
-          };
+            blocks: normalizeContentBlocks(value.blocks),
+            scriptureQuote: value.scriptureQuote as LessonContentPage['scriptureQuote'],
+            keyTakeaway: typeof value.keyTakeaway === 'string' ? value.keyTakeaway : undefined,
+            imageUrl: typeof value.imageUrl === 'string' ? value.imageUrl : undefined,
+          } satisfies LessonContentPage;
         })
       : blocksToContentPages(data.pages),
     questions: Array.isArray(data.questions) ? data.questions : Array.isArray(data.quiz) ? data.quiz : [],
