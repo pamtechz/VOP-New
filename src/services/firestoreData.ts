@@ -28,7 +28,7 @@ function blocksToContentPages(pages: unknown): Lesson['contentPages'] {
       pageNumber: Number.isSafeInteger(item.pageNumber) ? item.pageNumber! : index + 1,
       title: String(item.title ?? '').trim(),
       content,
-      imageUrl: image?.src ? `/${image.src.replace(/^\//, '')}` : undefined,
+      imageUrl: image?.src ? `/lessons/${image.src.replace(/^\//, '')}` : undefined,
     };
   }).filter(page => page.title && page.content);
 }
