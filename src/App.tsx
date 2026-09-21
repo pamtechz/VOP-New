@@ -246,10 +246,10 @@ export const App: React.FC = () => {
           onNextLesson={() => {
             if (nextLesson) setActiveLesson(nextLesson);
           }}
-          onComplete={() => {
-            const accepted = completeLesson(activeGuide.id, activeLesson.id);
+          onComplete={async () => {
+            const accepted = await completeLesson(activeGuide.id, activeLesson.id);
             if (!accepted) {
-              setStudyError('Lesson completion was not saved. Ask an administrator to check the curriculum and active language.');
+              setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.');
               return false;
             }
             const refreshedUser = getCurrentUser();
