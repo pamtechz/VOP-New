@@ -317,12 +317,12 @@ export const CertificationManager: React.FC<Props> = ({
           </aside>
           <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} settings={settings} /></section>
           <aside className="vop-cert-action-card">
-            <div className="vop-cert-info"><Info size={22} /><p>The certificate design is controlled by certification configuration. Generated records use the stored candidate and completion data.</p></div>
+            <div className="vop-cert-info"><Info size={22} /><p>This is the official VOP course certificate design. All generated certificates will follow this format.</p></div>
             <button className="vop-cert-primary-button" type="button" onClick={() => void downloadCertificate()} disabled={exporting}><Download size={18} />{exporting ? 'Generating…' : 'Download Certificate'}</button>
             <button className="vop-cert-secondary-button" type="button" onClick={() => window.print()}><Printer size={18} />Print Certificate</button>
             <button className="vop-cert-secondary-button" type="button" onClick={() => void shareCertificate()}><Share2 size={18} />Share Certificate</button>
             <button className="vop-cert-secondary-button" type="button" onClick={sendCertificate} disabled={!selected.candidateEmail}><Mail size={18} />Send to Candidate</button>
-            <div className="vop-cert-ready"><CheckCircle2 size={26} /><div><strong>Certificate Ready</strong><span>Certificate record is stored in Firestore.</span></div></div>
+            <div className="vop-cert-ready"><CheckCircle2 size={26} /><div><strong>Certificate Ready</strong><span>This candidate has successfully completed all requirements.</span></div></div>
           </aside>
         </div>
         <div className="vop-cert-note"><Info size={22} /><div><strong>Note</strong><span>The certificate is generated from the stored candidate record, completion date and configured certification assets.</span></div></div>
