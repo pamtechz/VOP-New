@@ -1,22 +1,11 @@
 import { LanguageCode, CustomLanguage, AppSettings } from '../types';
 import { getStoredAutoLocalization, registerLocalizationString } from './storage';
 
-export const DEFAULT_LANGUAGES: CustomLanguage[] = [
-  { code: 'en', name: 'English', nativeName: 'English', enabled: true, sortOrder: 0 }
-];
-
-export const LANGUAGE_NAMES: Record<string, { name: string; nativeName: string }> = {
-  en: { name: 'English', nativeName: 'English' },
-  bem: { name: 'Bemba', nativeName: 'Chibemba' },
-  nya: { name: 'Nyanja', nativeName: 'Chinyanja' },
-  ton: { name: 'Tonga', nativeName: 'Chitonga' }
-};
-
 export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] => {
-  const configured = (settings?.customLanguages ?? [])
-    .filter(language => language.enabled !== false)
+  return (settings?.customLanguages ?? [])
+    .filter(language => language.enabled !== false && language.code.trim() && language.name.trim())
+    .map(language => ({ ...language, code: language.code.trim().toLowerCase() }))
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
-  return configured.length ? configured : DEFAULT_LANGUAGES;
 };
 
 export const DEFAULT_TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
