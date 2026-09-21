@@ -170,6 +170,26 @@ export default async function handler(request: Request, response: Response) {
       });
     }
 
+    if (action === 'unpublishLesson') {
+      if (collection !== 'curriculum') {
+        return response.status(400).json({ error: 'Lesson unpublishing requires the curriculum collection.' });
+      }
+      const lessonId = typeof body.id === 'string' ? body.id.trim() : '';
+      const language = typeof body.data === 'object' && body.data && !Array.isArray(body.data)
+        && typeof (body.data as Record<string, unknown>).language === 'string'
+        ? String((body.data as Record<string, unknown>).language).trim()
+        : '';
+      if (!lessonId || !language) {
+        return response.status(400).json({ error: 'Lesson ID and language are required.' });
+      }
+      if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(language)) {
+        return response.status(400).json({ error: 'A valid language code is required.' });
+      }
+      const canonical = db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
+      await canonical.delete();
+      return response.status(200).json({ ok: true, item: { id: lessonId, published: false } });
+    }
+
     const ref = collection === 'settings'
       ? db.doc('system/settings')
       : collection === 'certificationConfig'
