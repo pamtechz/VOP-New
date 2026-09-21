@@ -4,6 +4,13 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'student';
+    }
+
     function validProgress(uid) {
       let d = request.resource.data;
       return d.keys().hasAll([
@@ -28,19 +35,77 @@ service cloud.firestore {
         && d.answers[4] is int && d.answers[4] >= 0 && d.answers[4] <= 5
         && d.submittedAt == request.time;
     }
+
+    // Public application configuration and published ministry content.
+    match /system/settings {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isAdmin();
+    }
+
+    match /languages/{languageId} {
+      allow get, list: if resource.data.enabled == true;
+      allow write: if isAdmin();
+    }
+
+    match /translations/{translationId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow get, list: if resource.data.published == true;
+      allow write: if isAdmin();
+    }
+
+    match /books/{bookId} {
+      allow get, list: if resource.data.published == true;
+      allow write: if isAdmin();
+    }
+
+    match /radioBroadcasts/{broadcastId} {
+      allow get, list: if resource.data.published == true;
+      allow write: if isAdmin();
+    }
+
+    // Organization references are public content; mutations remain server-authorized.
+    match /unions/{unionId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /conferences/{conferenceId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /districts/{districtId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /churches/{churchId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    // Lessons remain protected and are served only to authenticated learners/admins.
     match /{path=**}/lessons/{lessonId} {
       allow get, list: if request.auth != null;
       allow create, update, delete: if false;
     }
+
     match /users/{uid} {
       allow get: if isOwner(uid);
       allow list, create, update, delete: if false;
+
       match /progress/{recordId} {
         allow get, list: if isOwner(uid);
         allow create: if isOwner(uid) && recordId == uid && validProgress(uid);
         allow update, delete: if false;
       }
     }
+
     // All other paths are implicitly denied.
   }
 }
