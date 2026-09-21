@@ -24,7 +24,6 @@ import {
   deleteLesson,
   deleteOrganization,
   deleteRadioBroadcast,
-  emptySettings,
   exportAdminBackup,
   loadAdminData,
   saveAdminSettings,
