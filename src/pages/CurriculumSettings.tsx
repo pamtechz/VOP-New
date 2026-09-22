@@ -71,7 +71,7 @@ const emptySettings = (settings: ExtendedAppSettings | null, languages: CustomLa
   requireApproval: false,
   allowDraftMode: false,
   notifyOnSubmissions: false,
-  defaultLanguage: settings?.defaultLanguage || languages[0]?.name || '',
+  defaultLanguage: settings?.defaultLanguage || languages[0]?.code || '',
   defaultDifficulty: '',
   enableVideoUploads: false,
   enableAudioUploads: false,
