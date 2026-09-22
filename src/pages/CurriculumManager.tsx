@@ -78,6 +78,7 @@ type EditorState = {
   tags: string;
   estimatedMinutes: number;
   published: boolean;
+  sharingScope: 'private' | 'organization' | 'shared';
 };
 
 async function adminContent(
@@ -143,6 +144,7 @@ function blankEditor(language = '', guideId = ''): EditorState {
     tags: '',
     estimatedMinutes: 15,
     published: false,
+    sharingScope: 'organization',
   };
 }
 
@@ -289,6 +291,7 @@ function editorFromLesson(row: LessonRow): EditorState {
     tags: Array.isArray(raw.tags) ? raw.tags.map(valueText).join(', ') : valueText(raw.tags),
     estimatedMinutes: Math.max(1, Number(raw.estimatedMinutes ?? row.lesson.estimatedMinutes ?? 15) || 15),
     published: row.status === 'Published',
+    sharingScope: raw.sharingScope === 'shared' ? 'shared' : raw.sharingScope === 'private' ? 'private' : 'organization',
   };
   return editor;
 }
@@ -637,6 +640,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         estimatedMinutes: Math.max(1, Number(editor.estimatedMinutes) || 15),
         type: 'Lesson',
         published: publish,
+        sharingScope: editor.sharingScope,
       };
 
       await adminContent('upsert', 'curriculum', id, payload);
@@ -831,6 +835,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
             {editorTab === 'notes' && <div className="vop-field"><label>Teacher Notes</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div>}
 
             {editorTab === 'settings' && <div className="vop-form-grid vop-reference-single-column">
+              <div className="vop-field"><label>Sharing</label><select value={editor.sharingScope} onChange={e => setEditor({...editor,sharingScope:e.target.value as EditorState['sharingScope']})}><option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared</option></select><small>Shared lessons can be consumed by other organizations. Canonical editing remains restricted to the owning organization and VOP Super Admin.</small></div>
               <div className="vop-field"><label>Estimated Minutes</label><input type="number" min="1" value={editor.estimatedMinutes} onChange={e => setEditor({...editor,estimatedMinutes:Number(e.target.value)})}/></div>
               <div className="vop-field"><label>Tags</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/></div>
               <div className="vop-setting-row"><div><div className="vop-setting-name">Publication status</div><div className="vop-setting-help">Publishing is validated against the selected guide.</div></div><select value={editor.published ? 'published' : 'draft'} onChange={e => setEditor({...editor,published:e.target.value==='published'})}><option value="draft">Draft</option><option value="published">Published</option></select></div>
