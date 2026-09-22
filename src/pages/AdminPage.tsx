@@ -814,7 +814,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   return <div className="vop-admin">
     <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
       <div className="vop-brand"><div className="vop-brand-mark"><img src="/assets/vop_logo_2.png" alt="" /></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <button className="vop-notification" type="button" aria-label="Notifications" title="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
