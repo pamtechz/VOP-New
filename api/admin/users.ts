@@ -1,6 +1,7 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
+import { authenticateTenant } from '../lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -31,6 +32,8 @@ async function authenticate(request: Request) {
 }
 
 function profileType(profile: Record<string, unknown> | undefined, authUser: UserRecord): ProfileType {
+  const organizationRole = String(profile?.organizationRole || '');
+  if (organizationRole === 'admin' || organizationRole === 'editor' || organizationRole === 'mentor' || organizationRole === 'teacher') return organizationRole === 'mentor' ? 'mentor' : organizationRole === 'teacher' ? 'teacher' : 'admin';
   const explicit = profile?.userType;
   if (explicit === 'super_admin' || explicit === 'admin' || explicit === 'teacher' || explicit === 'mentor' || explicit === 'learner' || explicit === 'guest') return explicit;
   const role = String(profile?.role || '');
@@ -133,7 +136,13 @@ async function listAllUsers(authService: ReturnType<typeof getAuth>) {
   return users;
 }
 
-function profileForType(type: ProfileType, organization: Record<string, unknown>) {
+function profileForType(type: ProfileType, organization: Record<string, unknown>, tenantOrganizationId = '') {
+  if (tenantOrganizationId && type !== 'super_admin') {
+    if (type === 'admin') return { role:'student', organizationRole:'admin', organizationId:tenantOrganizationId, adminNodeType:null, adminNodeId:null, privileges:{admin:true,superAdmin:false,guardian:true,editor:false,manager:true,developer:false,coordinator:true} };
+    if (type === 'mentor') return { role:'mentor', organizationRole:'mentor', organizationId:tenantOrganizationId, adminNodeType:null, adminNodeId:null, mentorProfile:{enabled:true}, privileges:{admin:false,superAdmin:false,guardian:false,editor:true,manager:false,developer:false,coordinator:true} };
+    if (type === 'teacher') return { role:'student', organizationRole:'teacher', organizationId:tenantOrganizationId, adminNodeType:null, adminNodeId:null, privileges:{admin:false,superAdmin:false,guardian:false,editor:true,manager:false,developer:false,coordinator:false} };
+    return { role:'student', organizationRole:'learner', organizationId:tenantOrganizationId, adminNodeType:null, adminNodeId:null, privileges:{admin:false,superAdmin:false,guardian:false,editor:false,manager:false,developer:false,coordinator:false} };
+  }
   if (type === 'super_admin') {
     return { role: 'super_admin', adminNodeType: null, adminNodeId: null, privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true, coordinator: true } };
   }
@@ -178,13 +187,20 @@ export default async function handler(request: Request, response: Response) {
 
   try {
     const decoded = await authenticate(request);
-    const db = await requireSuperAdmin(decoded as unknown as Record<string, unknown>);
     const authService = getAuth(getFirebaseAdmin());
     const body = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
     const action = typeof body.action === 'string' ? body.action : 'list';
+    const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;
+    const tenant = await authenticateTenant(request, requestedOrganizationId);
+    const db = tenant.db;
+    const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || ''));
+    if (!canManageTenantUsers) throw new Error('Only an organization owner or administrator can manage organization users.');
+    const tenantOrganizationId = tenant.organizationId;
 
     if (action === 'list') {
-      const users = await listAllUsers(authService);
+      const users = tenant.isSuperAdmin && !tenantOrganizationId
+        ? await listAllUsers(authService)
+        : await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
       return response.status(200).json({ ok: true, items: await serializeUsers(db, users) });
     }
 
@@ -208,7 +224,8 @@ export default async function handler(request: Request, response: Response) {
         ...(password ? { password } : {}),
         disabled: false,
       });
-      const profile = profileForType(type, body);
+      const profile = profileForType(type, body, tenantOrganizationId);
+      if (tenantOrganizationId && type === 'super_admin') throw new Error('Organization administrators cannot create platform administrators.');
       await db.doc(`users/${created.uid}`).set({
         uid: created.uid,
         email,
@@ -222,7 +239,8 @@ export default async function handler(request: Request, response: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
-      await authService.setCustomUserClaims(created.uid, claims);
+      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:tenantOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
+      await authService.setCustomUserClaims(created.uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
     }
@@ -242,7 +260,8 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
-      const profile = profileForType(type, body);
+      if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      const profile = profileForType(type, body, tenantOrganizationId);
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
@@ -253,7 +272,8 @@ export default async function handler(request: Request, response: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
-      await authService.setCustomUserClaims(uid, claims);
+      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).set({ uid, organizationId:tenantOrganizationId, role:type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, updatedAt:new Date().toISOString() }, {merge:true});
+      await authService.setCustomUserClaims(uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
       return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName } });
     }
 
@@ -273,8 +293,11 @@ export default async function handler(request: Request, response: Response) {
 
     if (action === 'delete') {
       if (uid === String(decoded.uid)) return response.status(400).json({ error: 'The signed-in administrator cannot delete their own account.' });
+      const targetProfile = await db.doc(`users/${uid}`).get();
+      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
       await authService.deleteUser(uid);
       await db.doc(`users/${uid}`).delete();
+      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).delete().catch(() => undefined);
       return response.status(200).json({ ok: true, uid });
     }
 
