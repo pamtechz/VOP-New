@@ -99,6 +99,7 @@ export type UserRole =
   | 'conference_admin' 
   | 'district_admin' 
   | 'church_admin' 
+  | 'mentor'
   | 'student';
 
 export type AdminNodeType = 'super' | 'union' | 'conference' | 'district' | 'church';
@@ -255,6 +256,55 @@ export interface BookResource {
   description: string;
   published?: boolean;
   downloadUrl?: string;
+}
+
+export interface MentorAssignment {
+  id: string;
+  studentId: string;
+  mentorId: string;
+  status: 'active' | 'paused' | 'completed';
+  assignedAt: string;
+  assignedBy: string;
+  notes?: string;
+  lastContactAt?: string;
+}
+
+export interface MentorMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  references?: Array<{ type: 'guide' | 'lesson' | 'section' | 'topic' | 'block'; id: string; label: string }>;
+  createdAt: string;
+  readAt?: string;
+}
+
+export interface ShareReference {
+  id: string;
+  code: string;
+  targetPath: string;
+  language?: string;
+  guideId?: string;
+  lessonId?: string;
+  label?: string;
+  createdAt: string;
+  createdBy: string;
+  clicks: number;
+  installs: number;
+  lastAccessAt?: string;
+}
+
+export interface LearningPerformance {
+  studentId: string;
+  assessments: number;
+  averageScore: number;
+  passedAssessments: number;
+  failedAssessments: number;
+  completedLessons: number;
+  progressPercent: number;
+  weakQuestions: Array<{ key: string; question: string; failedCount: number; answeredCount: number; lessonId?: string; guideId?: string }>;
+  updatedAt: string;
 }
 
 export interface PrayerRequest {
