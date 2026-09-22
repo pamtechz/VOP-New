@@ -16,7 +16,7 @@ type ManagedUser = {
   role: string;
   roleLabel: string;
   roleColor: 'admin' | 'teacher' | 'learner' | 'guest';
-  userType: 'admin' | 'teacher' | 'learner' | 'guest';
+  userType: 'super_admin' | 'admin' | 'teacher' | 'learner' | 'guest';
   disabled: boolean;
   status: 'Active' | 'Inactive';
   emailVerified: boolean;
@@ -72,7 +72,7 @@ function initials(name: string) {
 }
 
 function roleLabel(type: ManagedUser['userType']) {
-  return type === 'admin' ? 'Admin' : type === 'teacher' ? 'Teacher' : type === 'guest' ? 'Guest' : 'Learner';
+  return type === 'super_admin' ? 'Super Admin' : type === 'admin' ? 'Admin' : type === 'teacher' ? 'Teacher' : type === 'guest' ? 'Guest' : 'Learner';
 }
 
 function emptyEditor(): EditorState {
@@ -436,7 +436,7 @@ export default function UserManagement({ onBack }: Props) {
             <label><span>Full Name *</span><input value={editor.displayName} onChange={e => setEditor({...editor,displayName:e.target.value})}/></label>
             <label><span>Email *</span><input type="email" value={editor.email} onChange={e => setEditor({...editor,email:e.target.value})}/></label>
             <label><span>Phone</span><input value={editor.phoneNumber} onChange={e => setEditor({...editor,phoneNumber:e.target.value})}/></label>
-            <label><span>Role</span><select value={editor.userType} onChange={e => setEditor({...editor,userType:e.target.value as EditorState['userType']})}><option value="admin">Admin</option><option value="teacher">Teacher</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
+            <label><span>Role</span><select value={editor.userType} onChange={e => setEditor({...editor,userType:e.target.value as EditorState['userType']})}><option value="super_admin">Super Admin</option><option value="admin">Admin</option><option value="teacher">Teacher</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
             {editor.userType === 'admin' && <><label><span>Admin Scope</span><select value={editor.adminNodeType} onChange={e => setEditor({...editor,adminNodeType:e.target.value,adminNodeId:''})}><option value="">Select scope</option>{Array.from(new Set(organizations.map(item => item.type))).map(type => <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}</select></label><label><span>Organization</span><select value={editor.adminNodeId} onChange={e => setEditor({...editor,adminNodeId:e.target.value})}><option value="">Select organization</option>{organizations.filter(item => item.type === editor.adminNodeType).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></>}
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
