@@ -250,7 +250,7 @@ export default function UserManagement({ onBack }: Props) {
   const exportUsers = () => {
     const headers = ['User Code', 'Name', 'Email', 'Role', 'Status', 'Conference', 'District', 'Last Login'];
     const rows = filtered.map(user => [user.userCode, user.displayName, user.email, user.roleLabel, user.status, user.conferenceName || '', user.districtName || '', user.lastLogin || '']);
-    const csv = [headers, ...rows].map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\\n');
+    const csv = [headers, ...rows].map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -274,7 +274,7 @@ export default function UserManagement({ onBack }: Props) {
 
   const importCsv = async (file: File) => {
     const text = await file.text();
-    const lines = text.split(/\\r?\\n/).filter(Boolean);
+    const lines = text.split(/\r?\n/).filter(Boolean);
     if (lines.length < 2) throw new Error('The CSV file contains no user rows.');
     const headers = lines[0].split(',').map(value => value.trim());
     const indexOf = (name: string) => headers.indexOf(name);
