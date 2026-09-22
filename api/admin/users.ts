@@ -4,7 +4,7 @@ import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
-type ProfileType = 'admin' | 'teacher' | 'learner' | 'guest';
+type ProfileType = 'super_admin' | 'admin' | 'teacher' | 'learner' | 'guest';
 
 const ADMIN_ROLES = new Set(['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']);
 
@@ -32,7 +32,7 @@ async function authenticate(request: Request) {
 
 function profileType(profile: Record<string, unknown> | undefined, authUser: UserRecord): ProfileType {
   const explicit = profile?.userType;
-  if (explicit === 'admin' || explicit === 'teacher' || explicit === 'learner' || explicit === 'guest') return explicit;
+  if (explicit === 'super_admin' || explicit === 'admin' || explicit === 'teacher' || explicit === 'learner' || explicit === 'guest') return explicit;
   const role = String(profile?.role || '');
   if (ADMIN_ROLES.has(role)) return 'admin';
   if (profile?.privileges && typeof profile.privileges === 'object' && (profile.privileges as Record<string, unknown>).editor === true) return 'teacher';
@@ -41,7 +41,7 @@ function profileType(profile: Record<string, unknown> | undefined, authUser: Use
 }
 
 function displayRole(type: ProfileType, profile: Record<string, unknown> | undefined): string {
-  if (type === 'admin') return String(profile?.role || '') === 'super_admin' ? 'Super Admin' : 'Admin';
+  if (type === 'super_admin') return 'Super Admin';\n  if (type === 'admin') return 'Admin';
   if (type === 'teacher') return 'Teacher';
   if (type === 'guest') return 'Guest';
   return 'Learner';
@@ -131,7 +131,7 @@ async function listAllUsers(authService: ReturnType<typeof getAuth>) {
 }
 
 function profileForType(type: ProfileType, organization: Record<string, unknown>) {
-  if (type === 'admin') {
+  if (type === 'super_admin') {\n    return { role: 'super_admin', adminNodeType: null, adminNodeId: null, privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true, coordinator: true } };\n  }\n  if (type === 'admin') {
     const nodeType = String(organization.adminNodeType || 'union');
     const nodeId = String(organization.adminNodeId || '');
     const role = nodeType === 'union' ? 'union_admin' : nodeType === 'conference' ? 'conference_admin' : nodeType === 'district' ? 'district_admin' : nodeType === 'church' ? 'church_admin' : 'union_admin';
@@ -180,7 +180,7 @@ export default async function handler(request: Request, response: Response) {
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
       const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
       const password = typeof body.password === 'string' ? body.password : '';
-      const type = (body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : 'learner';
+      const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : 'learner';
 
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
@@ -206,7 +206,7 @@ export default async function handler(request: Request, response: Response) {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      const claims = type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : { role: 'student' };
+      const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : { role: 'student' };
       await authService.setCustomUserClaims(created.uid, claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
