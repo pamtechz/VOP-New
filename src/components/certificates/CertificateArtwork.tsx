@@ -5,7 +5,7 @@ export interface CertificateArtworkRecord {
   courseName: string;
   courseCode?: string;
   certificateNumber: string;
-  completionDate?: string;
+  completionDate?: string | null;
   issuedAt?: string;
 }
 
@@ -87,7 +87,7 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
 
       {(config?.signatureUrl || directorName || directorTitle) && (
         <div className="vop-certificate-signature">
-          {config.signatureUrl && <img src={config.signatureUrl} alt="" />}
+          {config?.signatureUrl && <img src={config.signatureUrl} alt="" />}
           <div className="vop-certificate-signature-line" />
           {directorName && <strong>{directorName}</strong>}
           {directorTitle && <span>{directorTitle}</span>}
@@ -96,7 +96,7 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
 
       {(config?.logoUrl || issuer || subtitle) && (
         <div className="vop-certificate-brand">
-          {config.logoUrl && <img src={config.logoUrl} alt="" />}
+          {config?.logoUrl && <img src={config.logoUrl} alt="" />}
           <div>
             {issuer && <strong>{issuer}</strong>}
             {subtitle && <span>{subtitle}</span>}
