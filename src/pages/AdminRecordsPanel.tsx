@@ -577,7 +577,7 @@ function RadioAdminDashboard({
 }) {
   const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
   const [search, setSearch] = useState('');
-  const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'|'upload'>('stream');
+  const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'>('stream');
 
   const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
   const nowPlaying = live[0] || records[0] || null;
@@ -640,14 +640,14 @@ function RadioAdminDashboard({
           <div className="vop-radio-admin-add-card">
             <div className="vop-radio-admin-card-title"><span><Radio size={17}/> Add Live Stream</span></div>
             <div className="vop-radio-source-picker">
-              {([['stream','Stream URL',Link2],['youtube','YouTube',Video],['audioverse','AudioVerse',Headphones],['upload','Upload File',Upload]] as const).map(([value,label,Icon])=><button key={value} className={sourceMode===value?'active':''} type="button" onClick={()=>setSourceMode(value)}><Icon size={22}/><span>{label}</span></button>)}
+              {([['stream','Stream URL',Link2],['youtube','YouTube',Video],['audioverse','AudioVerse',Headphones]] as const).map(([value,label,Icon])=><button key={value} className={sourceMode===value?'active':''} type="button" onClick={()=>setSourceMode(value)}><Icon size={22}/><span>{label}</span></button>)}
             </div>
             <form onSubmit={submit} className="vop-radio-admin-quick-form">
               <label>Stream / Media URL<input value={String(form.streamUrl || form.videoUrl || form.audioUrl || '')} onChange={e=>{const key=sourceMode==='youtube'?'videoUrl':sourceMode==='audioverse'?'audioUrl':'streamUrl';change(key,e.target.value)}} placeholder={sourceMode==='youtube'?'https://youtube.com/watch?v=…':sourceMode==='audioverse'?'https://www.audioverse.org/en/media/…':'https://your-stream.example/live'}/></label>
               <label>Title<input value={String(form.title || '')} onChange={e=>change('title',e.target.value)} placeholder="Programme title"/></label>
               <button className="vop-radio-admin-start" type="submit" disabled={saving}>{saving?'Saving…':'Save / Start Stream'}</button>
             </form>
-            <div className="vop-radio-admin-quick-links"><button type="button" onClick={()=>setTab('playlists')}><ListVideo size={15}/> Manage Playlists</button><button type="button" onClick={openNew}><Upload size={15}/> Upload Audio/Video</button><button type="button" onClick={()=>setTab('settings')}><Settings size={15}/> Radio Settings</button></div>
+            <div className="vop-radio-admin-quick-links"><button type="button" onClick={()=>setTab('playlists')}><ListVideo size={15}/> Manage Playlists</button><button type="button" onClick={openNew}><Link2 size={15}/> Add Media URL</button><button type="button" onClick={()=>setTab('settings')}><Settings size={15}/> Radio Settings</button></div>
           </div>
         </div>
       ) : (
