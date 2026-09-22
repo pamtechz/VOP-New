@@ -10,6 +10,7 @@ import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
 import { auth } from '../lib/firebase';
 import { loadFirestoreGuides } from '../services/firestoreData';
 import GuideManager from './GuideManager';
+import QuizLibrary from './QuizLibrary';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -905,32 +906,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         })}
       </div>
 
-      {tab === 'quizzes' ? (
-        <>
-          <div className="vop-reference-toolbar">
-            <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label="Search quizzes"/></div>
-            <select value={guideFilter} onChange={e => setGuideFilter(e.target.value)}><option value="all">All Guides</option>{guides.map(guide => <option key={guide.id + guide.language} value={guide.id}>{guide.title}</option>)}</select>
-            <select value={languageFilter} onChange={e => setLanguageFilter(e.target.value)}><option value="all">All Lessons</option>{lessonRows.map(row => <option key={row.key} value={row.key}>{row.lesson.lessonNumber} · {row.lesson.title}</option>)}</select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All Status</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select>
-            <button className="vop-primary vop-filter-button" type="button"><Filter size={17}/>Filter</button>
-          </div>
-          <div className="vop-quiz-metrics">
-            <div className="vop-quiz-metric"><FileText size={27}/><div><small>Total Quizzes</small><strong>{quizCount}</strong></div></div>
-            <div className="vop-quiz-metric"><CheckCircle size={27}/><div><small>Published</small><strong>{publishedQuizCount}</strong></div></div>
-            <div className="vop-quiz-metric"><Clock size={27}/><div><small>Drafts</small><strong>{draftQuizCount}</strong></div></div>
-            <div className="vop-quiz-metric"><Layers size={27}/><div><small>Question Bank</small><strong>{questionBankCount}</strong></div></div>
-            <div className="vop-quiz-metric"><CircleHelp size={27}/><div><small>Avg. Questions</small><strong>{averageQuestions}</strong></div></div>
-          </div>
-          <div className="vop-reference-table-wrap">
-            {loading ? <div className="vop-empty">Loading quizzes…</div> : quizPageRows.length === 0 ? <div className="vop-empty">No quizzes are configured.</div> : (
-              <table className="vop-reference-table vop-quiz-table"><thead><tr><th>#</th><th>Quiz Title</th><th>Guide / Lesson</th><th>Questions</th><th>Type</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
-                <tbody>{quizPageRows.map((row,index) => <tr key={row.key}><td>{(quizPage - 1) * quizPageSize + index + 1}</td><td><div className="vop-quiz-title"><span><FileText size={18}/></span><div><strong>{row.lesson.title}</strong><small>{row.lesson.description}</small></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.lesson.lessonNumber}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-type-pill">{questionType(questionsFromUnknown(row.lesson.questions))}</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><div className="vop-reference-updated">{formatDate(row.updatedAt)}{row.updatedBy && <small>by {row.updatedBy}</small>}</div></td><td><button className="vop-actions" type="button" onClick={() => openLesson(row)}><MoreVertical size={18}/></button></td></tr>)}</tbody>
-              </table>
-            )}
-            <div className="vop-reference-pager"><span>Showing {quizRows.length ? ((quizPage - 1) * quizPageSize + 1) : 0}–{Math.min(quizPage * quizPageSize, quizRows.length)} of {quizRows.length} quizzes</span><div><button className="vop-page-btn" type="button" onClick={() => setQuizPage(value => Math.max(1,value-1))} disabled={quizPage===1}><ChevronLeft size={17}/></button>{Array.from({length:quizPages},(_,i)=>i+1).slice(0,5).map(item=><button key={item} className={'vop-page-btn '+(item===quizPage?'active':'')} type="button" onClick={() => setQuizPage(item)}>{item}</button>)}<button className="vop-page-btn" type="button" onClick={() => setQuizPage(value => Math.min(quizPages,value+1))} disabled={quizPage===quizPages}><ChevronRight size={17}/></button></div></div>
-          </div>
-        </>
-      ) : tab === 'guides' ? (
+      {tab === 'quizzes' ? <QuizLibrary /> : tab === 'guides' ? (
         <GuideManager languages={languages} guides={guides} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
       ) : (
         <>
