@@ -276,6 +276,10 @@ export interface RadioBroadcast {
   series: string;
   durationMinutes: number;
   audioUrl: string;
+  videoUrl?: string;
+  streamUrl?: string;
+  mediaType?: 'audio' | 'video';
+  posterUrl?: string;
   broadcastTime: string;
   description: string;
   published?: boolean;
