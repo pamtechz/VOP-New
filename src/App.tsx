@@ -119,8 +119,9 @@ export const App: React.FC = () => {
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
 
-      const guideParam = params.get('guide');
-      const lessonParam = params.get('lesson');
+      const deepLinkParams = new URLSearchParams(window.location.search);
+      const guideParam = deepLinkParams.get('guide');
+      const lessonParam = deepLinkParams.get('lesson');
       if (guideParam) {
         const deepGuide = snapshot.guides.find(guide => guide.id === guideParam || guide.language === guideParam);
         if (deepGuide) {
@@ -132,7 +133,7 @@ export const App: React.FC = () => {
           }
         }
       }
-      const shareRef = params.get('ref');
+      const shareRef = deepLinkParams.get('ref');
       if (shareRef && !sessionStorage.getItem('vop_share_open_' + shareRef)) {
         sessionStorage.setItem('vop_share_open_' + shareRef, '1');
         void auth?.currentUser?.getIdToken().then(token => fetch('/api/share', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body:JSON.stringify({action:'markInstall',code:shareRef}) })).catch(() => undefined);
