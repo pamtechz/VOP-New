@@ -73,13 +73,13 @@ export function Root() {
               try {
                 profile = await loadFirestoreUser(firebaseUser.uid);
               } catch (fsErr) {
-                console.warn('Direct Firestore user load error:', fsErr);
+                console.warn('Direct account data load error:', fsErr);
               }
             }
 
             if (!profile) {
               // New Firebase Authentication accounts may legitimately have no
-              // Firestore profile yet. The Firestore rules permit a signed-in
+              // account profile yet. The account data policy permits a signed-in
               // account to create only its own student profile. This keeps
               // local clones usable even when the Admin SDK API is unavailable.
               profile = await createFirestoreStudentProfile(

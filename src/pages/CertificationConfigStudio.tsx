@@ -152,7 +152,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
         <div>
           <div className="vop-cert-kicker">Certification</div>
           <h1>Certificate Configuration</h1>
-          <p>Manage the official certification rules, wording, verification settings and artwork assets stored in Firestore.</p>
+          <p>Manage the official certification rules, wording, verification settings and artwork assets.</p>
         </div>
         <div className="vop-cert-head-actions">
           <button className="vop-cert-secondary-button vop-cert-config-back" type="button" onClick={onBack}>
@@ -289,7 +289,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
 
       <div className="vop-cert-note">
         <ShieldCheck size={22} />
-        <div><strong>Server authority</strong><span>Changing this screen changes the Firestore <code>system/certification</code> document used by certificate issuance, learner certificates and public verification.</span></div>
+        <div><strong>Server authority</strong><span>Changes here update the authoritative certification configuration used by certificate issuance, learner certificates and public verification.</span></div>
       </div>
     </div>
   );

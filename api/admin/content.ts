@@ -33,6 +33,7 @@ const COLLECTIONS = new Set([
   'certificates',
   'graduationRequests',
   'settings',
+  'curriculumSettings',
 ]);
 
 function header(request: Request, name: string): string {
@@ -228,6 +229,10 @@ export default async function handler(request: Request, response: Response) {
         const snapshot = await db.doc('system/certification').get();
         return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'certification', ...snapshot.data() }] : [] });
       }
+      if (collection === 'curriculumSettings') {
+        const snapshot = await db.doc('system/curriculum').get();
+        return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'curriculum', ...snapshot.data() }] : [] });
+      }
       const snapshot = await db.collection(collection).get();
       const items = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
       return response.status(200).json({ ok: true, items });
@@ -322,7 +327,9 @@ export default async function handler(request: Request, response: Response) {
       ? db.doc('system/settings')
       : collection === 'certificationConfig'
         ? db.doc('system/certification')
-        : db.doc(`${collection}/${id}`);
+        : collection === 'curriculumSettings'
+          ? db.doc('system/curriculum')
+          : db.doc(`${collection}/${id}`);
 
     if (action === 'delete') {
       await ref.delete();
