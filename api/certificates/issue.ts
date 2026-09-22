@@ -105,18 +105,15 @@ export default async function handler(request: Request, response: Response) {
       return response.status(409).json({ error: 'The approved graduation guide could not be found in the published curriculum.' });
     }
 
-    const approvedLanguage = String(matchingGuide.data().language ?? matchingGuide.id);
-    const requiredGuides = guideSnapshot.docs.filter(snapshot => {
-      const data = snapshot.data();
-      return data.published === true
-        && data.archived !== true
-        && data.certificateEligible === true
-        && String(data.language ?? snapshot.id) === approvedLanguage;
-    });
-
-    if (requiredGuides.length === 0) {
-      return response.status(409).json({ error: 'No published certificate-eligible curriculum is configured for the candidate.' });
+    const matchingGuideData = matchingGuide.data();
+    const approvedLanguage = String(matchingGuideData.language ?? matchingGuide.id);
+    if (matchingGuideData.published !== true || matchingGuideData.archived === true || matchingGuideData.certificateEligible !== true) {
+      return response.status(409).json({ error: 'The approved graduation guide is not currently configured as a published certificate-eligible guide.' });
     }
+
+    // Certification requirements are scoped to the guide approved for this candidate.
+    // Other certificate-eligible guides in the same language must not become implicit requirements.
+    const requiredGuides = [matchingGuide];
 
     const progress = candidate.progress && typeof candidate.progress === 'object'
       ? candidate.progress as Record<string, unknown>
