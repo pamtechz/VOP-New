@@ -30,7 +30,17 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, item: { id: organizationId, name, status: 'active' } });
     }
     if (action === 'list') {
-      if (!ctx.isSuperAdmin) requireOrgRole(ctx, ['owner','admin']);
+      if (!ctx.isSuperAdmin) {
+        requireOrgRole(ctx, ['owner','admin']);
+        const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
+        const data = organization.data() || {};
+        const members = await organization.ref.collection('members').where('active','==',true).get();
+        return res.status(200).json({ ok:true, items:[{
+          id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
+          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'),
+          quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
+        }]});
+      }
       const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
       const items = await Promise.all(snap.docs.map(async organization => {
         const data = organization.data() || {};
