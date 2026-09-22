@@ -73,7 +73,7 @@ export const App: React.FC = () => {
         setAllUsers([]);
         return;
       }
-      void loadFirestoreUser(firebaseUser.uid).then(profile => {
+      void loadFirestoreUser(firebaseUser.uid).then((profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
@@ -82,7 +82,7 @@ export const App: React.FC = () => {
         }
         setCurrentUser(profile);
         setAllUsers([profile]);
-      }).catch(error => {
+      }).catch((error: unknown) => {
         console.error('VOP user profile load failed', error);
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
