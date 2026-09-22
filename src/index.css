@@ -1132,3 +1132,10 @@ h1, h2, h3, h4, h5, h6 {
 @media(max-width:460px){
   .vop-radio-hero-actions{gap:8px}.vop-radio-listen,.vop-radio-watch{padding:0 14px;font-size:11px}.vop-radio-featured-grid{grid-template-columns:1fr 1fr}.vop-radio-admin-stats{grid-template-columns:1fr}.vop-radio-admin-library-grid{grid-template-columns:1fr}.vop-radio-source-picker{grid-template-columns:repeat(2,1fr)}
 }
+
+/* Admin radio provider preview */
+.vop-radio-admin-preview-empty{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:#7a8da9;background:#f5f8fc;border-radius:14px;text-align:center;padding:24px}
+.vop-radio-admin-preview-frame{display:block;width:100%;height:300px;border:0;background:#071426;border-radius:14px}
+.vop-radio-admin-preview-media{display:block;width:100%;max-height:320px;min-height:180px;object-fit:contain;background:#071426;border-radius:14px}
+.vop-radio-admin-preview-audio{display:block;width:100%;margin:72px 0}
+@media (max-width:760px){.vop-radio-admin-preview-frame{height:220px}.vop-radio-admin-preview-media{min-height:150px}.vop-radio-admin-preview-audio{margin:48px 0}}
