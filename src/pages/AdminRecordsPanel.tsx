@@ -210,7 +210,17 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
       const id = editingId || makeId();
       if (!isRecordKind(kind)) return;
       const payload = { ...form };
-      if (kind === 'radio') validateRadioMedia(payload);
+      if (kind === 'radio') {
+        const mediaType = String(payload.mediaType || '');
+        const urls = ['audioUrl', 'videoUrl', 'streamUrl'].map(key => String(payload[key] ?? '').trim()).filter(Boolean);
+        if (!urls.length) throw new Error('Add an Audio, Video, YouTube, AudioVerse or live stream URL.');
+        if (mediaType === 'youtube' && !urls.some(value => /(^|\.)youtu\.be$|(^|\.)youtube\.com$/i.test(new URL(value).hostname))) {
+          throw new Error('For YouTube media, enter a valid YouTube URL.');
+        }
+        if (mediaType === 'audioverse' && !urls.some(value => /(^|\.)audioverse\.org$/i.test(new URL(value).hostname))) {
+          throw new Error('For AudioVerse media, enter a valid AudioVerse URL.');
+        }
+      }
       if (kind === 'radio' && !String(payload.broadcastTime || '').trim()) {
         payload.broadcastTime = new Date().toISOString();
       }
@@ -434,7 +444,7 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
     case 'radio':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
         {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
-        {select('mediaType','Primary Media Type',[{value:'audio',label:'Audio'},{value:'video',label:'Video'}])}
+        {select('mediaType','Primary Media Type',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
         {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}
         {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}
         {field('streamUrl','Live Stream URL','url','Direct stream/HLS URL where supported')}
