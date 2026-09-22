@@ -13,6 +13,35 @@ function getDb(): Firestore {
   return db;
 }
 
+const TENANT_COLLECTIONS = new Set<AdminRecordCollection | 'languages' | 'translations'>([
+  'languages','translations','announcements','books','radioBroadcasts','churches'
+]);
+
+async function currentOrganizationId(): Promise<string> {
+  if (!auth?.currentUser) return '';
+  const profile = await getDoc(doc(getDb(), 'users', auth.currentUser.uid));
+  const role = String(profile.data()?.role || '');
+  if (role === 'super_admin') return '';
+  return String(profile.data()?.organizationId || '').trim();
+}
+
+function tenantSubscription(
+  collectionName: string,
+  callback: (snapshot: import('firebase/firestore').QuerySnapshot) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  let stop: Unsubscribe = () => undefined;
+  let cancelled = false;
+  void currentOrganizationId().then(organizationId => {
+    if (cancelled) return;
+    const source = organizationId && TENANT_COLLECTIONS.has(collectionName as never)
+      ? query(collection(getDb(), collectionName), where('organizationId', '==', organizationId))
+      : collection(getDb(), collectionName);
+    stop = onSnapshot(source, callback, err => onError?.(err));
+  }).catch(error => onError?.(error instanceof Error ? error : new Error('Tenant data could not be loaded.')));
+  return () => { cancelled = true; stop(); };
+}
+
 // ------------------------------------------------------------------
 // 1. LANGUAGES (Live Firestore CRUD)
 // ------------------------------------------------------------------
@@ -22,10 +51,7 @@ export const subscribeLanguages = (
   onError?: (error: Error) => void
 ): Unsubscribe => {
   const firestore = getDb();
-  const langCol = collection(firestore, 'languages');
-
-  return onSnapshot(
-    langCol,
+  return tenantSubscription('languages',
     (snapshot) => {
       const list: CustomLanguage[] = snapshot.docs.map(d => {
         const data = d.data();
@@ -55,9 +81,11 @@ export const subscribeLanguages = (
 export const saveLanguageToFirestore = async (language: CustomLanguage): Promise<void> => {
   const firestore = getDb();
   const id = language.code.toLowerCase().trim();
+  const organizationId = await currentOrganizationId();
   const ref = doc(firestore, 'languages', id);
   await setDoc(ref, {
     ...language,
+    ...(organizationId ? { organizationId } : {}),
     code: language.code.toUpperCase(),
     updatedAt: new Date().toISOString(),
   }, { merge: true });
@@ -66,9 +94,11 @@ export const saveLanguageToFirestore = async (language: CustomLanguage): Promise
 export const updateLanguageStatusInFirestore = async (code: string, enabled: boolean): Promise<void> => {
   const firestore = getDb();
   const id = code.toLowerCase().trim();
+  const organizationId = await currentOrganizationId();
   const ref = doc(firestore, 'languages', id);
   await updateDoc(ref, {
     enabled,
+    ...(organizationId ? { organizationId } : {}),
     updatedAt: new Date().toISOString(),
   });
 };
@@ -122,10 +152,12 @@ export const subscribeSettings = (
   onError?: (error: Error) => void
 ): Unsubscribe => {
   const firestore = getDb();
-  const ref = doc(firestore, 'system', 'settings');
-
-  return onSnapshot(
-    ref,
+  let stop: Unsubscribe = () => undefined;
+  let cancelled = false;
+  void currentOrganizationId().then(organizationId => {
+    if (cancelled) return;
+    const ref = organizationId ? doc(firestore, 'organizations', organizationId, 'settings', 'settings') : doc(firestore, 'system', 'settings');
+    stop = onSnapshot(ref,
     (snap) => {
       if (snap.exists()) {
         const data = snap.data() as ExtendedAppSettings;
@@ -212,15 +244,18 @@ export const subscribeSettings = (
     (err) => {
       console.error('Firestore settings subscription error:', err);
       if (onError) onError(err);
-    }
-  );
+    });
+  }).catch(error => onError?.(error instanceof Error ? error : new Error('Settings could not be loaded.')));
+  return () => { cancelled = true; stop(); };
 };
 
 export const saveSettingsToFirestore = async (settings: ExtendedAppSettings): Promise<void> => {
   const firestore = getDb();
-  const ref = doc(firestore, 'system', 'settings');
+  const organizationId = await currentOrganizationId();
+  const ref = organizationId ? doc(firestore, 'organizations', organizationId, 'settings', 'settings') : doc(firestore, 'system', 'settings');
   await setDoc(ref, {
     ...settings,
+    ...(organizationId ? { organizationId } : {}),
     updatedAt: new Date().toISOString(),
   }, { merge: true });
 };
@@ -233,11 +268,7 @@ export const subscribeCandidates = (
   callback: (users: User[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  const firestore = getDb();
-  const userCol = collection(firestore, 'users');
-
-  return onSnapshot(
-    userCol,
+  return tenantSubscription('users',
     (snapshot) => {
       const list: User[] = snapshot.docs.map(d => {
         const data = d.data();
@@ -282,9 +313,7 @@ export const subscribeChurches = (
   callback: (churches: ChurchOrganization[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  const firestore = getDb();
-  return onSnapshot(
-    collection(firestore, 'churches'),
+  return tenantSubscription('churches',
     (snapshot) => {
       const list: ChurchOrganization[] = snapshot.docs.map(d => ({
         id: d.id,
@@ -307,9 +336,7 @@ export const subscribeAnnouncements = (
   callback: (announcements: Announcement[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  const firestore = getDb();
-  return onSnapshot(
-    collection(firestore, 'announcements'),
+  return tenantSubscription('announcements',
     (snapshot) => {
       const list: Announcement[] = snapshot.docs.map(d => ({
         id: d.id,
@@ -345,9 +372,7 @@ export const subscribeAdminCollection = (
   callback: (records: Array<Record<string, unknown> & { id: string }>) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  const firestore = getDb();
-  return onSnapshot(
-    collection(firestore, collectionName),
+  return tenantSubscription(collectionName,
     snapshot => {
       callback(snapshot.docs.map(item => ({
         id: item.id,
@@ -367,10 +392,12 @@ export const saveAdminRecord = async (
   data: Record<string, unknown>
 ): Promise<void> => {
   const firestore = getDb();
+  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
   const existing = await getDoc(doc(firestore, collectionName, id));
   const now = new Date().toISOString();
   await setDoc(doc(firestore, collectionName, id), {
     ...data,
+    ...(organizationId ? { organizationId } : {}),
     id,
     createdAt: existing.exists() && existing.data()?.createdAt ? existing.data()?.createdAt : now,
     updatedAt: now,
@@ -389,9 +416,7 @@ export const subscribeTranslations = (
   callback: (records: AdminTranslationRecord[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  const firestore = getDb();
-  return onSnapshot(
-    collection(firestore, 'translations'),
+  return tenantSubscription('translations',
     snapshot => {
       callback(snapshot.docs.map(item => {
         const raw = item.data();
@@ -422,8 +447,10 @@ export const saveTranslation = async (
   const firestore = getDb();
   const id = language.trim().toLowerCase();
   if (!id) throw new Error('A language code is required.');
+  const organizationId = await currentOrganizationId();
   await setDoc(doc(firestore, 'translations', id), {
     values,
+    ...(organizationId ? { organizationId } : {}),
     updatedAt: new Date().toISOString(),
   }, { merge: true });
 };
