@@ -165,6 +165,44 @@ function sortLessonNumber(a: LessonRow, b: LessonRow) {
   return a.lesson.lessonNumber.localeCompare(b.lesson.lessonNumber);
 }
 
+function contentToBlocks(content: string): LessonBlock[] {
+  const pages = content.split(/\\[\\[PAGE_BREAK\\]\\]/g);
+  const blocks: LessonBlock[] = [];
+  pages.forEach((page, pageIndex) => {
+    page.split(/\\r?\\n/).forEach(line => {
+      const value = line.trim();
+      if (!value) return;
+      if (value.startsWith('[h2]') && value.endsWith('[/h2]')) blocks.push({ id: newId('content-heading'), type: 'heading', text: value.slice(4, -5).trim() });
+      else if (value.startsWith('[quote]') && value.endsWith('[/quote]')) blocks.push({ id: newId('content-quote'), type: 'quote', text: value.slice(7, -8).trim() });
+      else if (value.startsWith('- ')) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.slice(2) });
+      else if (/^\\d+\\.\\s/.test(value)) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.replace(/^\\d+\\.\\s/, '') });
+      else blocks.push({ id: newId('content-paragraph'), type: 'paragraph', text: value });
+    });
+    if (pageIndex < pages.length - 1) blocks.push({ id: newId('content-page'), type: 'pageBreak' });
+  });
+  return blocks;
+}
+
+function renderMarkedText(text: string): React.ReactNode[] {
+  const output: React.ReactNode[] = [];
+  const pattern = /\\[(b|i|u|link)\\]([\\s\\S]*?)\\[\\/\\1\\]/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = pattern.exec(text))) {
+    if (match.index > cursor) output.push(text.slice(cursor, match.index));
+    const tag = match[1];
+    const value = match[2];
+    if (tag === 'b') output.push(<strong key={key++}>{value}</strong>);
+    else if (tag === 'i') output.push(<em key={key++}>{value}</em>);
+    else if (tag === 'u') output.push(<u key={key++}>{value}</u>);
+    else output.push(<span key={key++} className="vop-inline-link">{value}</span>);
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) output.push(text.slice(cursor));
+  return output;
+}
+
 function questionType(questions: EditorQuestion[] | undefined): string {
   if (!questions?.length) return '—';
   const multiple = questions.some(question => question.options.some(Boolean));
@@ -296,7 +334,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
                 if (block.type === 'image' && block.src) return <img key={block.id} src={block.src} alt="" />;
                 if (block.type === 'video' && block.src) return <video key={block.id} controls src={block.src}/>;
                 if (block.type === 'audio' && block.src) return <audio key={block.id} controls src={block.src}/>;
-                return <p key={block.id}>{block.text}</p>;
+                return <p key={block.id}>{renderMarkedText(block.text || '')}</p>;
               })}
               {!pages.length && editor.content && <p>{editor.content}</p>}
             </div>}
@@ -544,7 +582,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     setError('');
     try {
       const id = editor.id || newId('lesson');
-      const pageBlocks = splitLessonBlocks(editor.blocks);
+      const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;\n      const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
