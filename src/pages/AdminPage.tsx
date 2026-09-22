@@ -5,7 +5,7 @@ import {
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
   Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload,
   Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
-  Send, FileText, Grid2X2
+  Send, FileText, Grid2X2, Building2
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson } from '../types';
@@ -23,6 +23,7 @@ import CurriculumSettings from './CurriculumSettings';
 import CertificationManager from './CertificationManager';
 import UserManagement from './UserManagement';
 import MentorshipInsights from './MentorshipInsights';
+import OrganizationManagement from './OrganizationManagement';
 
 interface AdminPageProps {
   currentUser: User;
@@ -34,7 +35,7 @@ interface AdminPageProps {
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'materials' | 'radio'
-  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship';
+  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications';
 type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -56,6 +57,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'churches', label: 'Churches', icon: Church },
   { id: 'certification', label: 'Certification', icon: Award },
   { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
+  { id: 'organizations', label: 'Organizations', icon: Building2 },
 ];
 
 const text = (value: unknown) => value == null ? '' : String(value);
@@ -908,6 +910,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           />
         )}
         {activeTab==='mentorship'&&<MentorshipInsights />}
+        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
