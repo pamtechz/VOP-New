@@ -15,8 +15,8 @@ type ManagedUser = {
   photoURL?: string;
   role: string;
   roleLabel: string;
-  roleColor: 'admin' | 'teacher' | 'learner' | 'guest';
-  userType: 'super_admin' | 'admin' | 'teacher' | 'learner' | 'guest';
+  roleColor: 'admin' | 'teacher' | 'mentor' | 'learner' | 'guest';
+  userType: 'super_admin' | 'admin' | 'teacher' | 'mentor' | 'learner' | 'guest';
   disabled: boolean;
   status: 'Active' | 'Inactive';
   emailVerified: boolean;
