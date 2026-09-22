@@ -216,7 +216,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     const q = lessonSearch.trim().toLowerCase();
     const matchText = !q || [row.lesson.title, row.lesson.description, row.lesson.lessonNumber, row.guide.language, row.guide.title].join(' ').toLowerCase().includes(q);
     const matchLanguage = lessonLanguage === 'all' || row.guide.language === lessonLanguage;
-    const matchStatus = lessonStatus === 'all' || (lessonStatus === 'published' && row.lesson.published === true) || (lessonStatus === 'draft' && row.lesson.published !== true);
+    const matchStatus = lessonStatus === 'all' || (lessonStatus === 'published' && (row.lesson as Lesson & { published?: boolean }).published === true) || (lessonStatus === 'draft' && (row.lesson as Lesson & { published?: boolean }).published !== true);
     return matchText && matchLanguage && matchStatus;
   }), [lessonRows, lessonSearch, lessonLanguage, lessonStatus]);
 
