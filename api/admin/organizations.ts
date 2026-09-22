@@ -1,5 +1,4 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, requireOrgRole } from '../lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
