@@ -136,7 +136,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   const [dashboardRange, setDashboardRange] = useState('year');
   const [candidateSearch, setCandidateSearch] = useState('');
   const [candidateStatus, setCandidateStatus] = useState<'all' | 'active' | 'graduated' | 'graduating'>('all');
+  const [candidateBaptism, setCandidateBaptism] = useState<'all' | 'not_marked' | 'candidate' | 'baptized'>('all');
   const [selectedCandidate, setSelectedCandidate] = useState<User | null>(null);
+  const [baptismSaving, setBaptismSaving] = useState(false);
   const [certification, setCertification] = useState<Record<string, unknown> | null>(null);
   const [certificationLoading, setCertificationLoading] = useState(false);
   const [certificationSaving, setCertificationSaving] = useState(false);
@@ -215,9 +217,45 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         (candidateStatus === 'graduated' && info?.graduated === true) ||
         (candidateStatus === 'graduating' && info?.graduating === true) ||
         (candidateStatus === 'active' && info?.graduated !== true);
-      return matchesSearch && matchesStatus;
+      const matchesBaptism =
+        candidateBaptism === 'all' ||
+        (candidateBaptism === 'baptized' && info?.baptized === true) ||
+        (candidateBaptism === 'candidate' && info?.baptized !== true && info?.baptismCandidate === true) ||
+        (candidateBaptism === 'not_marked' && info?.baptized !== true && info?.baptismCandidate !== true);
+      return matchesSearch && matchesStatus && matchesBaptism;
     });
-  }, [candidates, candidateSearch, candidateStatus]);
+  }, [candidates, candidateSearch, candidateStatus, candidateBaptism]);
+
+  const saveBaptismMark = async (candidate: User, status: 'not_marked' | 'candidate' | 'baptized', baptismDate: string) => {
+    setBaptismSaving(true);
+    try {
+      if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/candidates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({
+          action: 'updateBaptism',
+          candidateId: candidate.uid,
+          baptismCandidate: status === 'candidate',
+          baptized: status === 'baptized',
+          baptismDate: status === 'baptized' ? baptismDate.trim() : '',
+        }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string; candidate?: User };
+      if (!response.ok || !body.candidate) throw new Error(body.error || 'Baptism status could not be saved.');
+      setCandidates(current => current.map(item => item.uid === candidate.uid ? body.candidate! : item));
+      setSelectedCandidate(body.candidate);
+      showMessage('Baptism status saved to Firestore.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save baptism status.');
+    } finally {
+      setBaptismSaving(false);
+    }
+  };
 
   const loadCertification = async () => {
     setCertificationLoading(true);
@@ -770,13 +808,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             <select className="vop-filter" value={candidateStatus} onChange={e=>setCandidateStatus(e.target.value as typeof candidateStatus)}>
               <option value="all">All Candidates</option><option value="active">Active</option><option value="graduating">Graduating</option><option value="graduated">Graduated</option>
             </select>
+            <select className="vop-filter" value={candidateBaptism} onChange={e=>setCandidateBaptism(e.target.value as typeof candidateBaptism)}>
+              <option value="all">All Baptism Statuses</option><option value="not_marked">Not Marked</option><option value="candidate">Baptism Candidate</option><option value="baptized">Baptized</option>
+            </select>
           </div>
-          <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Contact</th><th>Progress</th><th>Status</th><th>Enrollment</th><th>Action</th></tr></thead><tbody>
+          <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Contact</th><th>Progress</th><th>Status</th><th>Baptism</th><th>Enrollment</th><th>Action</th></tr></thead><tbody>
             {filteredCandidates.map((candidate,index)=><tr key={candidate.uid}>
               <td>{index+1}</td><td><strong>{candidate.displayName || 'Unnamed'}</strong><div className="vop-row-desc">{candidate.role || 'student'}</div></td>
               <td>{candidate.email || 'Not recorded'}<div className="vop-row-desc">{candidate.phoneNumber || 'No phone recorded'}</div></td>
               <td>{candidate.progress?.discoverProgress || 0}%<div className="vop-row-desc">{candidate.progress?.completedGuidesCount || 0} / {candidate.progress?.totalGuidesCount || 0} guides</div></td>
               <td><span className={'vop-status '+(candidate.information?.graduated?'enabled':candidate.information?.graduating?'review':'disabled')}>{candidate.information?.graduated?'Graduated':candidate.information?.graduating?'Graduating':'Active'}</span></td>
+              <td><span className={'vop-status '+(candidate.information?.baptized?'enabled':candidate.information?.baptismCandidate?'review':'disabled')}>{candidate.information?.baptized?'Baptized':candidate.information?.baptismCandidate?'Baptism Candidate':'Not Marked'}</span>{candidate.information?.baptismDate&&<div className="vop-row-desc">{formatDate(candidate.information.baptismDate)}</div>}</td>
               <td>{formatDate(candidate.information?.enrollmentDate)}</td>
               <td><button className="vop-actions" type="button" onClick={()=>setSelectedCandidate(candidate)}><Eye size={16}/></button></td>
             </tr>)}
@@ -795,6 +837,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
               <div><strong>Union</strong><p>{selectedCandidate.unionId || 'Not assigned'}</p></div>
               <div><strong>Enrollment</strong><p>{formatDate(selectedCandidate.information?.enrollmentDate)}</p></div>
               <div><strong>Completion</strong><p>{formatDate(selectedCandidate.information?.completionDate)}</p></div>
+              <div className="vop-field"><label>Baptism Status</label><select value={selectedCandidate.information?.baptized ? 'baptized' : selectedCandidate.information?.baptismCandidate ? 'candidate' : 'not_marked'} onChange={e => {
+                const value = e.target.value as 'not_marked' | 'candidate' | 'baptized';
+                const next: User = { ...selectedCandidate, information: { ...selectedCandidate.information, baptismCandidate: value === 'candidate', baptized: value === 'baptized' } };
+                setSelectedCandidate(next);
+              }}><option value="not_marked">Not Marked</option><option value="candidate">Baptism Candidate</option><option value="baptized">Baptized</option></select></div>
+              <div className="vop-field"><label>Baptism Date</label><input type="date" value={selectedCandidate.information?.baptismDate || ''} disabled={!selectedCandidate.information?.baptized} onChange={e => setSelectedCandidate({ ...selectedCandidate, information: { ...selectedCandidate.information, baptismDate: e.target.value } })}/></div>
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end',marginTop:14}}>
+              <button className="vop-primary" type="button" disabled={baptismSaving} onClick={() => {
+                const status = selectedCandidate.information?.baptized ? 'baptized' : selectedCandidate.information?.baptismCandidate ? 'candidate' : 'not_marked';
+                void saveBaptismMark(selectedCandidate, status, selectedCandidate.information?.baptismDate || '');
+              }}>{baptismSaving ? 'Saving…' : 'Save Baptism Status'}</button>
             </div>
           </div>}
         </div>}
