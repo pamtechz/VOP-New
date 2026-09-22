@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Download, Printer } from 'lucide-react';
+import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Printer } from 'lucide-react';
 import CertificateArtwork from '../components/certificates/CertificateArtwork';
 
 interface Props { onBack: () => void; }
