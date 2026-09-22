@@ -148,6 +148,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   const [certification, setCertification] = useState<Record<string, unknown> | null>(null);
   const [certificationLoading, setCertificationLoading] = useState(false);
   const [certificationSaving, setCertificationSaving] = useState(false);
+  const detectedTimeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '', []);
 
   const showMessage = (value: string) => {
     setMessage(value);
@@ -637,7 +638,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             <div className="vop-field"><label>App Tagline</label><input value={settings.appTagline || ''} onChange={e=>setSettings({...settings,appTagline:e.target.value})}/></div>
             <div className="vop-field"><label>Organization Name</label><input value={settings.organizationName} onChange={e=>setSettings({...settings,organizationName:e.target.value})}/></div>
             <div className="vop-field"><label>Default Language</label><select value={settings.defaultLanguage} onChange={e=>setSettings({...settings,defaultLanguage:e.target.value})}><option value="">Not configured</option>{languages.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
-            <div className="vop-field"><label>Timezone</label><input value={settings.timezone || ''} onChange={e=>setSettings({...settings,timezone:e.target.value})}/></div>
+            <div className="vop-field"><label>Timezone</label><input value={settings.timezone || detectedTimeZone} onChange={e=>setSettings({...settings,timezone:e.target.value})} placeholder="Detected automatically"/><small>Uses the device timezone automatically when no explicit value is configured.</small></div>
             <div className="vop-field"><label>Website</label><input value={settings.website || ''} onChange={e=>setSettings({...settings,website:e.target.value})}/></div>
             <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>
           </div>
