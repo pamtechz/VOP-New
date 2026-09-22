@@ -6,7 +6,7 @@ import {
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import { auth, authPersistenceReady } from '../lib/firebase';
@@ -37,10 +37,12 @@ export async function googleSignIn() {
   await authPersistenceReady;
   if (!Capacitor.isNativePlatform()) {
     const provider = new GoogleAuthProvider();
-    // Let Google's account chooser use its normal browser session. Forcing
-    // select_account can repeatedly invoke Google's accountchooser surface.
-    // Redirect is more reliable than popup polling under modern browser COOP policies.
-    return signInWithRedirect(firebaseAuth, provider);
+    provider.setCustomParameters({ prompt: 'select_account' });
+    // Web sign-in uses a popup so the Firebase Auth state stays in the
+    // current application context. This avoids the redirect race that could
+    // return the user to the login screen before the Auth observer restored
+    // the Google session.
+    return signInWithPopup(firebaseAuth, provider);
   }
   const result = await FirebaseAuthentication.signInWithGoogle();
   const idToken = result.credential?.idToken;
