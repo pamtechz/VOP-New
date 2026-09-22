@@ -27,6 +27,7 @@ import { PrayerPage } from './pages/PrayerPage';
 import { RadioPage } from './pages/RadioPage';
 import { CertificatesPage } from './pages/CertificatesPage';
 import { AdminPage } from './pages/AdminPage';
+import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -52,6 +53,11 @@ export const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileShell, setIsMobileShell] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
+  }, []);
 
   useEffect(() => {
     if (!auth) return;
@@ -200,6 +206,7 @@ export const App: React.FC = () => {
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
+          {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}
           {currentRoute === 'admin' && currentUser.role && currentUser.role !== 'student' && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
           {showCourse && activeGuide && (
             <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
