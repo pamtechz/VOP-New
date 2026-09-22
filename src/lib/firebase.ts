@@ -31,11 +31,9 @@ export const db: Firestore | null = app ? getFirestore(app) : null;
 
 export const auth: Auth | null = app ? getAuth(app) : null;
 
-if (auth) {
-  void setPersistence(auth, indexedDBLocalPersistence).catch(() => {
-    void setPersistence(auth, browserLocalPersistence);
-  });
-}
+export const authPersistenceReady: Promise<void> = auth
+  ? setPersistence(auth, indexedDBLocalPersistence).catch(() => setPersistence(auth, browserLocalPersistence)).then(() => undefined)
+  : Promise.resolve();
 
 let firestorePromise: Promise<Firestore> | undefined;
 
