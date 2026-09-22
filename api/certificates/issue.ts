@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -40,6 +41,10 @@ function completionKey(language: string, guideId: string, lessonId: string) {
 
 function scoreKey(language: string, guideId: string, testId: string) {
   return `${language}:${guideId}:${testId}`;
+}
+
+function certificateDocumentId(candidateId: string, language: string) {
+  return `cert-${createHash('sha256').update(`${candidateId}:${language}`).digest('hex').slice(0, 48)}`;
 }
 
 export default async function handler(request: Request, response: Response) {
@@ -103,6 +108,11 @@ export default async function handler(request: Request, response: Response) {
 
     if (!matchingGuide) {
       return response.status(409).json({ error: 'The approved graduation guide could not be found in the published curriculum.' });
+    }
+
+    const approvedGuideId = String(approvedRequest.guideId ?? '').trim();
+    if (!approvedGuideId) {
+      return response.status(409).json({ error: 'The approved graduation record is missing its guide reference.' });
     }
 
     const matchingGuideData = matchingGuide.data();
@@ -183,18 +193,6 @@ export default async function handler(request: Request, response: Response) {
       });
     }
 
-    const existingSnapshot = await db.collection('certificates')
-      .where('candidateId', '==', candidateId)
-      .limit(50)
-      .get();
-    const existing = existingSnapshot.docs
-      .map(snapshot => ({ id: snapshot.id, ...snapshot.data() }))
-      .find(item => item.status === 'Certified' && item.language === approvedLanguage);
-
-    if (existing) {
-      return response.status(200).json({ ok: true, created: false, certificate: existing });
-    }
-
     const [churchSnapshot, districtSnapshot, conferenceSnapshot, unionSnapshot] = await Promise.all([
       candidate.churchId ? db.doc(`churches/${candidate.churchId}`).get() : Promise.resolve(null),
       candidate.districtId ? db.doc(`districts/${candidate.districtId}`).get() : Promise.resolve(null),
@@ -202,7 +200,7 @@ export default async function handler(request: Request, response: Response) {
       candidate.unionId ? db.doc(`unions/${candidate.unionId}`).get() : Promise.resolve(null),
     ]);
 
-    const certificateRef = db.collection('certificates').doc();
+    const certificateRef = db.collection('certificates').doc(certificateDocumentId(candidateId, approvedLanguage));
     const issuedAt = FieldValue.serverTimestamp();
     const certificateNumber = `VOP-${new Date().getUTCFullYear()}-${certificateRef.id.toUpperCase()}`;
     const primaryGuide = configuredGuides[0];
@@ -232,13 +230,19 @@ export default async function handler(request: Request, response: Response) {
       updatedAt: issuedAt,
     };
 
-    await certificateRef.set(certificate);
-    const saved = await certificateRef.get();
+    const result = await db.runTransaction(async transaction => {
+      const existingSnapshot = await transaction.get(certificateRef);
+      if (existingSnapshot.exists) {
+        return { created: false, certificate: { id: existingSnapshot.id, ...existingSnapshot.data() } };
+      }
+      transaction.create(certificateRef, certificate);
+      return { created: true, certificate: { id: certificateRef.id, ...certificate } };
+    });
 
-    return response.status(201).json({
+    return response.status(result.created ? 201 : 200).json({
       ok: true,
-      created: true,
-      certificate: { id: saved.id, ...saved.data() },
+      created: result.created,
+      certificate: result.certificate,
     });
   } catch (error) {
     console.error('VOP certificate issuance failed', error);
