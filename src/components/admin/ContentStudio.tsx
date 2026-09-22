@@ -260,7 +260,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         <textarea rows={14} value={translationText} disabled={pending} spellCheck={false}
           onChange={event => setTranslationText(event.target.value)}
           className="w-full rounded-lg border border-slate-300 p-3 font-mono text-xs" aria-label="Translation values JSON" />
-        <p className="text-xs text-slate-500">Translations are stored per language in Firestore. Only configured languages should be published.</p>
+        <p className="text-xs text-slate-500">Translations are stored per configured language. Only configured languages should be published.</p>
       </div>
     );
     if (active === 'languages') return (
@@ -288,7 +288,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   return (
     <section className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div><h2 className="text-xl font-black">Content Studio</h2><p className="mt-1 text-xs text-slate-500">Firestore-managed languages, translations, public content and organizational records.</p></div>
+        <div><h2 className="text-xl font-black">Content Studio</h2><p className="mt-1 text-xs text-slate-500">Managed languages, translations, public content and organizational records.</p></div>
         <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} />New</button></div>
       </div>
 
@@ -316,7 +316,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         </div>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? 'Edit record' : 'Create record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is persisted in Firestore</p></div></div>
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? 'Edit record' : 'Create record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
           {renderEditor()}
           <button type="button" onClick={() => void save()} disabled={pending} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? 'Save changes' : 'Create record'}</button>
         </div>
