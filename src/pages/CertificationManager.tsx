@@ -263,7 +263,7 @@ export const CertificationManager: React.FC<Props> = ({
     setSelected(draft);
     setEditing(false);
     await load();
-    showMessage('Certificate record updated in Firestore.');
+    showMessage('Certificate record updated.');
   };
 
   const downloadCertificate = async () => {
