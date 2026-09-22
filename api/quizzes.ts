@@ -23,10 +23,16 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || 'list');
 
     if (action === 'list') {
-      const snap = ctx.isSuperAdmin && !ctx.organizationId
-        ? await ctx.db.collection('quizzes').get()
-        : await ctx.db.collection('quizzes').where('organizationId', '==', ctx.organizationId).get();
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (ctx.isSuperAdmin && !ctx.organizationId) {
+        const snap = await ctx.db.collection('quizzes').get();
+        return res.status(200).json({ ok:true, items:snap.docs.map(d => ({id:d.id,...d.data()})) });
+      }
+      const [owned, shared] = await Promise.all([
+        ctx.db.collection('quizzes').where('organizationId','==',ctx.organizationId).get(),
+        ctx.db.collection('quizzes').where('sharingScope','==','shared').where('published','==',true).get(),
+      ]);
+      const items = [...owned.docs, ...shared.docs.filter(doc => String(doc.data().organizationId || '') !== ctx.organizationId)]
+        .map(d => ({ id:d.id, ...d.data() }));
       return res.status(200).json({ ok: true, items });
     }
 
