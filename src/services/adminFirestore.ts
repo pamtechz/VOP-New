@@ -1,6 +1,6 @@
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, orderBy, limit, onSnapshot, type Unsubscribe, type Firestore
+  collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  query, where, onSnapshot, type Unsubscribe, type Firestore
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type {
