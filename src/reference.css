@@ -1172,6 +1172,18 @@
 
 
 
+
+.vop-public-certificate-preview{margin-top:20px;padding-top:18px;border-top:1px solid #dfe7f1}
+.vop-public-certificate-preview-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:12px}
+.vop-public-certificate-preview-head strong,.vop-public-certificate-preview-head span{display:block}
+.vop-public-certificate-preview-head strong{font-size:15px;color:#173d75}
+.vop-public-certificate-preview-head span{font-size:12px;color:#7185a3;margin-top:3px}
+.vop-public-certificate-preview-actions{display:flex;gap:7px}
+.vop-public-certificate-preview-actions button{height:38px;border:1px solid #dbe5ef;border-radius:8px;background:#fff;color:#173d75;padding:0 12px;font-weight:800;display:flex;align-items:center;gap:6px}
+.vop-public-certificate-preview .vop-certificate-artwork{max-width:980px;margin:0 auto}
+@media(max-width:640px){.vop-public-certificate-preview-head{align-items:flex-start;flex-direction:column}.vop-public-certificate-preview-actions{width:100%}.vop-public-certificate-preview-actions button{width:100%;justify-content:center}}
+@media print{.vop-certificate-verification-head,.vop-certificate-verification-search,.vop-certificate-verification-result.invalid,.vop-verification-status,.vop-verification-grid,.vop-verification-foot,.vop-public-certificate-preview-head{display:none!important}.vop-certificate-verification{background:#fff}.vop-certificate-verification-body{width:100%;margin:0}.vop-public-certificate-preview{margin:0;padding:0;border:0}.vop-public-certificate-preview .vop-certificate-artwork{max-width:none;box-shadow:none}}
+
 /* Shared official certificate artwork */
 .vop-official-certificate-wrap .vop-certificate-artwork{width:100%;max-width:980px;margin:0 auto}
 .vop-certificate-artwork{position:relative;aspect-ratio:1.46;background:#fff;border:5px solid #082e70;overflow:hidden;box-shadow:0 5px 18px rgba(15,45,90,.13);font-family:Arial,Helvetica,sans-serif;color:#111;box-sizing:border-box}
