@@ -1,209 +1,247 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RadioBroadcast } from '../types';
-import { ArrowLeft, Radio, Play, Pause, Volume2 } from 'lucide-react';
+import { ArrowLeft, Radio, Play, Pause, Volume2, VolumeX, Maximize, ExternalLink } from 'lucide-react';
 
 interface RadioPageProps {
   broadcasts: RadioBroadcast[];
   onBack: () => void;
 }
 
+function formatTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+function mediaSource(item: RadioBroadcast) {
+  const video = item.videoUrl?.trim();
+  const audio = item.audioUrl?.trim();
+  const stream = item.streamUrl?.trim();
+  if (item.mediaType === 'video' && video) return { type: 'video' as const, url: video };
+  if (item.mediaType === 'audio' && audio) return { type: 'audio' as const, url: audio };
+  if (video) return { type: 'video' as const, url: video };
+  if (audio) return { type: 'audio' as const, url: audio };
+  if (stream) return { type: 'audio' as const, url: stream };
+  return null;
+}
+
 export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   const [currentPlaying, setCurrentPlaying] = useState<RadioBroadcast | null>(broadcasts[0] || null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [audioError, setAudioError] = useState('');
+  const [mediaError, setMediaError] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const playCurrent = async () => {
-    const source = currentPlaying?.audioUrl?.trim();
-    if (!audioRef.current || !source) {
-      setIsPlaying(false);
-      setAudioError('This broadcast does not have a playable audio source configured.');
-      return;
-    }
-
-    setAudioError('');
-    try {
-      await audioRef.current.play();
-      setIsPlaying(true);
-    } catch (error) {
-      console.error('VOP radio playback failed', error);
-      setIsPlaying(false);
-      setAudioError('The configured audio source could not be played on this device.');
-    }
-  };
+  const selectedSource = useMemo(() => currentPlaying ? mediaSource(currentPlaying) : null, [currentPlaying]);
 
   useEffect(() => {
+    setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-    setAudioError('');
-    if (!currentPlaying?.audioUrl?.trim()) setIsPlaying(false);
-  }, [currentPlaying?.id, currentPlaying?.audioUrl]);
+    setMediaError('');
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.load();
+    }
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.load();
+    }
+  }, [currentPlaying?.id]);
 
-  useEffect(() => {
-    if (!isPlaying || !currentPlaying?.audioUrl?.trim()) return;
-    const timer = window.setTimeout(() => { void playCurrent(); }, 50);
-    return () => window.clearTimeout(timer);
-  }, [currentPlaying?.id, isPlaying]);
+  const activeMedia = () => audioRef.current || videoRef.current;
 
-  const togglePlay = (broadcast: RadioBroadcast) => {
-    const hasSource = Boolean(broadcast.audioUrl?.trim());
-    if (currentPlaying?.id === broadcast.id) {
-      if (isPlaying) {
-        audioRef.current?.pause();
-        setIsPlaying(false);
-      } else if (hasSource) {
-        void playCurrent();
-      } else {
-        setAudioError('This broadcast does not have a playable audio source configured.');
-      }
+  const playSelected = async () => {
+    const media = activeMedia();
+    if (!media || !selectedSource) {
+      setMediaError('No playable media source has been configured for this programme.');
+      setIsPlaying(false);
       return;
     }
-
-    setCurrentPlaying(broadcast);
-    setIsPlaying(hasSource);
-    setAudioError('');
-  };
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-      setDuration(Number.isFinite(audioRef.current.duration) ? audioRef.current.duration : 0);
+    setMediaError('');
+    try {
+      await media.play();
+      setIsPlaying(true);
+    } catch (error) {
+      console.error('VOP media playback failed', error);
+      setIsPlaying(false);
+      setMediaError('The configured media could not be played. Check the media URL and format.');
     }
   };
 
-  const formatTime = (secs: number) => {
-    if (!Number.isFinite(secs) || secs < 0) return '0:00';
-    const mins = Math.floor(secs / 60);
-    const rem = Math.floor(secs % 60);
-    return `${mins}:${rem < 10 ? '0' : ''}${rem}`;
+  const togglePlay = (item: RadioBroadcast) => {
+    if (currentPlaying?.id !== item.id) {
+      setCurrentPlaying(item);
+      window.setTimeout(() => {}, 0);
+      return;
+    }
+    if (isPlaying) {
+      activeMedia()?.pause();
+      setIsPlaying(false);
+    } else {
+      void playSelected();
+    }
+  };
+
+  const seek = (value: number) => {
+    const media = activeMedia();
+    if (!media) return;
+    media.currentTime = value;
+    setCurrentTime(value);
+  };
+
+  const setVolume = (value: number) => {
+    const media = activeMedia();
+    if (!media) return;
+    media.volume = value;
+    setMuted(value === 0);
+  };
+
+  const toggleMute = () => {
+    const media = activeMedia();
+    if (!media) return;
+    media.muted = !media.muted;
+    setMuted(media.muted);
+  };
+
+  const enterFullscreen = () => {
+    if (videoRef.current) void videoRef.current.requestFullscreen?.();
+  };
+
+  const updateTime = () => {
+    const media = activeMedia();
+    if (!media) return;
+    setCurrentTime(media.currentTime);
+    setDuration(Number.isFinite(media.duration) ? media.duration : 0);
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6fa] text-slate-800 pb-28 md:pb-12">
-      <div className="bg-[#002d72] text-white pt-5 pb-6 px-4 sm:px-6 shadow-md">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <button onClick={onBack} className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
-              <ArrowLeft size={22} />
-              <span className="font-bold text-base sm:text-lg">Radio Ministry</span>
-            </button>
-            <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
-              Audio Sermons & Broadcasts
-            </span>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Voice of Prophecy Radio Ministry</h1>
-              <p className="text-xs sm:text-sm text-blue-100/90 mt-0.5">Listen to published radio programmes and broadcasts.</p>
-            </div>
-          </div>
+    <div className="vop-radio-page">
+      <div className="vop-radio-header">
+        <div className="vop-radio-header-inner">
+          <button onClick={onBack} className="vop-radio-back" type="button">
+            <ArrowLeft size={20} />
+            <span>Radio Ministry</span>
+          </button>
+          <span className="vop-radio-badge"><Radio size={13}/> Audio & Video Broadcasts</span>
+          <h1>Voice of Prophecy Radio Ministry</h1>
+          <p>Listen to published programmes and watch available video broadcasts.</p>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <main className="vop-radio-main">
         {currentPlaying && (
-          <div className="mb-6 p-5 sm:p-7 rounded-2xl bg-white border border-slate-200/80 shadow-md relative overflow-hidden">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              <button
-                onClick={() => togglePlay(currentPlaying)}
-                disabled={!currentPlaying.audioUrl?.trim()}
-                className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#002d72] hover:bg-[#002257] disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-md transition-transform active:scale-95 flex-shrink-0 cursor-pointer"
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-              >
-                {isPlaying ? <Pause size={28} /> : <Play size={28} className="ml-1" fill="currentColor" />}
-              </button>
-
-              <div className="flex-1 min-w-0">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#002d72] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full inline-block mb-1">
-                  {currentPlaying.series}
-                </span>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{currentPlaying.title}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {currentPlaying.speaker} • {currentPlaying.broadcastTime}
-                </p>
-
-                <div className="mt-3.5 flex items-center gap-3">
-                  <span className="text-[11px] text-slate-500 font-mono">{formatTime(currentTime)}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || Math.max(1, currentPlaying.durationMinutes * 60)}
-                    value={Math.min(currentTime, duration || Math.max(1, currentPlaying.durationMinutes * 60))}
-                    onChange={(e) => {
-                      if (audioRef.current) audioRef.current.currentTime = Number(e.target.value);
-                    }}
-                    className="flex-1 accent-[#ff9900] cursor-pointer h-2 bg-slate-200 rounded-lg"
-                    disabled={!currentPlaying.audioUrl?.trim()}
-                    aria-label="Audio position"
-                  />
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    {formatTime(duration || currentPlaying.durationMinutes * 60)}
-                  </span>
+          <section className="vop-radio-player-card">
+            <div className="vop-radio-media-stage">
+              {selectedSource?.type === 'video' ? (
+                <video
+                  ref={videoRef}
+                  src={selectedSource.url}
+                  poster={currentPlaying.posterUrl?.trim() || undefined}
+                  preload="metadata"
+                  playsInline
+                  onTimeUpdate={updateTime}
+                  onLoadedMetadata={updateTime}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                  onVolumeChange={() => setMuted(Boolean(videoRef.current?.muted))}
+                  onError={() => { setIsPlaying(false); setMediaError('The configured video could not be loaded.'); }}
+                />
+              ) : selectedSource ? (
+                <div className="vop-radio-audio-visual">
+                  <Radio size={52}/>
+                  <span>Voice of Prophecy Radio</span>
+                  <small>Audio broadcast</small>
                 </div>
-
-                {audioError && <div className="vop-radio-error" role="alert">{audioError}</div>}
-              </div>
+              ) : (
+                <div className="vop-radio-no-media">No media source configured for this programme.</div>
+              )}
+              {selectedSource?.type === 'video' && (
+                <div className="vop-radio-video-overlay">
+                  <button type="button" onClick={() => togglePlay(currentPlaying)} aria-label={isPlaying ? 'Pause video' : 'Play video'}>
+                    {isPlaying ? <Pause size={23}/> : <Play size={23} fill="currentColor"/>}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {currentPlaying.audioUrl?.trim() && (
+            <div className="vop-radio-player-info">
+              <div>
+                <span className="vop-radio-series">{currentPlaying.series}</span>
+                <h2>{currentPlaying.title}</h2>
+                <p>{currentPlaying.speaker} · {currentPlaying.broadcastTime}</p>
+              </div>
+              {currentPlaying.streamUrl?.trim() && <span className="vop-radio-live"><span/>LIVE STREAM</span>}
+            </div>
+
+            {selectedSource?.type === 'audio' && (
               <audio
                 ref={audioRef}
-                src={currentPlaying.audioUrl.trim()}
+                src={selectedSource.url}
                 preload="metadata"
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleTimeUpdate}
+                onTimeUpdate={updateTime}
+                onLoadedMetadata={updateTime}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
                 onEnded={() => setIsPlaying(false)}
-                onError={() => {
-                  setIsPlaying(false);
-                  setAudioError('The configured audio source could not be loaded.');
-                }}
+                onVolumeChange={() => setMuted(Boolean(audioRef.current?.muted))}
+                onError={() => { setIsPlaying(false); setMediaError('The configured audio could not be loaded.'); }}
               />
             )}
-          </div>
+
+            <div className="vop-radio-controls">
+              <button className="vop-radio-control-main" type="button" onClick={() => togglePlay(currentPlaying)} disabled={!selectedSource}>
+                {isPlaying ? <Pause size={19}/> : <Play size={19} fill="currentColor"/>}
+              </button>
+              <span className="vop-radio-time">{formatTime(currentTime)}</span>
+              <input className="vop-radio-seek" type="range" min={0} max={duration || 0} step="0.1" value={Math.min(currentTime, duration || 0)} onChange={e => seek(Number(e.target.value))} disabled={!selectedSource || !duration} aria-label="Playback position"/>
+              <span className="vop-radio-time">{formatTime(duration)}</span>
+              <button className="vop-radio-icon-btn" type="button" onClick={toggleMute} disabled={!selectedSource} aria-label={muted ? 'Unmute' : 'Mute'}>
+                {muted ? <VolumeX size={18}/> : <Volume2 size={18}/>}
+              </button>
+              <input className="vop-radio-volume" type="range" min={0} max={1} step="0.05" defaultValue="1" onChange={e => setVolume(Number(e.target.value))} disabled={!selectedSource} aria-label="Volume"/>
+              {selectedSource?.type === 'video' && <button className="vop-radio-icon-btn" type="button" onClick={enterFullscreen} aria-label="Fullscreen"><Maximize size={18}/></button>}
+            </div>
+
+            {mediaError && <div className="vop-radio-error" role="alert">{mediaError}</div>}
+          </section>
         )}
 
-        <h3 className="text-base font-bold text-slate-900 mb-3">Available Radio Programs</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {broadcasts.map((b) => {
-            const isSelected = currentPlaying?.id === b.id;
-            const hasSource = Boolean(b.audioUrl?.trim());
+        <h3 className="vop-radio-list-title">Available Radio Programmes</h3>
+        <div className="vop-radio-grid">
+          {broadcasts.map(item => {
+            const source = mediaSource(item);
+            const selected = currentPlaying?.id === item.id;
             return (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => togglePlay(b)}
-                className={`p-5 rounded-2xl border text-left cursor-pointer transition-all ${isSelected
-                  ? 'bg-blue-50/70 border-[#002d72] shadow-sm ring-1 ring-[#002d72]/20'
-                  : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm'}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#002d72] block mb-0.5">{b.series}</span>
-                    <h4 className="font-bold text-slate-900 text-sm sm:text-base truncate">{b.title}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5">{b.speaker}</p>
-                    <p className="text-xs text-slate-600 mt-1.5 line-clamp-2 leading-relaxed">{b.description}</p>
+              <article className={`vop-radio-program ${selected ? 'selected' : ''}`} key={item.id}>
+                <button type="button" className="vop-radio-program-main" onClick={() => setCurrentPlaying(item)}>
+                  <div>
+                    <span>{item.series}</span>
+                    <h4>{item.title}</h4>
+                    <p>{item.speaker}</p>
+                    <small>{item.description}</small>
                   </div>
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-[#002d72] text-white' : 'bg-slate-100 text-slate-600'}`}>
-                    {isSelected && isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
-                  </div>
+                  <span className="vop-radio-program-icon">{selected && isPlaying ? <Pause size={16}/> : <Play size={16} fill="currentColor"/>}</span>
+                </button>
+                <div className="vop-radio-program-footer">
+                  <span>{item.broadcastTime}</span>
+                  <span>{item.durationMinutes ? `${item.durationMinutes} min` : 'On demand'}</span>
+                  {source?.type === 'video' && <span>VIDEO</span>}
+                  {source?.type === 'audio' && <span>AUDIO</span>}
+                  {!source && <span>MEDIA NOT CONFIGURED</span>}
                 </div>
-                <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-medium">
-                  <span>{b.broadcastTime}</span>
-                  <span>{b.durationMinutes} mins</span>
-                </div>
-                {!hasSource && <div className="mt-2 text-[10px] font-semibold text-amber-700">Audio source not configured</div>}
-              </button>
+                {item.streamUrl?.trim() && <a className="vop-radio-external" href={item.streamUrl} target="_blank" rel="noreferrer"><ExternalLink size={13}/>Open stream</a>}
+              </article>
             );
           })}
-          {!broadcasts.length && (
-            <div className="sm:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-              No published radio programmes are available.
-            </div>
-          )}
+          {!broadcasts.length && <div className="vop-radio-empty">No published radio programmes are available.</div>}
         </div>
-      </div>
+      </main>
     </div>
   );
 };
