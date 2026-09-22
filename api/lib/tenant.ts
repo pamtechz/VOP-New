@@ -17,7 +17,7 @@ function adminApp() {
   if (getApps().length) return getApps()[0];
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\\n');
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
   if (!projectId || !clientEmail || !privateKey) throw new Error('Server configuration is missing.');
   return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
 }
@@ -39,7 +39,10 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const profile = profileSnap.data() || {};
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
   const organizationId = String(requestedOrganizationId || profile.organizationId || '').trim();
-  if (!organizationId) throw new Error('An organization membership is required.');
+  if (!organizationId) {
+    if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin };
+    throw new Error('An organization membership is required.');
+  }
   const organizationSnap = await db.doc(`organizations/${organizationId}`).get();
   if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') throw new Error('The organization is not available.');
   const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
