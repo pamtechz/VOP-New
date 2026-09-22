@@ -341,9 +341,11 @@ export default async function handler(request: Request, response: Response) {
         return response.status(400).json({ error: 'Content data must be an object.' });
       }
 
+      const incoming = body.data as Record<string, unknown>;
       const data = {
-        ...(body.data as Record<string, unknown>),
+        ...incoming,
         id,
+        createdAt: incoming.createdAt || FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: decoded.uid,
       };
