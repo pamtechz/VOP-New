@@ -86,7 +86,7 @@ function blankForm(kind: ManagedAdminCollection): FormState {
     case 'materials':
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
-      return { title: '', speaker: '', series: '', durationMinutes: 0, audioUrl: '', broadcastTime: '', description: '', published: false };
+      return { title: '', speaker: '', series: '', durationMinutes: 0, audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', description: '', published: false };
     case 'unions':
       return { name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
     case 'conferences':
@@ -378,8 +378,16 @@ function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
       return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.tag, 'tag'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
     case 'materials':
       return [<td key="name"><strong>{valueOf(record,'name')||'Unnamed'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.category, 'category'),cell(record.author, 'author'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
-    case 'radio':
-      return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.speaker, 'speaker'),cell(record.series, 'series'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
+    case 'radio': {
+      const media = String(record.mediaType || (record.videoUrl ? 'video' : 'audio'));
+      const source = media === 'video' ? valueOf(record, 'videoUrl') : valueOf(record, 'audioUrl');
+      return [
+        <td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,
+        cell(record.speaker, 'speaker'),
+        <td key="series">{valueOf(record,'series')}<div className="vop-radio-admin-type">{media.toUpperCase()}</div></td>,
+        <td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span>{source && <div className="vop-radio-admin-preview">{media === 'video' ? <video src={source} controls preload="metadata" poster={valueOf(record,'posterUrl') || undefined}/> : <audio src={source} controls preload="metadata"/>}</div>}</td>
+      ];
+    }
     case 'unions': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.divisionName, 'division')];
     case 'conferences': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.region, 'region'),cell(record.unionId, 'union')];
     case 'districts': return [cell(record.name, 'name'),cell(record.conferenceId, 'conference'),cell(record.pastorName, 'pastor')];
@@ -405,7 +413,17 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
     case 'materials':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('category','Category')}{field('author','Author')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('downloadUrl','Download URL','url')}{published}</div>;
     case 'radio':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}{field('durationMinutes','Duration (minutes)','number')}{field('audioUrl','Audio URL','url')}{field('broadcastTime','Broadcast Time')}{area('description','Description')}{published}</div>;
+      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
+        {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
+        {select('mediaType','Primary Media Type',[{value:'audio',label:'Audio'},{value:'video',label:'Video'}])}
+        {field('durationMinutes','Duration (minutes)','number')}
+        {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}
+        {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}
+        {field('streamUrl','Live Stream URL','url','Direct HLS/stream URL where supported')}
+        {field('posterUrl','Video Poster URL','url','Optional poster image for video')}
+        {field('broadcastTime','Broadcast Time')}{area('description','Description')}{published}
+        <div className="vop-radio-admin-note">Use direct media/stream URLs that the browser can play. The public player automatically selects audio or video and supports seeking, volume and fullscreen for video.</div>
+      </div>;
     case 'unions':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('code','Code *')}{field('divisionName','Division')}{field('directorName','Director')}{field('contactEmail','Email','email')}{field('contactPhone','Phone')}{field('headquarters','Headquarters')}</div>;
     case 'conferences':
