@@ -222,7 +222,7 @@ export const CertificationManager: React.FC<Props> = ({
       verificationBaseUrl: nextConfig.verificationBaseUrl || '',
     });
     await load();
-    showMessage('Certification configuration saved to Firestore.');
+    showMessage('Certification configuration saved.');
   };
 
   const issueCertificate = async (candidateId: string) => {
@@ -241,7 +241,7 @@ export const CertificationManager: React.FC<Props> = ({
       setIssuerSearch('');
       await load();
       openPreview(body.certificate);
-      showMessage(response.status === 200 ? 'An official certificate already exists for this candidate.' : 'Official certificate issued and stored in Firestore.');
+      showMessage(response.status === 200 ? 'An official certificate already exists for this candidate.' : 'Official certificate issued and stored securely.');
     } catch (error) {
       showMessage(error instanceof Error ? error.message : 'Certificate issuance failed.');
     } finally {
