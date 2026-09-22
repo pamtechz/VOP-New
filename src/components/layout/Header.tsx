@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentRoute = 'home',
   onNavigate
 }) => {
-  const t = (key: string) => getTranslation(key, activeLanguage, settings?.customTranslations);
+  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings?.customTranslations, fallback);
   const availableLanguages = getAvailableLanguages(settings);
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
 
@@ -101,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <div className="hide-sm" style={{ fontSize: '0.68rem', color: 'rgba(255, 255, 255, 0.7)', fontWeight: 500 }}>
-              {t('school_subtitle')}
+              {t('school_subtitle', settings.schoolName || 'Bible Correspondence School')}
             </div>
           </div>
         </div>
@@ -241,7 +241,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <Award size={14} />
-            <span>{t('certificate_button')}</span>
+            <span>{t('certificate_button', 'Certificate')}</span>
           </button>
 
           {/* Admin Panel Quick Link (Desktop only) */}
@@ -249,7 +249,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => nav('admin')}
               className="btn btn-outline hide-sm"
-              title="Admin Panel"
+              title={t('admin_panel', 'Admin Panel')}
               style={{
                 borderColor: 'rgba(255, 255, 255, 0.25)',
                 color: '#ffffff',
@@ -259,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <ShieldCheck size={14} color="var(--vop-gold-400)" />
-              <span>Admin</span>
+              <span>{t('admin_panel', 'Admin Panel')}</span>
             </button>
           )}
 
