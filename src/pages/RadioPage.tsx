@@ -33,7 +33,7 @@ function loadYouTubeApi(): Promise<YTNamespace> {
     const previous = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       previous?.();
-      if (window.YT?.Player) resolve(window.YT); else reject(new Error('YouTube player API did not initialise.'));
+      const api = window.YT;\n      if (api?.Player) resolve(api); else reject(new Error('YouTube player API did not initialise.'));
     };
     if (document.querySelector('script[data-vop-youtube-api]')) return;
     const script = document.createElement('script');
