@@ -28,6 +28,8 @@ import { RadioPage } from './pages/RadioPage';
 import { CertificatesPage } from './pages/CertificatesPage';
 import { AdminPage } from './pages/AdminPage';
 import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
+import { AnnouncementsPage } from './pages/AnnouncementsPage';
+import { SupportPage } from './pages/SupportPage';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -58,6 +60,8 @@ export const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
     else if (params.get('radio') === '1') setCurrentRoute('radio');
+    else if (params.get('announcements') === '1') setCurrentRoute('announcements');
+    else if (params.get('support') === '1') setCurrentRoute('support');
   }, []);
 
   useEffect(() => {
@@ -114,6 +118,25 @@ export const App: React.FC = () => {
       setDistricts(snapshot.districts);
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
+
+      const guideParam = params.get('guide');
+      const lessonParam = params.get('lesson');
+      if (guideParam) {
+        const deepGuide = snapshot.guides.find(guide => guide.id === guideParam || guide.language === guideParam);
+        if (deepGuide) {
+          setActiveGuide(deepGuide);
+          setCurrentRoute('home');
+          if (lessonParam) {
+            const deepLesson = deepGuide.lessons.find(lesson => lesson.id === lessonParam || lesson.lessonNumber === lessonParam);
+            if (deepLesson) setActiveLesson(deepLesson);
+          }
+        }
+      }
+      const shareRef = params.get('ref');
+      if (shareRef && !sessionStorage.getItem('vop_share_open_' + shareRef)) {
+        sessionStorage.setItem('vop_share_open_' + shareRef, '1');
+        void auth?.currentUser?.getIdToken().then(token => fetch('/api/share', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body:JSON.stringify({action:'markInstall',code:shareRef}) })).catch(() => undefined);
+      }
 
       // The server is the source of truth; localStorage is only a local cache for
       // components that still need synchronous access during the current session.
@@ -206,6 +229,8 @@ export const App: React.FC = () => {
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} onBack={returnHome} />}
+          {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={returnHome} />}
+          {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}
           {currentRoute === 'admin' && currentUser.role && currentUser.role !== 'student' && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
