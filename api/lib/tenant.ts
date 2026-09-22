@@ -63,3 +63,14 @@ export function contentOwnedByOrg(data: DocumentData | undefined, organizationId
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
   return ctx.isSuperAdmin || (contentOwnedByOrg(data, ctx.organizationId) && ['owner','admin','editor'].includes(String(ctx.membership.role || '')));
 }
+
+
+export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
+  if (ctx.isSuperAdmin || !ctx.organizationId) return;
+  const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+  const quotas = organization.data()?.quotas;
+  const limit = Number(quotas && typeof quotas === 'object' ? (quotas as Record<string, unknown>)[quotaKey] : NaN);
+  if (!Number.isFinite(limit) || limit < 0) return;
+  const current = await ctx.db.collection(collectionName).where('organizationId','==',ctx.organizationId).get();
+  if (current.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
+}
