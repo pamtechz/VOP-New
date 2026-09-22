@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getRedirectResult, onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth, authPersistenceReady, firebaseConfigured } from './lib/firebase';
 import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
@@ -12,7 +12,6 @@ import type { User } from './types';
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [redirectReady, setRedirectReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
   const syncingUid = useRef<string | null>(null);
@@ -23,30 +22,11 @@ export function Root() {
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
       setAuthReady(true);
-      setRedirectReady(true);
       setDataReady(true);
       return;
     }
 
     let cancelled = false;
-
-    void (async () => {
-      try {
-        await authPersistenceReady;
-        await getRedirectResult(auth);
-      } catch (error) {
-        console.error('Google redirect sign-in could not be restored:', error);
-        if (!cancelled) {
-          setDataError(
-            error instanceof Error
-              ? error.message
-              : 'Google sign-in could not be completed. Please try again.',
-          );
-        }
-      } finally {
-        if (!cancelled) setRedirectReady(true);
-      }
-    })();
 
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -161,7 +141,7 @@ export function Root() {
 
   if (isBootstrapRoute) return <BootstrapPage account={account} />;
 
-  if (!redirectReady || !dataReady) {
+  if (!dataReady) {
     return (
       <main className="vop-auth-loading" aria-busy="true">
         <p>Opening Voice of Prophecy…</p>
