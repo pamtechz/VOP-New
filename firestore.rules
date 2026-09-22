@@ -343,6 +343,7 @@ service cloud.firestore {
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canManageOrg(organizationIdForUser())
       );
+    }
 
     // Platform certification configuration.
     match /system/certification {
