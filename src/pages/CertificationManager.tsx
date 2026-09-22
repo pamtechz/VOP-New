@@ -361,7 +361,7 @@ export const CertificationManager: React.FC<Props> = ({
             <button className="vop-cert-secondary-button" type="button" onClick={() => window.print()}><Printer size={18} />Print Certificate</button>
             <button className="vop-cert-secondary-button" type="button" onClick={() => void shareCertificate()}><Share2 size={18} />Share Certificate</button>
             <button className="vop-cert-secondary-button" type="button" onClick={sendCertificate} disabled={!selected.candidateEmail}><Mail size={18} />Send to Candidate</button>
-            <div className="vop-cert-ready"><CheckCircle2 size={26} /><div><strong>Certificate Ready</strong><span>Certificate record is stored in Firestore.</span></div></div>
+            <div className="vop-cert-ready"><CheckCircle2 size={26} /><div><strong>Certificate Ready</strong><span>Certificate record is securely stored.</span></div></div>
           </aside>
         </div>
         <div className="vop-cert-note"><Info size={22} /><div><strong>Note</strong><span>The certificate is generated from the stored candidate record, completion date and configured certification assets.</span></div></div>
