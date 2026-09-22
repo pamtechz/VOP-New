@@ -111,6 +111,38 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'upsertLesson') {
+      if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
+      if (!ctx.organizationId) throw new Error('Select an organization before saving a lesson.');
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+      const language = String(data.language || '').trim();
+      const guideId = safeId(data.guideId);
+      const lessonId = safeId(body.id || data.lessonId);
+      if (!language || !guideId) throw new Error('A guide and language are required for a lesson.');
+      const guideRef = ctx.db.doc(`guides/${guideId}`);
+      const guide = await guideRef.get();
+      if (!guide.exists || String(guide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('The selected guide does not belong to this organization.');
+      const ref = guideRef.collection('lessons').doc(lessonId);
+      const existing = await ref.get();
+      if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
+      await ref.set({
+        ...data,
+        id: lessonId,
+        lessonId,
+        organizationId: ctx.organizationId,
+        ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+        ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
+        canonical: true,
+        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
+        published: data.published === true,
+        createdAt: existing.data()?.createdAt || new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: ctx.auth.uid,
+      }, { merge:true });
+      const saved = await ref.get();
+      return res.status(200).json({ ok:true, item:{id:lessonId,...saved.data()} });
+    }
+
     if (action === 'publishLesson' || action === 'unpublishLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson publishing requires the curriculum collection.');
       if (!ctx.organizationId) throw new Error('Select an organization before publishing lessons.');
