@@ -12,7 +12,7 @@ import {
   saveTranslation
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
-import { MASTER_TRANSLATION_KEYS } from '../services/i18n';
+import { DEFAULT_TRANSLATIONS, MASTER_TRANSLATION_KEYS } from '../services/i18n';
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -201,7 +201,10 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     const nextValues: Record<string, string> = { ...(doc?.values || {}) };
     detectedTranslations.forEach(entry => {
       if (nextValues[entry.key] === undefined) {
-        nextValues[entry.key] = entry.translations?.[selectedTranslation] || (selectedTranslation === 'en' ? entry.english : '');
+        nextValues[entry.key] =
+          entry.translations?.[selectedTranslation] ||
+          DEFAULT_TRANSLATIONS[selectedTranslation]?.[entry.key] ||
+          (selectedTranslation === 'en' ? entry.english : '');
       }
     });
     setTranslationValues(nextValues);
