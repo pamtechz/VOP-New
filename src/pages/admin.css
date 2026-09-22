@@ -658,3 +658,14 @@
   .vop-section-card{padding:15px}
   .vop-form-card{padding:16px}
 }
+
+
+/* Live official certificate preview in Certification Configuration Studio */
+.vop-cert-live-artwork{width:100%;max-width:980px;margin:0 auto;border:1px solid #dfe8f2;border-radius:11px;overflow:hidden;background:#fff}
+.vop-cert-live-artwork .vop-certificate-artwork{border:0;box-shadow:none;max-width:none}
+.vop-cert-preview-state{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid #dbe9f8;border-radius:8px;background:#f1f7ff;color:#315d94;font-size:11px;line-height:1.4}
+.vop-cert-preview-state svg{flex:0 0 auto;color:#0b5bb5}
+@media(max-width:640px){
+  .vop-cert-live-artwork .vop-certificate-artwork{min-width:0}
+  .vop-cert-preview-state{align-items:flex-start}
+}
