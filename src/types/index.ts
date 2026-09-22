@@ -274,13 +274,16 @@ export interface RadioBroadcast {
   title: string;
   speaker: string;
   series: string;
-  durationMinutes: number;
-  audioUrl: string;
+  durationMinutes?: number;
+  audioUrl?: string;
   videoUrl?: string;
   streamUrl?: string;
   mediaType?: 'audio' | 'video';
   posterUrl?: string;
-  broadcastTime: string;
+  /** System-generated ISO timestamp. Admins do not enter broadcast time manually. */
+  broadcastTime?: string;
+  createdAt?: string;
+  updatedAt?: string;
   description: string;
   published?: boolean;
 }
