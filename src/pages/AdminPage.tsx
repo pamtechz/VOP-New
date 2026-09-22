@@ -100,6 +100,8 @@ async function adminContent(action: 'list' | 'upsert' | 'delete', collection: st
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
   const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
@@ -367,6 +369,20 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
           ? 'Curriculum Studio'
           : 'Curriculum Studio'
     : currentPage?.label || 'Dashboard';
+  const toggleNavigation = () => {
+    setProfileOpen(false);
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      setSidebarOpen(value => !value);
+    } else {
+      setSidebarCollapsed(value => !value);
+    }
+  };
+
+  const closeTransientMenus = () => {
+    setProfileOpen(false);
+    setSidebarOpen(false);
+  };
+
   const currentDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const openLanguageEditor = (language?: CustomLanguage) => {
@@ -787,13 +803,27 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   ];
 
   return <div className="vop-admin">
-    <header className="vop-admin-top">
-      <div className="vop-brand"><div className="vop-brand-mark"><Award size={30}/></div><div><div className="vop-brand-name">{settings?.appName || ''}</div><div className="vop-brand-sub">{settings?.appTagline || ''}</div></div></div>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>setSidebarOpen(!sidebarOpen)} aria-label="Open navigation"><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
-      <div className="vop-top-actions"><button className="vop-notification" type="button" aria-label="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button><div className="vop-user">{currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><div className="vop-user-name">{currentUser.displayName || currentUser.email || ''}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || ''}</div></div><ChevronDown size={18}/></div></div>
+    <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
+      <div className="vop-brand"><div className="vop-brand-mark"><Award size={30}/></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title={sidebarOpen?'Close navigation':'Open navigation'}><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-actions">
+        <button className="vop-notification" type="button" aria-label="Notifications" title="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button>
+        <div className={'vop-profile '+(profileOpen?'open':'')}>
+          <button className="vop-user" type="button" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>{setProfileOpen(value=>!value);setSidebarOpen(false)}} title="Open profile menu">
+            {currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}
+            <div className="vop-user-copy"><div className="vop-user-name">{currentUser.displayName || currentUser.email || ''}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || ''}</div></div>
+            <ChevronDown className="vop-profile-chevron" size={18}/>
+          </button>
+          {profileOpen&&<div className="vop-profile-menu" role="menu">
+            <div className="vop-profile-menu-head">{currentUser.photoURL ? <img className="vop-profile-menu-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-profile-menu-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><strong>{currentUser.displayName || currentUser.email || 'Account'}</strong><span>{currentUser.email || ''}</span></div></div>
+            <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);setActiveTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
+            <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
+          </div>}
+        </div>
+      </div>
     </header>
     <div className="vop-shell">
-      <aside className={'vop-sidebar '+(sidebarOpen?'open':'')}><nav className="vop-nav">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={23}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" onClick={onBack}><ArrowLeft size={19}/>Back to App</button></aside>
+      <aside className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}><nav className="vop-nav">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?'Back to App':undefined} onClick={onBack}><ArrowLeft size={19}/><span>Back to App</span></button></aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}

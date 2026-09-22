@@ -870,3 +870,120 @@
   .vop-reference-table,.vop-cert-table{min-width:920px}
   .vop-lesson-row{grid-template-columns:76px minmax(0,1fr)}
 }
+
+/* ==========================================================================
+   Admin shell interaction polish — reference header/sidebar behavior
+   ========================================================================== */
+.vop-admin-top{z-index:100}
+.vop-brand-copy{min-width:0}
+.vop-shell{transition:none}
+.vop-sidebar{
+  position:relative;
+  transition:width .2s ease, flex-basis .2s ease, transform .2s ease, padding .2s ease;
+  overflow:hidden;
+  z-index:90;
+}
+.vop-sidebar.collapsed{
+  width:82px;
+  flex-basis:82px;
+  padding-left:10px;
+  padding-right:10px;
+}
+.vop-sidebar.collapsed .vop-nav-item{
+  justify-content:center;
+  padding-left:0;
+  padding-right:0;
+  gap:0;
+}
+.vop-sidebar.collapsed .vop-nav-item span,
+.vop-sidebar.collapsed .vop-back span{display:none}
+.vop-sidebar.collapsed .vop-nav-item.active:before{left:0}
+.vop-sidebar.collapsed .vop-back{padding:0;gap:0}
+.vop-menu-btn{
+  border-radius:10px;
+  transition:background .16s ease,transform .16s ease;
+}
+.vop-menu-btn:hover{background:rgba(255,255,255,.1)}
+.vop-menu-btn:active{transform:scale(.94)}
+.vop-profile{position:relative}
+.vop-user{
+  border:0;
+  background:transparent;
+  padding:4px 7px 4px 5px;
+  border-radius:12px;
+  cursor:pointer;
+  text-align:left;
+}
+.vop-user:hover,.vop-profile.open .vop-user{background:rgba(255,255,255,.1)}
+.vop-user-copy{min-width:0}
+.vop-profile-chevron{transition:transform .18s ease}
+.vop-profile.open .vop-profile-chevron{transform:rotate(180deg)}
+.vop-profile-menu{
+  position:absolute;
+  right:0;
+  top:calc(100% + 10px);
+  width:280px;
+  background:#fff;
+  color:#09275f;
+  border:1px solid #dce6f2;
+  border-radius:13px;
+  box-shadow:0 18px 45px rgba(8,35,72,.2);
+  padding:8px;
+  z-index:150;
+}
+.vop-profile-menu-head{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  border-bottom:1px solid #edf2f7;
+  margin-bottom:5px;
+}
+.vop-profile-menu-head strong,.vop-profile-menu-head span{display:block}
+.vop-profile-menu-head strong{font-size:14px;color:#09275f}
+.vop-profile-menu-head span{font-size:11px;color:#7183a4;margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+.vop-profile-menu-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+.vop-profile-menu>button{
+  width:100%;
+  min-height:42px;
+  border:0;
+  background:#fff;
+  color:#173d75;
+  border-radius:8px;
+  padding:0 10px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  font-weight:750;
+  text-align:left;
+}
+.vop-profile-menu>button:hover{background:#f3f7fc}
+.vop-main{transition:padding .2s ease}
+
+@media(max-width:900px){
+  .vop-sidebar.collapsed{width:min(310px,86vw);flex-basis:auto;padding:14px 12px 18px}
+  .vop-sidebar.collapsed .vop-nav-item{
+    justify-content:flex-start;
+    padding-left:14px;
+    padding-right:14px;
+    gap:12px;
+  }
+  .vop-sidebar.collapsed .vop-nav-item span,
+  .vop-sidebar.collapsed .vop-back span{display:block}
+  .vop-profile-menu{right:-4px;width:min(280px,calc(100vw - 20px))}
+}
+@media(max-width:640px){
+  .vop-profile-menu{top:calc(100% + 7px)}
+  .vop-user{padding:2px}
+}
+
+@media(min-width:901px){
+  .vop-admin-top.sidebar-collapsed .vop-brand{
+    min-width:82px;
+    width:82px;
+    justify-content:center;
+    gap:0;
+  }
+  .vop-admin-top.sidebar-collapsed .vop-brand-copy{display:none}
+  .vop-admin-top.sidebar-collapsed .vop-brand-mark{width:50px;height:50px}
+}
