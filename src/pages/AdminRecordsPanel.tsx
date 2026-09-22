@@ -643,7 +643,15 @@ function RadioAdminDashboard({
               {([['stream','Stream URL',Link2],['youtube','YouTube',Video],['audioverse','AudioVerse',Headphones]] as const).map(([value,label,Icon])=><button key={value} className={sourceMode===value?'active':''} type="button" onClick={()=>setSourceMode(value)}><Icon size={22}/><span>{label}</span></button>)}
             </div>
             <form onSubmit={submit} className="vop-radio-admin-quick-form">
-              <label>Stream / Media URL<input value={String(form.streamUrl || form.videoUrl || form.audioUrl || '')} onChange={e=>{const key=sourceMode==='youtube'?'videoUrl':sourceMode==='audioverse'?'audioUrl':'streamUrl';change(key,e.target.value)}} placeholder={sourceMode==='youtube'?'https://youtube.com/watch?v=…':sourceMode==='audioverse'?'https://www.audioverse.org/en/media/…':'https://your-stream.example/live'}/></label>
+              <label>Stream / Media URL<input value={String(form.streamUrl || form.videoUrl || form.audioUrl || '')} onChange={e=>{
+                const value = e.target.value;
+                const key = sourceMode === 'youtube' ? 'videoUrl' : sourceMode === 'audioverse' ? 'audioUrl' : 'streamUrl';
+                setForm(current => ({
+                  ...current,
+                  [key]: value,
+                  mediaType: sourceMode === 'youtube' ? 'youtube' : sourceMode === 'audioverse' ? 'audioverse' : 'audio',
+                }));
+              }} placeholder={sourceMode==='youtube'?'https://youtube.com/watch?v=…':sourceMode==='audioverse'?'https://www.audioverse.org/en/media/…':'https://your-stream.example/live'}/></label>
               <label>Title<input value={String(form.title || '')} onChange={e=>change('title',e.target.value)} placeholder="Programme title"/></label>
               <button className="vop-radio-admin-start" type="submit" disabled={saving}>{saving?'Saving…':'Save / Start Stream'}</button>
             </form>
