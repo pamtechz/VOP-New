@@ -369,6 +369,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
           ? 'Curriculum Studio'
           : 'Curriculum Studio'
     : currentPage?.label || 'Dashboard';
+  const toggleNavigation = () => {
+    setProfileOpen(false);
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      setSidebarOpen(value => !value);
+    } else {
+      setSidebarCollapsed(value => !value);
+    }
+  };
+
   const closeTransientMenus = () => {
     setProfileOpen(false);
     setSidebarOpen(false);
@@ -796,7 +805,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   return <div className="vop-admin">
     <header className="vop-admin-top">
       <div className="vop-brand"><div className="vop-brand-mark"><Award size={30}/></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={()=>{setSidebarOpen(value=>!value);setProfileOpen(false)}} aria-label={sidebarOpen?'Close navigation':'Open navigation'} title={sidebarOpen?'Close navigation':'Open navigation'}><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title={sidebarOpen?'Close navigation':'Open navigation'}><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <button className="vop-notification" type="button" aria-label="Notifications" title="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
