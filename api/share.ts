@@ -66,7 +66,7 @@ export default async function handler(req: Request, res: Response) {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '');
     if (action === 'create') {
-      if (!isSuperAdmin && !['union_admin','conference_admin','district_admin','church_admin'].includes(String(actorData.role || '')) && String(actorData.organizationRole || '') !in ['owner','admin']) {
+      if (!isSuperAdmin && !['union_admin','conference_admin','district_admin','church_admin'].includes(String(actorData.role || '')) && !['owner','admin'].includes(String(actorData.organizationRole || ''))) {
         return res.status(403).json({ error: 'Administrator privileges are required.' });
       }
       const targetPath = String(body.targetPath || '').trim();
