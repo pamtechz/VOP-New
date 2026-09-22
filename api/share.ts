@@ -58,11 +58,17 @@ export default async function handler(req: Request, res: Response) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
     const decoded = await authenticate(req);
     const actor = await db.doc(`users/${decoded.uid}`).get();
-    if (!actor.exists || String(actor.data()?.role || '') === 'student') return res.status(403).json({ error: 'Administrator privileges are required.' });
+    if (!actor.exists) return res.status(403).json({ error: 'Account profile was not found.' });
+    const actorData = actor.data() || {};
+    const actorOrganizationId = String(actorData.organizationId || '').trim();
+    const isSuperAdmin = String(actorData.role || '') === 'super_admin';
 
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '');
     if (action === 'create') {
+      if (!isSuperAdmin && !['union_admin','conference_admin','district_admin','church_admin'].includes(String(actorData.role || '')) && String(actorData.organizationRole || '') !in ['owner','admin']) {
+        return res.status(403).json({ error: 'Administrator privileges are required.' });
+      }
       const targetPath = String(body.targetPath || '').trim();
       if (!isSafeTarget(targetPath)) throw new Error('A safe internal lesson or chapter path is required.');
       const code = randomUUID().replace(/-/g, '').slice(0, 12);
@@ -73,6 +79,8 @@ export default async function handler(req: Request, res: Response) {
         guideId: String(body.guideId || ''),
         lessonId: String(body.lessonId || ''),
         label: String(body.label || ''),
+        organizationId: actorOrganizationId,
+        sharingScope: body.sharingScope === 'shared' ? 'shared' : 'organization',
         clicks: 0,
         installs: 0,
         createdBy: decoded.uid,
@@ -86,15 +94,31 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'list') {
-      const snapshot = await db.collection('shareReferences').orderBy('createdAt','desc').limit(100).get();
+      const snapshot = isSuperAdmin
+        ? await db.collection('shareReferences').orderBy('createdAt','desc').limit(100).get()
+        : await db.collection('shareReferences').where('organizationId','==',actorOrganizationId).orderBy('createdAt','desc').limit(100).get();
       return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
     }
 
     if (action === 'markInstall') {
       const code = String(body.code || '').trim();
       if (!code) throw new Error('Share code is required.');
-      await db.doc(`shareReferences/${code}`).set({ installs: FieldValue.increment(1), lastInstallAt: FieldValue.serverTimestamp() }, { merge: true });
-      return res.status(200).json({ ok: true });
+      const shareRef = db.doc(`shareReferences/${code}`);
+      const share = await shareRef.get();
+      if (!share.exists) throw new Error('Share link not found.');
+      const shareData = share.data() || {};
+      const shareOrg = String(shareData.organizationId || '').trim();
+      const shared = shareData.sharingScope === 'shared';
+      if (!isSuperAdmin && !shared && (!actorOrganizationId || shareOrg !== actorOrganizationId)) throw new Error('This share link is not available to your organization.');
+      const installerRef = shareRef.collection('installers').doc(decoded.uid);
+      const installer = await installerRef.get();
+      if (!installer.exists) {
+        await db.runTransaction(async transaction => {
+          transaction.create(installerRef, { uid: decoded.uid, organizationId: actorOrganizationId, installedAt: FieldValue.serverTimestamp() });
+          transaction.set(shareRef, { installs: FieldValue.increment(1), lastInstallAt: FieldValue.serverTimestamp() }, { merge:true });
+        });
+      }
+      return res.status(200).json({ ok: true, recorded: !installer.exists });
     }
 
     return res.status(400).json({ error: 'Unsupported share action.' });
