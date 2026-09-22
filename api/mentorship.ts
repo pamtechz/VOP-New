@@ -150,7 +150,7 @@ export default async function handler(req: Request, res: Response) {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
 
-    if (action === 'listStudents' || action === 'listMentors' || action === 'listAssignments' || action === 'questionFailures' || action === 'createDraft' || action === 'sendDraft') {
+    if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
     }
 
@@ -279,6 +279,34 @@ export default async function handler(req: Request, res: Response) {
         createdAt: FieldValue.serverTimestamp(),
       });
       return res.status(200).json({ ok: true, item: { id: messageRef.id, senderId: decoded.uid, body: message, references } });
+    }
+
+    if (action === 'getAutomationSettings') {
+      const snapshot = await db.doc('system/mentorship').get();
+      return res.status(200).json({ ok: true, item: snapshot.exists ? snapshot.data() : {
+        enabled: false,
+        channel: 'in_app',
+        minAverageScore: 0,
+        maxProgressPercent: 0,
+        cooldownDays: 7,
+      }});
+    }
+
+    if (action === 'saveAutomationSettings') {
+      const minAverageScore = Math.max(0, Math.min(100, Number(body.minAverageScore || 0)));
+      const maxProgressPercent = Math.max(0, Math.min(100, Number(body.maxProgressPercent || 0)));
+      const cooldownDays = Math.max(1, Math.min(90, Number(body.cooldownDays || 7)));
+      const channel = body.channel === 'email' ? 'email' : 'in_app';
+      await db.doc('system/mentorship').set({
+        enabled: body.enabled === true,
+        channel,
+        minAverageScore,
+        maxProgressPercent,
+        cooldownDays,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: decoded.uid,
+      }, { merge: true });
+      return res.status(200).json({ ok: true, item: { enabled: body.enabled === true, channel, minAverageScore, maxProgressPercent, cooldownDays } });
     }
 
     if (action === 'createDraft') {
