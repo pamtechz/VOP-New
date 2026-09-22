@@ -4,7 +4,7 @@ import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
-type ProfileType = 'super_admin' | 'admin' | 'teacher' | 'learner' | 'guest';
+type ProfileType = 'super_admin' | 'admin' | 'teacher' | 'mentor' | 'learner' | 'guest';
 
 const ADMIN_ROLES = new Set(['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']);
 
@@ -32,10 +32,11 @@ async function authenticate(request: Request) {
 
 function profileType(profile: Record<string, unknown> | undefined, authUser: UserRecord): ProfileType {
   const explicit = profile?.userType;
-  if (explicit === 'super_admin' || explicit === 'admin' || explicit === 'teacher' || explicit === 'learner' || explicit === 'guest') return explicit;
+  if (explicit === 'super_admin' || explicit === 'admin' || explicit === 'teacher' || explicit === 'mentor' || explicit === 'learner' || explicit === 'guest') return explicit;
   const role = String(profile?.role || '');
   if (ADMIN_ROLES.has(role)) return 'admin';
   if (profile?.privileges && typeof profile.privileges === 'object' && (profile.privileges as Record<string, unknown>).editor === true) return 'teacher';
+  if (role === 'mentor') return 'mentor';
   if (role === 'student') return authUser.providerData.length ? 'learner' : 'guest';
   return 'learner';
 }
@@ -45,11 +46,12 @@ function displayRole(type: ProfileType, profile: Record<string, unknown> | undef
   if (type === 'admin') return 'Admin';
   if (type === 'teacher') return 'Teacher';
   if (type === 'guest') return 'Guest';
+  if (type === 'mentor') return 'Mentor';
   return 'Learner';
 }
 
 function roleColor(type: ProfileType): string {
-  return type === 'super_admin' || type === 'admin' ? 'admin' : type === 'teacher' ? 'teacher' : type === 'guest' ? 'guest' : 'learner';
+  return type === 'super_admin' || type === 'admin' ? 'admin' : type === 'teacher' ? 'teacher' : type === 'mentor' ? 'mentor' : type === 'guest' ? 'guest' : 'learner';
 }
 
 function userCode(authUser: UserRecord, profile: Record<string, unknown> | undefined): string {
@@ -144,6 +146,15 @@ function profileForType(type: ProfileType, organization: Record<string, unknown>
       adminNodeType: nodeType,
       adminNodeId: nodeId,
       privileges: { admin: true, superAdmin: false, guardian: true, editor: false, manager: true, developer: false, coordinator: true },
+    };
+  }
+  if (type === 'mentor') {
+    return {
+      role: 'mentor',
+      adminNodeType: null,
+      adminNodeId: null,
+      mentorProfile: { enabled: true },
+      privileges: { admin: false, superAdmin: false, guardian: false, editor: true, manager: false, developer: false, coordinator: true },
     };
   }
   if (type === 'teacher') {
