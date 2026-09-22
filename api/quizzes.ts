@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent } from './lib/tenant';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota } from './lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -52,6 +52,7 @@ export default async function handler(req: Request, res: Response) {
       const id = safeId(body.id || crypto.randomUUID().replace(/-/g, '').slice(0, 20));
       const existing = await ctx.db.doc(`quizzes/${id}`).get();
       const current = existing.exists ? existing.data() : undefined;
+      if (!existing.exists) await enforceQuota(ctx, 'quizzes', 'maxQuizzes');
       if (existing.exists && !canEditCanonicalContent(ctx, current)) throw new Error('Only the owning organization or VOP Super Admin can edit this quiz.');
       if (existing.exists && String(current?.organizationId || '') !== ctx.organizationId && !ctx.isSuperAdmin) throw new Error('This quiz belongs to another organization.');
       const now = new Date().toISOString();
