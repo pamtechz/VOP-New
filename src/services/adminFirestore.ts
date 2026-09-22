@@ -9,7 +9,7 @@ import type {
 } from '../types';
 
 function getDb(): Firestore {
-  if (!db) throw new Error('Firebase Firestore is not initialized.');
+  if (!db) throw new Error('The application data service is not initialized.');
   return db;
 }
 
@@ -104,12 +104,6 @@ export interface ExtendedAppSettings extends AppSettings {
     announcements: boolean;
     certification: boolean;
   };
-  integrations?: {
-    firebaseProjectId?: string;
-    analyticsEnabled?: boolean;
-    storageEnabled?: boolean;
-    apiBaseUrl?: string;
-  };
   security?: {
     sessionTimeoutMinutes?: number;
     allowMultipleSessions?: boolean;
@@ -136,41 +130,35 @@ export const subscribeSettings = (
       if (snap.exists()) {
         const data = snap.data() as ExtendedAppSettings;
         callback({
-          appName: data.appName || 'VOP App',
-          organizationName: data.organizationName || 'Voice of Prophecy',
-          schoolName: data.schoolName || 'Discover Bible School',
+          appName: data.appName || '',
+          organizationName: data.organizationName || '',
+          schoolName: data.schoolName || '',
           directorName: data.directorName || '',
           directorTitle: data.directorTitle || '',
           contactPhone: data.contactPhone || '',
           whatsappNumber: data.whatsappNumber || '',
-          contactEmail: data.contactEmail || 'support@vop.org',
-          quizPassThreshold: Number(data.quizPassThreshold ?? 80),
-          defaultLanguage: data.defaultLanguage || 'English',
-          appTagline: data.appTagline || 'Manage · Equip · Empower',
-          timezone: data.timezone || '(GMT+02:00) Lusaka',
-          website: data.website || 'https://vop.org',
-          welcomeMessage: data.welcomeMessage || 'Welcome to VOP! Manage · Equip · Empower',
+          contactEmail: data.contactEmail || '',
+          quizPassThreshold: Number(data.quizPassThreshold ?? 0),
+          defaultLanguage: data.defaultLanguage || '',
+          appTagline: data.appTagline || '',
+          timezone: data.timezone || '',
+          website: data.website || '',
+          welcomeMessage: data.welcomeMessage || '',
           systemOptions: {
-            allowRegistrations: data.systemOptions?.allowRegistrations ?? true,
-            requireApproval: data.systemOptions?.requireApproval ?? true,
-            enableEmailNotifications: data.systemOptions?.enableEmailNotifications ?? true,
-            showChurchInfo: data.systemOptions?.showChurchInfo ?? true,
+            allowRegistrations: data.systemOptions?.allowRegistrations ?? false,
+            requireApproval: data.systemOptions?.requireApproval ?? false,
+            enableEmailNotifications: data.systemOptions?.enableEmailNotifications ?? false,
+            showChurchInfo: data.systemOptions?.showChurchInfo ?? false,
             enablePwa: data.systemOptions?.enablePwa ?? false,
             maintenanceMode: data.systemOptions?.maintenanceMode ?? false,
           },
           features: {
-            candidatesModule: data.features?.candidatesModule ?? true,
-            curriculumStudio: data.features?.curriculumStudio ?? true,
-            translations: data.features?.translations ?? true,
-            radio: data.features?.radio ?? true,
-            announcements: data.features?.announcements ?? true,
-            certification: data.features?.certification ?? true,
-          },
-          integrations: {
-            firebaseProjectId: data.integrations?.firebaseProjectId || '',
-            analyticsEnabled: data.integrations?.analyticsEnabled ?? false,
-            storageEnabled: data.integrations?.storageEnabled ?? false,
-            apiBaseUrl: data.integrations?.apiBaseUrl || '',
+            candidatesModule: data.features?.candidatesModule ?? false,
+            curriculumStudio: data.features?.curriculumStudio ?? false,
+            translations: data.features?.translations ?? false,
+            radio: data.features?.radio ?? false,
+            announcements: data.features?.announcements ?? false,
+            certification: data.features?.certification ?? false,
           },
           security: {
             sessionTimeoutMinutes: Number(data.security?.sessionTimeoutMinutes ?? 60),
@@ -188,16 +176,16 @@ export const subscribeSettings = (
       } else {
         // Provide default baseline if doc does not exist yet
         callback({
-          appName: 'VOP App',
-          organizationName: 'Voice of Prophecy',
-          schoolName: 'Discover Bible School',
+          appName: '',
+          organizationName: '',
+          schoolName: '',
           directorName: '',
           directorTitle: '',
           contactPhone: '',
           whatsappNumber: '',
           contactEmail: 'support@vop.org',
-          quizPassThreshold: 80,
-          defaultLanguage: 'English',
+          quizPassThreshold: 0,
+          defaultLanguage: '',
           appTagline: 'Manage · Equip · Empower',
           timezone: '(GMT+02:00) Lusaka',
           website: 'https://vop.org',
@@ -238,7 +226,7 @@ export const saveSettingsToFirestore = async (settings: ExtendedAppSettings): Pr
 };
 
 // ------------------------------------------------------------------
-// 3. USERS / CANDIDATES (Live Firestore)
+// 3. USERS / CANDIDATES
 // ------------------------------------------------------------------
 
 export const subscribeCandidates = (
