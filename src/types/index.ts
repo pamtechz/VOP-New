@@ -278,7 +278,7 @@ export interface RadioBroadcast {
   audioUrl?: string;
   videoUrl?: string;
   streamUrl?: string;
-  mediaType?: 'audio' | 'video';
+  mediaType?: 'audio' | 'video' | 'youtube' | 'audioverse';
   posterUrl?: string;
   /** System-generated ISO timestamp. Admins do not enter broadcast time manually. */
   broadcastTime?: string;
