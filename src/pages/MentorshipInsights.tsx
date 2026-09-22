@@ -12,7 +12,7 @@ async function mentoringApi(action: string, data: Record<string, unknown> = {}) 
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || 'Mentorship request failed.');
-  return body as { items?: any[]; item?: any };
+  return body as { items?: any[]; item?: any; delivery?: string };
 }
 
 async function shareApi(action: string, data: Record<string, unknown> = {}) {
