@@ -9,56 +9,39 @@ export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] 
 };
 
 /**
- * Translation strings are deliberately not stored in source-code dictionaries.
- *
- * Every call to getTranslation() is an automatic discovery point. The caller
- * may provide its English source text as the fallback argument; otherwise a
- * readable label is derived from the key. Administrators then translate the
- * discovered entry for any language configured by the administrator.
+ * Translation dictionaries are intentionally not embedded in the application.
+ * Strings are discovered from actual getTranslation() calls and their source
+ * fallback text, then translated through the administrator's configured
+ * language records.
  */
-function humanizeTranslationKey(key: string): string {
-  return key
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[._:-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, character => character.toUpperCase()) || key;
-}
-
 export const getTranslation = (
   key: string,
-  lang: LanguageCode = '',
+  lang: LanguageCode = 'en',
   customTranslations?: Record<string, Record<string, string>>,
   defaultFallback?: string,
   componentName?: string
 ): string => {
-  const fallbackText = String(defaultFallback || humanizeTranslationKey(key));
+  const fallback = String(defaultFallback || key).trim() || key;
 
-  // Every translation call is an automatic discovery point. This is the
-  // mechanism that keeps new UI strings out of a manually maintained key list.
   try {
-    registerLocalizationString(key, fallbackText, componentName);
+    registerLocalizationString(key, fallback, componentName);
   } catch {
-    // Discovery must never prevent the interface from rendering.
+    // Discovery must never block rendering.
   }
 
-  const customValue = customTranslations?.[lang]?.[key];
-  if (typeof customValue === 'string' && customValue.trim()) {
-    return customValue;
-  }
+  const custom = customTranslations?.[lang]?.[key];
+  if (typeof custom === 'string' && custom.trim()) return custom;
 
   try {
     const entry = getStoredAutoLocalization().find(item => item.key === key);
-    const translated = entry?.translations?.[lang];
-    if (typeof translated === 'string' && translated.trim()) {
-      return translated;
-    }
+    const stored = entry?.translations?.[lang];
+    if (typeof stored === 'string' && stored.trim()) return stored;
+
+    const english = entry?.translations?.en;
+    if (lang !== 'en' && typeof english === 'string' && english.trim()) return english;
   } catch {
-    // Local discovery cache is optional; the configured translation store
-    // supplied by the application remains the authoritative source.
+    // Storage is optional during early application bootstrap.
   }
 
-  // No language dictionary is embedded in the application. Until an
-  // administrator supplies a translation, display the discovered source text.
-  return fallbackText;
+  return fallback;
 };
