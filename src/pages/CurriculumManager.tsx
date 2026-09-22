@@ -894,7 +894,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
-          <button className="vop-primary" type="button" onClick={() => openNewLesson(tab === 'quizzes')}><Plus size={18}/>{tab === 'quizzes' ? 'New Quiz' : 'New Content'}</button>
+          {tab !== 'quizzes' && <button className="vop-primary" type="button" onClick={() => openNewLesson(false)}><Plus size={18}/>New Content</button>}
         </div>
       </div>
 
