@@ -185,6 +185,8 @@
 .vop-translation-list{display:flex;flex-direction:column;gap:9px;max-height:620px;overflow:auto;padding-right:2px}
 .vop-translation-row{display:grid;grid-template-columns:minmax(150px,.85fr) minmax(180px,1.4fr) 40px;gap:8px;align-items:center}
 .vop-translation-row input{min-width:0}
+.vop-translation-target{order:2}
+.vop-translation-entries{order:1}
 .vop-translation-auto-row{grid-template-columns:minmax(0,1fr) minmax(240px,1.15fr);padding:12px;border:1px solid #e3eaf3;border-radius:12px;background:#fbfcfe}
 .vop-translation-source{min-width:0;display:flex;flex-direction:column;gap:4px}
 .vop-translation-source strong{color:#17233d;font-size:14px;line-height:1.35}
