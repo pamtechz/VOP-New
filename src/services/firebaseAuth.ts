@@ -7,6 +7,7 @@ import {
   signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -31,7 +32,8 @@ export async function googleSignIn() {
   if (!Capacitor.isNativePlatform()) {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    return signInWithPopup(firebaseAuth, provider);
+    // Redirect is more reliable than popup polling under modern browser COOP policies.
+    return signInWithRedirect(firebaseAuth, provider);
   }
   const result = await FirebaseAuthentication.signInWithGoogle();
   const idToken = result.credential?.idToken;
