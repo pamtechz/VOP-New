@@ -389,12 +389,16 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
                     <strong>{row.english}</strong>
                     <small>{row.key}{row.component ? ' · ' + row.component : ''}</small>
                   </div>
-                  <input
-                    value={row.value}
-                    onChange={e=>setTranslationValues(current=>({...current,[row.key]:e.target.value}))}
-                    placeholder={selectedTranslation === 'en' ? row.english : 'Enter translation…'}
-                    aria-label={'Translation for ' + row.english}
-                  />
+                  <div className={`vop-translation-input-wrap${row.value.trim() ? ' has-value' : ''}`}>
+                    <span className="vop-translation-input-lang">{selectedTranslation || '—'}</span>
+                    <input
+                      value={row.value}
+                      onChange={e=>setTranslationValues(current=>({...current,[row.key]:e.target.value}))}
+                      placeholder={selectedTranslation === 'en' ? row.english : 'Type the translation…'}
+                      aria-label={'Translation for ' + row.english}
+                    />
+                    {row.value.trim() && <Check size={16} aria-hidden="true" />}
+                  </div>
                 </div>
               ))}
               {rows.length===0 && <div className="vop-empty">No detected strings match this filter. Use the application normally or open another section so newly used strings can be detected automatically.</div>}
