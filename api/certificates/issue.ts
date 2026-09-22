@@ -110,8 +110,7 @@ export default async function handler(request: Request, response: Response) {
       return response.status(409).json({ error: 'The approved graduation guide could not be found in the published curriculum.' });
     }
 
-    const approvedGuideId = String(approvedRequest.guideId ?? '').trim();
-    if (!approvedGuideId) {
+    if (!String(approvedRequest.guideId ?? '').trim()) {
       return response.status(409).json({ error: 'The approved graduation record is missing its guide reference.' });
     }
 
@@ -232,17 +231,16 @@ export default async function handler(request: Request, response: Response) {
 
     const result = await db.runTransaction(async transaction => {
       const existingSnapshot = await transaction.get(certificateRef);
-      if (existingSnapshot.exists) {
-        return { created: false, certificate: { id: existingSnapshot.id, ...existingSnapshot.data() } };
-      }
+      if (existingSnapshot.exists) return { created: false };
       transaction.create(certificateRef, certificate);
-      return { created: true, certificate: { id: certificateRef.id, ...certificate } };
+      return { created: true };
     });
 
+    const saved = await certificateRef.get();
     return response.status(result.created ? 201 : 200).json({
       ok: true,
       created: result.created,
-      certificate: result.certificate,
+      certificate: { id: saved.id, ...saved.data() },
     });
   } catch (error) {
     console.error('VOP certificate issuance failed', error);
