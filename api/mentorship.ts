@@ -168,7 +168,9 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'listAssignments') {
       const snapshot = await db.collection('mentorAssignments').get();
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const studentSnapshots = await Promise.all(snapshot.docs.map(doc => db.doc(`users/${String(doc.data()?.studentId || '')}`).get()));
+      const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameScope(actor, item.data() || {})).map(item => item.id));
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => allowedStudentIds.has(String(item.studentId || '')));
       return res.status(200).json({ ok: true, items });
     }
 
@@ -197,6 +199,8 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'performance') {
       const studentId = id(body.studentId);
+      const student = await profile(db, studentId);
+      if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       if (!isAdmin(actor)) {
         const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
         if (!assignment.exists || String(assignment.data()?.mentorId || '') !== decoded.uid) throw new Error('Mentor access to this learner is not configured.');
@@ -215,6 +219,9 @@ export default async function handler(req: Request, res: Response) {
       if (isAdmin(actor)) {
         let snapshot = await db.collection('mentorConversations').get();
         let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const studentSnapshots = await Promise.all(items.map(item => db.doc(`users/${String(item.studentId || '')}`).get()));
+        const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameScope(actor, item.data() || {})).map(item => item.id));
+        items = items.filter(item => allowedStudentIds.has(String(item.studentId || '')));
         if (requestedStudent) items = items.filter(item => String(item.studentId || '') === requestedStudent);
         if (requestedMentor) items = items.filter(item => String(item.mentorId || '') === requestedMentor);
         return res.status(200).json({ ok: true, items });
@@ -251,6 +258,8 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'sendMessage') {
       const studentId = id(body.studentId);
       const mentorId = id(body.mentorId);
+      const student = await profile(db, studentId);
+      if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const message = String(body.message || '').trim();
       if (!message || message.length > 10000) throw new Error('A message is required.');
       const ref = db.doc(`mentorConversations/${conversationId(studentId, mentorId)}`);
@@ -312,6 +321,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'createDraft') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
+      if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const performance = await performanceFor(db, studentId);
       const draft = draftFor(student, performance);
       const ref = db.collection('notificationDrafts').doc();
