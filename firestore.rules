@@ -36,6 +36,41 @@ service cloud.firestore {
       ];
     }
 
+    function organizationIdForUser() {
+      return hasUserProfile() ? userDoc().data.get('organizationId', '') : '';
+    }
+
+    function isOrgMember(orgId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('active', false) == true;
+    }
+
+    function orgRole(orgId) {
+      return isOrgMember(orgId)
+        ? get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', 'viewer')
+        : '';
+    }
+
+    function canManageOrg(orgId) {
+      return isSuperAdmin() || (
+        isOrgMember(orgId)
+        && orgRole(orgId) in ['owner', 'admin']
+      );
+    }
+
+    function canEditOrgContent(orgId) {
+      return isSuperAdmin() || (
+        isOrgMember(orgId)
+        && orgRole(orgId) in ['owner', 'admin', 'editor']
+      );
+    }
+
+    function orgDataMatches(orgId, data) {
+      return data.get('organizationId', '') == orgId
+        || data.get('ownerOrganizationId', '') == orgId;
+    }
+
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
@@ -166,12 +201,148 @@ service cloud.firestore {
             == userDoc().data.get('adminNodeId', '');
     }
 
-    // Public application configuration.
+    // Platform configuration remains controlled by the VOP Super Admin.
     match /system/settings {
       allow get: if true;
       allow list: if false;
       allow create, update, delete: if isSuperAdmin();
     }
+
+    // First-class SaaS organizations and memberships.
+    match /organizations/{organizationId} {
+      allow get: if isSuperAdmin() || isOrgMember(organizationId);
+      allow list: if isSuperAdmin();
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || canManageOrg(organizationId);
+      allow delete: if isSuperAdmin();
+
+      match /members/{uid} {
+        allow get: if isSuperAdmin() || uid == request.auth.uid || canManageOrg(organizationId);
+        allow list: if isSuperAdmin() || canManageOrg(organizationId);
+        allow create, update: if isSuperAdmin() || (canManageOrg(organizationId) && uid != request.auth.uid);
+        allow delete: if isSuperAdmin() || (canManageOrg(organizationId) && uid != request.auth.uid);
+      }
+
+      match /settings/{settingId} {
+        allow get: if isSuperAdmin() || isOrgMember(organizationId);
+        allow list: if false;
+        allow create, update, delete: if canManageOrg(organizationId);
+      }
+
+      match /audit/{entryId} {
+        allow get, list: if isSuperAdmin() || canManageOrg(organizationId);
+        allow create: if isSuperAdmin() || isOrgMember(organizationId);
+        allow update, delete: if false;
+      }
+    }
+
+    // Tenant-owned guides and lessons. Canonical editing never transfers through sharing.
+    match /guides/{guideId} {
+      allow get: if isSuperAdmin()
+        || (isOrgMember(resource.data.organizationId) && resource.data.get('organizationId','') == organizationIdForUser())
+        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
+      allow list: if isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser())
+        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
+      allow create: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canEditOrgContent(organizationIdForUser())
+      );
+      allow update, delete: if isSuperAdmin() || (
+        resource.data.get('organizationId','') == organizationIdForUser()
+        && canEditOrgContent(organizationIdForUser())
+      );
+
+      match /lessons/{lessonId} {
+        allow get: if isSuperAdmin()
+          || (isOrgMember(organizationIdForUser()) && get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser())
+          || (get(/databases/$(database)/documents/guides/$(guideId)).data.get('sharingScope','private') == 'shared' && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true);
+        allow list: if isSuperAdmin()
+          || (isOrgMember(organizationIdForUser()) && get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser())
+          || (get(/databases/$(database)/documents/guides/$(guideId)).data.get('sharingScope','private') == 'shared' && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true);
+        allow create: if isSuperAdmin() || (
+          get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
+          && canEditOrgContent(organizationIdForUser())
+          && request.resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+        );
+        allow update, delete: if isSuperAdmin() || (
+          get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
+          && canEditOrgContent(organizationIdForUser())
+          && resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+        );
+      }
+    }
+
+    // Reusable quiz library.
+    match /quizzes/{quizId} {
+      allow get: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
+      allow list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
+      allow create: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canEditOrgContent(organizationIdForUser())
+      );
+      allow update, delete: if isSuperAdmin() || (
+        resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+        && canEditOrgContent(organizationIdForUser())
+      );
+    }
+
+    // Tenant-owned operational records. Published shared records remain publicly readable.
+    match /announcements/{id} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || resource.data.get('published',false) == true;
+      allow create: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+      allow update, delete: if isSuperAdmin() || (
+        resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+    }
+
+    match /books/{id} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || resource.data.get('published',false) == true;
+      allow create, update, delete: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+    }
+
+    match /radioBroadcasts/{id} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || resource.data.get('published',false) == true;
+      allow create, update, delete: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+    }
+
+    match /languages/{languageId} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || resource.data.get('enabled',false) == true;
+      allow create, update, delete: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+    }
+
+    match /translations/{languageId} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()));
+      allow create, update, delete: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
 
     // Certification is public only when explicitly enabled.
     match /system/certification {
