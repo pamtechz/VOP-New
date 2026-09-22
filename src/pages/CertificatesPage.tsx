@@ -4,6 +4,7 @@ import { ArrowLeft, Award, Download, Share2, Printer, ShieldCheck } from 'lucide
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
+import CertificateArtwork from '../components/certificates/CertificateArtwork';
 
 interface CertificatesPageProps { currentUser: User; settings: AppSettings; activeLanguage: LanguageCode; onBack: () => void; }
 interface OfficialCertificate {
@@ -13,7 +14,7 @@ interface OfficialCertificate {
 }
 interface CertificateConfig {
   certificateTitle?: string; certificateBodyText?: string; issuerName?: string; issuerSubtitle?: string;
-  directorName?: string; directorTitle?: string; signatureUrl?: string; sealUrl?: string; logoUrl?: string; backgroundUrl?: string;
+  directorName?: string; directorTitle?: string; signatureUrl?: string; sealUrl?: string; logoUrl?: string; backgroundUrl?: string; verificationEnabled?: boolean; verificationBaseUrl?: string;
 }
 function dateText(value?: string | null) {
   if (!value) return '—';
@@ -28,6 +29,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const t = (key: string, fallback: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
+  const title = config.certificateTitle || settings.certificateTitle || certificate?.courseName || '';
 
   useEffect(() => {
     let cancelled = false;
@@ -46,12 +48,6 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
     void load();
     return () => { cancelled = true; };
   }, [currentUser.uid]);
-
-  const title = config.certificateTitle || settings.certificateTitle || '';
-  const body = config.certificateBodyText || settings.certificateBodyText || '';
-  const issuer = config.issuerName || settings.appName || settings.organizationName || '';
-  const directorName = config.directorName || settings.directorName || '';
-  const directorTitle = config.directorTitle || settings.directorTitle || '';
 
   const download = async () => {
     if (!certificate || !certificateRef.current || isExporting) return;
@@ -96,25 +92,10 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
         {!loading && certificate && (
           <>
             <div className="vop-official-certificate-wrap" ref={certificateRef}>
-              <div className="vop-official-certificate">
-                {config.backgroundUrl && <img className="vop-official-certificate-bg" src={config.backgroundUrl} alt="" />}
-                <div className="vop-official-certificate-overlay" />
-                <div className="vop-official-certificate-corner" />
-                <div className="vop-official-certificate-ribbon" />
-                <div className="vop-official-certificate-title">{title}</div>
-                <div className="vop-official-certificate-main">
-                  <span>{t('certified_text','This is to certify that')}</span><strong>{certificate.candidateName}</strong>
-                  <span>{body}</span><b>{certificate.courseName}</b><small>{certificate.courseCode || ''}</small>
-                </div>
-                {config.sealUrl && <img className="vop-official-certificate-seal" src={config.sealUrl} alt="" />}
-                <div className="vop-official-certificate-signature">
-                  {config.signatureUrl && <img src={config.signatureUrl} alt="" />}<div />
-                  <strong>{directorName}</strong><span>{directorTitle}</span>
-                </div>
-                <div className="vop-official-certificate-brand">{config.logoUrl && <img src={config.logoUrl} alt="" />}<span><strong>{issuer}</strong><small>{config.issuerSubtitle || ''}</small></span></div>
-                <div className="vop-official-certificate-number">{certificate.certificateNumber}</div>
-                <div className="vop-official-certificate-date">{dateText(certificate.issuedAt || certificate.completionDate)}</div>
-              </div>
+              <CertificateArtwork
+                certificate={certificate}
+                config={config}
+              />
             </div>
             <div className="vop-official-certificate-meta">
               <div><small>{t('certificate_number','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
@@ -127,7 +108,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
               <button type="button" onClick={() => window.print()}><Printer size={16} />{t('print','Print')}</button>
               <button type="button" onClick={() => void share()}><Share2 size={16} />{t('share','Share')}</button>
             </div>
-            {certificate.verificationEnabled && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('official_credential','Official credential')}</strong><span>{t('verification_note','This certificate can be independently verified using its certificate number.')}</span></div></div>}
+            {config.verificationEnabled === true && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('official_credential','Official credential')}</strong><span>{t('verification_note','This certificate can be independently verified using its certificate number.')}</span></div></div>}
           </>
         )}
         {!loading && !certificate && <div className="vop-reference-card vop-official-empty"><Award size={38} /><strong>{t('no_certificate_issued','No official certificate has been issued.')}</strong><p>{t('certificate_pending_message','Complete the required curriculum and follow the graduation approval process before certification.')}</p></div>}

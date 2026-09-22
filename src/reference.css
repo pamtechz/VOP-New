@@ -1171,6 +1171,52 @@
 }
 
 
+
+/* Shared official certificate artwork */
+.vop-official-certificate-wrap .vop-certificate-artwork{width:100%;max-width:980px;margin:0 auto}
+.vop-certificate-artwork{position:relative;aspect-ratio:1.46;background:#fff;border:5px solid #082e70;overflow:hidden;box-shadow:0 5px 18px rgba(15,45,90,.13);font-family:Arial,Helvetica,sans-serif;color:#111;box-sizing:border-box}
+.vop-certificate-background-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.vop-certificate-honeycomb{position:absolute;inset:0;opacity:.16;background-image:radial-gradient(#94a3b8 1px,transparent 1px);background-size:14px 14px}
+.vop-certificate-blue-corner-a{position:absolute;z-index:2;right:-3%;top:-4%;width:25%;height:21%;background:#082e70;border-radius:0 0 0 90px;transform:skew(-22deg)}
+.vop-certificate-blue-corner-b{position:absolute;z-index:2;left:-7%;bottom:-12%;width:43%;height:25%;background:#082e70;transform:rotate(34deg)}
+.vop-certificate-blue-ribbon{position:absolute;z-index:2;left:0;top:0;width:18%;height:5px;background:#ff9900}
+.vop-certificate-artwork-title,.vop-certificate-artwork-body,.vop-certificate-seal,.vop-certificate-signature,.vop-certificate-brand,.vop-certificate-issue-number,.vop-certificate-issue-date,.vop-certificate-verification-qr{position:absolute;z-index:3}
+.vop-certificate-artwork-title{top:7%;left:8%;right:8%;text-align:center;font-size:clamp(18px,2.7vw,31px);font-weight:800}
+.vop-certificate-artwork-body{top:29%;left:10%;right:10%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:5px}
+.vop-certificate-small-copy{font-size:clamp(10px,1.25vw,15px)}
+.vop-certificate-candidate-name{font-size:clamp(24px,3.5vw,44px);line-height:1.05;font-weight:800;overflow-wrap:anywhere}
+.vop-certificate-completed{font-size:clamp(9px,1.1vw,13px)}
+.vop-certificate-course{font-size:clamp(14px,1.7vw,22px);font-weight:700}
+.vop-certificate-outlined-copy{font-size:clamp(8px,1vw,12px)}
+.vop-certificate-seal{left:9%;bottom:13%;width:12%;aspect-ratio:1;display:grid;place-items:center}
+.vop-certificate-seal img{width:100%;height:100%;object-fit:contain}
+.vop-certificate-signature{right:8%;bottom:12%;width:24%;display:flex;flex-direction:column;align-items:center;text-align:center}
+.vop-certificate-signature img{max-width:90%;height:34px;object-fit:contain}
+.vop-certificate-signature-line{width:100%;height:1px;background:#111}
+.vop-certificate-signature strong{font-size:clamp(8px,1vw,12px);margin-top:3px}
+.vop-certificate-signature span{font-size:clamp(7px,.8vw,10px)}
+.vop-certificate-brand{left:50%;bottom:4%;transform:translateX(-50%);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.vop-certificate-brand img{width:28px;height:28px;object-fit:contain}
+.vop-certificate-brand strong,.vop-certificate-brand span{display:block}
+.vop-certificate-brand strong{font-size:11px}.vop-certificate-brand span{font-size:8px}
+.vop-certificate-issue-number{left:50%;bottom:1.1%;transform:translateX(-50%);font-size:7px;white-space:nowrap}
+.vop-certificate-issue-date{right:7%;bottom:5%;font-size:8px}
+.vop-certificate-verification-qr{right:3.2%;bottom:5%;width:72px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;background:rgba(255,255,255,.94);border-radius:5px}
+.vop-certificate-verification-qr img{display:block;width:62px;height:62px;object-fit:contain}
+.vop-certificate-verification-qr span{font-size:6px;font-weight:800;color:#173d75;line-height:1;white-space:nowrap}
+@media(max-width:640px){
+  .vop-certificate-artwork{border-width:3px}
+  .vop-certificate-verification-qr{width:56px;right:2.5%;bottom:4%}
+  .vop-certificate-verification-qr img{width:48px;height:48px}
+  .vop-certificate-verification-qr span{font-size:5px}
+  .vop-certificate-issue-number{font-size:6px}
+  .vop-certificate-issue-date{font-size:5.5px}
+}
+@media print{
+  .vop-certificate-artwork{box-shadow:none;max-width:none}
+}
+
+
 /* Official certificate and public verification */
 .vop-official-certificate-wrap{width:100%;max-width:980px;margin:0 auto 20px}
 .vop-official-certificate{position:relative;aspect-ratio:1.46;background:#fff;border:5px solid #082e70;overflow:hidden;box-shadow:0 5px 18px rgba(15,45,90,.13);font-family:Arial,Helvetica,sans-serif;color:#111}

@@ -539,6 +539,20 @@
 
 
 
+
+.vop-certificate-verification-qr{position:absolute!important;right:3.2%;bottom:5%;z-index:8;width:72px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;background:rgba(255,255,255,.94);border-radius:5px}
+.vop-certificate-verification-qr img{display:block;width:62px;height:62px;object-fit:contain}
+.vop-certificate-verification-qr span{font-size:6px!important;font-weight:800!important;color:#173d75!important;line-height:1!important;white-space:nowrap}
+.vop-certificate-issue-number{position:absolute!important;left:50%;bottom:4.2%;transform:translateX(-50%);z-index:8;color:#173d75;font-size:8px;font-weight:900;letter-spacing:.08em;white-space:nowrap}
+.vop-certificate-issue-date{position:absolute!important;left:50%;bottom:1.8%;transform:translateX(-50%);z-index:8;color:#536e96;font-size:7px;white-space:nowrap}
+@media(max-width:640px){
+  .vop-certificate-verification-qr{width:56px;right:2.5%;bottom:4%}
+  .vop-certificate-verification-qr img{width:48px;height:48px}
+  .vop-certificate-verification-qr span{font-size:5px!important}
+  .vop-certificate-issue-number{font-size:6px;bottom:3.8%}
+  .vop-certificate-issue-date{font-size:5.5px;bottom:1.5%}
+}
+
 /* Certification configuration studio */
 .vop-cert-config-status{display:flex;align-items:center;gap:12px;background:#eef6ff;border:1px solid #d6e7fb;border-radius:12px;padding:13px 15px;margin-bottom:15px;color:#173d75}
 .vop-cert-config-status-icon{width:42px;height:42px;border-radius:10px;background:#dcecff;color:#0b5bb5;display:grid;place-items:center;flex:0 0 auto}
