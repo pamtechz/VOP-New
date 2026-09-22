@@ -392,8 +392,9 @@ export const saveAdminRecord = async (
   data: Record<string, unknown>
 ): Promise<void> => {
   const firestore = getDb();
-  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
   const existing = await getDoc(doc(firestore, collectionName, id));
+  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
+  if (organizationId && existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
   const now = new Date().toISOString();
   await setDoc(doc(firestore, collectionName, id), {
     ...data,
@@ -409,6 +410,11 @@ export const deleteAdminRecord = async (
   id: string
 ): Promise<void> => {
   const firestore = getDb();
+  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
+  if (organizationId) {
+    const existing = await getDoc(doc(firestore, collectionName, id));
+    if (existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
+  }
   await deleteDoc(doc(firestore, collectionName, id));
 };
 
