@@ -20,9 +20,9 @@ function humanizeTranslationKey(key: string): string {
   return key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[._:-]+/g, ' ')
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
-    .replace(/\\b\\w/g, character => character.toUpperCase()) || key;
+    .replace(/\b\w/g, character => character.toUpperCase()) || key;
 }
 
 export const getTranslation = (
