@@ -6,7 +6,7 @@ export interface CertificateArtworkRecord {
   courseCode?: string;
   certificateNumber: string;
   completionDate?: string | null;
-  issuedAt?: string;
+  issuedAt?: string | null;
 }
 
 export interface CertificateArtworkConfig {
@@ -31,7 +31,7 @@ interface Props {
   verification?: boolean;
 }
 
-function dateText(value?: string) {
+function dateText(value?: string | null) {
   if (!value) return '';
   const date = new Date(value);
   return Number.isNaN(date.getTime())
