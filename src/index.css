@@ -977,3 +977,48 @@ h1, h2, h3, h4, h5, h6 {
     padding: 1.4rem;
   }
 }
+
+
+/* VOP Radio media player */
+.vop-radio-page{min-height:100vh;background:#f4f6fa;color:#172033;padding-bottom:56px}
+.vop-radio-header{background:#002d72;color:#fff;padding:20px 16px 24px;box-shadow:0 4px 16px rgba(0,45,114,.18)}
+.vop-radio-header-inner{max-width:1080px;margin:auto}
+.vop-radio-back{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;color:#fff;font-weight:800;font-size:15px;cursor:pointer;padding:4px 0}
+.vop-radio-badge{float:right;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);padding:6px 10px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#ffd36a}
+.vop-radio-header h1{font-size:26px;line-height:1.15;margin:22px 0 5px;font-weight:900}
+.vop-radio-header p{margin:0;color:#d8e6ff;font-size:13px}
+.vop-radio-main{max-width:1080px;margin:auto;padding:24px 16px}
+.vop-radio-player-card{background:#fff;border:1px solid #dfe7f1;border-radius:16px;box-shadow:0 8px 28px rgba(17,44,82,.08);overflow:hidden}
+.vop-radio-media-stage{position:relative;background:#071a31;min-height:250px;display:flex;align-items:center;justify-content:center}
+.vop-radio-media-stage video{display:block;width:100%;max-height:540px;aspect-ratio:16/9;object-fit:contain;background:#000}
+.vop-radio-audio-visual{width:100%;min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#fff;background:radial-gradient(circle at center,#12427e,#071a31 68%)}
+.vop-radio-audio-visual span{font-weight:900;font-size:18px}.vop-radio-audio-visual small{color:#b9cbe3;font-size:11px}
+.vop-radio-no-media{padding:80px 20px;text-align:center;color:#b9cbe3;font-size:13px}
+.vop-radio-video-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.vop-radio-video-overlay button{pointer-events:auto;width:62px;height:62px;border:0;border-radius:50%;background:rgba(0,45,114,.9);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.28)}
+.vop-radio-player-info{padding:17px 19px 10px;display:flex;justify-content:space-between;gap:15px}
+.vop-radio-series{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#0755b8;background:#edf5ff;border:1px solid #d7e7fb;padding:4px 7px;border-radius:999px}
+.vop-radio-player-info h2{font-size:20px;margin:8px 0 3px;color:#102f66}.vop-radio-player-info p{font-size:11px;color:#6c7f9b;margin:0}
+.vop-radio-live{align-self:flex-start;display:inline-flex;gap:6px;align-items:center;font-size:9px;font-weight:900;color:#b42318}.vop-radio-live span{width:7px;height:7px;border-radius:50%;background:#d92d20}
+.vop-radio-controls{display:flex;align-items:center;gap:9px;padding:10px 16px 15px;border-top:1px solid #edf1f6}
+.vop-radio-control-main,.vop-radio-icon-btn{border:0;background:#002d72;color:#fff;width:38px;height:38px;border-radius:9px;display:grid;place-items:center;cursor:pointer;flex:0 0 auto}
+.vop-radio-icon-btn{background:#edf3fb;color:#17447e}.vop-radio-controls button:disabled{opacity:.4;cursor:not-allowed}
+.vop-radio-time{font:10px/1 monospace;color:#687d9c;min-width:30px;text-align:center}
+.vop-radio-seek{flex:1;min-width:70px;accent-color:#ff9900}.vop-radio-volume{width:85px;accent-color:#ff9900}
+.vop-radio-error{margin:0 16px 15px;padding:9px 11px;background:#fff1f1;border:1px solid #ffcaca;color:#b42318;border-radius:8px;font-size:11px}
+.vop-radio-list-title{font-size:16px;color:#102f66;margin:25px 0 10px}
+.vop-radio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.vop-radio-program{background:#fff;border:1px solid #dfe7f1;border-radius:12px;overflow:hidden}
+.vop-radio-program.selected{border-color:#2b65b0;box-shadow:0 4px 14px rgba(16,59,112,.08)}
+.vop-radio-program-main{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;text-align:left;border:0;background:transparent;padding:14px;cursor:pointer}
+.vop-radio-program-main>div{min-width:0}.vop-radio-program-main span:first-child{font-size:9px;font-weight:900;text-transform:uppercase;color:#0755b8}.vop-radio-program-main h4{font-size:14px;color:#152f5f;margin:4px 0 2px}.vop-radio-program-main p{font-size:10px;color:#71839d;margin:0}.vop-radio-program-main small{display:block;color:#5e718d;font-size:10px;line-height:1.4;margin-top:8px}
+.vop-radio-program-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:#edf3fb;color:#16437c;flex:0 0 auto}
+.vop-radio-program.selected .vop-radio-program-icon{background:#002d72;color:#fff}
+.vop-radio-program-footer{display:flex;gap:8px;justify-content:space-between;border-top:1px solid #edf1f6;padding:8px 12px;color:#7789a2;font-size:9px;font-weight:700}
+.vop-radio-external{display:inline-flex;gap:5px;align-items:center;margin:0 12px 10px;color:#0755b8;font-size:10px;font-weight:800;text-decoration:none}
+.vop-radio-empty{grid-column:1/-1;padding:40px;text-align:center;background:#fff;border:1px dashed #cbd7e5;border-radius:12px;color:#72849d}
+.vop-radio-admin-type{font-size:8px;color:#0755b8;font-weight:900;margin-top:3px}
+.vop-radio-admin-preview{margin-top:6px;max-width:240px}
+.vop-radio-admin-preview audio{width:220px;height:34px}.vop-radio-admin-preview video{width:220px;max-height:125px;display:block;background:#071a31;border-radius:5px}
+.vop-radio-admin-note{padding:9px 11px;border:1px solid #dce8f6;background:#f5f9ff;border-radius:8px;color:#526f91;font-size:10px;line-height:1.45}
+@media(max-width:700px){.vop-radio-badge{float:none;margin-top:10px}.vop-radio-header h1{font-size:21px;margin-top:16px}.vop-radio-main{padding:14px 10px}.vop-radio-media-stage{min-height:210px}.vop-radio-player-info{padding:14px 12px}.vop-radio-player-info h2{font-size:17px}.vop-radio-controls{gap:6px;padding:9px 10px 12px}.vop-radio-volume{display:none}.vop-radio-grid{grid-template-columns:1fr}.vop-radio-program-footer{flex-wrap:wrap}.vop-radio-admin-preview video,.vop-radio-admin-preview audio{max-width:180px;width:100%}}
