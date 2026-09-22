@@ -212,9 +212,6 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listConversations') {
       const requestedStudent = body.studentId ? id(body.studentId) : '';
       const requestedMentor = body.mentorId ? id(body.mentorId) : '';
-      const filters: Array<[string, FirebaseFirestore.WhereFilterOp, string]> = [];
-      if (requestedStudent) filters.push(['studentId', '==', requestedStudent]);
-      if (requestedMentor) filters.push(['mentorId', '==', requestedMentor]);
       if (isAdmin(actor)) {
         let snapshot = await db.collection('mentorConversations').get();
         let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -235,9 +232,11 @@ export default async function handler(req: Request, res: Response) {
       const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
       if (!assignment.exists) return res.status(200).json({ ok: true, items: [] });
       const mentorId = String(assignment.data()?.mentorId || '');
+      const mentor = await profile(db, mentorId);
       const ref = db.doc(`mentorConversations/${conversationId(studentId, mentorId)}`);
       const snapshot = await ref.get();
-      return res.status(200).json({ ok: true, items: snapshot.exists ? [{ id: snapshot.id, ...snapshot.data() }] : [{ id: ref.id, studentId, mentorId, status: 'open' }] });
+      const item = snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : { id: ref.id, studentId, mentorId, status: 'open' };
+      return res.status(200).json({ ok: true, items: [{ ...item, mentorName: String(mentor.displayName || mentor.email || mentorId), mentorPhotoURL: String(mentor.photoURL || '') }] });
     }
 
     if (action === 'messages') {
