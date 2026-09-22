@@ -128,7 +128,7 @@ export const App: React.FC = () => {
     }).catch(error => {
       if (!cancelled) {
         console.error('VOP public content load failed', error);
-        setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded from Firestore.');
+        setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded.');
       }
     });
 
