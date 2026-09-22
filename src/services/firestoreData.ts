@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, getDoc, getDocs, query, where, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
 import { db, auth } from '../lib/firebase';
 
