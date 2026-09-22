@@ -238,8 +238,8 @@ export default function CurriculumSettings({ languages, settings, adminContent, 
 
     <section className="vop-cs-card">
       <div className="vop-cs-card-title"><SlidersHorizontal size={22}/><div><h2>Curriculum Structure</h2><p>Configure how curriculum content is organized.</p></div></div>
-      <Field label="Default View"><select value={data.defaultView} onChange={e => update('defaultView', e.target.value)}><option value="">Not configured</option>{data.enableSeasons && <option value="seasons-guides-lessons">Seasons → Guides → Lessons</option>}{data.enableGuides && <option value="guides-lessons">Guides → Lessons</option>}<option value="lessons">Lessons</option></select></Field>
-      <Field label="Items Per Page"><select value={data.itemsPerPage || ''} onChange={e => update('itemsPerPage', Number(e.target.value) || 0)}><option value="">Not configured</option><option value="10">10</option><option value="12">12</option><option value="20">20</option><option value="25">25</option><option value="50">50</option></select></Field>
+      <Field label="Default View" help="Enter the configured curriculum view identifier used by the curriculum renderer. Leave empty to let the renderer use its configured default."><input value={data.defaultView} onChange={e => update('defaultView', e.target.value)} placeholder="Not configured" /></Field>
+      <Field label="Items Per Page" help="Set the page size required by your curriculum workflow. Leave empty for the configured system default."><input type="number" min="1" step="1" value={data.itemsPerPage || ''} onChange={e => update('itemsPerPage', Math.max(0, Number(e.target.value) || 0))} placeholder="Not configured" /></Field>
       {[
         ['enableSeasons', 'Enable Seasons / Quarters', 'Organize content by year, quarter or season'],
         ['enableGuides', 'Enable Guides', 'Group lessons under guides'],
