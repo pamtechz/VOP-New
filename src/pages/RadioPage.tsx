@@ -254,8 +254,15 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
           </div>
           <div className="vop-radio-live-card">
             <div className="vop-radio-live-head"><span><i/> {source?.live ? 'LIVE ON VOP RADIO' : sourceLabel(source)}</span><small>{live.length ? live.length + ' live source' + (live.length === 1 ? '' : 's') : localTime(now)}</small></div>
+            <div className="vop-radio-provider-stage">
+              {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-radio-youtube-stage"/>}
+              {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} allow="autoplay; encrypted-media; picture-in-picture" />}
+              {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster || undefined} playsInline preload="metadata" {...mediaEvents}/>}
+              {source?.provider === 'direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" />}
+              {!source && <div className="vop-radio-provider-empty"><Radio size={26}/>No playable source configured.</div>}
+            </div>
             <div className="vop-radio-live-body">
-              <div className="vop-radio-cover" style={selectedPoster ? {backgroundImage: 'url("' + selectedPoster + '")'} : undefined}><Radio size={28}/></div>
+              <div className="vop-radio-cover" style={selectedPoster ? {backgroundImage: 'url("' + selectedPoster + '" )'} : undefined}><Radio size={28}/></div>
               <div><strong>{heroItem?.title}</strong><span>{heroItem?.speaker || 'Voice of Prophecy'}</span><span>{heroItem?.broadcastTime ? dateTime(heroItem.broadcastTime) : localTime(now)}</span></div>
             </div>
             <div className="vop-radio-wave">{Array.from({length:24},(_,i)=><b key={i} style={{height: (12 + ((i*17)%30)) + 'px'}}/>)}</div>
@@ -294,13 +301,6 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
 
         <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><Headphones size={19}/> Latest Audio</h2><span>{latestAudio.length} shown</span></div><div className="vop-radio-latest-list">{latestAudio.map(item=><button key={item.id} type="button" onClick={()=>selectProgramme(item)}><div className="vop-radio-latest-cover" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}><Play size={17} fill="currentColor"/></div><div><strong>{item.title}</strong><small>{item.speaker||item.series||'Voice of Prophecy'}</small><span>{item.durationMinutes?formatTime(item.durationMinutes*60):sourceLabel(detectMedia(item))}</span></div><Play className="latest-play" size={18} fill="currentColor"/></button>)}</div></section>
       </main>
-
-      <div className="vop-radio-hidden-media">
-        {source?.provider==='direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster||undefined} playsInline preload="metadata" {...mediaEvents}/>}
-        {source?.provider==='direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents}/>}
-        {source?.provider==='youtube' && <div ref={ytMountRef}/>}
-        {source?.provider==='audioverse' && <iframe className="vop-radio-audioverse-hidden" src={source.embedUrl} title={heroItem?.title||'AudioVerse'} allow="autoplay; encrypted-media; picture-in-picture" />}
-      </div>
 
       <section className="vop-radio-docked-player">
         <div className="vop-radio-docked-meta"><div className="vop-radio-docked-cover" style={selectedPoster?{backgroundImage:'url("' + selectedPoster + '")'}:undefined}><Radio size={18}/></div><div><strong>{selected?.title}</strong><small>{selected?.speaker||selected?.series||'Voice of Prophecy'}</small></div>{source?.live&&<em>LIVE</em>}</div>
