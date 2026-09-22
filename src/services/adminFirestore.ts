@@ -50,7 +50,6 @@ export const subscribeLanguages = (
   callback: (languages: CustomLanguage[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  const firestore = getDb();
   return tenantSubscription('languages',
     (snapshot) => {
       const list: CustomLanguage[] = snapshot.docs.map(d => {
