@@ -86,7 +86,7 @@ function blankForm(kind: ManagedAdminCollection): FormState {
     case 'materials':
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
-      return { title: '', speaker: '', series: '', durationMinutes: 0, audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', description: '', published: false };
+      return { title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', description: '', published: false };
     case 'unions':
       return { name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
     case 'conferences':
@@ -195,6 +195,9 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
       const id = editingId || makeId();
       if (!isRecordKind(kind)) return;
       const payload = { ...form };
+      if (kind === 'radio' && !String(payload.broadcastTime || '').trim()) {
+        payload.broadcastTime = new Date().toISOString();
+      }
       await saveAdminRecord(COLLECTIONS[kind], id, payload);
       setMessage(editingId ? 'Record updated.' : 'Record created.');
       openNew();
@@ -416,13 +419,13 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
         {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
         {select('mediaType','Primary Media Type',[{value:'audio',label:'Audio'},{value:'video',label:'Video'}])}
-        {field('durationMinutes','Duration (minutes)','number')}
         {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}
         {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}
-        {field('streamUrl','Live Stream URL','url','Direct HLS/stream URL where supported')}
+        {field('streamUrl','Live Stream URL','url','Direct stream/HLS URL where supported')}
         {field('posterUrl','Video Poster URL','url','Optional poster image for video')}
-        {field('broadcastTime','Broadcast Time')}{area('description','Description')}{published}
-        <div className="vop-radio-admin-note">Use direct media/stream URLs that the browser can play. The public player automatically selects audio or video and supports seeking, volume and fullscreen for video.</div>
+        <div className="vop-radio-admin-note"><strong>Automatic media intelligence:</strong> playback time, duration, buffering state and local clock display are detected from the media/browser. You do not enter a broadcast time or duration manually. The system records the creation timestamp automatically.</div>
+        {area('description','Description')}{published}
+        <div className="vop-radio-admin-note">Use browser-playable media URLs. The public player provides play/pause, seek, skip, volume, speed, fullscreen and picture-in-picture where the browser supports them.</div>
       </div>;
     case 'unions':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('code','Code *')}{field('divisionName','Division')}{field('directorName','Director')}{field('contactEmail','Email','email')}{field('contactPhone','Phone')}{field('headquarters','Headquarters')}</div>;
