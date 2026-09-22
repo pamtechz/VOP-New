@@ -162,6 +162,28 @@ export default async function handler(
 
     const scoreKey = `${language}:${guideId}:${lessonId}`;
     const passed = score >= threshold;
+    const attemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
+    const questionResults = questions.map((question, index) => {
+      const answer = answers[String(index)];
+      const correct = Array.isArray(question.options)
+        ? Number(answer) === Number(question.correctOptionIndex)
+        : answer === question.answer;
+      const questionKey = typeof question.key === 'string' ? question.key : String(index);
+      return {
+        key: questionKey,
+        question: String(question.question ?? ''),
+        correct,
+        answer: answer ?? null,
+        lessonId,
+        guideId,
+        language,
+      };
+    });
+    const failedQuestions = questionResults.filter(item => !item.correct);
+    const failureRefs = failedQuestions.map(item => db.collection('questionPerformance').doc(
+      `${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+    ));
 
     await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(userRef);
@@ -186,9 +208,46 @@ export default async function handler(
         },
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+
+      transaction.set(attemptRef, {
+        score,
+        passed,
+        threshold,
+        language,
+        guideId,
+        lessonId,
+        questionResults,
+        failedQuestionKeys: failedQuestions.map(item => item.key),
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      for (let index = 0; index < failureRefs.length; index += 1) {
+        const failure = failedQuestions[index];
+        const ref = failureRefs[index];
+        transaction.set(ref, {
+          key: failure.key,
+          question: failure.question,
+          language,
+          guideId,
+          lessonId,
+          failedCount: FieldValue.increment(1),
+          answeredCount: FieldValue.increment(1),
+          lastFailedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      const successRefs = questionResults.filter(item => item.correct).map(item =>
+        db.collection('questionPerformance').doc(
+          `${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+        )
+      );
+      for (const ref of successRefs) {
+        transaction.set(ref, { answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
     });
 
-    return res.status(200).json({ ok: true, score, passed, scoreKey, threshold });
+    return res.status(200).json({ ok: true, score, passed, scoreKey, threshold, failedQuestions: failedQuestions.map(item => item.key) });
   } catch (error) {
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
