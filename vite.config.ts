@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig, loadEnv, type Connect } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parse as parseUrl } from 'node:url';
 
@@ -67,7 +67,7 @@ function createApiResponse(res: ServerResponse) {
 
 function createLocalApiMiddleware(server: {
   ssrLoadModule: (url: string) => Promise<Record<string, unknown>>;
-}): Connect.NextHandleFunction {
+}): Parameters<import('vite').ViteDevServer['middlewares']['use']>[0] {
   return async (req, res, next) => {
     const requestUrl = req.url ?? '';
     if (!requestUrl.startsWith(LOCAL_API_PREFIX)) {
