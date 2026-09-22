@@ -48,7 +48,7 @@ function newRecord(collection: CollectionName, state: ContentState): ContentItem
     case 'translations': return { id: '', values: {} };
     case 'announcements': return { id: '', title: '', tag: '', description: '', imageUrl: '', actionText: '', actionUrl: '', published: false };
     case 'books': return { id: '', name: '', category: '', author: '', imageUrl: '', description: '', downloadUrl: '', published: false };
-    case 'radioBroadcasts': return { id: '', title: '', speaker: '', series: '', durationMinutes: 0, audioUrl: '', broadcastTime: '', description: '', published: false };
+    case 'radioBroadcasts': return { id: '', title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', description: '', published: false };
     case 'unions': return { id: '', name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
     case 'conferences': return { id: '', unionId: '', name: '', code: '', region: '', directorName: '', contactEmail: '' };
     case 'districts': return { id: '', unionId: '', conferenceId: '', name: '', pastorName: '', contactPhone: '' };
@@ -167,6 +167,9 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         id = id || `${active}-${Date.now()}`;
         for (const key of requiredFields[active]) if (!text(draft[key]).trim()) throw new Error(`${key} is required.`);
         data = { ...draft, id };
+        if (active === 'radioBroadcasts' && !text(data.broadcastTime).trim()) {
+          data.broadcastTime = new Date().toISOString();
+        }
       }
 
       await adminContent('upsert', active, id, data);
@@ -246,7 +249,13 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     );
     if (active === 'announcements') return <div className="grid gap-3">{field('Title','title')}{field('Tag','tag')}{area('Description','description')}{field('Image URL','imageUrl')}{field('Action text','actionText')}{field('Action URL','actionUrl')}{publicationToggle()}</div>;
     if (active === 'books') return <div className="grid gap-3">{field('Material title','name')}{field('Category','category')}{field('Author','author')}{field('Cover image URL','imageUrl')}{field('Download URL','downloadUrl')}{area('Description','description')}{publicationToggle()}</div>;
-    if (active === 'radioBroadcasts') return <div className="grid gap-3">{field('Broadcast title','title')}{field('Speaker','speaker')}{field('Series','series')}{field('Duration (minutes)','durationMinutes','number')}{field('Audio URL','audioUrl')}{field('Broadcast time','broadcastTime')}{area('Description','description')}{publicationToggle()}</div>;
+    if (active === 'radioBroadcasts') return <div className="grid gap-3">
+      {field('Broadcast title','title')}{field('Speaker','speaker')}{field('Series','series')}
+      {select('Primary media type','mediaType',[{value:'audio',label:'Audio'},{value:'video',label:'Video'}])}
+      {field('Audio URL','audioUrl')}{field('Video URL','videoUrl')}{field('Live stream URL','streamUrl')}{field('Poster image URL','posterUrl')}
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-[11px] leading-5 text-blue-900"><strong>Automatic timing:</strong> do not enter duration or broadcast time. The player detects media duration and playback time automatically, while the system records the creation timestamp.</div>
+      {area('Description','description')}{publicationToggle()}
+    </div>;
     if (active === 'unions') return <div className="grid gap-3">{field('Name','name')}{field('Code','code')}{field('Division name','divisionName')}{field('Director name','directorName')}{field('Contact email','contactEmail')}{field('Contact phone','contactPhone')}{field('Headquarters','headquarters')}</div>;
     if (active === 'conferences') return <div className="grid gap-3">{field('Name','name')}{field('Code','code')}{field('Region','region')}{select('Union','unionId',unions.map(u => ({ value:text(u.id), label:text(u.name) })).filter(o => o.value))}{field('Director name','directorName')}{field('Contact email','contactEmail')}</div>;
     if (active === 'districts') return <div className="grid gap-3">{field('Name','name')}{select('Union','unionId',unions.map(u => ({ value:text(u.id), label:text(u.name) })).filter(o => o.value))}{select('Conference','conferenceId',conferences.map(c => ({ value:text(c.id), label:text(c.name) })).filter(o => o.value))}{field('Pastor name','pastorName')}{field('Contact phone','contactPhone')}</div>;
