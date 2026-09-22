@@ -9,18 +9,24 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, authPersistenceReady } from '../lib/firebase';
 
 function requireAuth() {
   if (!auth) throw new Error('Firebase authentication is not configured for this deployment.');
   return auth;
 }
 
-export const emailSignIn = (email: string, password: string) =>
-  signInWithEmailAndPassword(requireAuth(), email.trim(), password);
+export const emailSignIn = async (email: string, password: string) => {
+  const firebaseAuth = requireAuth();
+  await authPersistenceReady;
+  return signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+};
 
-export const emailSignUp = (email: string, password: string) =>
-  createUserWithEmailAndPassword(requireAuth(), email.trim(), password);
+export const emailSignUp = async (email: string, password: string) => {
+  const firebaseAuth = requireAuth();
+  await authPersistenceReady;
+  return createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
+};
 
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(requireAuth(), email.trim());
@@ -28,6 +34,7 @@ export const resetPassword = (email: string) =>
 /** Android Google sign-in uses native account selection; the Web SDK consumes the returned ID token. */
 export async function googleSignIn() {
   const firebaseAuth = requireAuth();
+  await authPersistenceReady;
   if (!Capacitor.isNativePlatform()) {
     const provider = new GoogleAuthProvider();
     // Let Google's account chooser use its normal browser session. Forcing
