@@ -912,6 +912,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
             languages={languages}
+            preferredLanguage={activeLanguage}
           />
         )}
       </main>
