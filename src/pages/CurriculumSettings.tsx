@@ -259,7 +259,7 @@ export default function CurriculumSettings({ languages, settings, adminContent, 
 
     <section className="vop-cs-card">
       <div className="vop-cs-card-title"><SlidersHorizontal size={22}/><div><h2>Default Settings for New Content</h2><p>These settings are applied when creating new content.</p></div></div>
-      <Field label="Default Language"><select value={data.defaultLanguage} onChange={e => update('defaultLanguage', e.target.value)}><option value="">Not configured</option>{languages.filter(item => item.enabled !== false).map(item => <option key={item.code} value={item.name}>{item.name}</option>)}</select></Field>
+      <Field label="Default Language"><select value={data.defaultLanguage} onChange={e => update('defaultLanguage', e.target.value)}><option value="">Not configured</option>{languages.filter(item => item.enabled !== false).map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></Field>
       <Field label="Default Difficulty"><select value={data.defaultDifficulty} onChange={e => update('defaultDifficulty', e.target.value)}><option value="">Not configured</option>{data.difficultyLevels.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
     </section>
 
