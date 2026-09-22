@@ -379,10 +379,13 @@ export const saveAdminRecord = async (
   data: Record<string, unknown>
 ): Promise<void> => {
   const firestore = getDb();
+  const existing = await getDoc(doc(firestore, collectionName, id));
+  const now = new Date().toISOString();
   await setDoc(doc(firestore, collectionName, id), {
     ...data,
     id,
-    updatedAt: new Date().toISOString(),
+    createdAt: existing.exists() && existing.data()?.createdAt ? existing.data()?.createdAt : now,
+    updatedAt: now,
   }, { merge: true });
 };
 
