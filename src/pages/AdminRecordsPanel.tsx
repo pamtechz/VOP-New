@@ -359,7 +359,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         {error && <ErrorBox message={error} clear={()=>setError('')} />}
         {message && <Toast message={message}/>}
         <div className="vop-grid-2">
-          <div className="vop-card vop-form-card">
+          <div className="vop-card vop-form-card vop-translation-target">
             <div className="vop-section-title"><div><h2>Translation Target</h2><p>Keys are detected by the application; administrators do not create them manually.</p></div></div>
             <div className="vop-field">
               <label>Preferred Language</label>
@@ -374,7 +374,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
               <div><strong>{missingCount}</strong><span>Remaining</span></div>
             </div>
           </div>
-          <div className="vop-card vop-form-card">
+          <div className="vop-card vop-form-card vop-translation-entries">
             <div className="vop-section-title"><div><h2>Detected Translation Entries</h2><p>English source text is detected automatically. Only the translated value needs administrator input.</p></div></div>
             <div className="vop-translation-toolbar">
               <div className="vop-search"><Search size={16}/><input value={translationSearch} onChange={e=>setTranslationSearch(e.target.value)} placeholder="Search detected text…"/></div>
