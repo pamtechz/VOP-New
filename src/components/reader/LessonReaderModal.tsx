@@ -10,17 +10,18 @@ interface LessonReaderModalProps {
   onComplete: () => boolean | void | Promise<boolean | void>;
   onPreviousLesson?: () => void;
   onNextLesson?: () => void;
+  initialPageIndex?: number;
   hasPreviousLesson?: boolean;
   hasNextLesson?: boolean;
 }
 
 export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson,
-  hasPreviousLesson = false, hasNextLesson = false,
+  hasPreviousLesson = false, hasNextLesson = false, initialPageIndex = 0,
 }) => {
   const configured = isLessonConfigured(lesson);
   const pages = configured ? lesson.contentPages! : [];
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [currentPageIndex, setCurrentPageIndex] = useState(() => Math.max(0, initialPageIndex));
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [notice, setNotice] = useState('');
   const currentPage = pages[currentPageIndex];
