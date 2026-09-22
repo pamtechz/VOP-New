@@ -468,6 +468,9 @@ export const registerLocalizationString = (
           discoveredAt: new Date().toISOString()
         };
         saveAutoLocalization([...entries, newEntry], false);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('vop_localization_discovered'));
+        }
       }
     } catch {
       // silent catch
