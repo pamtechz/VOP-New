@@ -105,6 +105,21 @@ function valueOf(record: AdminRecord | undefined, key: string) {
   return value == null ? '' : String(value);
 }
 
+function validateRadioMedia(form: FormState) {
+  const urls = ['audioUrl', 'videoUrl', 'streamUrl']
+    .map(key => String(form[key] ?? '').trim())
+    .filter(Boolean);
+  if (!urls.length) throw new Error('Add at least one playable audio, video or live stream URL.');
+  urls.forEach(value => {
+    try {
+      const parsed = new URL(value);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      throw new Error('Radio media URLs must be valid HTTP(S) URLs.');
+    }
+  });
+}
+
 export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
@@ -195,6 +210,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
       const id = editingId || makeId();
       if (!isRecordKind(kind)) return;
       const payload = { ...form };
+      if (kind === 'radio') validateRadioMedia(payload);
       if (kind === 'radio' && !String(payload.broadcastTime || '').trim()) {
         payload.broadcastTime = new Date().toISOString();
       }
