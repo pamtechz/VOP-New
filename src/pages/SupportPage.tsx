@@ -29,6 +29,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [reference, setReference] = useState<{type:string;id:string;label:string} | null>(null);
   const [selectedGuide, setSelectedGuide] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
+  const [referenceType, setReferenceType] = useState<'lesson'|'section'|'topic'|'block'>('lesson');
+  const [referenceLabel, setReferenceLabel] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -81,7 +83,10 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const chooseLesson = (lessonId: string) => {
     setSelectedLesson(lessonId);
     const item = lessons.find(entry => entry.id === lessonId);
-    if (item) setReference({ type: 'lesson', id: item.id, label: `${item.lessonNumber} · ${item.title}` });
+    if (item) {
+      const label = referenceLabel.trim() || `${item.lessonNumber} · ${item.title}`;
+      setReference({ type: referenceType, id: item.id, label });
+    }
   };
 
   return (
@@ -114,10 +119,12 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
           </section>
 
           <aside className="vop-support-reference-panel">
-            <div className="vop-support-panel-title"><BookOpen size={19}/><strong>Reference a lesson</strong></div>
+            <div className="vop-support-panel-title"><BookOpen size={19}/><strong>Reference study content</strong></div>
             <p>Select a guide and lesson before sending a question. Your mentor will see the exact reference.</p>
+            <select value={referenceType} onChange={e=>setReferenceType(e.target.value as typeof referenceType)}><option value="lesson">Lesson</option><option value="section">Section</option><option value="topic">Topic</option><option value="block">Block</option></select>
             <select value={selectedGuide} onChange={e=>{setSelectedGuide(e.target.value);setSelectedLesson('');setReference(null)}}><option value="">Select guide</option>{guides.map(item=><option key={item.id} value={item.id}>{item.title} · {item.language}</option>)}</select>
-            <select value={selectedLesson} onChange={e=>chooseLesson(e.target.value)} disabled={!guide}><option value="">Select lesson</option>{lessons.map(item=><option key={item.id} value={item.id}>{item.lessonNumber} · {item.title}</option>)}</select>
+            <select value={selectedLesson} onChange={e=>chooseLesson(e.target.value)} disabled={!guide}><option value="">Select lesson / source</option>{lessons.map(item=><option key={item.id} value={item.id}>{item.lessonNumber} · {item.title}</option>)}</select>
+            <input value={referenceLabel} onChange={e=>setReferenceLabel(e.target.value)} placeholder="Optional section, topic or block label"/>
             {reference && <div className="vop-support-selected"><span>Attached reference</span><strong>{reference.label}</strong></div>}
           </aside>
         </div>
