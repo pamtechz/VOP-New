@@ -320,7 +320,11 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     );
   }
 
-  if (kind === 'radio') {\n    return <RadioAdminDashboard records={records} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} />;\n  }\n\n  const primaryTitle = LABELS[kind];
+  if (kind === 'radio') {
+    return <RadioAdminDashboard records={records} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} />;
+  }
+
+  const primaryTitle = LABELS[kind];
   const actionLabel = editingId ? 'Save Changes' : 'Add Record';
 
   return (
