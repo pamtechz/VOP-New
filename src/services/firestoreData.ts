@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
 import { db } from '../lib/firebase';
 
@@ -171,4 +171,60 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
   const snapshot = await getDoc(doc(requireDb(), 'users', uid));
   return snapshot.exists() ? snapshot.data() as User : null;
+}
+
+/**
+ * Creates the minimum student profile allowed by Firestore rules.
+ *
+ * This is a deliberate client-side bootstrap fallback for local development
+ * and for deployments where the Admin SDK profile endpoint is temporarily
+ * unavailable. It can never create an administrator role.
+ */
+export async function createFirestoreStudentProfile(
+  uid: string,
+  email: string,
+  displayName: string,
+  photoURL?: string | null,
+): Promise<User> {
+  const firestore = requireDb();
+  const ref = doc(firestore, 'users', uid);
+  const profile = {
+    uid,
+    email: email.trim(),
+    displayName: displayName.trim() || email.split('@')[0] || 'VOP Student',
+    photoURL: photoURL ?? null,
+    role: 'student',
+    adminNodeType: null,
+    adminNodeId: null,
+    privileges: {
+      admin: false,
+      guardian: false,
+      editor: false,
+      manager: false,
+      developer: false,
+      coordinator: false,
+    },
+    information: {
+      enrollmentDate: new Date().toISOString(),
+      graduating: false,
+      graduated: false,
+      baptismCandidate: false,
+      baptized: false,
+    },
+    progress: {
+      discoverProgress: 0,
+      completedGuidesCount: 0,
+      totalGuidesCount: 0,
+      guideScores: {},
+      completedLessons: [],
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  await setDoc(ref, profile);
+  const created = await getDoc(ref);
+  if (!created.exists()) throw new Error('The VOP student profile could not be created.');
+
+  return created.data() as User;
 }
