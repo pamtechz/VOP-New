@@ -26,6 +26,8 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const [notice, setNotice] = useState('');
   const currentPage = pages[currentPageIndex];
 
+  useEffect(() => { setCurrentPageIndex(Math.max(0, initialPageIndex)); }, [lesson.id, initialPageIndex]);
+
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', escape);
