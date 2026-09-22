@@ -1,6 +1,6 @@
-import { collection, collectionGroup, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, getDocs, query, where, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 
 function requireDb() {
   if (!db) throw new Error('Firestore is not configured for this deployment.');
@@ -88,26 +88,46 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
 
 export async function loadFirestoreGuides(_language?: LanguageCode): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
+  const guideSnapshots = [];
+  const currentUser = auth?.currentUser;
+  let organizationId = '';
 
-  const [guideSnapshot, lessonSnapshot] = await Promise.all([
-    getDocs(collection(firestore, 'curricula/discover/languages')),
-    getDocs(collectionGroup(firestore, 'lessons')),
-  ]);
+  if (currentUser) {
+    const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
+    organizationId = String(profile.data()?.organizationId || '').trim();
+  }
 
-  const guides = new Map<string, {
-    guide: DiscoverGuide;
-    published: boolean;
-    archived: boolean;
-  }>();
+  if (organizationId) {
+    const [owned, shared] = await Promise.all([
+      getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', organizationId))),
+      getDocs(query(collection(firestore, 'guides'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
+    ]);
+    guideSnapshots.push(...owned.docs, ...shared.docs.filter(item => item.data().organizationId !== organizationId));
+  }
 
-  for (const item of guideSnapshot.docs) {
-    const data = item.data() as FirestoreGuide;
-    const language = String(data.language ?? item.id).trim();
+  const legacyGuides = await getDocs(collection(firestore, 'curricula/discover/languages'));
+
+  const guides = new Map<string, { guide: DiscoverGuide; lessonsRef: ReturnType<typeof collection> }>();
+
+  for (const item of [...guideSnapshots, ...legacyGuides.docs]) {
+    const data = item.data() as FirestoreGuide & Record<string, unknown>;
+    const legacy = item.ref.path.startsWith('curricula/discover/languages/');
+    const language = String(data.language ?? (legacy ? item.id : '')).trim();
     if (!language || data.archived === true || data.published !== true) continue;
+
+    if (!legacy) {
+      const ownerOrg = String(data.organizationId ?? data.ownerOrganizationId ?? '').trim();
+      if (organizationId && ownerOrg && ownerOrg !== organizationId && data.sharingScope !== 'shared') continue;
+      if (!organizationId && data.sharingScope !== 'shared') continue;
+    }
 
     const id = String(data.id ?? item.id).trim();
     const guide: DiscoverGuide = {
       id,
+      ownerOrganizationId: String(data.ownerOrganizationId ?? data.organizationId ?? '').trim() || undefined,
+      ownerUid: String(data.ownerUid ?? '').trim() || undefined,
+      sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : data.organizationId ? 'organization' : undefined,
+      canonical: data.canonical !== false,
       discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
       title: String(data.title ?? '').trim(),
       subtitle: String(data.subtitle ?? '').trim(),
@@ -119,112 +139,34 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     };
     if (!guide.title) continue;
 
-    guides.set(language, { guide, published: true, archived: false });
+    const key = legacy ? `legacy:${language}` : `org:${String(data.organizationId || data.ownerOrganizationId || '')}:${language}`;
+    guides.set(key, { guide, lessonsRef: item.ref.collection('lessons') });
   }
 
-  for (const item of lessonSnapshot.docs) {
-    const data = item.data() as FirestoreLesson;
-    const pathSegments = item.ref.path.split('/');
-    const curriculaIndex = pathSegments.indexOf('curricula');
-
-    if (
-      curriculaIndex < 0 ||
-      pathSegments[curriculaIndex + 1] !== 'discover' ||
-      pathSegments[curriculaIndex + 2] !== 'languages' ||
-      !pathSegments[curriculaIndex + 3]
-    ) {
-      continue;
+  for (const entry of guides.values()) {
+    const lessonSnapshot = await getDocs(entry.lessonsRef);
+    for (const item of lessonSnapshot.docs) {
+      const data = item.data() as FirestoreLesson & Record<string, unknown>;
+      if (data.published === false || data.archived === true) continue;
+      const lesson = normalizeLesson(data, item.id);
+      if (!lesson) continue;
+      lesson.ownerOrganizationId = String(data.ownerOrganizationId ?? entry.guide.ownerOrganizationId ?? '').trim() || undefined;
+      lesson.ownerUid = String(data.ownerUid ?? entry.guide.ownerUid ?? '').trim() || undefined;
+      lesson.sharingScope = data.sharingScope === 'shared' ? 'shared' : entry.guide.sharingScope;
+      lesson.canonical = data.canonical !== false;
+      lesson.quizId = typeof data.quizId === 'string' ? data.quizId : undefined;
+      entry.guide.lessons.push(lesson);
     }
-
-    const language = String(
-      data.lang ?? pathSegments[curriculaIndex + 3] ?? '',
-    ).trim();
-
-    const lesson = normalizeLesson(data, item.id);
-    if (!lesson || !language) continue;
-
-    const guideEntry = guides.get(language);
-    if (!guideEntry) continue;
-
-    const guideId = String(data.guideId ?? '').trim();
-    if (guideId && guideId !== guideEntry.guide.id) continue;
-
-    guideEntry.guide.lessons.push(lesson);
   }
 
   return [...guides.values()]
     .map(entry => ({
       ...entry.guide,
-      lessons: entry.guide.lessons.sort(
-        (a, b) =>
-          a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true })
-          || a.title.localeCompare(b.title),
+      lessons: entry.guide.lessons.sort((a, b) =>
+        a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true }) || a.title.localeCompare(b.title),
       ),
     }))
     .filter(guide => guide.lessons.length > 0)
-    .sort((a, b) =>
-      a.discoverNumber - b.discoverNumber
-      || a.language.localeCompare(b.language)
-    );
+    .sort((a, b) => a.discoverNumber - b.discoverNumber || a.language.localeCompare(b.language));
 }
 
-export async function loadFirestoreUser(uid: string): Promise<User | null> {
-  const snapshot = await getDoc(doc(requireDb(), 'users', uid));
-  return snapshot.exists() ? snapshot.data() as User : null;
-}
-
-/**
- * Creates the minimum student profile allowed by Firestore rules.
- *
- * This is a deliberate client-side bootstrap fallback for local development
- * and for deployments where the Admin SDK profile endpoint is temporarily
- * unavailable. It can never create an administrator role.
- */
-export async function createFirestoreStudentProfile(
-  uid: string,
-  email: string,
-  displayName: string,
-  photoURL?: string | null,
-): Promise<User> {
-  const firestore = requireDb();
-  const ref = doc(firestore, 'users', uid);
-  const profile = {
-    uid,
-    email: email.trim(),
-    displayName: displayName.trim() || email.split('@')[0] || 'VOP Student',
-    photoURL: photoURL ?? null,
-    role: 'student',
-    adminNodeType: null,
-    adminNodeId: null,
-    privileges: {
-      admin: false,
-      guardian: false,
-      editor: false,
-      manager: false,
-      developer: false,
-      coordinator: false,
-    },
-    information: {
-      enrollmentDate: new Date().toISOString(),
-      graduating: false,
-      graduated: false,
-      baptismCandidate: false,
-      baptized: false,
-    },
-    progress: {
-      discoverProgress: 0,
-      completedGuidesCount: 0,
-      totalGuidesCount: 0,
-      guideScores: {},
-      completedLessons: [],
-    },
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-
-  await setDoc(ref, profile);
-  const created = await getDoc(ref);
-  if (!created.exists()) throw new Error('The VOP student profile could not be created.');
-
-  return created.data() as User;
-}
