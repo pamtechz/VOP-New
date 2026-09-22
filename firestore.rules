@@ -344,98 +344,55 @@ service cloud.firestore {
         && canManageOrg(organizationIdForUser())
       );
 
-    // Certification is public only when explicitly enabled.
+    // Platform certification configuration.
     match /system/certification {
-      allow get: if resource.data.enabled == true;
+      allow get: if resource.data.get('enabled', false) == true || isSuperAdmin();
       allow list: if false;
       allow create, update, delete: if isSuperAdmin();
     }
 
-    // Public languages are enabled languages only.
-    match /languages/{languageId} {
-      allow get, list: if isAdmin() || resource.data.enabled == true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Translation configuration is public.
-    match /translations/{language} {
-      allow get, list: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Public announcements are published only.
-    match /announcements/{id} {
-      allow get, list: if isAdmin() || resource.data.published == true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Public learning materials are published only.
-    match /books/{id} {
-      allow get, list: if isAdmin() || resource.data.published == true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Public radio broadcasts are published only.
-    match /radioBroadcasts/{id} {
-      allow get, list: if isAdmin() || resource.data.published == true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Organization reference data.
+    // Organization reference data remains platform-managed.
     match /unions/{id} {
-      allow get, list: if true;
+      allow get, list: if signedIn();
       allow create, update, delete: if isSuperAdmin();
     }
-
     match /conferences/{id} {
-      allow get, list: if true;
+      allow get, list: if signedIn();
       allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate();
       allow delete: if isSuperAdmin() || unionAdminForDelete();
     }
-
     match /districts/{id} {
-      allow get, list: if true;
+      allow get, list: if signedIn();
       allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate();
       allow delete: if isSuperAdmin() || conferenceAdminForDelete();
     }
-
     match /churches/{id} {
-      allow get, list: if true;
+      allow get, list: if signedIn();
       allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate();
       allow delete: if isSuperAdmin() || districtAdminForDelete();
     }
 
-    // Canonical Discover guide metadata.
-    // A guide is visible to learners only after the admin explicitly publishes it.
+    // Legacy platform curriculum remains available only when explicitly published.
     match /curricula/discover/languages/{language} {
       allow get, list: if isAdmin()
-        || (signedIn() && resource.data.published == true && resource.data.archived != true);
+        || (signedIn() && resource.data.get('published', false) == true && resource.data.get('archived', false) != true);
       allow create, update, delete: if canEditCurriculum();
     }
-
-    // Canonical approved VOP Discover lesson path.
     match /curricula/discover/languages/{language}/lessons/{lessonId} {
-      allow get, list: if signedIn();
+      allow get, list: if signedIn() && get(/databases/$(database)/documents/curricula/discover/languages/$(language)).data.get('published', false) == true;
       allow create, update, delete: if canEditCurriculum();
     }
 
-    // Collection-group queries over all VOP lesson subcollections.
-    match /{path=**}/lessons/{lessonId} {
-      allow get, list: if signedIn();
-      allow create, update, delete: if canEditCurriculum();
-    }
-
-    // Legacy/alternate top-level curriculum documents, if present.
-    // Public access requires explicit publication.
+    // Legacy alternate curriculum documents are platform-managed.
     match /curriculum/{guideId} {
-      allow get, list: if isAdmin() || resource.data.published == true;
+      allow get, list: if isAdmin() || resource.data.get('published', false) == true;
       allow create, update, delete: if canEditCurriculum();
     }
 
     // User profiles.
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin();
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin() || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser())));
+      allow list: if isSuperAdmin() || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
 
       allow create: if canCreateOwnProfile();
       allow update: if isSuperAdmin() || canUpdateOwnProfile();
@@ -461,10 +418,10 @@ service cloud.firestore {
           || isAdmin()
         );
 
-      allow list: if signedIn();
+      allow list: if signedIn() && (isSuperAdmin() || isAdmin() || resource.data.candidateId == request.auth.uid || resource.data.get('organizationId','') == organizationIdForUser());
 
       allow create: if signedIn()
-        && request.resource.data.candidateId == request.auth.uid;
+        && (request.resource.data.candidateId == request.auth.uid || (isOrgMember(organizationIdForUser()) && request.resource.data.get('organizationId','') == organizationIdForUser()));
 
       allow update: if signedIn()
         && (
