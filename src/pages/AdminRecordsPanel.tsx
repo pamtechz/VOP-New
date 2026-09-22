@@ -32,6 +32,7 @@ interface TranslationRecord {
 interface Props {
   kind: ManagedAdminCollection;
   languages: CustomLanguage[];
+  preferredLanguage?: string;
 }
 
 type FormState = Record<string, string | number | boolean>;
@@ -122,7 +123,7 @@ function validateRadioMedia(form: FormState) {
   });
 }
 
-export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
+export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage }) => {
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
   const [translations, setTranslations] = useState<TranslationRecord[]>([]);
@@ -187,11 +188,13 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
   }, [kind]);
 
   useEffect(() => {
-    const first = languages.find(language => language.enabled !== false)?.code || '';
-    if (!selectedTranslation || !languages.some(language => language.code === selectedTranslation)) {
+    const enabledLanguages = languages.filter(language => language.enabled !== false);
+    const preferred = enabledLanguages.find(language => language.code === preferredLanguage)?.code || '';
+    const first = preferred || enabledLanguages[0]?.code || '';
+    if (!selectedTranslation || !languages.some(language => language.code === selectedTranslation && language.enabled !== false)) {
       setSelectedTranslation(first);
     }
-  }, [languages, selectedTranslation]);
+  }, [languages, preferredLanguage, selectedTranslation]);
 
   useEffect(() => {
     const doc = translations.find(item => item.id === selectedTranslation);
