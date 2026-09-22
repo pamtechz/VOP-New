@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Check, ExternalLink, Image, LockKeyhole, Save, ShieldCheck
+  ArrowLeft, ExternalLink, Image, LockKeyhole, Save, ShieldCheck
 } from 'lucide-react';
 
 export interface CertificationConfig {
@@ -29,7 +29,9 @@ interface Props {
   onBack: () => void;
 }
 
-const textFields: Array<{ key: keyof CertificationConfig; label: string; hint: string; multiline?: boolean }> = [
+type StringConfigKey = 'courseName' | 'courseCode' | 'certificateTitle' | 'certificateBodyText' | 'issuerName' | 'issuerSubtitle' | 'directorName' | 'directorTitle' | 'verificationBaseUrl' | 'logoUrl' | 'sealUrl' | 'signatureUrl' | 'backgroundUrl';
+
+const textFields: Array<{ key: StringConfigKey; label: string; hint: string; multiline?: boolean }> = [
   { key: 'courseName', label: 'Course name', hint: 'The official course name printed on certificates.' },
   { key: 'courseCode', label: 'Course code', hint: 'Optional official course or programme code.' },
   { key: 'certificateTitle', label: 'Certificate title', hint: 'The main heading displayed on the certificate.' },
@@ -41,7 +43,7 @@ const textFields: Array<{ key: keyof CertificationConfig; label: string; hint: s
   { key: 'verificationBaseUrl', label: 'Verification base URL', hint: 'Public verification page base URL used when sharing certificates.' },
 ];
 
-const assetFields: Array<{ key: keyof CertificationConfig; label: string; hint: string }> = [
+const assetFields: Array<{ key: StringConfigKey; label: string; hint: string }> = [
   { key: 'logoUrl', label: 'Organisation logo URL', hint: 'Public image URL for the certificate logo.' },
   { key: 'sealUrl', label: 'Official seal URL', hint: 'Public image URL for the certificate seal.' },
   { key: 'signatureUrl', label: 'Signature URL', hint: 'Public image URL for the authorised signature.' },
