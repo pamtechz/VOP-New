@@ -803,7 +803,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   ];
 
   return <div className="vop-admin">
-    <header className="vop-admin-top">
+    <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
       <div className="vop-brand"><div className="vop-brand-mark"><Award size={30}/></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title={sidebarOpen?'Close navigation':'Open navigation'}><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
