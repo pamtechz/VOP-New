@@ -328,7 +328,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       {editing && (
         <div className="vop-reference-editor">
           <div className="vop-section-title">
-            <div><h2>{editing.id ? 'Edit Guide' : 'New Guide'}</h2><p>Guide metadata is stored in Firestore.</p></div>
+            <div><h2>{editing.id ? 'Edit Guide' : 'New Guide'}</h2><p>Guide metadata is stored in the content service.</p></div>
             <button className="vop-actions" type="button" onClick={() => setEditing(null)}><X size={17}/></button>
           </div>
           <div className="vop-form-grid vop-reference-form-grid">
@@ -359,7 +359,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       )}
 
       <div className="vop-reference-table-wrap">
-        {loading ? <div className="vop-empty">Loading guide records from Firestore…</div> : pageRows.length === 0 ? (
+        {loading ? <div className="vop-empty">Loading guide records…</div> : pageRows.length === 0 ? (
           <div className="vop-empty"><ImageIcon size={26}/><span>No guide records are configured.</span></div>
         ) : (
           <table className="vop-reference-table">
