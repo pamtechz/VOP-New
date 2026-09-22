@@ -102,7 +102,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
       TABS.forEach((tab, index) => { next[tab.id] = (results[index].items ?? []) as ContentItem[]; });
       setState(next);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load Firestore content.');
+      setError(reason instanceof Error ? reason.message : 'Could not load content.');
     } finally { setPending(false); }
   };
 
@@ -171,7 +171,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
 
       await adminContent('upsert', active, id, data);
       setEditingId(id);
-      setMessage('Saved to Firestore.');
+      setMessage('Saved.');
       await reload();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save the record.');
