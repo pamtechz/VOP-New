@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ArrowLeft, ExternalLink, Image, LockKeyhole, Save, ShieldCheck
-} from 'lucide-react';
+import { ArrowLeft, ExternalLink, Image, LockKeyhole, Save, ShieldCheck } from 'lucide-react';
+import CertificateArtwork, { CertificateArtworkRecord } from '../components/certificates/CertificateArtwork';
 
 export interface CertificationConfig {
   id?: string;
@@ -29,7 +28,20 @@ interface Props {
   onBack: () => void;
 }
 
-type StringConfigKey = 'courseName' | 'courseCode' | 'certificateTitle' | 'certificateBodyText' | 'issuerName' | 'issuerSubtitle' | 'directorName' | 'directorTitle' | 'verificationBaseUrl' | 'logoUrl' | 'sealUrl' | 'signatureUrl' | 'backgroundUrl';
+type StringConfigKey =
+  | 'courseName'
+  | 'courseCode'
+  | 'certificateTitle'
+  | 'certificateBodyText'
+  | 'issuerName'
+  | 'issuerSubtitle'
+  | 'directorName'
+  | 'directorTitle'
+  | 'verificationBaseUrl'
+  | 'logoUrl'
+  | 'sealUrl'
+  | 'signatureUrl'
+  | 'backgroundUrl';
 
 const textFields: Array<{ key: StringConfigKey; label: string; hint: string; multiline?: boolean }> = [
   { key: 'courseName', label: 'Course name', hint: 'The official course name printed on certificates.' },
@@ -40,7 +52,7 @@ const textFields: Array<{ key: StringConfigKey; label: string; hint: string; mul
   { key: 'issuerSubtitle', label: 'Issuer subtitle', hint: 'Secondary organisation or programme line shown with the issuer.' },
   { key: 'directorName', label: 'Director / authorised signatory', hint: 'Name printed below the signature area.' },
   { key: 'directorTitle', label: 'Signatory title', hint: 'Official title printed below the signatory name.' },
-  { key: 'verificationBaseUrl', label: 'Verification base URL', hint: 'Public verification page base URL used when sharing certificates.' },
+  { key: 'verificationBaseUrl', label: 'Verification base URL', hint: 'Optional public verification page base URL. Leave empty to use the current VOP site URL.' },
 ];
 
 const assetFields: Array<{ key: StringConfigKey; label: string; hint: string }> = [
@@ -50,36 +62,85 @@ const assetFields: Array<{ key: StringConfigKey; label: string; hint: string }> 
   { key: 'backgroundUrl', label: 'Certificate background URL', hint: 'Public image URL used behind the certificate artwork.' },
 ];
 
+const emptyPreviewCertificate: CertificateArtworkRecord = {
+  candidateName: '',
+  courseName: '',
+  courseCode: '',
+  certificateNumber: '',
+  completionDate: null,
+  issuedAt: null,
+};
+
 function stringValue(config: CertificationConfig, key: keyof CertificationConfig) {
   const value = config[key];
   return typeof value === 'string' ? value : '';
 }
 
+function normalizeBaseUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
 export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onBack }) => {
   const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), id: config?.id || 'certification' }));
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setDraft({ ...(config || {}), id: config?.id || 'certification' });
+    setError('');
   }, [config]);
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify({ ...(config || {}), id: config?.id || 'certification' }), [draft, config]);
+  const baseline = useMemo(
+    () => ({ ...(config || {}), id: config?.id || 'certification' }),
+    [config],
+  );
+  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(baseline), [draft, baseline]);
 
   const update = <K extends keyof CertificationConfig>(key: K, value: CertificationConfig[K]) => {
+    setError('');
     setDraft(current => ({ ...current, [key]: value }));
   };
 
+  const previewCertificate = useMemo(
+    () => ({
+      ...emptyPreviewCertificate,
+      courseName: draft.courseName?.trim() || '',
+      courseCode: draft.courseCode?.trim() || '',
+    }),
+    [draft.courseName, draft.courseCode],
+  );
+
   const save = async () => {
+    setError('');
     const score = draft.minimumScore;
     if (score !== undefined && (!Number.isFinite(score) || score < 0 || score > 100)) {
-      throw new Error('Minimum certification score must be between 0 and 100.');
+      setError('Minimum certification score must be between 0 and 100.');
+      return;
     }
+
+    const verificationBaseUrl = draft.verificationBaseUrl?.trim() || '';
+    if (verificationBaseUrl && !normalizeBaseUrl(verificationBaseUrl)) {
+      setError('Verification base URL must be a valid HTTP or HTTPS URL.');
+      return;
+    }
+
     setSaving(true);
     try {
       await onSave({
         ...draft,
         minimumScore: score === undefined || Number.isNaN(score) ? undefined : score,
+        verificationBaseUrl: normalizeBaseUrl(verificationBaseUrl),
       });
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Certification configuration could not be saved.');
     } finally {
       setSaving(false);
     }
@@ -102,6 +163,8 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
           </button>
         </div>
       </div>
+
+      {error && <div className="vop-alert error" role="alert">{error}</div>}
 
       <div className="vop-cert-config-status">
         <div className="vop-cert-config-status-icon"><ShieldCheck size={22} /></div>
@@ -166,7 +229,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
 
         <section className="vop-cert-config-card vop-cert-config-assets">
           <div className="vop-cert-config-card-head">
-            <div><h2>Certificate Artwork Assets</h2><p>Use public, stable image URLs. Nothing is generated or substituted when an asset is missing.</p></div>
+            <div><h2>Certificate Artwork Assets</h2><p>Use public, stable image URLs. No substitute artwork is created when an asset is missing.</p></div>
             <Image size={20} />
           </div>
           <div className="vop-cert-config-fields">
@@ -177,7 +240,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
                   <span>{field.label}</span>
                   <input value={value} onChange={event => update(field.key, event.target.value)} />
                   <small>{field.hint}</small>
-                  {value && <span className="vop-cert-asset-preview"><img src={value} alt="" /><span>Configured asset</span></span>}
+                  {value && (
+                    <span className="vop-cert-asset-preview">
+                      <img src={value} alt="" />
+                      <span>Configured asset</span>
+                    </span>
+                  )}
                 </label>
               );
             })}
@@ -186,28 +254,33 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
 
         <section className="vop-cert-config-card vop-cert-config-preview">
           <div className="vop-cert-config-card-head">
-            <div><h2>Configuration Preview</h2><p>Preview only configured values; candidate information is intentionally not fabricated.</p></div>
+            <div>
+              <h2>Live Certificate Preview</h2>
+              <p>The same certificate renderer used by admin, learners and public verification is shown below. Candidate identity and certificate number remain empty until a real certificate is issued.</p>
+            </div>
             <ExternalLink size={20} />
           </div>
-          <div className="vop-cert-live-preview">
-            <div className="vop-cert-live-brand">
-              {draft.logoUrl ? <img src={draft.logoUrl} alt="" /> : <span>No logo configured</span>}
-              <div><strong>{draft.issuerName || 'Issuer name not configured'}</strong><small>{draft.issuerSubtitle || 'Issuer subtitle not configured'}</small></div>
-            </div>
-            <h3>{draft.certificateTitle || 'Certificate title not configured'}</h3>
-            <div className="vop-cert-live-rule" />
-            <p>{draft.certificateBodyText || 'Certificate body text not configured.'}</p>
-            <strong>{draft.courseName || 'Course name not configured'}</strong>
-            <div className="vop-cert-live-signature">
-              {draft.signatureUrl ? <img src={draft.signatureUrl} alt="" /> : <span>No signature configured</span>}
-              <div>{draft.directorName || 'Signatory name not configured'}</div>
-              <small>{draft.directorTitle || 'Signatory title not configured'}</small>
-            </div>
-            <div className="vop-cert-live-seal">{draft.sealUrl ? <img src={draft.sealUrl} alt="" /> : <span>No seal configured</span>}</div>
+
+          <div className="vop-cert-live-artwork">
+            <CertificateArtwork
+              certificate={previewCertificate}
+              config={draft}
+              verification={false}
+            />
           </div>
+
+          <div className="vop-cert-preview-state">
+            <ShieldCheck size={18} />
+            <span>
+              {draft.verificationEnabled === true
+                ? 'Public verification is enabled. Issued certificates will include a verification QR code.'
+                : 'Public verification is disabled. Issued certificates will not include a verification QR code.'}
+            </span>
+          </div>
+
           {draft.verificationEnabled === true && draft.verificationBaseUrl && (
             <div className="vop-cert-verification-link">
-              <span>Verification endpoint</span>
+              <span>Configured verification base URL</span>
               <strong>{draft.verificationBaseUrl}</strong>
             </div>
           )}
