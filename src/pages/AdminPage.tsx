@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowLeft, Award, Bell, Book, BookOpen, CalendarDays, Check,
-  ChevronDown, ChevronLeft, ChevronRight, Church, Clock, Edit3, ExternalLink,
+  ChevronDown, ChevronLeft, ChevronRight, Church, Clock, Edit3, ExternalLink, UserCheck,
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
   Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload,
   Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
@@ -22,6 +22,7 @@ import CurriculumManager from './CurriculumManager';
 import CurriculumSettings from './CurriculumSettings';
 import CertificationManager from './CertificationManager';
 import UserManagement from './UserManagement';
+import MentorshipInsights from './MentorshipInsights';
 
 interface AdminPageProps {
   currentUser: User;
@@ -33,7 +34,7 @@ interface AdminPageProps {
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'materials' | 'radio'
-  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification';
+  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications';
 type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -54,6 +55,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'districts', label: 'Districts', icon: Layers },
   { id: 'churches', label: 'Churches', icon: Church },
   { id: 'certification', label: 'Certification', icon: Award },
+  { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
 ];
 
 const text = (value: unknown) => value == null ? '' : String(value);
@@ -901,6 +903,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             showMessage={showMessage}
           />
         )}
+        {activeTab==='mentorship'&&<MentorshipInsights />}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
