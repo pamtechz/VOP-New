@@ -1090,3 +1090,7 @@
   .vop-sidebar-backdrop{inset:56px 0 0}
   .vop-top-page{font-size:15px}
 }
+
+.vop-brand-mark{overflow:hidden;background:rgba(255,255,255,.1)}
+.vop-brand-mark img{width:100%;height:100%;object-fit:contain;padding:3px}
+@media(max-width:900px){.vop-brand-mark img{padding:2px}}
