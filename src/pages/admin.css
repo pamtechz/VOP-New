@@ -185,6 +185,19 @@
 .vop-translation-list{display:flex;flex-direction:column;gap:9px;max-height:620px;overflow:auto;padding-right:2px}
 .vop-translation-row{display:grid;grid-template-columns:minmax(150px,.85fr) minmax(180px,1.4fr) 40px;gap:8px;align-items:center}
 .vop-translation-row input{min-width:0}
+.vop-translation-auto-row{grid-template-columns:minmax(0,1fr) minmax(240px,1.15fr);padding:12px;border:1px solid #e3eaf3;border-radius:12px;background:#fbfcfe}
+.vop-translation-source{min-width:0;display:flex;flex-direction:column;gap:4px}
+.vop-translation-source strong{color:#17233d;font-size:14px;line-height:1.35}
+.vop-translation-source small{color:#7b8aa5;font-size:11px;overflow-wrap:anywhere}
+.vop-translation-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.vop-translation-summary>div{padding:14px;border:1px solid #e3eaf3;border-radius:12px;background:#fbfcfe;text-align:center}
+.vop-translation-summary strong{display:block;font-size:22px;color:#102a63}
+.vop-translation-summary span{display:block;margin-top:3px;color:#72809a;font-size:12px;font-weight:700}
+.vop-translation-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.vop-translation-toolbar .vop-search{flex:1;min-width:220px}
+.vop-translation-filters{display:flex;gap:6px;flex-wrap:wrap}
+.vop-translation-filters button{border:1px solid #dbe3ee;background:#fff;color:#64748b;border-radius:9px;padding:8px 11px;font-weight:700;cursor:pointer}
+.vop-translation-filters button.active{background:#eef4ff;color:#174ea6;border-color:#a9c5f7}
 .vop-form-card textarea{min-height:105px;resize:vertical}
 @media(max-width:1100px){
   .vop-admin-record-layout{grid-template-columns:1fr}
@@ -193,6 +206,10 @@
 @media(max-width:640px){
   .vop-translation-row{grid-template-columns:1fr 40px}
   .vop-translation-row input:first-child{grid-column:1 / -1}
+  .vop-translation-auto-row{grid-template-columns:1fr}
+  .vop-translation-summary{grid-template-columns:1fr}
+  .vop-translation-toolbar{align-items:stretch}
+  .vop-translation-toolbar .vop-search{min-width:100%}
 }
 
 
