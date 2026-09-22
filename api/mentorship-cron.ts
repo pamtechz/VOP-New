@@ -33,7 +33,7 @@ export default async function handler(req: { method?: string; headers?: Record<s
     const organizationsSnapshot = await db.collection('organizations').where('status','==','active').get();
     const organizations = organizationsSnapshot.docs.length
       ? organizationsSnapshot.docs
-      : [{ id: '', data: () => ({}) } as unknown as FirebaseFirestore.QueryDocumentSnapshot];
+      : [{ id: '' }];
 
     let processed = 0;
     let created = 0;
