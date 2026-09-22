@@ -346,6 +346,7 @@ export default async function handler(req: Request, res: Response) {
       if (!draftSnapshot.exists) throw new Error('Message draft was not found.');
       const draft = draftSnapshot.data() || {};
       const student = await profile(db, String(draft.studentId || ''));
+      if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const channel = String(draft.channel || 'in_app');
       let delivery = 'in_app';
       if (channel === 'email') {
