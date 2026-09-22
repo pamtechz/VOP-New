@@ -5,7 +5,7 @@ import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
-import { loadFirestoreGuides, loadFirestoreUser } from './services/firestoreData';
+import { createFirestoreStudentProfile, loadFirestoreGuides, loadFirestoreUser } from './services/firestoreData';
 import { App } from './App';
 import type { User } from './types';
 
@@ -78,7 +78,16 @@ export function Root() {
             }
 
             if (!profile) {
-              throw new Error('Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
+              // New Firebase Authentication accounts may legitimately have no
+              // Firestore profile yet. The Firestore rules permit a signed-in
+              // account to create only its own student profile. This keeps
+              // local clones usable even when the Admin SDK API is unavailable.
+              profile = await createFirestoreStudentProfile(
+                firebaseUser.uid,
+                firebaseUser.email ?? '',
+                firebaseUser.displayName ?? '',
+                firebaseUser.photoURL,
+              );
             }
 
             // Keep only the authenticated account identifier locally.
