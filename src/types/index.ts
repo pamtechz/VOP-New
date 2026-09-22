@@ -347,6 +347,8 @@ export type AppRoute =
   | 'resources' 
   | 'prayer' 
   | 'radio' 
+  | 'announcements'
+  | 'support'
   | 'admin' 
   | 'certificates' 
   | 'certificate-verification';
