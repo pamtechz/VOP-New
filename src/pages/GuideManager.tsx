@@ -20,6 +20,7 @@ type GuideRecord = {
   certificateEligible: boolean;
   published: boolean;
   archived: boolean;
+  sharingScope: 'private' | 'organization' | 'shared';
   lessonCount: number;
   updatedAt?: string;
   updatedBy?: string;
@@ -100,6 +101,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     certificateEligible: value.certificateEligible === true,
     published: value.published === true,
     archived: value.archived === true,
+    sharingScope: value.sharingScope === 'shared' ? 'shared' : value.sharingScope === 'private' ? 'private' : 'organization',
     lessonCount: Number(value.lessonCount ?? fallbackLessons) || 0,
     updatedAt: timestampText(value.updatedAt),
     updatedBy: valueText(value.updatedBy),
@@ -231,6 +233,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       certificateEligible: false,
       published: false,
       archived: false,
+      sharingScope: 'organization',
       lessonCount: 0,
     });
   };
@@ -269,6 +272,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         certificateEligible: editing.certificateEligible,
         published: editing.published,
         archived: false,
+        sharingScope: editing.sharingScope,
       });
       setEditing(null);
       setMessage(editing.published ? 'Guide published.' : 'Guide saved as draft.');
@@ -345,6 +349,10 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Certificate eligibility</div><div className="vop-setting-help">Available to the configured certification workflow.</div></div>
             <input type="checkbox" checked={editing.certificateEligible} onChange={e => setEditing({...editing,certificateEligible:e.target.checked})}/>
+          </div>
+          <div className="vop-setting-row">
+            <div><div className="vop-setting-name">Sharing</div><div className="vop-setting-help">Shared guides can be consumed by other organizations. Canonical editing remains with the owner and VOP Super Admin.</div></div>
+            <select value={editing.sharingScope} onChange={e => setEditing({...editing,sharingScope:e.target.value as GuideRecord['sharingScope']})}><option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared</option></select>
           </div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Publication status</div><div className="vop-setting-help">Only published, non-archived guides are visible to learners.</div></div>
