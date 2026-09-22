@@ -50,6 +50,7 @@ function sameTenant(actor: Record<string, unknown>, target: Record<string, unkno
   const actorOrg = String(actor.organizationId || '').trim();
   const targetOrg = String(target.organizationId || '').trim();
   if (String(actor.role || '') === 'super_admin') return !requestedOrganizationId || targetOrg === requestedOrganizationId;
+  if (!actorOrg && ['union_admin','conference_admin','district_admin','church_admin'].includes(String(actor.role || ''))) return true;
   return Boolean(actorOrg && targetOrg && actorOrg === targetOrg);
 }
 
