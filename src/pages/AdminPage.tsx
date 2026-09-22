@@ -102,7 +102,7 @@ async function adminContent(action: 'list' | 'upsert' | 'delete', collection: st
   return body;
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
