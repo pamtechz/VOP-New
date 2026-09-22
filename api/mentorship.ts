@@ -39,7 +39,7 @@ async function profile(db: FirebaseFirestore.Firestore, uid: string) {
 }
 
 function isAdmin(data: Record<string, unknown>) {
-  return ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(data.role || ''));
+  return ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(data.role || '')) || ['owner','admin'].includes(String(data.organizationRole || ''));
 }
 
 function isMentor(data: Record<string, unknown>) {
