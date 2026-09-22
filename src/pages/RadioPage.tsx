@@ -36,10 +36,59 @@ function formatLocalClock(date: Date) {
   }).format(date);
 }
 
+function youtubeVideoId(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.hostname === 'youtu.be') return url.pathname.slice(1).split('/')[0] || null;
+    if (url.hostname.endsWith('youtube.com')) {
+      if (url.pathname === '/watch') return url.searchParams.get('v');
+      if (url.pathname.startsWith('/shorts/')) return url.pathname.split('/')[2] || null;
+      if (url.pathname.startsWith('/live/')) return url.pathname.split('/')[2] || null;
+      if (url.pathname.startsWith('/embed/')) return url.pathname.split('/')[2] || null;
+    }
+  } catch { /* invalid URL is handled by the player */ }
+  return null;
+}
+
+function isAudioVerseUrl(value: string) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === 'audioverse.org' || hostname.endsWith('.audioverse.org');
+  } catch {
+    return false;
+  }
+}
+
 function mediaSource(item: RadioBroadcast) {
   const video = item.videoUrl?.trim();
   const audio = item.audioUrl?.trim();
   const stream = item.streamUrl?.trim();
+  const candidates = [
+    ...(video ? [{ type: 'video' as const, url: video }] : []),
+    ...(audio ? [{ type: 'audio' as const, url: audio }] : []),
+    ...(stream ? [{ type: 'audio' as const, url: stream }] : []),
+  ];
+
+  for (const candidate of candidates) {
+    const youtubeId = youtubeVideoId(candidate.url);
+    if (youtubeId) {
+      return {
+        type: 'youtube' as const,
+        url: candidate.url,
+        embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?playsinline=1&rel=0&controls=1`,
+        live: false,
+      };
+    }
+    if (isAudioVerseUrl(candidate.url)) {
+      return {
+        type: 'audioverse' as const,
+        url: candidate.url,
+        embedUrl: candidate.url,
+        live: false,
+      };
+    }
+  }
+
   if (item.mediaType === 'video' && video) return { type: 'video' as const, url: video, live: false };
   if (item.mediaType === 'audio' && audio) return { type: 'audio' as const, url: audio, live: false };
   if (video) return { type: 'video' as const, url: video, live: false };
@@ -101,7 +150,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   }, [currentPlaying?.id]);
 
   useEffect(() => {
-    const media = selectedSource?.type === 'video' ? videoRef.current : audioRef.current;
+    const media = selectedSource?.type === 'video' || selectedSource?.type === 'youtube' || selectedSource?.type === 'audioverse' ? null : audioRef.current;
     if (!media) return;
     media.volume = volume;
     media.muted = muted;
@@ -130,6 +179,10 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
 
   const playSelected = async () => {
     const media = activeMedia();
+    if (selectedSource?.type === 'youtube' || selectedSource?.type === 'audioverse') {
+      setMediaError('This programme is hosted by an external media provider. Use the embedded player controls.');
+      return;
+    }
     if (!media || !selectedSource) {
       setMediaError('No playable media source has been configured for this programme.');
       setIsPlaying(false);
@@ -268,7 +321,16 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
         {currentPlaying && (
           <section className="vop-radio-player-card" aria-label="Radio media player">
             <div className="vop-radio-media-stage">
-              {selectedSource?.type === 'video' ? (
+              {selectedSource?.type === 'youtube' || selectedSource?.type === 'audioverse' ? (
+                <iframe
+                  className="vop-radio-embed-player"
+                  src={selectedSource.embedUrl}
+                  title={currentPlaying.title}
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
+              ) : selectedSource?.type === 'video' ? (
                 <video
                   ref={videoRef}
                   src={selectedSource.url}
@@ -346,7 +408,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
             </div>
 
             <div className="vop-radio-controls">
-              <button className="vop-radio-control-main" type="button" onClick={() => selectProgramme(currentPlaying)} disabled={!selectedSource} aria-label={isPlaying ? 'Pause' : 'Play'}>
+              <button className="vop-radio-control-main" type="button" onClick={() => selectProgramme(currentPlaying)} disabled={!selectedSource || selectedSource.type === 'youtube' || selectedSource.type === 'audioverse'} aria-label={isPlaying ? 'Pause' : 'Play'}>
                 {isPlaying ? <Pause size={19}/> : <Play size={19} fill="currentColor"/>}
               </button>
               <button className="vop-radio-icon-btn" type="button" onClick={() => skip(-10)} disabled={!selectedSource || !duration} aria-label="Back 10 seconds"><SkipBack size={17}/></button>
@@ -400,6 +462,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
                   <span>{item.durationMinutes ? `${item.durationMinutes} min` : 'Auto duration'}</span>
                   {source?.live && <span>LIVE</span>}
                   {source?.type === 'video' && <span>VIDEO</span>}
+                  {source?.type === 'youtube' && <span>YOUTUBE</span>}
+                  {source?.type === 'audioverse' && <span>AUDIOVERSE</span>}
                   {source?.type === 'audio' && !source.live && <span>AUDIO</span>}
                   {!source && <span>MEDIA NOT CONFIGURED</span>}
                 </div>
