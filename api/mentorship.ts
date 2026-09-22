@@ -69,7 +69,13 @@ async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
 }
 
 async function assertParticipant(db: FirebaseFirestore.Firestore, uid: string, conversation: Record<string, unknown>) {
-  if (isAdmin(await profile(db, uid))) return;
+  const actor = await profile(db, uid);
+  if (String(actor.role || '') === 'super_admin') return;
+  if (['owner','admin'].includes(String(actor.organizationRole || ''))) {
+    if (String(conversation.organizationId || '') !== String(actor.organizationId || '')) throw new Error('You cannot access this conversation.');
+    return;
+  }
+  if (isAdmin(actor)) return;
   if (String(conversation.studentId || '') === uid || String(conversation.mentorId || '') === uid) return;
   throw new Error('You are not a participant in this conversation.');
 }
@@ -184,7 +190,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listAssignments') {
       const snapshot = await db.collection('mentorAssignments').get();
       const studentSnapshots = await Promise.all(snapshot.docs.map(doc => db.doc(`users/${String(doc.data()?.studentId || '')}`).get()));
-      const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameScope(actor, item.data() || {})).map(item => item.id));
+      const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => item.id));
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => allowedStudentIds.has(String(item.studentId || '')));
       return res.status(200).json({ ok: true, items });
     }
@@ -239,7 +245,7 @@ export default async function handler(req: Request, res: Response) {
         let snapshot = await db.collection('mentorConversations').get();
         let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => !organizationId || String(item.organizationId || '') === organizationId);
         const studentSnapshots = await Promise.all(items.map(item => db.doc(`users/${String(item.studentId || '')}`).get()));
-        const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameScope(actor, item.data() || {})).map(item => item.id));
+        const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => item.id));
         items = items.filter(item => allowedStudentIds.has(String(item.studentId || '')));
         if (requestedStudent) items = items.filter(item => String(item.studentId || '') === requestedStudent);
         if (requestedMentor) items = items.filter(item => String(item.mentorId || '') === requestedMentor);
