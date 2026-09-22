@@ -765,7 +765,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
                 <button type="button" title="Undo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('undo'); }}><Undo2 size={17}/></button>
                 <button type="button" title="Redo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('redo'); }}><Redo2 size={17}/></button>
               </div>
-              <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content.replaceAll('[[PAGE_BREAK]]','\\n') } onChange={event => setEditor({...editor,content:event.target.value})} placeholder="Start writing the lesson content here..." />
+              <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content} onChange={event => setEditor({...editor,content:event.target.value})} placeholder="Start writing the lesson content here..." />
               <div className="vop-lesson-editor-footer"><span>Words: {wordCount}</span><span>Use the toolbar to add lightweight formatting markers.</span></div>
               <div className="vop-form-grid vop-lesson-description-grid"><div className="vop-field"><label>Description</label><textarea value={editor.description} onChange={e => setEditor({...editor,description:e.target.value})}/></div><div className="vop-field"><label>Plain-text fallback</label><textarea value={editor.content} onChange={e => setEditor({...editor,content:e.target.value})}/></div></div>
             </div>}
