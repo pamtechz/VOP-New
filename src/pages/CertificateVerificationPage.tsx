@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Download, Printer } from 'lucide-react';
+import CertificateArtwork from '../components/certificates/CertificateArtwork';
 
 interface Props { onBack: () => void; }
 
@@ -21,6 +22,22 @@ interface VerifiedCertificate {
   verificationEnabled?: boolean;
 }
 
+interface PublicCertificateConfig {
+  certificateTitle?: string;
+  certificateBodyText?: string;
+  issuerName?: string;
+  issuerSubtitle?: string;
+  courseName?: string;
+  directorName?: string;
+  directorTitle?: string;
+  signatureUrl?: string;
+  sealUrl?: string;
+  logoUrl?: string;
+  backgroundUrl?: string;
+  verificationEnabled?: boolean;
+  verificationBaseUrl?: string;
+}
+
 function dateText(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
@@ -32,6 +49,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
   const [certificate, setCertificate] = useState<VerifiedCertificate | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<PublicCertificateConfig | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -46,6 +64,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
     const certificateNumber = value.trim();
     setError('');
     setCertificate(null);
+    setConfig(null);
     if (!certificateNumber) {
       setError('Enter a certificate number.');
       return;
@@ -53,11 +72,12 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
     setLoading(true);
     try {
       const response = await fetch('/api/certificates/verify?certificateNumber=' + encodeURIComponent(certificateNumber));
-      const body = await response.json().catch(() => ({})) as { verified?: boolean; certificate?: VerifiedCertificate; error?: string };
+      const body = await response.json().catch(() => ({})) as { verified?: boolean; certificate?: VerifiedCertificate; config?: PublicCertificateConfig; error?: string };
       if (!response.ok || body.verified !== true || !body.certificate) {
         throw new Error(body.error || 'Certificate could not be verified.');
       }
       setCertificate(body.certificate);
+      setConfig(body.config || null);
       const url = new URL(window.location.href);
       url.searchParams.set('certificate', certificateNumber);
       window.history.replaceState({}, '', url);
@@ -103,6 +123,17 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
               {certificate.unionName && <div><small>Union</small><strong>{certificate.unionName}</strong></div>}
             </div>
             <div className="vop-verification-foot"><ShieldCheck size={19} /><span>Verification is performed against the VOP server record. Certificate status: {certificate.status || 'Certified'}.</span></div>
+            {config && (
+              <div className="vop-public-certificate-preview">
+                <div className="vop-public-certificate-preview-head">
+                  <div><strong>Official Certificate</strong><span>The verified record and certificate presentation use the same official configuration.</span></div>
+                  <div className="vop-public-certificate-preview-actions">
+                    <button type="button" onClick={() => window.print()}><Printer size={16} />Print</button>
+                  </div>
+                </div>
+                <CertificateArtwork certificate={certificate} config={config} />
+              </div>
+            )}
           </article>
         )}
       </main>
