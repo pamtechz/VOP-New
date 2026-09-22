@@ -51,6 +51,7 @@ export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [deepLinkPageIndex, setDeepLinkPageIndex] = useState(0);
   const [studyError, setStudyError] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -122,6 +123,7 @@ export const App: React.FC = () => {
       const deepLinkParams = new URLSearchParams(window.location.search);
       const guideParam = deepLinkParams.get('guide');
       const lessonParam = deepLinkParams.get('lesson');
+      const pageParam = Number.parseInt(deepLinkParams.get('page') || '1', 10);
       if (guideParam) {
         const deepGuide = snapshot.guides.find(guide => guide.id === guideParam || guide.language === guideParam);
         if (deepGuide) {
@@ -129,7 +131,10 @@ export const App: React.FC = () => {
           setCurrentRoute('home');
           if (lessonParam) {
             const deepLesson = deepGuide.lessons.find(lesson => lesson.id === lessonParam || lesson.lessonNumber === lessonParam);
-            if (deepLesson) setActiveLesson(deepLesson);
+            if (deepLesson) {
+              setActiveLesson(deepLesson);
+              setDeepLinkPageIndex(Number.isFinite(pageParam) ? Math.max(0, pageParam - 1) : 0);
+            }
           }
         }
       }
@@ -258,6 +263,7 @@ export const App: React.FC = () => {
         <LessonReaderModal
           lesson={activeLesson}
           guide={activeGuide}
+          initialPageIndex={deepLinkPageIndex}
           onClose={() => setActiveLesson(null)}
           hasPreviousLesson={Boolean(previousLesson)}
           hasNextLesson={Boolean(nextLesson)}
