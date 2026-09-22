@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent } from '../lib/tenant';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota } from '../lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -72,6 +72,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
+      if (!existing.exists) await enforceQuota(ctx, 'guides', 'maxGuides');
       if (existing.exists && !canEditCanonicalContent(ctx, current)) throw new Error('Only the owning organization or VOP Super Admin can edit this guide.');
       await ref.set({
         id,
@@ -124,6 +125,7 @@ export default async function handler(req: Request, res: Response) {
       if (!guide.exists || String(guide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('The selected guide does not belong to this organization.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if (!existing.exists) await enforceQuota(ctx, 'guides', 'maxLessons');
       if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
@@ -218,6 +220,10 @@ export default async function handler(req: Request, res: Response) {
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (!existing.exists) {
+          const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
+          if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
+        }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
         await ref.set({
           ...incoming,
