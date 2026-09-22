@@ -1,0 +1,107 @@
+import { randomUUID } from 'node:crypto';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+
+type Request = { method?: string; headers?: Record<string, string | string[]> | undefined; query?: Record<string, string | string[] | undefined>; body?: unknown };
+type Response = { status: (code: number) => Response; json: (body: unknown) => void; setHeader?: (name: string, value: string) => void; end?: (body?: string) => void };
+
+function admin() {
+  if (getApps().length) return getApps()[0];
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  if (!projectId || !clientEmail || !privateKey) throw new Error('Server-side administration is not configured.');
+  return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+}
+
+function header(req: Request, name: string) {
+  const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+}
+
+async function authenticate(req: Request) {
+  const authorization = header(req, 'authorization');
+  if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
+  return getAuth(admin()).verifyIdToken(authorization.slice(7).trim());
+}
+
+function value(req: Request, key: string) {
+  const raw = req.query?.[key];
+  return Array.isArray(raw) ? raw[0] ?? '' : raw ?? '';
+}
+
+function isSafeTarget(target: string) {
+  return target.startsWith('/') && !target.startsWith('//') && !target.includes('\\n') && !target.includes('\\r');
+}
+
+export default async function handler(req: Request, res: Response) {
+  try {
+    const db = getFirestore(admin());
+
+    if (req.method === 'GET') {
+      const code = value(req, 'c').trim();
+      if (!code) return res.status(400).json({ error: 'Share code is required.' });
+      const ref = db.doc(`shareReferences/${code}`);
+      const snapshot = await ref.get();
+      if (!snapshot.exists) return res.status(404).json({ error: 'Share link not found.' });
+      const data = snapshot.data() || {};
+      const targetPath = String(data.targetPath || '/');
+      if (!isSafeTarget(targetPath)) return res.status(400).json({ error: 'Share destination is invalid.' });
+      await ref.set({ clicks: FieldValue.increment(1), lastAccessAt: FieldValue.serverTimestamp() }, { merge: true });
+      const separator = targetPath.includes('?') ? '&' : '?';
+      const target = `${targetPath}${separator}ref=${encodeURIComponent(code)}`;
+      if (res.setHeader) res.setHeader('Location', target);
+      return res.status(302).json({ redirect: target });
+    }
+
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
+    const decoded = await authenticate(req);
+    const actor = await db.doc(`users/${decoded.uid}`).get();
+    if (!actor.exists || String(actor.data()?.role || '') === 'student') return res.status(403).json({ error: 'Administrator privileges are required.' });
+
+    const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+    const action = String(body.action || '');
+    if (action === 'create') {
+      const targetPath = String(body.targetPath || '').trim();
+      if (!isSafeTarget(targetPath)) throw new Error('A safe internal lesson or chapter path is required.');
+      const code = randomUUID().replace(/-/g, '').slice(0, 12);
+      const item = {
+        code,
+        targetPath,
+        language: String(body.language || ''),
+        guideId: String(body.guideId || ''),
+        lessonId: String(body.lessonId || ''),
+        label: String(body.label || ''),
+        clicks: 0,
+        installs: 0,
+        createdBy: decoded.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      };
+      await db.doc(`shareReferences/${code}`).set(item);
+      const proto = header(req, 'x-forwarded-proto') || 'https';
+      const host = header(req, 'x-forwarded-host') || header(req, 'host');
+      if (!host) throw new Error('The public host could not be determined.');
+      return res.status(200).json({ ok: true, item: { ...item, code, url: `${proto}://${host}/api/share?c=${code}` } });
+    }
+
+    if (action === 'list') {
+      const snapshot = await db.collection('shareReferences').orderBy('createdAt','desc').limit(100).get();
+      return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+    }
+
+    if (action === 'markInstall') {
+      const code = String(body.code || '').trim();
+      if (!code) throw new Error('Share code is required.');
+      await db.doc(`shareReferences/${code}`).set({ installs: FieldValue.increment(1), lastInstallAt: FieldValue.serverTimestamp() }, { merge: true });
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(400).json({ error: 'Unsupported share action.' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Share operation failed.';
+    if (message.includes('required') || message.includes('invalid') || message.includes('Administrator') || message.includes('not found')) return res.status(400).json({ error: message });
+    console.error('VOP share operation failed', error);
+    return res.status(500).json({ error: 'Share operation failed.' });
+  }
+}
