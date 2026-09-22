@@ -1199,3 +1199,133 @@
   .vop-lesson-content-title{flex-direction:column}
   .vop-lesson-content-title .vop-reference-actions{width:100%}
 }
+
+/* Compact admin density + mobile navigation */
+.vop-admin{font-size:13px}
+.vop-admin-top{height:68px;padding:0 20px}
+.vop-brand{height:68px;min-width:230px;gap:10px}
+.vop-brand-mark{width:45px;height:45px;border-radius:13px;font-size:22px}
+.vop-brand-name{font-size:17px}
+.vop-brand-sub{font-size:10px;margin-top:3px}
+.vop-top-kicker{font-size:11px}
+.vop-top-page{font-size:20px}
+.vop-top-actions{gap:10px}
+.vop-notification{width:34px;height:34px}
+.vop-avatar{width:38px;height:38px}
+.vop-user-name{font-size:12px}
+.vop-user-role{font-size:10px}
+.vop-shell{min-height:calc(100vh - 68px)}
+.vop-sidebar{width:245px;flex-basis:245px;padding:12px 10px 14px}
+.vop-nav{gap:2px}
+.vop-nav-item{min-height:40px;border-radius:8px;gap:11px;padding:0 13px;font-size:12px}
+.vop-nav-item.active:before{top:7px;bottom:7px;width:3px}
+.vop-back{min-height:42px;border-radius:8px;font-size:12px}
+.vop-main{padding:14px 16px 18px}
+.vop-page-head{gap:12px;margin-bottom:14px}
+.vop-heading{gap:11px}
+.vop-heading-icon{width:50px;height:50px;border-radius:11px}
+.vop-heading h1{font-size:23px}
+.vop-heading p{font-size:12px;margin-top:3px}
+.vop-primary{border-radius:8px;padding:9px 14px;font-size:12px;box-shadow:none}
+.vop-secondary{border-radius:8px;padding:8px 12px;font-size:12px}
+.vop-grid-4,.vop-grid-3{gap:10px}
+.vop-grid-2{gap:12px}
+.vop-card{border-radius:10px}
+.vop-metric{padding:10px 12px;min-height:76px;gap:9px}
+.vop-metric-icon{width:40px;height:40px;border-radius:11px}
+.vop-metric-value{font-size:20px}
+.vop-metric-label{font-size:11px}
+.vop-metric-trend{font-size:10px;margin-top:5px}
+.vop-section-card{padding:13px 15px}
+.vop-section-title{margin-bottom:11px}
+.vop-section-title h2,.vop-section-title h3{font-size:16px}
+.vop-section-title p{font-size:11px}
+.vop-chart{height:220px}
+.vop-activity-row{padding:8px 0}
+.vop-activity-icon{width:32px;height:32px;border-radius:9px}
+.vop-activity-title{font-size:11px}
+.vop-activity-desc,.vop-activity-time{font-size:9px}
+.vop-quick{padding:11px 13px;border-radius:9px}
+.vop-quick-title{font-size:12px}
+.vop-quick-desc{font-size:10px}
+.vop-settings-tabs,.vop-studio-tabs{gap:5px;margin-bottom:11px}
+.vop-tab{border-radius:8px;padding:8px 12px;font-size:11px}
+.vop-form-card{padding:15px}
+.vop-form-grid{gap:11px}
+.vop-field{gap:5px}
+.vop-field label{font-size:11px}
+.vop-field input,.vop-field select,.vop-field textarea{border-radius:7px;padding:9px 10px;font-size:11px}
+.vop-field textarea{min-height:78px}
+.vop-setting-row{padding:9px 0}
+.vop-setting-name{font-size:11px}
+.vop-setting-help{font-size:9px}
+.vop-toolbar{gap:7px;margin-bottom:10px}
+.vop-search,.vop-filter{height:38px;border-radius:8px;font-size:11px}
+.vop-table{border-radius:10px}
+.vop-table th{font-size:10px;padding:9px 10px}
+.vop-table td{font-size:10px;padding:9px 10px}
+.vop-actions{width:32px;height:32px;border-radius:7px}
+.vop-lesson-row{gap:10px;padding:8px 10px;border-radius:10px}
+.vop-thumb{width:90px;height:55px}
+.vop-row-title{font-size:12px}
+.vop-row-desc{font-size:10px}
+.vop-row-meta{font-size:9px;margin-top:4px}
+.vop-chip{font-size:9px;padding:4px 7px}
+.vop-pager{font-size:10px}
+.vop-page-btn{width:31px;height:31px;border-radius:7px}
+.vop-breadcrumb{font-size:11px;margin-bottom:8px}
+.vop-toast{right:14px;bottom:14px;padding:9px 12px;border-radius:8px;font-size:11px}
+.vop-sidebar-backdrop{display:none;position:fixed;inset:68px 0 0 0;background:rgba(4,20,45,.38);z-index:54;border:0}
+.vop-reference-toolbar{gap:8px;margin-bottom:11px}
+.vop-reference-toolbar select,.vop-reference-search,.vop-filter-button{height:38px;border-radius:8px;font-size:11px}
+.vop-reference-tab{height:40px;border-radius:8px;padding:0 13px;font-size:11px}
+.vop-reference-table-wrap{border-radius:10px}
+.vop-reference-table th{height:36px;padding:0 10px;font-size:10px}
+.vop-reference-table td{padding:8px 10px;font-size:10px}
+.vop-reference-guide-cell,.vop-lesson-reference-cell{gap:8px;min-width:200px}
+.vop-reference-guide-cell img,.vop-lesson-reference-cell img,.vop-reference-image-empty{width:52px;height:38px;border-radius:6px}
+.vop-reference-guide-cell strong,.vop-lesson-reference-cell strong{font-size:11px}
+.vop-reference-guide-cell span,.vop-lesson-reference-cell span{font-size:9px}
+.vop-reference-season{padding:5px 8px;font-size:9px}
+.vop-language-pills span,.vop-language-pill{padding:5px 7px;font-size:9px}
+.vop-reference-updated{font-size:9px}
+.vop-reference-updated small{font-size:8px}
+.vop-reference-pager{padding:10px 12px;font-size:10px}
+.vop-reference-editor{border-radius:10px;padding:15px}
+.vop-quiz-metric{min-height:70px;border-radius:10px;padding:10px 12px}
+.vop-quiz-metric>svg{width:38px;height:38px;padding:8px;border-radius:10px}
+@media(max-width:900px){
+  .vop-sidebar{top:68px;bottom:0;width:245px;flex-basis:245px;display:flex;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility .2s}
+  .vop-sidebar.open{transform:translateX(0);visibility:visible}
+  .vop-sidebar-backdrop{display:block;opacity:0;pointer-events:none;transition:opacity .2s}
+  .vop-sidebar-backdrop:has(+ .vop-sidebar.open){opacity:1;pointer-events:auto}
+  .vop-main{width:100%;padding:12px}
+  .vop-top-title{display:flex}
+  .vop-menu-btn{width:36px;height:36px}
+}
+@media(max-width:640px){
+  .vop-admin-top{height:60px;padding:0 10px}
+  .vop-brand{height:60px;min-width:0}
+  .vop-brand-mark{width:38px;height:38px;font-size:19px}
+  .vop-brand-name{font-size:14px}
+  .vop-brand-sub{font-size:8px}
+  .vop-sidebar{top:60px;width:min(245px,82vw)}
+  .vop-sidebar-backdrop{inset:60px 0 0}
+  .vop-top-title{display:flex;min-width:0}
+  .vop-top-kicker{display:none}
+  .vop-top-page{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vop-top-actions{margin-left:auto}
+  .vop-page-head{margin-bottom:10px}
+  .vop-heading-icon{width:42px;height:42px}
+  .vop-heading h1{font-size:19px}
+  .vop-heading p{font-size:10px}
+  .vop-main{padding:10px}
+  .vop-grid-4,.vop-grid-3,.vop-stat-row{gap:8px}
+  .vop-section-card{padding:11px}
+  .vop-card{border-radius:8px}
+  .vop-form-card{padding:12px}
+  .vop-primary{padding:8px 11px;font-size:11px}
+  .vop-secondary{padding:7px 10px;font-size:10px}
+  .vop-reference-editor-head{gap:8px}
+  .vop-reference-editor-title h1{font-size:19px}
+}
