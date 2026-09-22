@@ -21,6 +21,7 @@ import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPa
 import CurriculumManager from './CurriculumManager';
 import CurriculumSettings from './CurriculumSettings';
 import CertificationManager from './CertificationManager';
+import UserManagement from './UserManagement';
 
 interface AdminPageProps {
   currentUser: User;
@@ -30,7 +31,7 @@ interface AdminPageProps {
 }
 
 type AdminTab =
-  | 'dashboard' | 'settings' | 'candidates' | 'curriculum' | 'languages'
+  | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'materials' | 'radio'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification';
 
@@ -39,6 +40,7 @@ type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'season
 
 const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?: number}>}> = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'userManagement', label: 'User Management', icon: Users },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'candidates', label: 'Candidates', icon: Users },
   { id: 'curriculum', label: 'Curriculum Studio', icon: BookOpen },
@@ -356,6 +358,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     const canEdit = isSuper || currentUser.privileges?.editor === true;
     const allowed = new Set<AdminTab>([
       'dashboard',
+      'userManagement',
       'candidates',
       'languages',
       'translations',
@@ -383,7 +386,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
     ? curriculumSettingsOpen ? 'Curriculum Settings' : studioTab === 'quizzes' ? 'Quiz Management' : studioTab === 'guides' ? 'Guides Management' : 'Curriculum Studio'
-    : currentPage?.label || 'Dashboard';
+    : activeTab === 'userManagement' ? 'User Management' : currentPage?.label || 'Dashboard';
   const toggleNavigation = () => {
     setProfileOpen(false);
     if (window.matchMedia('(max-width: 900px)').matches) {
@@ -835,6 +838,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}
         {activeTab==='dashboard'&&renderDashboard()}
+        {activeTab==='userManagement'&&<UserManagement onBack={onBack} />}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
         {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={languages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
