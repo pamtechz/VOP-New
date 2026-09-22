@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
+import CertificationConfigStudio from './CertificationConfigStudio';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
 
@@ -44,6 +45,7 @@ interface CertificationConfig {
   logoUrl?: string;
   backgroundUrl?: string;
   verificationEnabled?: boolean;
+  minimumScore?: number;
   verificationBaseUrl?: string;
 }
 
@@ -164,7 +166,7 @@ const CertificateArtwork: React.FC<{
 export const CertificationManager: React.FC<Props> = ({
   settings, adminContent, showMessage,
 }) => {
-  const [view, setView] = useState<'list' | 'preview'>('list');
+  const [view, setView] = useState<'list' | 'preview' | 'config'>('list');
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [config, setConfig] = useState<CertificationConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -247,6 +249,29 @@ export const CertificationManager: React.FC<Props> = ({
       .sort((a, b) => (toDate(b.approvedAt)?.getTime() || 0) - (toDate(a.approvedAt)?.getTime() || 0));
   }, [approvedCandidates, certificates, issuerSearch]);
 
+  const saveCertificationConfig = async (nextConfig: CertificationConfig) => {
+    await adminContent('upsert', 'certificationConfig', 'certification', {
+      enabled: nextConfig.enabled === true,
+      verificationEnabled: nextConfig.verificationEnabled === true,
+      minimumScore: nextConfig.minimumScore,
+      courseName: nextConfig.courseName || '',
+      courseCode: nextConfig.courseCode || '',
+      certificateTitle: nextConfig.certificateTitle || '',
+      certificateBodyText: nextConfig.certificateBodyText || '',
+      issuerName: nextConfig.issuerName || '',
+      issuerSubtitle: nextConfig.issuerSubtitle || '',
+      directorName: nextConfig.directorName || '',
+      directorTitle: nextConfig.directorTitle || '',
+      backgroundUrl: nextConfig.backgroundUrl || '',
+      sealUrl: nextConfig.sealUrl || '',
+      signatureUrl: nextConfig.signatureUrl || '',
+      logoUrl: nextConfig.logoUrl || '',
+      verificationBaseUrl: nextConfig.verificationBaseUrl || '',
+    });
+    await load();
+    showMessage('Certification configuration saved to Firestore.');
+  };
+
   const issueCertificate = async (candidateId: string) => {
     if (!auth?.currentUser || issuingCandidateId) return;
     setIssuingCandidateId(candidateId);
@@ -328,6 +353,16 @@ export const CertificationManager: React.FC<Props> = ({
     if (draft) setDraft({ ...draft, [key]: value });
   };
 
+  if (view === 'config') {
+    return (
+      <CertificationConfigStudio
+        config={config}
+        onSave={saveCertificationConfig}
+        onBack={() => setView('list')}
+      />
+    );
+  }
+
   if (view === 'preview' && selected) {
     return (
       <div className="vop-cert-page">
@@ -386,6 +421,7 @@ export const CertificationManager: React.FC<Props> = ({
       <div className="vop-cert-list-head">
         <div><div className="vop-cert-kicker">Certification</div><h1>Certified Candidates</h1><p>View and manage candidates who have successfully completed VOP courses.</p></div>
         <div className="vop-cert-head-actions">
+          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />Certificate Settings</button>
           <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />Issue Certificate</button>
           <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />Export List (PDF)</button>
         </div>

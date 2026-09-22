@@ -538,6 +538,85 @@
 }
 
 
+
+/* Certification configuration studio */
+.vop-cert-config-status{display:flex;align-items:center;gap:12px;background:#eef6ff;border:1px solid #d6e7fb;border-radius:12px;padding:13px 15px;margin-bottom:15px;color:#173d75}
+.vop-cert-config-status-icon{width:42px;height:42px;border-radius:10px;background:#dcecff;color:#0b5bb5;display:grid;place-items:center;flex:0 0 auto}
+.vop-cert-config-status strong{display:block;font-size:14px;color:#0a397f}
+.vop-cert-config-status span{display:block;font-size:12px;color:#61799d;margin-top:2px}
+.vop-cert-config-pill{margin-left:auto!important;display:inline-flex!important;align-items:center;padding:7px 11px;border-radius:999px;background:#eef2f7;color:#667b98!important;font-size:11px!important;font-weight:900!important;white-space:nowrap}
+.vop-cert-config-pill.on{background:#dff7e9;color:#128f4d!important}
+.vop-cert-config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:14px;align-items:start}
+.vop-cert-config-card{background:#fff;border:1px solid #e0e8f2;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(19,55,102,.035);min-width:0}
+.vop-cert-config-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.vop-cert-config-card-head h2{margin:0;color:#09275f;font-size:18px;font-weight:900}
+.vop-cert-config-card-head p{margin:4px 0 0;color:#657c9e;font-size:12px;line-height:1.45}
+.vop-cert-config-card-head>svg{color:#315d94;flex:0 0 auto}
+.vop-cert-toggle-list{display:grid;gap:8px;margin-bottom:14px}
+.vop-cert-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px;border:1px solid #e3eaf3;border-radius:9px;background:#fbfcfe;cursor:pointer}
+.vop-cert-toggle-row strong{display:block;color:#173d75;font-size:13px}
+.vop-cert-toggle-row small{display:block;color:#6b81a2;font-size:11px;line-height:1.4;margin-top:3px}
+.vop-cert-toggle-row input{appearance:none;width:42px;height:24px;border-radius:999px;background:#d5dfeb;position:relative;flex:0 0 auto;cursor:pointer}
+.vop-cert-toggle-row input:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .16s ease}
+.vop-cert-toggle-row input:checked{background:#0a4a9b}
+.vop-cert-toggle-row input:checked:after{transform:translateX(18px)}
+.vop-cert-config-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.vop-cert-config-field{display:block;min-width:0}
+.vop-cert-config-field.full{grid-column:1/-1}
+.vop-cert-config-field>span:first-child{display:block;color:#536e96;font-size:11px;font-weight:900;margin-bottom:5px}
+.vop-cert-config-field input,.vop-cert-config-field textarea{display:block;width:100%;box-sizing:border-box;border:1px solid #dbe5ef;border-radius:8px;background:#fff;color:#173d75;outline:none;font:inherit;font-size:13px;padding:9px 10px}
+.vop-cert-config-field input{height:40px}
+.vop-cert-config-field textarea{resize:vertical;min-height:92px;line-height:1.45}
+.vop-cert-config-field input:focus,.vop-cert-config-field textarea:focus{border-color:#6e9bd2;box-shadow:0 0 0 3px rgba(44,112,194,.08)}
+.vop-cert-config-field>small{display:block;color:#7185a3;font-size:10px;line-height:1.4;margin-top:4px}
+.vop-cert-config-assets,.vop-cert-config-preview{grid-column:1/-1}
+.vop-cert-asset-preview{display:flex!important;align-items:center;gap:8px;margin-top:7px;padding:6px 8px;border:1px solid #e1e9f3;border-radius:8px;background:#f8fbff}
+.vop-cert-asset-preview img{width:38px;height:30px;object-fit:contain;border-radius:5px;background:#fff}
+.vop-cert-asset-preview span{font-size:10px!important;color:#5e769d!important;font-weight:700!important}
+.vop-cert-config-save{min-height:48px;padding:0 17px}
+.vop-cert-config-back{min-height:48px;padding:0 15px}
+.vop-cert-live-preview{position:relative;min-height:290px;border:1px solid #dfe8f2;border-radius:11px;overflow:hidden;padding:24px 28px;background:linear-gradient(135deg,#f8fbff,#eef3f8);text-align:center;color:#111}
+.vop-cert-live-preview:before{content:"";position:absolute;inset:0;opacity:.25;background-image:linear-gradient(30deg,#d7e0ea 12%,transparent 12.5%,transparent 87%,#d7e0ea 87.5%,#d7e0ea),linear-gradient(150deg,#d7e0ea 12%,transparent 12.5%,transparent 87%,#d7e0ea 87.5%,#d7e0ea);background-size:40px 70px;pointer-events:none}
+.vop-cert-live-preview>*{position:relative;z-index:1}
+.vop-cert-live-brand{display:flex;align-items:center;justify-content:center;gap:8px;min-height:32px}
+.vop-cert-live-brand img{width:34px;height:34px;object-fit:contain}
+.vop-cert-live-brand>span{font-size:10px;color:#7185a3}
+.vop-cert-live-brand strong,.vop-cert-live-brand small{display:block}
+.vop-cert-live-brand strong{font-size:11px;color:#173d75}
+.vop-cert-live-brand small{font-size:8px;color:#657c9e;margin-top:1px}
+.vop-cert-live-preview h3{margin:24px 0 8px;color:#09275f;font-size:24px;font-weight:900}
+.vop-cert-live-rule{width:58%;height:1px;margin:0 auto 14px;background:#315d94}
+.vop-cert-live-preview p{max-width:620px;margin:0 auto 12px;color:#435d80;font-size:12px;line-height:1.5}
+.vop-cert-live-preview>strong{display:block;color:#173d75;font-size:14px}
+.vop-cert-live-signature{position:absolute!important;left:7%;bottom:24px;text-align:center;min-width:120px}
+.vop-cert-live-signature img{display:block;width:100px;height:28px;object-fit:contain;margin:0 auto 3px}
+.vop-cert-live-signature div{font-size:10px;font-weight:900;color:#173d75;border-top:1px solid #45566f;padding-top:3px}
+.vop-cert-live-signature small{display:block;font-size:8px;color:#667b98;margin-top:2px}
+.vop-cert-live-seal{position:absolute!important;right:7%;bottom:24px;width:52px;height:52px;border-radius:50%;border:2px solid #315d94;background:#fff;display:grid;place-items:center;color:#7185a3;font-size:7px;padding:4px}
+.vop-cert-live-seal img{width:100%;height:100%;object-fit:contain}
+.vop-cert-verification-link{margin-top:10px;padding:10px 12px;border-radius:8px;background:#f1f7ff;border:1px solid #dbe9f8}
+.vop-cert-verification-link span{display:block;color:#6c82a1;font-size:10px}
+.vop-cert-verification-link strong{display:block;color:#0b5bb5;font-size:12px;word-break:break-all;margin-top:2px}
+@media(max-width:900px){
+  .vop-cert-config-grid{grid-template-columns:1fr}
+  .vop-cert-config-assets,.vop-cert-config-preview{grid-column:auto}
+  .vop-cert-config-status{align-items:flex-start}
+  .vop-cert-config-pill{margin-left:0!important}
+}
+@media(max-width:640px){
+  .vop-cert-config-card{padding:13px}
+  .vop-cert-config-fields{grid-template-columns:1fr}
+  .vop-cert-config-field.full{grid-column:auto}
+  .vop-cert-config-status{flex-wrap:wrap}
+  .vop-cert-config-status>div:nth-child(2){min-width:0;flex:1}
+  .vop-cert-config-pill{margin-left:54px!important}
+  .vop-cert-live-preview{padding:18px 12px;min-height:300px}
+  .vop-cert-live-preview h3{font-size:19px}
+  .vop-cert-live-signature{left:4%;bottom:18px}
+  .vop-cert-live-seal{right:4%;bottom:18px}
+}
+
+
 /* Shared admin density pass: keeps previously built pages aligned with the reference scale. */
 .vop-page-head{margin-bottom:16px}
 .vop-heading{gap:14px}
