@@ -57,6 +57,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
+    else if (params.get('radio') === '1') setCurrentRoute('radio');
   }, []);
 
   useEffect(() => {
