@@ -562,7 +562,7 @@ function RadioAdminDashboard({
             <div className="vop-radio-admin-player">
               {records[0] && <div className="vop-radio-admin-player-art" style={records[0].posterUrl ? {backgroundImage:'url("' + String(records[0].posterUrl) + '")'} : undefined}><Radio size={54}/><div><strong>{String(records[0].title || 'Configured radio content')}</strong><small>{String(records[0].speaker || 'Voice of Prophecy')}</small></div></div>}
             </div>
-            <div className="vop-radio-admin-now-meta"><strong>{records[0]?.title || 'No radio content configured'}</strong><span>{records[0]?.speaker || 'Add published content to populate the player.'}</span></div>
+            <div className="vop-radio-admin-now-meta"><strong>{String(records[0]?.title || 'No radio content configured')}</strong><span>{String(records[0]?.speaker || 'Add published content to populate the player.')}</span></div>
             <div className="vop-radio-admin-player-controls"><button type="button"><Play size={18} fill="currentColor"/></button><div/><span>{records[0] ? radioTime(records[0]) : '—'}</span><span>{records[0]?.durationMinutes ? Math.round(Number(records[0].durationMinutes)) + ' min' : 'Auto'}</span></div>
           </div>
 
