@@ -30,22 +30,35 @@ export default async function handler(req: { method?: string; headers?: Record<s
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed.' });
 
     const db = getFirestore(admin());
-    const configSnapshot = await db.doc('system/mentorship').get();
-    const config = configSnapshot.exists ? configSnapshot.data() || {} : {};
-    if (config.enabled !== true) return res.status(200).json({ ok: true, skipped: true, reason: 'Automation disabled.' });
+    const organizationsSnapshot = await db.collection('organizations').where('status','==','active').get();
+    const organizations = organizationsSnapshot.docs.length
+      ? organizationsSnapshot.docs
+      : [{ id: '', data: () => ({}) } as unknown as FirebaseFirestore.QueryDocumentSnapshot];
 
-    const minAverageScore = Number(config.minAverageScore || 0);
-    const maxProgressPercent = Number(config.maxProgressPercent || 0);
-    const cooldownDays = Math.max(1, Number(config.cooldownDays || 7));
-    if (minAverageScore <= 0 && maxProgressPercent <= 0) return res.status(200).json({ ok: true, skipped: true, reason: 'No performance trigger thresholds configured.' });
-
-    const studentsSnapshot = await db.collection('users').get();
     let processed = 0;
     let created = 0;
     let sent = 0;
     const now = Date.now();
 
-    for (const studentDoc of studentsSnapshot.docs) {
+    for (const organizationDoc of organizations) {
+      const organizationId = organizationDoc.id;
+      const orgConfigSnapshot = organizationId
+        ? await db.doc(`organizations/${organizationId}/settings/mentorship`).get()
+        : await db.doc('system/mentorship').get();
+      const config = orgConfigSnapshot.exists ? orgConfigSnapshot.data() || {} : {};
+      if (config.enabled !== true) continue;
+
+      const minAverageScore = Number(config.minAverageScore || 0);
+      const maxProgressPercent = Number(config.maxProgressPercent || 0);
+      const cooldownDays = Math.max(1, Number(config.cooldownDays || 7));
+      if (minAverageScore <= 0 && maxProgressPercent <= 0) continue;
+
+      const studentsQuery = organizationId
+        ? db.collection('users').where('organizationId','==',organizationId)
+        : db.collection('users');
+      const studentsSnapshot = await studentsQuery.get();
+
+      for (const studentDoc of studentsSnapshot.docs) {
       const student = studentDoc.data();
       if (String(student.role || 'student') !== 'student') continue;
       processed += 1;
@@ -70,6 +83,7 @@ export default async function handler(req: { method?: string; headers?: Record<s
       const draftRef = db.collection('notificationDrafts').doc();
       const channel = config.channel === 'email' ? 'email' : 'in_app';
       await draftRef.set({
+        organizationId,
         studentId: studentDoc.id,
         type: 'performance-support',
         channel,
@@ -99,6 +113,7 @@ export default async function handler(req: { method?: string; headers?: Record<s
         }
       } else {
         await db.collection('notifications').add({
+          organizationId,
           recipientId: studentDoc.id,
           title: draft.subject,
           body: draft.body,
@@ -108,6 +123,9 @@ export default async function handler(req: { method?: string; headers?: Record<s
         });
         await draftRef.set({ status:'sent', sentAt:FieldValue.serverTimestamp(), delivery:'in_app' }, { merge:true });
         sent += 1;
+      }
+    }
+
       }
     }
 
