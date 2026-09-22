@@ -58,15 +58,28 @@ function dateTime(value?: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
-function youtubeVideoId(value?: string) {
+function youtubeSource(value?: string) {
   if (!value) return null;
   try {
     const url = new URL(value), host = url.hostname.toLowerCase();
-    if (host === 'youtu.be') return url.pathname.split('/').filter(Boolean)[0] || null;
+    if (host === 'youtu.be') {
+      const id = url.pathname.split('/').filter(Boolean)[0] || '';
+      return id ? { id, live: false } : null;
+    }
     if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
-      if (url.pathname === '/watch') return url.searchParams.get('v');
-      for (const prefix of ['/shorts/', '/live/', '/embed/']) {
-        if (url.pathname.startsWith(prefix)) return url.pathname.slice(prefix.length).split('/')[0] || null;
+      if (url.pathname === '/watch') {
+        const id = url.searchParams.get('v') || '';
+        return id ? { id, live: false } : null;
+      }
+      if (url.pathname.startsWith('/live/')) {
+        const id = url.pathname.slice('/live/'.length).split('/')[0] || '';
+        return id ? { id, live: true } : null;
+      }
+      for (const prefix of ['/shorts/', '/embed/']) {
+        if (url.pathname.startsWith(prefix)) {
+          const id = url.pathname.slice(prefix.length).split('/')[0] || '';
+          return id ? { id, live: false } : null;
+        }
       }
     }
   } catch {}
@@ -93,8 +106,8 @@ type MediaSource =
 function detectMedia(item: RadioBroadcast): MediaSource {
   const candidates = [item.videoUrl, item.audioUrl, item.streamUrl].map(v => v?.trim()).filter(Boolean) as string[];
   for (const url of candidates) {
-    const youtube = youtubeVideoId(url);
-    if (youtube) return { provider: 'youtube', url, videoId: youtube, live: false };
+    const youtube = youtubeSource(url);
+    if (youtube) return { provider: 'youtube', url, videoId: youtube.id, live: youtube.live };
     const audioVerse = audioVerseEmbedUrl(url);
     if (audioVerse) return { provider: 'audioverse', url, embedUrl: audioVerse, live: false };
   }
@@ -118,6 +131,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   const [current, setCurrent] = useState(0), [duration, setDuration] = useState(0), [rate, setRate] = useState(1);
   const [error, setError] = useState(''), [waiting, setWaiting] = useState(false), [now, setNow] = useState(() => new Date());
   const [ytReady, setYtReady] = useState(false);
+  const [scheduleRange, setScheduleRange] = useState<'today' | 'tomorrow' | 'week'>('today');
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
   const ytMountRef = useRef<HTMLDivElement | null>(null), ytPlayerRef = useRef<YTPlayer | null>(null);
   const source = useMemo(() => selected ? detectMedia(selected) : null, [selected]);
@@ -233,7 +247,34 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   const heroItem = selected || broadcasts[0], selectedPoster = heroItem?.posterUrl?.trim() || '';
   const featured = broadcasts.slice(0, 4);
   const latestAudio = broadcasts.filter(item => { const media = detectMedia(item); return media?.provider !== 'direct-video'; }).slice(0, 4);
-  const schedule = [...broadcasts].sort((a,b) => String(a.broadcastTime || a.createdAt || '').localeCompare(String(b.broadcastTime || b.createdAt || ''))).slice(0, 10);
+  const schedule = useMemo(() => {
+    const nowDate = new Date();
+    const startToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+    const startTomorrow = new Date(startToday);
+    startTomorrow.setDate(startTomorrow.getDate() + 1);
+    const startWeek = new Date(startToday);
+    startWeek.setDate(startWeek.getDate() - startWeek.getDay());
+    const endWeek = new Date(startWeek);
+    endWeek.setDate(endWeek.getDate() + 7);
+
+    return broadcasts
+      .map(item => ({ item, date: item.broadcastTime ? new Date(item.broadcastTime) : null }))
+      .filter(entry => {
+        if (!entry.date || Number.isNaN(entry.date.getTime())) return false;
+        if (scheduleRange === 'today') {
+          return entry.date >= startToday && entry.date < startTomorrow;
+        }
+        if (scheduleRange === 'tomorrow') {
+          const endTomorrow = new Date(startTomorrow);
+          endTomorrow.setDate(endTomorrow.getDate() + 1);
+          return entry.date >= startTomorrow && entry.date < endTomorrow;
+        }
+        return entry.date >= startWeek && entry.date < endWeek;
+      })
+      .sort((a, b) => a.date!.getTime() - b.date!.getTime())
+      .map(entry => entry.item)
+      .slice(0, 10);
+  }, [broadcasts, scheduleRange]);
   const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
   const live = broadcasts.filter(item => detectMedia(item)?.live);
 
@@ -285,7 +326,13 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
         <section className="vop-radio-section-grid">
           <div className="vop-radio-schedule-card">
             <div className="vop-radio-section-head"><h2><CalendarDays size={19}/> Program Schedule</h2><button type="button">View Full Schedule <ChevronRight size={15}/></button></div>
-            <div className="vop-radio-schedule-tabs"><button className="active" type="button">Today</button><button type="button">Tomorrow</button><button type="button">This Week</button></div>
+            <div className="vop-radio-schedule-tabs">
+              {(['today', 'tomorrow', 'week'] as const).map(range => (
+                <button key={range} className={scheduleRange === range ? 'active' : ''} type="button" onClick={() => setScheduleRange(range)}>
+                  {range === 'today' ? 'Today' : range === 'tomorrow' ? 'Tomorrow' : 'This Week'}
+                </button>
+              ))}
+            </div>
             <div className="vop-radio-schedule-list">
               {schedule.map(item=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime ? localTime(new Date(item.broadcastTime)) : '—'}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{detectMedia(item)?.live && <em>LIVE</em>}</button>)}
               {!schedule.length && <div className="vop-radio-muted">No scheduled programmes configured.</div>}
