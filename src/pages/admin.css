@@ -976,3 +976,14 @@
   .vop-profile-menu{top:calc(100% + 7px)}
   .vop-user{padding:2px}
 }
+
+@media(min-width:901px){
+  .vop-admin-top.sidebar-collapsed .vop-brand{
+    min-width:82px;
+    width:82px;
+    justify-content:center;
+    gap:0;
+  }
+  .vop-admin-top.sidebar-collapsed .vop-brand-copy{display:none}
+  .vop-admin-top.sidebar-collapsed .vop-brand-mark{width:50px;height:50px}
+}
