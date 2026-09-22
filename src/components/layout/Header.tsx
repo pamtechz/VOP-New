@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation } from '../../services/i18n';
-import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info } from 'lucide-react';
+import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
 
 interface HeaderProps {
   currentUser: User;
@@ -151,6 +151,30 @@ export const Header: React.FC<HeaderProps> = ({
             <Radio size={14} />
             <span>Radio</span>
           </button>
+          <button
+            onClick={() => nav('announcements')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentRoute === 'announcements'
+                ? 'bg-amber-400/20 text-amber-300 font-bold'
+                : 'text-slate-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Megaphone size={14} />
+            <span>Announcements</span>
+          </button>
+          {currentUser.role === 'student' && (
+            <button
+              onClick={() => nav('support')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                currentRoute === 'support'
+                  ? 'bg-amber-400/20 text-amber-300 font-bold'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <MessageCircle size={14} />
+              <span>Support</span>
+            </button>
+          )}
           <button
             onClick={() => nav('about')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
