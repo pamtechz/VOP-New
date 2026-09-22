@@ -206,7 +206,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('Delete this record from Firestore?')) return;
+    if (!window.confirm('Delete this record?')) return;
     try {
       if (!isRecordKind(kind)) return;
       await deleteAdminRecord(COLLECTIONS[kind], id);
@@ -231,7 +231,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     setError('');
     try {
       await saveTranslation(selectedTranslation, cleaned);
-      setMessage('Translations saved to Firestore.');
+      setMessage('Translations saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save translations.');
     } finally {
