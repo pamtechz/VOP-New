@@ -17,7 +17,9 @@ function getFirebaseAdmin() {
   if (getApps().length) return getApps()[0];
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\
+/g, '
+');
   if (!projectId || !clientEmail || !privateKey) throw new Error('Firebase Admin server configuration is missing.');
   return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
 }
@@ -41,14 +43,15 @@ function profileType(profile: Record<string, unknown> | undefined, authUser: Use
 }
 
 function displayRole(type: ProfileType, profile: Record<string, unknown> | undefined): string {
-  if (type === 'super_admin') return 'Super Admin';\n  if (type === 'admin') return 'Admin';
+  if (type === 'super_admin') return 'Super Admin';
+  if (type === 'admin') return 'Admin';
   if (type === 'teacher') return 'Teacher';
   if (type === 'guest') return 'Guest';
   return 'Learner';
 }
 
 function roleColor(type: ProfileType): string {
-  return type === 'admin' ? 'admin' : type === 'teacher' ? 'teacher' : type === 'guest' ? 'guest' : 'learner';
+  return type === 'super_admin' || type === 'admin' ? 'admin' : type === 'teacher' ? 'teacher' : type === 'guest' ? 'guest' : 'learner';
 }
 
 function userCode(authUser: UserRecord, profile: Record<string, unknown> | undefined): string {
@@ -131,7 +134,10 @@ async function listAllUsers(authService: ReturnType<typeof getAuth>) {
 }
 
 function profileForType(type: ProfileType, organization: Record<string, unknown>) {
-  if (type === 'super_admin') {\n    return { role: 'super_admin', adminNodeType: null, adminNodeId: null, privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true, coordinator: true } };\n  }\n  if (type === 'admin') {
+  if (type === 'super_admin') {
+    return { role: 'super_admin', adminNodeType: null, adminNodeId: null, privileges: { admin: true, superAdmin: true, guardian: true, editor: true, manager: true, developer: true, coordinator: true } };
+  }
+  if (type === 'admin') {
     const nodeType = String(organization.adminNodeType || 'union');
     const nodeId = String(organization.adminNodeId || '');
     const role = nodeType === 'union' ? 'union_admin' : nodeType === 'conference' ? 'conference_admin' : nodeType === 'district' ? 'district_admin' : nodeType === 'church' ? 'church_admin' : 'union_admin';
