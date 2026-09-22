@@ -30,7 +30,8 @@ export async function googleSignIn() {
   const firebaseAuth = requireAuth();
   if (!Capacitor.isNativePlatform()) {
     const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
+    // Let Google's account chooser use its normal browser session. Forcing
+    // select_account can repeatedly invoke Google's accountchooser surface.
     // Redirect is more reliable than popup polling under modern browser COOP policies.
     return signInWithRedirect(firebaseAuth, provider);
   }
