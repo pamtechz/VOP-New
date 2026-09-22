@@ -67,7 +67,7 @@ function createApiResponse(res: ServerResponse) {
 
 function createLocalApiMiddleware(server: {
   ssrLoadModule: (url: string) => Promise<Record<string, unknown>>;
-}): Parameters<import('vite').ViteDevServer['middlewares']['use']>[0] {
+}) {
   return async (req, res, next) => {
     const requestUrl = req.url ?? '';
     if (!requestUrl.startsWith(LOCAL_API_PREFIX)) {
