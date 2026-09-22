@@ -12,7 +12,6 @@ import {
   saveTranslation
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
-import { DEFAULT_TRANSLATIONS, MASTER_TRANSLATION_KEYS } from '../services/i18n';
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -152,24 +151,13 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     if (kind === 'translations') {
       const refreshDetectedTranslations = () => {
         const detected = new Map<string, AutoLocalizationEntry>();
-        MASTER_TRANSLATION_KEYS.forEach(entry => {
-          detected.set(entry.key, {
-            key: entry.key,
-            english: entry.defaultEn,
-            component: 'Built-in',
-            translations: { en: entry.defaultEn },
-            discoveredAt: ''
-          });
-        });
         getStoredAutoLocalization().forEach(entry => {
           if (!entry.key.trim()) return;
-          const existing = detected.get(entry.key);
-          detected.set(entry.key, existing ? {
-            ...existing,
+          detected.set(entry.key, {
             ...entry,
-            english: entry.english || existing.english,
-            translations: { ...existing.translations, ...entry.translations }
-          } : entry);
+            english: entry.english || entry.key,
+            translations: { ...entry.translations }
+          });
         });
         setDetectedTranslations(Array.from(detected.values()).sort((a, b) => a.key.localeCompare(b.key)));
       };
@@ -203,7 +191,6 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       if (nextValues[entry.key] === undefined) {
         nextValues[entry.key] =
           entry.translations?.[selectedTranslation] ||
-          DEFAULT_TRANSLATIONS[selectedTranslation]?.[entry.key] ||
           (selectedTranslation === 'en' ? entry.english : '');
       }
     });
