@@ -1,367 +1,231 @@
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent } from '../lib/tenant';
 
-type Request = {
-  method?: string;
-  headers?: Record<string, string | string[] | undefined>;
-  body?: unknown;
-};
-
-type Response = {
-  status: (code: number) => Response;
-  json: (body: unknown) => void;
-};
+type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
+type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 const COLLECTIONS = new Set([
-  'languages',
-  'translations',
-  'announcements',
-  'books',
-  'radioBroadcasts',
-  'unions',
-  'conferences',
-  'districts',
-  'churches',
-  'users',
-  'curriculum',
-  'guides',
-  'learningPaths',
-  'bibleTopics',
-  'seasons',
-  'certificationConfig',
-  'certificates',
-  'graduationRequests',
-  'settings',
-  'curriculumSettings',
+  'languages','translations','announcements','books','radioBroadcasts','unions','conferences','districts','churches',
+  'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
+  'graduationRequests','settings','curriculumSettings'
 ]);
 
-function header(request: Request, name: string): string {
-  const value = request.headers?.[name] ?? request.headers?.[name.toLowerCase()];
-  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
-}
+const ORG_COLLECTIONS = new Set([
+  'languages','translations','announcements','books','radioBroadcasts','learningPaths','bibleTopics','seasons',
+  'certificates','graduationRequests','curriculum','guides'
+]);
 
-function admin() {
-  if (getApps().length) return getApps()[0];
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error('Server-side Firebase administration is not configured.');
-  }
-  return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
-}
-
-async function authenticate(request: Request) {
-  const authorization = header(request, 'authorization');
-  if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
-  return getAuth(admin()).verifyIdToken(authorization.slice(7).trim());
-}
-
-function safeDocumentId(value: unknown): string {
-  const id = typeof value === 'string' ? value.trim() : '';
+function safeId(value: unknown) {
+  const id = String(value || '').trim();
   if (!id || id.length > 120 || id.includes('/')) throw new Error('A valid document ID is required.');
   return id;
 }
-
-function validLanguage(value: unknown): value is string {
-  return typeof value === 'string'
-    && /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(value.trim());
+function language(value: unknown) {
+  return typeof value === 'string' && /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(value.trim());
 }
-
-function guideRef(db: FirebaseFirestore.Firestore, language: string) {
-  return db.doc(`curricula/discover/languages/${language}`);
+function orgCollection(ctx: { db: FirebaseFirestore.Firestore; organizationId: string }, collection: string) {
+  if (!ctx.organizationId) throw new Error('Select an organization before managing organization content.');
+  return ctx.db.collection(collection);
 }
+function guideId(orgId: string, lang: string) { return `${orgId}__${lang}`; }
 
-function lessonRef(db: FirebaseFirestore.Firestore, language: string, lessonId: string) {
-  return db.doc(`curricula/discover/languages/${language}/lessons/${lessonId}`);
-}
-
-function normalizeLessonNumber(value: unknown): number {
-  const number = Number.parseFloat(String(value ?? '').replace(',', '.'));
-  if (!Number.isFinite(number) || number < 0) return Number.NaN;
-  return number;
-}
-
-async function validateLessonNumber(
-  db: FirebaseFirestore.Firestore,
-  language: string,
-  lessonNumber: unknown,
-  lessonId: string,
-) {
-  const normalized = normalizeLessonNumber(lessonNumber);
-  if (!Number.isFinite(normalized)) {
-    throw new Error('Lesson number must be numeric, for example 1, 1.1 or 1.2.');
-  }
-
-  const guide = await guideRef(db, language).get();
-  if (!guide.exists || guide.data()?.archived === true) {
-    throw new Error('A valid non-archived guide is required.');
-  }
-
-  const snapshot = await db.collection(`curricula/discover/languages/${language}/lessons`).get();
-  const duplicate = snapshot.docs.find(item => {
-    if (item.id === lessonId) return false;
-    return normalizeLessonNumber(item.data().lessonNumber) === normalized;
-  });
-  if (duplicate) {
-    throw new Error(`Lesson number ${String(lessonNumber)} is already used by another published lesson.`);
-  }
-}
-
-export default async function handler(request: Request, response: Response) {
-  if (request.method !== 'POST') return response.status(405).json({ error: 'Method not allowed.' });
-
+export default async function handler(req: Request, res: Response) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
   try {
-    const decoded = await authenticate(request);
-    const body = request.body && typeof request.body === 'object'
-      ? request.body as Record<string, unknown>
-      : {};
-    const action = typeof body.action === 'string' ? body.action : 'list';
-    const collection = typeof body.collection === 'string' ? body.collection : '';
+    const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+    const collection = String(body.collection || '');
+    const action = String(body.action || 'list');
+    if (!COLLECTIONS.has(collection)) return res.status(400).json({ error: 'Unsupported content collection.' });
 
-    if (!COLLECTIONS.has(collection)) {
-      return response.status(400).json({ error: 'Unsupported content collection.' });
-    }
-
-    const db = getFirestore(admin());
-    const actor = await db.doc(`users/${decoded.uid}`).get();
-    const role = actor.exists ? actor.data()?.role : null;
-    const canEditCurriculum = role === 'super_admin'
-      || (['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(role))
-        && actor.data()?.privileges?.editor === true);
-    if (!['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(role || ''))) {
-      return response.status(403).json({ error: 'Administrator privileges are required.' });
-    }
-    if (['curriculum', 'guides', 'learningPaths', 'bibleTopics', 'seasons'].includes(collection) && !canEditCurriculum) {
-      return response.status(403).json({ error: 'Curriculum editor privileges are required.' });
-    }
-    if ((collection === 'settings' || collection === 'certificationConfig' || collection === 'certificates') && role !== 'super_admin') {
-      return response.status(403).json({ error: 'Only a super administrator can manage certification records and configuration.' });
+    const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
+    const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
+    const editorRoles = curriculum ? ['owner','admin','editor'] : ['owner','admin'];
+    if (action !== 'list' && action !== 'listGuides') requireOrgRole(ctx, editorRoles);
+    if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
+      if (collection === 'settings' && ctx.organizationId) {
+        requireOrgRole(ctx, ['owner','admin']);
+      } else {
+        throw new Error('Only the VOP Super Admin can manage platform configuration.');
+      }
     }
 
     if (action === 'listGuides') {
-      if (collection !== 'guides') {
-        return response.status(400).json({ error: 'Guide listing requires the guides collection.' });
-      }
-      const snapshot = await db.collection('curricula/discover/languages').get();
-      const items = await Promise.all(snapshot.docs.map(async item => {
-        const data = item.data();
-        const lessons = await item.ref.collection('lessons').get();
-        return {
-          id: item.id,
-          ...data,
-          lessonCount: lessons.size,
-          languages: [String(data.language ?? item.id)].filter(Boolean),
-        };
+      const snap = ctx.organizationId
+        ? await ctx.db.collection('guides').where('organizationId','==',ctx.organizationId).get()
+        : await ctx.db.collection('guides').get();
+      const items = await Promise.all(snap.docs.map(async d => {
+        const lessons = await d.ref.collection('lessons').get();
+        return { id: d.id, ...d.data(), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean) };
       }));
-      return response.status(200).json({ ok: true, items });
+      return res.status(200).json({ ok: true, items });
     }
 
     if (action === 'upsertGuide') {
-      if (collection !== 'guides') {
-        return response.status(400).json({ error: 'Guide management requires the guides collection.' });
-      }
-      if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
-        return response.status(400).json({ error: 'Guide data must be an object.' });
-      }
-      const data = body.data as Record<string, unknown>;
-      const language = typeof data.language === 'string' ? data.language.trim() : '';
-      if (!validLanguage(language)) {
-        return response.status(400).json({ error: 'A valid language code is required for a guide.' });
-      }
-      const title = typeof data.title === 'string' ? data.title.trim() : '';
-      if (!title) return response.status(400).json({ error: 'Guide title is required.' });
-      const id = typeof data.id === 'string' && data.id.trim()
-        ? safeDocumentId(data.id)
-        : `discover-${language}`;
-
-      const ref = guideRef(db, language);
+      if (collection !== 'guides') throw new Error('Guide management requires the guides collection.');
+      if (!ctx.organizationId) throw new Error('Select an organization before creating a guide.');
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+      const lang = String(data.language || '').trim();
+      if (!language(lang)) throw new Error('A valid language code is required for a guide.');
+      const title = String(data.title || '').trim();
+      if (!title) throw new Error('Guide title is required.');
+      const id = guideId(ctx.organizationId, lang);
+      const ref = ctx.db.doc(`guides/${id}`);
+      const existing = await ref.get();
+      const current = existing.exists ? existing.data() || {} : {};
+      if (existing.exists && !canEditCanonicalContent(ctx, current)) throw new Error('Only the owning organization or VOP Super Admin can edit this guide.');
       await ref.set({
         id,
+        organizationId: ctx.organizationId,
+        ownerOrganizationId: current.ownerOrganizationId || ctx.organizationId,
+        ownerUid: current.ownerUid || ctx.auth.uid,
+        canonical: true,
+        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
         curriculumId: 'discover',
         discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
         title,
-        subtitle: typeof data.subtitle === 'string' ? data.subtitle.trim() : '',
-        description: typeof data.description === 'string' ? data.description.trim() : '',
-        language,
-        image: typeof data.image === 'string' ? data.image.trim() : '',
-        season: typeof data.season === 'string' ? data.season.trim() : '',
-        quarter: typeof data.quarter === 'string' ? data.quarter.trim() : '',
+        subtitle: String(data.subtitle || ''),
+        description: String(data.description || ''),
+        language: lang,
+        image: String(data.image || ''),
+        season: String(data.season || ''),
+        quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
         published: data.published === true,
         archived: data.archived === true,
-        createdAt: data.createdAt || FieldValue.serverTimestamp(),
+        createdAt: current.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: decoded.uid,
+        updatedBy: ctx.auth.uid,
       }, { merge: true });
-
       const saved = await ref.get();
-      return response.status(200).json({ ok: true, item: { id: language, ...saved.data() } });
+      return res.status(200).json({ ok: true, item: { id, ...saved.data() } });
     }
 
     if (action === 'archiveGuide') {
-      if (collection !== 'guides') {
-        return response.status(400).json({ error: 'Guide archiving requires the guides collection.' });
+      if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
+      const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim();
+      if (!language(lang) || !ctx.organizationId) throw new Error('A valid language and organization are required.');
+      const ref = ctx.db.doc(`guides/${guideId(ctx.organizationId, lang)}`);
+      const current = await ref.get();
+      if (!current.exists || !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can archive this guide.');
+      await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'publishLesson' || action === 'unpublishLesson') {
+      if (collection !== 'curriculum') throw new Error('Lesson publishing requires the curriculum collection.');
+      if (!ctx.organizationId) throw new Error('Select an organization before publishing lessons.');
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+      const lang = String(data.language || '').trim();
+      const lessonId = safeId(data.lessonId || body.id);
+      if (!language(lang)) throw new Error('A valid language code is required.');
+      const guide = await ctx.db.doc(`guides/${guideId(ctx.organizationId, lang)}`).get();
+      if (!guide.exists || guide.data()?.archived === true) throw new Error('A valid organization guide is required.');
+      const ref = guide.ref.collection('lessons').doc(lessonId);
+      if (action === 'unpublishLesson') {
+        const current = await ref.get();
+        if (current.exists && !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can unpublish this lesson.');
+        await ref.delete();
+        return res.status(200).json({ ok: true, item: { id: lessonId, published: false } });
       }
-      const language = typeof body.data === 'object' && body.data && !Array.isArray(body.data)
-        && typeof (body.data as Record<string, unknown>).language === 'string'
-        ? String((body.data as Record<string, unknown>).language).trim()
-        : '';
-      if (!validLanguage(language)) {
-        return response.status(400).json({ error: 'A valid language code is required.' });
-      }
-      await guideRef(db, language).set({
-        published: false,
-        archived: true,
+      await ref.set({
+        ...data,
+        id: lessonId,
+        lessonId,
+        organizationId: ctx.organizationId,
+        ownerOrganizationId: ctx.organizationId,
+        ownerUid: ctx.auth.uid,
+        canonical: true,
+        sharingScope: data.sharingScope === 'shared' ? 'shared' : 'organization',
+        published: true,
+        publishedAt: FieldValue.serverTimestamp(),
+        publishedBy: ctx.auth.uid,
         updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: decoded.uid,
+        updatedBy: ctx.auth.uid,
       }, { merge: true });
-      return response.status(200).json({ ok: true, item: { id: language, published: false, archived: true } });
+      return res.status(200).json({ ok: true, item: { id: lessonId, published: true } });
     }
 
     if (action === 'list') {
-      if (collection === 'settings') {
-        const snapshot = await db.doc('system/settings').get();
-        return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'settings', ...snapshot.data() }] : [] });
+      if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
+        if (collection === 'certificationConfig' && ctx.isSuperAdmin) {
+          const s = await ctx.db.doc('system/certification').get();
+          return res.status(200).json({ ok: true, items: s.exists ? [{ id:'certification', ...s.data() }] : [] });
+        }
+        const id = collection === 'settings' ? 'settings' : 'curriculum';
+        const s = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/${id}`).get();
+        return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data() }] : [] });
       }
-      if (collection === 'certificationConfig') {
-        const snapshot = await db.doc('system/certification').get();
-        return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'certification', ...snapshot.data() }] : [] });
+      if (collection === 'users') {
+        if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('Organization membership is required.');
+        const snap = ctx.organizationId
+          ? await ctx.db.collection('users').where('organizationId','==',ctx.organizationId).get()
+          : await ctx.db.collection('users').get();
+        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
       }
-      if (collection === 'curriculumSettings') {
-        const snapshot = await db.doc('system/curriculum').get();
-        return response.status(200).json({ ok: true, items: snapshot.exists ? [{ id: 'curriculum', ...snapshot.data() }] : [] });
+      if (ORG_COLLECTIONS.has(collection)) {
+        if (!ctx.organizationId) return res.status(200).json({ ok: true, items: [] });
+        const snap = await ctx.db.collection(collection).where('organizationId','==',ctx.organizationId).get();
+        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
       }
-      const snapshot = await db.collection(collection).get();
-      const items = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-      return response.status(200).json({ ok: true, items });
+      if (ctx.isSuperAdmin) {
+        const snap = await ctx.db.collection(collection).get();
+        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
+      }
+      return res.status(403).json({ error: 'This platform-level collection is managed by the VOP Super Admin.' });
     }
 
-    const id = safeDocumentId(body.id);
-
-    if (action === 'publishLesson') {
-      if (collection !== 'curriculum') {
-        return response.status(400).json({ error: 'Lesson publishing requires the curriculum collection.' });
+    const id = safeId(body.id);
+    if (ORG_COLLECTIONS.has(collection)) {
+      if (!ctx.organizationId) throw new Error('Select an organization before managing content.');
+      const ref = ctx.db.doc(`${collection}/${id}`);
+      const existing = await ref.get();
+      if (action === 'delete') {
+        if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization can delete this content.');
+        await ref.delete();
+        return res.status(200).json({ ok:true, id });
       }
-      if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
-        return response.status(400).json({ error: 'Lesson data must be an object.' });
+      if (action === 'upsert') {
+        const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
+        await ref.set({
+          ...incoming,
+          id,
+          organizationId: ctx.organizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+          ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
+          canonical: true,
+          createdAt: existing.data()?.createdAt || new Date().toISOString(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: ctx.auth.uid,
+        }, { merge:true });
+        const saved=await ref.get();
+        return res.status(200).json({ ok:true, item:{id,...saved.data()} });
       }
-
-      const lesson = body.data as Record<string, unknown>;
-      const language = typeof lesson.language === 'string' ? lesson.language.trim() : '';
-      const lessonId = typeof lesson.lessonId === 'string' && lesson.lessonId.trim()
-        ? lesson.lessonId.trim()
-        : id;
-      if (!validLanguage(language)) {
-        return response.status(400).json({ error: 'A valid language code is required for publication.' });
-      }
-      if (!/^[A-Za-z0-9_-]{1,80}$/.test(lessonId)) {
-        return response.status(400).json({ error: 'A valid lesson ID is required for publication.' });
-      }
-
-      const guide = await guideRef(db, language).get();
-      if (!guide.exists || guide.data()?.published !== true || guide.data()?.archived === true) {
-        return response.status(400).json({ error: 'Create and publish a guide for this language before publishing lessons.' });
-      }
-      await validateLessonNumber(db, language, lesson.lessonNumber, lessonId);
-
-      const guideData = guide.data() || {};
-      const canonical = lessonRef(db, language, lessonId);
-      const canonicalData = {
-        schemaVersion: 3,
-        curriculumId: 'discover',
-        language,
-        lessonId,
-        lessonNumber: String(lesson.lessonNumber ?? lessonId),
-        title: String(lesson.title ?? ''),
-        description: String(lesson.description ?? ''),
-        type: lesson.type === 'Test' ? 'Test' : 'Lesson',
-        pages: Array.isArray(lesson.pages) ? lesson.pages : [],
-        contentPages: Array.isArray(lesson.contentPages) ? lesson.contentPages : [],
-        quiz: Array.isArray(lesson.quiz) ? lesson.quiz : [],
-        questions: Array.isArray(lesson.questions) ? lesson.questions : [],
-        guideId: String(guideData.id ?? ''),
-        discoverNumber: Number(guideData.discoverNumber ?? 1),
-        guideTitle: String(guideData.title ?? ''),
-        guideSubtitle: String(guideData.subtitle ?? ''),
-        guideDescription: String(guideData.description ?? ''),
-        guideImage: String(guideData.image ?? ''),
-        certificateEligible: Boolean(guideData.certificateEligible),
-        season: String(lesson.season ?? ''),
-        media: lesson.media && typeof lesson.media === 'object' ? lesson.media : {},
-        bibleReferences: Array.isArray(lesson.bibleReferences) ? lesson.bibleReferences : [],
-        teacherNotes: String(lesson.teacherNotes ?? ''),
-        tags: Array.isArray(lesson.tags) ? lesson.tags : [],
-        estimatedMinutes: Math.max(1, Number(lesson.estimatedMinutes ?? 15) || 15),
-        published: true,
-        publishedAt: FieldValue.serverTimestamp(),
-        publishedBy: decoded.uid,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: decoded.uid,
-      };
-      await canonical.set(canonicalData, { merge: true });
-      return response.status(200).json({
-        ok: true,
-        item: { id: lessonId, path: canonical.path, published: true },
-      });
     }
 
-    if (action === 'unpublishLesson') {
-      if (collection !== 'curriculum') {
-        return response.status(400).json({ error: 'Lesson unpublishing requires the curriculum collection.' });
-      }
-      const lessonId = typeof body.id === 'string' ? body.id.trim() : '';
-      const language = typeof body.data === 'object' && body.data && !Array.isArray(body.data)
-        && typeof (body.data as Record<string, unknown>).language === 'string'
-        ? String((body.data as Record<string, unknown>).language).trim()
-        : '';
-      if (!lessonId || !validLanguage(language)) {
-        return response.status(400).json({ error: 'Lesson ID and a valid language are required.' });
-      }
-      await lessonRef(db, language, lessonId).delete();
-      return response.status(200).json({ ok: true, item: { id: lessonId, published: false } });
+    if (collection === 'settings' || collection === 'curriculumSettings') {
+      if (!ctx.organizationId) throw new Error('Select an organization before changing settings.');
+      const ref=ctx.db.doc(`organizations/${ctx.organizationId}/settings/${collection === 'settings' ? 'settings' : 'curriculum'}`);
+      if (action === 'delete') { await ref.delete(); return res.status(200).json({ok:true,id}); }
+      const incoming=body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
+      await ref.set({...incoming, organizationId:ctx.organizationId, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid},{merge:true});
+      return res.status(200).json({ok:true,item:{id,...(await ref.get()).data()}});
     }
 
-    const ref = collection === 'settings'
-      ? db.doc('system/settings')
-      : collection === 'certificationConfig'
-        ? db.doc('system/certification')
-        : collection === 'curriculumSettings'
-          ? db.doc('system/curriculum')
-          : db.doc(`${collection}/${id}`);
-
-    if (action === 'delete') {
-      await ref.delete();
-      return response.status(200).json({ ok: true, id });
-    }
-
-    if (action === 'upsert') {
-      if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
-        return response.status(400).json({ error: 'Content data must be an object.' });
+    if (ctx.isSuperAdmin) {
+      const ref=ctx.db.doc(`${collection}/${id}`);
+      if (action === 'delete') { await ref.delete(); return res.status(200).json({ok:true,id}); }
+      if (action === 'upsert') {
+        const incoming=body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
+        await ref.set({...incoming,id,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
+        return res.status(200).json({ok:true,item:{id,...(await ref.get()).data()}});
       }
-
-      const incoming = body.data as Record<string, unknown>;
-      const data = {
-        ...incoming,
-        id,
-        createdAt: incoming.createdAt || FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: decoded.uid,
-      };
-
-      await ref.set(data, { merge: true });
-      const saved = await ref.get();
-      return response.status(200).json({ ok: true, item: { id, ...saved.data() } });
     }
 
-    return response.status(400).json({ error: 'Unsupported content action.' });
+    return res.status(400).json({ error:'Unsupported content action.' });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Content operation failed.';
-    if (message === 'Sign in first.') return response.status(401).json({ error: message });
-    if (message.includes('not configured')) return response.status(503).json({ error: message });
-    if (message.includes('valid document ID') || message.includes('Lesson number') || message.includes('published guide')) return response.status(400).json({ error: message });
-    console.error('VOP content administration failed', error);
-    return response.status(500).json({ error: 'Content operation failed.' });
+    const message=error instanceof Error ? error.message : 'Content operation failed.';
+    const status=/Sign in first/.test(message)?401:/permission|Only|membership|Select|available|required/.test(message)?403:400;
+    return res.status(status).json({error:message});
   }
 }
