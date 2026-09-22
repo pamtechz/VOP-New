@@ -85,12 +85,25 @@ export default async function handler(
     }
 
     const db = getFirestore(firebaseAdmin);
-    const guideRef = db.doc(`curricula/discover/languages/${language}`);
+    const userRef = db.doc(`users/${decoded.uid}`);
+    const userSnapshot = await userRef.get();
+    if (!userSnapshot.exists) return res.status(404).json({ error: 'VOP account profile was not found.' });
+    const userData = userSnapshot.data() || {};
+    const organizationId = String(userData.organizationId || '').trim();
+
+    const tenantGuideRef = organizationId ? db.doc(`guides/${guideId}`) : null;
+    const legacyGuideRef = db.doc(`curricula/discover/languages/${language}`);
+    const candidateGuide = tenantGuideRef ? await tenantGuideRef.get() : null;
+    const useTenantGuide = Boolean(candidateGuide?.exists && String(candidateGuide?.data()?.organizationId || '') === organizationId);
+    const guideRef = useTenantGuide ? tenantGuideRef! : legacyGuideRef;
     const lessonRef = guideRef.collection('lessons').doc(lessonId);
     const [guideSnapshot, lessonSnapshot] = await Promise.all([guideRef.get(), lessonRef.get()]);
 
     if (!guideSnapshot.exists || guideSnapshot.data()?.published !== true || guideSnapshot.data()?.archived === true) {
       return res.status(404).json({ error: 'The selected guide is not published.' });
+    }
+    if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
+      return res.status(409).json({ error: 'The selected guide language does not match the study request.' });
     }
     if (!lessonSnapshot.exists || lessonSnapshot.data()?.published !== true) {
       return res.status(404).json({ error: 'The selected lesson is not published.' });
@@ -100,8 +113,6 @@ export default async function handler(
     if (String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
-
-    const userRef = db.doc(`users/${decoded.uid}`);
 
     if (action === 'completeLesson') {
       if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
@@ -154,13 +165,14 @@ export default async function handler(
       return res.status(400).json({ error: 'The assessment answers or question configuration are invalid.' });
     }
 
-    const settingsSnapshot = await db.doc('system/settings').get();
+    const settingsRef = organizationId ? db.doc(`organizations/${organizationId}/settings/settings`) : db.doc('system/settings');
+    const settingsSnapshot = await settingsRef.get();
     const threshold = Number(settingsSnapshot.data()?.quizPassThreshold ?? 0);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
 
-    const scoreKey = `${language}:${guideId}:${lessonId}`;
+    const scoreKey = `${organizationId || 'platform'}:${language}:${guideId}:${lessonId}`;
     const passed = score >= threshold;
     const attemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
@@ -182,7 +194,7 @@ export default async function handler(
     });
     const failedQuestions = questionResults.filter(item => !item.correct);
     const failureRefs = failedQuestions.map(item => db.collection('questionPerformance').doc(
-      `${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+      `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
     ));
 
     await db.runTransaction(async transaction => {
@@ -213,6 +225,7 @@ export default async function handler(
         score,
         passed,
         threshold,
+        organizationId,
         language,
         guideId,
         lessonId,
@@ -227,6 +240,7 @@ export default async function handler(
         transaction.set(ref, {
           key: failure.key,
           question: failure.question,
+          organizationId,
           language,
           guideId,
           lessonId,
@@ -239,11 +253,11 @@ export default async function handler(
 
       const successRefs = questionResults.filter(item => item.correct).map(item =>
         db.collection('questionPerformance').doc(
-          `${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+          `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
         )
       );
       for (const ref of successRefs) {
-        transaction.set(ref, { answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(ref, { organizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
     });
 
