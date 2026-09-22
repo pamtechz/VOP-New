@@ -268,10 +268,10 @@ export const App: React.FC = () => {
           hasPreviousLesson={Boolean(previousLesson)}
           hasNextLesson={Boolean(nextLesson)}
           onPreviousLesson={() => {
-            if (previousLesson) setActiveLesson(previousLesson);
+            if (previousLesson) { setDeepLinkPageIndex(0); setActiveLesson(previousLesson); }
           }}
           onNextLesson={() => {
-            if (nextLesson) setActiveLesson(nextLesson);
+            if (nextLesson) { setDeepLinkPageIndex(0); setActiveLesson(nextLesson); }
           }}
           onComplete={async () => {
             const accepted = await completeLesson(activeGuide.id, activeLesson.id);
