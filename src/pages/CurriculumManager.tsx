@@ -166,16 +166,16 @@ function sortLessonNumber(a: LessonRow, b: LessonRow) {
 }
 
 function contentToBlocks(content: string): LessonBlock[] {
-  const pages = content.split(/\\[\\[PAGE_BREAK\\]\\]/g);
+  const pages = content.split(/\[\[PAGE_BREAK\]\]/g);
   const blocks: LessonBlock[] = [];
   pages.forEach((page, pageIndex) => {
-    page.split(/\\r?\\n/).forEach(line => {
+    page.split(/\r?\n/).forEach(line => {
       const value = line.trim();
       if (!value) return;
       if (value.startsWith('[h2]') && value.endsWith('[/h2]')) blocks.push({ id: newId('content-heading'), type: 'heading', text: value.slice(4, -5).trim() });
       else if (value.startsWith('[quote]') && value.endsWith('[/quote]')) blocks.push({ id: newId('content-quote'), type: 'quote', text: value.slice(7, -8).trim() });
       else if (value.startsWith('- ')) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.slice(2) });
-      else if (/^\\d+\\.\\s/.test(value)) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.replace(/^\\d+\\.\\s/, '') });
+      else if (/^\d+\.\s/.test(value)) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.replace(/^\d+\.\s/, '') });
       else blocks.push({ id: newId('content-paragraph'), type: 'paragraph', text: value });
     });
     if (pageIndex < pages.length - 1) blocks.push({ id: newId('content-page'), type: 'pageBreak' });
@@ -185,7 +185,7 @@ function contentToBlocks(content: string): LessonBlock[] {
 
 function renderMarkedText(text: string): React.ReactNode[] {
   const output: React.ReactNode[] = [];
-  const pattern = /\\[(b|i|u|link)\\]([\\s\\S]*?)\\[\\/\\1\\]/g;
+  const pattern = /\[(b|i|u|link)\]([\s\S]*?)\[\/\1\]/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   let key = 0;
@@ -296,7 +296,7 @@ function editorFromLesson(row: LessonRow): EditorState {
 function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; guideTitle: string; onClose: () => void }) {
   const [page, setPage] = useState(0);
   const [section, setSection] = useState(0);
-  const pages = useMemo(() => splitLessonBlocks(editor.blocks), [editor.blocks]);
+  const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;\n  const pages = useMemo(() => splitLessonBlocks(sourceBlocks), [sourceBlocks]);
   const sections = ['Lesson', ...(editor.bibleReferences.trim() ? ['Bible References'] : []), ...(editor.questions.length ? ['Quiz'] : [])];
   const next = () => {
     if (section === 0 && page < pages.length - 1) return setPage(value => value + 1);
@@ -329,14 +329,14 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
             {editor.description && <p className="vop-preview-description">{editor.description}</p>}
             {section === 0 && <div className="vop-preview-blocks">
               {(pages[page] || []).map(block => {
-                if (block.type === 'heading') return <h2 key={block.id}>{block.text}</h2>;
-                if (block.type === 'quote') return <blockquote key={block.id}>{block.text}</blockquote>;
+                if (block.type === 'heading') return <h2 key={block.id}>{renderMarkedText(block.text || '')}</h2>;
+                if (block.type === 'quote') return <blockquote key={block.id}>{renderMarkedText(block.text || '')}</blockquote>;
                 if (block.type === 'image' && block.src) return <img key={block.id} src={block.src} alt="" />;
                 if (block.type === 'video' && block.src) return <video key={block.id} controls src={block.src}/>;
                 if (block.type === 'audio' && block.src) return <audio key={block.id} controls src={block.src}/>;
                 return <p key={block.id}>{renderMarkedText(block.text || '')}</p>;
               })}
-              {!pages.length && editor.content && <p>{editor.content}</p>}
+              {!pages.length && editor.content && <p>{renderMarkedText(editor.content)}</p>}
             </div>}
             {section === 1 && editor.bibleReferences && <div className="vop-preview-list">{editor.bibleReferences.split('\n').filter(Boolean).map(item => <div key={item}>{item}</div>)}</div>}
             {section === sections.length - 1 && sections.includes('Quiz') && <div className="vop-preview-quiz">{editor.questions.map((question, index) => <div key={index}><strong>{index + 1}. {question.question}</strong>{question.options.map((option, optionIndex) => <span key={optionIndex} className={question.answer === optionIndex ? 'correct' : ''}>{String.fromCharCode(65 + optionIndex)}. {option}</span>)}</div>)}</div>}
