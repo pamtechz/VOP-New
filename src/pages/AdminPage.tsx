@@ -19,6 +19,7 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
+import CurriculumSettings from './CurriculumSettings';
 import CertificationManager from './CertificationManager';
 
 interface AdminPageProps {
@@ -99,6 +100,7 @@ async function adminContent(action: 'list' | 'upsert' | 'delete', collection: st
 
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -270,7 +272,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       if (!response.ok || !body.candidate) throw new Error(body.error || 'Baptism status could not be saved.');
       setCandidates(current => current.map(item => item.uid === candidate.uid ? body.candidate! : item));
       setSelectedCandidate(body.candidate);
-      showMessage('Baptism status saved to Firestore.');
+      showMessage('Baptism status saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save baptism status.');
     } finally {
@@ -380,13 +382,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
-    ? studioTab === 'quizzes'
-      ? 'Quiz Management'
-      : studioTab === 'guides'
-        ? 'Guides Management'
-        : studioTab === 'lessons'
-          ? 'Curriculum Studio'
-          : 'Curriculum Studio'
+    ? curriculumSettingsOpen ? 'Curriculum Settings' : studioTab === 'quizzes' ? 'Quiz Management' : studioTab === 'guides' ? 'Guides Management' : 'Curriculum Studio'
     : currentPage?.label || 'Dashboard';
   const toggleNavigation = () => {
     setProfileOpen(false);
@@ -441,7 +437,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   };
 
   const deleteLanguage = async (language: CustomLanguage) => {
-    if (!window.confirm('Delete this language from Firestore?')) return;
+    if (!window.confirm('Delete this language?')) return;
     try {
       await deleteLanguageFromFirestore(language.code);
       if (editingLanguage === language.code) openLanguageEditor();
@@ -457,7 +453,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     setSettingsSaving(true);
     try {
       await saveSettingsToFirestore(settings);
-      showMessage('Settings saved to Firestore.');
+      showMessage('Settings saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save settings.');
     } finally {
@@ -575,7 +571,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
           const Icon = metric.icon;
           return <div className="vop-card vop-metric" key={metric.label}>
             <div className="vop-metric-icon" style={{background:metric.tone,color:metric.color}}><Icon size={29}/></div>
-            <div><div className="vop-metric-value">{metric.value.toLocaleString()}</div><div className="vop-metric-label">{metric.label}</div><div className="vop-metric-trend">Live Firestore data</div></div>
+            <div><div className="vop-metric-value">{metric.value.toLocaleString()}</div><div className="vop-metric-label">{metric.label}</div><div className="vop-metric-trend">Live data</div></div>
           </div>;
         })}
       </div>
@@ -590,7 +586,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
           </svg>}
         </div>
         <div className="vop-card vop-section-card">
-          <div className="vop-section-title"><div><h2>Recent Activities</h2><p>Latest updates available in Firestore.</p></div><button className="vop-secondary" type="button" onClick={()=>void loadDrafts()}><RefreshCw size={15}/><span>Refresh</span></button></div>
+          <div className="vop-section-title"><div><h2>Recent Activities</h2><p>Latest updates available.</p></div><button className="vop-secondary" type="button" onClick={()=>void loadDrafts()}><RefreshCw size={15}/><span>Refresh</span></button></div>
           <div className="vop-activity">
             {activities.length === 0 ? <div className="vop-empty">No recent activity is available.</div> : activities.map((activity,index)=>{
               const Icon = activity.icon;
@@ -805,7 +801,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       <div style={{display:'flex',flexDirection:'column',gap:16}}>
         <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h3>Featured Image</h3><p>Use a configured media URL.</p></div></div><div className="vop-featured">{editorImage ? <img src={editorImage} alt="" />:<div className="vop-thumb" style={{width:145,height:92}}/>}<div style={{flex:1}}><div className="vop-field"><label>Image URL</label><input value={editorImage} onChange={e=>setEditorImage(e.target.value)}/></div></div></div></div>
         <div className="vop-card vop-form-card"><div className="vop-field"><label>Lesson Status</label><select value={editorStatus} onChange={e=>setEditorStatus(e.target.value as 'draft'|'published')}><option value="draft">Draft</option><option value="published">Published</option></select></div><div style={{height:13}}/><div className="vop-field"><label>Tags</label><input value={editorTags} onChange={e=>setEditorTags(e.target.value)} placeholder="Add tags separated by commas"/></div><div style={{height:13}}/><div className="vop-field"><label>Draft records</label><div style={{fontSize:13,color:'#7183a4'}}>{loadingDrafts?'Loading…':curriculumDrafts.length+' admin content records'}</div></div></div>
-        <div className="vop-card vop-form-card"><div style={{display:'flex',gap:10,alignItems:'flex-start'}}><div className="vop-mini-stat-icon" style={{background:'#eaf3ff',color:'#1768d7'}}><Shield size={20}/></div><div><strong>Publishing</strong><p style={{margin:'5px 0 0',fontSize:12,color:'#7183a4'}}>Published learner curriculum remains controlled by the approved Firestore curriculum hierarchy.</p></div></div></div>
+        <div className="vop-card vop-form-card"><div style={{display:'flex',gap:10,alignItems:'flex-start'}}><div className="vop-mini-stat-icon" style={{background:'#eaf3ff',color:'#1768d7'}}><Shield size={20}/></div><div><strong>Publishing</strong><p style={{margin:'5px 0 0',fontSize:12,color:'#7183a4'}}>Published learner curriculum remains controlled by the approved curriculum hierarchy.</p></div></div></div>
       </div>
     </div>
   </div>;
@@ -850,7 +846,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
-        {activeTab==='curriculum'&&<CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setActiveTab('settings')} />}
+        {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={languages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
         {activeTab==='candidates'&&<div>
           {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
           <div className="vop-toolbar">
