@@ -91,7 +91,7 @@ function Toggle({on, onClick}: {on: boolean; onClick: () => void}) {
   return <button type="button" className={'vop-toggle' + (on ? ' on' : '')} role="switch" aria-checked={on} onClick={onClick}><span /></button>;
 }
 
-async function adminContent(action: 'list' | 'upsert' | 'delete', collection: string, id?: string, data?: Record<string, unknown>) {
+async function adminContent(action: string, collection: string, id?: string, data?: Record<string, unknown>) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/content', {
@@ -530,10 +530,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       setError('Lesson title is required.');
       return;
     }
+    if (!selectedGuide) {
+      setError('Select a guide before saving a lesson.');
+      return;
+    }
     setEditorSaving(true);
     try {
       const id = selectedLesson?.id || ('lesson-' + Date.now());
-      await adminContent('upsert', 'curriculum', id, {
+      await adminContent('upsertLesson', 'curriculum', id, {
+        guideId: selectedGuide.id,
         title: editorTitle.trim(),
         description: editorDescription.trim(),
         lessonNumber: editorNumber.trim(),
