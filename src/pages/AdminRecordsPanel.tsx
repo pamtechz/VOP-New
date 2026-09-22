@@ -502,6 +502,71 @@ function radioTime(record: AdminRecord) {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
+function radioSourceUrl(record: AdminRecord) {
+  return [record.videoUrl, record.audioUrl, record.streamUrl]
+    .map(value => String(value ?? '').trim())
+    .find(Boolean) || '';
+}
+
+function youtubeEmbedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    let id = '';
+    if (host === 'youtu.be') id = url.pathname.split('/').filter(Boolean)[0] || '';
+    else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      if (url.pathname === '/watch') id = url.searchParams.get('v') || '';
+      else if (url.pathname.startsWith('/live/')) id = url.pathname.slice('/live/'.length).split('/')[0] || '';
+      else if (url.pathname.startsWith('/shorts/')) id = url.pathname.slice('/shorts/'.length).split('/')[0] || '';
+      else if (url.pathname.startsWith('/embed/')) id = url.pathname.slice('/embed/'.length).split('/')[0] || '';
+    }
+    return id ? 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=0&controls=1&rel=0&playsinline=1' : '';
+  } catch {
+    return '';
+  }
+}
+
+function audioVerseEmbedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (host !== 'audioverse.org' && !host.endsWith('.audioverse.org')) return '';
+    if (/\\/embed\\/media\\/\\d+(?:\\/|$)/i.test(url.pathname)) return url.toString();
+    const media = url.pathname.match(/\\/media\\/(\\d+)(?:\\/|$)/i);
+    if (media?.[1]) return 'https://www.audioverse.org/en/embed/media/' + media[1];
+    const teaching = url.pathname.match(/\\/teachings\\/(\\d+)(?:\\/|$)/i);
+    return teaching?.[1] ? 'https://www.audioverse.org/en/embed/media/' + teaching[1] : '';
+  } catch {
+    return '';
+  }
+}
+
+function RadioAdminMediaPreview({record}: {record: AdminRecord}) {
+  const source = radioSourceUrl(record);
+  const provider = radioProvider(record);
+  if (!source) return <div className="vop-radio-admin-preview-empty"><Radio size={28}/><span>No playable source configured.</span></div>;
+
+  if (provider === 'YouTube') {
+    const embed = youtubeEmbedUrl(source);
+    return embed
+      ? <iframe className="vop-radio-admin-preview-frame" src={embed} title={String(record.title || 'YouTube radio content')} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+      : <div className="vop-radio-admin-preview-empty"><Video size={28}/><span>Invalid YouTube source.</span></div>;
+  }
+
+  if (provider === 'AudioVerse') {
+    const embed = audioVerseEmbedUrl(source);
+    return embed
+      ? <iframe className="vop-radio-admin-preview-frame" src={embed} title={String(record.title || 'AudioVerse radio content')} allow="autoplay; encrypted-media; picture-in-picture" />
+      : <div className="vop-radio-admin-preview-empty"><Headphones size={28}/><span>Invalid AudioVerse source.</span></div>;
+  }
+
+  if (provider === 'Video') {
+    return <video className="vop-radio-admin-preview-media" src={source} poster={String(record.posterUrl || '').trim() || undefined} controls preload="metadata" playsInline />;
+  }
+
+  return <audio className="vop-radio-admin-preview-audio" src={source} controls preload="metadata" />;
+}
+
 function RadioAdminDashboard({
   records, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError
 }: {
@@ -515,6 +580,7 @@ function RadioAdminDashboard({
   const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'|'upload'>('stream');
 
   const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
+  const nowPlaying = live[0] || records[0] || null;
   const videos = records.filter(item => ['Video','YouTube'].includes(radioProvider(item)));
   const audio = records.filter(item => radioProvider(item) === 'Audio' || radioProvider(item) === 'AudioVerse');
   const filtered = records.filter(item => !search.trim() || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(search.trim().toLowerCase())));
@@ -560,10 +626,10 @@ function RadioAdminDashboard({
           <div className="vop-radio-admin-now">
             <div className="vop-radio-admin-card-title"><span><Radio size={17}/> Now Playing</span>{live.length > 0 && <b>● LIVE</b>}</div>
             <div className="vop-radio-admin-player">
-              {records[0] && <div className="vop-radio-admin-player-art" style={records[0].posterUrl ? {backgroundImage:'url("' + String(records[0].posterUrl) + '")'} : undefined}><Radio size={54}/><div><strong>{String(records[0].title || 'Configured radio content')}</strong><small>{String(records[0].speaker || 'Voice of Prophecy')}</small></div></div>}
+              {nowPlaying ? <RadioAdminMediaPreview record={nowPlaying} /> : <div className="vop-radio-admin-preview-empty"><Radio size={38}/><span>No radio content configured.</span></div>}
             </div>
-            <div className="vop-radio-admin-now-meta"><strong>{String(records[0]?.title || 'No radio content configured')}</strong><span>{String(records[0]?.speaker || 'Add published content to populate the player.')}</span></div>
-            <div className="vop-radio-admin-player-controls"><button type="button"><Play size={18} fill="currentColor"/></button><div/><span>{records[0] ? radioTime(records[0]) : '—'}</span><span>{records[0]?.durationMinutes ? Math.round(Number(records[0].durationMinutes)) + ' min' : 'Auto'}</span></div>
+            <div className="vop-radio-admin-now-meta"><strong>{String(nowPlaying?.title || 'No radio content configured')}</strong><span>{String(nowPlaying?.speaker || nowPlaying?.series || 'Add content to populate the player.')}</span></div>
+            <div className="vop-radio-admin-player-controls"><span>{nowPlaying ? radioProvider(nowPlaying) : '—'}</span><span>{nowPlaying ? radioTime(nowPlaying) : '—'}</span><span>{nowPlaying?.durationMinutes ? Math.round(Number(nowPlaying.durationMinutes)) + ' min' : 'Duration detected by player'}</span></div>
           </div>
 
           <div className="vop-radio-admin-schedule">
