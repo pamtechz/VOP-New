@@ -195,7 +195,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   };
   const toggleMute = () => {
     if (source?.provider === 'youtube') {
-      const player = ytPlayerRef.current; if (!player) return; if (player.isMuted()) player.unMute(); else player.mute(); setMuted(player.isMuted()); return;
+      const player = ytPlayerRef.current; if (!player) return; const wasMuted = player.isMuted(); if (wasMuted) { player.unMute(); setMuted(false); } else { player.mute(); setMuted(true); } return;
     }
     const media = source?.provider === 'direct-video' ? videoRef.current : audioRef.current; if (!media) return; media.muted = !media.muted; setMuted(media.muted);
   };
