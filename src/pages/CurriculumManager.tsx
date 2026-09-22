@@ -296,7 +296,8 @@ function editorFromLesson(row: LessonRow): EditorState {
 function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; guideTitle: string; onClose: () => void }) {
   const [page, setPage] = useState(0);
   const [section, setSection] = useState(0);
-  const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;\n  const pages = useMemo(() => splitLessonBlocks(sourceBlocks), [sourceBlocks]);
+  const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
+  const pages = useMemo(() => splitLessonBlocks(sourceBlocks), [sourceBlocks]);
   const sections = ['Lesson', ...(editor.bibleReferences.trim() ? ['Bible References'] : []), ...(editor.questions.length ? ['Quiz'] : [])];
   const next = () => {
     if (section === 0 && page < pages.length - 1) return setPage(value => value + 1);
@@ -582,7 +583,8 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     setError('');
     try {
       const id = editor.id || newId('lesson');
-      const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;\n      const pageBlocks = splitLessonBlocks(sourceBlocks);
+      const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
+      const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
@@ -739,13 +741,13 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       if (!element) return;
       const startAt = element.selectionStart;
       const before = element.value.slice(0, startAt);
-      const lineStart = before.lastIndexOf('\\n') + 1;
+      const lineStart = before.lastIndexOf('\n') + 1;
       const nextValue = element.value.slice(0, lineStart) + prefix + element.value.slice(lineStart);
       setEditor(current => current ? { ...current, content: nextValue } : current);
       window.requestAnimationFrame(() => { element.focus(); element.setSelectionRange(startAt + prefix.length, startAt + prefix.length); });
     };
     const addPageBreak = () => {
-      const next = editor.content ? editor.content + '\\n\\n[[PAGE_BREAK]]\\n\\n' : '[[PAGE_BREAK]]';
+      const next = editor.content ? editor.content + '\n\n[[PAGE_BREAK]]\n\n' : '[[PAGE_BREAK]]';
       setEditor({...editor,content:next});
     };
 
