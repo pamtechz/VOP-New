@@ -12,7 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onNavigate,
   currentUser
 }) => {
-  const isPrivileged = currentUser.privileges?.admin || (currentUser.role && currentUser.role !== 'student');
+  const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
 
   const navItems = [
     {
