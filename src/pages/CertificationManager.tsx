@@ -354,7 +354,7 @@ export const CertificationManager: React.FC<Props> = ({
               </>
             )}
           </aside>
-          <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} settings={settings} /></section>
+          <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} /></section>
           <aside className="vop-cert-action-card">
             <div className="vop-cert-info"><Info size={22} /><p>The certificate design is controlled by certification configuration. Generated records use the stored candidate and completion data.</p></div>
             <button className="vop-cert-primary-button" type="button" onClick={() => void downloadCertificate()} disabled={exporting}><Download size={18} />{exporting ? 'Generating…' : 'Download Certificate'}</button>
