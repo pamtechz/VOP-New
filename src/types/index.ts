@@ -291,7 +291,8 @@ export type AppRoute =
   | 'prayer' 
   | 'radio' 
   | 'admin' 
-  | 'certificates';
+  | 'certificates' 
+  | 'certificate-verification';
 
 export interface AutoLocalizationEntry {
   key: string;
