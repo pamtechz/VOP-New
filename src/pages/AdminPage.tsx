@@ -358,7 +358,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     const canEdit = isSuper || currentUser.privileges?.editor === true;
     const allowed = new Set<AdminTab>([
       'dashboard',
-      'userManagement',
       'candidates',
       'languages',
       'translations',
@@ -368,6 +367,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     ]);
     if (isSuper) {
       NAV.forEach(item => allowed.add(item.id));
+      allowed.add('userManagement');
     } else if (role === 'union_admin') {
       allowed.add('conferences');
       if (canEdit) allowed.add('curriculum');
