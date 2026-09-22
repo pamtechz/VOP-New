@@ -6,6 +6,7 @@ import {
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
 import CertificationConfigStudio from './CertificationConfigStudio';
+import CertificateArtwork from '../components/certificates/CertificateArtwork';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
 
@@ -114,54 +115,6 @@ function configText(config: CertificationConfig | null, settings: Props['setting
 const EmptyAvatar = () => (
   <div className="vop-cert-avatar-empty" aria-hidden="true"><Users size={19} /></div>
 );
-
-const CertificateArtwork: React.FC<{
-  certificate: CertificateRecord;
-  config: CertificationConfig | null;
-  settings: Props['settings'];
-}> = ({ certificate, config, settings }) => {
-  const title = configText(config, settings, 'certificateTitle');
-  const body = configText(config, settings, 'certificateBodyText');
-  const issuer = configText(config, settings, 'issuerName');
-  const courseName = certificate.courseName || configText(config, settings, 'courseName');
-  const directorName = configText(config, settings, 'directorName');
-  const directorTitle = configText(config, settings, 'directorTitle');
-
-  return (
-    <div className="vop-certificate-artwork">
-      {config?.backgroundUrl && <img className="vop-certificate-background-image" src={config.backgroundUrl} alt="" />}
-      <div className="vop-certificate-honeycomb" aria-hidden="true" />
-      <div className="vop-certificate-blue-corner vop-certificate-blue-corner-a" aria-hidden="true" />
-      <div className="vop-certificate-blue-corner vop-certificate-blue-corner-b" aria-hidden="true" />
-      <div className="vop-certificate-blue-ribbon" aria-hidden="true" />
-      <div className="vop-certificate-artwork-title">{title}</div>
-      <div className="vop-certificate-artwork-body">
-        <div className="vop-certificate-small-copy">This is to certify that</div>
-        <div className="vop-certificate-candidate-name">{certificate.candidateName}</div>
-        <div className="vop-certificate-completed">has successfully completed the</div>
-        <div className="vop-certificate-course">{body || courseName}</div>
-        <div className="vop-certificate-outlined-copy">as outlined by the {issuer}</div>
-      </div>
-      <div className="vop-certificate-seal">
-        {config?.sealUrl ? <img src={config.sealUrl} alt="" /> : <Award size={50} />}
-      </div>
-      <div className="vop-certificate-signature">
-        {config?.signatureUrl && <img src={config.signatureUrl} alt="" />}
-        <div className="vop-certificate-signature-line" />
-        <strong>{directorName}</strong>
-        <span>{directorTitle}</span>
-      </div>
-      <div className="vop-certificate-brand">
-        {config?.logoUrl ? <img src={config.logoUrl} alt="" /> : <span className="vop-certificate-brand-mark"><Award size={21} /></span>}
-        <div><strong>{issuer}</strong><span>{configText(config, settings, 'issuerSubtitle')}</span></div>
-      </div>
-      <div className="vop-certificate-sda-mark" aria-hidden="true"><span>✦</span></div>
-      <div className="vop-certificate-issue-date">
-        {certificate.issuedAt || certificate.completionDate ? `Issue date: ${dateText(certificate.issuedAt || certificate.completionDate)}` : ''}
-      </div>
-    </div>
-  );
-};
 
 export const CertificationManager: React.FC<Props> = ({
   settings, adminContent, showMessage,
