@@ -320,6 +320,10 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     );
   }
 
+  if (kind === 'announcements') {
+    return <AnnouncementAdminDashboard records={records} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} />;
+  }
+
   if (kind === 'radio') {
     return <RadioAdminDashboard records={records} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} />;
   }
@@ -470,6 +474,55 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
 
 export default AdminRecordsPanel;
 
+
+function AnnouncementAdminDashboard({
+  records, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError
+}: {
+  records: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  editingId: string | null; saving: boolean; error: string; message: string;
+  openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
+  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void;
+}) {
+  const [filter, setFilter] = useState<'all'|'published'|'scheduled'|'draft'|'archived'>('all');
+  const [search, setSearch] = useState('');
+  const published = records.filter(item => item.published === true && item.archived !== true);
+  const scheduled = records.filter(item => item.scheduledAt && item.published !== true && item.archived !== true);
+  const archived = records.filter(item => item.archived === true);
+  const drafts = records.filter(item => item.published !== true && !item.scheduledAt && item.archived !== true);
+  const visible = records.filter(item => {
+    const q = search.trim().toLowerCase();
+    const textMatch = !q || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(q));
+    const statusMatch = filter === 'all'
+      || (filter === 'published' && published.includes(item))
+      || (filter === 'scheduled' && scheduled.includes(item))
+      || (filter === 'draft' && drafts.includes(item))
+      || (filter === 'archived' && archived.includes(item));
+    return textMatch && statusMatch;
+  });
+
+  const field = (key:string,label:string,type='text') => <div className="vop-field"><label>{label}</label><input type={type} value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
+  const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
+
+  return <div className="vop-ann-admin">
+    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>Announcements</span><h1>Manage Announcements</h1><p>Create, manage and publish announcements for learners and users.</p></section></div><button className="vop-primary" type="button" onClick={openNew}><Plus size={17}/> New Announcement</button></div>
+    <div className="vop-ann-admin-stats">
+      <div><Megaphone/><span>Total Announcements<strong>{records.length}</strong><small>All time</small></span></div>
+      <div><Check/><span>Published<strong>{published.length}</strong><small>{records.length ? Math.round(published.length*100/records.length) : 0}%</small></span></div>
+      <div><CalendarDays/><span>Scheduled<strong>{scheduled.length}</strong><small>Awaiting publication</small></span></div>
+      <div><Trash2/><span>Archived<strong>{archived.length}</strong><small>Stored records</small></span></div>
+    </div>
+    <div className="vop-ann-admin-tabs">{([['all','All'],['published','Published'],['scheduled','Scheduled'],['draft','Drafts'],['archived','Archived']] as const).map(([key,label])=><button type="button" key={key} className={filter===key?'active':''} onClick={()=>setFilter(key)}>{label} ({key==='all'?records.length:key==='published'?published.length:key==='scheduled'?scheduled.length:key==='draft'?drafts.length:archived.length})</button>)}</div>
+    <div className="vop-ann-admin-toolbar"><div className="vop-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search announcements…"/></div><button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/> Refresh</button></div>
+    <div className="vop-ann-admin-body">
+      <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Announcement</th><th>Category</th><th>Status</th><th>Publish Date</th><th>Actions</th></tr></thead><tbody>{visible.map((item,index)=>{
+        const status=item.archived?'Archived':item.scheduledAt&&item.published!==true?'Scheduled':item.published?'Published':'Draft';
+        return <tr key={item.id}><td>{index+1}</td><td><strong>{valueOf(item,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></td><td><span className="vop-ann-tag">{valueOf(item,'tag')||'Uncategorized'}</span></td><td><span className={'vop-status '+(status==='Published'?'enabled':status==='Scheduled'?'review':'disabled')}>{status}</span></td><td>{valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—'}</td><td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" onClick={()=>edit(item)}><Edit3 size={15}/></button><button className="vop-actions" type="button" onClick={()=>void remove(item.id)}><Trash2 size={15}/></button></div></td></tr>;
+      })}</tbody></table>{!visible.length&&<div className="vop-empty">No announcements match the current filters.</div>}</div>
+      <form className="vop-card vop-form-card" onSubmit={save}><div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div></div>{field('title','Title *')}{field('tag','Category / Tag')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">Published</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={openNew}>Clear</button><button className="vop-primary" type="submit" disabled={saving}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div></form>
+    </div>
+    {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}{message&&<div className="vop-radio-admin-alert success">{message}</div>}
+  </div>;
+}
 
 function radioProvider(record: AdminRecord) {
   const values = [record.videoUrl, record.audioUrl, record.streamUrl].map(value => String(value ?? '').trim()).filter(Boolean);
