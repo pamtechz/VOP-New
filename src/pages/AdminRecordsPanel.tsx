@@ -679,10 +679,10 @@ function audioVerseEmbedUrl(value: string) {
     const url = new URL(value);
     const host = url.hostname.toLowerCase();
     if (host !== 'audioverse.org' && !host.endsWith('.audioverse.org')) return '';
-    if (/\\/embed\\/media\\/\\d+(?:\\/|$)/i.test(url.pathname)) return url.toString();
-    const media = url.pathname.match(/\\/media\\/(\\d+)(?:\\/|$)/i);
+    if (/\/embed\/media\/\d+(?:\/|$)/i.test(url.pathname)) return url.toString();
+    const media = url.pathname.match(/\/media\/(\d+)(?:\/|$)/i);
     if (media?.[1]) return 'https://www.audioverse.org/en/embed/media/' + media[1];
-    const teaching = url.pathname.match(/\\/teachings\\/(\\d+)(?:\\/|$)/i);
+    const teaching = url.pathname.match(/\/teachings\/(\d+)(?:\/|$)/i);
     return teaching?.[1] ? 'https://www.audioverse.org/en/embed/media/' + teaching[1] : '';
   } catch {
     return '';
