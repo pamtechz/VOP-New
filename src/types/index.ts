@@ -184,6 +184,8 @@ export interface User {
   districtId?: string;
   churchId?: string;
   role?: UserRole;
+  organizationId?: string;
+  organizationRole?: string;
   adminNodeType?: AdminNodeType;
   adminNodeId?: string; // ID of the specific Union, Conference, District, or Church this admin manages
   information: UserInformation;
@@ -214,6 +216,11 @@ export interface LessonContentPage {
 }
 
 export interface Lesson {
+  ownerOrganizationId?: string;
+  ownerUid?: string;
+  sharingScope?: 'private' | 'organization' | 'shared';
+  canonical?: boolean;
+  quizId?: string;
   id: string;
   title: string;
   lessonNumber: string; // e.g., "1.0", "1.1", "1.5"
@@ -225,6 +232,10 @@ export interface Lesson {
 }
 
 export interface DiscoverGuide {
+  ownerOrganizationId?: string;
+  ownerUid?: string;
+  sharingScope?: 'private' | 'organization' | 'shared';
+  canonical?: boolean;
   id: string;
   discoverNumber: number; // 1, 2, etc.
   title: string;
@@ -237,6 +248,7 @@ export interface DiscoverGuide {
 }
 
 export interface Announcement {
+  organizationId?: string;
   id: string;
   title: string;
   tag: string;
@@ -249,6 +261,7 @@ export interface Announcement {
 }
 
 export interface BookResource {
+  organizationId?: string;
   id: string;
   name: string;
   category: string;
@@ -321,6 +334,7 @@ export interface PrayerRequest {
 }
 
 export interface RadioBroadcast {
+  organizationId?: string;
   id: string;
   title: string;
   speaker: string;
