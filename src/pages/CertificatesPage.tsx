@@ -48,12 +48,6 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
     return () => { cancelled = true; };
   }, [currentUser.uid]);
 
-  const title = config.certificateTitle || settings.certificateTitle || '';
-  const body = config.certificateBodyText || settings.certificateBodyText || '';
-  const issuer = config.issuerName || settings.appName || settings.organizationName || '';
-  const directorName = config.directorName || settings.directorName || '';
-  const directorTitle = config.directorTitle || settings.directorTitle || '';
-
   const download = async () => {
     if (!certificate || !certificateRef.current || isExporting) return;
     setIsExporting(true); setFeedback('');
@@ -113,7 +107,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
               <button type="button" onClick={() => window.print()}><Printer size={16} />{t('print','Print')}</button>
               <button type="button" onClick={() => void share()}><Share2 size={16} />{t('share','Share')}</button>
             </div>
-            {certificate.verificationEnabled && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('official_credential','Official credential')}</strong><span>{t('verification_note','This certificate can be independently verified using its certificate number.')}</span></div></div>}
+            {config.verificationEnabled === true && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('official_credential','Official credential')}</strong><span>{t('verification_note','This certificate can be independently verified using its certificate number.')}</span></div></div>}
           </>
         )}
         {!loading && !certificate && <div className="vop-reference-card vop-official-empty"><Award size={38} /><strong>{t('no_certificate_issued','No official certificate has been issued.')}</strong><p>{t('certificate_pending_message','Complete the required curriculum and follow the graduation approval process before certification.')}</p></div>}
