@@ -46,6 +46,13 @@ function isMentor(data: Record<string, unknown>) {
   return String(data.role || '') === 'mentor' || (data.mentorProfile && typeof data.mentorProfile === 'object' && (data.mentorProfile as Record<string, unknown>).enabled === true);
 }
 
+function sameTenant(actor: Record<string, unknown>, target: Record<string, unknown>, requestedOrganizationId = '') {
+  const actorOrg = String(actor.organizationId || '').trim();
+  const targetOrg = String(target.organizationId || '').trim();
+  if (String(actor.role || '') === 'super_admin') return !requestedOrganizationId || targetOrg === requestedOrganizationId;
+  return Boolean(actorOrg && targetOrg && actorOrg === targetOrg);
+}
+
 function sameScope(actor: Record<string, unknown>, student: Record<string, unknown>) {
   const role = String(actor.role || '');
   if (role === 'super_admin') return true;
@@ -156,20 +163,21 @@ export default async function handler(req: Request, res: Response) {
     const actor = await profile(db, decoded.uid);
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
+    const organizationId = String(body.organizationId || actor.organizationId || '').trim();
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
     }
 
     if (action === 'listStudents') {
-      const snapshot = await db.collection('users').get();
-      const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => String(item.role || 'student') === 'student' && sameScope(actor, item));
+      const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
+      const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => String(item.role || 'student') === 'student' && sameTenant(actor, item, organizationId) && sameScope(actor, item));
       return res.status(200).json({ ok: true, items: students });
     }
 
     if (action === 'listMentors') {
-      const snapshot = await db.collection('users').get();
-      const mentors = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => isMentor(item));
+      const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
+      const mentors = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => isMentor(item) && sameTenant(actor, item, organizationId));
       return res.status(200).json({ ok: true, items: mentors });
     }
 
@@ -187,11 +195,13 @@ export default async function handler(req: Request, res: Response) {
       const mentorId = id(body.mentorId);
       const student = await profile(db, studentId);
       const mentor = await profile(db, mentorId);
+      if (!sameTenant(actor, student, organizationId) || !sameTenant(actor, mentor, organizationId)) throw new Error('The selected accounts are outside your organization.');
       if (String(student.role || 'student') !== 'student') throw new Error('The selected account is not a learner.');
       if (!isMentor(mentor)) throw new Error('The selected account is not configured as a mentor.');
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const ref = db.doc(`mentorAssignments/${studentId}`);
       await ref.set({
+        organizationId: String(student.organizationId || organizationId),
         studentId,
         mentorId,
         status: 'active',
@@ -207,6 +217,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'performance') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
+      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       if (!isAdmin(actor)) {
         const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
@@ -216,7 +227,8 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'questionFailures') {
-      const snapshot = await db.collection('questionPerformance').orderBy('failedCount', 'desc').limit(50).get();
+      const base = organizationId ? db.collection('questionPerformance').where('organizationId','==',organizationId).orderBy('failedCount','desc').limit(50) : db.collection('questionPerformance').orderBy('failedCount','desc').limit(50);
+      const snapshot = await base.get();
       return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
     }
 
@@ -225,7 +237,7 @@ export default async function handler(req: Request, res: Response) {
       const requestedMentor = body.mentorId ? id(body.mentorId) : '';
       if (isAdmin(actor)) {
         let snapshot = await db.collection('mentorConversations').get();
-        let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => !organizationId || String(item.organizationId || '') === organizationId);
         const studentSnapshots = await Promise.all(items.map(item => db.doc(`users/${String(item.studentId || '')}`).get()));
         const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameScope(actor, item.data() || {})).map(item => item.id));
         items = items.filter(item => allowedStudentIds.has(String(item.studentId || '')));
@@ -266,6 +278,8 @@ export default async function handler(req: Request, res: Response) {
       const studentId = id(body.studentId);
       const mentorId = id(body.mentorId);
       const student = await profile(db, studentId);
+      const mentor = await profile(db, mentorId);
+      if (!sameTenant(actor, student, organizationId) || !sameTenant(actor, mentor, organizationId)) throw new Error('You cannot access this learner.');
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const message = String(body.message || '').trim();
       if (!message || message.length > 10000) throw new Error('A message is required.');
@@ -280,6 +294,7 @@ export default async function handler(req: Request, res: Response) {
       const references = Array.isArray(body.references) ? body.references.map(safeReference).filter(Boolean) : [];
       await ref.set({
         ...current,
+        organizationId: String(student.organizationId || organizationId),
         studentId,
         mentorId,
         status: 'open',
@@ -298,7 +313,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'getAutomationSettings') {
-      const snapshot = await db.doc('system/mentorship').get();
+      const snapshot = await db.doc(organizationId ? `organizations/${organizationId}/settings/mentorship` : 'system/mentorship').get();
       return res.status(200).json({ ok: true, item: snapshot.exists ? snapshot.data() : {
         enabled: false,
         channel: 'in_app',
@@ -313,7 +328,7 @@ export default async function handler(req: Request, res: Response) {
       const maxProgressPercent = Math.max(0, Math.min(100, Number(body.maxProgressPercent || 0)));
       const cooldownDays = Math.max(1, Math.min(90, Number(body.cooldownDays || 7)));
       const channel = body.channel === 'email' ? 'email' : 'in_app';
-      await db.doc('system/mentorship').set({
+      await db.doc(organizationId ? `organizations/${organizationId}/settings/mentorship` : 'system/mentorship').set({
         enabled: body.enabled === true,
         channel,
         minAverageScore,
@@ -333,6 +348,7 @@ export default async function handler(req: Request, res: Response) {
       const draft = draftFor(student, performance);
       const ref = db.collection('notificationDrafts').doc();
       await ref.set({
+        organizationId: String(student.organizationId || organizationId),
         studentId,
         type: 'performance-support',
         channel: body.channel === 'email' ? 'email' : 'in_app',
@@ -352,6 +368,7 @@ export default async function handler(req: Request, res: Response) {
       const draftSnapshot = await draftRef.get();
       if (!draftSnapshot.exists) throw new Error('Message draft was not found.');
       const draft = draftSnapshot.data() || {};
+      if (organizationId && String(draft.organizationId || '') !== organizationId) throw new Error('This draft belongs to another organization.');
       const student = await profile(db, String(draft.studentId || ''));
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const channel = String(draft.channel || 'in_app');
@@ -371,6 +388,7 @@ export default async function handler(req: Request, res: Response) {
         delivery = 'email';
       } else {
         await db.collection('notifications').add({
+          organizationId: String(draft.organizationId || organizationId),
           recipientId: String(draft.studentId || ''),
           title: String(draft.subject || ''),
           body: String(draft.body || ''),
