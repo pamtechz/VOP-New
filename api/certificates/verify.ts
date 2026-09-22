@@ -51,6 +51,24 @@ function publicCertificate(id: string, data: Record<string, unknown>) {
   };
 }
 
+function publicConfig(data: Record<string, unknown>) {
+  return {
+    certificateTitle: String(data.certificateTitle ?? ''),
+    certificateBodyText: String(data.certificateBodyText ?? ''),
+    issuerName: String(data.issuerName ?? ''),
+    issuerSubtitle: String(data.issuerSubtitle ?? ''),
+    courseName: String(data.courseName ?? ''),
+    directorName: String(data.directorName ?? ''),
+    directorTitle: String(data.directorTitle ?? ''),
+    signatureUrl: String(data.signatureUrl ?? ''),
+    sealUrl: String(data.sealUrl ?? ''),
+    logoUrl: String(data.logoUrl ?? ''),
+    backgroundUrl: String(data.backgroundUrl ?? ''),
+    verificationEnabled: data.verificationEnabled === true,
+    verificationBaseUrl: String(data.verificationBaseUrl ?? ''),
+  };
+}
+
 export default async function handler(request: Request, response: Response) {
   if (request.method !== 'GET') return response.status(405).json({ error: 'Method not allowed.' });
 
@@ -88,6 +106,7 @@ export default async function handler(request: Request, response: Response) {
     return response.status(200).json({
       verified: true,
       certificate: publicCertificate(document.id, data),
+      config: publicConfig(configSnapshot.data() || {}),
     });
   } catch (error) {
     console.error('VOP certificate verification failed', error);
