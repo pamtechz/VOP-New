@@ -139,10 +139,7 @@ export const App: React.FC = () => {
         }
       }
       const shareRef = deepLinkParams.get('ref');
-      if (shareRef && !sessionStorage.getItem('vop_share_open_' + shareRef)) {
-        sessionStorage.setItem('vop_share_open_' + shareRef, '1');
-        void auth?.currentUser?.getIdToken().then(token => fetch('/api/share', { method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token}, body:JSON.stringify({action:'markInstall',code:shareRef}) })).catch(() => undefined);
-      }
+      if (shareRef) sessionStorage.setItem('vop_share_ref', shareRef);
 
       // The server is the source of truth; localStorage is only a local cache for
       // components that still need synchronous access during the current session.
@@ -163,6 +160,25 @@ export const App: React.FC = () => {
     });
 
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const markVerifiedInstall = () => {
+      const code = sessionStorage.getItem('vop_share_ref');
+      if (!code || sessionStorage.getItem('vop_share_install_recorded_' + code)) return;
+      sessionStorage.setItem('vop_share_install_recorded_' + code, '1');
+      void auth?.currentUser?.getIdToken().then(token =>
+        fetch('/api/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ action: 'markInstall', code }),
+        })
+      ).catch(() => undefined);
+    };
+    const media = window.matchMedia('(display-mode: standalone)');
+    if (media.matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)) markVerifiedInstall();
+    window.addEventListener('appinstalled', markVerifiedInstall);
+    return () => window.removeEventListener('appinstalled', markVerifiedInstall);
   }, []);
 
   useEffect(() => {
