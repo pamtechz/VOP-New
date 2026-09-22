@@ -284,7 +284,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     const translationKeys = Object.keys(translationValues).sort();
     return (
       <div>
-        <PageHead icon={Icon} title="Translations" subtitle="Manage application translation keys and values from Firestore." action={
+        <PageHead icon={Icon} title="Translations" subtitle="Manage application translation keys and values." action={
           <div style={{display:'flex',gap:9}}>
             <button className="vop-secondary" type="button" onClick={addTranslationKey}><Plus size={17}/>Add Key</button>
             <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
@@ -349,7 +349,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
           {visibleRecords.length===0 && <div className="vop-empty">No {primaryTitle.toLowerCase()} records are configured.</div>}
         </div>
         <form className="vop-card vop-form-card" onSubmit={save}>
-          <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved directly to the configured Firestore collection.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={22}/></div></div>
+          <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={22}/></div></div>
           <Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/>
           <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={openNew}>Clear</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
         </form>
