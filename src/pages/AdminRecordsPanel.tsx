@@ -3,7 +3,7 @@ import {
   AlertTriangle, Book, Check, ChevronDown, ChevronRight, Edit3, Globe, Layers, Megaphone,
   Plus, Radio, RefreshCw, Save, Search, Send, Trash2, Users, X, Video, Link2, BarChart3, ListVideo, Settings, MoreVertical, Play, Headphones, ExternalLink, CalendarDays
 } from 'lucide-react';
-import type { CustomLanguage } from '../types';
+import type { AutoLocalizationEntry, CustomLanguage } from '../types';
 import {
   deleteAdminRecord,
   saveAdminRecord,
@@ -11,6 +11,8 @@ import {
   subscribeTranslations,
   saveTranslation
 } from '../services/adminFirestore';
+import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
+import { MASTER_TRANSLATION_KEYS } from '../services/i18n';
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -128,6 +130,9 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedTranslation, setSelectedTranslation] = useState('');
   const [translationValues, setTranslationValues] = useState<Record<string, string>>({});
+  const [detectedTranslations, setDetectedTranslations] = useState<AutoLocalizationEntry[]>([]);
+  const [translationSearch, setTranslationSearch] = useState('');
+  const [translationFilter, setTranslationFilter] = useState<'all' | 'missing' | 'translated'>('all');
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -139,10 +144,43 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     setForm(blankForm(kind));
     setEditingId(null);
     setSearch('');
+    setTranslationSearch('');
+    setTranslationFilter('all');
     setMessage('');
     setError('');
     if (kind === 'translations') {
-      return subscribeTranslations(setTranslations, loadError);
+      const refreshDetectedTranslations = () => {
+        const detected = new Map<string, AutoLocalizationEntry>();
+        MASTER_TRANSLATION_KEYS.forEach(entry => {
+          detected.set(entry.key, {
+            key: entry.key,
+            english: entry.defaultEn,
+            component: 'Built-in',
+            translations: { en: entry.defaultEn },
+            discoveredAt: ''
+          });
+        });
+        getStoredAutoLocalization().forEach(entry => {
+          if (!entry.key.trim()) return;
+          const existing = detected.get(entry.key);
+          detected.set(entry.key, existing ? {
+            ...existing,
+            ...entry,
+            english: entry.english || existing.english,
+            translations: { ...existing.translations, ...entry.translations }
+          } : entry);
+        });
+        setDetectedTranslations(Array.from(detected.values()).sort((a, b) => a.key.localeCompare(b.key)));
+      };
+      refreshDetectedTranslations();
+      window.addEventListener('vop_localization_discovered', refreshDetectedTranslations);
+      window.addEventListener('vop_data_updated', refreshDetectedTranslations);
+      const unsubscribe = subscribeTranslations(setTranslations, loadError);
+      return () => {
+        window.removeEventListener('vop_localization_discovered', refreshDetectedTranslations);
+        window.removeEventListener('vop_data_updated', refreshDetectedTranslations);
+        unsubscribe();
+      };
     }
     if (!isRecordKind(kind)) return undefined;
     return subscribeAdminCollection(COLLECTIONS[kind], setRecords, loadError);
@@ -157,8 +195,14 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
 
   useEffect(() => {
     const doc = translations.find(item => item.id === selectedTranslation);
-    setTranslationValues(doc?.values || {});
-  }, [translations, selectedTranslation]);
+    const nextValues: Record<string, string> = { ...(doc?.values || {}) };
+    detectedTranslations.forEach(entry => {
+      if (nextValues[entry.key] === undefined) {
+        nextValues[entry.key] = entry.translations?.[selectedTranslation] || (selectedTranslation === 'en' ? entry.english : '');
+      }
+    });
+    setTranslationValues(nextValues);
+  }, [translations, selectedTranslation, detectedTranslations]);
 
   // Organization selectors need their parent collections. They are intentionally
   // loaded only while an organization screen is active.
@@ -253,14 +297,24 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     }
     const cleaned = Object.fromEntries(
       Object.entries(translationValues)
-        .map(([key, value]) => [key.trim(), value])
-        .filter(([key, value]) => key && String(value).trim())
+        .map(([key, value]) => [key.trim(), String(value ?? '')])
+        .filter(([key]) => Boolean(key))
     );
     setSaving(true);
     setError('');
     try {
       await saveTranslation(selectedTranslation, cleaned);
-      setMessage('Translations saved.');
+      const localEntries = getStoredAutoLocalization();
+      if (localEntries.length) {
+        saveAutoLocalization(localEntries.map(entry => ({
+          ...entry,
+          translations: {
+            ...entry.translations,
+            ...(cleaned[entry.key] !== undefined ? { [selectedTranslation]: cleaned[entry.key] } : {})
+          }
+        })), false);
+      }
+      setMessage('Saved ' + Object.keys(cleaned).length + ' detected translations for ' + selectedTranslation + '.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save translations.');
     } finally {
@@ -268,51 +322,89 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages }) => {
     }
   };
 
-  const addTranslationKey = () => {
-    let index = Object.keys(translationValues).length + 1;
-    let key = 'new.key.' + index;
-    while (translationValues[key] !== undefined) {
-      index += 1;
-      key = 'new.key.' + index;
-    }
-    setTranslationValues(current => ({ ...current, [key]: '' }));
-  };
-
   const Icon = ICONS[kind];
 
   if (kind === 'translations') {
-    const translationKeys = Object.keys(translationValues).sort();
+    const q = translationSearch.trim().toLowerCase();
+    const storedKeys = Object.keys(translationValues);
+    const detectedKeys = new Set(detectedTranslations.map(entry => entry.key));
+    const translationKeys = Array.from(new Set([...detectedKeys, ...storedKeys])).sort();
+    const rows = translationKeys
+      .map(key => {
+        const detected = detectedTranslations.find(entry => entry.key === key);
+        const english = detected?.english || key.replace(/[._-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        const value = translationValues[key] || '';
+        return {
+          key,
+          english,
+          component: detected?.component || 'Stored translation',
+          value,
+          isMissing: !value.trim() || (selectedTranslation !== 'en' && value.trim() === english.trim())
+        };
+      })
+      .filter(row => {
+        const matchesSearch = !q || [row.key, row.english, row.component, row.value].join(' ').toLowerCase().includes(q);
+        const matchesFilter = translationFilter === 'all' || (translationFilter === 'missing' ? row.isMissing : !row.isMissing);
+        return matchesSearch && matchesFilter;
+      });
+    const detectedCount = translationKeys.filter(key => detectedKeys.has(key)).length;
+    const translatedCount = translationKeys.filter(key => {
+      const value = translationValues[key] || '';
+      const source = detectedTranslations.find(entry => entry.key === key)?.english || '';
+      return Boolean(value.trim()) && (selectedTranslation === 'en' || value.trim() !== source.trim());
+    }).length;
+    const missingCount = Math.max(0, translationKeys.length - translatedCount);
+
     return (
       <div>
-        <PageHead icon={Icon} title="Translations" subtitle="Manage application translation keys and values." action={
-          <div style={{display:'flex',gap:9}}>
-            <button className="vop-secondary" type="button" onClick={addTranslationKey}><Plus size={17}/>Add Key</button>
-            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
+        <PageHead icon={Icon} title="Translations" subtitle="The system detects translatable interface strings automatically. Select a language and translate the detected entries." action={
+          <div style={{display:'flex',gap:9,flexWrap:'wrap',justifyContent:'flex-end'}}>
+            <button className="vop-secondary" type="button" onClick={() => window.dispatchEvent(new Event('vop_localization_discovered'))}><RefreshCw size={17}/>Refresh Detected</button>
+            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving || !selectedTranslation}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
           </div>
         } />
         {error && <ErrorBox message={error} clear={()=>setError('')} />}
         {message && <Toast message={message}/>}
         <div className="vop-grid-2">
           <div className="vop-card vop-form-card">
-            <div className="vop-section-title"><div><h2>Language</h2><p>Translation documents are keyed by the configured language code.</p></div></div>
-            <div className="vop-field"><label>Language</label><select value={selectedTranslation} onChange={e=>setSelectedTranslation(e.target.value)}><option value="">Select language</option>{languages.filter(item=>item.enabled!==false).map(language=><option key={language.code} value={language.code}>{language.name} · {language.code}</option>)}</select></div>
-            <div className="vop-empty" style={{marginTop:16}}>
-              <Globe size={28}/>
-              <strong>{translationKeys.length}</strong>
-              <span>translation keys configured</span>
+            <div className="vop-section-title"><div><h2>Translation Target</h2><p>Keys are detected by the application; administrators do not create them manually.</p></div></div>
+            <div className="vop-field">
+              <label>Preferred Language</label>
+              <select value={selectedTranslation} onChange={e=>setSelectedTranslation(e.target.value)}>
+                <option value="">Select language</option>
+                {languages.filter(item=>item.enabled!==false).map(language=><option key={language.code} value={language.code}>{language.name} · {language.code}</option>)}
+              </select>
+            </div>
+            <div className="vop-translation-summary" style={{marginTop:16}}>
+              <div><strong>{detectedCount}</strong><span>Detected</span></div>
+              <div><strong>{translatedCount}</strong><span>Translated</span></div>
+              <div><strong>{missingCount}</strong><span>Remaining</span></div>
             </div>
           </div>
           <div className="vop-card vop-form-card">
-            <div className="vop-section-title"><div><h2>Translation Entries</h2><p>Only configured keys are stored; there is no embedded demo catalogue.</p></div></div>
+            <div className="vop-section-title"><div><h2>Detected Translation Entries</h2><p>English source text is detected automatically. Only the translated value needs administrator input.</p></div></div>
+            <div className="vop-translation-toolbar">
+              <div className="vop-search"><Search size={16}/><input value={translationSearch} onChange={e=>setTranslationSearch(e.target.value)} placeholder="Search detected text…"/></div>
+              <div className="vop-translation-filters">
+                {([['all','All'],['missing','Needs Translation'],['translated','Translated']] as const).map(([filter,label])=><button type="button" key={filter} className={translationFilter===filter?'active':''} onClick={()=>setTranslationFilter(filter)}>{label}</button>)}
+              </div>
+            </div>
             <div className="vop-translation-list">
-              {translationKeys.map(key=>(
-                <div className="vop-translation-row" key={key}>
-                  <input value={key} onChange={e=>setTranslationValues(current=>{const next={...current};const value=next[key]||'';delete next[key];next[e.target.value]=value;return next;})} aria-label="Translation key"/>
-                  <input value={translationValues[key]||''} onChange={e=>setTranslationValues(current=>({...current,[key]:e.target.value}))} placeholder="Translated value"/>
-                  <button className="vop-actions" type="button" onClick={()=>setTranslationValues(current=>{const next={...current};delete next[key];return next;})}><Trash2 size={15}/></button>
+              {rows.map(row=>(
+                <div className="vop-translation-row vop-translation-auto-row" key={row.key}>
+                  <div className="vop-translation-source">
+                    <strong>{row.english}</strong>
+                    <small>{row.key}{row.component ? ' · ' + row.component : ''}</small>
+                  </div>
+                  <input
+                    value={row.value}
+                    onChange={e=>setTranslationValues(current=>({...current,[row.key]:e.target.value}))}
+                    placeholder={selectedTranslation === 'en' ? row.english : 'Enter translation…'}
+                    aria-label={'Translation for ' + row.english}
+                  />
                 </div>
               ))}
-              {translationKeys.length===0 && <div className="vop-empty">No translations configured for this language.</div>}
+              {rows.length===0 && <div className="vop-empty">No detected strings match this filter. Use the application normally or open another section so newly used strings can be detected automatically.</div>}
             </div>
           </div>
         </div>
