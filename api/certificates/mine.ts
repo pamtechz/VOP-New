@@ -55,9 +55,27 @@ export default async function handler(request: Request, response: Response) {
     if (!authorization.startsWith('Bearer ')) return response.status(401).json({ error: 'Sign in first.' });
     const decoded = await getAuth(admin()).verifyIdToken(authorization.slice(7).trim());
     const db = getFirestore(admin());
-    const snapshot = await db.collection('certificates').where('candidateId', '==', decoded.uid).limit(20).get();
+    const [snapshot, configSnapshot] = await Promise.all([
+      db.collection('certificates').where('candidateId', '==', decoded.uid).limit(20).get(),
+      db.doc('system/certification').get(),
+    ]);
     const certificates = snapshot.docs.map(doc => safe({ id: doc.id, ...doc.data() })).filter(item => item.status === 'Certified');
-    return response.status(200).json({ certificates });
+    const config = configSnapshot.exists ? configSnapshot.data() ?? {} : {};
+    return response.status(200).json({
+      certificates,
+      config: {
+        certificateTitle: String(config.certificateTitle ?? ''),
+        certificateBodyText: String(config.certificateBodyText ?? ''),
+        issuerName: String(config.issuerName ?? ''),
+        issuerSubtitle: String(config.issuerSubtitle ?? ''),
+        directorName: String(config.directorName ?? ''),
+        directorTitle: String(config.directorTitle ?? ''),
+        signatureUrl: String(config.signatureUrl ?? ''),
+        sealUrl: String(config.sealUrl ?? ''),
+        logoUrl: String(config.logoUrl ?? ''),
+        backgroundUrl: String(config.backgroundUrl ?? ''),
+      },
+    });
   } catch (error) {
     console.error('VOP learner certificate load failed', error);
     const message = error instanceof Error ? error.message : '';
