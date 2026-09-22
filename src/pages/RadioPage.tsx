@@ -74,6 +74,16 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   }, []);
 
   useEffect(() => {
+    if (!broadcasts.length) {
+      setCurrentPlaying(null);
+      return;
+    }
+    if (!currentPlaying || !broadcasts.some(item => item.id === currentPlaying.id)) {
+      setCurrentPlaying(broadcasts[0]);
+    }
+  }, [broadcasts, currentPlaying]);
+
+  useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
