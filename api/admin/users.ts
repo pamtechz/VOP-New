@@ -232,7 +232,7 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.photoURL === 'string') update.photoURL = body.photoURL.trim() || null;
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
       const updated = await authService.updateUser(uid, update);
-      const type = (body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
+      const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
       const profile = profileForType(type, body);
       await profileRef.set({
         uid,
@@ -243,7 +243,7 @@ export default async function handler(request: Request, response: Response) {
         ...profile,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      const claims = type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : { role: 'student' };
+      const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : { role: 'student' };
       await authService.setCustomUserClaims(uid, claims);
       return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName } });
     }
