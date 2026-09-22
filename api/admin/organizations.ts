@@ -29,19 +29,68 @@ export default async function handler(req: Request, res: Response) {
       await ref.collection('members').doc(ctx.auth.uid).set({ uid: ctx.auth.uid, organizationId, role: 'owner', active: true, joinedAt: now, updatedAt: now });
       return res.status(200).json({ ok: true, item: { id: organizationId, name, status: 'active' } });
     }
+    if (action === 'list') {
+      if (!ctx.isSuperAdmin) requireOrgRole(ctx, ['owner','admin']);
+      const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
+      const items = await Promise.all(snap.docs.map(async organization => {
+        const data = organization.data() || {};
+        const members = await organization.ref.collection('members').where('active','==',true).get();
+        return {
+          id: organization.id,
+          name: String(data.name || organization.id),
+          slug: String(data.slug || organization.id),
+          status: String(data.status || 'active'),
+          ownerUid: String(data.ownerUid || ''),
+          plan: String(data.plan || 'standard'),
+          quotas: data.quotas || {},
+          createdAt: String(data.createdAt || ''),
+          updatedAt: String(data.updatedAt || ''),
+          memberCount: members.size,
+        };
+      }));
+      return res.status(200).json({ ok: true, items });
+    }
+
     requireOrgRole(ctx, ['owner','admin']);
+    if (action === 'getUsage') {
+      const orgId = ctx.organizationId;
+      const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
+      const [members, guides, quizzes, announcements, radio, books] = await Promise.all([
+        ctx.db.collection(`organizations/${orgId}/members`).where('active','==',true).get(),
+        count('guides'), count('quizzes'), count('announcements'), count('radioBroadcasts'), count('books'),
+      ]);
+      return res.status(200).json({ ok:true, usage:{ members:members.size, guides, quizzes, announcements, radio, books } });
+    }
+
+    if (action === 'update') {
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+      if (!ctx.isSuperAdmin && data.plan !== undefined) throw new Error('Only the VOP Super Admin can change organization plans.');
+      const allowed: Record<string, unknown> = {
+        name: typeof data.name === 'string' ? data.name.trim() : undefined,
+        slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
+        plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
+        quotas: data.quotas && typeof data.quotas === 'object' ? data.quotas : undefined,
+        branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
+      await ctx.db.doc(`organizations/${ctx.organizationId}`).set(allowed, { merge:true });
+      return res.status(200).json({ ok:true });
+    }
+
     if (action === 'listMembers') {
       const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/members`).get();
       return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
     }
     if (action === 'setMember') {
       const uid = String(body.uid || '').trim();
+      if (!(await ctx.db.doc(`users/${uid}`).get()).exists) throw new Error('The selected user account does not exist.');
       const memberRole = String(body.role || 'learner');
       if (!uid || !['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Valid member details are required.');
       if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
       const now = new Date().toISOString();
       await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
-      await ctx.db.doc(`users/${uid}`).set({ organizationId: ctx.organizationId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await ctx.db.doc(`users/${uid}`).set({ organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
     if (action === 'setStatus') {
