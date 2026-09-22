@@ -258,7 +258,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
               {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-radio-youtube-stage"/>}
               {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} allow="autoplay; encrypted-media; picture-in-picture" />}
               {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster || undefined} playsInline preload="metadata" {...mediaEvents}/>}
-              {source?.provider === 'direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" />}
+              {source?.provider === 'direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents} />}
               {!source && <div className="vop-radio-provider-empty"><Radio size={26}/>No playable source configured.</div>}
             </div>
             <div className="vop-radio-live-body">
