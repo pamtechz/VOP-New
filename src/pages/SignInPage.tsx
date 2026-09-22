@@ -32,6 +32,12 @@ function firebaseMessage(error: unknown, mode: Mode): string {
         : 'This sign-in method is not enabled in Firebase Authentication.';
     case 'auth/network-request-failed':
       return 'The connection to Firebase failed. Check your internet connection and try again.';
+    case 'auth/too-many-requests':
+      return 'Too many sign-in attempts were made. Wait a little while and try again.';
+    case 'auth/internal-error':
+      return 'Firebase could not complete the authentication request. Check the Firebase Web configuration and try again.';
+    case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
+      return 'The Firebase Web API key is invalid. Check VITE_FIREBASE_API_KEY in the local environment configuration.';
     default:
       return `Authentication failed (${error.code}).`;
   }
