@@ -67,6 +67,13 @@ async function assertParticipant(db: FirebaseFirestore.Firestore, uid: string, c
   throw new Error('You are not a participant in this conversation.');
 }
 
+function iso(value: unknown) {
+  const candidate = value as { toDate?: () => Date } | undefined;
+  if (candidate?.toDate) return candidate.toDate().toISOString();
+  const parsed = new Date(String(value ?? ''));
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
 function conversationId(studentId: string, mentorId: string) {
   return `${studentId}__${mentorId}`;
 }
@@ -252,7 +259,7 @@ export default async function handler(req: Request, res: Response) {
       const data = conversation.data() || {};
       await assertParticipant(db, decoded.uid, data);
       const messages = await conversation.ref.collection('messages').orderBy('createdAt','asc').limit(200).get();
-      return res.status(200).json({ ok: true, items: messages.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+      return res.status(200).json({ ok: true, items: messages.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: iso(doc.data()?.createdAt) })) });
     }
 
     if (action === 'sendMessage') {
