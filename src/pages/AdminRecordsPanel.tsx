@@ -348,7 +348,7 @@ function subtitleFor(kind: ManagedAdminCollection) {
   switch (kind) {
     case 'announcements': return 'Create, edit, publish and remove public announcements.';
     case 'materials': return 'Manage learning materials and downloadable resources.';
-    case 'radio': return 'Manage radio broadcasts, audio links and schedules.';
+    case 'radio': return 'Manage radio audio/video broadcasts with automatic timing and media detection.';
     case 'unions': return 'Manage the configurable church administrative hierarchy.';
     case 'conferences': return 'Manage conferences and their union relationships.';
     case 'districts': return 'Manage districts and their conference relationships.';
