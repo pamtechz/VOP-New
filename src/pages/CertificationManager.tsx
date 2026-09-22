@@ -45,6 +45,7 @@ interface CertificationConfig {
   logoUrl?: string;
   backgroundUrl?: string;
   verificationEnabled?: boolean;
+  minimumScore?: number;
   verificationBaseUrl?: string;
 }
 
