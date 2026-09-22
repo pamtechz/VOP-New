@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const t = (key: string) => getTranslation(key, activeLanguage, settings?.customTranslations);
   const availableLanguages = getAvailableLanguages(settings);
-  const isPrivileged = currentUser.privileges?.admin || (currentUser.role && currentUser.role !== 'student');
+  const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
 
   const nav = (route: AppRoute) => {
     if (onNavigate) {
