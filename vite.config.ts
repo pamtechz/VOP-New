@@ -65,9 +65,15 @@ function createApiResponse(res: ServerResponse) {
   };
 }
 
+type LocalApiMiddleware = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: (error?: unknown) => void,
+) => void | Promise<void>;
+
 function createLocalApiMiddleware(server: {
   ssrLoadModule: (url: string) => Promise<Record<string, unknown>>;
-}) {
+}): LocalApiMiddleware {
   return async (req, res, next) => {
     const requestUrl = req.url ?? '';
     if (!requestUrl.startsWith(LOCAL_API_PREFIX)) {
