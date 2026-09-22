@@ -23,6 +23,7 @@ export function Root() {
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
       setAuthReady(true);
+      setRedirectReady(true);
       setDataReady(true);
       return;
     }
