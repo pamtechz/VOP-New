@@ -16,6 +16,32 @@ node --experimental-strip-types --test tests/progress.test.ts tests/multitest.te
 
 For Android packaging, use the Capacitor/Android configuration under `android/` after a successful web build. These workflows do not publish an APK or a production deployment.
 
+
+## Local development API
+
+The production deployment uses Vercel's native `/api/*` functions. A plain Vite server does not provide those routes, so `vite.config.ts` now mounts the same TypeScript handlers under `/api/*` during `npm run dev`. This prevents local 404s such as `POST /api/account/profile` and `POST /api/study/progress`.
+
+Create `.env.local` from `.env.example`. Keep the Firebase Web values prefixed with `VITE_`. Keep Firebase Admin credentials server-only (never use a `VITE_` prefix):
+
+```text
+VITE_FIREBASE_PROJECT_ID=voiceofprophecy
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_APP_ID=...
+
+FIREBASE_ADMIN_PROJECT_ID=voiceofprophecy
+FIREBASE_ADMIN_CLIENT_EMAIL=...
+FIREBASE_ADMIN_PRIVATE_KEY=...
+```
+
+The Admin SDK variables are required for server-authoritative study progress, assessment grading, certificate issuance and administrator API actions. A newly registered learner can still create their own minimum student profile through the Firestore rules if the local Admin SDK is unavailable.
+
+After changing environment variables, restart Vite:
+
+```bash
+npm run dev
+```
+
 ## Firestore curriculum
 
 The production lesson seed script writes approved lessons to the canonical `curricula/discover/languages/{language}/lessons/{lessonId}` hierarchy used by the web reader.
