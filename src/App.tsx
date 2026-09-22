@@ -193,7 +193,7 @@ export const App: React.FC = () => {
     setStudyError('');
     setIsMenuOpen(false);
     // Display checks are not security. Server APIs must authorize roles and scopes.
-    if (route === 'admin' && (!currentUser.role || currentUser.role === 'student')) return;
+    if (route === 'admin' && !['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) return;
     setCurrentRoute(route);
   };
   const returnHome = () => navigate('home');
