@@ -62,13 +62,6 @@ function userCode(authUser: UserRecord, profile: Record<string, unknown> | undef
   return existing || authUser.uid.slice(0, 12).toUpperCase();
 }
 
-async function requireSuperAdmin(decoded: Record<string, unknown>) {
-  const db = getFirestore(getFirebaseAdmin());
-  const actor = await db.doc(`users/${String(decoded.uid)}`).get();
-  if (!actor.exists || actor.data()?.role !== 'super_admin') throw new Error('Only the VOP super administrator can manage users.');
-  return db;
-}
-
 async function loadOrganizations(db: Firestore) {
   const [unions, conferences, districts] = await Promise.all([
     db.collection('unions').get(),
