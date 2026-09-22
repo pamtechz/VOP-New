@@ -97,12 +97,11 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     organizationId = String(profile.data()?.organizationId || '').trim();
   }
 
+  const sharedGuides = await getDocs(query(collection(firestore, 'guides'), where('sharingScope', '==', 'shared'), where('published', '==', true)));
+  guideSnapshots.push(...sharedGuides.docs);
   if (organizationId) {
-    const [owned, shared] = await Promise.all([
-      getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', organizationId))),
-      getDocs(query(collection(firestore, 'guides'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
-    ]);
-    guideSnapshots.push(...owned.docs, ...shared.docs.filter(item => item.data().organizationId !== organizationId));
+    const owned = await getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', organizationId)));
+    guideSnapshots.push(...owned.docs.filter(item => item.data().sharingScope !== 'shared'));
   }
 
   const legacyGuides = await getDocs(collection(firestore, 'curricula/discover/languages'));
@@ -140,7 +139,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     if (!guide.title) continue;
 
     const key = legacy ? `legacy:${language}` : `org:${String(data.organizationId || data.ownerOrganizationId || '')}:${language}`;
-    guides.set(key, { guide, lessonsRef: item.ref.collection('lessons') });
+    guides.set(key, { guide, lessonsRef: collection(firestore, `${item.ref.path}/lessons`) });
   }
 
   for (const entry of guides.values()) {
@@ -170,3 +169,101 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     .sort((a, b) => a.discoverNumber - b.discoverNumber || a.language.localeCompare(b.language));
 }
 
+
+
+export async function loadFirestoreUser(uid: string): Promise<User | null> {
+  const firestore = requireDb();
+  const snapshot = await getDoc(doc(firestore, 'users', uid));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() as Partial<User>;
+  return {
+    uid,
+    displayName: String(data.displayName ?? ''),
+    email: String(data.email ?? ''),
+    phoneNumber: data.phoneNumber,
+    photoURL: data.photoURL,
+    bio: data.bio,
+    address: data.address,
+    unionId: data.unionId,
+    conferenceId: data.conferenceId,
+    districtId: data.districtId,
+    churchId: data.churchId,
+    role: data.role,
+    organizationId: data.organizationId,
+    organizationRole: data.organizationRole,
+    adminNodeType: data.adminNodeType,
+    adminNodeId: data.adminNodeId,
+    information: {
+      enrollmentDate: String(data.information?.enrollmentDate ?? new Date().toISOString().slice(0, 10)),
+      completionDate: data.information?.completionDate,
+      decisionDate: data.information?.decisionDate,
+      graduationDate: data.information?.graduationDate,
+      baptismDate: data.information?.baptismDate,
+      graduating: data.information?.graduating === true,
+      graduated: data.information?.graduated === true,
+      baptismCandidate: data.information?.baptismCandidate === true,
+      baptized: data.information?.baptized === true,
+      guardian: data.information?.guardian,
+      notes: data.information?.notes,
+    },
+    privileges: {
+      admin: data.privileges?.admin === true,
+      superAdmin: data.privileges?.superAdmin === true,
+      guardian: data.privileges?.guardian === true,
+      editor: data.privileges?.editor === true,
+      manager: data.privileges?.manager === true,
+      developer: data.privileges?.developer === true,
+      coordinator: data.privileges?.coordinator === true,
+    },
+    progress: {
+      discoverProgress: Number(data.progress?.discoverProgress ?? 0),
+      completedGuidesCount: Number(data.progress?.completedGuidesCount ?? 0),
+      totalGuidesCount: Number(data.progress?.totalGuidesCount ?? 0),
+      guideScores: data.progress?.guideScores ?? {},
+      completedLessons: Array.isArray(data.progress?.completedLessons) ? data.progress.completedLessons : [],
+    },
+  };
+}
+
+export async function createFirestoreStudentProfile(
+  uid: string,
+  email: string,
+  displayName: string,
+  photoURL?: string | null,
+): Promise<User> {
+  const firestore = requireDb();
+  const ref = doc(firestore, 'users', uid);
+  const existing = await getDoc(ref);
+  if (existing.exists()) return (await loadFirestoreUser(uid)) as User;
+  const now = new Date().toISOString();
+  const profile: User = {
+    uid,
+    displayName: displayName.trim(),
+    email: email.trim(),
+    photoURL: photoURL ?? undefined,
+    role: 'student',
+    information: {
+      enrollmentDate: now.slice(0, 10),
+      graduating: false,
+      graduated: false,
+      baptismCandidate: false,
+      baptized: false,
+    },
+    privileges: {
+      admin: false,
+      guardian: false,
+      editor: false,
+      manager: false,
+      developer: false,
+    },
+    progress: {
+      discoverProgress: 0,
+      completedGuidesCount: 0,
+      totalGuidesCount: 0,
+      guideScores: {},
+      completedLessons: [],
+    },
+  };
+  await setDoc(ref, { ...profile, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  return profile;
+}
