@@ -42,6 +42,21 @@ const requiredFields: Record<CollectionName, string[]> = {
 
 const text = (value: unknown) => value == null ? '' : String(value);
 
+function validateRadioMedia(data: ContentItem) {
+  const urls = ['audioUrl', 'videoUrl', 'streamUrl']
+    .map(key => text(data[key]).trim())
+    .filter(Boolean);
+  if (!urls.length) throw new Error('Add at least one playable audio, video or live stream URL.');
+  urls.forEach(value => {
+    try {
+      const parsed = new URL(value);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      throw new Error('Radio media URLs must be valid HTTP(S) URLs.');
+    }
+  });
+}
+
 function newRecord(collection: CollectionName, state: ContentState): ContentItem {
   switch (collection) {
     case 'languages': return { code: '', name: '', nativeName: '', enabled: true, sortOrder: state.languages.length, rtl: false };
@@ -167,6 +182,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         id = id || `${active}-${Date.now()}`;
         for (const key of requiredFields[active]) if (!text(draft[key]).trim()) throw new Error(`${key} is required.`);
         data = { ...draft, id };
+        if (active === 'radioBroadcasts') validateRadioMedia(data);
         if (active === 'radioBroadcasts' && !text(data.broadcastTime).trim()) {
           data.broadcastTime = new Date().toISOString();
         }
