@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Book, BookOpen, CalendarDays, CheckCircle, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Clock, Edit3, Eye, FileText,
-  Filter, Globe, Image as ImageIcon, Layers, MoreVertical, Plus, RefreshCw,
-  Save, Search, Send, Settings, Trash2, Video, Volume2, X
+  Filter, Globe, Image as ImageIcon, Layers, Link as LinkIcon, List, ListOrdered,
+  MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings,
+  Table2, Trash2, Underline, Undo2, Video, Volume2, X
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
 import { auth } from '../lib/firebase';
@@ -164,6 +165,44 @@ function sortLessonNumber(a: LessonRow, b: LessonRow) {
   return a.lesson.lessonNumber.localeCompare(b.lesson.lessonNumber);
 }
 
+function contentToBlocks(content: string): LessonBlock[] {
+  const pages = content.split(/\[\[PAGE_BREAK\]\]/g);
+  const blocks: LessonBlock[] = [];
+  pages.forEach((page, pageIndex) => {
+    page.split(/\r?\n/).forEach(line => {
+      const value = line.trim();
+      if (!value) return;
+      if (value.startsWith('[h2]') && value.endsWith('[/h2]')) blocks.push({ id: newId('content-heading'), type: 'heading', text: value.slice(4, -5).trim() });
+      else if (value.startsWith('[quote]') && value.endsWith('[/quote]')) blocks.push({ id: newId('content-quote'), type: 'quote', text: value.slice(7, -8).trim() });
+      else if (value.startsWith('- ')) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.slice(2) });
+      else if (/^\d+\.\s/.test(value)) blocks.push({ id: newId('content-list'), type: 'paragraph', text: '• ' + value.replace(/^\d+\.\s/, '') });
+      else blocks.push({ id: newId('content-paragraph'), type: 'paragraph', text: value });
+    });
+    if (pageIndex < pages.length - 1) blocks.push({ id: newId('content-page'), type: 'pageBreak' });
+  });
+  return blocks;
+}
+
+function renderMarkedText(text: string): React.ReactNode[] {
+  const output: React.ReactNode[] = [];
+  const pattern = /\[(b|i|u|link)\]([\s\S]*?)\[\/\1\]/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = pattern.exec(text))) {
+    if (match.index > cursor) output.push(text.slice(cursor, match.index));
+    const tag = match[1];
+    const value = match[2];
+    if (tag === 'b') output.push(<strong key={key++}>{value}</strong>);
+    else if (tag === 'i') output.push(<em key={key++}>{value}</em>);
+    else if (tag === 'u') output.push(<u key={key++}>{value}</u>);
+    else output.push(<span key={key++} className="vop-inline-link">{value}</span>);
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) output.push(text.slice(cursor));
+  return output;
+}
+
 function questionType(questions: EditorQuestion[] | undefined): string {
   if (!questions?.length) return '—';
   const multiple = questions.some(question => question.options.some(Boolean));
@@ -257,7 +296,8 @@ function editorFromLesson(row: LessonRow): EditorState {
 function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; guideTitle: string; onClose: () => void }) {
   const [page, setPage] = useState(0);
   const [section, setSection] = useState(0);
-  const pages = useMemo(() => splitLessonBlocks(editor.blocks), [editor.blocks]);
+  const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
+  const pages = useMemo(() => splitLessonBlocks(sourceBlocks), [sourceBlocks]);
   const sections = ['Lesson', ...(editor.bibleReferences.trim() ? ['Bible References'] : []), ...(editor.questions.length ? ['Quiz'] : [])];
   const next = () => {
     if (section === 0 && page < pages.length - 1) return setPage(value => value + 1);
@@ -290,14 +330,14 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
             {editor.description && <p className="vop-preview-description">{editor.description}</p>}
             {section === 0 && <div className="vop-preview-blocks">
               {(pages[page] || []).map(block => {
-                if (block.type === 'heading') return <h2 key={block.id}>{block.text}</h2>;
-                if (block.type === 'quote') return <blockquote key={block.id}>{block.text}</blockquote>;
+                if (block.type === 'heading') return <h2 key={block.id}>{renderMarkedText(block.text || '')}</h2>;
+                if (block.type === 'quote') return <blockquote key={block.id}>{renderMarkedText(block.text || '')}</blockquote>;
                 if (block.type === 'image' && block.src) return <img key={block.id} src={block.src} alt="" />;
                 if (block.type === 'video' && block.src) return <video key={block.id} controls src={block.src}/>;
                 if (block.type === 'audio' && block.src) return <audio key={block.id} controls src={block.src}/>;
-                return <p key={block.id}>{block.text}</p>;
+                return <p key={block.id}>{renderMarkedText(block.text || '')}</p>;
               })}
-              {!pages.length && editor.content && <p>{editor.content}</p>}
+              {!pages.length && editor.content && <p>{renderMarkedText(editor.content)}</p>}
             </div>}
             {section === 1 && editor.bibleReferences && <div className="vop-preview-list">{editor.bibleReferences.split('\n').filter(Boolean).map(item => <div key={item}>{item}</div>)}</div>}
             {section === sections.length - 1 && sections.includes('Quiz') && <div className="vop-preview-quiz">{editor.questions.map((question, index) => <div key={index}><strong>{index + 1}. {question.question}</strong>{question.options.map((option, optionIndex) => <span key={optionIndex} className={question.answer === optionIndex ? 'correct' : ''}>{String.fromCharCode(65 + optionIndex)}. {option}</span>)}</div>)}</div>}
@@ -543,7 +583,8 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     setError('');
     try {
       const id = editor.id || newId('lesson');
-      const pageBlocks = splitLessonBlocks(editor.blocks);
+      const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
+      const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
         lessonId: id,
         lessonNumber: editor.lessonNumber.trim(),
@@ -678,8 +719,40 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
       ['quiz', 'Quiz'], ['notes', 'Teacher Notes'], ['settings', 'Settings'],
     ] as const;
 
+    const wordCount = editor.content.trim() ? editor.content.trim().split(/\\s+/).filter(Boolean).length : 0;
+    const wrapSelection = (prefix: string, suffix = prefix) => {
+      const element = document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement | null;
+      if (!element) return;
+      const startAt = element.selectionStart;
+      const endAt = element.selectionEnd;
+      const selectedText = element.value.slice(startAt, endAt);
+      const replacement = prefix + (selectedText || 'text') + suffix;
+      const nextValue = element.value.slice(0, startAt) + replacement + element.value.slice(endAt);
+      setEditor(current => current ? { ...current, content: nextValue } : current);
+      window.requestAnimationFrame(() => {
+        element.focus();
+        const cursor = startAt + replacement.length;
+        const selectionStart = selectedText ? startAt + prefix.length : startAt + prefix.length;
+        element.setSelectionRange(selectionStart, selectedText ? cursor - suffix.length : cursor - suffix.length);
+      });
+    };
+    const addLinePrefix = (prefix: string) => {
+      const element = document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement | null;
+      if (!element) return;
+      const startAt = element.selectionStart;
+      const before = element.value.slice(0, startAt);
+      const lineStart = before.lastIndexOf('\n') + 1;
+      const nextValue = element.value.slice(0, lineStart) + prefix + element.value.slice(lineStart);
+      setEditor(current => current ? { ...current, content: nextValue } : current);
+      window.requestAnimationFrame(() => { element.focus(); element.setSelectionRange(startAt + prefix.length, startAt + prefix.length); });
+    };
+    const addPageBreak = () => {
+      const next = editor.content ? editor.content + '\n\n[[PAGE_BREAK]]\n\n' : '[[PAGE_BREAK]]';
+      setEditor({...editor,content:next});
+    };
+
     return (
-      <div className="vop-reference-editor-page">
+      <div className="vop-reference-editor-page vop-reference-lesson-editor">
         <div className="vop-breadcrumb">
           <button type="button" className="vop-breadcrumb-button" onClick={() => setEditor(null)}><ArrowLeft size={15}/>Curriculum Studio</button>
           <span>›</span><span>Lessons</span><span>›</span><span>Create / Edit Lesson</span>
@@ -703,24 +776,38 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           <div className="vop-field"><label>Guide *</label><select value={editor.guideId} onChange={e => { const selected = guides.find(item => item.id === e.target.value && item.language === editor.language); setEditor({...editor,guideId:e.target.value,guideTitle:selected?.title || '',language:selected?.language || editor.language}); }}><option value="">Select guide</option>{guides.map(guide => <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}</option>)}</select></div>
           <div className="vop-field"><label>Lesson Number *</label><input value={editor.lessonNumber} onChange={e => setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Season / Quarter</label><select value={editor.season} onChange={e => setEditor({...editor,season:e.target.value})}><option value="">Select season</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
-          <div className="vop-field"><label>Language</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value})}><option value="">Select language</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name} · {item.code}</option>)}</select></div>
+          <div className="vop-field"><label>Language</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value})}><option value="">Select language</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
         </div>
 
-        <div className="vop-grid-2 vop-reference-editor-layout">
-          <div className="vop-card vop-editor">
+        <div className="vop-reference-editor-layout vop-lesson-editor-grid">
+          <div className="vop-card vop-editor vop-lesson-content-card">
             <div className="vop-settings-tabs vop-reference-editor-tabs">
               {editorTabs.map(([id, label]) => <button key={id} type="button" className={'vop-tab ' + (editorTab === id ? 'active' : '')} onClick={() => setEditorTab(id)}>{label}</button>)}
             </div>
 
-            {editorTab === 'content' && <div>
-              <div className="vop-section-title"><div><h3>Lesson Content *</h3><p>Build ordered content blocks. All learner content comes from the approved content service.</p></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>Add Block</button><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('page'),type:'pageBreak'}]})}>Page Break</button></div></div>
-              <div className="vop-editor-blocks">
-                {editor.blocks.map((block, index) => <div className="vop-editor-block" key={block.id}>
-                  <div className="vop-editor-block-head"><strong>Block {index + 1}</strong><select value={block.type} onChange={e => { const next = [...editor.blocks]; next[index] = {...next[index], type:e.target.value as LessonBlock['type']}; setEditor({...editor,blocks:next}); }}><option value="paragraph">Paragraph</option><option value="heading">Heading</option><option value="quote">Quote</option><option value="image">Image</option><option value="video">Video</option><option value="audio">Audio</option><option value="pageBreak">Page Break</option></select><button className="vop-actions" type="button" onClick={() => moveBlock(index,-1)} disabled={index===0}><ChevronUp size={15}/></button><button className="vop-actions" type="button" onClick={() => moveBlock(index,1)} disabled={index===editor.blocks.length-1}><ChevronDown size={15}/></button><button className="vop-actions" type="button" onClick={() => setEditor({...editor,blocks:editor.blocks.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button></div>
-                  {block.type === 'pageBreak' ? <div className="vop-page-break">Page break</div> : ['paragraph','heading','quote'].includes(block.type) ? <textarea className="vop-editor-body" value={block.text || ''} onChange={e => { const next = [...editor.blocks]; next[index] = {...next[index], text:e.target.value}; setEditor({...editor,blocks:next}); }} /> : <input value={block.src || ''} onChange={e => { const next = [...editor.blocks]; next[index] = {...next[index], src:e.target.value}; setEditor({...editor,blocks:next}); }} />}</div>)}
-                {editor.blocks.length === 0 && <div className="vop-empty">No content blocks configured.</div>}
+            {editorTab === 'content' && <div className="vop-lesson-rich-editor">
+              <div className="vop-section-title vop-lesson-content-title"><div><h3>Lesson Content *</h3><p>Format lesson text, insert media and structure the lesson without hardcoded content.</p></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>Add Block</button><button className="vop-secondary" type="button" onClick={addPageBreak}>Page Break</button></div></div>
+              <div className="vop-lesson-toolbar">
+                <select aria-label="Text style" onChange={event => { const value=event.target.value; if(value==='heading') wrapSelection('[h2]','[/h2]'); if(value==='quote') wrapSelection('[quote]','[/quote]'); event.currentTarget.value='paragraph'; }} defaultValue="paragraph"><option value="paragraph">Paragraph</option><option value="heading">Heading</option><option value="quote">Quote</option></select>
+                <span className="vop-lesson-toolbar-divider"/>
+                <button type="button" title="Bold" onClick={() => wrapSelection('[b]','[/b]')}><strong>B</strong></button>
+                <button type="button" title="Italic" onClick={() => wrapSelection('[i]','[/i]')}><em>I</em></button>
+                <button type="button" title="Underline" onClick={() => wrapSelection('[u]','[/u]')}><Underline size={17}/></button>
+                <span className="vop-lesson-toolbar-divider"/>
+                <button type="button" title="Bulleted list" onClick={() => addLinePrefix('- ')}><List size={18}/></button>
+                <button type="button" title="Numbered list" onClick={() => addLinePrefix('1. ')}><ListOrdered size={18}/></button>
+                <button type="button" title="Quote" onClick={() => addLinePrefix('> ')}><Quote size={18}/></button>
+                <button type="button" title="Link" onClick={() => wrapSelection('[link]','[/link]')}><LinkIcon size={17}/></button>
+                <button type="button" title="Image" onClick={() => setEditor({...editor,imageUrl:editor.imageUrl})}><ImageIcon size={17}/></button>
+                <button type="button" title="Video" onClick={() => setEditor({...editor,videoUrl:editor.videoUrl})}><Video size={17}/></button>
+                <button type="button" title="Table" onClick={() => wrapSelection('[table]','[/table]')}><Table2 size={17}/></button>
+                <span className="vop-lesson-toolbar-divider"/>
+                <button type="button" title="Undo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('undo'); }}><Undo2 size={17}/></button>
+                <button type="button" title="Redo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('redo'); }}><Redo2 size={17}/></button>
               </div>
-              <div className="vop-form-grid" style={{marginTop:16}}><div className="vop-field"><label>Description</label><textarea value={editor.description} onChange={e => setEditor({...editor,description:e.target.value})}/></div><div className="vop-field"><label>Plain-text fallback</label><textarea value={editor.content} onChange={e => setEditor({...editor,content:e.target.value})}/></div></div>
+              <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content} onChange={event => setEditor({...editor,content:event.target.value})} placeholder="Start writing the lesson content here..." />
+              <div className="vop-lesson-editor-footer"><span>Words: {wordCount}</span><span>Use the toolbar to add lightweight formatting markers.</span></div>
+              <div className="vop-form-grid vop-lesson-description-grid"><div className="vop-field"><label>Description</label><textarea value={editor.description} onChange={e => setEditor({...editor,description:e.target.value})}/></div><div className="vop-field"><label>Plain-text fallback</label><textarea value={editor.content} onChange={e => setEditor({...editor,content:e.target.value})}/></div></div>
             </div>}
 
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column">
@@ -759,8 +846,8 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
             </div>
             <div className="vop-card vop-side-card">
               <div className="vop-field"><label>Lesson Status</label><select value={editor.published ? 'published' : 'draft'} onChange={e => setEditor({...editor,published:e.target.value==='published'})}><option value="draft">Draft</option><option value="published">Published</option></select></div>
-              <div className="vop-field"><label>Schedule (Optional)</label><input type="datetime-local" value={valueText((editor as unknown as Record<string, unknown>).schedule)} onChange={() => undefined} disabled /></div>
-              <div className="vop-field"><label>Tags</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/></div>
+              <div className="vop-field"><label>Schedule (Optional)</label><input type="datetime-local" value="" onChange={() => undefined} disabled /></div>
+              <div className="vop-field"><label>Tags</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/><small className="vop-field-help">Press Enter to add tags</small></div>
               <div className="vop-reference-info"><Globe size={17}/><span>This lesson will be available to learners in the selected language after publication.</span></div>
               <button className="vop-primary vop-full-button" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>Save Changes</button>
             </div>
