@@ -1,3 +1,4 @@
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
@@ -12,31 +13,16 @@ type Response = {
   json: (body: unknown) => void;
 };
 
-let initialized = false;
-
-function getDb() {
-  if (!process.env.FIREBASE_ADMIN_PROJECT_ID && !process.env.FIREBASE_PROJECT_ID) {
-    throw new Error('Firebase Admin is not configured.');
+function admin() {
+  if (getApps().length) return getApps()[0];
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('Server-side Firebase administration is not configured.');
   }
-  if (!process.env.FIREBASE_ADMIN_CLIENT_EMAIL || !process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
-    throw new Error('Firebase Admin credentials are not configured.');
-  }
-  if (!initialized) {
-    const admin = require('firebase-admin') as typeof import('firebase-admin');
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        }),
-      });
-    }
-    initialized = true;
-  }
-  return getFirestore();
+  return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
 }
-
 function bearerToken(request: Request) {
   const value = request.headers?.authorization;
   const authorization = Array.isArray(value) ? value[0] : value;
@@ -58,9 +44,9 @@ export default async function handler(request: Request, response: Response) {
     const token = bearerToken(request);
     if (!token) return response.status(401).json({ error: 'Sign in first.' });
 
-    const admin = require('firebase-admin') as typeof import('firebase-admin');
-    const decoded = await getAuth().verifyIdToken(token);
-    const db = getDb();
+    const firebaseAdmin = admin();
+    const decoded = await getAuth(firebaseAdmin).verifyIdToken(token);
+    const db = getFirestore(firebaseAdmin);
 
     const actorSnapshot = await db.doc(`users/${decoded.uid}`).get();
     if (!actorSnapshot.exists) return response.status(403).json({ error: 'Administrator profile is not configured.' });
