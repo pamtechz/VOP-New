@@ -94,7 +94,7 @@ export default async function handler(
     const tenantGuideRef = organizationId ? db.doc(`guides/${guideId}`) : null;
     const legacyGuideRef = db.doc(`curricula/discover/languages/${language}`);
     const candidateGuide = tenantGuideRef ? await tenantGuideRef.get() : null;
-    const useTenantGuide = Boolean(candidateGuide?.exists && String(candidateGuide?.data()?.organizationId || '') === organizationId);
+    const useTenantGuide = Boolean(candidateGuide?.exists && (String(candidateGuide?.data()?.organizationId || '') === organizationId || (candidateGuide?.data()?.sharingScope === 'shared' && candidateGuide?.data()?.published === true)));
     const guideRef = useTenantGuide ? tenantGuideRef! : legacyGuideRef;
     const lessonRef = guideRef.collection('lessons').doc(lessonId);
     const [guideSnapshot, lessonSnapshot] = await Promise.all([guideRef.get(), lessonRef.get()]);
