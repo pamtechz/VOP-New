@@ -29,6 +29,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const t = (key: string, fallback: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
+  const title = config.certificateTitle || settings.certificateTitle || certificate?.courseName || '';
 
   useEffect(() => {
     let cancelled = false;
