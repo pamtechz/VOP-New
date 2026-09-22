@@ -130,7 +130,7 @@ export default async function handler(request: Request, response: Response) {
     const canEditCurriculum = role === 'super_admin'
       || (['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(role))
         && actor.data()?.privileges?.editor === true);
-    if (!role || role === 'student') {
+    if (!['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(role || ''))) {
       return response.status(403).json({ error: 'Administrator privileges are required.' });
     }
     if (['curriculum', 'guides', 'learningPaths', 'bibleTopics', 'seasons'].includes(collection) && !canEditCurriculum) {
