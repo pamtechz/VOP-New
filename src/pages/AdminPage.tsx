@@ -164,6 +164,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   };
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProfileOpen(false);
+        setSidebarOpen(false);
+      }
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('.vop-profile')) setProfileOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, []);
+
+  useEffect(() => {
     const unsubs = [
       subscribeLanguages(setLanguages, err => setError(err.message)),
       subscribeSettings(setSettings, err => setError(err.message)),
@@ -805,7 +824,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   return <div className="vop-admin">
     <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
       <div className="vop-brand"><div className="vop-brand-mark"><Award size={30}/></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title={sidebarOpen?'Close navigation':'Open navigation'}><Menu size={30}/></button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label="Toggle navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <button className="vop-notification" type="button" aria-label="Notifications" title="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
@@ -823,6 +842,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       </div>
     </header>
     <div className="vop-shell">
+      {sidebarOpen && <button className="vop-sidebar-backdrop" type="button" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)} />}
       <aside className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}><nav className="vop-nav">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?'Back to App':undefined} onClick={onBack}><ArrowLeft size={19}/><span>Back to App</span></button></aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
