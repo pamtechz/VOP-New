@@ -205,7 +205,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   };
 
   const remove = async (id: string) => {
-    if (!id || !window.confirm('Delete this record permanently from Firestore?')) return;
+    if (!id || !window.confirm('Delete this record permanently?')) return;
     setPending(true); setError(''); setMessage('');
     try {
       await adminContent('delete', active, id);
