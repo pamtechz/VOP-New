@@ -61,10 +61,13 @@ export default async function handler(request: Request, response: Response) {
     }
 
     const db = getFirestore(admin());
-    const snapshot = await db.collection('certificates')
-      .where('certificateNumber', '==', certificateNumber)
-      .limit(1)
-      .get();
+    const [snapshot, configSnapshot] = await Promise.all([
+      db.collection('certificates')
+        .where('certificateNumber', '==', certificateNumber)
+        .limit(1)
+        .get(),
+      db.doc('system/certification').get(),
+    ]);
 
     if (snapshot.empty) {
       return response.status(404).json({ verified: false, error: 'No certificate was found with that number.' });
@@ -73,7 +76,8 @@ export default async function handler(request: Request, response: Response) {
     const document = snapshot.docs[0];
     const data = document.data();
 
-    if (data.verificationEnabled !== true || data.status !== 'Certified') {
+    const verificationEnabled = configSnapshot.exists && configSnapshot.data()?.verificationEnabled === true;
+    if (!verificationEnabled || data.status !== 'Certified') {
       return response.status(200).json({
         verified: false,
         certificate: publicCertificate(document.id, data),
