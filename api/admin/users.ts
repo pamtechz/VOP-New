@@ -1,27 +1,12 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
 
-type Request = {
-  method?: string;
-  headers?: Record<string, string | string[] | undefined>;
-  body?: unknown;
-};
-
-type Response = {
-  status: (code: number) => Response;
-  json: (body: unknown) => void;
-};
-
+type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
+type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 type ProfileType = 'admin' | 'teacher' | 'learner' | 'guest';
 
-const ADMIN_ROLES = new Set([
-  'super_admin',
-  'union_admin',
-  'conference_admin',
-  'district_admin',
-  'church_admin',
-]);
+const ADMIN_ROLES = new Set(['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']);
 
 function getHeader(request: Request, name: string): string {
   const value = request.headers?.[name] ?? request.headers?.[name.toLowerCase()];
@@ -30,18 +15,11 @@ function getHeader(request: Request, name: string): string {
 
 function getFirebaseAdmin() {
   if (getApps().length) return getApps()[0];
-
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error('Firebase Admin server configuration is missing.');
-  }
-
-  return initializeApp({
-    credential: cert({ projectId, clientEmail, privateKey }),
-  });
+  if (!projectId || !clientEmail || !privateKey) throw new Error('Firebase Admin server configuration is missing.');
+  return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
 }
 
 async function authenticate(request: Request) {
@@ -54,13 +32,10 @@ async function authenticate(request: Request) {
 
 function profileType(profile: Record<string, unknown> | undefined, authUser: UserRecord): ProfileType {
   const explicit = profile?.userType;
-  if (explicit === 'admin' || explicit === 'teacher' || explicit === 'learner' || explicit === 'guest') {
-    return explicit;
-  }
+  if (explicit === 'admin' || explicit === 'teacher' || explicit === 'learner' || explicit === 'guest') return explicit;
   const role = String(profile?.role || '');
   if (ADMIN_ROLES.has(role)) return 'admin';
-  if (profile?.privileges && typeof profile.privileges === 'object'
-      && (profile.privileges as Record<string, unknown>).editor === true) return 'teacher';
+  if (profile?.privileges && typeof profile.privileges === 'object' && (profile.privileges as Record<string, unknown>).editor === true) return 'teacher';
   if (role === 'student') return authUser.providerData.length ? 'learner' : 'guest';
   return 'learner';
 }
@@ -78,20 +53,17 @@ function roleColor(type: ProfileType): string {
 
 function userCode(authUser: UserRecord, profile: Record<string, unknown> | undefined): string {
   const existing = typeof profile?.userCode === 'string' ? profile.userCode.trim() : '';
-  if (existing) return existing;
-  return authUser.uid.slice(0, 12).toUpperCase();
+  return existing || authUser.uid.slice(0, 12).toUpperCase();
 }
 
 async function requireSuperAdmin(decoded: Record<string, unknown>) {
   const db = getFirestore(getFirebaseAdmin());
   const actor = await db.doc(`users/${String(decoded.uid)}`).get();
-  if (!actor.exists || actor.data()?.role !== 'super_admin') {
-    throw new Error('Only the VOP super administrator can manage users.');
-  }
+  if (!actor.exists || actor.data()?.role !== 'super_admin') throw new Error('Only the VOP super administrator can manage users.');
   return db;
 }
 
-async function loadOrganizations(db: FirebaseFirestore.Firestore) {
+async function loadOrganizations(db: Firestore) {
   const [unions, conferences, districts] = await Promise.all([
     db.collection('unions').get(),
     db.collection('conferences').get(),
@@ -104,12 +76,10 @@ async function loadOrganizations(db: FirebaseFirestore.Firestore) {
   };
 }
 
-async function serializeUsers(db: FirebaseFirestore.Firestore, authUsers: UserRecord[]) {
+async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
   const refs = authUsers.map(user => db.doc(`users/${user.uid}`));
-  const profiles: FirebaseFirestore.DocumentSnapshot[] = [];
-  for (let index = 0; index < refs.length; index += 100) {
-    profiles.push(...await db.getAll(...refs.slice(index, index + 100)));
-  }
+  const profiles: DocumentSnapshot[] = [];
+  for (let index = 0; index < refs.length; index += 100) profiles.push(...await db.getAll(...refs.slice(index, index + 100)));
   const profileMap = new Map(profiles.map(snapshot => [snapshot.id, snapshot.exists ? snapshot.data() || {} : {}]));
   const organizations = await loadOrganizations(db);
 
@@ -164,15 +134,7 @@ function profileForType(type: ProfileType, organization: Record<string, unknown>
   if (type === 'admin') {
     const nodeType = String(organization.adminNodeType || 'union');
     const nodeId = String(organization.adminNodeId || '');
-    const role = nodeType === 'union'
-      ? 'union_admin'
-      : nodeType === 'conference'
-        ? 'conference_admin'
-        : nodeType === 'district'
-          ? 'district_admin'
-          : nodeType === 'church'
-            ? 'church_admin'
-            : 'union_admin';
+    const role = nodeType === 'union' ? 'union_admin' : nodeType === 'conference' ? 'conference_admin' : nodeType === 'district' ? 'district_admin' : nodeType === 'church' ? 'church_admin' : 'union_admin';
     return {
       role,
       adminNodeType: nodeType,
@@ -208,8 +170,7 @@ export default async function handler(request: Request, response: Response) {
 
     if (action === 'list') {
       const users = await listAllUsers(authService);
-      const items = await serializeUsers(db, users);
-      return response.status(200).json({ ok: true, items });
+      return response.status(200).json({ ok: true, items: await serializeUsers(db, users) });
     }
 
     const uid = typeof body.uid === 'string' ? body.uid.trim() : '';
@@ -219,14 +180,11 @@ export default async function handler(request: Request, response: Response) {
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
       const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
       const password = typeof body.password === 'string' ? body.password : '';
-      const type = (body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner')
-        ? body.userType as ProfileType
-        : 'learner';
+      const type = (body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : 'learner';
+
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
-      if (type === 'admin' && !String(body.adminNodeId || '').trim()) {
-        return response.status(400).json({ error: 'Select an organization scope for an administrator.' });
-      }
+      if (type === 'admin' && !String(body.adminNodeId || '').trim()) return response.status(400).json({ error: 'Select an organization scope for an administrator.' });
 
       const created = await authService.createUser({
         email,
@@ -243,32 +201,14 @@ export default async function handler(request: Request, response: Response) {
         ...(phoneNumber ? { phoneNumber } : {}),
         userType: type,
         ...profile,
-        information: {
-          enrollmentDate: new Date().toISOString(),
-          graduating: false,
-          graduated: false,
-          baptismCandidate: false,
-          baptized: false,
-        },
-        privileges: profile.privileges,
-        progress: {
-          discoverProgress: 0,
-          completedGuidesCount: 0,
-          totalGuidesCount: 0,
-          guideScores: {},
-          completedLessons: [],
-        },
+        information: { enrollmentDate: new Date().toISOString(), graduating: false, graduated: false, baptismCandidate: false, baptized: false },
+        progress: { discoverProgress: 0, completedGuidesCount: 0, totalGuidesCount: 0, guideScores: {}, completedLessons: [] },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      const claims = type === 'admin'
-        ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId }
-        : { role: 'student' };
+      const claims = type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : { role: 'student' };
       await authService.setCustomUserClaims(created.uid, claims);
-      const resetLink = await authService.generatePasswordResetLink(email, {
-        url: process.env.VOP_PUBLIC_APP_URL || 'https://vop-new.vercel.app',
-        handleCodeInApp: false,
-      }).catch(() => null);
+      const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
     }
 
@@ -286,12 +226,9 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.photoURL === 'string') update.photoURL = body.photoURL.trim() || null;
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
       const updated = await authService.updateUser(uid, update);
-
-      const type = (body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner')
-        ? body.userType as ProfileType
-        : profileType(existingData, existing);
+      const type = (body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
       const profile = profileForType(type, body);
-      const profileUpdate: Record<string, unknown> = {
+      await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
         displayName: updated.displayName || existingData.displayName || '',
@@ -299,11 +236,8 @@ export default async function handler(request: Request, response: Response) {
         userType: type,
         ...profile,
         updatedAt: FieldValue.serverTimestamp(),
-      };
-      await profileRef.set(profileUpdate, { merge: true });
-      const claims = type === 'admin'
-        ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId }
-        : { role: 'student' };
+      }, { merge: true });
+      const claims = type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : { role: 'student' };
       await authService.setCustomUserClaims(uid, claims);
       return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName } });
     }
@@ -318,10 +252,7 @@ export default async function handler(request: Request, response: Response) {
     if (action === 'resetPassword') {
       const target = await authService.getUser(uid);
       if (!target.email) return response.status(400).json({ error: 'This user does not have an email address.' });
-      const resetLink = await authService.generatePasswordResetLink(target.email, {
-        url: process.env.VOP_PUBLIC_APP_URL || 'https://vop-new.vercel.app',
-        handleCodeInApp: false,
-      });
+      const resetLink = await authService.generatePasswordResetLink(target.email);
       return response.status(200).json({ ok: true, email: target.email, resetLink });
     }
 
