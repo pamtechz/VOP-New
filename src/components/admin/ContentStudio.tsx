@@ -182,7 +182,14 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         id = id || `${active}-${Date.now()}`;
         for (const key of requiredFields[active]) if (!text(draft[key]).trim()) throw new Error(`${key} is required.`);
         data = { ...draft, id };
-        if (active === 'radioBroadcasts') validateRadioMedia(data);
+        if (active === 'radioBroadcasts') {
+          validateRadioMedia(data);
+          const mediaType = text(data.mediaType).trim();
+          const mediaUrl = ['audioUrl', 'videoUrl', 'streamUrl'].map(key => text(data[key]).trim()).find(Boolean) || '';
+          const hostname = new URL(mediaUrl).hostname.toLowerCase();
+          if (mediaType === 'youtube' && !(hostname === 'youtu.be' || hostname.endsWith('youtube.com'))) throw new Error('For YouTube media, enter a valid YouTube URL.');
+          if (mediaType === 'audioverse' && !(hostname === 'audioverse.org' || hostname.endsWith('.audioverse.org'))) throw new Error('For AudioVerse media, enter a valid AudioVerse URL.');
+        }
         if (active === 'radioBroadcasts' && !text(data.broadcastTime).trim()) {
           data.broadcastTime = new Date().toISOString();
         }
@@ -267,8 +274,8 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     if (active === 'books') return <div className="grid gap-3">{field('Material title','name')}{field('Category','category')}{field('Author','author')}{field('Cover image URL','imageUrl')}{field('Download URL','downloadUrl')}{area('Description','description')}{publicationToggle()}</div>;
     if (active === 'radioBroadcasts') return <div className="grid gap-3">
       {field('Broadcast title','title')}{field('Speaker','speaker')}{field('Series','series')}
-      {select('Primary media type','mediaType',[{value:'audio',label:'Audio'},{value:'video',label:'Video'}])}
-      {field('Audio URL','audioUrl')}{field('Video URL','videoUrl')}{field('Live stream URL','streamUrl')}{field('Poster image URL','posterUrl')}
+      {select('Primary media type','mediaType',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
+      {field('Audio / YouTube / AudioVerse URL','audioUrl')}{field('Video URL','videoUrl')}{field('Live stream URL','streamUrl')}{field('Poster image URL','posterUrl')}
       <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-[11px] leading-5 text-blue-900"><strong>Automatic timing:</strong> do not enter duration or broadcast time. The player detects media duration and playback time automatically, while the system records the creation timestamp.</div>
       {area('Description','description')}{publicationToggle()}
     </div>;
