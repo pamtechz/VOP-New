@@ -1,7 +1,7 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
-import { authenticateTenant } from '../lib/tenant';
+import { authenticateTenant, enforceQuota } from '../lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -210,6 +210,7 @@ export default async function handler(request: Request, response: Response) {
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
       if (type === 'admin' && !tenantOrganizationId && !String(body.adminNodeId || '').trim()) return response.status(400).json({ error: 'Select an organization scope for an administrator.' });
 
+      if (tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
       const created = await authService.createUser({
         email,
         displayName,
