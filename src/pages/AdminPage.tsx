@@ -34,7 +34,7 @@ type AdminTab =
   | 'translations' | 'announcements' | 'materials' | 'radio'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification';
 
-type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'integrations' | 'security' | 'notifications';
+type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications';
 type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
 const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?: number}>}> = [
@@ -299,7 +299,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
     try {
       await adminContent('upsert', 'certificationConfig', 'certification', certification);
       await loadCertification();
-      showMessage('Certification configuration saved to Firestore.');
+      showMessage('Certification configuration saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save certification configuration.');
     } finally {
@@ -420,7 +420,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         nativeName: languageDraft.nativeName.trim() || languageDraft.name.trim(),
         enabled: languageDraft.enabled,
       });
-      showMessage('Language saved to Firestore.');
+      showMessage('Language saved.');
       openLanguageEditor();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save language.');
@@ -608,7 +608,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
   };
 
   const renderSettings = () => {
-    if (!settings) return <div className="vop-empty">Loading settings from Firestore…</div>;
+    if (!settings) return <div className="vop-empty">Loading settings…</div>;
     const featureRows: Array<{key:keyof NonNullable<ExtendedAppSettings['features']>;label:string;icon:React.ComponentType<{size?:number}>}> = [
       {key:'candidatesModule',label:'Candidates Module',icon:Users},
       {key:'curriculumStudio',label:'Curriculum Studio',icon:BookOpen},
@@ -622,7 +622,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       <div className="vop-settings-tabs">
         {[
           {id:'general',label:'General',icon:Settings},{id:'appInfo',label:'App Info',icon:Book},{id:'features',label:'Features',icon:Grid2X2},
-          {id:'integrations',label:'Integrations',icon:Link2},{id:'security',label:'Security',icon:Lock},{id:'notifications',label:'Notifications',icon:Bell},
+          {id:'services',label:'Services',icon:Link2},{id:'security',label:'Security',icon:Lock},{id:'notifications',label:'Notifications',icon:Bell},
         ].map(item=>{const Icon=item.icon;return <button key={item.id} className={'vop-tab '+(settingsSubtab===item.id?'active':'')} type="button" onClick={()=>setSettingsSubtab(item.id as SettingsSubtab)}><Icon size={17}/>{item.label}</button>;})}
       </div>
       {settingsSubtab === 'general' && <div className="vop-grid-2">
@@ -639,7 +639,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
             <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>
           </div>
           <div style={{height:18}} />
-          <div className="vop-section-title"><div><h3>System Options</h3><p>Configuration is stored in Firestore.</p></div></div>
+          <div className="vop-section-title"><div><h3>System Options</h3><p>Configuration is securely managed.</p></div></div>
           <div className="vop-setting-list">
             {[
               {key:'allowRegistrations',label:'Allow new registrations',help:'Permit new candidate accounts.'},
@@ -665,7 +665,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         </div>
       </div>}
       {settingsSubtab === 'features' && <div className="vop-grid-2">
-        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is stored in Firestore.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
+        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
         <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
       </div>}
       {settingsSubtab === 'appInfo' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
@@ -683,20 +683,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>{settingsSaving?'Saving…':'Save App Information'}</button></div>
       </form>}
 
-      {settingsSubtab === 'integrations' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
-        <div className="vop-section-title"><div><h2>Integrations</h2><p>Configure optional service connections without embedding credentials in the client.</p></div></div>
-        <div className="vop-form-grid">
-          <div className="vop-field"><label>Firebase project ID</label><input value={settings.integrations?.firebaseProjectId || ''} onChange={e=>setSettings({...settings,integrations:{...settings.integrations,firebaseProjectId:e.target.value}})} /></div>
-          <div className="vop-field"><label>API base URL</label><input type="url" value={settings.integrations?.apiBaseUrl || ''} onChange={e=>setSettings({...settings,integrations:{...settings.integrations,apiBaseUrl:e.target.value}})} /></div>
-        </div>
-        <div className="vop-setting-list">
-          {[
-            ['analyticsEnabled','Analytics', 'Enable configured analytics integration.'],
-            ['storageEnabled','Cloud storage', 'Enable configured storage integration.'],
-          ].map(([key,label,help])=>{const on=Boolean(settings.integrations?.[key as 'analyticsEnabled'|'storageEnabled']);return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">{help}</div></div><Toggle on={on} onClick={()=>setSettings({...settings,integrations:{...settings.integrations,[key]:!on}})}/></div>;})}
-        </div>
-        <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Integrations</button></div>
-      </form>}
+      {settingsSubtab === 'services' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+        <div className="vop-section-title"><div><h2>Services</h2><p>Operational services are configured securely outside the administrator interface.</p></div></div>
+           <div className="vop-setting-list">
+             
+           </div></form>}
 
       {settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>Security</h2><p>Application-level security preferences. Secrets remain server-side.</p></div></div>
