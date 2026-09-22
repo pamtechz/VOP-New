@@ -68,7 +68,7 @@ function formatLastLogin(value?: string) {
 }
 
 function initials(name: string) {
-  return name.trim().split(/\\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
+  return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
 }
 
 function roleLabel(type: ManagedUser['userType']) {
@@ -262,7 +262,7 @@ export default function UserManagement({ onBack }: Props) {
   };
 
   const downloadTemplate = () => {
-    const csv = 'displayName,email,phoneNumber,userType,adminNodeType,adminNodeId\\n';
+    const csv = 'displayName,email,phoneNumber,userType,adminNodeType,adminNodeId\n';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
