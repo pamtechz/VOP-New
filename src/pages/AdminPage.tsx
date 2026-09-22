@@ -372,15 +372,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, onBack }) => 
       NAV.forEach(item => allowed.add(item.id));
       allowed.add('userManagement');
     } else if (role === 'union_admin') {
+      allowed.add('mentorship');
       allowed.add('conferences');
       if (canEdit) allowed.add('curriculum');
     } else if (role === 'conference_admin') {
+      allowed.add('mentorship');
       allowed.add('districts');
       if (canEdit) allowed.add('curriculum');
     } else if (role === 'district_admin') {
+      allowed.add('mentorship');
       allowed.add('churches');
       if (canEdit) allowed.add('curriculum');
     } else if (role === 'church_admin') {
+      allowed.add('mentorship');
       if (canEdit) allowed.add('curriculum');
     }
     return NAV.filter(item => allowed.has(item.id));
