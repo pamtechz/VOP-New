@@ -340,7 +340,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                       </span>
                     ) : (
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                        {doneCount}/{g.lessons.length} Modules
+                        {doneCount > 0 ? t('in_progress', 'In Progress') : t('ready_to_learn', 'Ready to Learn')}
                       </span>
                     )}
                   </div>
