@@ -28,7 +28,7 @@ async function shareApi(action: string, data: Record<string, unknown> = {}) {
   return body as { items?: any[]; item?: any };
 }
 
-type Tab = 'assignments' | 'conversations' | 'performance' | 'questions' | 'sharing' | 'messages';
+type Tab = 'assignments' | 'conversations' | 'performance' | 'questions' | 'sharing' | 'messages' | 'automation';
 
 export const MentorshipInsights: React.FC = () => {
   const [tab, setTab] = useState<Tab>('assignments');
@@ -52,6 +52,7 @@ export const MentorshipInsights: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [automation, setAutomation] = useState({ enabled:false, channel:'in_app' as 'in_app'|'email', minAverageScore:0, maxProgressPercent:0, cooldownDays:7 });
 
   const studentMap = useMemo(() => new Map(students.map(item => [item.uid, item])), [students]);
   const mentorMap = useMemo(() => new Map(mentors.map(item => [item.uid, item])), [mentors]);
@@ -69,6 +70,8 @@ export const MentorshipInsights: React.FC = () => {
       setMentors(mentorResult.items || []);
       setAssignments(assignmentResult.items || []);
       setFailures(failureResult.items || []);
+      const automationResult = await mentoringApi('getAutomationSettings');
+      if (automationResult.item) setAutomation({ enabled: automationResult.item.enabled === true, channel: automationResult.item.channel === 'email' ? 'email' : 'in_app', minAverageScore: Number(automationResult.item.minAverageScore || 0), maxProgressPercent: Number(automationResult.item.maxProgressPercent || 0), cooldownDays: Number(automationResult.item.cooldownDays || 7) });
       setError('');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load mentorship data.');
@@ -88,6 +91,14 @@ export const MentorshipInsights: React.FC = () => {
       const result = await mentoringApi('performance', { studentId });
       setPerformance(result.item || null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not load performance.'); }
+  };
+
+  const saveAutomation = async () => {
+    try {
+      const result = await mentoringApi('saveAutomationSettings', automation);
+      if (result.item) setAutomation({ ...automation, ...result.item });
+      setNotice('Support automation settings saved.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save automation settings.'); }
   };
 
   const assign = async () => {
@@ -182,7 +193,7 @@ export const MentorshipInsights: React.FC = () => {
 
       <div className="vop-mentoring-tabs">{([
         ['assignments','Mentor Allocation'],['conversations','Conversations'],['performance','Learner Performance'],
-        ['questions','Commonly Missed Questions'],['sharing','Lesson Sharing'],['messages','Messages & Drafts']
+        ['questions','Commonly Missed Questions'],['sharing','Lesson Sharing'],['messages','Messages & Drafts'],['automation','Automation']
       ] as const).map(([value,label])=><button key={value} type="button" className={tab===value?'active':''} onClick={()=>setTab(value)}>{label}</button>)}</div>
 
       {tab==='assignments' && <section className="vop-mentoring-card">
@@ -220,6 +231,18 @@ export const MentorshipInsights: React.FC = () => {
         <div className="vop-share-form"><input value={sharePath} onChange={e=>setSharePath(e.target.value)} placeholder="/?guide=...&lesson=..."/><input value={shareLabel} onChange={e=>setShareLabel(e.target.value)} placeholder="Reference label"/><button className="vop-primary" type="button" onClick={()=>void createShare()}><Link2 size={16}/>Create tracked link</button></div>
         {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Tracked lesson reference'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy</button></div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(shareResult.url)} alt="QR code for the tracked lesson link"/></div>}
         <div className="vop-share-list">{shareLinks.map(item=><div key={item.code}><span><strong>{item.label || item.targetPath}</strong><small>{item.targetPath}</small></span><b>{Number(item.clicks||0)} opens</b><a href={item.url || '#'} target="_blank" rel="noreferrer"><ExternalLink size={15}/></a></div>)}{!shareLinks.length&&<div className="vop-empty">No tracked share links have been created.</div>}</div>
+      </section>}
+
+      {tab==='automation' && <section className="vop-mentoring-card">
+        <div className="vop-mentoring-card-head"><div><h2>Performance-based support automation</h2><p>The system can create and deliver support messages from actual learner performance. Automation is disabled until an administrator enables it.</p></div></div>
+        <div className="vop-automation-grid">
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Enable daily support automation</div><div className="vop-setting-help">Runs once each day and respects the configured cooldown.</div></div><button type="button" className={'vop-toggle '+(automation.enabled?'on':'')} onClick={()=>setAutomation(current=>({...current,enabled:!current.enabled}))}><span/></button></div>
+          <label className="vop-field"><span>Delivery channel</span><select value={automation.channel} onChange={e=>setAutomation(current=>({...current,channel:e.target.value as 'in_app'|'email'}))}><option value="in_app">In-app message</option><option value="email">Email</option></select></label>
+          <label className="vop-field"><span>Trigger when assessment average is at or below (%)</span><input type="number" min="0" max="100" value={automation.minAverageScore || ''} onChange={e=>setAutomation(current=>({...current,minAverageScore:Number(e.target.value)||0}))}/></label>
+          <label className="vop-field"><span>Trigger when progress is at or below (%)</span><input type="number" min="0" max="100" value={automation.maxProgressPercent || ''} onChange={e=>setAutomation(current=>({...current,maxProgressPercent:Number(e.target.value)||0}))}/></label>
+          <label className="vop-field"><span>Cooldown (days)</span><input type="number" min="1" max="90" value={automation.cooldownDays} onChange={e=>setAutomation(current=>({...current,cooldownDays:Number(e.target.value)||1}))}/></label>
+        </div>
+        <div className="vop-performance-actions"><button className="vop-primary" type="button" onClick={()=>void saveAutomation()}>Save Automation Settings</button></div>
       </section>}
 
       {tab==='messages' && <section className="vop-mentoring-card">
