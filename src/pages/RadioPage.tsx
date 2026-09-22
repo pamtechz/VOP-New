@@ -135,6 +135,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
   const ytMountRef = useRef<HTMLDivElement | null>(null), ytPlayerRef = useRef<YTPlayer | null>(null);
   const source = useMemo(() => selected ? detectMedia(selected) : null, [selected]);
+  const youtubeVideoId = source?.provider === 'youtube' ? source.videoId : undefined;
 
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
@@ -147,12 +148,12 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
   }, [selected?.id]);
 
   useEffect(() => {
-    if (source?.provider !== 'youtube' || !ytMountRef.current || !source.videoId) return;
+    if (source?.provider !== 'youtube' || !ytMountRef.current || !youtubeVideoId) return;
     let cancelled = false;
     void loadYouTubeApi().then(YT => {
       if (cancelled || !ytMountRef.current) return;
       const player = new YT.Player(ytMountRef.current, {
-        videoId: source.videoId, width: '100%', height: '100%',
+        videoId: youtubeVideoId, width: '100%', height: '100%',
         playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1, enablejsapi: 1 },
         events: {
           onReady: event => { if (cancelled) return; ytPlayerRef.current = event.target; setYtReady(true); setDuration(event.target.getDuration() || 0); event.target.setVolume(volume * 100); },
@@ -166,7 +167,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
       ytPlayerRef.current = player;
     }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'YouTube player controls could not be initialised.'); });
     return () => { cancelled = true; ytPlayerRef.current?.destroy(); ytPlayerRef.current = null; };
-  }, [source?.provider, source?.videoId]);
+  }, [source?.provider, youtubeVideoId]);
 
   useEffect(() => {
     if (source?.provider !== 'youtube' || !ytPlayerRef.current || !ytReady) return;
