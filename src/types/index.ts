@@ -240,6 +240,7 @@ export interface Announcement {
   id: string;
   title: string;
   tag: string;
+  targetAudience?: string;
   description: string;
   published?: boolean;
   imageUrl?: string;
