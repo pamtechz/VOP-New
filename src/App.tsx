@@ -80,7 +80,7 @@ export const App: React.FC = () => {
         console.error('VOP user profile load failed', error);
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
-        setStudyError('Your VOP account profile could not be loaded from Firestore.');
+        setStudyError('Your VOP account profile could not be loaded.');
       });
     });
   }, []);
@@ -114,7 +114,7 @@ export const App: React.FC = () => {
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
 
-      // Firestore is the source of truth; localStorage is only a local cache for
+      // The server is the source of truth; localStorage is only a local cache for
       // components that still need synchronous access during the current session.
       saveSettings(nextSettings);
       saveGuides(snapshot.guides);
