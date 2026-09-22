@@ -159,7 +159,8 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const radioBroadcasts = radioSnap.docs
     .map(item => published<RadioBroadcast>(item.data(), item.id, {
       id: item.id, title: '', speaker: '', series: '', durationMinutes: 0,
-      audioUrl: '', broadcastTime: '', description: '',
+      audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '',
+      broadcastTime: '', description: '',
     }))
     .filter(item => item.published === true && item.title.trim());
 
