@@ -1022,3 +1022,31 @@ h1, h2, h3, h4, h5, h6 {
 .vop-radio-admin-preview audio{width:220px;height:34px}.vop-radio-admin-preview video{width:220px;max-height:125px;display:block;background:#071a31;border-radius:5px}
 .vop-radio-admin-note{padding:9px 11px;border:1px solid #dce8f6;background:#f5f9ff;border-radius:8px;color:#526f91;font-size:10px;line-height:1.45}
 @media(max-width:700px){.vop-radio-badge{float:none;margin-top:10px}.vop-radio-header h1{font-size:21px;margin-top:16px}.vop-radio-main{padding:14px 10px}.vop-radio-media-stage{min-height:210px}.vop-radio-player-info{padding:14px 12px}.vop-radio-player-info h2{font-size:17px}.vop-radio-controls{gap:6px;padding:9px 10px 12px}.vop-radio-volume{display:none}.vop-radio-grid{grid-template-columns:1fr}.vop-radio-program-footer{flex-wrap:wrap}.vop-radio-admin-preview video,.vop-radio-admin-preview audio{max-width:180px;width:100%}}
+
+
+/* Advanced radio player enhancements */
+.vop-radio-header-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vop-radio-clock{margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.04em;color:#c9dcf6}
+.vop-radio-seek-wrap{position:relative;flex:1;min-width:90px;display:flex;align-items:center}
+.vop-radio-seek-wrap .vop-radio-seek{width:100%;position:relative;z-index:2}
+.vop-radio-buffered{position:absolute;left:0;height:4px;border-radius:999px;background:#aebfd6;opacity:.65;pointer-events:none;z-index:1;top:50%;transform:translateY(-50%)}
+.vop-radio-buffering{position:absolute;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:999px;background:rgba(0,0,0,.68);color:#fff;font-size:10px;font-weight:800}
+.vop-radio-buffering span{width:8px;height:8px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:vop-radio-spin .8s linear infinite}
+.vop-radio-rate{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 7px;border-radius:8px;background:#edf3fb;color:#17447e}
+.vop-radio-rate select{border:0;background:transparent;color:inherit;font-size:10px;font-weight:800;outline:0;cursor:pointer}
+.vop-radio-help{padding:0 16px 13px;color:#8a9ab0;font-size:9px;text-align:center}
+@keyframes vop-radio-spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){
+  .vop-radio-controls{flex-wrap:wrap}
+  .vop-radio-seek-wrap{order:10;flex-basis:100%}
+  .vop-radio-time{min-width:34px}
+}
+@media(max-width:700px){
+  .vop-radio-clock{margin-left:0;order:3;width:100%}
+  .vop-radio-controls{gap:5px}
+  .vop-radio-controls .vop-radio-icon-btn{width:34px;height:34px}
+  .vop-radio-control-main{width:36px;height:36px}
+  .vop-radio-volume{display:none}
+  .vop-radio-rate{height:34px}
+  .vop-radio-help{padding-left:8px;padding-right:8px}
+}
