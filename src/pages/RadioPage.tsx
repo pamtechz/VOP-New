@@ -50,12 +50,29 @@ function youtubeVideoId(value: string) {
   return null;
 }
 
-function isAudioVerseUrl(value: string) {
+function audioVerseEmbedUrl(value: string) {
   try {
-    const hostname = new URL(value).hostname.toLowerCase();
-    return hostname === 'audioverse.org' || hostname.endsWith('.audioverse.org');
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    if (hostname !== 'audioverse.org' && !hostname.endsWith('.audioverse.org')) return null;
+
+    // AudioVerse provides a dedicated embeddable player route. Accept either
+    // that route directly or a normal presentation/teaching URL and normalize it.
+    if (/\/embed\/media\/\d+(?:\/|$)/i.test(url.pathname)) return url.toString();
+
+    const mediaMatch = url.pathname.match(/\/media\/(\d+)(?:\/|$)/i);
+    if (mediaMatch?.[1]) {
+      return `https://www.audioverse.org/en/embed/media/${mediaMatch[1]}`;
+    }
+
+    const teachingMatch = url.pathname.match(/\/teachings\/(\d+)(?:\/|$)/i);
+    if (teachingMatch?.[1]) {
+      return `https://www.audioverse.org/en/embed/media/${teachingMatch[1]}`;
+    }
+
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -79,11 +96,12 @@ function mediaSource(item: RadioBroadcast) {
         live: false,
       };
     }
-    if (isAudioVerseUrl(candidate.url)) {
+    const audioVerseUrl = audioVerseEmbedUrl(candidate.url);
+    if (audioVerseUrl) {
       return {
         type: 'audioverse' as const,
         url: candidate.url,
-        embedUrl: candidate.url,
+        embedUrl: audioVerseUrl,
         live: false,
       };
     }
