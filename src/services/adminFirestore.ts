@@ -2,7 +2,7 @@ import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit, onSnapshot, type Unsubscribe, type Firestore
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import type {
   CustomLanguage, AppSettings, User, ChurchOrganization,
   Announcement, BookResource, RadioBroadcast, DiscoverGuide
@@ -13,8 +13,8 @@ function getDb(): Firestore {
   return db;
 }
 
-const TENANT_COLLECTIONS = new Set<AdminRecordCollection | 'languages' | 'translations'>([
-  'languages','translations','announcements','books','radioBroadcasts','churches'
+const TENANT_COLLECTIONS = new Set<string>([
+  'languages','translations','announcements','books','radioBroadcasts','churches','users'
 ]);
 
 async function currentOrganizationId(): Promise<string> {
@@ -34,7 +34,7 @@ function tenantSubscription(
   let cancelled = false;
   void currentOrganizationId().then(organizationId => {
     if (cancelled) return;
-    const source = organizationId && TENANT_COLLECTIONS.has(collectionName as never)
+    const source = organizationId && TENANT_COLLECTIONS.has(collectionName)
       ? query(collection(getDb(), collectionName), where('organizationId', '==', organizationId))
       : collection(getDb(), collectionName);
     stop = onSnapshot(source, callback, err => onError?.(err));
