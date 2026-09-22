@@ -25,7 +25,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 }) => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [curriculumLangFilter, setCurriculumLangFilter] = useState<string>('all');
-  const t = (key: string) => getTranslation(key, activeLanguage, settings.customTranslations);
+  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback);
 
   // Auto-advance carousel every 6 seconds
   useEffect(() => {
@@ -67,10 +67,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       >
         <div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {t('welcome_back')}
+            {t('welcome_back', 'Welcome back to Bible Study')}
           </div>
           <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-            {t('greeting_prefix')}, {currentUser.displayName.split(' ')[0]}! 👋
+            {t('greeting_prefix', 'Hello')}, {currentUser.displayName.split(' ')[0]}! 👋
           </h2>
         </div>
 
@@ -82,7 +82,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem 1.25rem' }}
           >
             <Award size={18} />
-            <span>Course Certificate Earned</span>
+            <span>{t('certificate_button', 'Certificate')} {t('completed', 'Completed')}</span>
           </button>
         )}
       </div>
@@ -178,7 +178,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       {/* Quick Resume Card */}
       <div style={{ marginBottom: '2.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-          <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('recent_guides')}</h4>
+          <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('recent_guides', 'Recent Guides')}</h4>
           <span style={{ fontSize: '0.85rem', color: 'var(--vop-navy-700)', fontWeight: 600, cursor: 'pointer' }} onClick={() => onSelectGuide(primaryGuide)}>
             View all ({guides.length})
           </span>
@@ -234,7 +234,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {completedCount}/{primaryGuide.lessons.length} {t('completed')}
+                {completedCount}/{primaryGuide.lessons.length} {t('completed', 'Completed')}
               </div>
               <div style={{ width: '110px', height: '6px', background: 'var(--border-subtle)', borderRadius: '999px', overflow: 'hidden', marginTop: '4px' }}>
                 <div
@@ -250,7 +250,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
             <button className="btn btn-gold" style={{ borderRadius: 'var(--radius-full)', padding: '0.55rem 1.25rem' }}>
               <Play size={16} fill="currentColor" />
-              <span>{completedCount === primaryGuide.lessons.length ? 'Review' : 'Continue'}</span>
+              <span>{completedCount === primaryGuide.lessons.length ? t('review', 'Review') : t('continue', 'Continue')}</span>
             </button>
           </div>
         </div>
@@ -260,7 +260,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       <div style={{ marginBottom: '3rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
           <div>
-            <h4 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{t('discover_curriculum')}</h4>
+            <h4 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{t('discover_curriculum', 'Discover Bible Curriculum')}</h4>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               Systematic lessons uncovering spiritual truth, prophecy, and salvation.
             </p>
@@ -336,7 +336,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                     {isDone ? (
                       <span className="badge badge-success">
                         <CheckCircle2 size={12} />
-                        {t('completed')}
+                        {t('completed', 'Completed')}
                       </span>
                     ) : (
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
@@ -360,7 +360,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   </div>
 
                   <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--vop-navy-700)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    {t('open_guide')}
+                    {t('open_guide', 'Open Guide')}
                     <ChevronRight size={16} />
                   </span>
                 </div>
