@@ -360,6 +360,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const visibleNav = useMemo(() => {
     const role = currentUser.role;
     const isSuper = role === 'super_admin';
+    const organizationAdmin = ['owner','admin'].includes(String(currentUser.organizationRole || ''));
     const canEdit = isSuper || currentUser.privileges?.editor === true;
     const allowed = new Set<AdminTab>([
       'dashboard',
@@ -373,6 +374,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     if (isSuper) {
       NAV.forEach(item => allowed.add(item.id));
       allowed.add('userManagement');
+    } else if (organizationAdmin) {
+      allowed.add('userManagement');
+      allowed.add('settings');
+      allowed.add('curriculum');
+      allowed.add('languages');
+      allowed.add('translations');
+      allowed.add('announcements');
+      allowed.add('materials');
+      allowed.add('radio');
+      allowed.add('certification');
+      allowed.add('mentorship');
     } else if (role === 'union_admin') {
       allowed.add('mentorship');
       allowed.add('conferences');
