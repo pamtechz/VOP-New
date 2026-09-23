@@ -263,15 +263,15 @@ export default async function handler(req: Request, res: Response) {
       if (GLOBAL_COLLECTIONS.has(collection)) {
         if (ctx.isSuperAdmin) {
           const snap = await ctx.db.collection(collection).get();
-          return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
+          return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: true })) });
         }
-        const snap = await ctx.db.collection(collection).where('ownerUid','==',ctx.auth.uid).get();
-        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
+        const snap = await ctx.db.collection(collection).get();
+        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: String(d.data().ownerUid || '') === ctx.auth.uid })) });
       }
       if (ORG_COLLECTIONS.has(collection)) {
         if (!ctx.organizationId) return res.status(200).json({ ok: true, items: [] });
         const snap = await ctx.db.collection(collection).where('organizationId','==',ctx.organizationId).get();
-        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
+        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid })) });
       }
       if (ctx.isSuperAdmin) {
         const snap = await ctx.db.collection(collection).get();
@@ -305,6 +305,7 @@ export default async function handler(req: Request, res: Response) {
         reason,
         proposerUid: ctx.auth.uid,
         proposerOrganizationId: ctx.organizationId,
+        organizationId: ctx.organizationId,
         status: 'pending',
         createdAt: now,
         updatedAt: now,
