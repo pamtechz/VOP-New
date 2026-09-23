@@ -4,6 +4,7 @@ import { getStoredAutoLocalization, registerLocalizationString } from './storage
 
 const UI_LOCALE_KEY = 'vop_ui_locale';
 const dictionaryCache: Record<string, Record<string,string>> = {};
+const localeFallbacks: Record<string, string> = {};
 const localeState = { value: '' };
 const listeners = new Set<() => void>();
 
@@ -42,11 +43,18 @@ export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promi
     dictionaryCache[requested] = payload?.translations && typeof payload.translations === 'object'
       ? payload.translations as Record<string,string>
       : {};
+    localeFallbacks[requested] = normalizeLocale(payload?.fallback) || 'en';
     document.documentElement.dir = payload?.direction === 'rtl' ? 'rtl' : 'ltr';
     document.documentElement.lang = requested;
     notify();
-    if (requested !== fallback && !dictionaryCache[fallback]) {
-      await loadUiLocale(fallback, fallback);
+    const configuredFallback = localeFallbacks[requested] && localeFallbacks[requested] !== requested
+      ? localeFallbacks[requested]
+      : fallback;
+    if (configuredFallback !== requested && !dictionaryCache[configuredFallback]) {
+      await loadUiLocale(configuredFallback, 'en');
+    }
+    if (configuredFallback !== 'en' && !dictionaryCache.en) {
+      await loadUiLocale('en', 'en');
     }
   } catch {
     if (requested !== fallback && !dictionaryCache[fallback]) {
@@ -91,6 +99,8 @@ export const getTranslation = (
     dictionaryCache[locale]?.[key],
     customTranslations?.[locale]?.[key],
     stored,
+    localeFallbacks[locale] && localeFallbacks[locale] !== locale ? dictionaryCache[localeFallbacks[locale]]?.[key] : undefined,
+    localeFallbacks[locale] && localeFallbacks[locale] !== locale ? customTranslations?.[localeFallbacks[locale]]?.[key] : undefined,
     locale !== 'en' ? dictionaryCache.en?.[key] : undefined,
     locale !== 'en' ? customTranslations?.en?.[key] : undefined,
     fallback
