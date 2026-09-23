@@ -213,9 +213,37 @@ export default async function handler(req: Request, res: Response) {
       if (!existingMembership.exists || existingMembership.data()?.active !== true) await enforceMemberQuota(ctx, organizationId);
       const now = new Date().toISOString();
       await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
-      await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      const userRef = bootstrapDb.doc(`users/${ctx.auth.uid}`);
+      const userSnap = await userRef.get();
+      const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
+      const organizationIds = [...new Set([...existingIds, organizationId])];
+      await userRef.set({organizationId,organizationRole:String(data.role || 'learner'),organizationIds,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       await bootstrapDb.doc(`organizationInvites/${token}`).set({status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},{merge:true});
       return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
+    }
+
+    if (action === 'listMyMemberships') {
+      const snap = await ctx.db.collection('organizations').get();
+      const memberships = await Promise.all(snap.docs.map(async organization => {
+        const member = await organization.ref.collection('members').doc(ctx.auth.uid).get();
+        if (!member.exists || member.data()?.active !== true) return null;
+        return { organizationId: organization.id, name:String(organization.data()?.name || organization.id), role:String(member.data()?.role || 'learner'), active:organization.id === ctx.organizationId };
+      }));
+      return res.status(200).json({ok:true,items:memberships.filter(Boolean)});
+    }
+
+    if (action === 'switchOrganization') {
+      const target = String(body.organizationId || '').trim();
+      if (!target) throw new Error('Organization ID is required.');
+      const member = await bootstrapDb.doc(`organizations/${target}/members/${ctx.auth.uid}`).get();
+      const organization = await bootstrapDb.doc(`organizations/${target}`).get();
+      if (!organization.exists || organization.data()?.status !== 'active' || !member.exists || member.data()?.active !== true) throw new Error('You are not a member of that organization.');
+      const userRef = bootstrapDb.doc(`users/${ctx.auth.uid}`);
+      const userSnap = await userRef.get();
+      const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
+      const organizationIds = [...new Set([...existingIds, target])];
+      await userRef.set({organizationId:target,organizationRole:String(member.data()?.role || 'learner'),organizationIds,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,organizationId:target,role:String(member.data()?.role || 'learner')});
     }
 
     if (action === 'listMembers') {
@@ -233,7 +261,11 @@ export default async function handler(req: Request, res: Response) {
       const now = new Date().toISOString();
       await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
       await writeTenantAudit(ctx, 'membership.upsert', `organizations/${ctx.organizationId}/members/${uid}`, undefined, { uid, role:memberRole, active:body.active !== false });
-      await ctx.db.doc(`users/${uid}`).set({ organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      const userRef = ctx.db.doc(`users/${uid}`);
+      const userSnap = await userRef.get();
+      const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
+      const organizationIds = [...new Set([...existingIds, ctx.organizationId])];
+      await userRef.set({ organizationId: ctx.organizationId, organizationRole: memberRole, organizationIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
     if (action === 'setStatus') {
