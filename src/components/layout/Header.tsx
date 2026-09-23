@@ -98,14 +98,14 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <span style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.01em', fontFamily: 'var(--font-display)' }}>
-                {t('app_title', settings.appName || 'Voice of Prophecy')}
+                {t('common.appName', settings.appName || 'Voice of Prophecy')}
               </span>
               <span className="badge badge-gold hide-sm" style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem' }}>
                 v4.0 PRO
               </span>
             </div>
             <div className="hide-sm" style={{ fontSize: '0.68rem', color: 'rgba(255, 255, 255, 0.7)', fontWeight: 500 }}>
-              {t('school_subtitle', settings.schoolName || 'Bible Correspondence School')}
+              {t('common.schoolSubtitle', settings.schoolName || 'Bible Correspondence School')}
             </div>
           </div>
         </div>
