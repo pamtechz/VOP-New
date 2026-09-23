@@ -73,8 +73,9 @@ export default async function handler(req: Request, res: Response) {
         const parentId = raw && typeof raw === 'object' && (raw as Record<string, unknown>).parentId != null ? String((raw as Record<string, unknown>).parentId).trim() : '';
         if (parentId && !seen.has(parentId)) throw new Error('Hierarchy parent references must point to an existing level.');
       }
-      const settings = ctx.profile.settings && typeof ctx.profile.settings === 'object' ? ctx.profile.settings as Record<string, unknown> : {};
-      await ctx.db.doc(`organizations/${ctx.organizationId}`).set({settings:{...settings,hierarchy:{...hierarchy,levels}} ,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+      const organizationSettings = organization.data()?.settings && typeof organization.data()?.settings === 'object' ? organization.data()?.settings as Record<string, unknown> : {};
+      await ctx.db.doc(`organizations/${ctx.organizationId}`).set({settings:{...organizationSettings,hierarchy:{...hierarchy,levels}} ,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       await writeTenantAudit(ctx,'organization.hierarchy.update',`organizations/${ctx.organizationId}`,undefined,{levels:levels.length});
       return res.status(200).json({ok:true,item:{...hierarchy,levels}});
     }
