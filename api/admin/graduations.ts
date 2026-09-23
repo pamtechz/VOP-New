@@ -24,8 +24,8 @@ function stageConfig(data: Record<string, unknown>): ApprovalStage[] {
 
 function requestStatus(stage: ApprovalStage | undefined) {
   if (!stage) return 'pending';
-  const id = stage.id.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-  return ['church', 'district', 'conference', 'union'].includes(id) ? `pending_${id}` : 'pending';
+  const id = stage.id.toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/^_+|_+$/g, '');
+  return id ? `pending_${id}`.slice(0, 80) : 'pending';
 }
 
 function requestId(organizationId: string, candidateId: string, guideId: string) {
