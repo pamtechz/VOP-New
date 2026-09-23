@@ -294,7 +294,12 @@ export default async function handler(request: Request, response: Response) {
 
     if (action === 'setStatus') {
       const targetProfile = await db.doc(`users/${uid}`).get();
-      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (tenantOrganizationId) {
+        const membershipSnapshot = await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).get();
+        if (!membershipSnapshot.exists || membershipSnapshot.data()?.active !== true) {
+          throw new Error('This user is not an active member of the organization.');
+        }
+      }
       if (typeof body.disabled !== 'boolean') return response.status(400).json({ error: 'A valid account status is required.' });
       const updated = await authService.updateUser(uid, { disabled: body.disabled });
       await db.doc(`users/${uid}`).set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -303,7 +308,12 @@ export default async function handler(request: Request, response: Response) {
 
     if (action === 'resetPassword') {
       const targetProfile = await db.doc(`users/${uid}`).get();
-      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (tenantOrganizationId) {
+        const membershipSnapshot = await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).get();
+        if (!membershipSnapshot.exists || membershipSnapshot.data()?.active !== true) {
+          throw new Error('This user is not an active member of the organization.');
+        }
+      }
       const target = await authService.getUser(uid);
       if (!target.email) return response.status(400).json({ error: 'This user does not have an email address.' });
       const resetLink = await authService.generatePasswordResetLink(target.email);
@@ -313,7 +323,12 @@ export default async function handler(request: Request, response: Response) {
     if (action === 'delete') {
       if (uid === String(decoded.uid)) return response.status(400).json({ error: 'The signed-in administrator cannot delete their own account.' });
       const targetProfile = await db.doc(`users/${uid}`).get();
-      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (tenantOrganizationId) {
+        const membershipSnapshot = await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).get();
+        if (!membershipSnapshot.exists || membershipSnapshot.data()?.active !== true) {
+          throw new Error('This user is not an active member of the organization.');
+        }
+      }
       await authService.deleteUser(uid);
       await db.doc(`users/${uid}`).delete();
       if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).delete().catch(() => undefined);
