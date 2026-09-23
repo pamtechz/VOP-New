@@ -4,7 +4,7 @@ import { auth } from '../lib/firebase';
 
 type Quiz = {
   id:string; title:string; description?:string; language:string; questions:Array<Record<string,unknown>>;
-  published?:boolean; sharingScope?:'private'|'organization'|'shared'; organizationId?:string; ownerOrganizationId?:string;
+  published?:boolean; sharingScope?:'private'|'organization'|'shared'; organizationId?:string; ownerOrganizationId?:string; editable?:boolean;
 };
 type Question = { question:string; options:string[]; answer:number; explanation?:string };
 
@@ -33,6 +33,7 @@ export default function QuizLibrary(){
   const load=async()=>{setLoading(true);setError('');try{const body=await quizApi('list');setItems(body.items||[]);}catch(e){setError(e instanceof Error?e.message:'Could not load quizzes.');}finally{setLoading(false);}};
   useEffect(()=>{void load();},[]);
   const open=(quiz:Quiz|null)=>{
+    if(quiz && quiz.editable !== true){ setError('This shared quiz is read-only. Use Copy to create an editable organization-owned version.'); return; }
     setSelected(quiz);setEditorOpen(true);setTitle(quiz?.title||'');setDescription(quiz?.description||'');setLanguage(quiz?.language||'');setScope(quiz?.sharingScope||'organization');setPublished(quiz?.published===true);setQuestions(quiz?normalize(quiz.questions||[]):[]);
   };
   const save=async()=>{
@@ -53,6 +54,6 @@ export default function QuizLibrary(){
       <div style={{display:'grid',gap:12,marginTop:14}}>{questions.map((q,index)=><div className="vop-card vop-form-card" key={index}><div className="vop-section-title"><div><h3>Question {index+1}</h3></div><button className="vop-actions" type="button" onClick={()=>setQuestions(v=>v.filter((_,i)=>i!==index))}><Trash2 size={16}/></button></div><div className="vop-field"><label>Question</label><textarea value={q.question} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,question:e.target.value}:x))}/></div><div className="vop-form-grid">{q.options.map((option,oi)=><div className="vop-field" key={oi}><label>Option {oi+1}</label><input value={option} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,options:x.options.map((o,j)=>j===oi?e.target.value:o)}:x))}/></div>)}</div><div className="vop-form-grid"><div className="vop-field"><label>Correct option</label><select value={q.answer} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,answer:Number(e.target.value)}:x))}>{q.options.map((_,oi)=><option key={oi} value={oi}>Option {oi+1}</option>)}</select></div><div className="vop-field"><label>Explanation</label><input value={q.explanation||''} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,explanation:e.target.value}:x))}/></div></div></div>)}</div>
       <div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={addQuestion}><Plus size={16}/>Add Question</button><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}><Save size={17}/>Save Quiz</button></div>
     </div> : null}
-    <div className="vop-reference-table-wrap">{loading?<div className="vop-empty">Loading quizzes…</div>:<table className="vop-reference-table"><thead><tr><th>Quiz</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.title}</strong><div>{item.description||'No description'}</div></td><td>{item.language.toUpperCase()}</td><td>{item.questions?.length||0}</td><td>{item.sharingScope||'organization'}</td><td>{item.published?'Published':'Draft'}</td><td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={()=>open(item)} title="Edit"><Edit3 size={16}/></button>{item.sharingScope==='shared'&&item.published&&<button className="vop-actions" type="button" onClick={()=>void fork(item.id)} title="Copy shared quiz"><Copy size={16}/></button>}</div></td></tr>)}</tbody></table>}</div>
+    <div className="vop-reference-table-wrap">{loading?<div className="vop-empty">Loading quizzes…</div>:<table className="vop-reference-table"><thead><tr><th>Quiz</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.title}</strong><div>{item.description||'No description'}</div></td><td>{item.language.toUpperCase()}</td><td>{item.questions?.length||0}</td><td>{item.sharingScope||'organization'}</td><td>{item.published?'Published':'Draft'}</td><td><div className="vop-reference-action-cell">{item.editable !== false && <button className="vop-actions" type="button" onClick={()=>open(item)} title="Edit"><Edit3 size={16}/></button>}{item.sharingScope==='shared'&&item.published&&<button className="vop-actions" type="button" onClick={()=>void fork(item.id)} title="Copy shared quiz"><Copy size={16}/></button>}</div></td></tr>)}</tbody></table>}</div>
   </div>;
 }
