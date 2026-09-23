@@ -29,7 +29,7 @@ function header(request: Request, name: string) {
 
 export function getAdminDb() { return getFirestore(adminApp()); }
 
-export async function authenticateTenant(request: Request, requestedOrganizationId?: string): Promise<TenantContext> {
+export async function authenticateTenant(request: Request, requestedOrganizationId?: string, allowUnassigned = false): Promise<TenantContext> {
   const authorization = header(request, 'authorization');
   if (!authorization.startsWith('Bearer ')) throw new Error('Sign in first.');
   const auth = await getAuth(adminApp()).verifyIdToken(authorization.slice(7).trim());
