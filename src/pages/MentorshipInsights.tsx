@@ -50,6 +50,7 @@ export const MentorshipInsights: React.FC = () => {
   const [sharePath, setSharePath] = useState('/');
   const [shareLabel, setShareLabel] = useState('');
   const [shareResult, setShareResult] = useState<any | null>(null);
+  const [shareQr, setShareQr] = useState<string>('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
