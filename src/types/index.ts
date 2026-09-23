@@ -391,7 +391,6 @@ export interface AppDatabaseBackup {
   districts: District[];
   churches: ChurchOrganization[];
   hierarchyConfig: HierarchyConfig;
-  graduationRequests: GraduationRequest[];
   announcements: Announcement[];
   books: BookResource[];
   prayerRequests?: PrayerRequest[];
