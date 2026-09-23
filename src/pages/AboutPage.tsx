@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppSettings, LanguageCode } from '../types';
-import { getTranslation } from '../services/i18n';
+import { useLocalization } from '../services/i18n';
 import { ArrowLeft, BookOpen, Clock, MapPin, Phone, Mail, MessageCircle, Info } from 'lucide-react';
 
 interface AboutPageProps {
@@ -17,8 +17,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
   const [activeTab, setActiveTab] = useState<'ministry' | 'app' | 'contact'>('ministry');
   const details = settings.detailPages;
 
-  const t = (key: string, fallback: string) =>
-    getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'AboutPage');
+  const { t } = useLocalization();
 
   return (
     <div className="min-h-screen bg-[#f4f6fa] text-slate-800 pb-24 md:pb-12">
