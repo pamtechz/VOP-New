@@ -437,12 +437,15 @@ service cloud.firestore {
         request.auth.uid == uid
         || isSuperAdmin()
         || (
-          isAdmin()
+          canManageOrg(organizationIdForUser())
           && resource.data.get('organizationId','') == organizationIdForUser()
-          && isOrgMember(organizationIdForUser())
         )
       );
-      allow list: if isSuperAdmin() || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
+      allow list: if isSuperAdmin()
+        || (
+          canManageOrg(organizationIdForUser())
+          && resource.data.get('organizationId','') == organizationIdForUser()
+        );
 
       allow create: if canCreateOwnProfile();
       allow update: if isSuperAdmin() || canUpdateOwnProfile();
