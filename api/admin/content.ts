@@ -246,7 +246,7 @@ export default async function handler(req: Request, res: Response) {
         if (collection !== 'settings') throw new Error('Curriculum settings require an organization tenant.');
       }
       if (!ctx.isSuperAdmin && !ctx.organizationId) throw new Error('Organization membership is required.');
-      if (!ctx.isSuperAdmin && !['owner','admin'].includes(String(ctx.organizationRole || ''))) {
+      if (!ctx.isSuperAdmin && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
         throw new Error('Only the organization owner or administrator can change organization settings.');
       }
 
