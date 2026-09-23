@@ -31,9 +31,10 @@ export default async function handler(req: { method?: string; headers?: Record<s
 
     const db = getFirestore(admin());
     const organizationsSnapshot = await db.collection('organizations').where('status','==','active').get();
-    const organizations = organizationsSnapshot.docs.length
-      ? organizationsSnapshot.docs
-      : [{ id: '' }];
+    // Mentorship automation is tenant-scoped. Never fall back to a platform-wide
+    // users query: an organization with no tenant record must not cause another
+    // organization's learners to be processed.
+    const organizations = organizationsSnapshot.docs;
 
     let processed = 0;
     let created = 0;
@@ -42,9 +43,7 @@ export default async function handler(req: { method?: string; headers?: Record<s
 
     for (const organizationDoc of organizations) {
       const organizationId = organizationDoc.id;
-      const orgConfigSnapshot = organizationId
-        ? await db.doc(`organizations/${organizationId}/settings/mentorship`).get()
-        : await db.doc('system/mentorship').get();
+      const orgConfigSnapshot = await db.doc(`organizations/${organizationId}/settings/mentorship`).get();
       const config = orgConfigSnapshot.exists ? orgConfigSnapshot.data() || {} : {};
       if (config.enabled !== true) continue;
 
@@ -53,14 +52,13 @@ export default async function handler(req: { method?: string; headers?: Record<s
       const cooldownDays = Math.max(1, Number(config.cooldownDays || 7));
       if (minAverageScore <= 0 && maxProgressPercent <= 0) continue;
 
-      const studentsQuery = organizationId
-        ? db.collection('users').where('organizationId','==',organizationId)
-        : db.collection('users');
-      const studentsSnapshot = await studentsQuery.get();
+      const studentsSnapshot = await db.collection('users')
+        .where('organizationId','==',organizationId)
+        .where('role','==','student')
+        .get();
 
       for (const studentDoc of studentsSnapshot.docs) {
       const student = studentDoc.data();
-      if (String(student.role || 'student') !== 'student') continue;
       processed += 1;
       const progress = student.progress && typeof student.progress === 'object' ? student.progress as Record<string, unknown> : {};
       const progressPercent = Math.max(0, Math.min(100, Number(progress.discoverProgress || 0)));
@@ -71,7 +69,11 @@ export default async function handler(req: { method?: string; headers?: Record<s
       const progressTrigger = maxProgressPercent > 0 && progressPercent <= maxProgressPercent;
       if (!scoreTrigger && !progressTrigger) continue;
 
-      const recentDrafts = await db.collection('notificationDrafts').where('studentId','==',studentDoc.id).limit(20).get();
+      const recentDrafts = await db.collection('notificationDrafts')
+        .where('organizationId','==',organizationId)
+        .where('studentId','==',studentDoc.id)
+        .limit(20)
+        .get();
       const hasRecent = recentDrafts.docs.some(doc => {
         const createdAt = doc.data().createdAt;
         const millis = createdAt?.toMillis?.() ?? Date.parse(String(createdAt || ''));
