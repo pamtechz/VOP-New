@@ -83,7 +83,7 @@ type EditorState = {
 };
 
 async function adminContent(
-  action: 'list' | 'listGuides' | 'upsert' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
@@ -644,7 +644,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         sharingScope: editor.sharingScope,
       };
 
-      await adminContent('upsert', 'curriculum', id, payload);
+      await adminContent('upsertLesson', 'curriculum', id, payload);
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload);
       await load();
       setEditor({ ...editor, id, guideTitle: guide?.title || editor.guideTitle, published: publish });
@@ -661,8 +661,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     if (!window.confirm('Unpublish this lesson from the learner curriculum?')) return;
     setSaving(true);
     try {
-      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language });
-      await adminContent('upsert', 'curriculum', editor.id, { published: false });
+      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, lessonId: editor.id });
       setEditor({ ...editor, published: false });
       await load();
       notify('Lesson unpublished.');
