@@ -63,15 +63,17 @@ function userCode(authUser: UserRecord, profile: Record<string, unknown> | undef
 }
 
 async function loadOrganizations(db: Firestore) {
-  const [unions, conferences, districts] = await Promise.all([
+  const [unions, conferences, districts, organizations] = await Promise.all([
     db.collection('unions').get(),
     db.collection('conferences').get(),
     db.collection('districts').get(),
+    db.collection('organizations').get(),
   ]);
   return {
     unions: new Map(unions.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
     conferences: new Map(conferences.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
     districts: new Map(districts.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
+    organizations: new Map(organizations.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
   };
 }
 
@@ -111,6 +113,8 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
       unionId,
       unionName: organizations.unions.get(unionId) || unionId,
       adminNodeType: String(profile.adminNodeType || ''),
+      organizationId: String(profile.organizationId || ''),
+      organizationName: organizations.organizations.get(String(profile.organizationId || '')) || String(profile.organizationId || ''),
       adminNodeId: String(profile.adminNodeId || ''),
       privileges: profile.privileges || {},
       information: profile.information || {},
