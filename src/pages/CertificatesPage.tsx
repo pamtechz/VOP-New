@@ -54,7 +54,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
     setIsExporting(true); setFeedback('');
     try {
       const canvas = await html2canvas(certificateRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-      const link = document.createElement('common.error');
+      const link = document.createElement('a');
       link.download = `VOP_Certificate_${certificate.certificateNumber || certificate.id}.png`;
       link.href = canvas.toDataURL('image/png'); link.click();
       setFeedback(t('certificates.saved', 'Official certificate saved.'));
