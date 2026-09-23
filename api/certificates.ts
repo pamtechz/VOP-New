@@ -73,9 +73,11 @@ async function issue(req:Request,res:Response){
  const candidateRef=db.doc(`users/${candidateId}`);
  const approvedRequestRef=db.doc(`graduationRequests/${String(approved.id)}`);
  const result=await db.runTransaction(async tx=>{
-   const [existing,candidateFresh,requestFresh]=await Promise.all([tx.get(certificateRef),tx.get(candidateRef),tx.get(approvedRequestRef)]);
+   const existing=await tx.get(certificateRef);
    if(existing.exists)return {created:false};
+   const candidateFresh=await tx.get(candidateRef);
    if(!candidateFresh.exists||String(candidateFresh.data()?.organizationId||'')!==organizationId||candidateFresh.data()?.information?.graduated!==true) throw new Error('The candidate graduation state changed before certificate issuance.');
+   const requestFresh=await tx.get(approvedRequestRef);
    if(!requestFresh.exists||requestFresh.data()?.status!=='approved'||String(requestFresh.data()?.organizationId||'')!==organizationId||String(requestFresh.data()?.guideId||'')!==approvedGuideId) throw new Error('The approved graduation record changed before certificate issuance.');
    tx.create(certificateRef,certificate);
    return {created:true};
