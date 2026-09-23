@@ -84,6 +84,23 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true, usage:{ members:members.size, guides, quizzes, announcements, radio, books, playlists } });
     }
 
+    if (action === 'getAnalytics') {
+      const orgId = ctx.organizationId;
+      const memberSnap = await ctx.db.collection(`organizations/${orgId}/members`).where('active','==',true).get();
+      const roleCounts: Record<string,number> = {};
+      memberSnap.docs.forEach(doc => { const role=String(doc.data()?.role || 'learner'); roleCounts[role]=(roleCounts[role]||0)+1; });
+      const count = async (collection:string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
+      const [guides,quizzes,lessons,announcements,radio,materials,candidates,certificates] = await Promise.all([
+        count('guides'), count('quizzes'), count('lessons'), count('announcements'),
+        count('radioBroadcasts'), count('books'), count('candidates'), count('certificates')
+      ]);
+      const audit = await ctx.db.collection(`organizations/${orgId}/audit`).orderBy('timestamp','desc').limit(20).get();
+      return res.status(200).json({ok:true,analytics:{
+        members:memberSnap.size, roleCounts, content:{guides,quizzes,lessons,announcements,radio,materials,candidates,certificates},
+        recentActivity:audit.docs.map(doc=>({id:doc.id,...doc.data()}))
+      }});
+    }
+
     if (action === 'update') {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       if (!ctx.isSuperAdmin && data.plan !== undefined) throw new Error('Only the VOP Super Admin can change organization plans.');
