@@ -133,7 +133,11 @@ export interface GraduationRequest {
   conferenceId?: string;
   unionId?: string;
   averageScore: number;
-  status: 'pending_church' | 'pending_district' | 'pending_conference' | 'approved' | 'rejected';
+  status: 'pending' | 'pending_church' | 'pending_district' | 'pending_conference' | 'pending_union' | 'approved' | 'rejected';
+  workflowStageId?: string;
+  workflowStageIndex?: number;
+  revision?: number;
+  decisions?: Array<{ stageId: string; stageLabel?: string; decision: 'approve' | 'reject'; notes?: string; approverUid: string; approverRole?: string; decidedAt: string }>;
   submittedAt: string;
   approvedAt?: string;
   approverNotes?: string;
