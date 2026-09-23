@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Copy, ExternalLink, Link2, MessageCircle, QrCode, Send, UserCheck, Users, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { generateQrDataUrl } from '../services/qr';
 
 async function mentoringApi(action: string, data: Record<string, unknown> = {}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -153,6 +154,7 @@ export const MentorshipInsights: React.FC = () => {
     try {
       const result = await shareApi('create', { targetPath: sharePath, label: shareLabel });
       setShareResult(result.item);
+      setShareQr(await generateQrDataUrl(String(result.item?.url || ''), 240));
       setNotice('Tracked share link created.');
       await loadShares();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create share link.'); }
@@ -229,7 +231,7 @@ export const MentorshipInsights: React.FC = () => {
       {tab==='sharing' && <section className="vop-mentoring-card">
         <div className="vop-mentoring-card-head"><div><h2>Tracked lesson & chapter sharing</h2><p>Create a share link that returns learners to the exact lesson or chapter and records access.</p></div></div>
         <div className="vop-share-form"><input value={sharePath} onChange={e=>setSharePath(e.target.value)} placeholder="/?guide=...&lesson=..."/><input value={shareLabel} onChange={e=>setShareLabel(e.target.value)} placeholder="Reference label"/><button className="vop-primary" type="button" onClick={()=>void createShare()}><Link2 size={16}/>Create tracked link</button></div>
-        {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Tracked lesson reference'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy</button></div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(shareResult.url)} alt="QR code for the tracked lesson link"/></div>}
+        {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Tracked lesson reference'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy</button></div>{shareQr && <img src={shareQr} alt="QR code for the tracked lesson link"/>}</div>}
         <div className="vop-share-list">{shareLinks.map(item=><div key={item.code}><span><strong>{item.label || item.targetPath}</strong><small>{item.targetPath}</small></span><b>{Number(item.clicks||0)} opens · {Number(item.appLaunches||0)} app launches · {Number(item.installs||0)} installs</b><a href={item.url || '#'} target="_blank" rel="noreferrer"><ExternalLink size={15}/></a></div>)}{!shareLinks.length&&<div className="vop-empty">No tracked share links have been created.</div>}</div>
       </section>}
 
