@@ -92,6 +92,7 @@ export default async function handler(req: Request, res: Response) {
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
         plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
         quotas: data.quotas && typeof data.quotas === 'object' ? data.quotas : undefined,
+        settings: data.settings && typeof data.settings === 'object' ? data.settings : undefined,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
         updatedAt: FieldValue.serverTimestamp(),
       };
