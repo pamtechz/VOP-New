@@ -83,7 +83,9 @@ export const App: React.FC = () => {
         }
         setCurrentUser(profile);
         setAllUsers([profile]);
-        const inviteToken = new URLSearchParams(window.location.search).get('invite');
+        const params = new URLSearchParams(window.location.search);
+        const inviteToken = params.get('invite');
+        const shareCode = params.get('ref');
         if (inviteToken && firebaseAuth.currentUser) {
           try {
             const token = await firebaseAuth.currentUser.getIdToken();
@@ -103,6 +105,28 @@ export const App: React.FC = () => {
             }
           } catch (inviteError) {
             console.error('Organization invitation acceptance failed', inviteError);
+          }
+        }
+        if (shareCode && firebaseAuth.currentUser) {
+          try {
+            const token = await firebaseAuth.currentUser.getIdToken();
+            const response = await fetch('/api/share', {
+              method:'POST',
+              headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+              body:JSON.stringify({action:'enroll',code:shareCode})
+            });
+            const result = await response.json().catch(()=>({}));
+            if (response.ok) {
+              window.history.replaceState({}, '', window.location.pathname);
+              sessionStorage.setItem('vop_share_enrollment_' + shareCode, '1');
+              const refreshed = await loadFirestoreUser(firebaseUser.uid);
+              if (refreshed) setCurrentUser(refreshed);
+              setStudyError('');
+            } else if (result?.error) {
+              setStudyError(String(result.error));
+            }
+          } catch (shareError) {
+            console.error('Shared course enrollment failed', shareError);
           }
         }
       }).catch((error: unknown) => {
@@ -184,25 +208,6 @@ export const App: React.FC = () => {
 
     return () => { cancelled = true; };
   }, [currentUser.uid, currentUser.organizationId]);
-
-  useEffect(() => {
-    const markVerifiedInstall = () => {
-      const code = sessionStorage.getItem('vop_share_ref');
-      if (!code || sessionStorage.getItem('vop_share_install_recorded_' + code)) return;
-      sessionStorage.setItem('vop_share_install_recorded_' + code, '1');
-      void auth?.currentUser?.getIdToken().then(token =>
-        fetch('/api/share', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ action: 'markInstall', code }),
-        })
-      ).catch(() => undefined);
-    };
-    const media = window.matchMedia('(display-mode: standalone)');
-    if (media.matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)) markVerifiedInstall();
-    window.addEventListener('appinstalled', markVerifiedInstall);
-    return () => window.removeEventListener('appinstalled', markVerifiedInstall);
-  }, []);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
