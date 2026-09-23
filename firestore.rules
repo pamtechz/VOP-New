@@ -329,7 +329,8 @@ service cloud.firestore {
     match /books/{id} {
       allow get, list: if isSuperAdmin()
         || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || resource.data.get('published',false) == true;
+        || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
+            || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
       allow create, update, delete: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canManageOrg(organizationIdForUser())
@@ -339,7 +340,8 @@ service cloud.firestore {
     match /radioBroadcasts/{id} {
       allow get, list: if isSuperAdmin()
         || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || resource.data.get('published',false) == true;
+        || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
+            || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
       allow create, update, delete: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canManageOrg(organizationIdForUser())
