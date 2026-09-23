@@ -8,7 +8,7 @@ type CollectionName =
   | 'unions' | 'conferences' | 'districts' | 'churches';
 
 type Props = { activeLanguage: string };
-type ContentItem = Record<string, unknown> & { id?: string };
+type ContentItem = Record<string, unknown> & { id?: string; canEdit?: boolean };
 type ContentState = Record<CollectionName, ContentItem[]>;
 
 const emptyState: ContentState = {
@@ -83,13 +83,13 @@ function title(collection: CollectionName, item: ContentItem) {
   return text(item.name) || 'Unnamed organization';
 }
 
-async function adminContent(action: 'list' | 'upsert' | 'delete', collection: CollectionName, id?: string, data?: ContentItem) {
+async function adminContent(action: 'list' | 'upsert' | 'delete' | 'proposeTranslation' | 'reviewTranslationProposal', collection: CollectionName, id?: string, data?: ContentItem, extra?: Record<string, unknown>) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action, collection, id, data }),
+    body: JSON.stringify({ action, collection, id, data, ...(extra || {}) }),
   });
   const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
@@ -102,6 +102,13 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const [draft, setDraft] = useState<ContentItem>(newRecord('languages', emptyState));
   const [editingId, setEditingId] = useState('');
   const [translationText, setTranslationText] = useState('{}');
+  const [editingCanEdit, setEditingCanEdit] = useState(true);
+  const [proposalLanguage, setProposalLanguage] = useState('');
+  const [proposalKey, setProposalKey] = useState('');
+  const [proposalValue, setProposalValue] = useState('');
+  const [proposalReason, setProposalReason] = useState('');
+  const [proposalBusy, setProposalBusy] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'enabled' | 'disabled'>('all');
   const [pending, setPending] = useState(false);
@@ -121,7 +128,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     } finally { setPending(false); }
   };
 
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => { void reload(); void auth?.currentUser?.getIdTokenResult().then(result => setIsSuperAdmin(result.claims.role === 'super_admin')).catch(() => setIsSuperAdmin(false)); }, []);
 
   const languages = useMemo(() => state.languages as unknown as CustomLanguage[], [state.languages]);
   const unions = state.unions;
@@ -144,6 +151,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const startNew = (collection = active) => {
     setActive(collection);
     setEditingId('');
+    setEditingCanEdit(true);
     const record = newRecord(collection, state);
     setDraft(record);
     setTranslationText(JSON.stringify(record.values ?? {}, null, 2));
@@ -153,6 +161,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
 
   const edit = (item: ContentItem) => {
     setEditingId(identity(active, item));
+    setEditingCanEdit(item.canEdit !== false);
     setDraft({ ...item });
     setTranslationText(JSON.stringify(item.values ?? {}, null, 2));
     setMessage('');
@@ -162,6 +171,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const setField = (key: string, value: unknown) => setDraft(current => ({ ...current, [key]: value }));
 
   const save = async () => {
+    if (editingId && !editingCanEdit) { setError('This record is read-only. Only its contributor or the VOP Super Admin can edit it.'); return; }
     setPending(true); setError(''); setMessage('');
     try {
       let id = editingId || text(draft.id).trim();
@@ -205,6 +215,8 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   };
 
   const remove = async (id: string) => {
+    const item = state[active].find(candidate => identity(active, candidate) === id);
+    if (item?.canEdit === false) { setError('This record is read-only. Only its contributor or the VOP Super Admin can delete it.'); return; }
     if (!id || !window.confirm('Delete this record permanently?')) return;
     setPending(true); setError(''); setMessage('');
     try {
@@ -220,7 +232,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const field = (label: string, key: string, type = 'text') => (
     <label className="grid gap-1.5 text-xs font-bold">
       <span>{label}</span>
-      <input type={type} value={text(draft[key])} disabled={pending}
+      <input type={type} value={text(draft[key])} disabled={pending || (editingId !== '' && !editingCanEdit)}
         onChange={event => setField(key, type === 'number' ? Number(event.target.value) || 0 : event.target.value)}
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal outline-none focus:border-slate-500" />
     </label>
@@ -238,7 +250,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const select = (label: string, key: string, options: Array<{ value: string; label: string }>) => (
     <label className="grid gap-1.5 text-xs font-bold">
       <span>{label}</span>
-      <select value={text(draft[key])} disabled={pending} onChange={event => setField(key, event.target.value)}
+      <select value={text(draft[key])} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={event => setField(key, event.target.value)}
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal">
         <option value="">Not configured</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -253,11 +265,41 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     </label>
   );
 
+  const selectedProposalTranslation = state.translations.find(item => text(item.id) === proposalLanguage);
+  const proposalKeys = selectedProposalTranslation?.values && typeof selectedProposalTranslation.values === 'object'
+    ? Object.keys(selectedProposalTranslation.values as Record<string, unknown>).sort()
+    : [];
+
+  const submitTranslationProposal = async () => {
+    if (!proposalLanguage || !proposalKey || !proposalValue.trim()) { setError('Select a language and translation key, then enter the proposed value.'); return; }
+    setProposalBusy(true); setError(''); setMessage('');
+    try {
+      await adminContent('proposeTranslation', 'translations', proposalLanguage, undefined, {
+        languageId: proposalLanguage, key: proposalKey, proposedValue: proposalValue.trim(), reason: proposalReason.trim()
+      });
+      setMessage('Translation proposal submitted for Super Admin review.');
+      setProposalValue(''); setProposalReason('');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not submit translation proposal.'); }
+    finally { setProposalBusy(false); }
+  };
+
+  const reviewProposal = async (proposal: ContentItem, decision: 'approve' | 'reject') => {
+    setProposalBusy(true); setError('');
+    try {
+      await adminContent('reviewTranslationProposal', 'translations', text(proposal.languageId), undefined, {
+        languageId: text(proposal.languageId), proposalId: text(proposal.id), decision
+      });
+      setMessage(`Proposal ${decision === 'approve' ? 'approved' : 'rejected'}.`);
+      await reload();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not review proposal.'); }
+    finally { setProposalBusy(false); }
+  };
+
   const renderEditor = () => {
     if (active === 'translations') return (
       <div className="grid gap-3">
         {field('Language code', 'id')}
-        <textarea rows={14} value={translationText} disabled={pending} spellCheck={false}
+        <textarea rows={14} value={translationText} disabled={pending || (editingId !== '' && !editingCanEdit)} spellCheck={false}
           onChange={event => setTranslationText(event.target.value)}
           className="w-full rounded-lg border border-slate-300 p-3 font-mono text-xs" aria-label="Translation values JSON" />
         <p className="text-xs text-slate-500">Translations are stored per configured language. Only configured languages should be published.</p>
@@ -266,8 +308,8 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     if (active === 'languages') return (
       <div className="grid gap-3">
         {field('Language code', 'code')}{field('Display name', 'name')}{field('Native name', 'nativeName')}{field('Sort order', 'sortOrder', 'number')}
-        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} onChange={e => setField('enabled', e.target.checked)} />Enabled for learners</label>
-        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.rtl === true} onChange={e => setField('rtl', e.target.checked)} />Right-to-left</label>
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('enabled', e.target.checked)} />Enabled for learners</label>
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.rtl === true} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('rtl', e.target.checked)} />Right-to-left</label>
       </div>
     );
     if (active === 'announcements') return <div className="grid gap-3">{field('Title','title')}{field('Tag','tag')}{area('Description','description')}{field('Image URL','imageUrl')}{field('Action text','actionText')}{field('Action URL','actionUrl')}{publicationToggle()}</div>;
@@ -303,12 +345,24 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
 
       {(message || error) && <div role={error ? 'alert' : undefined} className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || <><Check size={16} />{message}</>}</div>}
 
+      {active === 'translations' && <div className="grid gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div><h3 className="font-black">Translation improvement workflow</h3><p className="mt-1 text-xs text-blue-900">Canonical translations owned by another contributor are read-only. Submit an improvement for Super Admin review instead of overwriting it.</p></div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <select value={proposalLanguage} onChange={e => { setProposalLanguage(e.target.value); setProposalKey(''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select language</option>{languages.map(lang => <option key={text(lang.id || lang.code)} value={text(lang.id || lang.code)}>{text(lang.name)} ({text(lang.code).toUpperCase()})</option>)}</select>
+          <select value={proposalKey} onChange={e => { setProposalKey(e.target.value); setProposalValue(selectedProposalTranslation?.values && typeof selectedProposalTranslation.values === 'object' ? text((selectedProposalTranslation.values as Record<string, unknown>)[e.target.value]) : ''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select UI key</option>{proposalKeys.map(key => <option key={key} value={key}>{key}</option>)}</select>
+          <input value={proposalValue} onChange={e => setProposalValue(e.target.value)} placeholder="Proposed translation" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
+          <input value={proposalReason} onChange={e => setProposalReason(e.target.value)} placeholder="Reason (optional)" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
+        </div>
+        <button type="button" onClick={() => void submitTranslationProposal()} disabled={proposalBusy} className="w-fit rounded-lg bg-blue-900 px-4 py-2.5 text-xs font-bold text-white">{proposalBusy ? 'Submitting…' : 'Submit proposal'}</button>
+        {isSuperAdmin && <div className="rounded-lg border border-amber-200 bg-white p-3"><div className="mb-2 text-xs font-black">Pending proposals</div><div className="grid gap-2">{state.translations.flatMap(t => Array.isArray(t.proposals) ? (t.proposals as ContentItem[]).map(p => ({...p, languageId:text(t.id)})) : []).filter(p => text(p.status) === 'pending').map(p => <div key={text(p.id)} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"><div><strong>{text(p.languageId)} · {text(p.key)}</strong><div className="text-slate-500">{text(p.currentValue)} → {text(p.proposedValue)}</div></div><div className="flex gap-2"><button type="button" onClick={() => void reviewProposal(p,'approve')} className="rounded-md bg-emerald-700 px-3 py-1.5 font-bold text-white">Approve</button><button type="button" onClick={() => void reviewProposal(p,'reject')} className="rounded-md bg-rose-700 px-3 py-1.5 font-bold text-white">Reject</button></div></div>)}</div></div>}
+      </div>}
+
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,.82fr)]">
         <div className="grid gap-2 min-w-0">
           {activeItems.map(item => {
             const id = identity(active, item);
             return <div key={id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? 'Disabled' : 'Enabled'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? 'Published' : 'Draft') : text(item.id))}</div></button>
+              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.canEdit === false ? 'Read only' : 'Your contribution'}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? 'Disabled' : 'Enabled'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? 'Published' : 'Draft') : text(item.id))}</div></button>
               <button type="button" onClick={() => void remove(id)} disabled={pending} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50" aria-label={`Delete ${title(active,item)}`}><Trash2 size={14} /></button>
             </div>;
           })}
@@ -318,7 +372,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? 'Edit record' : 'Create record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
           {renderEditor()}
-          <button type="button" onClick={() => void save()} disabled={pending} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? 'Save changes' : 'Create record'}</button>
+          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? 'Save changes' : 'Create record'}</button>
         </div>
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-500"><Globe size={13} />Admin language: {activeLanguage || 'not configured'} · {languages.length} configured languages</div>
