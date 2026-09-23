@@ -119,9 +119,13 @@ export default async function handler(req: Request, res: Response) {
         createdAt: FieldValue.serverTimestamp(),
       };
       await db.doc(`shareReferences/${code}`).set(item);
-      const proto = header(req, 'x-forwarded-proto') || 'https';
-      const host = header(req, 'x-forwarded-host') || header(req, 'host');
-      if (!host) throw new Error('The public host could not be determined.');
+      const forwardedProto = header(req, 'x-forwarded-proto').toLowerCase();
+      const proto = forwardedProto === 'http' ? 'http' : 'https';
+      const forwardedHost = header(req, 'x-forwarded-host').trim();
+      const host = forwardedHost || header(req, 'host').trim();
+      if (!host || !/^[a-z0-9.-]+(?::[0-9]{1,5})?$/i.test(host) || host.includes('..')) {
+        throw new Error('The public host could not be determined.');
+      }
       return res.status(200).json({ ok: true, item: { ...item, code, url: `${proto}://${host}/api/share?c=${code}` } });
     }
 
