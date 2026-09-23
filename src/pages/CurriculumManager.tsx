@@ -83,7 +83,7 @@ type EditorState = {
 };
 
 async function adminContent(
-  action: 'list' | 'listGuides' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson' | 'forkGuide',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
