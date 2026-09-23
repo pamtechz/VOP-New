@@ -565,8 +565,17 @@ export default async function handler(req: Request, res: Response) {
 
     if (collection === 'settings' || collection === 'curriculumSettings') {
       if (!ctx.organizationId) throw new Error('Select an organization before changing settings.');
+      if (!ctx.isSuperAdmin && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
+        throw new Error('Only the organization owner or administrator can change organization settings.');
+      }
       const ref=ctx.db.doc(`organizations/${ctx.organizationId}/settings/${collection === 'settings' ? 'settings' : 'curriculum'}`);
-      if (action === 'delete') { await ref.delete(); return res.status(200).json({ok:true,id}); }
+      if (action === 'delete') {
+        const existing = await ref.get();
+        if (!existing.exists) return res.status(200).json({ok:true,id});
+        await ref.delete();
+        await writeTenantAudit(ctx, `${collection}.delete`, ref.path, existing.data(), undefined);
+        return res.status(200).json({ok:true,id});
+      }
       const incoming=body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
       await ref.set({...incoming, organizationId:ctx.organizationId, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid},{merge:true});
       return res.status(200).json({ok:true,item:{id,...(await ref.get()).data()}});
