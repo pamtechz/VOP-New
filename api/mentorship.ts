@@ -71,6 +71,9 @@ async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
 
 async function assertParticipant(db: FirebaseFirestore.Firestore, uid: string, conversation: Record<string, unknown>) {
   const actor = await profile(db, uid);
+  const conversationOrg = String(conversation.organizationId || '').trim();
+  const actorOrg = String(actor.organizationId || '').trim();
+  if (String(actor.role || '') !== 'super_admin' && conversationOrg && actorOrg !== conversationOrg) throw new Error('You cannot access this conversation.');
   if (String(actor.role || '') === 'super_admin') return;
   if (['owner','admin'].includes(String(actor.organizationRole || ''))) {
     if (String(conversation.organizationId || '') !== String(actor.organizationId || '')) throw new Error('You cannot access this conversation.');
@@ -272,6 +275,7 @@ export default async function handler(req: Request, res: Response) {
       const studentId = decoded.uid;
       const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
       if (!assignment.exists) return res.status(200).json({ ok: true, items: [] });
+      if (String(assignment.data()?.organizationId || '') !== organizationId && String(actor.role || '') !== 'super_admin') return res.status(200).json({ ok: true, items: [] });
       if (organizationId && String(assignment.data()?.organizationId || '') !== organizationId) return res.status(200).json({ ok: true, items: [] });
       const mentorId = String(assignment.data()?.mentorId || '');
       const mentor = await profile(db, mentorId);
