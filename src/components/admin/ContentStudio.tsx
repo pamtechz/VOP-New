@@ -128,7 +128,11 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     } finally { setPending(false); }
   };
 
-  useEffect(() => { void reload(); void auth?.currentUser?.getIdTokenResult().then(result => setIsSuperAdmin(result.claims.role === 'super_admin')).catch(() => setIsSuperAdmin(false)); }, []);
+  useEffect(() => {
+    void reload();
+    const current = auth?.currentUser;
+    if (current) void current.getIdTokenResult().then(result => setIsSuperAdmin(result.claims.role === 'super_admin')).catch(() => setIsSuperAdmin(false));
+  }, []);
 
   const languages = useMemo(() => state.languages as unknown as CustomLanguage[], [state.languages]);
   const unions = state.unions;
