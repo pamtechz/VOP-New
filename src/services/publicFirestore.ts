@@ -113,7 +113,7 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
   const organizationData = organizationSnap?.exists() ? organizationSnap.data() : {};
   const legacyNodeType = String(organizationData?.legacyNodeType || '');
   const legacyNodeId = String(organizationData?.legacyNodeId || '');
-  const hierarchyQuery = (collectionName: string, legacyField: string) => {
+  const hierarchyQuery = (collectionName: string) => {
     if (!organizationId) return query(collection(firestore, collectionName), where('organizationId', '==', '__no_public_tenant__'));
     if (legacyNodeType === collectionName.slice(0, -1) && legacyNodeId) {
       return query(collection(firestore, collectionName), where('__name__', '==', legacyNodeId));
@@ -143,10 +143,10 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     getDocs(query(collection(firestore, 'books'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
-    hierarchyQuery('unions', 'unionId'),
-    hierarchyQuery('conferences', 'conferenceId'),
-    hierarchyQuery('districts', 'districtId'),
-    hierarchyQuery('churches', 'churchId'),
+    hierarchyQuery('unions'),
+    hierarchyQuery('conferences'),
+    hierarchyQuery('districts'),
+    hierarchyQuery('churches'),
   ]);
 
   const visibleTenantContent = (data: Record<string, unknown>) => {
