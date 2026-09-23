@@ -141,12 +141,13 @@ export default async function handler(req: Request, res: Response) {
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
       }, { merge:true });
       const lessons = await source.ref.collection('lessons').get();
+      const targetData = (await target.get()).data() || {};
       const batch = ctx.db.batch();
       lessons.docs.forEach((lesson, index) => {
         const data = lesson.data();
         const ref = target.collection('lessons').doc(lesson.id);
         batch.set(ref, {
-          ...data, id:lesson.id, lessonId:lesson.id, guideId:id, guideTitle:String((await target.get()).data()?.title || sourceData.title || ''), organizationId:ctx.organizationId,
+          ...data, id:lesson.id, lessonId:lesson.id, guideId:id, guideTitle:String(targetData.title || sourceData.title || ''), organizationId:ctx.organizationId,
           ownerOrganizationId:ctx.organizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
           copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
           createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid, copyOrder:index
