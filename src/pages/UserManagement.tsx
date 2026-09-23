@@ -86,7 +86,6 @@ function emptyEditor(): EditorState {
 export default function UserManagement({ onBack }: Props) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tenantOrganizations, setTenantOrganizations] = useState<TenantOrganization[]>([]);
-  const [currentOrganizationId, setCurrentOrganizationId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -204,6 +203,12 @@ export default function UserManagement({ onBack }: Props) {
     setSaving(true);
     setError('');
     try {
+      if (editor.uid) {
+        const existing = users.find(user => user.uid === editor.uid);
+        if (editor.organizationId !== (existing?.organizationId || '')) {
+          await userApi('assignOrganization', { uid: editor.uid, organizationId: editor.organizationId, organizationRole: editor.userType === 'admin' ? 'admin' : editor.userType === 'mentor' ? 'mentor' : editor.userType === 'teacher' ? 'teacher' : 'learner' });
+        }
+      }
       const body = await userApi(editor.uid ? 'update' : 'create', {
         ...(editor.uid ? { uid: editor.uid } : {}),
         displayName: editor.displayName.trim(),
@@ -212,7 +217,7 @@ export default function UserManagement({ onBack }: Props) {
         userType: editor.userType,
         adminNodeType: editor.adminNodeType,
         adminNodeId: editor.adminNodeId,
-        ...(editor.organizationId ? { organizationId: editor.organizationId } : {}),
+        ...(!editor.uid && editor.organizationId ? { organizationId: editor.organizationId } : {}),
         ...(editor.password ? { password: editor.password } : {}),
       });
       if (body.item?.resetLink) setResetLink(body.item.resetLink);
