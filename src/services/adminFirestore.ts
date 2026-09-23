@@ -447,7 +447,8 @@ export const subscribeTranslations = (
 
 export const saveTranslation = async (
   language: string,
-  values: Record<string, string>
+  values: Record<string, string>,
+  status: 'draft' | 'review' | 'published' = 'draft'
 ): Promise<void> => {
   if (!auth?.currentUser) throw new Error('Sign in first.');
   const id = language.trim().toLowerCase();
@@ -456,7 +457,7 @@ export const saveTranslation = async (
   const response = await fetch('/api/localization', {
     method:'POST',
     headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-    body:JSON.stringify({action:'bulkSave',locale:id,values}),
+    body:JSON.stringify({action:'bulkSave',locale:id,values,status}),
   });
   const result = await response.json().catch(()=>({}));
   if (!response.ok) throw new Error(String(result?.error || 'Could not save UI translations.'));
