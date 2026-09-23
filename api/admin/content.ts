@@ -73,7 +73,7 @@ export default async function handler(req: Request, res: Response) {
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const requestedId = body.id ? safeId(body.id) : '';
+      const requestedId = body.id ? safeId(body.id) : safeId(data.id || '');
       const id = requestedId || guideId(ctx.organizationId, lang);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
@@ -126,7 +126,7 @@ export default async function handler(req: Request, res: Response) {
       await enforceFeature(ctx, 'curriculum');
       requireOrgRole(ctx, ['owner','admin','editor']);
       if (!ctx.organizationId) throw new Error('Select an organization before copying a guide.');
-      const sourceId = safeId(body.id || body.sourceId);
+      const sourceId = safeId(body.id || body.sourceId || (body.data as Record<string, unknown> | undefined)?.sourceId || '');
       const source = await ctx.db.doc(`guides/${sourceId}`).get();
       const sourceData = source.data() || {};
       if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared guides can be copied.');
