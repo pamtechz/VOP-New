@@ -452,7 +452,8 @@ export const subscribeTranslations = (
   const firestore = getDb();
   let stop: Unsubscribe = () => undefined;
   let cancelled = false;
-  void getDoc(doc(firestore, 'users', auth.currentUser?.uid || '')).then(async profile => {
+
+  void getDoc(doc(firestore, 'users', auth.currentUser?.uid || '')).then(profile => {
     if (cancelled) return;
     const isSuperAdmin = String(profile.data()?.role || '') === 'super_admin';
     const organizationId = String(profile.data()?.organizationId || '').trim();
@@ -460,36 +461,40 @@ export const subscribeTranslations = (
     const organizationQuery = organizationId && !isSuperAdmin
       ? query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))
       : null;
-    stop = onSnapshot(sharedQuery, async first => {
-      const snapshots = organizationQuery ? [first, await getDocs(organizationQuery)] : [first];
-      const seen = new Set<string>();
-      const docs = snapshots.flatMap(snapshot => snapshot.docs.filter(item => {
-        if (seen.has(item.ref.path)) return false;
-        seen.add(item.ref.path);
-        return true;
-      }));
-      callback(docs.map(item => {
-        const raw = item.data();
-        const values = raw.values && typeof raw.values === 'object'
-          ? Object.fromEntries(
-              Object.entries(raw.values as Record<string, unknown>)
-                .map(([key, value]) => [key, String(value ?? '')])
-            )
-          : {};
-        return {
-          id: item.id,
-          values,
-          updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
-        };
-      }));
+
+    stop = onSnapshot(sharedQuery, snapshot => {
+      void (async () => {
+        const docs = [...snapshot.docs];
+        if (organizationQuery) {
+          const organizationSnapshot = await getDocs(organizationQuery);
+          const seen = new Set(docs.map(item => item.ref.path));
+          organizationSnapshot.docs.forEach(item => {
+            if (!seen.has(item.ref.path)) docs.push(item);
+          });
+        }
+        callback(docs.map(item => {
+          const raw = item.data();
+          const values = raw.values && typeof raw.values === 'object'
+            ? Object.fromEntries(
+                Object.entries(raw.values as Record<string, unknown>)
+                  .map(([key, value]) => [key, String(value ?? '')])
+              )
+            : {};
+          return {
+            id: item.id,
+            values,
+            updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+          };
+        }));
+      })().catch(error => onError?.(error instanceof Error ? error : new Error('Translations could not be loaded.')));
     }, err => {
       console.error('Firestore translations subscription error:', err);
       onError?.(err);
     });
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Translations could not be loaded.')));
+
   return () => { cancelled = true; stop(); };
 };
-
 export const saveTranslation = async (
   language: string,
   values: Record<string, string>
