@@ -103,6 +103,22 @@ export async function enforceQuota(ctx: TenantContext, collectionName: string, q
 }
 
 
+export async function enforceMemberQuota(ctx: TenantContext, organizationId = ctx.organizationId) {
+  if (ctx.isSuperAdmin || !organizationId) return;
+  const organization = await ctx.db.doc(`organizations/${organizationId}`).get();
+  const organizationQuotas = organization.data()?.quotas;
+  const plan = await ctx.db.doc(`plans/${String(organization.data()?.plan || '').trim()}`).get();
+  const planQuotas = plan.exists ? plan.data()?.quotas : undefined;
+  const quotas = organizationQuotas && typeof organizationQuotas === 'object' && Object.keys(organizationQuotas as object).length
+    ? organizationQuotas as Record<string, unknown>
+    : planQuotas && typeof planQuotas === 'object' ? planQuotas as Record<string, unknown> : {};
+  const limit = Number(quotas.maxUsers);
+  if (!Number.isFinite(limit) || limit < 0) return;
+  const current = await ctx.db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
+  if (current.size + 1 > limit) throw new Error('The organization has reached its configured maxUsers limit.');
+}
+
+
 export async function writeTenantAudit(
   ctx: TenantContext,
   action: string,
