@@ -9,6 +9,8 @@ export interface CustomLanguage {
   rtl?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  status?: 'draft' | 'published';
+  fallback?: string;
 }
 
 export interface DetailPagesSettings {
@@ -186,6 +188,10 @@ export interface User {
   role?: UserRole;
   organizationId?: string;
   organizationRole?: string;
+  preferences?: {
+    uiLocale?: LanguageCode;
+    studyLanguage?: LanguageCode;
+  };
   adminNodeType?: AdminNodeType;
   adminNodeId?: string; // ID of the specific Union, Conference, District, or Church this admin manages
   information: UserInformation;
