@@ -34,6 +34,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
   const [message,setMessage]=useState(''); const [audit,setAudit]=useState<Array<Record<string,unknown>>>([]);
+  const [invites,setInvites]=useState<Array<Record<string,unknown>>>([]);
   const [error,setError]=useState('');
 
   const load=async()=>{
