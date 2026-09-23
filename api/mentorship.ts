@@ -60,7 +60,7 @@ function sameScope(actor: Record<string, unknown>, student: Record<string, unkno
   const node = String(actor.adminNodeId || '');
   if (!node) return true;
   const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
-  return !student[field] || String(student[field]) === node;
+  return Boolean(node && String(student[field] || '') === node);
 }
 
 function assertOrganizationScope(actor: Record<string, unknown>, requestedOrganizationId: string) {
@@ -284,15 +284,21 @@ export default async function handler(req: Request, res: Response) {
         if (requestedMentor) items = items.filter(item => String(item.mentorId || '') === requestedMentor);
         return res.status(200).json({ ok: true, items });
       }
+      organizationId = String(actor.organizationId || '').trim();
+      if (!organizationId) throw new Error('Your mentor account is not linked to a tenant organization.');
+      if (requestedMentor && requestedMentor !== decoded.uid) throw new Error('You can only access your own mentor conversations.');
       const assignment = await db.collection('mentorAssignments').where('mentorId','==',decoded.uid).get();
       const assignedStudents = new Set(
         assignment.docs
-          .filter(doc => String(doc.data()?.organizationId || '') === organizationId)
+          .filter(doc => String(doc.data()?.organizationId || '') === organizationId && doc.data()?.status !== 'inactive')
           .map(doc => String(doc.data().studentId || ''))
       );
-      const snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).get();
-      const scopedConversationDocs = snapshot.docs.filter(doc => String(doc.data()?.organizationId || '') === organizationId);
       if (requestedStudent && !assignedStudents.has(requestedStudent)) throw new Error('This learner is not assigned to you.');
+      const snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).get();
+      const scopedConversationDocs = snapshot.docs.filter(doc =>
+        String(doc.data()?.organizationId || '') === organizationId
+        && assignedStudents.has(String(doc.data()?.studentId || ''))
+      );
       const items = requestedStudent
         ? scopedConversationDocs.filter(doc => String(doc.data()?.studentId || '') === requestedStudent)
         : scopedConversationDocs;
@@ -341,13 +347,15 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : { studentId, mentorId, status: 'open' };
       if (String(decoded.uid) !== studentId && String(decoded.uid) !== mentorId && !isAdmin(actor)) throw new Error('You are not allowed to send to this conversation.');
-      if (String(decoded.uid) === mentorId) {
-        const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
-        if (
-          !assignment.exists
-          || String(assignment.data()?.mentorId || '') !== mentorId
-          || String(assignment.data()?.organizationId || '') !== String(student.organizationId || '')
-        ) throw new Error('This learner is not assigned to you.');
+      const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
+      if (
+        !assignment.exists
+        || String(assignment.data()?.mentorId || '') !== mentorId
+        || String(assignment.data()?.organizationId || '') !== String(student.organizationId || '')
+        || assignment.data()?.status === 'inactive'
+      ) throw new Error('This learner is not assigned to this mentor.');
+      if (String(decoded.uid) === studentId && mentorId !== String(assignment.data()?.mentorId || '')) {
+        throw new Error('You can only message your assigned mentor.');
       }
       const references = Array.isArray(body.references) ? body.references.map(safeReference).filter(Boolean) : [];
       await ref.set({
