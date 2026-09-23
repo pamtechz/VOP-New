@@ -157,9 +157,9 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
       ? Promise.all([
           getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))),
           getDocs(query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'))),
-          getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''))),
+          getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''), where('sharingScope', '==', 'shared'))),
         ]).then(snapshots => snapshots.flatMap(snapshot => snapshot.docs))
-      : getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''))).then(snapshot => snapshot.docs),
+      : getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''), where('sharingScope', '==', 'shared'))).then(snapshot => snapshot.docs),
     loadScoped('announcements', 'published'),
     loadScoped('books', 'published'),
     loadScoped('radioBroadcasts', 'published'),
