@@ -89,7 +89,7 @@ export const App: React.FC = () => {
         const preferredUi = profile.preferences?.uiLocale;
         const preferredStudy = profile.preferences?.studyLanguage;
         if (preferredUi) { setUiLocale(preferredUi); setUiLocaleState(preferredUi); }
-        if (preferredStudy) { setActiveLang(preferredStudy); setActiveLanguage(preferredStudy); }
+        if (preferredStudy) { setActiveLang(preferredStudy); setStudyLanguage(preferredStudy); }
         const inviteToken = new URLSearchParams(window.location.search).get('invite');
         if (inviteToken && firebaseAuth.currentUser) {
           try {
