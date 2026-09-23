@@ -449,13 +449,15 @@ export const saveTranslation = async (
   language: string,
   values: Record<string, string>
 ): Promise<void> => {
-  const firestore = getDb();
+  if (!auth?.currentUser) throw new Error('Sign in first.');
   const id = language.trim().toLowerCase();
   if (!id) throw new Error('A language code is required.');
-  const organizationId = await currentOrganizationId();
-  await setDoc(doc(firestore, 'translations', id), {
-    values,
-    ...(organizationId ? { organizationId } : {}),
-    updatedAt: new Date().toISOString(),
-  }, { merge: true });
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/localization', {
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({action:'bulkSave',locale:id,values}),
+  });
+  const result = await response.json().catch(()=>({}));
+  if (!response.ok) throw new Error(String(result?.error || 'Could not save UI translations.'));
 };
