@@ -27,8 +27,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
   if (!isOpen) return null;
 
-  const t = (key: string) => getTranslation(key, activeLanguage, settings.customTranslations);
-  const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate || '12 June, 2023';
+  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback);
+  const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate || '';
 
   const handleDownloadImage = async () => {
     if (!certificateRef.current) return;
@@ -39,7 +39,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         useCORS: true,
         backgroundColor: '#ffffff'
       });
-      const link = document.createElement('common.error');
+      const link = document.createElement('a');
       link.download = `VOP_Certificate_${customName.replace(/\s+/g, '_')}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
@@ -47,7 +47,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err) {
       console.error('Failed to export certificate:', err);
-      alert('Could not export certificate image. Please try again.');
+      alert(t('errors.certificateExportFailed', 'Could not export certificate image. Please try again.'));
     } finally {
       setIsExporting(false);
     }
@@ -70,7 +70,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       }
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Certificate verification link copied to clipboard!');
+      alert(t('common.linkCopied', 'Certificate verification link copied to clipboard!'));
     }
   };
 
@@ -128,10 +128,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
 
           <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.25rem' }}>
-            Congratulations!!
+            {t('certificates.congratulations', 'Congratulations!')}
           </h3>
           <p style={{ fontSize: '0.9rem', color: 'rgba(255, 255, 255, 0.85)', maxWidth: '440px', margin: '0 auto' }}>
-            You have successfully completed the {settings.schoolName}
+            {t('certificates.completedMessage', 'You have successfully completed the')} {settings.schoolName}
           </p>
         </div>
 
@@ -215,7 +215,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   marginBottom: '0.2rem'
                 }}
               >
-                {settings.schoolName || 'BIBLE CORRESPONDENCE COURSE'}
+                {settings.schoolName || t('certificates.bibleCorrespondenceCourse', 'BIBLE CORRESPONDENCE COURSE')}
               </div>
 
               <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
