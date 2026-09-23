@@ -247,7 +247,7 @@ export default async function handler(req: Request, res: Response) {
           name: String(organizationSnap.data()?.name || organizationId),
           role: String(membership.role || ''),
           active: membership.active === true,
-          current: organizationId === String(ctx.profile.organizationId || ''),
+          current: organizationId === String(ctx.organizationId || ctx.profile.organizationId || ''),
         };
       }))).filter(Boolean);
       return res.status(200).json({ ok:true, items });
