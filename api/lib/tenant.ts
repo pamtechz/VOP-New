@@ -1,6 +1,6 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
-import { getFirestore, type Firestore, type DocumentData } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type Firestore, type DocumentData } from 'firebase-admin/firestore';
 
 type Request = { headers?: Record<string, string | string[] | undefined> };
 
@@ -73,4 +73,25 @@ export async function enforceQuota(ctx: TenantContext, collectionName: string, q
   if (!Number.isFinite(limit) || limit < 0) return;
   const current = await ctx.db.collection(collectionName).where('organizationId','==',ctx.organizationId).get();
   if (current.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
+}
+
+
+export async function writeTenantAudit(
+  ctx: TenantContext,
+  action: string,
+  target: string,
+  before?: DocumentData,
+  after?: DocumentData,
+) {
+  if (!ctx.organizationId) return;
+  await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).add({
+    actorUid: ctx.auth.uid,
+    actorEmail: ctx.auth.email || '',
+    action,
+    target,
+    organizationId: ctx.organizationId,
+    before: before || null,
+    after: after || null,
+    timestamp: FieldValue.serverTimestamp(),
+  });
 }
