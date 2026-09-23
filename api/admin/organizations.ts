@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../lib/tenant';
+import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../../server/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
