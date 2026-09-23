@@ -452,7 +452,7 @@ service cloud.firestore {
     // Legacy platform curriculum remains available only when explicitly published.
     match /curricula/discover/languages/{language} {
       allow get, list: if isAdmin()
-        || (resource.data.get('published', false) == true && resource.data.get('archived', false) != true);
+        || resource.data.get('published', false) == true;
       allow create, update, delete: if canEditCurriculum();
     }
     match /curricula/discover/languages/{language}/lessons/{lessonId} {
