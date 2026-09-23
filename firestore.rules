@@ -397,8 +397,13 @@ service cloud.firestore {
       allow get, list: if isSuperAdmin()
         || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
         || resource.data.get('sharingScope','private') == 'shared';
-      allow create, update, delete: if isSuperAdmin() || (
+      allow create: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+      allow update, delete: if isSuperAdmin() || (
+        resource.data.get('organizationId','') == organizationIdForUser()
+        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
         && canManageOrg(organizationIdForUser())
       );
     }
