@@ -121,9 +121,20 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     return query(collection(firestore, collectionName), where('organizationId', '==', organizationId));
   };
 
+  const languageQueries = organizationId
+    ? [
+        query(collection(firestore, 'languages'), where('sharingScope', '==', 'shared'), where('enabled', '==', true)),
+        query(collection(firestore, 'languages'), where('organizationId', '==', organizationId), where('enabled', '==', true)),
+      ]
+    : [
+        query(collection(firestore, 'languages'), where('sharingScope', '==', 'shared'), where('enabled', '==', true)),
+        query(collection(firestore, 'languages'), where('organizationId', '==', ''), where('enabled', '==', true)),
+      ];
+
   const [
     settingsSnap,
-    languagesSnap,
+    languagesSharedSnap,
+    languagesOwnedSnap,
     announcementsSharedSnap,
     announcementsOwnedSnap,
     booksSharedSnap,
@@ -136,7 +147,8 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     churchesSnap,
   ] = await Promise.all([
     getDoc(doc(firestore, 'system', 'settings')),
-    getDocs(query(collection(firestore, 'languages'), where('enabled', '==', true))),
+    getDocs(languageQueries[0]),
+    getDocs(languageQueries[1]),
     getDocs(query(collection(firestore, 'announcements'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
     getDocs(query(collection(firestore, 'announcements'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
     getDocs(query(collection(firestore, 'books'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
@@ -154,7 +166,7 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     return !owner || owner === organizationId || data.sharingScope === 'shared';
   };
 
-  const languages = languagesSnap.docs
+  const languages = [...languagesSharedSnap.docs, ...languagesOwnedSnap.docs]
     .filter(item => visibleTenantContent(item.data()))
     .map(item => normalizeLanguage(item.id, item.data()))
     .filter(item => item.enabled)
