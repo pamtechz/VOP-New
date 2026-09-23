@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { generateQrDataUrl } from '../../services/qr';
 
 export interface CertificateArtworkRecord {
   candidateName: string;
@@ -47,10 +48,6 @@ function verificationUrl(certificate: CertificateArtworkRecord, config: Certific
   return `${base}${separator}certificate=${encodeURIComponent(certificate.certificateNumber)}`;
 }
 
-function qrUrl(value: string) {
-  return `https://quickchart.io/qr?format=png&size=180&margin=1&ecLevel=H&text=${encodeURIComponent(value)}`;
-}
-
 export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verification = true }) => {
   const title = config?.certificateTitle?.trim() || '';
   const body = config?.certificateBodyText?.trim() || '';
@@ -60,6 +57,8 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
   const directorName = config?.directorName?.trim() || '';
   const directorTitle = config?.directorTitle?.trim() || '';
   const verifyUrl = verification ? verificationUrl(certificate, config) : '';
+  const [verifyQr, setVerifyQr] = useState('');
+  useEffect(() => { let cancelled = false; if (!verifyUrl) { setVerifyQr(''); return; } void generateQrDataUrl(verifyUrl, 180).then(value => { if (!cancelled) setVerifyQr(value); }).catch(() => { if (!cancelled) setVerifyQr(''); }); return () => { cancelled = true; }; }, [verifyUrl]);
 
   return (
     <div className="vop-certificate-artwork">
@@ -106,7 +105,7 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
 
       {verifyUrl && (
         <div className="vop-certificate-verification-qr">
-          <img src={qrUrl(verifyUrl)} alt="Certificate verification QR code" />
+          {verifyQr && <img src={verifyQr} alt="Certificate verification QR code" />}
           <span>Scan to verify</span>
         </div>
       )}
