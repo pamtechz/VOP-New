@@ -57,8 +57,8 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
       const link = document.createElement('a');
       link.download = `VOP_Certificate_${certificate.certificateNumber || certificate.id}.png`;
       link.href = canvas.toDataURL('image/png'); link.click();
-      setFeedback(t('certificate_saved', 'Official certificate saved.'));
-    } catch { setFeedback(t('certificate_save_failed', 'Could not save the certificate. Please try again.')); }
+      setFeedback(t('certificates.saved', 'Official certificate saved.'));
+    } catch { setFeedback(t('certificates.saveFailed', 'Could not save the certificate. Please try again.')); }
     finally { setIsExporting(false); }
   };
 
@@ -98,8 +98,8 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
               />
             </div>
             <div className="vop-official-certificate-meta">
-              <div><small>{t('certificate_number','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
-              <div><small>{t('course','Course')}</small><strong>{certificate.courseName}</strong></div>
+              <div><small>{t('certificates.verificationCode','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
+              <div><small>{t('common.course','Course')}</small><strong>{certificate.courseName}</strong></div>
               <div><small>{t('completion_date','Completion Date')}</small><strong>{dateText(certificate.completionDate)}</strong></div>
               <div><small>{t('issue_date','Issue Date')}</small><strong>{dateText(certificate.issuedAt)}</strong></div>
             </div>
