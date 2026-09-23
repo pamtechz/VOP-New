@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function userDoc() {
+      return get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+    function member(orgId) {
+      return signedIn()
+        && userDoc().data.get('organizationId','') == orgId
+        && get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('active',false) == true;
+    }
+    function manager(orgId) {
+      return signedIn()
+        && (userDoc().data.get('role','') == 'super_admin'
+          || (member(orgId)
+            && get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role','viewer') in ['owner','admin','editor']));
+    }
+
+    match /organizations/{organizationId}/radio/{fileName} {
+      allow read: if member(organizationId) || userDoc().data.get('role','') == 'super_admin';
+      allow write: if manager(organizationId)
+        && request.resource.size < 524288000
+        && request.resource.contentType.matches('audio/.*|video/.*|image/.*');
+      allow delete: if manager(organizationId);
+    }
+
+    match /organizations/{organizationId}/materials/{fileName} {
+      allow read: if member(organizationId) || userDoc().data.get('role','') == 'super_admin';
+      allow write: if manager(organizationId)
+        && request.resource.size < 524288000;
+      allow delete: if manager(organizationId);
+    }
+
+    match /organizations/{organizationId}/certificates/{fileName} {
+      allow read: if member(organizationId) || userDoc().data.get('role','') == 'super_admin';
+      allow write: if manager(organizationId)
+        && request.resource.size < 524288000;
+      allow delete: if manager(organizationId);
+    }
+  }
+}
