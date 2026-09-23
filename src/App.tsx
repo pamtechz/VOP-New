@@ -123,7 +123,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    void loadPublicContent().then(snapshot => {
+    void loadPublicContent(currentUser.organizationId || '').then(snapshot => {
       if (cancelled) return;
 
       const customTranslations: Record<string, Record<string, string>> = {};
