@@ -317,7 +317,10 @@ export default async function handler(request: Request, response: Response) {
         transaction.set(db.doc('organizations/' + targetOrganizationId + '/members/' + uid), { uid, organizationId:targetOrganizationId, role:memberRole, active:true, joinedAt:previousOrganizationId === targetOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt:now, assignedBy:decoded.uid }, { merge:true });
         transaction.set(db.doc('users/' + uid), { organizationId:targetOrganizationId, organizationRole:memberRole, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       });
-      await authService.setCustomUserClaims(uid, { role:'student', organizationId:targetOrganizationId, organizationRole:memberRole });
+      const preservedPlatformRole = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(existingData.role || '')) && memberRole === 'admin'
+        ? String(existingData.role)
+        : 'student';
+      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, organizationId:targetOrganizationId, organizationRole:memberRole });
       return response.status(200).json({ ok:true, item:{uid, organizationId:targetOrganizationId, organizationRole:memberRole} });
     }
 
