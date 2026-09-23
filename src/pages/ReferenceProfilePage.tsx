@@ -6,7 +6,7 @@ import type {
 import { ArrowLeft, Pencil, X, Check } from 'lucide-react';
 import { calculateCurriculumProgress } from '../services/progress';
 import { updateUser } from '../services/storage';
-import { getTranslation } from '../services/i18n';
+import { useLocalization } from '../services/i18n';
 
 interface ProfileProps {
   currentUser: User;
@@ -51,9 +51,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
     unions.find(item => item.id === currentUser.unionId)?.name,
   ].filter((name): name is string => Boolean(name));
 
-  const t = (key: string, english: string) => getTranslation(
-    key, activeLanguage, settings.customTranslations, english, 'ProfilePage',
-  );
+  const { t } = useLocalization();
 
   const getTestScore = (guide: DiscoverGuide, lesson: Lesson): number | undefined => {
     const scores = currentUser.progress.guideScores ?? {};
