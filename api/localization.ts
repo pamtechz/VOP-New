@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, getAdminDb, writeTenantAudit } from './lib/tenant';
+import { authenticateTenant, getAdminDb, writeTenantAudit } from './lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -74,8 +74,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     const ctx = await authenticateTenant(req);
-    if (!ctx.isSuperAdmin && !ctx.organizationId) throw new Error('Organization membership is required.');
-    requireOrgRole(ctx, ['owner','admin']);
+    if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');
 
     if (action === 'list') {
       const requestedNamespace = String(body.namespace || '').trim();
