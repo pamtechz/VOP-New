@@ -191,6 +191,8 @@ export interface User {
   role?: UserRole;
   organizationId?: string;
   organizationRole?: string;
+  organizationIds?: string[];
+  organizationMemberships?: Array<{ organizationId: string; role: string; active: boolean }>;
   preferences?: {
     uiLocale?: LanguageCode;
     studyLanguage?: LanguageCode;
