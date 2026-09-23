@@ -273,7 +273,23 @@ export default async function handler(req: Request, res: Response) {
           return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: true })) });
         }
         const snap = await ctx.db.collection(collection).get();
-        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: String(d.data().ownerUid || '') === ctx.auth.uid })) });
+        const visible = snap.docs.filter(d => {
+          const data = d.data() || {};
+          const ownerUid = String(data.ownerUid || '');
+          if (ownerUid === ctx.auth.uid) return true;
+          if (String(data.sharingScope || '') !== 'shared') return false;
+          if (collection === 'languages') return data.enabled === true;
+          if (collection === 'translations') return true;
+          return data.published === true;
+        });
+        return res.status(200).json({
+          ok: true,
+          items: visible.map(d => ({
+            id:d.id,
+            ...d.data(),
+            canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
+          })),
+        });
       }
       if (ORG_COLLECTIONS.has(collection)) {
         if (!ctx.organizationId) return res.status(200).json({ ok: true, items: [] });
