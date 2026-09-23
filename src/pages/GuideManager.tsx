@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Archive, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Edit3,
   Filter, Globe, Image as ImageIcon, MoreVertical, Plus, RefreshCw, Save,
-  Search, ShieldCheck, X
+  Search, ShieldCheck, X, Copy
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
@@ -52,7 +52,7 @@ type Props = {
 };
 
 async function guideAdmin(
-  action: 'listGuides' | 'upsertGuide' | 'archiveGuide',
+  action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide',
   data?: Record<string, unknown>,
 ) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -285,6 +285,18 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     }
   };
 
+  const fork = async (record: GuideRecord) => {
+    if (record.sharingScope !== 'shared' || !record.published) return;
+    setSaving(true); setError('');
+    try {
+      await guideAdmin('forkGuide', { sourceId: record.id });
+      setMessage('Shared guide copied into your organization as a draft.');
+      onSaved?.(); await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not copy guide.');
+    } finally { setSaving(false); }
+  };
+
   const archive = async (record: GuideRecord) => {
     if (!window.confirm('Archive this guide for the selected language?')) return;
     setSaving(true);
@@ -392,7 +404,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
                   <td><div className="vop-language-pills">{group.languages.map(code => <span key={code}>{code.toUpperCase()}</span>)}</div></td>
                   <td><span className={'vop-status ' + group.status.toLowerCase()}>{group.status}</span></td>
                   <td><div className="vop-reference-updated">{formatDate(group.updatedAt)}{group.updatedBy && <small>by {group.updatedBy}</small>}</div></td>
-                  <td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={() => openEdit(group)}><MoreVertical size={18}/></button></div></td>
+                  <td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={() => openEdit(group)} title="Edit guide"><MoreVertical size={18}/></button>{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
                 </tr>
               ))}
             </tbody>
