@@ -227,6 +227,16 @@ export const App: React.FC = () => {
   }, [currentUser.uid]);
 
   useEffect(() => {
+    if (!auth?.currentUser || !currentUser.uid) return;
+    const tokenPromise = auth.currentUser.getIdToken();
+    void tokenPromise.then(token => fetch('/api/preferences',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      body:JSON.stringify({uiLocale,studyLanguage:activeLanguage})
+    })).catch(()=>undefined);
+  }, [currentUser.uid, uiLocale, activeLanguage]);
+
+  useEffect(() => {
     if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
   }, [isDarkMode]);
