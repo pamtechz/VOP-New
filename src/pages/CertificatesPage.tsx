@@ -54,7 +54,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
     setIsExporting(true); setFeedback('');
     try {
       const canvas = await html2canvas(certificateRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' });
-      const link = document.createElement('a');
+      const link = document.createElement('common.error');
       link.download = `VOP_Certificate_${certificate.certificateNumber || certificate.id}.png`;
       link.href = canvas.toDataURL('image/png'); link.click();
       setFeedback(t('certificates.saved', 'Official certificate saved.'));
@@ -63,7 +63,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   };
 
   const share = async () => {
-    if (!certificate || !navigator.share) { setFeedback(t('sharing_unavailable', 'Sharing is not available on this device.')); return; }
+    if (!certificate || !navigator.share) { setFeedback(t('sharing.unavailable', 'Sharing is not available on this device.')); return; }
     try {
       await navigator.share({
         title: title || certificate.courseName,
@@ -78,17 +78,17 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
       <header className="vop-certificate-reference-header">
         <div className="vop-certificate-header-inner">
           <div className="vop-certificate-topbar">
-            <button className="vop-reference-back" aria-label={t('back','Back')} onClick={onBack} type="button"><ArrowLeft size={24} /><span>{t('my_certificate', 'My Certificate')}</span></button>
+            <button className="vop-reference-back" aria-label={t('common.back','Back')} onClick={onBack} type="button"><ArrowLeft size={24} /><span>{t('certificates.myCertificates', 'My Certificate')}</span></button>
           </div>
           <div className="vop-certificate-hero-reference">
             <Award size={67} strokeWidth={1.8} aria-hidden="true" />
-            <h2>{certificate ? t('congratulations','Congratulations!') : t('certificate_status','Certificate status')}</h2>
-            <p>{loading ? t('certificate_loading','Loading your official certificate record…') : certificate ? t('official_certificate_message','Your official VOP certificate has been issued and verified from the server.') : t('no_certificate_message','No official certificate has been issued to this account.')}</p>
+            <h2>{certificate ? t('certificates.congratulations','Congratulations!') : t('certificates.status','Certificate status')}</h2>
+            <p>{loading ? t('certificates.loading','Loading your official certificate record…') : certificate ? t('certificates.officialMessage','Your official VOP certificate has been issued and verified from the server.') : t('certificates.noCertificates','No official certificate has been issued to this account.')}</p>
           </div>
         </div>
       </header>
       <main className="vop-certificate-reference-body">
-        {loading && <div className="vop-reference-card"><strong>{t('loading','Loading…')}</strong></div>}
+        {loading && <div className="vop-reference-card"><strong>{t('common.loading','Loading…')}</strong></div>}
         {!loading && certificate && (
           <>
             <div className="vop-official-certificate-wrap" ref={certificateRef}>
@@ -100,18 +100,18 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
             <div className="vop-official-certificate-meta">
               <div><small>{t('certificates.verificationCode','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
               <div><small>{t('common.course','Course')}</small><strong>{certificate.courseName}</strong></div>
-              <div><small>{t('completion_date','Completion Date')}</small><strong>{dateText(certificate.completionDate)}</strong></div>
-              <div><small>{t('issue_date','Issue Date')}</small><strong>{dateText(certificate.issuedAt)}</strong></div>
+              <div><small>{t('certificates.completed','Completion Date')}</small><strong>{dateText(certificate.completionDate)}</strong></div>
+              <div><small>{t('certificates.issuedOn','Issue Date')}</small><strong>{dateText(certificate.issuedAt)}</strong></div>
             </div>
             <div className="vop-official-certificate-actions">
-              <button type="button" className="apk-btn-primary" onClick={() => void download()} disabled={isExporting}><Download size={16} />{isExporting ? t('saving','SAVING...') : t('download','DOWNLOAD')}</button>
-              <button type="button" onClick={() => window.print()}><Printer size={16} />{t('print','Print')}</button>
-              <button type="button" onClick={() => void share()}><Share2 size={16} />{t('share','Share')}</button>
+              <button type="button" className="apk-btn-primary" onClick={() => void download()} disabled={isExporting}><Download size={16} />{isExporting ? t('common.saving','SAVING...') : t('certificates.download','DOWNLOAD')}</button>
+              <button type="button" onClick={() => window.print()}><Printer size={16} />{t('certificates.print','Print')}</button>
+              <button type="button" onClick={() => void share()}><Share2 size={16} />{t('certificates.share','Share')}</button>
             </div>
-            {config.verificationEnabled === true && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('official_credential','Official credential')}</strong><span>{t('verification_note','This certificate can be independently verified using its certificate number.')}</span></div></div>}
+            {config.verificationEnabled === true && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('certificates.officialCredential','Official credential')}</strong><span>{t('certificates.verificationNote','This certificate can be independently verified using its certificate number.')}</span></div></div>}
           </>
         )}
-        {!loading && !certificate && <div className="vop-reference-card vop-official-empty"><Award size={38} /><strong>{t('no_certificate_issued','No official certificate has been issued.')}</strong><p>{t('certificate_pending_message','Complete the required curriculum and follow the graduation approval process before certification.')}</p></div>}
+        {!loading && !certificate && <div className="vop-reference-card vop-official-empty"><Award size={38} /><strong>{t('certificates.notIssued','No official certificate has been issued.')}</strong><p>{t('certificates.pendingMessage','Complete the required curriculum and follow the graduation approval process before certification.')}</p></div>}
         {feedback && <p role="status" className="vop-cert-caption">{feedback}</p>}
       </main>
     </section>
