@@ -80,12 +80,27 @@ async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
 
 async function assertParticipant(db: FirebaseFirestore.Firestore, uid: string, conversation: Record<string, unknown>) {
   const actor = await profile(db, uid);
-  if (String(actor.role || '') === 'super_admin') return;
-  if (['owner','admin'].includes(String(actor.organizationRole || ''))) {
-    if (String(conversation.organizationId || '') !== String(actor.organizationId || '')) throw new Error('You cannot access this conversation.');
+  const actorRole = String(actor.role || '');
+  if (actorRole === 'super_admin') return;
+
+  const actorOrganizationId = String(actor.organizationId || '').trim();
+  const conversationOrganizationId = String(conversation.organizationId || '').trim();
+  if (!actorOrganizationId || !conversationOrganizationId || actorOrganizationId !== conversationOrganizationId) {
+    throw new Error('You cannot access this conversation.');
+  }
+
+  if (['owner','admin'].includes(String(actor.organizationRole || ''))) return;
+
+  if (['union_admin','conference_admin','district_admin','church_admin'].includes(actorRole)) {
+    const studentId = String(conversation.studentId || '').trim();
+    if (!studentId) throw new Error('You cannot access this conversation.');
+    const student = await profile(db, studentId);
+    if (!sameTenant(actor, student, actorOrganizationId) || !sameScope(actor, student)) {
+      throw new Error('You cannot access this conversation.');
+    }
     return;
   }
-  if (isAdmin(actor)) return;
+
   if (String(conversation.studentId || '') === uid || String(conversation.mentorId || '') === uid) return;
   throw new Error('You are not a participant in this conversation.');
 }
