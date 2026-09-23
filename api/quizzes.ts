@@ -32,7 +32,11 @@ export default async function handler(req: Request, res: Response) {
         ctx.db.collection('quizzes').where('sharingScope','==','shared').where('published','==',true).get(),
       ]);
       const items = [...owned.docs, ...shared.docs.filter(doc => String(doc.data().organizationId || '') !== ctx.organizationId)]
-        .map(d => ({ id:d.id, ...d.data() }));
+        .map(d => ({
+          id:d.id,
+          ...d.data(),
+          canEdit: ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid,
+        }));
       return res.status(200).json({ ok: true, items });
     }
 
