@@ -276,8 +276,9 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`${collection}/${id}`);
       const existing = await ref.get();
 
-      // Official certificates are issued only by the dedicated server-side issuance
-      // command. The generic content endpoint must never become a certificate-forging path.
+      // Official certificates are issued only by /api/certificates.
+      // This generic endpoint may never create, replace, revoke, or rewrite
+      // credential identity. Existing records expose only a monotonic download counter.
       if (collection === 'certificates') {
         if (action === 'delete') {
           if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can delete certificate records.');
@@ -287,48 +288,32 @@ export default async function handler(req: Request, res: Response) {
           return res.status(200).json({ ok:true, id });
         }
         if (action === 'upsert') {
-          const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
           if (!existing.exists) {
-            if (!ctx.isSuperAdmin) throw new Error('Official certificates can only be created by the VOP Super Admin issuance service.');
-          } else if (!ctx.isSuperAdmin) {
-            const keys = Object.keys(incoming);
-            if (keys.some(key => key !== 'downloadCount')) {
-              throw new Error('Certificate records are immutable. Only the download counter may be updated.');
-            }
-            const current = Math.max(0, Number(existing.data()?.downloadCount || 0));
-            const next = Number(incoming.downloadCount);
-            if (!Number.isInteger(next) || next < current) {
-              throw new Error('Certificate download count must be a non-decreasing integer.');
-            }
-            if (String(existing.data()?.organizationId || '') !== ctx.organizationId) {
-              throw new Error('This certificate belongs to another organization.');
-            }
+            throw new Error('Official certificates can only be created by the certificate issuance service.');
           }
-          const savedData = {
-            ...incoming,
-            id,
-            ...(existing.exists
-              ? {
-                  organizationId: existing.data()?.organizationId || ctx.organizationId,
-                  ownerOrganizationId: existing.data()?.ownerOrganizationId || existing.data()?.organizationId || ctx.organizationId,
-                  ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-                }
-              : {
-                  organizationId: ctx.organizationId,
-                  ownerOrganizationId: ctx.organizationId,
-                  ownerUid: ctx.auth.uid,
-                }),
-            createdAt: existing.data()?.createdAt || new Date().toISOString(),
+          const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+          const keys = Object.keys(incoming);
+          if (keys.some(key => key !== 'downloadCount')) {
+            throw new Error('Certificate records are immutable. Only the download counter may be updated.');
+          }
+          const current = Math.max(0, Number(existing.data()?.downloadCount || 0));
+          const next = Number(incoming.downloadCount);
+          if (!Number.isInteger(next) || next < current) {
+            throw new Error('Certificate download count must be a non-decreasing integer.');
+          }
+          if (!ctx.isSuperAdmin && String(existing.data()?.organizationId || '') !== ctx.organizationId) {
+            throw new Error('This certificate belongs to another organization.');
+          }
+          await ref.set({
+            downloadCount: next,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: ctx.auth.uid,
-          };
-          await ref.set(savedData, { merge:true });
+          }, { merge:true });
           const saved=await ref.get();
-          await writeTenantAudit(ctx, existing.exists ? 'certificate.update' : 'certificate.create', `certificates/${id}`, existing.exists ? existing.data() : undefined, saved.data());
+          await writeTenantAudit(ctx, 'certificate.downloadCount', `certificates/${id}`, existing.data(), saved.data());
           return res.status(200).json({ ok:true, item:{id,...saved.data()} });
         }
       }
-
       if (collection === 'graduationRequests' && action !== 'list') {
         throw new Error('Graduation requests can only be changed through the approval workflow.');
       }
