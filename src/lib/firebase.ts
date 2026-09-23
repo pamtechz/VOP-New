@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, setPersistence, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { deploymentPolicy } from '../config/deployment';
 
 // Firebase Web configuration is public. NEVER put service-account credentials in VITE_*.
@@ -32,7 +33,7 @@ export const app = firebaseConfigured
 export const db: Firestore | null = app ? getFirestore(app) : null;
 
 export const auth: Auth | null = app ? getAuth(app) : null;
-export const storage = app && values.storageBucket ? (await import('firebase/storage')).getStorage(app) : null;
+export const storage: FirebaseStorage | null = app && values.storageBucket ? getStorage(app, undefined) : null;
 
 export const authPersistenceReady: Promise<void> = auth
   ? setPersistence(auth, indexedDBLocalPersistence).catch(() => setPersistence(auth, browserLocalPersistence)).then(() => undefined)
