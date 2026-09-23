@@ -62,17 +62,36 @@ function userCode(authUser: UserRecord, profile: Record<string, unknown> | undef
   return existing || authUser.uid.slice(0, 12).toUpperCase();
 }
 
-async function loadOrganizations(db: Firestore) {
-  const [unions, conferences, districts] = await Promise.all([
-    db.collection('unions').get(),
-    db.collection('conferences').get(),
-    db.collection('districts').get(),
-  ]);
-  return {
-    unions: new Map(unions.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
-    conferences: new Map(conferences.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
-    districts: new Map(districts.docs.map(doc => [doc.id, String(doc.data().name || doc.id)])),
+async function loadOrganizations(db: Firestore, profiles: Map<string, Record<string, unknown>>) {
+  const idsByType = {
+    unions: new Set<string>(),
+    conferences: new Set<string>(),
+    districts: new Set<string>(),
   };
+  profiles.forEach(profile => {
+    const unionId = typeof profile.unionId === 'string' ? profile.unionId.trim() : '';
+    const conferenceId = typeof profile.conferenceId === 'string' ? profile.conferenceId.trim() : '';
+    const districtId = typeof profile.districtId === 'string' ? profile.districtId.trim() : '';
+    if (unionId) idsByType.unions.add(unionId);
+    if (conferenceId) idsByType.conferences.add(conferenceId);
+    if (districtId) idsByType.districts.add(districtId);
+  });
+
+  const readReferenced = async (collectionName: 'unions' | 'conferences' | 'districts', ids: Set<string>) => {
+    const entries: Array<[string, string]> = [];
+    for (const id of ids) {
+      const snapshot = await db.doc(`${collectionName}/${id}`).get();
+      if (snapshot.exists) entries.push([id, String(snapshot.data()?.name || id)]);
+    }
+    return new Map(entries);
+  };
+
+  const [unions, conferences, districts] = await Promise.all([
+    readReferenced('unions', idsByType.unions),
+    readReferenced('conferences', idsByType.conferences),
+    readReferenced('districts', idsByType.districts),
+  ]);
+  return { unions, conferences, districts };
 }
 
 async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
@@ -80,7 +99,7 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
   const profiles: DocumentSnapshot[] = [];
   for (let index = 0; index < refs.length; index += 100) profiles.push(...await db.getAll(...refs.slice(index, index + 100)));
   const profileMap = new Map(profiles.map(snapshot => [snapshot.id, snapshot.exists ? snapshot.data() || {} : {}]));
-  const organizations = await loadOrganizations(db);
+  const organizations = await loadOrganizations(db, profileMap);
 
   return authUsers.map(authUser => {
     const profile = profileMap.get(authUser.uid) || {};
