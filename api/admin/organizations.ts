@@ -229,6 +229,48 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
     }
 
+    if (action === 'listMyMemberships') {
+      const ids = Array.isArray(ctx.profile.organizationIds)
+        ? ctx.profile.organizationIds.map((value: unknown) => String(value)).filter(Boolean)
+        : (ctx.organizationId ? [ctx.organizationId] : []);
+      const uniqueIds = [...new Set(ids)];
+      const items = (await Promise.all(uniqueIds.map(async organizationId => {
+        const [organizationSnap, membershipSnap] = await Promise.all([
+          ctx.db.doc(`organizations/${organizationId}`).get(),
+          ctx.db.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).get(),
+        ]);
+        if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') return null;
+        const membership = membershipSnap.data() || {};
+        if (!ctx.isSuperAdmin && membership.active !== true) return null;
+        return {
+          organizationId,
+          name: String(organizationSnap.data()?.name || organizationId),
+          role: String(membership.role || ''),
+          active: membership.active === true,
+          current: organizationId === String(ctx.profile.organizationId || ''),
+        };
+      }))).filter(Boolean);
+      return res.status(200).json({ ok:true, items });
+    }
+
+    if (action === 'switchOrganization') {
+      const targetOrganizationId = String(body.organizationId || '').trim();
+      if (!targetOrganizationId) throw new Error('An organization is required.');
+      const targetOrganization = await ctx.db.doc(`organizations/${targetOrganizationId}`).get();
+      if (!targetOrganization.exists || targetOrganization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const membership = await ctx.db.doc(`organizations/${targetOrganizationId}/members/${ctx.auth.uid}`).get();
+      if (!ctx.isSuperAdmin && (!membership.exists || membership.data()?.active !== true)) {
+        throw new Error('You are not a member of this organization.');
+      }
+      const role = ctx.isSuperAdmin ? 'platform' : String(membership.data()?.role || '');
+      await ctx.db.doc(`users/${ctx.auth.uid}`).set({
+        organizationId: targetOrganizationId,
+        organizationRole: role,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge:true });
+      return res.status(200).json({ ok:true, organizationId:targetOrganizationId, role });
+    }
+
     if (action === 'listMembers') {
       const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/members`).get();
       return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
