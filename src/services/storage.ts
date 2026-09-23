@@ -22,6 +22,23 @@ import {
 } from '../types';
 
 import { calculateCurriculumProgress, calculateCurriculumAverageScore } from './progress';
+import { auth } from '../lib/firebase';
+
+function scopedStorageKey(key: string): string {
+  // Browser caches are convenience state only. Namespace every cached value by
+  // the authenticated Firebase account so one account can never inherit another
+  // account's cached organization content on a shared device.
+  const uid = auth?.currentUser?.uid || 'anonymous';
+  return `vop:${uid}:${key}`;
+}
+
+function readStorage(key: string): string | null {
+  return localStorage.getItem(scopedStorageKey(key));
+}
+
+function writeStorage(key: string, value: string): void {
+  localStorage.setItem(scopedStorageKey(key), value);
+}
 
 const STORAGE_KEYS = {
   SETTINGS: 'vop_settings',
@@ -73,7 +90,7 @@ export const isSuperAdminAllowedOnPlatform = (): boolean => {
 // ---------------- Settings ---------------- //
 
 export const getStoredSettings = (): AppSettings => {
-  const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+  const data = readStorage(STORAGE_KEYS.SETTINGS);
   if (!data) return { ...DEFAULT_SETTINGS };
   try {
     const parsed = JSON.parse(data);
@@ -84,14 +101,14 @@ export const getStoredSettings = (): AppSettings => {
 };
 
 export const saveSettings = (settings: AppSettings) => {
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  writeStorage(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
 // ---------------- Language ---------------- //
 
 export const getActiveLanguage = (): LanguageCode => {
-  const lang = localStorage.getItem(STORAGE_KEYS.ACTIVE_LANGUAGE) as LanguageCode;
+  const lang = readStorage(STORAGE_KEYS.ACTIVE_LANGUAGE) as LanguageCode;
   if (lang) {
     return lang;
   }
@@ -99,14 +116,14 @@ export const getActiveLanguage = (): LanguageCode => {
 };
 
 export const setActiveLanguage = (lang: LanguageCode) => {
-  localStorage.setItem(STORAGE_KEYS.ACTIVE_LANGUAGE, lang);
+  writeStorage(STORAGE_KEYS.ACTIVE_LANGUAGE, lang);
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
 // ---------------- Languages (CRUD) ---------------- //
 
 export const getStoredLanguages = (): CustomLanguage[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.LANGUAGES);
+  const data = readStorage(STORAGE_KEYS.LANGUAGES);
   if (!data) return [];
   try {
     const list = JSON.parse(data);
@@ -117,14 +134,14 @@ export const getStoredLanguages = (): CustomLanguage[] => {
 };
 
 export const saveLanguages = (languages: CustomLanguage[]) => {
-  localStorage.setItem(STORAGE_KEYS.LANGUAGES, JSON.stringify(languages));
+  writeStorage(STORAGE_KEYS.LANGUAGES, JSON.stringify(languages));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
 // ---------------- Unions (CRUD) ---------------- //
 
 export const getStoredUnions = (): Union[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.UNIONS);
+  const data = readStorage(STORAGE_KEYS.UNIONS);
   if (!data) {
     return [];
   }
@@ -136,7 +153,7 @@ export const getStoredUnions = (): Union[] => {
 };
 
 export const saveUnions = (unions: Union[]) => {
-  localStorage.setItem(STORAGE_KEYS.UNIONS, JSON.stringify(unions));
+  writeStorage(STORAGE_KEYS.UNIONS, JSON.stringify(unions));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -163,7 +180,7 @@ export const deleteUnion = (id: string) => {
 // ---------------- Conferences (CRUD) ---------------- //
 
 export const getStoredConferences = (): Conference[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.CONFERENCES);
+  const data = readStorage(STORAGE_KEYS.CONFERENCES);
   if (!data) {
     return [];
   }
@@ -175,7 +192,7 @@ export const getStoredConferences = (): Conference[] => {
 };
 
 export const saveConferences = (conferences: Conference[]) => {
-  localStorage.setItem(STORAGE_KEYS.CONFERENCES, JSON.stringify(conferences));
+  writeStorage(STORAGE_KEYS.CONFERENCES, JSON.stringify(conferences));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -202,7 +219,7 @@ export const deleteConference = (id: string) => {
 // ---------------- Districts (CRUD) ---------------- //
 
 export const getStoredDistricts = (): District[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.DISTRICTS);
+  const data = readStorage(STORAGE_KEYS.DISTRICTS);
   if (!data) {
     return [];
   }
@@ -214,7 +231,7 @@ export const getStoredDistricts = (): District[] => {
 };
 
 export const saveDistricts = (districts: District[]) => {
-  localStorage.setItem(STORAGE_KEYS.DISTRICTS, JSON.stringify(districts));
+  writeStorage(STORAGE_KEYS.DISTRICTS, JSON.stringify(districts));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -241,7 +258,7 @@ export const deleteDistrict = (id: string) => {
 // ---------------- Churches (CRUD) ---------------- //
 
 export const getStoredChurches = (): ChurchOrganization[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.CHURCHES);
+  const data = readStorage(STORAGE_KEYS.CHURCHES);
   if (!data) {
     return [];
   }
@@ -253,7 +270,7 @@ export const getStoredChurches = (): ChurchOrganization[] => {
 };
 
 export const saveChurches = (churches: ChurchOrganization[]) => {
-  localStorage.setItem(STORAGE_KEYS.CHURCHES, JSON.stringify(churches));
+  writeStorage(STORAGE_KEYS.CHURCHES, JSON.stringify(churches));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -280,20 +297,20 @@ export const deleteChurch = (id: string) => {
 // ---------------- Hierarchy & Governance Flow ---------------- //
 
 export const getStoredHierarchyConfig = (): HierarchyConfig => {
-  const data = localStorage.getItem(STORAGE_KEYS.HIERARCHY_CONFIG);
+  const data = readStorage(STORAGE_KEYS.HIERARCHY_CONFIG);
   if (!data) return { unions: [], conferences: [], districts: [], churches: [] } as unknown as HierarchyConfig;
   try { return JSON.parse(data); } catch { return { unions: [], conferences: [], districts: [], churches: [] } as unknown as HierarchyConfig; }
 };
 
 export const saveHierarchyConfig = (config: HierarchyConfig) => {
-  localStorage.setItem(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(config));
+  writeStorage(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(config));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
 // ---------------- Prayer Requests ---------------- //
 
 export const getStoredPrayerRequests = (): PrayerRequest[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.PRAYER_REQUESTS);
+  const data = readStorage(STORAGE_KEYS.PRAYER_REQUESTS);
   if (!data) {
     return [];
   }
@@ -305,7 +322,7 @@ export const getStoredPrayerRequests = (): PrayerRequest[] => {
 };
 
 export const savePrayerRequests = (prayers: PrayerRequest[]) => {
-  localStorage.setItem(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(prayers));
+  writeStorage(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(prayers));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -328,7 +345,7 @@ export const updatePrayerStatus = (id: string, status: PrayerRequest['status']) 
 // ---------------- Radio Broadcasts ---------------- //
 
 export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.RADIO_BROADCASTS);
+  const data = readStorage(STORAGE_KEYS.RADIO_BROADCASTS);
   if (!data) {
     return [];
   }
@@ -340,7 +357,7 @@ export const getStoredRadioBroadcasts = (): RadioBroadcast[] => {
 };
 
 export const saveRadioBroadcasts = (broadcasts: RadioBroadcast[]) => {
-  localStorage.setItem(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(broadcasts));
+  writeStorage(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(broadcasts));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -357,7 +374,7 @@ export const addRadioBroadcast = (broadcast: Omit<RadioBroadcast, 'id'>): RadioB
 // ---------------- Auto-Discovery Localization Studio ---------------- //
 
 export const getStoredAutoLocalization = (): AutoLocalizationEntry[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.AUTO_LOCALIZATION);
+  const data = readStorage(STORAGE_KEYS.AUTO_LOCALIZATION);
   if (!data) {
     return [];
   }
@@ -371,7 +388,7 @@ export const getStoredAutoLocalization = (): AutoLocalizationEntry[] => {
 const registeredKeyCache = new Set<string>();
 
 export const saveAutoLocalization = (entries: AutoLocalizationEntry[], notify = true) => {
-  localStorage.setItem(STORAGE_KEYS.AUTO_LOCALIZATION, JSON.stringify(entries));
+  writeStorage(STORAGE_KEYS.AUTO_LOCALIZATION, JSON.stringify(entries));
   if (notify) {
     window.dispatchEvent(new Event('vop_data_updated'));
   }
@@ -438,7 +455,7 @@ export const updateLocalizationTranslation = (
 // ---------------- Guides & Lessons (CRUD) ---------------- //
 
 export const getStoredGuides = (): DiscoverGuide[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.GUIDES);
+  const data = readStorage(STORAGE_KEYS.GUIDES);
   if (!data) return [];
   try {
     const parsed = JSON.parse(data);
@@ -449,7 +466,7 @@ export const getStoredGuides = (): DiscoverGuide[] => {
 };
 
 export const saveGuides = (guides: DiscoverGuide[]) => {
-  localStorage.setItem(STORAGE_KEYS.GUIDES, JSON.stringify(guides));
+  writeStorage(STORAGE_KEYS.GUIDES, JSON.stringify(guides));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -528,7 +545,7 @@ export const addQuestionToLesson = (
 // ---------------- Users & Authentication ---------------- //
 
 export const getStoredUsers = (): User[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.USERS);
+  const data = readStorage(STORAGE_KEYS.USERS);
   if (!data) {
     return [];
   }
@@ -540,22 +557,22 @@ export const getStoredUsers = (): User[] => {
 };
 
 export const saveUsers = (users: User[]) => {
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  writeStorage(STORAGE_KEYS.USERS, JSON.stringify(users));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
 export const getCurrentUserId = (): string => {
-  const id = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
+  const id = readStorage(STORAGE_KEYS.CURRENT_USER_ID);
   if (id) return id;
   const users = getStoredUsers();
   const defaultId = users[0]?.uid;
   if (!defaultId) throw new Error('No account has been provisioned. Configure authentication before production use.');
-  localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, defaultId);
+  writeStorage(STORAGE_KEYS.CURRENT_USER_ID, defaultId);
   return defaultId;
 };
 
 export const setCurrentUserId = (uid: string) => {
-  localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, uid);
+  writeStorage(STORAGE_KEYS.CURRENT_USER_ID, uid);
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -655,7 +672,7 @@ export const submitQuizScore = (_guideId: string, _lessonId: string, _scorePerce
 // ---------------- Announcements & Resources ---------------- //
 
 export const getStoredAnnouncements = (): Announcement[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
+  const data = readStorage(STORAGE_KEYS.ANNOUNCEMENTS);
   if (!data) {
     return [];
   }
@@ -667,12 +684,12 @@ export const getStoredAnnouncements = (): Announcement[] => {
 };
 
 export const saveAnnouncements = (announcements: Announcement[]) => {
-  localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
+  writeStorage(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
 export const getStoredBooks = (): BookResource[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.BOOKS);
+  const data = readStorage(STORAGE_KEYS.BOOKS);
   if (!data) {
     return [];
   }
@@ -684,7 +701,7 @@ export const getStoredBooks = (): BookResource[] => {
 };
 
 export const saveBooks = (books: BookResource[]) => {
-  localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(books));
+  writeStorage(STORAGE_KEYS.BOOKS, JSON.stringify(books));
   window.dispatchEvent(new Event('vop_data_updated'));
 };
 
@@ -716,19 +733,19 @@ export const importDatabaseBackup = (jsonString: string): boolean => {
     const data: AppDatabaseBackup = JSON.parse(jsonString);
     if (!data.users || !data.guides) return false;
 
-    if (data.settings) localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
-    if (data.users) localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(data.users));
-    if (data.guides) localStorage.setItem(STORAGE_KEYS.GUIDES, JSON.stringify(data.guides));
-    if (data.unions) localStorage.setItem(STORAGE_KEYS.UNIONS, JSON.stringify(data.unions));
-    if (data.conferences) localStorage.setItem(STORAGE_KEYS.CONFERENCES, JSON.stringify(data.conferences));
-    if (data.districts) localStorage.setItem(STORAGE_KEYS.DISTRICTS, JSON.stringify(data.districts));
-    if (data.churches) localStorage.setItem(STORAGE_KEYS.CHURCHES, JSON.stringify(data.churches));
-    if (data.hierarchyConfig) localStorage.setItem(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(data.hierarchyConfig));
-    if (data.announcements) localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(data.announcements));
-    if (data.books) localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(data.books));
-    if (data.prayerRequests) localStorage.setItem(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(data.prayerRequests));
-    if (data.radioBroadcasts) localStorage.setItem(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(data.radioBroadcasts));
-    if (data.autoLocalizationEntries) localStorage.setItem(STORAGE_KEYS.AUTO_LOCALIZATION, JSON.stringify(data.autoLocalizationEntries));
+    if (data.settings) writeStorage(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
+    if (data.users) writeStorage(STORAGE_KEYS.USERS, JSON.stringify(data.users));
+    if (data.guides) writeStorage(STORAGE_KEYS.GUIDES, JSON.stringify(data.guides));
+    if (data.unions) writeStorage(STORAGE_KEYS.UNIONS, JSON.stringify(data.unions));
+    if (data.conferences) writeStorage(STORAGE_KEYS.CONFERENCES, JSON.stringify(data.conferences));
+    if (data.districts) writeStorage(STORAGE_KEYS.DISTRICTS, JSON.stringify(data.districts));
+    if (data.churches) writeStorage(STORAGE_KEYS.CHURCHES, JSON.stringify(data.churches));
+    if (data.hierarchyConfig) writeStorage(STORAGE_KEYS.HIERARCHY_CONFIG, JSON.stringify(data.hierarchyConfig));
+    if (data.announcements) writeStorage(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(data.announcements));
+    if (data.books) writeStorage(STORAGE_KEYS.BOOKS, JSON.stringify(data.books));
+    if (data.prayerRequests) writeStorage(STORAGE_KEYS.PRAYER_REQUESTS, JSON.stringify(data.prayerRequests));
+    if (data.radioBroadcasts) writeStorage(STORAGE_KEYS.RADIO_BROADCASTS, JSON.stringify(data.radioBroadcasts));
+    if (data.autoLocalizationEntries) writeStorage(STORAGE_KEYS.AUTO_LOCALIZATION, JSON.stringify(data.autoLocalizationEntries));
 
     window.dispatchEvent(new Event('vop_data_updated'));
     return true;
