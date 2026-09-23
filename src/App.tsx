@@ -13,6 +13,7 @@ import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
+import { getUiLocale, setUiLocale, initializeLocalization, loadUiLocale } from './services/i18n';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -37,6 +38,7 @@ const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enroll
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
+  const [uiLocale, setUiLocaleState] = useState<LanguageCode>(getUiLocale());
   const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
@@ -82,6 +84,10 @@ export const App: React.FC = () => {
         }
         setCurrentUser(profile);
         setAllUsers([profile]);
+        const preferredUi = profile.preferences?.uiLocale;
+        const preferredStudy = profile.preferences?.studyLanguage;
+        if (preferredUi) { setUiLocale(preferredUi); setUiLocaleState(preferredUi); }
+        if (preferredStudy) { setActiveLang(preferredStudy); setActiveLanguage(preferredStudy); }
         const inviteToken = new URLSearchParams(window.location.search).get('invite');
         if (inviteToken && auth.currentUser) {
           try {
@@ -133,6 +139,9 @@ export const App: React.FC = () => {
       };
 
       setSettings(nextSettings);
+      const configuredUi = getUiLocale(nextSettings);
+      setUiLocaleState(configuredUi);
+      void initializeLocalization(nextSettings);
       setGuides(snapshot.guides);
       setAnnouncements(snapshot.announcements);
       setBooks(snapshot.books);
@@ -252,7 +261,11 @@ export const App: React.FC = () => {
             currentUser={currentUser}
             settings={settings}
             activeLanguage={activeLanguage}
-            onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setStudyError(''); }}
+            uiLocale={uiLocale}
+            onChangeLanguage={language => {
+              setUiLocale(language); setUiLocaleState(language); setStudyError('');
+              if (auth?.currentUser) void auth.currentUser.getIdToken().then(token => fetch('/api/account/preferences',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({uiLocale:language})})).catch(()=>undefined);
+            }}
             isDarkMode={isDarkMode}
             onToggleDarkMode={() => setIsDarkMode(value => !value)}
             isMobileShell={isMobileShell}
