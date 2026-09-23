@@ -412,13 +412,15 @@ service cloud.firestore {
         || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('enabled',false) == true)
             || (resource.data.get('organizationId','') == '' && resource.data.get('enabled',false) == true));
       allow create: if isSuperAdmin() || (
-        request.resource.data.get('organizationId','') == organizationIdForUser()
-        && canManageOrg(organizationIdForUser())
+        isOrgMember(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == request.auth.uid
+        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
       );
       allow update, delete: if isSuperAdmin() || (
-        resource.data.get('organizationId','') == organizationIdForUser()
+        canEditOwnedGlobal(resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && canManageOrg(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
     }
 
@@ -427,13 +429,15 @@ service cloud.firestore {
         || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
         || resource.data.get('sharingScope','private') == 'shared';
       allow create: if isSuperAdmin() || (
-        request.resource.data.get('organizationId','') == organizationIdForUser()
-        && canManageOrg(organizationIdForUser())
+        isOrgMember(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == request.auth.uid
+        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
       );
       allow update, delete: if isSuperAdmin() || (
-        resource.data.get('organizationId','') == organizationIdForUser()
+        canEditOwnedGlobal(resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && canManageOrg(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
     }
 
