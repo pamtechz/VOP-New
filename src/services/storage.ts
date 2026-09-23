@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
   ANNOUNCEMENTS: 'vop_announcements',
   BOOKS: 'vop_books',
   ACTIVE_LANGUAGE: 'vop_active_language',
+  STUDY_LANGUAGE: 'vop_study_language',
   UNIONS: 'vop_unions',
   CONFERENCES: 'vop_conferences',
   DISTRICTS: 'vop_districts',
@@ -91,6 +92,18 @@ export const saveSettings = (settings: AppSettings) => {
 };
 
 // ---------------- Language ---------------- //
+
+export const getStudyLanguage = (): LanguageCode => {
+  const lang = localStorage.getItem(STORAGE_KEYS.STUDY_LANGUAGE) as LanguageCode;
+  if (lang) return lang;
+  return getActiveLanguage();
+};
+
+export const setStudyLanguage = (lang: LanguageCode) => {
+  localStorage.setItem(STORAGE_KEYS.STUDY_LANGUAGE, lang);
+  localStorage.setItem(STORAGE_KEYS.ACTIVE_LANGUAGE, lang);
+  window.dispatchEvent(new Event('vop_data_updated'));
+};
 
 export const getActiveLanguage = (): LanguageCode => {
   const lang = localStorage.getItem(STORAGE_KEYS.ACTIVE_LANGUAGE) as LanguageCode;
