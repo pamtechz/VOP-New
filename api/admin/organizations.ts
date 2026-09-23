@@ -16,7 +16,7 @@ export default async function handler(req: Request, res: Response) {
     const bootstrapDb = getAdminDb();
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, requestedOrg);
+    const ctx = await authenticateTenant(req, requestedOrg, action === 'acceptInvite');
     if (action === 'create') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
       const name = String(body.name || '').trim();
