@@ -108,7 +108,7 @@ export default function UserManagement({ onBack }: Props) {
   const loadOrganizations = async () => {
     try {
       const body = await userApi('listOrganizations');
-      setTenantOrganizations((body.items || []) as TenantOrganization[]);
+      setTenantOrganizations((body.items || []).filter((item: unknown): item is TenantOrganization => { const value = item as Partial<TenantOrganization>; return typeof value.id === 'string' && typeof value.name === 'string'; }));
     } catch { /* User loading remains useful even when organization metadata is unavailable. */ }
   };
 
