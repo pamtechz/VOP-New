@@ -12,6 +12,7 @@ import {
   saveTranslation
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
+import { auth } from '../lib/firebase';
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -196,6 +197,22 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     });
     setTranslationValues(nextValues);
   }, [translations, selectedTranslation, detectedTranslations]);
+
+  useEffect(() => {
+    if (kind !== 'translations' || !selectedTranslation || !auth?.currentUser) return;
+    let cancelled = false;
+    void auth.currentUser.getIdToken().then(token =>
+      fetch('/api/localization?locale=' + encodeURIComponent(selectedTranslation), {
+        headers:{Accept:'application/json',Authorization:'Bearer '+token}
+      })
+    ).then(response => response.ok ? response.json() : null)
+      .then(payload => {
+        if (!cancelled && payload?.translations && typeof payload.translations === 'object') {
+          setTranslationValues(current => ({...current, ...(payload.translations as Record<string,string>)}));
+        }
+      }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [kind, selectedTranslation]);
 
   // Organization selectors need their parent collections. They are intentionally
   // loaded only while an organization screen is active.
