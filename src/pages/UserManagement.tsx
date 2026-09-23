@@ -407,7 +407,7 @@ export default function UserManagement({ onBack }: Props) {
           <section className="vop-user-side-card">
             <h3><Shield size={16}/>Security & Access</h3>
             <p>Account access is managed through the secured administrator workflow.</p>
-            <button type="button" onClick={() => flash('Audit history is retained by server-side administrative actions.')}><ShieldCheck size={15}/>View Audit Logs</button>
+            <div className="vop-setting-help"><ShieldCheck size={15}/>Audit history is available in the organization administration panel.</div>
           </section>
         </aside>
       </div>
