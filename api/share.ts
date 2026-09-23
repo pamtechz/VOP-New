@@ -83,6 +83,7 @@ export default async function handler(req: Request, res: Response) {
         sharingScope: body.sharingScope === 'shared' ? 'shared' : 'organization',
         clicks: 0,
         installs: 0,
+        appLaunches: 0,
         createdBy: decoded.uid,
         createdAt: FieldValue.serverTimestamp(),
       };
@@ -98,6 +99,27 @@ export default async function handler(req: Request, res: Response) {
         ? await db.collection('shareReferences').orderBy('createdAt','desc').limit(100).get()
         : await db.collection('shareReferences').where('organizationId','==',actorOrganizationId).orderBy('createdAt','desc').limit(100).get();
       return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+    }
+
+    if (action === 'markAppLaunch') {
+      const code = String(body.code || '').trim();
+      if (!code) throw new Error('Share code is required.');
+      const shareRef = db.doc(`shareReferences/${code}`);
+      const share = await shareRef.get();
+      if (!share.exists) throw new Error('Share link not found.');
+      const shareData = share.data() || {};
+      const shareOrg = String(shareData.organizationId || '').trim();
+      const shared = shareData.sharingScope === 'shared';
+      if (!isSuperAdmin && !shared && (!actorOrganizationId || shareOrg !== actorOrganizationId)) throw new Error('This share link is not available to your organization.');
+      const launchRef = shareRef.collection('appLaunches').doc(decoded.uid);
+      const launch = await launchRef.get();
+      if (!launch.exists) {
+        await db.runTransaction(async transaction => {
+          transaction.create(launchRef, { uid:decoded.uid, organizationId:actorOrganizationId, launchedAt:FieldValue.serverTimestamp() });
+          transaction.set(shareRef,{appLaunches:FieldValue.increment(1),lastAppLaunchAt:FieldValue.serverTimestamp()},{merge:true});
+        });
+      }
+      return res.status(200).json({ok:true,recorded:!launch.exists});
     }
 
     if (action === 'markInstall') {
