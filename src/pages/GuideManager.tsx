@@ -24,6 +24,8 @@ type GuideRecord = {
   lessonCount: number;
   updatedAt?: string;
   updatedBy?: string;
+  ownerOrganizationId?: string;
+  editable?: boolean;
 };
 
 type GuideGroup = {
@@ -105,6 +107,8 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     lessonCount: Number(value.lessonCount ?? fallbackLessons) || 0,
     updatedAt: timestampText(value.updatedAt),
     updatedBy: valueText(value.updatedBy),
+    ownerOrganizationId: valueText(value.ownerOrganizationId),
+    editable: value.editable === true,
   };
 }
 
@@ -239,9 +243,13 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
   };
 
   const openEdit = (group: GuideGroup) => {
-    const preferred = group.records.find(record => record.published && !record.archived)
-      || group.records.find(record => !record.archived)
-      || group.records[0];
+    const preferred = group.records.find(record => record.editable && record.published && !record.archived)
+      || group.records.find(record => record.editable && !record.archived);
+    if (!preferred) {
+      const shared = group.records.find(record => record.sharingScope === 'shared' && record.published && !record.archived);
+      if (shared) void fork(shared);
+      return;
+    }
     setEditing({ ...preferred });
   };
 
@@ -302,7 +310,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     setSaving(true);
     setError('');
     try {
-      await guideAdmin('archiveGuide', { language: record.language });
+      await guideAdmin('archiveGuide', { id: record.id, language: record.language });
       setMessage('Guide archived.');
       onSaved?.();
       await load();
