@@ -77,9 +77,13 @@ export async function getOrganizationPlan(ctx: TenantContext) {
 
 export async function enforceFeature(ctx: TenantContext, featureKey: string) {
   if (ctx.isSuperAdmin || !ctx.organizationId) return;
+  const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+  const organizationData = organization.data() || {};
   const plan = await getOrganizationPlan(ctx);
-  if (!plan || plan.active === false) throw new Error('The organization does not have an active SaaS plan.');
-  const features = plan.features && typeof plan.features === 'object' ? plan.features as Record<string, unknown> : {};
+  if (plan && plan.active === false) throw new Error('The organization plan is inactive.');
+  const planFeatures = plan?.features && typeof plan.features === 'object' ? plan.features as Record<string, unknown> : {};
+  const legacyFeatures = organizationData.features && typeof organizationData.features === 'object' ? organizationData.features as Record<string, unknown> : {};
+  const features = Object.keys(planFeatures).length ? planFeatures : legacyFeatures;
   if (features[featureKey] === false) throw new Error(`The ${featureKey} feature is not enabled for the organization plan.`);
 }
 
