@@ -214,6 +214,24 @@ export default async function handler(request: Request, response: Response) {
       const profile = await syncOwnProfile(decoded, getFirestore(getFirebaseAdmin()));
       return response.status(200).json({ ok:true, profile });
     }
+    if (action === 'personalSettings') {
+      const db = getFirestore(getFirebaseAdmin());
+      const ref = db.doc('users/' + decoded.uid + '/settings/personal');
+      if (request.body && typeof request.body === 'object' && (request.body as Record<string, unknown>).operation === 'get') {
+        const snapshot = await ref.get();
+        return response.status(200).json({ ok:true, settings: snapshot.exists ? snapshot.data() : {} });
+      }
+      const incoming = body.settings && typeof body.settings === 'object'
+        ? body.settings as Record<string, unknown>
+        : {};
+      const allowed = ['theme','language','notifications','accessibility','privacy','studyPreferences'];
+      const invalid = Object.keys(incoming).filter(key => !allowed.includes(key));
+      if (invalid.length) return response.status(400).json({ error:'Unsupported personal setting.' });
+      await ref.set({ ...incoming, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      const snapshot = await ref.get();
+      return response.status(200).json({ ok:true, settings:snapshot.data() || {} });
+    }
+
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;
     const tenant = await authenticateTenant(request, requestedOrganizationId);
     const db = tenant.db;
