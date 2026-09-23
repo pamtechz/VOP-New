@@ -208,7 +208,7 @@ export default async function handler(request: Request, response: Response) {
 
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
-      if (type === 'admin' && !tenantOrganizationId && !String(body.adminNodeId || '').trim()) return response.status(400).json({ error: 'Select an organization scope for an administrator.' });
+      if (type === 'admin' && !tenantOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
 
       if (tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
       const created = await authService.createUser({
