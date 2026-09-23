@@ -453,7 +453,9 @@ export const subscribeTranslations = (
   let stop: Unsubscribe = () => undefined;
   let cancelled = false;
 
-  void getDoc(doc(firestore, 'users', auth.currentUser?.uid || '')).then(profile => {
+  const uid = auth?.currentUser?.uid || '';
+  if (!uid) { onError?.(new Error('Sign in first.')); return () => undefined; }
+  void getDoc(doc(firestore, 'users', uid)).then(profile => {
     if (cancelled) return;
     const isSuperAdmin = String(profile.data()?.role || '') === 'super_admin';
     const organizationId = String(profile.data()?.organizationId || '').trim();
