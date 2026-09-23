@@ -28,7 +28,18 @@ export default async function handler(req: Request, res: Response) {
     const db = getAdminDb();
 
     if (req.method === 'GET') {
-      const locale = cleanLocale(q(req, 'locale') || 'en');
+      const requestedLocale = q(req, 'locale').trim();
+      if (!requestedLocale) {
+        const snap = await db.collection('locales').get();
+        const items = snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(item => item.enabled !== false && LOCALE_RE.test(String(item.code || item.id)))
+          .sort((a,b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+        const hasEnglish = items.some(item => String(item.code || item.id).toLowerCase() === 'en');
+        if (!hasEnglish) items.unshift({ id:'en', code:'en', name:'English', nativeName:'English', enabled:true, direction:'ltr', fallback:'en', sortOrder:0 });
+        return res.status(200).json({ok:true, items});
+      }
+      const locale = cleanLocale(requestedLocale);
       const [localeSnap, legacyLanguageSnap, legacyTranslationSnap] = await Promise.all([
         db.doc(`locales/${locale}`).get(),
         db.doc(`languages/${locale}`).get(),
