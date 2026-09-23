@@ -42,11 +42,19 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
 
   useEffect(() => {
     let active = true;
-    void Promise.all([callPersonalSettings('get'), loadPublicContent()]).then(([value, content]) => {
-      if (active && value) setSettings(previous => ({ ...previous, ...value }));
-      if (active) setLanguages(content.languages || []);
-    }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load settings.'); })
-      .finally(() => { if (active) setBusy(false); });
+    const loadSettings = callPersonalSettings('get')
+      .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
+      .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
+    const loadLanguages = loadPublicContent()
+      .then(content => { if (active) setLanguages(content.languages || []); })
+      .catch(error => {
+        // Language metadata is optional for the page. Keep personal settings usable
+        // when public content is temporarily unavailable.
+        if (active) setMessage(error instanceof Error ? error.message : 'Configured languages could not be loaded.');
+      });
+    void Promise.allSettled([loadSettings, loadLanguages]).finally(() => {
+      if (active) setBusy(false);
+    });
     return () => { active = false; };
   }, []);
 
