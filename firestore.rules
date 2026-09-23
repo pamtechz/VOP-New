@@ -369,12 +369,33 @@ service cloud.firestore {
     }
 
     match /translations/{languageId} {
+      // Published UI translations are readable by authenticated organization members.
+      // Draft/review records remain restricted to translation managers.
       allow get, list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()));
+        || (isOrgMember(organizationIdForUser())
+            && (
+              resource.data.get('status','published') == 'published'
+              || canManageOrg(organizationIdForUser())
+            ));
       allow create, update, delete: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canManageOrg(organizationIdForUser())
       );
+    }
+
+    // First-class localization registry. Learners and other clients only receive
+    // published translations; platform managers can maintain draft/review records.
+    match /locales/{locale} {
+      allow get: if isSuperAdmin()
+        || (signedIn() && resource.data.get('enabled', true) == true);
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+
+      match /translations/{key} {
+        allow get, list: if isSuperAdmin()
+          || (signedIn() && resource.data.get('status','published') == 'published');
+        allow create, update, delete: if isSuperAdmin();
+      }
     }
 
     // Platform certification configuration.
