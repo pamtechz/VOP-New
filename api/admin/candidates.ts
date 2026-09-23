@@ -1,6 +1,7 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { authenticateTenant, requireOrgRole, writeTenantAudit } from '../../server/tenant';
 
 type Request = {
   method?: string;
@@ -13,23 +14,6 @@ type Response = {
   json: (body: unknown) => void;
 };
 
-function admin() {
-  if (getApps().length) return getApps()[0];
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error('Server-side Firebase administration is not configured.');
-  }
-  return initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
-}
-function bearerToken(request: Request) {
-  const value = request.headers?.authorization;
-  const authorization = Array.isArray(value) ? value[0] : value;
-  if (!authorization?.startsWith('Bearer ')) return '';
-  return authorization.slice(7).trim();
-}
-
 function validDate(value: unknown) {
   if (value === '') return '';
   if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return null;
@@ -41,24 +25,10 @@ export default async function handler(request: Request, response: Response) {
   if (request.method !== 'POST') return response.status(405).json({ error: 'Method not allowed.' });
 
   try {
-    const token = bearerToken(request);
-    if (!token) return response.status(401).json({ error: 'Sign in first.' });
-
-    const firebaseAdmin = admin();
-    const decoded = await getAuth(firebaseAdmin).verifyIdToken(token);
-    const db = getFirestore(firebaseAdmin);
-
-    const actorSnapshot = await db.doc(`users/${decoded.uid}`).get();
-    if (!actorSnapshot.exists) return response.status(403).json({ error: 'Administrator profile is not configured.' });
-    const actor = actorSnapshot.data() || {};
-    const allowedRoles = new Set(['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']);
-    if (!allowedRoles.has(String(actor.role || '')) && actor.privileges?.manager !== true && actor.privileges?.superAdmin !== true) {
-      return response.status(403).json({ error: 'You are not authorized to update candidate baptism records.' });
-    }
-
     const body = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
     if (body.action !== 'updateBaptism') return response.status(400).json({ error: 'Unsupported candidate action.' });
-
+    const ctx = await authenticateTenant(request, typeof body.organizationId === 'string' ? body.organizationId : undefined);
+    requireOrgRole(ctx, ['owner','admin']);
     const candidateId = typeof body.candidateId === 'string' ? body.candidateId.trim() : '';
     if (!candidateId || !/^[A-Za-z0-9_-]{1,160}$/.test(candidateId)) {
       return response.status(400).json({ error: 'A valid candidate ID is required.' });
@@ -74,9 +44,10 @@ export default async function handler(request: Request, response: Response) {
     if (baptismDate === null) return response.status(400).json({ error: 'Baptism date must use YYYY-MM-DD.' });
     if (baptized && !baptismDate) return response.status(400).json({ error: 'A baptism date is required when marking a candidate as baptized.' });
 
-    const candidateRef = db.doc(`users/${candidateId}`);
+    const candidateRef = ctx.db.doc(`users/${candidateId}`);
     const candidateSnapshot = await candidateRef.get();
     if (!candidateSnapshot.exists) return response.status(404).json({ error: 'Candidate was not found.' });
+    if (String(candidateSnapshot.data()?.organizationId || '') !== ctx.organizationId && !ctx.isSuperAdmin) return response.status(403).json({ error: 'This candidate belongs to another organization.' });
 
     const information = (candidateSnapshot.data()?.information || {}) as Record<string, unknown>;
     await candidateRef.set({
@@ -93,6 +64,7 @@ export default async function handler(request: Request, response: Response) {
 
     const saved = await candidateRef.get();
     const data = saved.data() || {};
+    await writeTenantAudit(ctx,'candidate.baptism.update',`users/${candidateId}`,undefined,{baptismCandidate,baptized,baptismDate});
     return response.status(200).json({
       ok: true,
       candidate: {
