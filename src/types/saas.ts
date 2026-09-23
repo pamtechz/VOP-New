@@ -10,6 +10,9 @@ export interface Organization {
   ownerUid: string;
   createdAt: string;
   updatedAt: string;
+  plan?: string;
+  quotas?: Record<string, number>;
+  features?: Record<string, boolean>;
   settings?: Record<string, unknown>;
   branding?: Record<string, unknown>;
 }
