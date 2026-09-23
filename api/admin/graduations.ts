@@ -72,7 +72,46 @@ async function submit(req: Request, res: Response) {
   if (organizationSnapshot.data()?.status !== 'active') return res.status(409).json({ error: 'The candidate organization is not active.' });
 
   const stages = await loadWorkflow(ctx);
+  const lessonsSnapshot = await guideSnapshot.ref.collection('lessons').get();
+  const lessons = lessonsSnapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+  const publishedLessons = lessons.filter(item => item.published === true);
+  const studyLessons = publishedLessons.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
+  const testLessons = publishedLessons.filter(item => String(item.type ?? '') === 'Test');
+  if (publishedLessons.length !== lessons.length || !studyLessons.length || !testLessons.length) {
+    return res.status(409).json({ error: 'The candidate cannot submit graduation until the certificate-eligible guide has all required published lessons and assessments.' });
+  }
+  const certificationConfigSnapshot = await ctx.db.doc('system/certification').get();
+  const certificationConfig = certificationConfigSnapshot.exists ? certificationConfigSnapshot.data() || {} : {};
+  const organizationSettingsSnapshot = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/settings`).get();
+  const configuredMinimum = Number(certificationConfig.minimumScore);
+  const organizationThreshold = Number(organizationSettingsSnapshot.data()?.quizPassThreshold ?? 0);
+  const threshold = Number.isFinite(configuredMinimum) && configuredMinimum >= 0 && configuredMinimum <= 100
+    ? configuredMinimum
+    : organizationThreshold;
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+    return res.status(409).json({ error: 'The certification pass mark is not configured for this organization.' });
+  }
+  const progress = ctx.profile.progress && typeof ctx.profile.progress === 'object'
+    ? ctx.profile.progress as Record<string, unknown>
+    : {};
+  const completedLessons = new Set(Array.isArray(progress.completedLessons) ? progress.completedLessons.map(String) : []);
+  const scores = progress.guideScores && typeof progress.guideScores === 'object'
+    ? progress.guideScores as Record<string, unknown>
+    : {};
+  const language = text(guide.language);
+  if (!language) return res.status(409).json({ error: 'The certificate-eligible guide has no configured language.' });
+  for (const lesson of studyLessons) {
+    const key = `${language}:${guideId}:${String(lesson.id)}`;
+    if (!completedLessons.has(key)) return res.status(409).json({ error: 'The candidate has not completed all required lessons.' });
+  }
+  for (const test of testLessons) {
+    const key = `${ctx.organizationId}:${language}:${guideId}:${String(test.id)}`;
+    const score = Number(scores[key]);
+    if (!Number.isFinite(score) || score < threshold) return res.status(409).json({ error: 'The candidate has not passed all required assessments.' });
+  }
+
   const ref = ctx.db.doc(`graduationRequests/${requestId(ctx.organizationId, ctx.auth.uid, guideId)}`);
+  const userRef = ctx.db.doc(`users/${ctx.auth.uid}`);
   const score = Number(body.averageScore);
   const now = FieldValue.serverTimestamp();
 
@@ -95,6 +134,7 @@ async function submit(req: Request, res: Response) {
       approverNotes: '', decisions: [], updatedAt: now,
     };
     transaction.set(ref, data);
+    transaction.set(userRef, { information: { ...(candidate.information && typeof candidate.information === 'object' ? candidate.information : {}), graduating: true }, updatedAt: now }, { merge: true });
     return { created: true, data: safeRequest(ref.id, data) };
   });
   if (result.created) await writeTenantAudit(ctx, 'graduation.request.submitted', ref.path, undefined, result.data as Record<string, unknown>);
