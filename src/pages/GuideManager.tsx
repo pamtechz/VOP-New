@@ -24,6 +24,8 @@ type GuideRecord = {
   lessonCount: number;
   updatedAt?: string;
   updatedBy?: string;
+  ownerUid?: string;
+  canEdit?: boolean;
 };
 
 type GuideGroup = {
@@ -242,6 +244,10 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     const preferred = group.records.find(record => record.published && !record.archived)
       || group.records.find(record => !record.archived)
       || group.records[0];
+    if (!preferred || preferred.canEdit === false) {
+      setError('This guide is owned by another contributor. Copy a shared guide into your organization before editing it.');
+      return;
+    }
     setEditing({ ...preferred });
   };
 
@@ -404,7 +410,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
                   <td><div className="vop-language-pills">{group.languages.map(code => <span key={code}>{code.toUpperCase()}</span>)}</div></td>
                   <td><span className={'vop-status ' + group.status.toLowerCase()}>{group.status}</span></td>
                   <td><div className="vop-reference-updated">{formatDate(group.updatedAt)}{group.updatedBy && <small>by {group.updatedBy}</small>}</div></td>
-                  <td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={() => openEdit(group)} title="Edit guide"><MoreVertical size={18}/></button>{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
+                  <td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
                 </tr>
               ))}
             </tbody>
