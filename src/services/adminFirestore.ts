@@ -402,7 +402,7 @@ export const saveAdminRecord = async (
   // Sensitive canonical CRUD is authorized by the server. Keep the remaining
   // hierarchy-only legacy collections on their Firestore rules until their
   // scope-specific API contract is migrated.
-  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts']);
+  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts', 'unions', 'conferences', 'districts', 'churches']);
   if (serverManaged.has(collectionName)) {
     const token = await user.getIdToken();
     const response = await fetch('/api/admin/content', {
@@ -441,7 +441,7 @@ export const deleteAdminRecord = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
 
-  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts']);
+  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts', 'unions', 'conferences', 'districts', 'churches']);
   if (serverManaged.has(collectionName)) {
     const token = await user.getIdToken();
     const response = await fetch('/api/admin/content', {
