@@ -10,7 +10,8 @@ const requiredNamespaces = new Set([
   'users','translations','validation','errors','accessibility','dates','time','pagination',
   'sharing','offline','network','security','system'
 ]);
-const keyPattern = /(?:getTranslation|t)\(\s*['"]([^'"]+)['"]/g;
+const directPattern = /getTranslation\(\s*['"]([^'"]+)['"]/g;
+const localPattern = /\bt\(\s*['"]([^'"]+)['"]/g;
 const keys = new Map();
 
 function walk(dir) {
@@ -19,18 +20,31 @@ function walk(dir) {
     if (['node_modules','.git','android','dist'].includes(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
-    else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
-      const source = fs.readFileSync(full, 'utf8');
-      for (const match of source.matchAll(keyPattern)) {
-        const key = match[1];
-        const line = source.slice(0, match.index).split('\n').length;
-        const record = keys.get(key) || { locations: [] };
-        record.locations.push(path.relative(root, full) + ':' + line);
-        keys.set(key, record);
-      }
+    else if (/\.(tsx?|jsx?)$/.test(entry.name)) inspect(full);
+  }
+}
+
+function addKey(key, file, source) {
+  const record = keys.get(key) || { locations: [], source };
+  record.locations.push(path.relative(root, file));
+  keys.set(key, record);
+}
+
+function inspect(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  for (const match of source.matchAll(directPattern)) addKey(match[1], file, 'getTranslation');
+
+  // Only inspect local t() calls in files that explicitly define t as a wrapper
+  // around getTranslation. This avoids mistaking unrelated functions such as
+  // URLSearchParams.get(), helper t(), or Firebase imports for UI translations.
+  if (/\b(?:const|let|var)\s+t\s*=/.test(source) && /\bgetTranslation\s*\(/.test(source)) {
+    for (const match of source.matchAll(localPattern)) {
+      const key = match[1];
+      if (key !== 'getTranslation') addKey(key, file, 't');
     }
   }
 }
+
 for (const dir of sourceRoots) walk(dir);
 
 const invalid = [];
