@@ -319,9 +319,9 @@ export default async function handler(req: Request, res: Response) {
       }
     }
 
-    if (collection === 'settings' || collection === 'curriculumSettings') {
+    if (collection === 'settings' || collection === 'curriculumSettings' || collection === 'certificationConfig') {
       if (!ctx.organizationId) throw new Error('Select an organization before changing settings.');
-      const ref=ctx.db.doc(`organizations/${ctx.organizationId}/settings/${collection === 'settings' ? 'settings' : 'curriculum'}`);
+      const ref=ctx.db.doc(`organizations/${ctx.organizationId}/settings/${collection === 'settings' ? 'settings' : collection === 'certificationConfig' ? 'certification' : 'curriculum'}`);
       if (action === 'delete') { await ref.delete(); return res.status(200).json({ok:true,id}); }
       const incoming=body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
       await ref.set({...incoming, organizationId:ctx.organizationId, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid},{merge:true});
