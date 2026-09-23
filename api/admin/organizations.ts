@@ -44,7 +44,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
           status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || ''),
-          quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
+          quotas:data.quotas || {}, branding:data.branding || {}, settings:data.settings || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
         }]});
       }
       const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
@@ -59,6 +59,7 @@ export default async function handler(req: Request, res: Response) {
           ownerUid: String(data.ownerUid || ''),
           plan: String(data.plan || ''),
           quotas: data.quotas || {},
+          branding: data.branding || {}, settings: data.settings || {},
           createdAt: String(data.createdAt || ''),
           updatedAt: String(data.updatedAt || ''),
           memberCount: members.size,
