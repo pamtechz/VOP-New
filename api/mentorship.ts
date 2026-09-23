@@ -46,13 +46,37 @@ function isMentor(data: Record<string, unknown>) {
   return String(data.role || '') === 'mentor' || (data.mentorProfile && typeof data.mentorProfile === 'object' && (data.mentorProfile as Record<string, unknown>).enabled === true);
 }
 
+function legacyNodeForRole(role: string): LegacyTenantNodeType | '' {
+  if (role === 'union_admin') return 'union';
+  if (role === 'conference_admin') return 'conference';
+  if (role === 'district_admin') return 'district';
+  if (role === 'church_admin') return 'church';
+  return '';
+}
+
 function sameTenant(actor: Record<string, unknown>, target: Record<string, unknown>, requestedOrganizationId = '') {
-  const actorOrg = String(actor.organizationId || '').trim();
-  const targetOrg = String(target.organizationId || '').trim();
-  if (String(actor.role || '') === 'super_admin') return !requestedOrganizationId || targetOrg === requestedOrganizationId;
-  // Legacy hierarchy roles do not bypass tenant isolation. They must now resolve to
-  // an active organization before accessing tenant-owned mentoring data.
-  return Boolean(actorOrg && targetOrg && actorOrg === targetOrg);
+  const actorRole = String(actor.role || '');
+  const actorOrg = tenantIdForProfile(actor);
+  const targetOrg = tenantIdForProfile(target);
+
+  if (actorRole === 'super_admin') {
+    if (!requestedOrganizationId) return true;
+    return targetOrg === requestedOrganizationId || String(target.organizationId || '') === requestedOrganizationId;
+  }
+
+  if (actorOrg && targetOrg && actorOrg === targetOrg) return true;
+
+  // Legacy hierarchy tenants can scope older records that have not yet received
+  // an organizationId by their authoritative hierarchy node.
+  const nodeType = legacyNodeForRole(actorRole);
+  const nodeId = String(actor.adminNodeId || '').trim();
+  if (!nodeType || !nodeId) return false;
+  const hierarchyField = nodeType === 'union' ? 'unionId' : nodeType === 'conference' ? 'conferenceId' : nodeType === 'district' ? 'districtId' : 'churchId';
+  const targetNodeId = String(target[hierarchyField] || '').trim();
+  if (targetNodeId !== nodeId) return false;
+
+  const expectedLegacyTenant = legacyTenantId(nodeType, nodeId);
+  return !requestedOrganizationId || requestedOrganizationId === expectedLegacyTenant;
 }
 
 function sameScope(actor: Record<string, unknown>, student: Record<string, unknown>) {
@@ -186,13 +210,27 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listStudents') {
-      const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
+      const actorNodeType = legacyNodeForRole(String(actor.role || ''));
+      const actorNodeId = String(actor.adminNodeId || '').trim();
+      const legacyField = actorNodeType === 'union' ? 'unionId' : actorNodeType === 'conference' ? 'conferenceId' : actorNodeType === 'district' ? 'districtId' : actorNodeType === 'church' ? 'churchId' : '';
+      const snapshot = actorNodeType && actorNodeId
+        ? await db.collection('users').where(legacyField, '==', actorNodeId).get()
+        : organizationId
+          ? await db.collection('users').where('organizationId','==',organizationId).get()
+          : await db.collection('users').get();
       const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => String(item.role || 'student') === 'student' && sameTenant(actor, item, organizationId) && sameScope(actor, item));
       return res.status(200).json({ ok: true, items: students });
     }
 
     if (action === 'listMentors') {
-      const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
+      const actorNodeType = legacyNodeForRole(String(actor.role || ''));
+      const actorNodeId = String(actor.adminNodeId || '').trim();
+      const legacyField = actorNodeType === 'union' ? 'unionId' : actorNodeType === 'conference' ? 'conferenceId' : actorNodeType === 'district' ? 'districtId' : actorNodeType === 'church' ? 'churchId' : '';
+      const snapshot = actorNodeType && actorNodeId
+        ? await db.collection('users').where(legacyField, '==', actorNodeId).get()
+        : organizationId
+          ? await db.collection('users').where('organizationId','==',organizationId).get()
+          : await db.collection('users').get();
       const mentors = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => isMentor(item) && sameTenant(actor, item, organizationId));
       return res.status(200).json({ ok: true, items: mentors });
     }
