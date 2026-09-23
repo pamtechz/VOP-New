@@ -28,7 +28,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [name,setName]=useState('');
   const [organizationId,setOrganizationId]=useState('');
   const [plan,setPlan]=useState('');
-  const [status,setStatus]=useState('active'); const [quotas,setQuotas]=useState('{}');
+  const [status,setStatus]=useState('active'); const [quotas,setQuotas]=useState('{}'); const [branding,setBranding]=useState('{}'); const [tenantSettings,setTenantSettings]=useState('{}');
   const [memberUid,setMemberUid]=useState(''); const [inviteEmail,setInviteEmail]=useState(''); const [inviteRole,setInviteRole]=useState('learner'); const [inviteUrl,setInviteUrl]=useState('');
   const [memberRole,setMemberRole]=useState('learner');
   const [saving,setSaving]=useState(false);
@@ -74,7 +74,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     if(!selected) return;
     setSaving(true);setError('');
     try{
-      let parsedQuotas:Record<string,unknown>={}; try { parsedQuotas=JSON.parse(quotas||'{}'); if(!parsedQuotas || Array.isArray(parsedQuotas) || typeof parsedQuotas!=='object') throw new Error(); } catch { throw new Error('Quotas must be a valid JSON object.'); } await api('update',{organizationId:selected.id,data:{name:name.trim()||selected.name,plan,status,quotas:parsedQuotas}});
+      let parsedQuotas:Record<string,unknown>={}; let parsedBranding:Record<string,unknown>={}; let parsedSettings:Record<string,unknown>={}; try { parsedQuotas=JSON.parse(quotas||'{}'); parsedBranding=JSON.parse(branding||'{}'); parsedSettings=JSON.parse(tenantSettings||'{}'); if([parsedQuotas,parsedBranding,parsedSettings].some(v=>!v || Array.isArray(v) || typeof v!=='object')) throw new Error(); } catch { throw new Error('Quotas, branding and tenant settings must each be valid JSON objects.'); } await api('update',{organizationId:selected.id,data:{name:name.trim()||selected.name,plan,status,quotas:parsedQuotas,branding:parsedBranding,settings:parsedSettings}});
       if(status!==selected.status) await api('setStatus',{organizationId:selected.id,status});
       setMessage('Organization settings saved.');await load();
     }catch(e){setError(e instanceof Error?e.message:'Could not save organization.');}
@@ -108,7 +108,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
       <div className="vop-card vop-form-card">
         <div className="vop-section-title"><div><h2>Tenant workspaces</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>
         <div style={{display:'grid',gap:9}}>
-          {items.map(item=><button key={item.id} type="button" onClick={()=>{setSelected(item);setName(item.name);setPlan(item.plan||'');setStatus(item.status||'active');setQuotas(JSON.stringify(item.quotas||{},null,2));void loadDetails(item.id);}} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
+          {items.map(item=><button key={item.id} type="button" onClick={()=>{setSelected(item);setName(item.name);setPlan(item.plan||'');setStatus(item.status||'active');setQuotas(JSON.stringify(item.quotas||{},null,2));setBranding(JSON.stringify((item as any).branding||{},null,2));setTenantSettings(JSON.stringify((item as any).settings||{},null,2));void loadDetails(item.id);}} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div>
             <div style={{fontSize:12,color:'#7183a4',marginTop:4}}>{item.id} · {item.memberCount} active members · {item.plan}</div>
           </button>)}
@@ -123,6 +123,8 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
             <div className="vop-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div>
             <div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value="">No plan</option>{plans.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{isSuperAdmin&&plans.length===0&&<small>Create plans in Plans &amp; Entitlements before assigning one.</small>}</div>
             <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div><div className="vop-field" style={{gridColumn:'1 / -1'}}><label>Usage quotas (JSON)</label><textarea value={quotas} onChange={e=>setQuotas(e.target.value)} disabled={!isSuperAdmin} rows={4} placeholder='{"maxUsers":100,"maxGuides":20,"maxQuizzes":100,"maxAnnouncements":50,"maxRadioItems":50,"maxMaterials":100}'/><small>Leave a limit out, or use a negative value, for unlimited. Limits are enforced server-side when the organization creates new records.</small></div>
+            <div className="vop-field"><label>Tenant branding (JSON)</label><textarea value={branding} onChange={e=>setBranding(e.target.value)} rows={4} placeholder='{"logoUrl":"","primaryColor":"","accentColor":"","appName":""}'/><small>Branding belongs to this organization and is resolved from tenant configuration.</small></textarea></div>
+            <div className="vop-field"><label>Tenant settings (JSON)</label><textarea value={tenantSettings} onChange={e=>setTenantSettings(e.target.value)} rows={4} placeholder='{"timezone":"Africa/Lusaka","defaultUiLocale":"en"}'/><small>Organization-specific runtime settings. Do not place secrets here.</small></div>
             <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button></div>
           </div>
           {usage&&<div className="vop-grid-3" style={{marginTop:16}}>
