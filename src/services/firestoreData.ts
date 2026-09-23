@@ -175,9 +175,32 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
 
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
   const firestore = requireDb();
+  // Profile bootstrap is server-authoritative. This creates the profile for a
+  // newly registered Firebase account before any client-side Firestore read,
+  // which is essential for share-link onboarding and tenant assignment.
+  if (auth?.currentUser?.uid === uid) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ action: 'profile' }),
+      });
+      if (response.ok) {
+        const body = await response.json() as { profile?: Record<string, unknown> };
+        const profile = body.profile;
+        if (profile) return normalizeUserProfile(uid, profile);
+      }
+    } catch (error) {
+      console.warn('Server profile synchronization unavailable; attempting the existing profile read.', error);
+    }
+  }
   const snapshot = await getDoc(doc(firestore, 'users', uid));
   if (!snapshot.exists()) return null;
-  const data = snapshot.data() as Partial<User>;
+  return normalizeUserProfile(uid, snapshot.data() as Record<string, unknown>);
+}
+
+function normalizeUserProfile(uid: string, data: Record<string, any>): User {
   return {
     uid,
     displayName: String(data.displayName ?? ''),
