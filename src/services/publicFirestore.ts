@@ -110,7 +110,6 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
   const [
     settingsSnap,
     languagesSnap,
-    translationsSnap,
     announcementsSharedSnap,
     announcementsOwnedSnap,
     booksSharedSnap,
@@ -124,9 +123,8 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
   ] = await Promise.all([
     getDoc(doc(firestore, 'system', 'settings')),
     getDocs(query(collection(firestore, 'languages'), where('enabled', '==', true))),
-    getDocs(collection(firestore, 'translations')),
     getDocs(query(collection(firestore, 'announcements'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
-    getDocs(query(collection(firestore, 'announcements'), where('organizationId', '==', organizationId || '__none__'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'announcements'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
     getDocs(query(collection(firestore, 'books'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
     getDocs(query(collection(firestore, 'books'), where('organizationId', '==', organizationId || '__none__'), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
@@ -148,13 +146,7 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     .filter(item => item.enabled)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 
-  const translations: Record<string, Record<string, string>> = {};
-  translationsSnap.docs.forEach(item => {
-    const values = item.data().values;
-    if (values && typeof values === 'object') {
-      translations[item.id] = values as Record<string, string>;
-    }
-  });
+  // UI localization is loaded through /api/localization. Curriculum and UI translation data are not mixed here.
 
   const announcements = [...announcementsSharedSnap.docs, ...announcementsOwnedSnap.docs]
     .filter(item => visibleTenantContent(item.data()))
