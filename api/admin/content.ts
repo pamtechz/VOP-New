@@ -63,6 +63,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'upsertGuide') {
       if (collection !== 'guides') throw new Error('Guide management requires the guides collection.');
       if (!ctx.organizationId) throw new Error('Select an organization before creating a guide.');
+      await enforceFeature(ctx, 'curriculum');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
