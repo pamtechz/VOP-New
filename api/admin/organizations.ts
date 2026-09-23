@@ -38,31 +38,35 @@ export default async function handler(req: Request, res: Response) {
     }
     if (action === 'list') {
       if (!ctx.isSuperAdmin) {
-        if (action === 'listMyMemberships') {
-      const profileIds = Array.isArray(ctx.profile.organizationIds) ? ctx.profile.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : (ctx.organizationId ? [ctx.organizationId] : []);
-      const organizationRefs = ctx.isSuperAdmin
-        ? (await ctx.db.collection('organizations').get()).docs
-        : await Promise.all([...new Set(profileIds)].map(orgId => ctx.db.doc(`organizations/${orgId}`).get()));
-      const memberships = await Promise.all(organizationRefs.map(async organization => {
-        const member = await organization.ref.collection('members').doc(ctx.auth.uid).get();
-        if (!organization.exists || organization.data()?.status !== 'active' || !member.exists || member.data()?.active !== true) return null;
-        return { organizationId: organization.id, name:String(organization.data()?.name || organization.id), role:String(member.data()?.role || 'learner'), active:organization.id === ctx.organizationId };
+        requireOrgRole(ctx, ['owner','admin']);
+        const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
+        const data = organization.data() || {};
+        const members = await organization.ref.collection('members').where('active','==',true).get();
+        return res.status(200).json({ ok:true, items:[{
+          id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
+          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || ''),
+          quotas:data.quotas || {}, branding:data.branding || {}, settings:data.settings || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
+        }]});
+      }
+      const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
+      const items = await Promise.all(snap.docs.map(async organization => {
+        const data = organization.data() || {};
+        const members = await organization.ref.collection('members').where('active','==',true).get();
+        return {
+          id: organization.id,
+          name: String(data.name || organization.id),
+          slug: String(data.slug || organization.id),
+          status: String(data.status || 'active'),
+          ownerUid: String(data.ownerUid || ''),
+          plan: String(data.plan || ''),
+          quotas: data.quotas || {},
+          branding: data.branding || {}, settings: data.settings || {},
+          createdAt: String(data.createdAt || ''),
+          updatedAt: String(data.updatedAt || ''),
+          memberCount: members.size,
+        };
       }));
-      return res.status(200).json({ok:true,items:memberships.filter(Boolean)});
-    }
-
-    if (action === 'switchOrganization') {
-      const target = String(body.organizationId || '').trim();
-      if (!target) throw new Error('Organization ID is required.');
-      const member = await bootstrapDb.doc(`organizations/${target}/members/${ctx.auth.uid}`).get();
-      const organization = await bootstrapDb.doc(`organizations/${target}`).get();
-      if (!organization.exists || organization.data()?.status !== 'active' || !member.exists || member.data()?.active !== true) throw new Error('You are not a member of that organization.');
-      const userRef = bootstrapDb.doc(`users/${ctx.auth.uid}`);
-      const userSnap = await userRef.get();
-      const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
-      const organizationIds = [...new Set([...existingIds, target])];
-      await userRef.set({organizationId:target,organizationRole:String(member.data()?.role || 'learner'),organizationIds,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      return res.status(200).json({ok:true,organizationId:target,role:String(member.data()?.role || 'learner')});
+      return res.status(200).json({ ok: true, items });
     }
 
     requireOrgRole(ctx, ['owner','admin']);
