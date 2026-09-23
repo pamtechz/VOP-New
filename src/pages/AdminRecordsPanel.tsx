@@ -91,7 +91,7 @@ function blankForm(kind: ManagedAdminCollection): FormState {
     case 'materials':
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
-      return { title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', scheduledStart: '', scheduledEnd: '', scheduleRepeat: 'once', timezone: '', description: '', published: false };
+      return { title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', scheduledStart: '', scheduledEnd: '', scheduleRepeat: 'once', timezone: '', description: '', published: false, sharingScope: 'shared' };
     case 'unions':
       return { name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
     case 'conferences':
