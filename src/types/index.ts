@@ -48,6 +48,9 @@ export interface AppSettings {
   customLanguages?: CustomLanguage[];
   customTranslations?: Record<string, Record<string, string>>;
   themeColor?: string; // CSS color string e.g. #0a192f
+  logoUrl?: string;
+  primaryColor?: string;
+  accentColor?: string;
   certificateTitle?: string;
   certificateBodyText?: string;
   detailPages?: DetailPagesSettings;
