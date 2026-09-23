@@ -431,24 +431,36 @@ service cloud.firestore {
     }
 
     // Organization reference data remains platform-managed.
+    // Hierarchy records are tenant-scoped reference data. Legacy records must be
+    // migrated with organizationId before tenant users can read them directly.
     match /unions/{id} {
-      allow get, list: if signedIn();
+      allow get, list: if isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
       allow create, update, delete: if isSuperAdmin();
     }
     match /conferences/{id} {
-      allow get, list: if signedIn();
-      allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate();
-      allow delete: if isSuperAdmin() || unionAdminForDelete();
+      allow get, list: if isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
+      allow create, update: if isSuperAdmin()
+        || (unionAdminForCreateUpdate() && request.resource.data.get('organizationId','') == organizationIdForUser());
+      allow delete: if isSuperAdmin()
+        || (unionAdminForDelete() && resource.data.get('organizationId','') == organizationIdForUser());
     }
     match /districts/{id} {
-      allow get, list: if signedIn();
-      allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate();
-      allow delete: if isSuperAdmin() || conferenceAdminForDelete();
+      allow get, list: if isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
+      allow create, update: if isSuperAdmin()
+        || (conferenceAdminForCreateUpdate() && request.resource.data.get('organizationId','') == organizationIdForUser());
+      allow delete: if isSuperAdmin()
+        || (conferenceAdminForDelete() && resource.data.get('organizationId','') == organizationIdForUser());
     }
     match /churches/{id} {
-      allow get, list: if signedIn();
-      allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate();
-      allow delete: if isSuperAdmin() || districtAdminForDelete();
+      allow get, list: if isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
+      allow create, update: if isSuperAdmin()
+        || (districtAdminForCreateUpdate() && request.resource.data.get('organizationId','') == organizationIdForUser());
+      allow delete: if isSuperAdmin()
+        || (districtAdminForDelete() && resource.data.get('organizationId','') == organizationIdForUser());
     }
 
     // Legacy platform curriculum remains available only when explicitly published.
