@@ -67,7 +67,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!auth) return;
-    return onAuthStateChanged(auth, firebaseUser => {
+    return onAuthStateChanged(auth, async firebaseUser => {
       if (!firebaseUser) {
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
