@@ -501,20 +501,21 @@ export const saveTranslation = async (
   language: string,
   values: Record<string, string>
 ): Promise<void> => {
-  const firestore = getDb();
   const id = language.trim().toLowerCase();
   if (!id) throw new Error('A language code is required.');
-  if (!auth?.currentUser) throw new Error('Sign in first.');
-  const organizationId = await currentOrganizationId();
-  const ref = doc(firestore, 'translations', id);
-  const existing = await getDoc(ref);
-  await setDoc(ref, {
-    values,
-    organizationId: '',
-    ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
-    ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
-    canonical: true,
-    sharingScope: 'shared',
-    updatedAt: new Date().toISOString(),
-  }, { merge: true });
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      action: 'upsert',
+      collection: 'translations',
+      id,
+      data: { id, languageCode: id, values },
+    }),
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');
 };
