@@ -363,6 +363,7 @@ export type AppRoute =
   | 'lesson' 
   | 'about' 
   | 'profile' 
+  | 'personal-settings' 
   | 'resources' 
   | 'prayer' 
   | 'radio' 
