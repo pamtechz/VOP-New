@@ -187,7 +187,6 @@ export default async function handler(req: Request, res: Response) {
       if (!guide.exists || String(guide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('The selected guide does not belong to this organization.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
-      if (!existing.exists) await enforceQuota(ctx, 'guides', 'maxLessons');
       if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
