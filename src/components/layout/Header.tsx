@@ -87,8 +87,8 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <img
-              src="/assets/vop_logo_2.png"
-              alt="Voice of Prophecy"
+              src={settings.logoUrl || "/assets/vop_logo_2.png"}
+              alt={settings.appName || "Voice of Prophecy"}
               style={{ width: '26px', height: '26px', objectFit: 'contain' }}
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';
