@@ -245,6 +245,9 @@ export default async function handler(req: Request, res: Response) {
           return res.status(200).json({ ok: true, items: s.exists ? [{ id:'certification', ...s.data() }] : [] });
         }
         const id = collection === 'settings' ? 'settings' : 'curriculum';
+        if (!ctx.organizationId) {
+          return res.status(200).json({ ok: true, items: [] });
+        }
         const s = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/${id}`).get();
         return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data() }] : [] });
       }
