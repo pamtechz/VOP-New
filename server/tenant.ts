@@ -64,7 +64,15 @@ export function contentOwnedByOrg(data: DocumentData | undefined, organizationId
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
-  return ctx.isSuperAdmin || (contentOwnedByOrg(data, ctx.organizationId) && ['owner','admin','editor'].includes(String(ctx.membership.role || '')));
+  // Organization membership grants access to the organization, not ownership of
+  // another contributor's canonical content. Only the recorded creator/owner or
+  // the platform Super Admin may mutate canonical content.
+  return ctx.isSuperAdmin
+    || (
+      contentOwnedByOrg(data, ctx.organizationId)
+      && String(data?.ownerUid || '') === ctx.auth.uid
+      && ['owner','admin','editor'].includes(String(ctx.membership.role || ''))
+    );
 }
 
 
