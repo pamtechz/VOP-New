@@ -94,6 +94,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'bulkSave') {
       const values = body.values && typeof body.values === 'object' ? body.values as Record<string,unknown> : {};
+      const bulkStatus = ['draft','review','published'].includes(String(body.status||'draft')) ? String(body.status||'draft') : 'draft';
       const batch = db.batch();
       const now = new Date();
       Object.entries(values).forEach(([rawKey, rawValue]) => {
@@ -102,7 +103,7 @@ export default async function handler(req: Request, res: Response) {
         const ref = db.doc(`locales/${locale}/translations/${key}`);
         batch.set(ref, {
           key, locale, namespace:namespaceOf(key), source:String((body.sources && typeof body.sources === 'object' ? (body.sources as Record<string,unknown>)[key] : '') || ''),
-          value, status:value.trim() ? 'published' : 'draft', version:FieldValue.increment(1),
+          value, status:value.trim() ? bulkStatus : 'draft', version:FieldValue.increment(1),
           updatedAt:now, updatedBy:ctx.auth.uid,
         }, {merge:true});
       });
