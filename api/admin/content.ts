@@ -5,13 +5,13 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 const COLLECTIONS = new Set([
-  'languages','translations','announcements','books','radioBroadcasts','unions','conferences','districts','churches',
+  'languages','translations','announcements','books','radioBroadcasts','radioPlaylists','unions','conferences','districts','churches',
   'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
 const ORG_COLLECTIONS = new Set([
-  'languages','translations','announcements','books','radioBroadcasts','learningPaths','bibleTopics','seasons',
+  'languages','translations','announcements','books','radioBroadcasts','radioPlaylists','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides'
 ]);
 
