@@ -22,7 +22,10 @@ async function mine(req:Request,res:Response){
  const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
  const decoded=await getAuth(admin()).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(admin());
  const profile=await db.doc(`users/${decoded.uid}`).get();
- const organizationId=String(profile.data()?.organizationId||'').trim();
+ if (!profile.exists) return res.status(404).json({error:'VOP account profile was not found.'});
+ const profileData=profile.data()||{};
+ const organizationId=String(profileData.organizationId||'').trim();
+ if (!organizationId && String(profileData.role||'') !== 'super_admin') return res.status(403).json({error:'Your account is not linked to an organization.'});
  const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
  const [snapshot,configSnapshot]=await Promise.all([organizationId?certificateQuery.where('organizationId','==',organizationId).limit(20).get():certificateQuery.limit(20).get(),db.doc('system/certification').get()]);
  const certificates=snapshot.docs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified');const config=configSnapshot.exists?configSnapshot.data()??{}:{};
@@ -47,11 +50,11 @@ async function issue(req:Request,res:Response){
  const [candidateSnapshot,configSnapshot,requestsSnapshot,settingsSnapshot]=await Promise.all([db.doc('users/'+candidateId).get(),db.doc('system/certification').get(),db.collection('graduationRequests').where('candidateId','==',candidateId).limit(50).get(),db.doc('system/settings').get()]);
  if(!candidateSnapshot.exists)return res.status(404).json({error:'Candidate account was not found.'});
  const candidate=candidateSnapshot.data()??{},config=configSnapshot.data()??{};const organizationId=String(candidate.organizationId||'').trim();if(!organizationId)return res.status(409).json({error:'The candidate is not linked to a tenant organization.'});if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
- const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>String(x.organizationId||'')===organizationId&&x.status==='approved'&&typeof x.approvedAt==='string'&&Date.parse(x.approvedAt)<=Date.now()).sort((a,b)=>Date.parse(String(b.approvedAt))-Date.parse(String(a.approvedAt)))[0];
+ const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>{const approvedAt=dateValue(x.approvedAt);return String(x.organizationId||'')===organizationId&&x.status==='approved'&&Boolean(approvedAt)&&Date.parse(approvedAt)<=Date.now();}).sort((a,b)=>Date.parse(String(dateValue(b.approvedAt)||''))-Date.parse(String(dateValue(a.approvedAt)||'')))[0];
  if(!approved)return res.status(409).json({error:'The candidate does not have an approved graduation record.'});
  if(candidate.information?.graduated!==true)return res.status(409).json({error:'The candidate is not marked as graduated.'});
  const approvedGuideId=String(approved.guideId??'').trim();if(!approvedGuideId)return res.status(409).json({error:'The approved graduation record is missing its guide reference.'});
- const matching=await db.doc(`guides/${approvedGuideId}`).get();if(!matching.exists||String(matching.data()?.organizationId||'')!==organizationId)return res.status(409).json({error:'The approved graduation guide could not be found in the candidate organization curriculum.'});
+ const matching=await db.doc(`guides/${approvedGuideId}`).get();if(!matching.exists||String(matching.data()?.organizationId||'')!==organizationId||String(matching.data()?.ownerOrganizationId||organizationId)!==organizationId)return res.status(409).json({error:'The approved graduation guide could not be found in the candidate organization curriculum.'});
  const gd=matching.data(),lang=String(gd.language??matching.id);if(gd.published!==true||gd.archived===true||gd.certificateEligible!==true)return res.status(409).json({error:'The approved graduation guide is not currently configured as a published certificate-eligible guide.'});
  const progress=(candidate.progress&&typeof candidate.progress==='object'?candidate.progress:{}) as Record<string,unknown>;const completed=new Set(Array.isArray(progress.completedLessons)?progress.completedLessons.map(String):[]);const scores=(progress.guideScores&&typeof progress.guideScores==='object'?progress.guideScores:{}) as Record<string,unknown>;
  const min=Number(config.minimumScore), configured=Number(settingsSnapshot.data()?.quizPassThreshold??0), threshold=Number.isFinite(min)&&min>=0&&min<=100?min:configured;if(!Number.isFinite(threshold)||threshold<0||threshold>100)return res.status(503).json({error:'The certification pass mark is not configured.'});
