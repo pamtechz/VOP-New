@@ -389,8 +389,12 @@ service cloud.firestore {
               resource.data.get('status','published') == 'published'
               || canManageOrg(organizationIdForUser())
             ));
-      allow create, update, delete: if isSuperAdmin() || (
+      allow create, update: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+      allow delete: if isSuperAdmin() || (
+        resource.data.get('organizationId','') == organizationIdForUser()
         && canManageOrg(organizationIdForUser())
       );
     }
