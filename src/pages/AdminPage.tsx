@@ -24,6 +24,7 @@ import CertificationManager from './CertificationManager';
 import UserManagement from './UserManagement';
 import MentorshipInsights from './MentorshipInsights';
 import OrganizationManagement from './OrganizationManagement';
+import PlansManagement from './PlansManagement';
 
 interface AdminPageProps {
   currentUser: User;
@@ -35,7 +36,7 @@ interface AdminPageProps {
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'materials' | 'radio'
-  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
+  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations' | 'plans';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications';
 type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -58,6 +59,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'certification', label: 'Certification', icon: Award },
   { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
+  { id: 'plans', label: 'Plans & Entitlements', icon: Tag },
 ];
 
 const text = (value: unknown) => value == null ? '' : String(value);
@@ -928,6 +930,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         )}
         {activeTab==='mentorship'&&<MentorshipInsights />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
+        {activeTab==='plans'&&currentUser.role==='super_admin'&&<PlansManagement />}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
