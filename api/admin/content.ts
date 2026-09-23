@@ -59,15 +59,15 @@ export default async function handler(req: Request, res: Response) {
       const docs = [...ownedSnap.docs, ...sharedSnap.docs.filter(d => String(d.data().organizationId || '') !== ctx.organizationId)];
       const items = await Promise.all(docs.map(async d => {
         const lessons = await d.ref.collection('lessons').get();
-        return { id: d.id, ...d.data(), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean) };
+        return { id: d.id, ...d.data(), editable: canEditCanonicalContent(ctx, d.data()), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean) };
       }));
       return res.status(200).json({ ok: true, items });
     }
 
     if (action === 'upsertGuide') {
       if (collection !== 'guides') throw new Error('Guide management requires the guides collection.');
-      if (!ctx.organizationId) throw new Error('Select an organization before creating a guide.');
       await enforceFeature(ctx, 'curriculum');
+      if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('Select an organization before creating a guide.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
@@ -182,8 +182,8 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'upsertLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
-      if (!ctx.organizationId) throw new Error('Select an organization before saving a lesson.');
       await enforceFeature(ctx, 'curriculum');
+      if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('Select an organization before saving a lesson.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
       const guideId = safeId(data.guideId);
