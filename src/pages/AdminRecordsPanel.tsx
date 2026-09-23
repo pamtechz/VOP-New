@@ -26,6 +26,9 @@ interface TranslationRecord {
   id: string;
   values: Record<string, string>;
   updatedAt?: string;
+  canEdit?: boolean;
+  ownerUid?: string;
+  ownerOrganizationId?: string;
 }
 
 interface Props {
@@ -133,6 +136,10 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   const [detectedTranslations, setDetectedTranslations] = useState<AutoLocalizationEntry[]>([]);
   const [translationSearch, setTranslationSearch] = useState('');
   const [translationFilter, setTranslationFilter] = useState<'all' | 'missing' | 'translated'>('all');
+  const [proposalKey, setProposalKey] = useState('');
+  const [proposalValue, setProposalValue] = useState('');
+  const [proposalReason, setProposalReason] = useState('');
+  const [proposalSaving, setProposalSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -146,6 +153,9 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     setSearch('');
     setTranslationSearch('');
     setTranslationFilter('all');
+    setProposalKey('');
+    setProposalValue('');
+    setProposalReason('');
     setMessage('');
     setError('');
     if (kind === 'translations') {
@@ -293,6 +303,11 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         .map(([key, value]) => [key.trim(), String(value ?? '')])
         .filter(([key]) => Boolean(key))
     );
+    const selectedRecord = translations.find(item => item.id === selectedTranslation);
+    if (selectedRecord?.canEdit === false) {
+      setError('This translation is owned by another contributor. Use the improvement workflow below instead of overwriting the canonical translation.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -376,6 +391,37 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           </div>
           <div className="vop-card vop-form-card vop-translation-entries">
             <div className="vop-section-title"><div><h2>Detected Translation Entries</h2><p>English source text is detected automatically. Only the translated value needs administrator input.</p></div></div>
+            {selectedTranslation && translations.find(item => item.id === selectedTranslation)?.canEdit === false && (
+              <div className="vop-card" style={{marginBottom:14,border:'1px solid #cfe0ff',background:'#f5f9ff'}}>
+                <div className="vop-section-title"><div><h3>Suggest a translation improvement</h3><p>This canonical translation belongs to another contributor. Your suggestion will be reviewed by the VOP Super Admin.</p></div></div>
+                <div style={{display:'grid',gap:10,gridTemplateColumns:'minmax(180px,1fr) minmax(180px,1fr)'}}>
+                  <select value={proposalKey} onChange={e=>{const key=e.target.value;setProposalKey(key);setProposalValue(translationValues[key] || '');}}>
+                    <option value="">Select UI key</option>
+                    {translationKeys.map(key=><option key={key} value={key}>{key}</option>)}
+                  </select>
+                  <input value={proposalValue} onChange={e=>setProposalValue(e.target.value)} placeholder="Proposed translation" />
+                </div>
+                <input value={proposalReason} onChange={e=>setProposalReason(e.target.value)} placeholder="Reason for the improvement (optional)" style={{marginTop:10,width:'100%'}} />
+                <button type="button" className="vop-primary" style={{marginTop:10}} disabled={proposalSaving || !proposalKey || !proposalValue.trim()} onClick={async()=>{
+                  setProposalSaving(true); setError(''); setMessage('');
+                  try {
+                    const user = auth?.currentUser;
+                    if (!user) throw new Error('Sign in first.');
+                    const token = await user.getIdToken();
+                    const response = await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({
+                      action:'proposeTranslation',collection:'translations',languageId:selectedTranslation,key:proposalKey,proposedValue:proposalValue.trim(),reason:proposalReason.trim()
+                    })});
+                    const body = await response.json().catch(()=>({})) as {error?:string};
+                    if (!response.ok) throw new Error(body.error || 'Could not submit the translation proposal.');
+                    setMessage('Translation improvement submitted for review.');
+                    setProposalKey(''); setProposalValue(''); setProposalReason('');
+                  } catch(reason) {
+                    setError(reason instanceof Error ? reason.message : 'Could not submit the translation proposal.');
+                  } finally { setProposalSaving(false); }
+                }}>{proposalSaving ? 'Submitting…' : 'Submit improvement'}</button>
+              </div>
+            )}
+
             <div className="vop-translation-toolbar">
               <div className="vop-search"><Search size={16}/><input value={translationSearch} onChange={e=>setTranslationSearch(e.target.value)} placeholder="Search detected text…"/></div>
               <div className="vop-translation-filters">
