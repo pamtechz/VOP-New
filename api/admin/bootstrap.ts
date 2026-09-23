@@ -173,6 +173,8 @@ export default async function handler(request: Request, response: Response) {
 
       const organizationRef = db.doc(`organizations/${organizationId}`);
       const organizationSnapshot = await organizationRef.get();
+      const existingTargetProfile = await db.doc(`users/${target.uid}`).get();
+      const previousOrganizationId = String(existingTargetProfile.data()?.organizationId || '').trim();
       const hierarchyCollection = nodeCollection[nodeType];
       if (!hierarchyCollection) return response.status(400).json({ error: 'Unsupported administrator organization scope.' });
       const nodeSnapshot = await db.doc(`${hierarchyCollection}/${nodeId}`).get();
@@ -188,8 +190,26 @@ export default async function handler(request: Request, response: Response) {
         await organizationRef.set({ id: organizationId, name: organizationName, slug: organizationId, status: 'active', ownerUid: target.uid, adminNodeType: nodeType, adminNodeId: nodeId, tenantType: nodeType, createdAt: now, updatedAt: now });
       }
 
-      await organizationRef.collection('members').doc(target.uid).set({ uid: target.uid, organizationId, role: 'owner', active: true, joinedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
-
+      const now = new Date().toISOString();
+      await db.runTransaction(async transaction => {
+        if (previousOrganizationId && previousOrganizationId !== organizationId) {
+          transaction.set(
+            db.doc(`organizations/${previousOrganizationId}/members/${target.uid}`),
+            { active: false, reassignedAt: FieldValue.serverTimestamp(), reassignedToOrganizationId: organizationId, updatedAt: FieldValue.serverTimestamp() },
+            { merge: true },
+          );
+          transaction.set(
+            db.doc(`organizations/${previousOrganizationId}`),
+            { updatedAt: FieldValue.serverTimestamp() },
+            { merge: true },
+          );
+        }
+        transaction.set(
+          organizationRef.collection('members').doc(target.uid),
+          { uid: target.uid, organizationId, role: 'owner', active: true, joinedAt: now, updatedAt: now },
+          { merge: true },
+        );
+      });
 
       await db.doc(`users/${target.uid}`).set({
         uid: target.uid,
