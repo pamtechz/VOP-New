@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, writeTenantAudit } from '../../server/tenant';
+import { authenticateTenant, requireOrgRole, writeTenantAudit } from '../../server/tenant.js';
 
 type Request = {
   method?: string;
