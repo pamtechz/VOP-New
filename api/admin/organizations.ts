@@ -30,7 +30,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = bootstrapDb.doc(`organizations/${organizationId}`);
       if ((await ref.get()).exists) throw new Error('That organization already exists.');
       const now = new Date().toISOString();
-      await ref.set({ id: organizationId, name, slug: slug(name), status: 'active', ownerUid: ctx.auth.uid, createdAt: now, updatedAt: now });
+      await ref.set({ id: organizationId, name, slug: slug(name), status: 'active', ownerUid: ctx.auth.uid, plan: '', quotas: {}, features: {}, createdAt: now, updatedAt: now });
       await ref.collection('members').doc(ctx.auth.uid).set({ uid: ctx.auth.uid, organizationId, role: 'owner', active: true, joinedAt: now, updatedAt: now });
       return res.status(200).json({ ok: true, item: { id: organizationId, name, status: 'active' } });
     }
@@ -42,7 +42,7 @@ export default async function handler(req: Request, res: Response) {
         const members = await organization.ref.collection('members').where('active','==',true).get();
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
-          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'),
+          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || ''),
           quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
         }]});
       }
