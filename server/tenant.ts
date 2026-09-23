@@ -219,6 +219,18 @@ export async function enforceFeature(ctx: TenantContext, featureKey: string) {
   const organizationData = organization.data() || {};
   const plan = await getOrganizationPlan(ctx);
   if (plan && plan.active === false) throw new Error('The organization plan is inactive.');
+  const subscriptionSnap = await ctx.db.doc(`organizations/${ctx.organizationId}/billing/subscription`).get();
+  if (subscriptionSnap.exists) {
+    const subscription = subscriptionSnap.data() || {};
+    const status = String(subscription.status || '');
+    const periodEnd = new Date(String(subscription.currentPeriodEnd || ''));
+    if (['cancelled','expired','suspended'].includes(status) && periodEnd.getTime() <= Date.now()) {
+      throw new Error('The organization subscription is not active.');
+    }
+    if (periodEnd.getTime() && periodEnd.getTime() < Date.now() && status !== 'trialing') {
+      throw new Error('The organization subscription period has ended.');
+    }
+  }
   const planFeatures = plan?.features && typeof plan.features === 'object' ? plan.features as Record<string, unknown> : {};
   const legacyFeatures = organizationData.features && typeof organizationData.features === 'object' ? organizationData.features as Record<string, unknown> : {};
   const features = Object.keys(planFeatures).length ? planFeatures : legacyFeatures;
