@@ -153,14 +153,27 @@ export default async function handler(req: Request, res: Response) {
       if (!uid || !['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Valid member details are required.');
       if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
       const existingProfile = await ctx.db.doc(`users/${uid}`).get();
-      const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
+      const existingData = existingProfile.data() || {};
+      const existingOrganizationId = String(existingData.organizationId || '').trim();
       if (!ctx.isSuperAdmin && existingOrganizationId && existingOrganizationId !== ctx.organizationId) {
         throw new Error('This user belongs to another organization.');
       }
       const now = new Date().toISOString();
-      await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
-      await writeTenantAudit(ctx, 'membership.upsert', `organizations/${ctx.organizationId}/members/${uid}`, undefined, { uid, role:memberRole, active:body.active !== false });
-      await ctx.db.doc(`users/${uid}`).set({ organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      const targetMemberRef = ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`);
+      const previousMemberRef = existingOrganizationId && existingOrganizationId !== ctx.organizationId
+        ? ctx.db.doc(`organizations/${existingOrganizationId}/members/${uid}`)
+        : null;
+      await ctx.db.runTransaction(async transaction => {
+        if (previousMemberRef) transaction.delete(previousMemberRef);
+        transaction.set(targetMemberRef, {
+          uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false,
+          invitedBy: ctx.auth.uid, joinedAt: String(existingData.organizationId || '') === ctx.organizationId ? String(existingData.joinedAt || now) : now, updatedAt: now
+        }, { merge: true });
+        transaction.set(ctx.db.doc(`users/${uid}`), {
+          organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingOrganizationId && existingOrganizationId !== ctx.organizationId ? { previousOrganizationId: existingOrganizationId } : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
     }
     if (action === 'setStatus') {
