@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
+import { getTranslation } from '../services/i18n';
 
 type GuideRecord = {
   id: string;
@@ -82,7 +83,7 @@ function timestampText(value: unknown) {
 }
 
 function formatDate(value?: string) {
-  if (!value) return 'Not recorded';
+  if (!value) return t('common.notRecorded','Not recorded');
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? 'Not recorded'
@@ -161,6 +162,8 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
 }
 
 export default function GuideManager({ languages, guides, onSaved, onOpenSettings }: Props) {
+  const activeLanguage = localStorage.getItem('vop_ui_locale') || 'en';
+  const t = (key: string, fallback: string, variables?: Record<string, unknown>) => getTranslation(key, activeLanguage, variables, fallback, 'GuideManager');
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
   const [search, setSearch] = useState('');
@@ -331,9 +334,9 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           </div>
         </div>
         <div className="vop-reference-actions">
-          <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button>
+          <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><span><span aria-hidden="true">⚙</span> Guide Settings</span></button>
-          <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>New Guide</button>
+          <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>{t('guides.new','New Guide')}</button>
         </div>
       </div>
 
@@ -341,17 +344,17 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       {message && <div className="vop-alert success">{message}</div>}
 
       <div className="vop-reference-toolbar">
-        <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label="Search guides"/></div>
-        <select value={languageFilter} onChange={e => setLanguageFilter(e.target.value)}><option value="all">All Languages</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select>
-        <select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">All Seasons</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All Status</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select>
+        <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label={t('accessibility.searchGuides','Search guides')}/></div>
+        <select value={languageFilter} onChange={e => setLanguageFilter(e.target.value)}><option value="all">{t('languages.all','All Languages')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select>
+        <select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">{t('guides.allSeasons','All Seasons')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{t('common.allStatus','All Status')}</option><option value="published">{t('common.published','Published')}</option><option value="draft">{t('common.draft','Draft')}</option><option value="archived">{t('common.archived','Archived')}</option></select>
         <button className="vop-primary vop-filter-button" type="button"><Filter size={17}/>Filter</button>
       </div>
 
       {editing && (
         <div className="vop-reference-editor">
           <div className="vop-section-title">
-            <div><h2>{editing.id ? 'Edit Guide' : 'New Guide'}</h2><p>Guide metadata is stored in the content service.</p></div>
+            <div><h2>{editing.id ? t('guides.edit','Edit Guide') : t('guides.new','New Guide')}</h2><p>{t('guides.metadataStored','Guide metadata is stored in the content service.')}</p></div>
             <button className="vop-actions" type="button" onClick={() => setEditing(null)}><X size={17}/></button>
           </div>
           <div className="vop-form-grid vop-reference-form-grid">
@@ -379,15 +382,15 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           </div>
           {editing.image && <img src={editing.image} alt="" className="vop-reference-editor-image"/>}
           <div className="vop-reference-editor-actions">
-            <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
-            <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}><Save size={17}/>{saving ? 'Saving…' : 'Save Guide'}</button>
+            <button className="vop-secondary" type="button" onClick={() => setEditing(null)}>{t('common.cancel','Cancel')}</button>
+            <button className="vop-primary" type="button" onClick={() => void save()} disabled={saving}><Save size={17}/>{saving ? t('common.saving','Saving…') : t('common.saveGuide','Save Guide')}</button>
           </div>
         </div>
       )}
 
       <div className="vop-reference-table-wrap">
-        {loading ? <div className="vop-empty">Loading guide records…</div> : pageRows.length === 0 ? (
-          <div className="vop-empty"><ImageIcon size={26}/><span>No guide records are configured.</span></div>
+        {loading ? <div className="vop-empty">{t('guides.loading','Loading guide records…')}</div> : pageRows.length === 0 ? (
+          <div className="vop-empty"><ImageIcon size={26}/><span>{t('guides.empty','No guide records are configured.')}</span></div>
         ) : (
           <table className="vop-reference-table">
             <thead>
