@@ -31,7 +31,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [memberRole,setMemberRole]=useState('learner');
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
-  const [message,setMessage]=useState('');
+  const [message,setMessage]=useState(''); const [audit,setAudit]=useState<Array<Record<string,unknown>>>([]);
   const [error,setError]=useState('');
 
   const load=async()=>{
@@ -50,8 +50,8 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
   const loadDetails=async(id:string)=>{
     try {
-      const [m,u]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id})]);
-      setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);
+      const [m,u,a]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id}),api('listAudit',{organizationId:id})]);
+      setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>);
     } catch(e){setError(e instanceof Error?e.message:'Could not load organization details.');}
   };
   useEffect(()=>{void load();},[]);
@@ -127,6 +127,10 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
             <div className="vop-card vop-mini-stat"><BarChart3 size={20}/><div><strong>{usage.guides}</strong><span>Guides</span></div></div>
             <div className="vop-card vop-mini-stat"><Shield size={20}/><div><strong>{usage.quizzes}</strong><span>Quizzes</span></div></div>
           </div>}
+          <div style={{marginTop:18}}>
+            <div className="vop-section-title"><div><h3>Audit history</h3><p>Privileged organization changes are retained as append-only records.</p></div></div>
+            <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp && typeof item.timestamp==='object' ? 'Recorded' : String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
+          </div>
           <div style={{marginTop:18}}>
             <div className="vop-section-title"><div><h3>Membership</h3><p>Assign an existing account to this organization.</p></div></div>
             <div className="vop-form-grid">
