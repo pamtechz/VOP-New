@@ -51,5 +51,18 @@ export async function submitQuizAnswers(
   if (!response.ok) return null;
   const body = await response.json().catch(() => null) as { score?: unknown } | null;
   const score = Number(body?.score);
-  return Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
+  if (Number.isFinite(score) && score >= 0 && score <= 100) {
+    // Graduation eligibility is re-evaluated server-side; a 409 simply means the learner has not completed every requirement yet.
+    try {
+      await fetch('/api/admin/graduations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'submit', guideId, averageScore: score }),
+      });
+    } catch {
+      // Quiz results remain authoritative even when graduation submission is not yet eligible or temporarily unavailable.
+    }
+    return score;
+  }
+  return null;
 }
