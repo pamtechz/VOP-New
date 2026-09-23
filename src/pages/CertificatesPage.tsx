@@ -3,7 +3,7 @@ import type { User, AppSettings, LanguageCode } from '../types';
 import { ArrowLeft, Award, Download, Share2, Printer, ShieldCheck } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
-import { getTranslation } from '../services/i18n';
+import { useLocalization } from '../services/i18n';
 import CertificateArtwork from '../components/certificates/CertificateArtwork';
 
 interface CertificatesPageProps { currentUser: User; settings: AppSettings; activeLanguage: LanguageCode; onBack: () => void; }
@@ -28,7 +28,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const t = (key: string, fallback: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback, 'CertificatesPage');
+  const { t } = useLocalization();
   const title = config.certificateTitle || settings.certificateTitle || certificate?.courseName || '';
 
   useEffect(() => {
