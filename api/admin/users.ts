@@ -292,7 +292,11 @@ export default async function handler(request: Request, response: Response) {
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
       if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
-      const profile = profileForType(type, body, tenantOrganizationId);
+      // Super Admin may manage users platform-wide, but changing a user's
+      // display role must not silently detach that user from an existing tenant.
+      // Tenant reassignment is a separate, explicit organization operation.
+      const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
+      const profile = profileForType(type, body, effectiveOrganizationId);
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
@@ -303,8 +307,20 @@ export default async function handler(request: Request, response: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
-      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).set({ uid, organizationId:tenantOrganizationId, role:type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, updatedAt:new Date().toISOString() }, {merge:true});
-      await authService.setCustomUserClaims(uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
+      const membershipOrganizationId = effectiveOrganizationId;
+      if (membershipOrganizationId && profile.organizationRole) {
+        await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
+          uid, organizationId:membershipOrganizationId,
+          role:type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner',
+          active:true, updatedAt:new Date().toISOString(),
+        }, {merge:true});
+      }
+      await authService.setCustomUserClaims(
+        uid,
+        membershipOrganizationId && profile.organizationRole
+          ? { role:'student', organizationId:membershipOrganizationId, organizationRole:profile.organizationRole }
+          : claims,
+      );
       return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName } });
     }
 
