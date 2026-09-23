@@ -7,7 +7,9 @@ interface HeaderProps {
   currentUser: User;
   settings: AppSettings;
   activeLanguage: LanguageCode;
+  uiLocale: LanguageCode;
   onChangeLanguage: (lang: LanguageCode) => void;
+  onChangeStudyLanguage?: (lang: LanguageCode) => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   isMobileShell: boolean;
@@ -21,7 +23,9 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   settings,
   activeLanguage,
+  uiLocale,
   onChangeLanguage,
+  onChangeStudyLanguage,
   isDarkMode,
   onToggleDarkMode,
   isMobileShell,
@@ -207,7 +211,8 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Globe size={13} color="var(--vop-gold-400)" />
               <select
-                value={activeLanguage}
+                value={uiLocale}
+                aria-label={getTranslation('settings.uiLanguage', uiLocale, settings?.customTranslations, 'UI language')}
                 onChange={(e) => onChangeLanguage(e.target.value as LanguageCode)}
                 style={{
                   background: 'transparent',
@@ -222,6 +227,23 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 {availableLanguages.map((lang) => (
                   <option key={lang.code} value={lang.code} style={{ background: '#0b2244', color: '#ffffff' }}>
+                    {lang.code.toUpperCase()} ({lang.nativeName})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'.25rem', background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', borderRadius:'var(--radius-full)', padding:'.25rem .5rem', fontSize:'.75rem', color:'#fff' }}>
+              <BookOpen size={13} color="var(--vop-gold-400)" />
+              <select
+                value={activeLanguage}
+                aria-label={getTranslation('settings.studyLanguage', uiLocale, settings?.customTranslations, 'Study language')}
+                onChange={(e) => onChangeStudyLanguage?.(e.target.value as LanguageCode)}
+                style={{ background:'transparent', border:'none', color:'#fff', outline:'none', fontWeight:600, fontSize:'.75rem', cursor:'pointer', maxWidth:'95px' }}
+              >
+                {availableLanguages.map((lang) => (
+                  <option key={lang.code} value={lang.code} style={{ background:'#0b2244', color:'#fff' }}>
                     {lang.code.toUpperCase()} ({lang.nativeName})
                   </option>
                 ))}
