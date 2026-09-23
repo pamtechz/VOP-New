@@ -39,7 +39,20 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const profile = profileSnap.data() || {};
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
   const hierarchyAdmin = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(profile.role || ''));
-  const organizationId = String(requestedOrganizationId || profile.organizationId || '').trim();
+  const profileOrganizationId = String(profile.organizationId || '').trim();
+  const requestedId = String(requestedOrganizationId || '').trim();
+
+  // Tenant identity is derived from the authenticated profile. A client-supplied
+  // organizationId may select a tenant only for Super Admin; ordinary and
+  // hierarchy-admin accounts must never switch tenant context by request payload.
+  if (!isSuperAdmin && requestedId && requestedId !== profileOrganizationId) {
+    throw new Error('You cannot access another organization.');
+  }
+
+  const organizationId = isSuperAdmin
+    ? requestedId
+    : profileOrganizationId;
+
   if (!organizationId) {
     if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin };
     if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin };
