@@ -41,11 +41,11 @@ export default async function handler(req: Request, res: Response) {
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
     const editorRoles = curriculum ? ['owner','admin','editor'] : ['owner','admin'];
     if (action !== 'list' && action !== 'listGuides') requireOrgRole(ctx, editorRoles);
-    if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
-      if (collection === 'settings' && ctx.organizationId) {
+    if ((collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') && !ctx.isSuperAdmin) {
+      if (ctx.organizationId) {
         requireOrgRole(ctx, ['owner','admin']);
       } else {
-        throw new Error('Only the VOP Super Admin can manage platform configuration.');
+        throw new Error('An active organization is required for organization configuration.');
       }
     }
 
@@ -193,7 +193,7 @@ export default async function handler(req: Request, res: Response) {
       if (!language || !guideId) throw new Error('A guide and language are required for a lesson.');
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
-      if (!guide.exists || String(guide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('The selected guide does not belong to this organization.');
+      if (!guide.exists || (!ctx.isSuperAdmin && String(guide.data()?.organizationId || '') !== ctx.organizationId)) throw new Error('The selected guide does not belong to this organization.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
@@ -201,8 +201,8 @@ export default async function handler(req: Request, res: Response) {
         ...data,
         id: lessonId,
         lessonId,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+        organizationId: existing.data()?.organizationId || guide.data()?.organizationId || ctx.organizationId,
+        ownerOrganizationId: existing.data()?.ownerOrganizationId || guide.data()?.ownerOrganizationId || guide.data()?.organizationId || ctx.organizationId,
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
