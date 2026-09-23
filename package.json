@@ -12,7 +12,8 @@
     "lint:legacy": "oxlint src",
     "preview": "vite preview",
     "verify:i18n": "node scripts/verify-i18n.mjs",
-    "migrate:tenant-content": "node scripts/migrate-tenant-content.mjs"
+    "migrate:tenant-content": "node scripts/migrate-tenant-content.mjs",
+    "verify:saas": "node scripts/verify-saas.mjs"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "8.5.2",
