@@ -37,7 +37,7 @@ Adding or publishing a UI locale must not require a React source-code change. Tr
 
 Complete and validate, in repository order:
 
-1. Tenant identity, memberships and server authorization.
+1. Tenant identity, memberships and server authorization. The legacy hierarchy administrator roles `union_admin`, `conference_admin`, `district_admin`, and `church_admin` are first-class tenants, not platform-wide administrators. Each role is bound to its `adminNodeType`/`adminNodeId`, receives a stable tenant organization, tenant membership, tenant settings/branding/plans/quotas/audit scope, and cannot cross that hierarchy tenant boundary.
 2. Organization onboarding, invitations, hierarchy and branding.
 3. Tenant-aware curriculum, guides, lessons and reusable Quiz Library.
 4. Shared-content publishing and explicit fork/copy workflows.
