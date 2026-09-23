@@ -172,7 +172,13 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'listMembers') {
       const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/members`).get();
-      return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+      const items = await Promise.all(snap.docs.map(async d => {
+        const member = d.data() || {};
+        const profile = await ctx.db.doc('users/' + d.id).get();
+        const data = profile.data() || {};
+        return { id:d.id, ...member, displayName:String(data.displayName || ''), email:String(data.email || '') };
+      }));
+      return res.status(200).json({ ok: true, items });
     }
     if (action === 'createAndAssign') {
       const email = String(body.email || '').trim().toLowerCase();
