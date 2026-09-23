@@ -31,6 +31,8 @@ export interface CertificateRecord {
   downloadCount?: number;
 }
 
+interface CertificationApprovalStage { id: string; label: string; approverRoles: string[]; enabled?: boolean; }
+
 interface CertificationConfig {
   enabled?: boolean;
   certificateTitle?: string;
@@ -48,6 +50,7 @@ interface CertificationConfig {
   verificationEnabled?: boolean;
   minimumScore?: number;
   verificationBaseUrl?: string;
+  approvalStages?: CertificationApprovalStage[];
 }
 
 interface GraduationCandidate {
@@ -218,6 +221,11 @@ export const CertificationManager: React.FC<Props> = ({
       signatureUrl: nextConfig.signatureUrl || '',
       logoUrl: nextConfig.logoUrl || '',
       verificationBaseUrl: nextConfig.verificationBaseUrl || '',
+      approvalStages: (nextConfig.approvalStages || []).map(stage => ({
+        id: String(stage.id || '').trim(), label: String(stage.label || '').trim(),
+        approverRoles: Array.isArray(stage.approverRoles) ? stage.approverRoles.map(role => String(role).trim()).filter(Boolean) : [],
+        enabled: stage.enabled !== false,
+      })).filter(stage => stage.id && stage.approverRoles.length),
     });
     await load();
     showMessage('Certification configuration saved.');
