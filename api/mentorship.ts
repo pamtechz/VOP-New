@@ -170,7 +170,12 @@ export default async function handler(req: Request, res: Response) {
     const actor = await profile(db, decoded.uid);
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
-    const organizationId = String(body.organizationId || actor.organizationId || '').trim();
+    const requestedOrganizationId = String(body.organizationId || '').trim();
+    const actorOrganizationId = String(actor.organizationId || '').trim();
+    const organizationId = requestedOrganizationId || actorOrganizationId;
+    if (requestedOrganizationId && String(actor.role || '') !== 'super_admin' && requestedOrganizationId !== actorOrganizationId) {
+      throw new Error('You cannot access another organization.');
+    }
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
@@ -198,6 +203,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'assign') {
       await assertAdmin(db, decoded.uid);
+      if (!organizationId) throw new Error('Organization membership is required.');
       const studentId = id(body.studentId);
       const mentorId = id(body.mentorId);
       const student = await profile(db, studentId);
@@ -223,6 +229,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'performance') {
       const studentId = id(body.studentId);
+      if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('Organization membership is required.');
       const student = await profile(db, studentId);
       if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
@@ -240,6 +247,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listConversations') {
+      if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('Organization membership is required.');
       const requestedStudent = body.studentId ? id(body.studentId) : '';
       const requestedMentor = body.mentorId ? id(body.mentorId) : '';
       if (isAdmin(actor)) {
@@ -264,6 +272,7 @@ export default async function handler(req: Request, res: Response) {
       const studentId = decoded.uid;
       const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
       if (!assignment.exists) return res.status(200).json({ ok: true, items: [] });
+      if (organizationId && String(assignment.data()?.organizationId || '') !== organizationId) return res.status(200).json({ ok: true, items: [] });
       const mentorId = String(assignment.data()?.mentorId || '');
       const mentor = await profile(db, mentorId);
       const ref = db.doc(`mentorConversations/${conversationId(studentId, mentorId)}`);
