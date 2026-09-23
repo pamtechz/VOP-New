@@ -85,6 +85,26 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ok:true, items});
     }
 
+    if (action === 'bulkSave') {
+      const values = body.values && typeof body.values === 'object' ? body.values as Record<string,unknown> : {};
+      const batch = db.batch();
+      const now = new Date();
+      Object.entries(values).forEach(([rawKey, rawValue]) => {
+        const key = cleanKey(rawKey);
+        const value = String(rawValue ?? '');
+        const ref = db.doc(`locales/${locale}/translations/${key}`);
+        batch.set(ref, {
+          key, locale, namespace:namespaceOf(key), source:String((body.sources && typeof body.sources === 'object' ? (body.sources as Record<string,unknown>)[key] : '') || ''),
+          value, status:value.trim() ? 'published' : 'draft', version:FieldValue.increment(1),
+          updatedAt:now, updatedBy:ctx.auth.uid,
+        }, {merge:true});
+      });
+      await batch.commit();
+      await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await writeTenantAudit(ctx,'translation.bulkSave',`locales/${locale}`,undefined,{count:Object.keys(values).length});
+      return res.status(200).json({ok:true,count:Object.keys(values).length});
+    }
+
     const key = cleanKey(body.key);
     const ref = db.doc(`locales/${locale}/translations/${key}`);
     const existing = await ref.get();
