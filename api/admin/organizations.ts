@@ -17,6 +17,12 @@ export default async function handler(req: Request, res: Response) {
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
     const ctx = await authenticateTenant(req, requestedOrg, action === 'acceptInvite');
+    if (action === 'listPlans') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can view platform plans.');
+      const snap=await bootstrapDb.collection('plans').where('active','==',true).orderBy('name').get();
+      return res.status(200).json({ok:true,items:snap.docs.map(doc=>({id:doc.id,name:String(doc.data()?.name||doc.id),active:true}))});
+    }
+
     if (action === 'create') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
       const name = String(body.name || '').trim();
