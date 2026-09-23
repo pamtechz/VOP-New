@@ -474,7 +474,7 @@ service cloud.firestore {
 
       match /translations/{key} {
         allow get: if signedIn() && resource.data.get('status','draft') == 'published';
-        allow list: if signedIn();
+        allow list: if signedIn() && resource.data.get('status','draft') == 'published';
         allow create, update, delete: if isSuperAdmin();
       }
     }
