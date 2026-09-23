@@ -335,6 +335,19 @@ service cloud.firestore {
       );
     }
 
+    match /radioPlaylists/{id} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()));
+      allow create: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+      allow update, delete: if isSuperAdmin() || (
+        resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+    }
+
     match /radioBroadcasts/{id} {
       allow get, list: if isSuperAdmin()
         || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
