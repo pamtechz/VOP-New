@@ -936,6 +936,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             kind={activeTab as ManagedAdminCollection}
             languages={languages}
             preferredLanguage={activeLanguage}
+            organizationId={currentUser.organizationId}
           />
         )}
       </main>
