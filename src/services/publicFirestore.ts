@@ -107,6 +107,20 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
 
 export async function loadPublicContent(organizationId = ''): Promise<PublicContentSnapshot> {
   const firestore = requireDb();
+  const organizationSnap = organizationId
+    ? await getDoc(doc(firestore, 'organizations', organizationId))
+    : null;
+  const organizationData = organizationSnap?.exists() ? organizationSnap.data() : {};
+  const legacyNodeType = String(organizationData?.legacyNodeType || '');
+  const legacyNodeId = String(organizationData?.legacyNodeId || '');
+  const hierarchyQuery = (collectionName: string, legacyField: string) => {
+    if (!organizationId) return query(collection(firestore, collectionName), where('organizationId', '==', '__no_public_tenant__'));
+    if (legacyNodeType === collectionName.slice(0, -1) && legacyNodeId) {
+      return query(collection(firestore, collectionName), where('__name__', '==', legacyNodeId));
+    }
+    return query(collection(firestore, collectionName), where('organizationId', '==', organizationId));
+  };
+
   const [
     settingsSnap,
     languagesSnap,
@@ -129,10 +143,10 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     getDocs(query(collection(firestore, 'books'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
-    getDocs(collection(firestore, 'unions')),
-    getDocs(collection(firestore, 'conferences')),
-    getDocs(collection(firestore, 'districts')),
-    getDocs(collection(firestore, 'churches')),
+    hierarchyQuery('unions', 'unionId'),
+    hierarchyQuery('conferences', 'conferenceId'),
+    hierarchyQuery('districts', 'districtId'),
+    hierarchyQuery('churches', 'churchId'),
   ]);
 
   const visibleTenantContent = (data: Record<string, unknown>) => {
