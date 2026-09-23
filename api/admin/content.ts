@@ -12,7 +12,7 @@ const COLLECTIONS = new Set([
 
 const ORG_COLLECTIONS = new Set([
   'languages','translations','announcements','books','radioBroadcasts','learningPaths','bibleTopics','seasons',
-  'certificates','graduationRequests','curriculum','guides'
+  'certificates','graduationRequests','candidates','curriculum','guides'
 ]);
 
 function safeId(value: unknown) {
