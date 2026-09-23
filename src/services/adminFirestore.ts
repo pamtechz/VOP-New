@@ -13,8 +13,9 @@ function getDb(): Firestore {
   return db;
 }
 
+const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts']);
 const TENANT_COLLECTIONS = new Set<string>([
-  'languages','translations','announcements','books','radioBroadcasts','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
+  'announcements','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
 ]);
 
 async function currentOrganizationId(): Promise<string> {
@@ -36,7 +37,9 @@ function tenantSubscription(
     if (cancelled) return;
     const source = organizationId && TENANT_COLLECTIONS.has(collectionName)
       ? query(collection(getDb(), collectionName), where('organizationId', '==', organizationId))
-      : collection(getDb(), collectionName);
+      : GLOBAL_CONTENT_COLLECTIONS.has(collectionName)
+        ? collection(getDb(), collectionName)
+        : collection(getDb(), collectionName);
     stop = onSnapshot(source, callback, err => onError?.(err));
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Tenant data could not be loaded.')));
   return () => { cancelled = true; stop(); };
@@ -81,10 +84,15 @@ export const saveLanguageToFirestore = async (language: CustomLanguage): Promise
   const firestore = getDb();
   const id = language.code.toLowerCase().trim();
   const organizationId = await currentOrganizationId();
+  if (!auth?.currentUser) throw new Error('Sign in first.');
   const ref = doc(firestore, 'languages', id);
+  const existing = await getDoc(ref);
   await setDoc(ref, {
     ...language,
-    ...(organizationId ? { organizationId } : {}),
+    organizationId: '',
+    ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
+    ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
+    sharingScope: 'shared',
     code: language.code.toUpperCase(),
     updatedAt: new Date().toISOString(),
   }, { merge: true });
@@ -93,11 +101,9 @@ export const saveLanguageToFirestore = async (language: CustomLanguage): Promise
 export const updateLanguageStatusInFirestore = async (code: string, enabled: boolean): Promise<void> => {
   const firestore = getDb();
   const id = code.toLowerCase().trim();
-  const organizationId = await currentOrganizationId();
   const ref = doc(firestore, 'languages', id);
   await updateDoc(ref, {
     enabled,
-    ...(organizationId ? { organizationId } : {}),
     updatedAt: new Date().toISOString(),
   });
 };
