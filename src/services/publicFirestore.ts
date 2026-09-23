@@ -105,7 +105,7 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
   } as T;
 }
 
-export async function loadPublicContent(): Promise<PublicContentSnapshot> {
+export async function loadPublicContent(organizationId = ''): Promise<PublicContentSnapshot> {
   const firestore = requireDb();
   const [
     settingsSnap,
@@ -131,7 +131,13 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     getDocs(collection(firestore, 'churches')),
   ]);
 
+  const visibleTenantContent = (data: Record<string, unknown>) => {
+    const owner = String(data.organizationId || '').trim();
+    return !owner || owner === organizationId || data.sharingScope === 'shared';
+  };
+
   const languages = languagesSnap.docs
+    .filter(item => visibleTenantContent(item.data()))
     .map(item => normalizeLanguage(item.id, item.data()))
     .filter(item => item.enabled)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
@@ -145,18 +151,21 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   });
 
   const announcements = announcementsSnap.docs
+    .filter(item => visibleTenantContent(item.data()))
     .map(item => published<Announcement>(item.data(), item.id, {
       id: item.id, title: '', tag: '', description: '',
     }))
     .filter(item => item.published === true && item.title.trim());
 
   const books = booksSnap.docs
+    .filter(item => visibleTenantContent(item.data()))
     .map(item => published<BookResource>(item.data(), item.id, {
       id: item.id, name: '', category: '', author: '', imageUrl: '', description: '',
     }))
     .filter(item => item.published === true && item.name.trim());
 
   const radioBroadcasts = radioSnap.docs
+    .filter(item => visibleTenantContent(item.data()))
     .map(item => published<RadioBroadcast>(item.data(), item.id, {
       id: item.id, title: '', speaker: '', series: '', durationMinutes: 0,
       audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '',
@@ -166,8 +175,18 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
 
   const guides = await loadFirestoreGuides();
 
+  let settings = settingsSnap.exists() ? normalizeSettings(settingsSnap.data()) : emptySettings();
+  if (organizationId) {
+    const tenantSettings = await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'));
+    if (tenantSettings.exists()) {
+      const tenantData = tenantSettings.data();
+      const tenantBranding = tenantData.branding && typeof tenantData.branding === 'object' ? tenantData.branding : {};
+      settings = normalizeSettings({ ...settings, ...tenantData, ...tenantBranding });
+    }
+  }
+
   return {
-    settings: settingsSnap.exists() ? normalizeSettings(settingsSnap.data()) : emptySettings(),
+    settings,
     languages,
     translations,
     announcements,
