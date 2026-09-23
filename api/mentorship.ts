@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { tenantIdForProfile, legacyTenantId, type LegacyTenantNodeType } from '../server/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -83,9 +84,9 @@ function sameScope(actor: Record<string, unknown>, student: Record<string, unkno
   const role = String(actor.role || '');
   if (role === 'super_admin') return true;
   const node = String(actor.adminNodeId || '');
-  if (!node) return true;
+  if (!node) return !legacyNodeForRole(role);
   const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
-  return !student[field] || String(student[field]) === node;
+  return String(student[field] || '') === node;
 }
 
 async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
@@ -97,9 +98,17 @@ async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
 async function assertParticipant(db: FirebaseFirestore.Firestore, uid: string, conversation: Record<string, unknown>) {
   const actor = await profile(db, uid);
   const conversationOrg = String(conversation.organizationId || '').trim();
-  const actorOrg = String(actor.organizationId || '').trim();
-  if (String(actor.role || '') !== 'super_admin' && conversationOrg && actorOrg !== conversationOrg) throw new Error('You cannot access this conversation.');
+  const actorOrg = tenantIdForProfile(actor);
   if (String(actor.role || '') === 'super_admin') return;
+  if (conversationOrg && actorOrg !== conversationOrg) throw new Error('You cannot access this conversation.');
+  if (!conversationOrg) {
+    const nodeType = legacyNodeForRole(String(actor.role || ''));
+    const nodeId = String(actor.adminNodeId || '').trim();
+    if (!nodeType || !nodeId) throw new Error('This conversation has no valid tenant scope.');
+    const field = nodeType === 'union' ? 'unionId' : nodeType === 'conference' ? 'conferenceId' : nodeType === 'district' ? 'districtId' : 'churchId';
+    const student = await profile(db, String(conversation.studentId || ''));
+    if (String(student[field] || '') !== nodeId) throw new Error('You cannot access this conversation.');
+  }
   if (['owner','admin'].includes(String(actor.organizationRole || ''))) {
     if (String(conversation.organizationId || '') !== String(actor.organizationId || '')) throw new Error('You cannot access this conversation.');
     return;
