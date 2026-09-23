@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole } from '../server/tenant';
+import { authenticateTenant, requireOrgRole, recordBelongsToTenant, tenantIdForProfile } from '../server/tenant';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -22,11 +22,19 @@ async function mine(req:Request,res:Response){
  const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
  const decoded=await getAuth(admin()).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(admin());
  const profileSnapshot=await db.doc(`users/${decoded.uid}`).get();
- const profileOrganizationId=String(profileSnapshot.data()?.organizationId || '').trim();
+ const profile=profileSnapshot.data()??{};
+ const profileOrganizationId=tenantIdForProfile(profile);
  const snapshot=await db.collection('certificates').where('candidateId','==',decoded.uid).limit(50).get();
- const visibleDocs=profileOrganizationId
-   ? snapshot.docs.filter(d => String(d.data()?.organizationId || '') === profileOrganizationId)
-   : snapshot.docs.filter(d => !String(d.data()?.organizationId || '').trim());
+ const profileTenant = profileOrganizationId ? { organizationId: profileOrganizationId, tenantKind: String(profile.organizationId || '').trim() ? 'organization' : 'legacy-hierarchy' } : null;
+ const visibleDocs=profileTenant
+   ? snapshot.docs.filter(d => {
+       const data=d.data()??{};
+       if (String(data.organizationId || '').trim()) return String(data.organizationId) === profileOrganizationId;
+       const role=String(profile.role||''); const nodeId=String(profile.adminNodeId||'').trim();
+       const field=role==='union_admin'?'unionId':role==='conference_admin'?'conferenceId':role==='district_admin'?'districtId':role==='church_admin'?'churchId':'';
+       return Boolean(field && nodeId && String(data[field]||'').trim()===nodeId) || String(data.candidateId||'')===decoded.uid;
+     })
+   : snapshot.docs.filter(d => !String(d.data()?.organizationId || '').trim() && String(d.data()?.candidateId||'')===decoded.uid);
  const certificates=visibleDocs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified').slice(0,20);
  const organizationId=profileOrganizationId || String(visibleDocs[0]?.data()?.organizationId || '').trim();
  const configSnapshot=organizationId ? await db.doc(`organizations/${organizationId}/settings/certification`).get() : await db.doc('system/certification').get();
@@ -62,14 +70,14 @@ async function issue(req:Request,res:Response){
  ]);
  if(!candidateSnapshot.exists)return res.status(404).json({error:'Candidate account was not found.'});
  const candidate=candidateSnapshot.data()??{};
- if(!ctx.isSuperAdmin && String(candidate.organizationId||'') !== ctx.organizationId) return res.status(403).json({error:'The candidate belongs to another organization.'});
+ if(!ctx.isSuperAdmin && !recordBelongsToTenant(ctx, candidate)) return res.status(403).json({error:'The candidate belongs to another organization.'});
  const systemConfig=systemConfigSnapshot.data()??{};
  const tenantConfig=organizationSettingsSnapshot?.exists ? organizationSettingsSnapshot.data()??{} : {};
  const config={...systemConfig,...tenantConfig};
  if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
  const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>
    x.status==='approved'
-   && (!ctx.organizationId || String(x.organizationId||ctx.organizationId)===ctx.organizationId)
+   && (ctx.isSuperAdmin || recordBelongsToTenant(ctx, x))
    && typeof x.approvedAt==='string'
    && Date.parse(x.approvedAt)<=Date.now()
  ).sort((a,b)=>Date.parse(String(b.approvedAt))-Date.parse(String(a.approvedAt)))[0];
