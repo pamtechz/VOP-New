@@ -6,6 +6,8 @@ const UI_LOCALE_KEY = 'vop_ui_locale';
 const dictionaryCache: Record<string, Record<string,string>> = {};
 const localeFallbacks: Record<string, string> = {};
 const localeState = { value: '' };
+const localeRegistry: CustomLanguage[] = [];
+let localeRegistryLoaded = false;
 const listeners = new Set<() => void>();
 
 function notify() { listeners.forEach(listener => listener()); }
@@ -17,6 +19,36 @@ export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] 
     .map(language => ({ ...language, code: language.code.trim().toLowerCase() }))
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 };
+
+export const getAvailableUiLocales = (): CustomLanguage[] => [...localeRegistry];
+
+export async function loadUiLocaleRegistry(): Promise<CustomLanguage[]> {
+  if (localeRegistryLoaded) return [...localeRegistry];
+  try {
+    const response = await fetch('/api/localization', { headers:{Accept:'application/json'} });
+    if (!response.ok) throw new Error('Locale registry unavailable.');
+    const payload = await response.json();
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    localeRegistry.splice(0, localeRegistry.length, ...items
+      .filter((item: any) => item && item.enabled !== false && typeof item.code === 'string')
+      .map((item: any) => ({
+        code:String(item.code).trim().toLowerCase(),
+        name:String(item.name || item.code).trim(),
+        nativeName:String(item.nativeName || item.name || item.code).trim(),
+        enabled:true,
+        sortOrder:Number(item.sortOrder || 0),
+        rtl:item.direction === 'rtl' || item.rtl === true,
+      }))
+      .sort((a:CustomLanguage,b:CustomLanguage) => (a.sortOrder ?? 0)-(b.sortOrder ?? 0) || a.name.localeCompare(b.name)));
+    localeRegistryLoaded = true;
+  } catch {
+    if (!localeRegistry.some(item => item.code === 'en')) {
+      localeRegistry.push({code:'en',name:'English',nativeName:'English',enabled:true,sortOrder:0,rtl:false});
+    }
+  }
+  notify();
+  return [...localeRegistry];
+}
 
 export const getUiLocale = (settings?: AppSettings): LanguageCode => {
   const stored = normalizeLocale(localStorage.getItem(UI_LOCALE_KEY));
@@ -116,5 +148,5 @@ export const getTranslation = (
 export const initializeLocalization = async (settings?: AppSettings) => {
   const locale = getUiLocale(settings);
   localeState.value = locale;
-  await loadUiLocale(locale, 'en');
+  await Promise.all([loadUiLocaleRegistry(), loadUiLocale(locale, 'en')]);
 };
