@@ -199,6 +199,19 @@ export async function loadFirestoreUser(uid: string): Promise<User | null> {
     organizationId: data.organizationId,
     organizationRole: data.organizationRole,
     organizationIds: Array.isArray(data.organizationIds) ? data.organizationIds.map(value => String(value)).filter(Boolean) : (data.organizationId ? [String(data.organizationId)] : []),
+    organizationMemberships: Array.isArray(data.organizationMemberships)
+      ? data.organizationMemberships
+          .filter(item => item && typeof item === 'object')
+          .map(item => {
+            const membership = item as Record<string, unknown>;
+            return {
+              organizationId: String(membership.organizationId || '').trim(),
+              role: String(membership.role || '').trim(),
+              active: membership.active === true,
+            };
+          })
+          .filter(item => item.organizationId)
+      : [],
     adminNodeType: data.adminNodeType,
     adminNodeId: data.adminNodeId,
     information: {
