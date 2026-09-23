@@ -147,7 +147,42 @@ export default async function handler(request: Request, response: Response) {
         return response.status(400).json({ error: 'Valid email, administrator role and matching organization scope are required.' });
       }
 
+      // Every hierarchy administrator is also a first-class SaaS tenant.
+      // Keep the tenant identity deterministic so re-assigning the same node
+      // never creates a second organization for that union/conference/district/church.
+      const organizationId = `${nodeType}-${nodeId}`
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
+      if (!organizationId) return response.status(400).json({ error: 'The administrator scope could not be converted into a tenant identifier.' });
+
       let target;
+      try {
+        target = await getAuth(getFirebaseAdmin()).getUserByEmail(email);
+      } catch {
+        return response.status(404).json({ error: 'No Firebase account exists for that email.' });
+      }
+
+      const organizationRef = db.doc(`organizations/${organizationId}`);
+      const organizationSnapshot = await organizationRef.get();
+      const nodeCollection = `${nodeType}s`;
+      const nodeSnapshot = await db.doc(`${nodeCollection}/${nodeId}`).get();
+      const nodeName = nodeSnapshot.exists ? String(nodeSnapshot.data()?.name || '').trim() : '';
+      const organizationName = nodeName || `${nodeType.charAt(0).toUpperCase()}${nodeType.slice(1)} ${nodeId}`;
+      if (organizationSnapshot.exists) {
+        const existing = organizationSnapshot.data() || {};
+        if ((existing.adminNodeType && String(existing.adminNodeType) !== nodeType) || (existing.adminNodeId && String(existing.adminNodeId) !== nodeId)) {
+          return response.status(409).json({ error: 'This tenant identifier is already assigned to a different organization scope.' });
+        }
+      } else {
+        const now = new Date().toISOString();
+        await organizationRef.set({ id: organizationId, name: organizationName, slug: organizationId, status: 'active', ownerUid: target.uid, adminNodeType: nodeType, adminNodeId: nodeId, tenantType: nodeType, createdAt: now, updatedAt: now });
+      }
+
+      await organizationRef.collection('members').doc(target.uid).set({ uid: target.uid, organizationId, role: 'owner', active: true, joinedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+
+      
       try {
         target = await getAuth(getFirebaseAdmin()).getUserByEmail(email);
       } catch {
@@ -161,6 +196,8 @@ export default async function handler(request: Request, response: Response) {
         role,
         adminNodeType: nodeType,
         adminNodeId: nodeId,
+        organizationId,
+        organizationRole: 'owner',
         privileges: {
           admin: true,
           superAdmin: false,
@@ -178,6 +215,8 @@ export default async function handler(request: Request, response: Response) {
         role,
         adminNodeType: nodeType,
         adminNodeId: nodeId,
+        organizationId,
+        organizationRole: 'owner',
       });
 
       return response.status(200).json({
@@ -186,6 +225,7 @@ export default async function handler(request: Request, response: Response) {
         email: target.email ?? email,
         adminNodeType: nodeType,
         adminNodeId: nodeId,
+        organizationId,
       });
     }
 
