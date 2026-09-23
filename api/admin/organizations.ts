@@ -94,6 +94,49 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true });
     }
 
+    if (action === 'sendInvite') {
+      requireOrgRole(ctx, ['owner','admin']);
+      const email = String(body.email || '').trim().toLowerCase();
+      const inviteRole = String(body.role || 'learner');
+      if (!/^\S+@\S+\.\S+$/.test(email) || !['admin','editor','mentor','teacher','learner','viewer'].includes(inviteRole)) throw new Error('A valid email and organization role are required.');
+      const token = crypto.randomUUID().replace(/-/g,'') + crypto.randomUUID().replace(/-/g,'');
+      const now = new Date();
+      const expiresAt = new Date(now.getTime()+7*24*60*60*1000).toISOString();
+      await ctx.db.doc(`organizationInvites/${token}`).set({
+        token,email,organizationId:ctx.organizationId,role:inviteRole,invitedBy:ctx.auth.uid,
+        createdAt:now.toISOString(),expiresAt,status:'pending'
+      });
+      await writeTenantAudit(ctx,'membership.invite',`organizationInvites/${token}`,undefined,{email,role:inviteRole,expiresAt});
+      const origin = String(req.headers?.origin || '').trim();
+      const inviteUrl = `${origin || ''}/?invite=${token}`;
+      if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+        await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
+          from:process.env.RESEND_FROM_EMAIL,to:[email],subject:'VOP organization invitation',
+          html:`<p>You have been invited to join an organization in VOP.</p><p><a href="${inviteUrl}">Accept invitation</a></p><p>This invitation expires in 7 days.</p>`
+        })});
+      }
+      return res.status(200).json({ok:true,item:{email,role:inviteRole,expiresAt,inviteUrl,emailSent:Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL)}});
+    }
+
+    if (action === 'acceptInvite') {
+      const token = String(body.token || '').trim();
+      if (!token) throw new Error('Invitation token is required.');
+      const invite = await bootstrapDb.doc(`organizationInvites/${token}`).get();
+      if (!invite.exists) throw new Error('This invitation is not valid.');
+      const data = invite.data() || {};
+      if (data.status !== 'pending' || new Date(String(data.expiresAt || 0)).getTime() < Date.now()) throw new Error('This invitation has expired or has already been used.');
+      const email = String(ctx.auth.email || '').trim().toLowerCase();
+      if (email !== String(data.email || '').trim().toLowerCase()) throw new Error('Sign in with the email address that received this invitation.');
+      const organizationId = String(data.organizationId || '');
+      const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
+      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const now = new Date().toISOString();
+      await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
+      await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await bootstrapDb.doc(`organizationInvites/${token}`).set({status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},{merge:true});
+      return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
+    }
+
     if (action === 'listMembers') {
       const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/members`).get();
       return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
