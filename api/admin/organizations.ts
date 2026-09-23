@@ -270,7 +270,8 @@ export default async function handler(req: Request, res: Response) {
       const userSnap = await userRef.get();
       const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
       const organizationIds = [...new Set([...existingIds, ctx.organizationId])];
-      await userRef.set({ organizationId: ctx.organizationId, organizationRole: memberRole, organizationIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      const activeOrganizationId = String(userSnap.data()?.organizationId || '').trim() || ctx.organizationId;
+      await userRef.set({ organizationId: activeOrganizationId, organizationRole: activeOrganizationId === ctx.organizationId ? memberRole : userSnap.data()?.organizationRole || memberRole, organizationIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
     if (action === 'setStatus') {
