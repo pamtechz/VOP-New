@@ -13,7 +13,7 @@ import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
-import { getUiLocale, setUiLocale, initializeLocalization } from './services/i18n';
+import { getUiLocale, setUiLocale, initializeLocalization, useLocalization } from './services/i18n';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
@@ -36,6 +36,7 @@ const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolNam
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
 
 export const App: React.FC = () => {
+  useLocalization();
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
   const [uiLocale, setUiLocaleState] = useState<LanguageCode>(getUiLocale());
