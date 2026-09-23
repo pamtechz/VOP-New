@@ -22,6 +22,13 @@ const roleNodeType: Record<AdminRole, string> = {
   church_admin: 'church',
 };
 
+const nodeCollection: Record<string, string> = {
+  union: 'unions',
+  conference: 'conferences',
+  district: 'districts',
+  church: 'churches',
+};
+
 function getHeader(request: Request, name: string): string {
   const value = request.headers?.[name] ?? request.headers?.[name.toLowerCase()];
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
@@ -166,8 +173,9 @@ export default async function handler(request: Request, response: Response) {
 
       const organizationRef = db.doc(`organizations/${organizationId}`);
       const organizationSnapshot = await organizationRef.get();
-      const nodeCollection = `${nodeType}s`;
-      const nodeSnapshot = await db.doc(`${nodeCollection}/${nodeId}`).get();
+      const hierarchyCollection = nodeCollection[nodeType];
+      if (!hierarchyCollection) return response.status(400).json({ error: 'Unsupported administrator organization scope.' });
+      const nodeSnapshot = await db.doc(`${hierarchyCollection}/${nodeId}`).get();
       const nodeName = nodeSnapshot.exists ? String(nodeSnapshot.data()?.name || '').trim() : '';
       const organizationName = nodeName || `${nodeType.charAt(0).toUpperCase()}${nodeType.slice(1)} ${nodeId}`;
       if (organizationSnapshot.exists) {
@@ -182,12 +190,6 @@ export default async function handler(request: Request, response: Response) {
 
       await organizationRef.collection('members').doc(target.uid).set({ uid: target.uid, organizationId, role: 'owner', active: true, joinedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
 
-      
-      try {
-        target = await getAuth(getFirebaseAdmin()).getUserByEmail(email);
-      } catch {
-        return response.status(404).json({ error: 'No Firebase account exists for that email.' });
-      }
 
       await db.doc(`users/${target.uid}`).set({
         uid: target.uid,
