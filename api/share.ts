@@ -164,14 +164,15 @@ export default async function handler(req: Request, res: Response) {
       const profile = profileSnap.data() || {};
       const existingOrganizationId = String(profile.organizationId || '').trim();
       if (existingOrganizationId && existingOrganizationId !== organizationId) throw new Error('Your account already belongs to another organization.');
-      const role = String(profile.role || '') === 'super_admin' ? 'learner' : String(profile.organizationRole || 'learner') || 'learner';
+      const currentRole = String(profile.organizationRole || '').trim();
+      const role = existingOrganizationId === organizationId && currentRole ? currentRole : 'learner';
       const now = new Date().toISOString();
       await db.runTransaction(async transaction => {
-        transaction.set(profileRef, { organizationId, organizationRole: role === 'owner' || role === 'admin' ? 'learner' : role, updatedAt:FieldValue.serverTimestamp() }, {merge:true});
-        transaction.set(db.doc('organizations/' + organizationId + '/members/' + decoded.uid), {uid:decoded.uid,organizationId,role:role === 'owner' || role === 'admin' ? 'learner' : role,active:true,joinedAt:now,updatedAt:now,joinedByShareCode:code},{merge:true});
+        transaction.set(profileRef, { organizationId, organizationRole:role, updatedAt:FieldValue.serverTimestamp() }, {merge:true});
+        transaction.set(db.doc('organizations/' + organizationId + '/members/' + decoded.uid), {uid:decoded.uid,organizationId,role,active:true,joinedAt:now,updatedAt:now,joinedByShareCode:code},{merge:true});
         transaction.set(db.doc('courseEnrollments/' + organizationId + '_' + decoded.uid + '_' + guideId), {uid:decoded.uid,organizationId,guideId,lessonId,source:'share',shareCode:code,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),status:'active'},{merge:true});
       });
-      await getAuth(admin()).setCustomUserClaims(decoded.uid, { role:'student', organizationId, organizationRole:'learner' });
+      await getAuth(admin()).setCustomUserClaims(decoded.uid, { role:String(profile.role || 'student'), organizationId, organizationRole:role });
       await shareRef.set({installs:FieldValue.increment(1),lastInstallAt:FieldValue.serverTimestamp()},{merge:true});
       return res.status(200).json({ok:true,item:{organizationId,guideId,lessonId}});
     }
