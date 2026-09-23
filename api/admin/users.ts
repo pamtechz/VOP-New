@@ -1,7 +1,7 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
-import { authenticateTenant, enforceQuota } from '../lib/tenant';
+import { authenticateTenant, enforceQuota } from '../../server/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
