@@ -31,10 +31,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({
               className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1"
             >
               <ArrowLeft size={22} />
-              <span className="font-bold text-base sm:text-lg">About Voice of Prophecy</span>
+              <span className="font-bold text-base sm:text-lg">{t('about.title', 'About Voice of Prophecy')}</span>
             </button>
             <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
-              Official Ministry Portal
+              {t('about.officialPortal', 'Official Ministry Portal')}
             </span>
           </div>
 
@@ -98,7 +98,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
                   <BookOpen size={18} />
                 </div>
-                <h2 className="text-base sm:text-lg font-bold text-slate-900">Our Mission & Purpose</h2>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900">{t('about.missionTitle', 'Our Mission & Purpose')}</h2>
               </div>
               <p className="text-slate-600 leading-relaxed text-xs sm:text-sm">
                 {details?.aboutUsMission ||
@@ -113,7 +113,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#002d72] flex items-center justify-center font-bold">
                     <Clock size={18} />
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Our Heritage & History</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">{t('about.historyTitle', 'Our Heritage & History')}</h3>
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                   {details?.aboutUsHistory ||
@@ -127,7 +127,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
                     <Info size={18} />
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Ministry Leadership</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">{t('about.leadershipTitle', 'Ministry Leadership')}</h3>
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                   {details?.aboutUsLeadership ||
@@ -141,7 +141,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
         {activeTab === 'app' && (
           <div className="space-y-5 animate-fadeIn">
             <div className="bg-white rounded-2xl p-6 sm:p-7 shadow-sm border border-slate-200/80">
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 mb-2">About Voice of Prophecy App</h2>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 mb-2">{t('about.appTitle', 'About Voice of Prophecy App')}</h2>
               <p className="text-slate-600 leading-relaxed text-xs sm:text-sm">
                 {details?.aboutAppDescription ||
                   'The Voice of Prophecy App is a next-generation Bible correspondence learning system operating simultaneously on Web and native Android.'}
@@ -149,24 +149,24 @@ export const AboutPage: React.FC<AboutPageProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-5 border-t border-slate-100">
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Application Version</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">{t('about.applicationVersion', 'Application Version')}</span>
                   <span className="text-xs sm:text-sm font-bold text-slate-800">
                     {details?.aboutAppVersion || 'Version 4.0.0 Pro'}
                   </span>
                 </div>
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Platform</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">{t('about.platform', 'Platform')}</span>
                   <span className="text-xs sm:text-sm font-bold text-slate-800">Dual Web & Android Native</span>
                 </div>
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Offline Support</span>
-                  <span className="text-xs sm:text-sm font-bold text-emerald-700">100% Offline Enabled</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">{t('about.offlineSupport', 'Offline Support')}</span>
+                  <span className="text-xs sm:text-sm font-bold text-emerald-700">{t('about.offlineEnabled', '100% Offline Enabled')}</span>
                 </div>
               </div>
             </div>
 
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
-              <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-1.5">Development Credits</h3>
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-1.5">{t('about.developmentCredits', 'Development Credits')}</h3>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                 {details?.aboutAppCredits ||
                   'Engineered for the Voice of Prophecy Bible Correspondence School. All rights reserved by the Seventh-day Adventist Church.'}
@@ -183,25 +183,25 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
                     <MapPin size={18} />
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Headquarters Office</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">{t('about.headquarters', 'Headquarters Office')}</h3>
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-4">
                   {details?.contactOfficeAddress ||
                     'Plot 9221, Corner of Burma & Independence Avenue, P.O. Box 31309, Lusaka, Zambia'}
                 </p>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600">
-                  <span className="font-bold text-slate-800 block mb-0.5">Office Hours</span>
+                  <span className="font-bold text-slate-800 block mb-0.5">{t('about.officeHours', 'Office Hours')}</span>
                   {details?.contactOfficeHours ||
                     'Monday – Thursday: 08:00 – 17:00 | Friday: 08:00 – 12:30 | Sabbath & Sunday: Closed'}
                 </div>
               </div>
 
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-2">Direct Communication</h3>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-2">{t('about.directCommunication', 'Direct Communication')}</h3>
 
                 {details?.contactPhoneNumbers && details.contactPhoneNumbers.length > 0 && (
                   <div>
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Enquiries</span>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">{t('about.phoneEnquiries', 'Phone Enquiries')}</span>
                     <div className="space-y-1">
                       {details.contactPhoneNumbers.map((phone, idx) => (
                         <a
@@ -219,7 +219,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
 
                 {details?.contactEmails && details.contactEmails.length > 0 && (
                   <div>
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Email Enquiries</span>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">{t('about.emailEnquiries', 'Email Enquiries')}</span>
                     <div className="space-y-1">
                       {details.contactEmails.map((email, idx) => (
                         <a
@@ -244,7 +244,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm"
                     >
                       <MessageCircle size={16} />
-                      <span>Chat on WhatsApp</span>
+                      <span>{t('about.chatWhatsApp', 'Chat on WhatsApp')}</span>
                     </a>
                   </div>
                 )}
