@@ -10,11 +10,11 @@ type Quiz = {
 type Question = { question:string; options:string[]; answer:number; explanation?:string };
 
 async function quizApi(action:string,payload:Record<string,unknown>={}) {
-  if(!auth?.currentUser) throw new Error(t('errors.sessionExpired','Your session has expired. Sign in again.'));
+  if(!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch('/api/quizzes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action,...payload})});
   const body=await response.json().catch(()=>({})) as {error?:string;items?:Quiz[];item?:Quiz};
-  if(!response.ok) throw new Error(body.error||t('errors.quizRequestFailed','Quiz request failed.'));
+  if(!response.ok) throw new Error(body.error||'Quiz request failed.');
   return body;
 }
 
