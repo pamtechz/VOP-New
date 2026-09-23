@@ -5,7 +5,7 @@ import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
-import { createFirestoreStudentProfile, loadFirestoreGuides, loadFirestoreUser } from './services/firestoreData';
+import { createFirestoreStudentProfile, loadFirestoreUser } from './services/firestoreData';
 import { App } from './App';
 import type { User } from './types';
 
@@ -92,10 +92,6 @@ export function Root() {
               );
             }
 
-            // Operational account/content data stays in Firebase.
-            // The application-level cache is populated only by the authenticated
-            // public-content service and is namespaced per Firebase account.
-            await loadFirestoreGuides().catch(() => []);
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
             console.error(error);
