@@ -13,7 +13,7 @@ function getDb(): Firestore {
   return db;
 }
 
-const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts']);
+const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts','playlists']);
 const TENANT_COLLECTIONS = new Set<string>([
   'announcements','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
 ]);
@@ -358,6 +358,7 @@ export type AdminRecordCollection =
   | 'announcements'
   | 'books'
   | 'radioBroadcasts'
+  | 'playlists'
   | 'unions'
   | 'conferences'
   | 'districts'
