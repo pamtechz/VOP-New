@@ -448,15 +448,13 @@ service cloud.firestore {
       allow get, list: if isSuperAdmin()
         || (signedIn() && resource.data.get('proposerUid', '') == request.auth.uid)
         || (isAdmin() && resource.data.get('organizationId', '') == organizationIdForUser());
-      allow create: if signedIn()
+      allow create: if isAdmin()
         && isOrgMember(organizationIdForUser())
         && request.resource.data.get('proposerUid', '') == request.auth.uid
+        && request.resource.data.get('proposerOrganizationId', '') == organizationIdForUser()
         && request.resource.data.get('organizationId', '') == organizationIdForUser()
         && request.resource.data.get('status', 'pending') == 'pending';
-      allow update: if isSuperAdmin()
-        || (isAdmin()
-          && resource.data.get('organizationId', '') == organizationIdForUser()
-          && request.resource.data.get('status', 'pending') in ['pending', 'approved', 'rejected']);
+      allow update: if isSuperAdmin();
       allow delete: if isSuperAdmin();
     }
 
