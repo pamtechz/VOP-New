@@ -161,9 +161,10 @@ export default async function handler(req: Request, res: Response) {
       await enforceFeature(ctx, 'curriculum');
       requireOrgRole(ctx, ['owner','admin','editor']);
       if (!ctx.organizationId) throw new Error('Select an organization before copying a lesson.');
-      const sourceGuideId = safeId(body.sourceGuideId);
-      const sourceLessonId = safeId(body.sourceLessonId || body.id);
-      const targetGuideId = safeId(body.targetGuideId);
+      const forkData = (body.data as Record<string, unknown> | undefined) || {};
+      const sourceGuideId = safeId(body.sourceGuideId || forkData.sourceGuideId || '');
+      const sourceLessonId = safeId(body.sourceLessonId || forkData.sourceLessonId || body.id || '');
+      const targetGuideId = safeId(body.targetGuideId || forkData.targetGuideId || '');
       const source = await ctx.db.doc(`guides/${sourceGuideId}/lessons/${sourceLessonId}`).get();
       const targetGuide = await ctx.db.doc(`guides/${targetGuideId}`).get();
       const sourceData = source.data() || {};
