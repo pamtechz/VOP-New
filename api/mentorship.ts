@@ -247,10 +247,17 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listAssignments') {
-      const snapshot = await db.collection('mentorAssignments').get();
-      const studentSnapshots = await Promise.all(snapshot.docs.map(doc => db.doc(`users/${String(doc.data()?.studentId || '')}`).get()));
+      const modernSnapshot = organizationId
+        ? await db.collection('mentorAssignments').where('organizationId','==',organizationId).get()
+        : await db.collection('mentorAssignments').get();
+      const modernDocs = modernSnapshot.docs;
+      const legacyDocs = organizationId
+        ? (await db.collection('mentorAssignments').where('organizationId','==','').get()).docs
+        : [];
+      const docs = [...modernDocs, ...legacyDocs.filter(doc => !modernDocs.some(existing => existing.id === doc.id))];
+      const studentSnapshots = await Promise.all(docs.map(doc => db.doc(`users/${String(doc.data()?.studentId || '')}`).get()));
       const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => item.id));
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => allowedStudentIds.has(String(item.studentId || '')));
+      const items = docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => allowedStudentIds.has(String(item.studentId || '')));
       return res.status(200).json({ ok: true, items });
     }
 
@@ -304,8 +311,14 @@ export default async function handler(req: Request, res: Response) {
       const requestedStudent = body.studentId ? id(body.studentId) : '';
       const requestedMentor = body.mentorId ? id(body.mentorId) : '';
       if (isAdmin(actor)) {
-        let snapshot = await db.collection('mentorConversations').get();
-        let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => !organizationId || String(item.organizationId || '') === organizationId);
+        const modernSnapshot = organizationId
+          ? await db.collection('mentorConversations').where('organizationId','==',organizationId).get()
+          : await db.collection('mentorConversations').get();
+        const legacyDocs = organizationId
+          ? (await db.collection('mentorConversations').where('organizationId','==','').get()).docs
+          : [];
+        const docs = [...modernSnapshot.docs, ...legacyDocs.filter(doc => !modernSnapshot.docs.some(existing => existing.id === doc.id))];
+        let items = docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const studentSnapshots = await Promise.all(items.map(item => db.doc(`users/${String(item.studentId || '')}`).get()));
         const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => item.id));
         items = items.filter(item => allowedStudentIds.has(String(item.studentId || '')));
