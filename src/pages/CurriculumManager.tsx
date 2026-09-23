@@ -3,7 +3,7 @@ import {
   ArrowLeft, Book, BookOpen, CalendarDays, CheckCircle, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Clock, Edit3, Eye, FileText,
   Filter, Globe, Image as ImageIcon, Layers, Link as LinkIcon, List, ListOrdered,
-  MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings,
+  MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings, Copy,
   Table2, Trash2, Underline, Undo2, Video, Volume2, X
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
@@ -542,9 +542,27 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
   const openLesson = (row: LessonRow) => {
+    if (row.lesson.editable !== true) {
+      setError('This shared lesson is read-only. Copy its shared guide into your organization to create an editable canonical copy.');
+      return;
+    }
     setEditor(editorFromLesson(row));
     setEditorTab('content');
     setPreviewOpen(false);
+  };
+
+  const copySharedGuide = async (row: LessonRow) => {
+    if (!row.guide || row.guide.sharingScope !== 'shared' || !row.guide.id) return;
+    setSaving(true); setError('');
+    try {
+      await adminContent('forkGuide', 'guides', row.guide.id);
+      await load();
+      notify('Shared guide copied into your organization as a draft.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not copy the shared guide.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openNewLesson = (quizMode = false) => {
@@ -919,7 +937,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
           <div className="vop-reference-table-wrap">
             {loading ? <div className="vop-empty">Loading lessons…</div> : lessonPageRows.length === 0 ? <div className="vop-empty">No lessons are configured.</div> : (
               <table className="vop-reference-table vop-lessons-reference-table"><thead><tr><th>#</th><th>Lesson</th><th>Guide</th><th>Quiz</th><th>Time</th><th>Status</th><th>Language</th><th>Created</th><th>Actions</th></tr></thead>
-                <tbody>{lessonPageRows.map((row,index) => <tr key={row.key}><td>{(lessonPage - 1) * lessonPageSize + index + 1}</td><td><div className="vop-lesson-reference-cell">{row.raw?.imageUrl || row.guide?.image ? <img src={valueText(row.raw?.imageUrl) || row.guide?.image || ''} alt="" /> : <div className="vop-reference-image-empty"><FileText size={20}/></div>}<div><strong>{row.lesson.lessonNumber}. {row.lesson.title}</strong><span>{row.lesson.description}</span></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.guide?.discoverNumber ? 'Guide ' + row.guide.discoverNumber : ''}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-time-cell"><Clock size={14}/>{row.lesson.estimatedMinutes} mins</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><span className="vop-language-pill"><Globe size={12}/>{row.language.toUpperCase()}</span></td><td>{formatDate(row.createdAt)}</td><td><button className="vop-actions" type="button" onClick={() => openLesson(row)}><MoreVertical size={18}/></button></td></tr>)}</tbody>
+                <tbody>{lessonPageRows.map((row,index) => <tr key={row.key}><td>{(lessonPage - 1) * lessonPageSize + index + 1}</td><td><div className="vop-lesson-reference-cell">{row.raw?.imageUrl || row.guide?.image ? <img src={valueText(row.raw?.imageUrl) || row.guide?.image || ''} alt="" /> : <div className="vop-reference-image-empty"><FileText size={20}/></div>}<div><strong>{row.lesson.lessonNumber}. {row.lesson.title}</strong><span>{row.lesson.description}</span></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.guide?.discoverNumber ? 'Guide ' + row.guide.discoverNumber : ''}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-time-cell"><Clock size={14}/>{row.lesson.estimatedMinutes} mins</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><span className="vop-language-pill"><Globe size={12}/>{row.language.toUpperCase()}</span></td><td>{formatDate(row.createdAt)}</td><td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={() => openLesson(row)} title={row.lesson.editable === true ? 'Edit lesson' : 'View shared lesson'}><MoreVertical size={18}/></button>{row.lesson.editable !== true && row.guide?.sharingScope === 'shared' && <button className="vop-actions" type="button" onClick={() => void copySharedGuide(row)} title="Copy shared guide"><Copy size={16}/></button>}</div></td></tr>)}</tbody>
               </table>
             )}
             <div className="vop-reference-pager"><span>Showing {lessonRows.length ? ((lessonPage - 1) * lessonPageSize + 1) : 0}–{Math.min(lessonPage * lessonPageSize, filteredLessons.length)} of {filteredLessons.length} lessons</span><div><button className="vop-page-btn" type="button" onClick={() => setLessonPage(value => Math.max(1,value-1))} disabled={lessonPage===1}><ChevronLeft size={17}/></button>{Array.from({length:lessonPages},(_,i)=>i+1).slice(0,5).map(item=><button key={item} className={'vop-page-btn '+(item===lessonPage?'active':'')} type="button" onClick={() => setLessonPage(item)}>{item}</button>)}<button className="vop-page-btn" type="button" onClick={() => setLessonPage(value => Math.min(lessonPages,value+1))} disabled={lessonPage===lessonPages}><ChevronRight size={17}/></button></div></div>
