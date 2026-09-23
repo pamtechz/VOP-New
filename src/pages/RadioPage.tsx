@@ -1,13 +1,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { RadioBroadcast } from '../types';
+import type { RadioBroadcast, RadioPlaylist } from '../types';
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
   ChevronRight, ListMusic, Clock3, Video, Headphones
 } from 'lucide-react';
 
-interface RadioPageProps { broadcasts: RadioBroadcast[]; onBack: () => void; }
+interface RadioPageProps { broadcasts: RadioBroadcast[]; playlists?: RadioPlaylist[]; onBack: () => void; }
 
 type YTPlayer = {
   playVideo: () => void; pauseVideo: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void;
@@ -125,7 +125,7 @@ function sourceLabel(source: MediaSource) {
   return source.live ? 'Live stream' : 'Audio';
 }
 
-export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
+export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = [], onBack }) => {
   const [selected, setSelected] = useState<RadioBroadcast | null>(broadcasts[0] || null);
   const [playing, setPlaying] = useState(false), [muted, setMuted] = useState(false), [volume, setVolume] = useState(1);
   const [current, setCurrent] = useState(0), [duration, setDuration] = useState(0), [rate, setRate] = useState(1);
@@ -277,6 +277,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
       .slice(0, 10);
   }, [broadcasts, scheduleRange]);
   const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
+  const publishedPlaylists = playlists.filter(item => item.published === true && item.itemIds.length).slice(0, 8);
   const live = broadcasts.filter(item => detectMedia(item)?.live);
 
   if (!broadcasts.length) return <div className="vop-audience-radio"><header className="vop-public-radio-top"><button type="button" onClick={onBack}><ArrowLeft size={19}/> Back</button></header><main className="vop-public-radio-empty"><Radio size={48}/><h1>Radio</h1><p>No published radio programmes are currently available.</p></main></div>;
@@ -346,6 +347,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
             </div>
           </div>
         </section>
+
+        {publishedPlaylists.length>0 && <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><ListMusic size={19}/> Playlists</h2><span>{publishedPlaylists.length} available</span></div><div className="vop-radio-featured-grid">{publishedPlaylists.map(playlist=>{const first=playlist.itemIds.map(id=>broadcasts.find(item=>item.id===id)).find(Boolean);return <button key={playlist.id} type="button" onClick={()=>first&&selectProgramme(first)}><div className="vop-radio-feature-image" style={playlist.coverUrl?{backgroundImage:'url("' + playlist.coverUrl + '")'}:undefined}><span><ListMusic/></span><small>{playlist.itemIds.length} programmes</small></div><strong>{playlist.name}</strong><span>{playlist.description || 'Curated radio programmes'}</span></button>})}</div></section>}
 
         {categories.length>0 && <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><ListMusic size={19}/> Browse by Category</h2><span>{categories.length} configured</span></div><div className="vop-radio-category-grid">{categories.slice(0,6).map(category=><button key={category} type="button" onClick={()=>setSelected(broadcasts.find(item=>item.series===category)||selected)}><span><BookOpen size={25}/></span><strong>{category}</strong><small>{broadcasts.filter(item=>item.series===category).length} programme{broadcasts.filter(item=>item.series===category).length===1?'':'s'}</small></button>)}</div></section>}
 
