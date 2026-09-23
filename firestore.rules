@@ -231,7 +231,8 @@ service cloud.firestore {
 
       match /audit/{entryId} {
         allow get, list: if isSuperAdmin() || canManageOrg(organizationId);
-        allow create: if isSuperAdmin() || isOrgMember(organizationId);
+        // Audit entries are server-generated only; clients cannot forge audit history.
+      allow create: if false;
         allow update, delete: if false;
       }
     }
