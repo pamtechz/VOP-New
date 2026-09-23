@@ -48,6 +48,152 @@ This ownership rule applies consistently to:
 - lesson sections/topics/blocks;
 - attachments and canonical metadata.
 
+
+
+## Content ownership — individual contributor enforcement
+
+Organization administration does not grant blanket editing rights over content.
+
+For organization-owned content, an organization administrator may edit, publish, unpublish, archive, delete, or otherwise modify a resource **only when that administrator is the recorded creator/contributor/owner of the resource**. The Super Admin may edit organization content regardless of its creator.
+
+This must be enforced server-side using immutable ownership metadata such as `ownerUid` and `ownerOrganizationId`. Never authorize editing solely because the requester belongs to the same organization.
+
+This rule applies to organization-managed:
+- guides;
+- lessons and lesson components;
+- quizzes and quiz questions;
+- materials;
+- radio/audio/video items;
+- announcements where individual ownership is applicable;
+- languages;
+- translations;
+- other contributor-created global/shared resources.
+
+A user may consume content available to their organization without receiving editing rights.
+
+## Global radio, materials, languages and translations
+
+Radio, materials, languages, and translations are treated as **global/shared platform resources** when their records are published into the global library.
+
+Organization administrators may add/contribute to these resources, but contribution does not grant ownership of resources created by another contributor.
+
+An organization administrator may:
+- create/add their own global resource;
+- edit or remove only resources whose ownership metadata identifies that administrator as the creator/owner, subject to publication/review rules;
+- consume approved resources created by other organizations or contributors.
+
+The Super Admin retains platform-wide administrative authority.
+
+### Translation contribution and review workflow
+
+Translations require special review handling.
+
+An organization administrator may directly edit an approved translation only when they own the translation record. If a translation was created/owned by another contributor, organization, or the platform, the administrator must **not overwrite it**.
+
+Instead, provide a translation proposal workflow:
+- the proposer submits a suggested replacement;
+- the original translation remains unchanged while the proposal is pending;
+- the proposal records proposer identity, organization, source key/language, current value, proposed value, reason/notes, and timestamps;
+- an authorized reviewer approves or rejects the proposal;
+- approval creates a new reviewed translation revision while preserving audit history;
+- rejection does not alter the canonical translation;
+- Super Admin may review, approve, reject, or directly edit canonical platform translations.
+
+Translation proposals are never treated as canonical content until approved.
+
+## Role-specific settings architecture
+
+Settings must be separated by authority and audience. Do not expose one universal settings object to every user.
+
+### Super Admin settings
+Super Admin settings control platform-wide concerns, including:
+- organizations and tenant lifecycle;
+- platform/shared content;
+- global languages and translation governance;
+- system defaults;
+- platform feature policies;
+- global certification/publishing policies;
+- quotas/plans and platform configuration;
+- security/audit controls.
+
+Only Super Admin may modify platform-level settings.
+
+### Organization settings
+Organization settings apply only to the selected organization and are available to authorized organization administrators according to their role.
+
+They include organization-specific:
+- branding;
+- organization profile;
+- default language;
+- curriculum configuration;
+- learning policies;
+- quiz/pass thresholds;
+- certificate presentation settings where permitted;
+- mentoring configuration;
+- radio/material publishing preferences;
+- announcements;
+- organization feature configuration;
+- organization usage/plan information.
+
+Organization administrators must never modify Super Admin/system settings or another organization's settings.
+
+### Individual learner/user settings
+Every learner/user has a separate personal settings area containing only settings applicable to that individual account, for example:
+- interface/UI preferences;
+- personal language preference;
+- notification preferences;
+- accessibility/display preferences;
+- privacy/account preferences;
+- study preferences;
+- personal device/session preferences where applicable.
+
+A learner must never be given access to organization administration settings merely because they are an organization member.
+
+Personal settings are scoped to the authenticated user and cannot be used to alter roles, privileges, organization membership, ownership, canonical content, assessment results, certificates, or other authoritative records.
+
+### Settings authorization rule
+
+The UI may present different settings screens by role, but the database and APIs must enforce the same separation server-side:
+
+**Super Admin → platform settings**
+
+**Organization Admin → own organization settings**
+
+**Learner/ordinary user → own personal settings**
+
+No role may escalate by writing fields belonging to a higher authority layer.
+
+## Learner access contract
+
+Learners are first-class authenticated users and must receive explicit, tested Firestore/API authorization for the operations they legitimately require.
+
+Learners must be able to:
+- read their own profile;
+- update only permitted personal profile/settings fields;
+- read published curriculum available to them;
+- read published shared content;
+- read published content made available by their organization;
+- read their own learning/progress records;
+- submit learning/assessment data only through the authoritative workflow;
+- read their own notifications;
+- read their own graduation/certificate status where applicable;
+- access their own certificates and public certificate verification;
+- participate in permitted mentoring/conversation workflows;
+- create/read their own prayer/support requests where supported.
+
+Learners must never:
+- list all organization users;
+- read another learner's private data;
+- modify assessment results or question-performance aggregates;
+- modify graduation approvals;
+- issue or alter certificates;
+- modify organization settings;
+- modify canonical shared content;
+- modify another user's settings/profile;
+- change their organization, role, privileges, or ownership fields.
+
+Every learner rule must be tested against both the positive case (the learner can perform the required operation) and the negative case (cross-user/cross-tenant access is rejected).
+
 ## SaaS organization model
 
 Implement a first-class organization/tenant model with:
