@@ -73,7 +73,7 @@ export default async function handler(req: Request, res: Response) {
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const requestedId = body.id ? safeId(body.id) : safeId(data.id || '');
+      const requestedId = body.id ? safeId(body.id) : (data.id ? safeId(data.id) : '');
       const id = requestedId || guideId(ctx.organizationId, lang);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
@@ -113,7 +113,7 @@ export default async function handler(req: Request, res: Response) {
       const data = (body.data as Record<string, unknown> | undefined) || {};
       const lang = String(data.language || '').trim();
       if (!language(lang) || !ctx.organizationId) throw new Error('A valid language and organization are required.');
-      const requestedId = body.id ? safeId(body.id) : '';
+      const requestedId = body.id ? safeId(body.id) : (data.id ? safeId(data.id) : '');
       const ref = ctx.db.doc(`guides/${requestedId || guideId(ctx.organizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can archive this guide.');
