@@ -37,7 +37,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
       if (!auth?.currentUser) { if (!cancelled) setLoading(false); return; }
       try {
         const token = await auth.currentUser.getIdToken();
-        const response = await fetch('/api/certificates/mine', { headers: { Authorization: `Bearer ${token}` } });
+        const response = await fetch('/api/certificates?action=mine', { headers: { Authorization: `Bearer ${token}` } });
         const body = await response.json().catch(() => ({})) as { certificates?: OfficialCertificate[]; config?: CertificateConfig; error?: string };
         if (!response.ok) throw new Error(body.error || 'Certificates could not be loaded.');
         if (!cancelled) { setCertificate((body.certificates || [])[0] || null); setConfig(body.config || {}); }
