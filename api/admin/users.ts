@@ -267,6 +267,10 @@ export default async function handler(request: Request, response: Response) {
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
       if (type === 'admin' && !tenantOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
+      if (type === 'super_admin' && !tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can create platform administrators.');
+      if (type === 'admin' && tenantOrganizationId && !['owner','admin'].includes(String(tenant.membership.role || ''))) {
+        throw new Error('Only an organization owner or administrator can create organization administrators.');
+      }
 
       if (tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
       const created = await authService.createUser({
@@ -277,7 +281,6 @@ export default async function handler(request: Request, response: Response) {
         disabled: false,
       });
       const profile = profileForType(type, body, tenantOrganizationId);
-      if (tenantOrganizationId && type === 'super_admin') throw new Error('Organization administrators cannot create platform administrators.');
       await db.doc(`users/${created.uid}`).set({
         uid: created.uid,
         email,
