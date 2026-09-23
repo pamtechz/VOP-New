@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   query, where, onSnapshot, type Unsubscribe, type Firestore
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -434,15 +434,12 @@ export const subscribeTranslations = (
     if (cancelled) return;
     const isSuperAdmin = String(profile.data()?.role || '') === 'super_admin';
     const organizationId = String(profile.data()?.organizationId || '').trim();
-    const queries = isSuperAdmin
-      ? [query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'))]
-      : [
-          query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared')),
-          ...(organizationId ? [query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))] : []),
-        ];
-    stop = onSnapshot(queries[0], async first => {
-      const snapshots = [first];
-      if (queries.length > 1) snapshots.push(await import('firebase/firestore').then(({ getDocs }) => getDocs(queries[1])));
+    const sharedQuery = query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'));
+    const organizationQuery = organizationId && !isSuperAdmin
+      ? query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))
+      : null;
+    stop = onSnapshot(sharedQuery, async first => {
+      const snapshots = organizationQuery ? [first, await getDocs(organizationQuery)] : [first];
       const seen = new Set<string>();
       const docs = snapshots.flatMap(snapshot => snapshot.docs.filter(item => {
         if (seen.has(item.ref.path)) return false;
