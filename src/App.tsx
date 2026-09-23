@@ -214,7 +214,7 @@ export const App: React.FC = () => {
     setStudyError('');
     setIsMenuOpen(false);
     // Display checks are not security. Server APIs must authorize roles and scopes.
-    if (route === 'admin' && !['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) return;
+    if (route === 'admin' && !(['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || '')))) return;
     setCurrentRoute(route);
   };
   const returnHome = () => navigate('home');
