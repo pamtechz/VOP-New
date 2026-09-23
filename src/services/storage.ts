@@ -629,6 +629,29 @@ export const assignCandidateToChurch = (
   saveUsers(users);
 };
 
+// ---------------- Study compatibility API ---------------- //
+
+/**
+ * Study progress is server-authoritative. These compatibility functions are
+ * intentionally non-persistent and exist only for legacy callers while the
+ * application migrates to the authenticated study API.
+ */
+export const recordLessonCompletion = (_lessonId: string) => {
+  // No local persistence. Use /api/study/progress through localStudy.ts.
+};
+
+export const completeLessonForCurrentUser = (_guideId: string, _lessonId: string) => {
+  // No local persistence. Use /api/study/progress through localStudy.ts.
+};
+
+export const recordQuizScore = (_guideId: string, _lessonId: string, _scorePercent: number) => {
+  // No local persistence. Use /api/study/progress through localStudy.ts.
+};
+
+export const submitQuizScore = (_guideId: string, _lessonId: string, _scorePercent: number) => {
+  // No local persistence. Use /api/study/progress through localStudy.ts.
+};
+
 // ---------------- Announcements & Resources ---------------- //
 
 export const getStoredAnnouncements = (): Announcement[] => {
