@@ -52,7 +52,7 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
-    const editorRoles = curriculum ? ['owner','admin','editor'] : ['owner','admin'];
+    const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection) ? ['owner','admin','editor'] : ['owner','admin'];
     if (action !== 'list' && action !== 'listGuides') requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'settings' && ctx.organizationId) {
