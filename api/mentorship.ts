@@ -50,7 +50,8 @@ function sameTenant(actor: Record<string, unknown>, target: Record<string, unkno
   const actorOrg = String(actor.organizationId || '').trim();
   const targetOrg = String(target.organizationId || '').trim();
   if (String(actor.role || '') === 'super_admin') return !requestedOrganizationId || targetOrg === requestedOrganizationId;
-  if (!actorOrg && ['union_admin','conference_admin','district_admin','church_admin'].includes(String(actor.role || ''))) return true;
+  // Legacy hierarchy roles do not bypass tenant isolation. They must now resolve to
+  // an active organization before accessing tenant-owned mentoring data.
   return Boolean(actorOrg && targetOrg && actorOrg === targetOrg);
 }
 
