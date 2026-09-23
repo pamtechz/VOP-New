@@ -29,23 +29,30 @@ export default async function handler(req: Request, res: Response) {
 
     if (req.method === 'GET') {
       const locale = cleanLocale(q(req, 'locale') || 'en');
-      const localeSnap = await db.doc(`locales/${locale}`).get();
-      if (!localeSnap.exists || localeSnap.data()?.enabled === false) {
-        return res.status(404).json({ error:'Locale is not available.' });
-      }
-      const snap = await db.collection(`locales/${locale}/translations`)
-        .where('status','==','published').get();
+      const [localeSnap, legacyLanguageSnap, legacyTranslationSnap] = await Promise.all([
+        db.doc(`locales/${locale}`).get(),
+        db.doc(`languages/${locale}`).get(),
+        db.doc(`translations/${locale}`).get(),
+      ]);
+      const metadata = localeSnap.exists ? localeSnap.data() || {} : legacyLanguageSnap.exists ? legacyLanguageSnap.data() || {} : locale === 'en' ? {code:'en',name:'English',nativeName:'English',enabled:true,direction:'ltr',fallback:'en'} : null;
+      if (!metadata || metadata.enabled === false) return res.status(404).json({ error:'Locale is not available.' });
+      const snap = await db.collection(`locales/${locale}/translations`).where('status','==','published').get();
       const translations: Record<string,string> = {};
       snap.docs.forEach(doc => {
         const value = String(doc.data()?.value ?? '');
         if (value.trim()) translations[doc.id] = value;
       });
+      const legacyValues = legacyTranslationSnap.exists && legacyTranslationSnap.data()?.values && typeof legacyTranslationSnap.data()?.values === 'object'
+        ? legacyTranslationSnap.data()?.values as Record<string,string> : {};
+      Object.entries(legacyValues).forEach(([key,value]) => {
+        if (!translations[key] && typeof value === 'string' && value.trim()) translations[key] = value;
+      });
       return res.status(200).json({
         ok:true,
         locale,
-        fallback:String(localeSnap.data()?.fallback || 'en'),
-        direction:String(localeSnap.data()?.direction || 'ltr') === 'rtl' ? 'rtl' : 'ltr',
-        version:Number(localeSnap.data()?.version || 1),
+        fallback:String(metadata.fallback || 'en'),
+        direction:String(metadata.direction || (metadata.rtl === true ? 'rtl' : 'ltr')) === 'rtl' ? 'rtl' : 'ltr',
+        version:Number(metadata.version || 1),
         translations
       });
     }
