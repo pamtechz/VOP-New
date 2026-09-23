@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, Check, Edit3, Plus, RefreshCw, Shield, Users, BarChart3 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Building2, Check, Edit3, Plus, RefreshCw, Shield, Users, BarChart3, UserPlus, Search } from 'lucide-react';
 import { auth } from '../lib/firebase';
 
 type Organization = {
   id:string; name:string; slug:string; status:string; ownerUid:string; plan:string;
   quotas:Record<string,unknown>; memberCount:number; createdAt?:string;
 };
-type Member = { id:string; uid:string; role:string; active:boolean; joinedAt?:string };
+type Member = { id:string; uid:string; role:string; active:boolean; joinedAt?:string; displayName?:string; email?:string };
+type DirectoryUser = { uid:string; displayName:string; email:string; organizationId?:string; organizationName?:string };
 type Usage = { members:number; guides:number; quizzes:number; announcements:number; radio:number; books:number };
+type Quotas = { maxUsers:string; maxGuides:string; maxQuizzes:string; maxAnnouncements:string; maxRadioItems:string; maxMaterials:string };
 
 async function api(action:string, payload:Record<string,unknown>={}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -18,6 +20,18 @@ async function api(action:string, payload:Record<string,unknown>={}) {
   return body;
 }
 
+const emptyQuotas=():Quotas=>({maxUsers:'',maxGuides:'',maxQuizzes:'',maxAnnouncements:'',maxRadioItems:'',maxMaterials:''});
+function quotaState(value:Record<string,unknown>):Quotas {
+  const result=emptyQuotas();
+  (Object.keys(result) as Array<keyof Quotas>).forEach(key=>{ const valueForKey=value[key]; if(valueForKey!==undefined&&valueForKey!==null&&Number(valueForKey)>=0) result[key]=String(valueForKey); });
+  return result;
+}
+function quotaPayload(value:Quotas):Record<string,number> {
+  const result:Record<string,number>={};
+  (Object.keys(value) as Array<keyof Quotas>).forEach(key=>{ if(value[key].trim()!=='') result[key]=Number(value[key]); });
+  return result;
+}
+
 export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:boolean}) {
   const [items,setItems]=useState<Organization[]>([]);
   const [selected,setSelected]=useState<Organization|null>(null);
@@ -26,12 +40,23 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [name,setName]=useState('');
   const [organizationId,setOrganizationId]=useState('');
   const [plan,setPlan]=useState('standard');
-  const [status,setStatus]=useState('active'); const [quotas,setQuotas]=useState('{}');
-  const [memberUid,setMemberUid]=useState(''); const [inviteEmail,setInviteEmail]=useState(''); const [inviteRole,setInviteRole]=useState('learner'); const [inviteUrl,setInviteUrl]=useState('');
+  const [status,setStatus]=useState('active');
+  const [quotas,setQuotas]=useState<Quotas>(emptyQuotas());
+  const [inviteEmail,setInviteEmail]=useState('');
+  const [inviteRole,setInviteRole]=useState('learner');
+  const [inviteUrl,setInviteUrl]=useState('');
   const [memberRole,setMemberRole]=useState('learner');
+  const [memberSearch,setMemberSearch]=useState('');
+  const [memberMatches,setMemberMatches]=useState<DirectoryUser[]>([]);
+  const [selectedUser,setSelectedUser]=useState<DirectoryUser|null>(null);
+  const [showCreateMember,setShowCreateMember]=useState(false);
+  const [newMemberName,setNewMemberName]=useState('');
+  const [newMemberEmail,setNewMemberEmail]=useState('');
+  const [newMemberPassword,setNewMemberPassword]=useState('');
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
-  const [message,setMessage]=useState(''); const [audit,setAudit]=useState<Array<Record<string,unknown>>>([]);
+  const [message,setMessage]=useState('');
+  const [audit,setAudit]=useState<Array<Record<string,unknown>>>([]);
   const [error,setError]=useState('');
 
   const load=async()=>{
@@ -56,6 +81,17 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
   useEffect(()=>{void load();},[]);
 
+  useEffect(()=>{
+    if(memberSearch.trim().length<2){setMemberMatches([]);return;}
+    const timer=window.setTimeout(()=>void (async()=>{
+      try {
+        const body=await api('searchUsers',{organizationId:selected?.id,query:memberSearch.trim()});
+        setMemberMatches((body.items||[]) as DirectoryUser[]);
+      } catch(e){setError(e instanceof Error?e.message:'Could not search accounts.');}
+    })(),250);
+    return()=>window.clearTimeout(timer);
+  },[memberSearch,selected?.id]);
+
   const create=async()=>{
     if(!name.trim()) return;
     setSaving(true);setError('');
@@ -64,91 +100,153 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
       setName('');setOrganizationId('');setMessage('Organization created.');
       await load();
       const created=(body.item||null) as Organization|null;
-      if(created){setSelected(created);await loadDetails(created.id);}
+      if(created){setSelected(created);setName(created.name);setPlan(created.plan||'standard');setStatus(created.status||'active');setQuotas(quotaState(created.quotas||{}));await loadDetails(created.id);}
     }catch(e){setError(e instanceof Error?e.message:'Could not create organization.');}
     finally{setSaving(false);}
   };
+
+  const selectOrganization=(item:Organization)=>{
+    setSelected(item);setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(quotaState(item.quotas||{}));
+    setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setInviteUrl('');void loadDetails(item.id);
+  };
+
   const save=async()=>{
     if(!selected) return;
     setSaving(true);setError('');
-    try{
-      let parsedQuotas:Record<string,unknown>={}; try { parsedQuotas=JSON.parse(quotas||'{}'); if(!parsedQuotas || Array.isArray(parsedQuotas) || typeof parsedQuotas!=='object') throw new Error(); } catch { throw new Error('Quotas must be a valid JSON object.'); } await api('update',{organizationId:selected.id,data:{name:name.trim()||selected.name,plan,status,quotas:parsedQuotas}});
-      if(status!==selected.status) await api('setStatus',{organizationId:selected.id,status});
+    try {
+      const payload:Record<string,unknown>={name:name.trim()||selected.name};
+      if(isSuperAdmin) { payload.plan=plan; payload.status=status; payload.quotas=quotaPayload(quotas); }
+      await api('update',{organizationId:selected.id,data:payload});
+      if(status!==selected.status && isSuperAdmin) await api('setStatus',{organizationId:selected.id,status});
       setMessage('Organization settings saved.');await load();
     }catch(e){setError(e instanceof Error?e.message:'Could not save organization.');}
     finally{setSaving(false);}
   };
-  const invite=async()=>{if(!selected||!inviteEmail.trim())return;setSaving(true);setError('');try{const body=await api('sendInvite',{organizationId:selected.id,email:inviteEmail.trim(),role:inviteRole});setInviteUrl(String((body.item as {inviteUrl?:string}|undefined)?.inviteUrl||''));setInviteEmail('');setMessage('Invitation created.');}catch(e){setError(e instanceof Error?e.message:'Could not create invitation.');}finally{setSaving(false);}};
-  const addMember=async()=>{
-    if(!selected||!memberUid.trim()) return;
+
+  const invite=async()=>{
+    if(!selected||!inviteEmail.trim())return;
     setSaving(true);setError('');
-    try{await api('setMember',{organizationId:selected.id,uid:memberUid.trim(),role:memberRole,active:true});setMemberUid('');setMessage('Organization membership saved.');await loadDetails(selected.id);await load();}
-    catch(e){setError(e instanceof Error?e.message:'Could not save membership.');}
+    try{const body=await api('sendInvite',{organizationId:selected.id,email:inviteEmail.trim(),role:inviteRole});setInviteUrl(String((body.item as {inviteUrl?:string}|undefined)?.inviteUrl||''));setInviteEmail('');setMessage('Invitation created.');}
+    catch(e){setError(e instanceof Error?e.message:'Could not create invitation.');}
     finally{setSaving(false);}
   };
 
+  const addExistingMember=async()=>{
+    if(!selectedUser||!selected)return;
+    setSaving(true);setError('');
+    try{await api('setMember',{organizationId:selected.id,uid:selectedUser.uid,role:memberRole,active:true});setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setMessage('User assigned to the organization.');await loadDetails(selected.id);await load();}
+    catch(e){setError(e instanceof Error?e.message:'Could not assign the user.');}
+    finally{setSaving(false);}
+  };
+
+  const createAndAssign=async()=>{
+    if(!selected||!newMemberName.trim()||!newMemberEmail.trim())return;
+    setSaving(true);setError('');
+    try{await api('createAndAssign',{organizationId:selected.id,displayName:newMemberName.trim(),email:newMemberEmail.trim(),password:newMemberPassword,role:memberRole});setNewMemberName('');setNewMemberEmail('');setNewMemberPassword('');setShowCreateMember(false);setMessage('Account created and assigned to the organization.');await loadDetails(selected.id);await load();}
+    catch(e){setError(e instanceof Error?e.message:'Could not create the account.');}
+    finally{setSaving(false);}
+  };
+
+  const quotaLabels:Record<keyof Quotas,string>={maxUsers:'Members / users',maxGuides:'Guides',maxQuizzes:'Quizzes',maxAnnouncements:'Announcements',maxRadioItems:'Radio items',maxMaterials:'Materials'};
+
   return <div>
     <div className="vop-page-header">
-      <div><div className="vop-breadcrumb"><Building2 size={15}/> Platform / Organizations</div><h1>Organizations</h1><p>Manage tenant workspaces, membership, plans and usage without sharing operational data between organizations.</p></div>
+      <div><div className="vop-breadcrumb"><Building2 size={15}/> Platform / Organizations</div><h1>Organizations</h1><p>Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.</p></div>
       <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button>
     </div>
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}
     {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}
+
     {isSuperAdmin&&<div className="vop-card vop-form-card" style={{marginBottom:16}}>
       <div className="vop-section-title"><div><h2>Create organization</h2><p>Create an isolated workspace for an institution or ministry.</p></div><Shield size={22}/></div>
       <div className="vop-form-grid">
         <div className="vop-field"><label>Organization name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Organization name"/></div>
-        <div className="vop-field"><label>Organization ID <small>(optional)</small></label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} placeholder="Generated from name"/></div>
+        <div className="vop-field"><label>Organization ID <small>(optional)</small></label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} placeholder="Generated automatically"/></div>
         <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!name.trim()} onClick={()=>void create()}><Plus size={17}/>Create Organization</button></div>
       </div>
     </div>}
+
     <div className="vop-grid-2">
       <div className="vop-card vop-form-card">
         <div className="vop-section-title"><div><h2>Tenant workspaces</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>
         <div style={{display:'grid',gap:9}}>
-          {items.map(item=><button key={item.id} type="button" onClick={()=>{setSelected(item);setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(JSON.stringify(item.quotas||{},null,2));void loadDetails(item.id);}} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
+          {items.map(item=><button key={item.id} type="button" onClick={()=>selectOrganization(item)} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div>
-            <div style={{fontSize:12,color:'#7183a4',marginTop:4}}>{item.id} · {item.memberCount} active members · {item.plan}</div>
+            <div style={{fontSize:12,color:'#7183a4',marginTop:4}}>{item.memberCount} active members · {item.plan}</div>
           </button>)}
           {!items.length&&!loading&&<div className="vop-empty">No organizations have been configured.</div>}
         </div>
       </div>
+
       <div className="vop-card vop-form-card">
         {!selected?<div className="vop-empty"><Building2 size={34}/><h3>Select an organization</h3><p>Organization settings, membership and usage appear here.</p></div>:
         <>
-          <div className="vop-section-title"><div><h2>{selected.name}</h2><p>{selected.id}</p></div><Edit3 size={20}/></div>
+          <div className="vop-section-title"><div><h2>{selected.name}</h2><p>Organization settings and members</p></div><Edit3 size={20}/></div>
+
           <div className="vop-form-grid">
             <div className="vop-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div>
             <div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value="standard">Standard</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></div>
-            <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div><div className="vop-field" style={{gridColumn:'1 / -1'}}><label>Usage quotas (JSON)</label><textarea value={quotas} onChange={e=>setQuotas(e.target.value)} disabled={!isSuperAdmin} rows={4} placeholder='{"maxUsers":100,"maxGuides":20,"maxQuizzes":100,"maxAnnouncements":50,"maxRadioItems":50,"maxMaterials":100}'/><small>Leave a limit out, or use a negative value, for unlimited. Limits are enforced server-side when the organization creates new records.</small></div>
-            <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button></div>
+            <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div>
           </div>
+
+          {isSuperAdmin&&<div style={{marginTop:16}}>
+            <div className="vop-section-title"><div><h3>Usage limits</h3><p>Set limits with simple fields. Leave a field empty for unlimited.</p></div><Shield size={18}/></div>
+            <div className="vop-form-grid">
+              {(Object.keys(quotaLabels) as Array<keyof Quotas>).map(key=><div className="vop-field" key={key}><label>{quotaLabels[key]}</label><input type="number" min="-1" step="1" value={quotas[key]} onChange={e=>setQuotas(current=>({...current,[key]:e.target.value}))} placeholder="Unlimited"/></div>)}
+            </div>
+          </div>}
+          <div style={{display:'flex',justifyContent:'flex-end',marginTop:14}}><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button></div>
+
           {usage&&<div className="vop-grid-3" style={{marginTop:16}}>
             <div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{usage.members}</strong><span>Members</span></div></div>
             <div className="vop-card vop-mini-stat"><BarChart3 size={20}/><div><strong>{usage.guides}</strong><span>Guides</span></div></div>
             <div className="vop-card vop-mini-stat"><Shield size={20}/><div><strong>{usage.quizzes}</strong><span>Quizzes</span></div></div>
           </div>}
+
           <div style={{marginTop:18}}>
-            <div className="vop-section-title"><div><h3>Audit history</h3><p>Privileged organization changes are retained as append-only records.</p></div></div>
-            <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp && typeof item.timestamp==='object' ? 'Recorded' : String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
+            <div className="vop-section-title"><div><h3>Members</h3><p>Add an existing VOP account by searching their name or email, or create the account here.</p></div><Users size={20}/></div>
+            <div className="vop-form-grid">
+              <div className="vop-field" style={{position:'relative'}}>
+                <label>Find an existing account</label>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}><Search size={17}/><input value={memberSearch} onChange={e=>{setMemberSearch(e.target.value);setSelectedUser(null)}} placeholder="Search by name or email"/></div>
+                {memberMatches.length>0&&<div style={{position:'absolute',zIndex:20,left:0,right:0,top:'100%',background:'#fff',border:'1px solid #dbe3ef',borderRadius:10,boxShadow:'0 12px 30px rgba(20,40,80,.12)',overflow:'hidden'}}>
+                  {memberMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedUser(user);setMemberSearch(user.displayName||user.email);setMemberMatches([])}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',border:0,borderBottom:'1px solid #eef2f7',background:'#fff',cursor:'pointer'}}>
+                    <strong>{user.displayName||'Unnamed account'}</strong><span style={{display:'block',fontSize:12,color:'#7183a4'}}>{user.email}</span>
+                    {user.organizationId&&<small style={{color:'#9a6700'}}>Already assigned to an organization</small>}
+                  </button>)}
+                </div>}
+              </div>
+              <div className="vop-field"><label>Role</label><select value={memberRole} onChange={e=>setMemberRole(e.target.value)}><option value="learner">Learner</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></div>
+              <div style={{display:'flex',alignItems:'end',gap:8}}><button className="vop-secondary" type="button" disabled={saving||!selectedUser} onClick={()=>void addExistingMember()}><UserPlus size={16}/>Assign selected</button><button className="vop-primary" type="button" onClick={()=>setShowCreateMember(value=>!value)}><Plus size={16}/>Add new account</button></div>
+            </div>
+
+            {showCreateMember&&<div className="vop-card" style={{marginTop:12,border:'1px solid #dce6f3'}}>
+              <h3>Create account and add it here</h3>
+              <p style={{color:'#7183a4'}}>The user receives a normal VOP account. No Firebase ID or technical setup is required.</p>
+              <div className="vop-form-grid">
+                <div className="vop-field"><label>Full name *</label><input value={newMemberName} onChange={e=>setNewMemberName(e.target.value)} placeholder="Full name"/></div>
+                <div className="vop-field"><label>Email *</label><input type="email" value={newMemberEmail} onChange={e=>setNewMemberEmail(e.target.value)} placeholder="name@example.com"/></div>
+                <div className="vop-field"><label>Temporary password <small>(optional)</small></label><input type="password" value={newMemberPassword} onChange={e=>setNewMemberPassword(e.target.value)} placeholder="Leave empty to send/reset later"/></div>
+                <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!newMemberName.trim()||!newMemberEmail.trim()} onClick={()=>void createAndAssign()}><UserPlus size={16}/>Create & Assign</button></div>
+              </div>
+            </div>}
+
+            <div className="vop-table-wrap" style={{marginTop:12}}><table className="vop-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>{members.map(item=><tr key={item.uid}><td>{item.displayName||'Account'}</td><td>{item.email||'—'}</td><td>{item.role}</td><td>{item.active?'Active':'Inactive'}</td></tr>)}</tbody></table>{!members.length&&<div className="vop-empty">No members have been added yet.</div>}</div>
           </div>
+
           <div style={{marginTop:18}}>
-            <div className="vop-section-title"><div><h3>Invite a member</h3><p>Send a secure invitation that expires after seven days.</p></div></div>
+            <div className="vop-section-title"><div><h3>Invitation by email</h3><p>Send a secure invitation to an existing email address.</p></div></div>
             <div className="vop-form-grid">
               <div className="vop-field"><label>Email *</label><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="member@example.org"/></div>
               <div className="vop-field"><label>Role</label><select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}><option value="learner">Learner</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></div>
               <div style={{display:'flex',alignItems:'end'}}><button className="vop-secondary" type="button" disabled={saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>Create Invitation</button></div>
             </div>
-            {inviteUrl&&<div className="vop-setting-row" style={{marginTop:10}}><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this single-use link with the invited user.</div></div><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Check size={16}/>Copy Link</button></div>}
+            {inviteUrl&&<div className="vop-setting-row" style={{marginTop:10}}><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this link with the invited user.</div></div><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Check size={16}/>Copy Link</button></div>}
           </div>
+
           <div style={{marginTop:18}}>
-            <div className="vop-section-title"><div><h3>Membership</h3><p>Assign an existing account to this organization.</p></div></div>
-            <div className="vop-form-grid">
-              <div className="vop-field"><label>User UID *</label><input value={memberUid} onChange={e=>setMemberUid(e.target.value)} placeholder="Firebase account UID"/></div>
-              <div className="vop-field"><label>Role</label><select value={memberRole} onChange={e=>setMemberRole(e.target.value)}><option value="learner">Learner</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="editor">Editor</option><option value="admin">Admin</option></select></div>
-              <div style={{display:'flex',alignItems:'end'}}><button className="vop-secondary" type="button" disabled={saving||!memberUid.trim()} onClick={()=>void addMember()}><Users size={16}/>Assign</button></div>
-            </div>
-            <div className="vop-table-wrap" style={{marginTop:12}}><table className="vop-table"><thead><tr><th>UID</th><th>Role</th><th>Status</th></tr></thead><tbody>{members.map(item=><tr key={item.uid}><td>{item.uid}</td><td>{item.role}</td><td>{item.active?'Active':'Inactive'}</td></tr>)}</tbody></table></div>
+            <div className="vop-section-title"><div><h3>Audit history</h3><p>Privileged organization changes are retained automatically.</p></div></div>
+            <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
           </div>
         </>}
       </div>
