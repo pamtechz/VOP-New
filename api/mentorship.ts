@@ -63,6 +63,15 @@ function sameScope(actor: Record<string, unknown>, student: Record<string, unkno
   return !student[field] || String(student[field]) === node;
 }
 
+function assertOrganizationScope(actor: Record<string, unknown>, requestedOrganizationId: string) {
+  const actorRole = String(actor.role || '');
+  const actorOrganizationId = String(actor.organizationId || '').trim();
+  if (actorRole === 'super_admin') return requestedOrganizationId;
+  if (!actorOrganizationId) throw new Error('Your administrator account is not linked to a tenant organization.');
+  if (requestedOrganizationId && requestedOrganizationId !== actorOrganizationId) throw new Error('The requested organization is outside your tenant.');
+  return actorOrganizationId;
+}
+
 async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
   const actor = await profile(db, uid);
   if (!isAdmin(actor)) throw new Error('Administrator privileges are required.');
@@ -170,7 +179,8 @@ export default async function handler(req: Request, res: Response) {
     const actor = await profile(db, decoded.uid);
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
-    const organizationId = String(body.organizationId || actor.organizationId || '').trim();
+    let organizationId = String(body.organizationId || actor.organizationId || '').trim();
+    if (isAdmin(actor)) organizationId = assertOrganizationScope(actor, organizationId);
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
@@ -320,6 +330,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'getAutomationSettings') {
+      if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('A tenant organization is required.');
       const snapshot = await db.doc(organizationId ? `organizations/${organizationId}/settings/mentorship` : 'system/mentorship').get();
       return res.status(200).json({ ok: true, item: snapshot.exists ? snapshot.data() : {
         enabled: false,
@@ -331,6 +342,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'saveAutomationSettings') {
+      if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('A tenant organization is required.');
       const minAverageScore = Math.max(0, Math.min(100, Number(body.minAverageScore || 0)));
       const maxProgressPercent = Math.max(0, Math.min(100, Number(body.maxProgressPercent || 0)));
       const cooldownDays = Math.max(1, Math.min(90, Number(body.cooldownDays || 7)));
@@ -350,6 +362,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'createDraft') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
+      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const performance = await performanceFor(db, studentId);
       const draft = draftFor(student, performance);
@@ -377,6 +390,7 @@ export default async function handler(req: Request, res: Response) {
       const draft = draftSnapshot.data() || {};
       if (organizationId && String(draft.organizationId || '') !== organizationId) throw new Error('This draft belongs to another organization.');
       const student = await profile(db, String(draft.studentId || ''));
+      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const channel = String(draft.channel || 'in_app');
       let delivery = 'in_app';
