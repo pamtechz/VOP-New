@@ -151,6 +151,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'forkLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson copying requires the curriculum collection.');
+      await enforceFeature(ctx, 'curriculum');
       requireOrgRole(ctx, ['owner','admin','editor']);
       if (!ctx.organizationId) throw new Error('Select an organization before copying a lesson.');
       const sourceGuideId = safeId(body.sourceGuideId);
