@@ -30,6 +30,17 @@ function orgCollection(ctx: { db: FirebaseFirestore.Firestore; organizationId: s
   return ctx.db.collection(collection);
 }
 function guideId(orgId: string, lang: string) { return `${orgId}__${lang}`; }
+function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<string, unknown> }, collection: string, data: Record<string, unknown> | undefined) {
+  if (ctx.isSuperAdmin) return true;
+  const role = String(ctx.profile.role || '');
+  const nodeId = String(ctx.profile.adminNodeId || '');
+  if (!nodeId) return false;
+  if (collection === 'unions') return role === 'super_admin';
+  if (collection === 'conferences') return role === 'union_admin' && String(data?.unionId || '') === nodeId;
+  if (collection === 'districts') return role === 'conference_admin' && String(data?.conferenceId || '') === nodeId;
+  if (collection === 'churches') return role === 'district_admin' && String(data?.districtId || '') === nodeId;
+  return false;
+}
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
@@ -412,6 +423,37 @@ export default async function handler(req: Request, res: Response) {
         });
       });
       return res.status(200).json({ ok:true, decision, proposalId });
+    }
+
+    if (['unions','conferences','districts','churches'].includes(collection) && action !== 'list') {
+      if (!ctx.isSuperAdmin && !['union_admin','conference_admin','district_admin'].includes(String(ctx.profile.role || ''))) {
+        throw new Error('Only an authorized hierarchy administrator can manage this record.');
+      }
+      const id = safeId(body.id);
+      const ref = ctx.db.doc(collection + '/' + id);
+      const existing = await ref.get();
+      if (action === 'delete') {
+        if (!existing.exists || !hierarchyScopeMatches(ctx, collection, existing.data() as Record<string, unknown>)) {
+          throw new Error('You cannot delete a hierarchy record outside your assigned scope.');
+        }
+        await ref.delete();
+        return res.status(200).json({ ok:true, id });
+      }
+      if (action === 'upsert') {
+        const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        const candidate = { ...incoming };
+        if (existing.exists) {
+          if (!hierarchyScopeMatches(ctx, collection, existing.data() as Record<string, unknown>)) {
+            throw new Error('You cannot edit a hierarchy record outside your assigned scope.');
+          }
+        } else if (!hierarchyScopeMatches(ctx, collection, candidate)) {
+          throw new Error('The hierarchy record does not belong to your assigned scope.');
+        }
+        if (collection === 'unions' && !ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage unions.');
+        await ref.set({ ...candidate, id, updatedAt: FieldValue.serverTimestamp(), createdAt: existing.data()?.createdAt || new Date().toISOString() }, { merge:true });
+        return res.status(200).json({ ok:true, id });
+      }
+      throw new Error('Unsupported hierarchy action.');
     }
 
     const id = safeId(body.id);
