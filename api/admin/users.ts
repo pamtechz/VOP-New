@@ -221,6 +221,15 @@ export default async function handler(request: Request, response: Response) {
     if (!canManageTenantUsers) throw new Error('Only an organization owner or administrator can manage organization users.');
     const tenantOrganizationId = tenant.organizationId;
 
+    if (action === 'listOrganizations') {
+      if (tenant.isSuperAdmin) {
+        const snapshot = await db.collection('organizations').orderBy('name').get();
+        return response.status(200).json({ ok:true, items:snapshot.docs.map(doc => ({ id:doc.id, name:String(doc.data().name || doc.id), status:String(doc.data().status || 'active') })) });
+      }
+      const organization = await db.doc('organizations/' + tenantOrganizationId).get();
+      return response.status(200).json({ ok:true, items: organization.exists ? [{ id:organization.id, name:String(organization.data()?.name || organization.id), status:String(organization.data()?.status || 'active') }] : [] });
+    }
+
     if (action === 'list') {
       const users = tenant.isSuperAdmin && !tenantOrganizationId
         ? await listAllUsers(authService)
@@ -268,6 +277,30 @@ export default async function handler(request: Request, response: Response) {
       await authService.setCustomUserClaims(created.uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
+    }
+
+    if (action === 'assignOrganization') {
+      if (!tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can reassign a user between organizations.');
+      const targetOrganizationId = String(body.organizationId || '').trim();
+      const memberRole = String(body.organizationRole || 'learner').trim();
+      if (!targetOrganizationId) throw new Error('Select an organization.');
+      if (!['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Select a valid organization role.');
+      const organization = await db.doc('organizations/' + targetOrganizationId).get();
+      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The selected organization is not available.');
+      const targetProfile = await db.doc('users/' + uid).get();
+      if (!targetProfile.exists) throw new Error('The selected user account does not exist.');
+      const existingData = targetProfile.data() || {};
+      const previousOrganizationId = String(existingData.organizationId || '').trim();
+      const now = new Date().toISOString();
+      await db.runTransaction(async transaction => {
+        if (previousOrganizationId && previousOrganizationId !== targetOrganizationId) {
+          transaction.set(db.doc('organizations/' + previousOrganizationId + '/members/' + uid), { active:false, updatedAt:now }, { merge:true });
+        }
+        transaction.set(db.doc('organizations/' + targetOrganizationId + '/members/' + uid), { uid, organizationId:targetOrganizationId, role:memberRole, active:true, joinedAt:previousOrganizationId === targetOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt:now, assignedBy:decoded.uid }, { merge:true });
+        transaction.set(db.doc('users/' + uid), { organizationId:targetOrganizationId, organizationRole:memberRole, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      });
+      await authService.setCustomUserClaims(uid, { role:'student', organizationId:targetOrganizationId, organizationRole:memberRole });
+      return response.status(200).json({ ok:true, item:{uid, organizationId:targetOrganizationId, organizationRole:memberRole} });
     }
 
     if (!uid) return response.status(400).json({ error: 'User ID is required.' });
