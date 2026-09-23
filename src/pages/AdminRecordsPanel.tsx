@@ -737,6 +737,11 @@ function RadioAdminDashboard({
   const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
   const [search, setSearch] = useState('');
   const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'>('stream');
+  const [playlists, setPlaylists] = useState<AdminRecord[]>([]);
+  const [playlistName, setPlaylistName] = useState('');
+  const [playlistDescription, setPlaylistDescription] = useState('');
+  const [playlistItems, setPlaylistItems] = useState<string[]>([]);
+  const [playlistSaving, setPlaylistSaving] = useState(false);
 
   const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
   const nowPlaying = live[0] || records[0] || null;
@@ -749,6 +754,52 @@ function RadioAdminDashboard({
   const hasListenerMetrics = records.some(item => radioNumeric(item, ['listeners','listenerCount','currentListeners']) !== null);
 
   const change = (key: string, value: string | boolean) => setForm(current => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (!auth?.currentUser) return;
+    let cancelled = false;
+    void auth.currentUser.getIdToken().then(token =>
+      fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({collection:'radioPlaylists',action:'list'})})
+    ).then(response => response.ok ? response.json() : null)
+      .then(payload => { if (!cancelled && Array.isArray(payload?.items)) setPlaylists(payload.items as AdminRecord[]); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [records.length]);
+
+  const savePlaylist = async () => {
+    const name = playlistName.trim();
+    if (!name) { setError('Playlist name is required.'); return; }
+    if (!auth?.currentUser) { setError('Sign in first.'); return; }
+    setPlaylistSaving(true); setError('');
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({
+        collection:'radioPlaylists',action:'upsert',id:playlistName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || crypto.randomUUID(),
+        data:{name,description:playlistDescription,items:playlistItems,recordIds:playlistItems, published:true}
+      })});
+      const payload = await response.json().catch(()=>({}));
+      if (!response.ok) throw new Error(String(payload?.error || 'Could not save playlist.'));
+      const refreshed = await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({collection:'radioPlaylists',action:'list'})});
+      const latest = await refreshed.json().catch(()=>({}));
+      if (Array.isArray(latest?.items)) setPlaylists(latest.items as AdminRecord[]);
+      setPlaylistName(''); setPlaylistDescription(''); setPlaylistItems([]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save playlist.');
+    } finally { setPlaylistSaving(false); }
+  };
+
+  const deletePlaylist = async (id: string) => {
+    if (!auth?.currentUser || !window.confirm('Delete this playlist?')) return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({collection:'radioPlaylists',action:'delete',id})});
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(String(payload?.error || 'Could not delete playlist.'));
+      setPlaylists(current=>current.filter(item=>item.id!==id));
+    } catch(reason) { setError(reason instanceof Error ? reason.message : 'Could not delete playlist.'); }
+  };
+
+
 
   const submit = async (event: React.FormEvent) => {
     await save(event);
@@ -772,7 +823,7 @@ function RadioAdminDashboard({
         <AdminStat icon={<Radio/>} tone="red" label="Live Streams" value={String(live.length)} note="Currently live"/>
         <AdminStat icon={<Video/>} tone="purple" label="Total Content" value={String(records.length)} note="Audio & Video"/>
         <AdminStat icon={<BarChart3/>} tone="green" label="Total Plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'} note={hasPlayMetrics ? 'All time' : 'Not configured'}/>
-        <AdminStat icon={<ListVideo/>} tone="blue" label="Active Playlists" value="—" note="No playlist records"/>
+        <AdminStat icon={<ListVideo/>} tone="blue" label="Active Playlists" value={String(playlists.length)} note="Persistent playlists"/>
         <AdminStat icon={<Users/>} tone="orange" label="Listeners Now" value={hasListenerMetrics ? listeners.toLocaleString() : '—'} note={hasListenerMetrics ? 'Across streams' : 'Not configured'}/>
       </div>
 
@@ -822,6 +873,21 @@ function RadioAdminDashboard({
           <div className="vop-radio-admin-library-head"><div><h2>{tab === 'audio' ? 'Audio Library' : tab === 'video' ? 'Video Library' : tab === 'playlists' ? 'Playlists' : tab === 'schedule' ? 'Schedule' : tab === 'analytics' ? 'Analytics' : 'Radio Settings'}</h2><p>{tab === 'analytics' ? 'Only metrics actually stored on published records are shown.' : 'Manage configured radio records without demo or placeholder entries.'}</p></div><div className="vop-radio-admin-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search content…"/></div></div>
           {tab === 'settings' ? <div className="vop-radio-admin-settings-note"><Settings size={28}/><strong>Provider-aware player settings</strong><p>YouTube content is controlled through the YouTube IFrame Player API. AudioVerse content keeps the embedded AudioVerse controls. Direct audio/video uses the VOP custom player.</p></div> :
            tab === 'analytics' ? <div className="vop-radio-admin-analytics"><AdminMetric label="Tracked plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'}/><AdminMetric label="Tracked listeners" value={hasListenerMetrics ? listeners.toLocaleString() : '—'}/><AdminMetric label="Configured content" value={String(records.length)}/></div> :
+           tab === 'playlists' ? <div className="vop-card vop-form-card" style={{display:'grid',gap:16}}>
+             <div><h2>Persistent Playlists</h2><p>Create organization-owned playlists from configured radio content. Playlist membership is stored in the tenant database.</p></div>
+             <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
+               <label className="vop-field"><span>Name</span><input value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="Playlist name"/></label>
+               <label className="vop-field"><span>Description</span><textarea value={playlistDescription} onChange={e=>setPlaylistDescription(e.target.value)} /></label>
+             </div>
+             <div><strong>Select content</strong><div style={{display:'grid',gap:8,maxHeight:280,overflow:'auto',marginTop:8}}>
+               {records.map(item=><label key={item.id} style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" checked={playlistItems.includes(item.id)} onChange={e=>setPlaylistItems(current=>e.target.checked?[...new Set([...current,item.id])]:current.filter(id=>id!==item.id))}/><span>{String(item.title||item.id)}</span></label>)}
+               {!records.length && <div className="vop-empty">Add radio content before creating a playlist.</div>}
+             </div></div>
+             <button type="button" className="vop-primary" onClick={()=>void savePlaylist()} disabled={playlistSaving || !playlistName.trim()}><Save size={16}/>{playlistSaving?'Saving…':'Save Playlist'}</button>
+             <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Name</th><th>Items</th><th>Actions</th></tr></thead><tbody>
+               {playlists.map(item=><tr key={item.id}><td><strong>{String(item.name||'Untitled')}</strong><div className="vop-row-desc">{String(item.description||'')}</div></td><td>{Array.isArray(item.items)?item.items.length:Array.isArray(item.recordIds)?item.recordIds.length:0}</td><td><button className="vop-actions" type="button" onClick={()=>void deletePlaylist(item.id)}><Trash2 size={15}/></button></td></tr>)}
+             </tbody></table>{!playlists.length&&<div className="vop-empty">No playlists have been created.</div>}</div>
+           </div> :
            <div className="vop-radio-admin-library-grid">{filtered.filter(item => tab==='audio' ? audio.includes(item) : tab==='video' ? videos.includes(item) : true).map(item=><article key={item.id}><div className="media" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><span>{radioProvider(item)}</span><button type="button" onClick={()=>edit(item)}><Play size={16} fill="currentColor"/></button></div><h3>{String(item.title || 'Untitled')}</h3><p>{String(item.speaker || item.series || '')}</p><div><small>{radioTime(item)}</small><button type="button" onClick={()=>edit(item)}>Edit</button><button type="button" onClick={()=>void remove(item.id)}>Delete</button></div></article>)}{filtered.length===0&&<div className="vop-radio-admin-empty">No records configured.</div>}</div>}
         </div>
       )}
