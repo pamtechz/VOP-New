@@ -86,7 +86,7 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
   };
 }
 
-export async function loadFirestoreGuides(_language?: LanguageCode): Promise<DiscoverGuide[]> {
+export async function loadFirestoreGuides(_language?: LanguageCode, requestedOrganizationId = ''): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
   const guideSnapshots = [];
   const currentUser = auth?.currentUser;
@@ -95,7 +95,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
 
   if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
-    organizationId = String(profile.data()?.organizationId || '').trim();
+    organizationId = String(requestedOrganizationId || profile.data()?.organizationId || '').trim();
     isSuperAdmin = String(profile.data()?.role || '') === 'super_admin' || profile.data()?.privileges?.superAdmin === true;
   }
 
