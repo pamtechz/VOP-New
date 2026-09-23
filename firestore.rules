@@ -256,10 +256,16 @@ service cloud.firestore {
       match /lessons/{lessonId} {
         allow get: if isSuperAdmin()
           || (isOrgMember(organizationIdForUser()) && get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser())
-          || (get(/databases/$(database)/documents/guides/$(guideId)).data.get('sharingScope','private') == 'shared' && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true);
+          || (get(/databases/$(database)/documents/guides/$(guideId)).data.get('sharingScope','private') == 'shared'
+              && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true
+              && resource.data.get('sharingScope','shared') == 'shared'
+              && resource.data.get('published',false) == true);
         allow list: if isSuperAdmin()
           || (isOrgMember(organizationIdForUser()) && get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser())
-          || (get(/databases/$(database)/documents/guides/$(guideId)).data.get('sharingScope','private') == 'shared' && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true);
+          || (get(/databases/$(database)/documents/guides/$(guideId)).data.get('sharingScope','private') == 'shared'
+              && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true
+              && resource.data.get('sharingScope','shared') == 'shared'
+              && resource.data.get('published',false) == true);
         allow create: if isSuperAdmin() || (
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
           && canEditOrgContent(organizationIdForUser())
