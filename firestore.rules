@@ -443,7 +443,7 @@ service cloud.firestore {
       allow create, update, delete: if canEditCurriculum();
     }
     match /curricula/discover/languages/{language}/lessons/{lessonId} {
-      allow get, list: if signedIn() && get(/databases/$(database)/documents/curricula/discover/languages/$(language)).data.get('published', false) == true;
+      allow get, list: if get(/databases/$(database)/documents/curricula/discover/languages/$(language)).data.get('published', false) == true;
       allow create, update, delete: if canEditCurriculum();
     }
 
