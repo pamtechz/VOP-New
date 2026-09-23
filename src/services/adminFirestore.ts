@@ -370,6 +370,9 @@ export interface AdminTranslationRecord {
   id: string;
   values: Record<string, string>;
   updatedAt?: string;
+  canEdit?: boolean;
+  ownerUid?: string;
+  ownerOrganizationId?: string;
 }
 
 export const subscribeAdminCollection = (
@@ -486,6 +489,9 @@ export const subscribeTranslations = (
             id: item.id,
             values,
             updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+            canEdit: isSuperAdmin || String(raw.ownerUid || '') === uid,
+            ownerUid: String(raw.ownerUid || ''),
+            ownerOrganizationId: String(raw.ownerOrganizationId || ''),
           };
         }));
       })().catch(error => onError?.(error instanceof Error ? error : new Error('Translations could not be loaded.')));
