@@ -240,6 +240,46 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, item: { id: lessonId, published: true } });
     }
 
+    if ((collection === 'settings' || collection === 'curriculumSettings') && action === 'upsert') {
+      if (!ctx.organizationId) {
+        if (!ctx.isSuperAdmin) throw new Error('An organization membership is required for organization settings.');
+        if (collection !== 'settings') throw new Error('Curriculum settings require an organization tenant.');
+      }
+      if (!ctx.isSuperAdmin && !ctx.organizationId) throw new Error('Organization membership is required.');
+      if (!ctx.isSuperAdmin && !['owner','admin'].includes(String(ctx.organizationRole || ''))) {
+        throw new Error('Only the organization owner or administrator can change organization settings.');
+      }
+
+      const settingsId = collection === 'settings' ? 'settings' : 'curriculum';
+      const ref = ctx.isSuperAdmin && !ctx.organizationId
+        ? ctx.db.doc(`system/settings`)
+        : ctx.db.doc(`organizations/${ctx.organizationId}/settings/${settingsId}`);
+      const existing = await ref.get();
+      const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+
+      if (collection === 'curriculumSettings' && !ctx.organizationId) {
+        throw new Error('Curriculum settings belong to an organization tenant.');
+      }
+
+      await ref.set({
+        ...incoming,
+        ...(ctx.organizationId ? { organizationId: ctx.organizationId } : {}),
+        updatedBy: ctx.auth.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: existing.data()?.createdAt || new Date().toISOString(),
+      }, { merge: true });
+
+      const saved = await ref.get();
+      await writeTenantAudit(
+        ctx,
+        `${collection}.update`,
+        ref.path,
+        existing.exists ? existing.data() : undefined,
+        saved.data(),
+      );
+      return res.status(200).json({ ok: true, item: { id: settingsId, ...saved.data() } });
+    }
+
     if (action === 'list') {
       if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
         if (collection === 'certificationConfig' && ctx.isSuperAdmin) {
