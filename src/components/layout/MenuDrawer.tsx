@@ -30,15 +30,15 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
 
   return (
     <div className="modal-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label="VOP account menu" style={{ width: '100%', maxWidth: '430px', maxHeight: 'calc(100dvh - 2rem)', overflowY: 'auto', borderRadius: '2rem', background: '#f4f7ff', padding: '.85rem', boxShadow: '0 18px 45px #0003' }}>
+      <div role="dialog" aria-modal="true" aria-label={t('accessibility.accountMenu', 'VOP account menu')} style={{ width: '100%', maxWidth: '430px', maxHeight: 'calc(100dvh - 2rem)', overflowY: 'auto', borderRadius: '2rem', background: '#f4f7ff', padding: '.85rem', boxShadow: '0 18px 45px #0003' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2.5rem 1fr 2.5rem', alignItems: 'center', padding: '.25rem .5rem 1rem' }}>
-          <button type="button" onClick={onClose} aria-label="Close menu" style={{ border: 0, background: 'transparent', color: '#6b7280', minHeight: '2.5rem' }}><X size={27}/></button>
+          <button type="button" onClick={onClose} aria-label={t('accessibility.closeMenu', 'Close menu')} style={{ border: 0, background: 'transparent', color: '#6b7280', minHeight: '2.5rem' }}><X size={27}/></button>
           <h2 style={{ textAlign: 'center', fontSize: '1.08rem', color: '#111827' }}>{settings.appName}</h2>
         </div>
         <div style={{ borderRadius: '1.9rem', background: '#fff', overflow: 'hidden' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '1.6rem .9rem 1.2rem' }}>
             {currentUser.photoURL ? (
-              <img src={currentUser.photoURL} alt="Profile" style={{ width: '5.2rem', height: '5.2rem', objectFit: 'cover', borderRadius: '50%' }} />
+              <img src={currentUser.photoURL} alt={t('profile.photo', 'Profile')} style={{ width: '5.2rem', height: '5.2rem', objectFit: 'cover', borderRadius: '50%' }} />
             ) : (
               <span style={{ width: '5.2rem', height: '5.2rem', display: 'grid', placeItems: 'center', background: '#0c2d63', color: '#fff', borderRadius: '50%', fontSize: '1.8rem' }}>{currentUser.displayName.charAt(0).toUpperCase()}</span>
             )}
@@ -55,17 +55,17 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
                 <p style={{ fontSize: '.81rem', lineHeight: 1.35, color: '#4b5563', margin: '.15rem 0 0' }}>{t('progress.description', 'How far you have gone in your learning and what remains before you are certified.')}</p>
               </div>
             </div>
-            <div className="vop-cert-progress" style={{ margin: '.8rem 0 .45rem 2.2rem', height: '.8rem' }} role="progressbar" aria-label="Course progress" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
+            <div className="vop-cert-progress" style={{ margin: '.8rem 0 .45rem 2.2rem', height: '.8rem' }} role="progressbar" aria-label={t('accessibility.courseProgress', 'Course progress')} aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
               <div style={{ width: `${progress.percent}%` }}/>
             </div>
-            <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
+            <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>{t('progress.guideCount', 'Guide {completed} of {total}', { completed: progress.completedGuides, total: progress.totalGuides })}</p>
           </div>
           {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('navigation.admin', 'Admin Panel')}</button>}
-          <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>About</button>
-          <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/>Logout</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>{t('navigation.about', 'About')}</button>
+          <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/>{t('authentication.logout', 'Logout')}</button>
         </div>
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('certificates.myCertificates', 'My Certificate')}</button>
-        <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>Announcements</button>
+        <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>{t('navigation.announcements', 'Announcements')}</button>
         {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/>Talk to my mentor</button>}
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>What's New</button>
         {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management and graduation progress. The app currently stores records on this device; official certification needs a secure server.</p>}
