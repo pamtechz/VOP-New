@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
-import { getAvailableLanguages, getAvailableUiLocales, getTranslation } from '../../services/i18n';
+import { getAvailableLanguages, getAvailableUiLocales, useLocalization } from '../../services/i18n';
 import { auth } from '../../lib/firebase';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
 
@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentRoute = 'home',
   onNavigate
 }) => {
-  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings?.customTranslations, fallback);
+  const { t } = useLocalization();
   const availableLanguages = getAvailableLanguages(settings);
   const availableUiLocales = getAvailableUiLocales();
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
