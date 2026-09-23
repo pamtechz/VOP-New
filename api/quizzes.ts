@@ -83,6 +83,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'fork') {
       requireOrgRole(ctx, ['owner','admin','editor']);
+      await enforceFeature(ctx, 'quizzes');
       if (!ctx.organizationId) throw new Error('Select an organization before copying content.');
       const sourceId = safeId(body.sourceId);
       const source = await ctx.db.doc(`quizzes/${sourceId}`).get();
