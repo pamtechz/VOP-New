@@ -60,6 +60,7 @@ export function Root() {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                 },
+                body: JSON.stringify({ action: 'profile' }),
               });
               if (response.ok) {
                 const body = await response.json().catch(() => ({})) as { error?: string; profile?: User };
