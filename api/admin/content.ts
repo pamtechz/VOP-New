@@ -176,6 +176,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'upsertLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
       if (!ctx.organizationId) throw new Error('Select an organization before saving a lesson.');
+      await enforceFeature(ctx, 'curriculum');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
       const guideId = safeId(data.guideId);
@@ -186,6 +187,7 @@ export default async function handler(req: Request, res: Response) {
       if (!guide.exists || String(guide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('The selected guide does not belong to this organization.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if (!existing.exists) await enforceQuota(ctx, 'guides', 'maxLessons');
       if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
@@ -282,11 +284,11 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok:true, id });
       }
       if (action === 'upsert') {
-        const featureKey = collection === 'announcements' ? 'announcements' : collection === 'books' ? 'materials' : (collection === 'radioBroadcasts' || collection === 'radioPlaylists') ? 'radio' : collection === 'certificates' ? 'certification' : '';
+        const featureKey = collection === 'announcements' ? 'announcements' : collection === 'books' ? 'materials' : (collection === 'radioBroadcasts' || collection === 'radioPlaylists') ? 'radio' : collection === 'certificates' || collection === 'graduationRequests' ? 'certification' : collection === 'candidates' ? 'candidates' : ['learningPaths','bibleTopics','seasons','curriculum','guides'].includes(collection) ? 'curriculum' : ['languages','translations'].includes(collection) ? 'translations' : '';
         if (featureKey) await enforceFeature(ctx, featureKey);
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
         if (!existing.exists) {
-          const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
+          const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'radioPlaylists' ? 'maxRadioPlaylists' : collection === 'candidates' ? 'maxCandidates' : collection === 'certificates' ? 'maxCertificates' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : collection === 'guides' ? 'maxGuides' : '';
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
