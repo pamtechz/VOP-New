@@ -138,6 +138,140 @@ export default async function handler(request: Request, response: Response) {
       });
     }
 
+    if (action === 'reconcile-hierarchy-tenants') {
+      const actor = await actorRef.get();
+      if (!actor.exists || actor.data()?.role !== 'super_admin') {
+        return response.status(403).json({ error: 'Only the VOP super administrator can reconcile hierarchy tenants.' });
+      }
+
+      const usersSnapshot = await db.collection('users').where('role', 'in', [
+        'union_admin',
+        'conference_admin',
+        'district_admin',
+        'church_admin',
+      ]).get();
+
+      const migrated: Array<{ uid: string; organizationId: string; role: string; adminNodeType: string; adminNodeId: string }> = [];
+      const skipped: Array<{ uid: string; reason: string }> = [];
+      const unresolved: Array<{ uid: string; role: string; reason: string }> = [];
+
+      for (const userDoc of usersSnapshot.docs) {
+        const user = userDoc.data() || {};
+        const uid = userDoc.id;
+        const role = String(user.role || '');
+        const nodeType = roleNodeType[role as AdminRole];
+        const nodeId = String(user.adminNodeId || '').trim();
+
+        if (!nodeType || !nodeId) {
+          unresolved.push({ uid, role, reason: 'Missing administrator organization scope (adminNodeId).' });
+          continue;
+        }
+
+        const existingOrganizationId = String(user.organizationId || '').trim();
+        if (existingOrganizationId) {
+          skipped.push({ uid, reason: 'Already linked to an organization.' });
+          continue;
+        }
+
+        const organizationId = `${nodeType}-${nodeId}`
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 80);
+
+        if (!organizationId) {
+          unresolved.push({ uid, role, reason: 'Could not derive a tenant organization identifier.' });
+          continue;
+        }
+
+        const hierarchyCollection = nodeCollection[nodeType];
+        const nodeSnapshot = await db.doc(`${hierarchyCollection}/${nodeId}`).get();
+        const nodeName = nodeSnapshot.exists ? String(nodeSnapshot.data()?.name || '').trim() : '';
+        const organizationName = nodeName || `${nodeType.charAt(0).toUpperCase()}${nodeType.slice(1)} ${nodeId}`;
+        const organizationRef = db.doc(`organizations/${organizationId}`);
+        const organizationSnapshot = await organizationRef.get();
+
+        if (organizationSnapshot.exists) {
+          const existing = organizationSnapshot.data() || {};
+          if (
+            (existing.adminNodeType && String(existing.adminNodeType) !== nodeType)
+            || (existing.adminNodeId && String(existing.adminNodeId) !== nodeId)
+          ) {
+            unresolved.push({ uid, role, reason: 'Derived tenant identifier is already assigned to a different organization scope.' });
+            continue;
+          }
+        }
+
+        const now = new Date().toISOString();
+        await db.runTransaction(async transaction => {
+          transaction.set(
+            organizationRef,
+            {
+              id: organizationId,
+              name: organizationName,
+              slug: organizationId,
+              status: 'active',
+              ownerUid: user.ownerUid || uid,
+              adminNodeType: nodeType,
+              adminNodeId: nodeId,
+              tenantType: nodeType,
+              createdAt: organizationSnapshot.exists ? organizationSnapshot.data()?.createdAt || now : now,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+          transaction.set(
+            organizationRef.collection('members').doc(uid),
+            {
+              uid,
+              organizationId,
+              role: 'owner',
+              active: true,
+              joinedAt: now,
+              updatedAt: now,
+              reconciledAt: now,
+              reconciledBy: decoded.uid,
+            },
+            { merge: true },
+          );
+          transaction.set(
+            actorRef.parent.doc(uid),
+            {
+              organizationId,
+              organizationRole: 'owner',
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        });
+
+        const target = await getAuth(getFirebaseAdmin()).getUser(uid);
+        await getAuth(getFirebaseAdmin()).setCustomUserClaims(uid, {
+          ...(target.customClaims ?? {}),
+          role,
+          adminNodeType: nodeType,
+          adminNodeId: nodeId,
+          organizationId,
+          organizationRole: 'owner',
+        });
+
+        migrated.push({ uid, organizationId, role, adminNodeType: nodeType, adminNodeId: nodeId });
+      }
+
+      return response.status(200).json({
+        ok: true,
+        migrated,
+        skipped,
+        unresolved,
+        summary: {
+          scanned: usersSnapshot.size,
+          migrated: migrated.length,
+          skipped: skipped.length,
+          unresolved: unresolved.length,
+        },
+      });
+    }
+
     if (action === 'assign-admin') {
       const actor = await actorRef.get();
       if (!actor.exists || actor.data()?.role !== 'super_admin') {
