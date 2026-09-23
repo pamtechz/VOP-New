@@ -79,9 +79,9 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
       <header className="vop-reference-blue-shell vop-account-header">
         <div className="vop-account-header-inner">
           <div className="vop-account-topbar">
-            <button type="button" className="vop-reference-back" onClick={onBack} aria-label={t('back', 'Back')}>
+            <button type="button" className="vop-reference-back" onClick={onBack} aria-label={t('common.back', 'Back')}>
               <ArrowLeft size={24} />
-              <span>{t('my_account', 'My Account')}</span>
+              <span>{t('account.title', 'My Account')}</span>
             </button>
             <button
               type="button"
@@ -95,9 +95,9 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 
           <div className="vop-account-identity">
             {currentUser.photoURL ? (
-              <img className="vop-account-avatar" src={currentUser.photoURL} alt={t('profile_photo', 'Profile')} />
+              <img className="vop-account-avatar" src={currentUser.photoURL} alt={t('profile.photo', 'Profile')} />
             ) : (
-              <span className="vop-account-avatar vop-account-avatar-fallback" aria-label={t('profile_placeholder', 'Profile')}>
+              <span className="vop-account-avatar vop-account-avatar-fallback" aria-label={t('profile.name', 'Profile')}>
                 {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
               </span>
             )}
@@ -110,7 +110,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
                 <rect x="7" y="5" width="30" height="26" rx="4" />
                 <path d="M17 22V36L22 32L27 36V22" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span>{t('certificate_button', 'Certificate')}</span>
+              <span>{t('certificates.button', 'Certificate')}</span>
             </button>
           </div>
         </div>
@@ -120,7 +120,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
       <main className="vop-reference-main">
         {saved && (
           <p role="status" className="vop-reference-success">
-            <Check size={16} /> {t('contact_saved_local', 'Contact details saved on this device.')}
+            <Check size={16} /> {t('profile.changesSaved', 'Contact details saved on this device.')}
           </p>
         )}
 
@@ -128,23 +128,23 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
           <form onSubmit={submit} className="vop-reference-form">
             <h2>{t('profile.contactDetails', 'Contact details')}</h2>
             <p className="vop-reference-muted">
-              {t('identity_admin_note', 'Identity and organisation assignments are managed by authorised administration.')}
+              {t('profile.adminNote', 'Identity and organisation assignments are managed by authorised administration.')}
             </p>
             <label className="vop-reference-field">
-              {t('phone', 'Phone')}
+              {t('profile.phone', 'Phone')}
               <input type="tel" value={phone} onChange={event => setPhone(event.target.value)} />
             </label>
             <label className="vop-reference-field">
-              {t('address', 'Address')}
+              {t('profile.address', 'Address')}
               <input value={address} onChange={event => setAddress(event.target.value)} />
             </label>
-            <button type="submit" className="vop-cert-action-btn" style={{ minHeight: '2.85rem' }}>{t('save', 'Save')}</button>
+            <button type="submit" className="vop-cert-action-btn" style={{ minHeight: '2.85rem' }}>{t('common.save', 'Save')}</button>
           </form>
         ) : (
           <>
             {/* LESSON PROGRESS CARD matching Screenshot 2 */}
-            <section aria-label={t('lesson_progress', 'Lesson progress')} className="vop-reference-card">
-              <h2 className="vop-reference-card-title">{t('lesson_progress', 'LESSON PROGRESS')}</h2>
+            <section aria-label={t('progress.lessonProgress', 'Lesson progress')} className="vop-reference-card">
+              <h2 className="vop-reference-card-title">{t('progress.lessonProgress', 'LESSON PROGRESS')}</h2>
               {availableGuides.length ? (
                 <div className="vop-lesson-progress-row">
                   {availableGuides.flatMap((guide, gIdx) => guide.lessons.map((lesson, idx) => {
@@ -178,14 +178,14 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
                 </div>
               ) : (
                 <div className="vop-reference-empty">
-                  {t('no_lesson_progress', 'No published lesson progress is available yet.')}
+                  {t('progress.noProgress', 'No published lesson progress is available yet.')}
                 </div>
               )}
             </section>
 
             {/* GUIDE PROGRESS CARD matching Screenshot 2 */}
-            <section aria-label={t('guide_progress', 'Guide progress')} className="vop-reference-card">
-              <h2 className="vop-reference-card-title">{t('guide_progress', 'GUIDE PROGRESS')}</h2>
+            <section aria-label={t('progress.guideProgress', 'Guide progress')} className="vop-reference-card">
+              <h2 className="vop-reference-card-title">{t('progress.guideProgress', 'GUIDE PROGRESS')}</h2>
               <div className="vop-lesson-progress-row">
                 {availableGuides.length ? (
                   availableGuides.map((guide, gIdx) => {
@@ -211,13 +211,13 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
             </section>
 
             {/* Assigned Ministry Organization */}
-            <section aria-label={t('organization_assignment', 'Organisation assignment')} className="vop-reference-card">
-              <h2 className="vop-reference-card-title">{t('organization_assignment', 'ASSIGNED MINISTRY ORGANIZATION')}</h2>
+            <section aria-label={t('organizations.assignment', 'Organisation assignment')} className="vop-reference-card">
+              <h2 className="vop-reference-card-title">{t('organizations.assignment', 'ASSIGNED MINISTRY ORGANIZATION')}</h2>
               <p className="vop-reference-muted" style={{ margin: 0, fontWeight: 600, color: '#111827' }}>
-                {orgNames.length ? orgNames.join(' · ') : t('not_assigned', 'Not assigned')}
+                {orgNames.length ? orgNames.join(' · ') : t('common.unassigned', 'Not assigned')}
               </p>
               <p className="vop-reference-muted" style={{ marginTop: '0.4rem', fontSize: '0.74rem' }}>
-                {t('organization_admin_only', 'Only administrators may change organisation assignments.')}
+                {t('organizations.adminOnly', 'Only administrators may change organisation assignments.')}
               </p>
             </section>
           </>
