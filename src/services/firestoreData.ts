@@ -106,7 +106,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     guideSnapshots.push(...owned.docs.filter(item => item.data().sharingScope !== 'shared'));
   }
 
-  const legacyGuides = await getDocs(collection(firestore, 'curricula/discover/languages'));
+  const legacyGuides = await getDocs(query(collection(firestore, 'curricula/discover/languages'), where('published', '==', true)));
 
   const guides = new Map<string, { guide: DiscoverGuide; lessonsRef: ReturnType<typeof collection> }>();
 
