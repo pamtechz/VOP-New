@@ -239,6 +239,10 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   };
 
   const edit = (record: AdminRecord) => {
+    if (record.canEdit === false) {
+      setError('This record is owned by another contributor and cannot be edited. Only the contributor who added it or VOP Super Admin can edit it.');
+      return;
+    }
     setEditingId(record.id);
     const next: FormState = {};
     Object.entries(record).forEach(([key, value]) => {
@@ -282,6 +286,11 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   };
 
   const remove = async (id: string) => {
+    const target = records.find(record => record.id === id);
+    if (target?.canEdit === false) {
+      setError('This record is owned by another contributor and cannot be deleted. Only the contributor who added it or VOP Super Admin can delete it.');
+      return;
+    }
     if (!window.confirm('Delete this record?')) return;
     try {
       if (!isRecordKind(kind)) return;
@@ -486,7 +495,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
               {visibleRecords.map((record,index)=><tr key={record.id}>
                 <td>{index+1}</td>
                 {tableCells(kind, record)}
-                <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
+                <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
               </tr>)}
             </tbody>
           </table>
