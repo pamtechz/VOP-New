@@ -89,6 +89,7 @@ export default async function handler(req: Request, res: Response) {
       const source = await ctx.db.doc(`quizzes/${sourceId}`).get();
       if (!source.exists || source.data()?.published !== true || source.data()?.sharingScope !== 'shared') throw new Error('Only approved shared quizzes can be copied.');
       const id = safeId(body.id || crypto.randomUUID().replace(/-/g, '').slice(0, 20));
+      await enforceQuota(ctx, 'quizzes', 'maxQuizzes');
       const now = new Date().toISOString();
       const data = source.data() || {};
       await ctx.db.doc(`quizzes/${id}`).set({
