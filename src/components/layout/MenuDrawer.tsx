@@ -61,6 +61,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
             <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
           </div>
           {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('admin_panel', 'Admin Panel')}</button>}
+          <button type="button" style={itemStyle} onClick={() => navigate('personal-settings')}><UserCheck size={24}/>Personal Settings</button>
           <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>About</button>
           <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/>Logout</button>
         </div>
