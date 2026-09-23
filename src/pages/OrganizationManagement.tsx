@@ -7,6 +7,7 @@ type Organization = {
   quotas:Record<string,unknown>; memberCount:number; createdAt?:string;
 };
 type Member = { id:string; uid:string; role:string; active:boolean; joinedAt?:string };
+type Plan = { id:string; name:string; description?:string; active:boolean; quotas:Record<string,unknown>; features:Record<string,boolean> };
 type Usage = { members:number; guides:number; quizzes:number; announcements:number; radio:number; books:number };
 
 async function api(action:string, payload:Record<string,unknown>={}) {
@@ -26,7 +27,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [usage,setUsage]=useState<Usage|null>(null);
   const [name,setName]=useState('');
   const [organizationId,setOrganizationId]=useState('');
-  const [plan,setPlan]=useState('standard');
+  const [plan,setPlan]=useState('');
   const [status,setStatus]=useState('active'); const [quotas,setQuotas]=useState('{}');
   const [memberUid,setMemberUid]=useState(''); const [inviteEmail,setInviteEmail]=useState(''); const [inviteRole,setInviteRole]=useState('learner'); const [inviteUrl,setInviteUrl]=useState('');
   const [memberRole,setMemberRole]=useState('learner');
@@ -107,7 +108,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
       <div className="vop-card vop-form-card">
         <div className="vop-section-title"><div><h2>Tenant workspaces</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>
         <div style={{display:'grid',gap:9}}>
-          {items.map(item=><button key={item.id} type="button" onClick={()=>{setSelected(item);setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(JSON.stringify(item.quotas||{},null,2));void loadDetails(item.id);}} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
+          {items.map(item=><button key={item.id} type="button" onClick={()=>{setSelected(item);setName(item.name);setPlan(item.plan||'');setStatus(item.status||'active');setQuotas(JSON.stringify(item.quotas||{},null,2));void loadDetails(item.id);}} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div>
             <div style={{fontSize:12,color:'#7183a4',marginTop:4}}>{item.id} · {item.memberCount} active members · {item.plan}</div>
           </button>)}
