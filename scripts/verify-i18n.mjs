@@ -52,7 +52,7 @@ const namespaces = new Set();
 for (const [key, value] of keys) {
   const parts = key.split('.');
   const namespace = parts[0];
-  if (parts.length < 2 || !/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/.test(key) || !requiredNamespaces.has(namespace)) {
+  if (parts.length < 2 || !/^[a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z][a-zA-Z0-9_-]*)+$/.test(key) || !requiredNamespaces.has(namespace)) {
     invalid.push([key, value.locations]);
   } else namespaces.add(namespace);
 }
