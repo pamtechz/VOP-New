@@ -67,13 +67,14 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (!auth) return;
-    return onAuthStateChanged(auth, async firebaseUser => {
+    const firebaseAuth = auth;
+    return onAuthStateChanged(firebaseAuth, async firebaseUser => {
       if (!firebaseUser) {
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
         return;
       }
-      void loadFirestoreUser(firebaseUser.uid).then((profile: User | null) => {
+      void loadFirestoreUser(firebaseUser.uid).then(async (profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
@@ -83,9 +84,9 @@ export const App: React.FC = () => {
         setCurrentUser(profile);
         setAllUsers([profile]);
         const inviteToken = new URLSearchParams(window.location.search).get('invite');
-        if (inviteToken && auth.currentUser) {
+        if (inviteToken && firebaseAuth.currentUser) {
           try {
-            const token = await auth.currentUser.getIdToken();
+            const token = await firebaseAuth.currentUser.getIdToken();
             const response = await fetch('/api/admin/organizations', {
               method:'POST',
               headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
