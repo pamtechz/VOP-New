@@ -266,6 +266,10 @@ export const App: React.FC = () => {
               setUiLocale(language); setUiLocaleState(language); setStudyError('');
               if (auth?.currentUser) void auth.currentUser.getIdToken().then(token => fetch('/api/account/preferences',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({uiLocale:language})})).catch(()=>undefined);
             }}
+            onChangeStudyLanguage={language => {
+              setActiveLang(language); setActiveLanguage(language); setStudyError('');
+              if (auth?.currentUser) void auth.currentUser.getIdToken().then(token => fetch('/api/account/preferences',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({studyLanguage:language})})).catch(()=>undefined);
+            }}
             isDarkMode={isDarkMode}
             onToggleDarkMode={() => setIsDarkMode(value => !value)}
             isMobileShell={isMobileShell}
