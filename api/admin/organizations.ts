@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../../server/tenant';
+import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceMemberQuota } from '../../server/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -107,6 +107,7 @@ export default async function handler(req: Request, res: Response) {
       const email = String(body.email || '').trim().toLowerCase();
       const inviteRole = String(body.role || 'learner');
       if (!/^\S+@\S+\.\S+$/.test(email) || !['admin','editor','mentor','teacher','learner','viewer'].includes(inviteRole)) throw new Error('A valid email and organization role are required.');
+      await enforceMemberQuota(ctx);
       const token = crypto.randomUUID().replace(/-/g,'') + crypto.randomUUID().replace(/-/g,'');
       const now = new Date();
       const expiresAt = new Date(now.getTime()+7*24*60*60*1000).toISOString();
@@ -138,6 +139,8 @@ export default async function handler(req: Request, res: Response) {
       const organizationId = String(data.organizationId || '');
       const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const existingMembership = await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).get();
+      if (!existingMembership.exists || existingMembership.data()?.active !== true) await enforceMemberQuota(ctx, organizationId);
       const now = new Date().toISOString();
       await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
       await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
@@ -155,6 +158,8 @@ export default async function handler(req: Request, res: Response) {
       const memberRole = String(body.role || 'learner');
       if (!uid || !['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Valid member details are required.');
       if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
+      const existingMember = await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).get();
+      if (!existingMember.exists || existingMember.data()?.active !== true) await enforceMemberQuota(ctx);
       const now = new Date().toISOString();
       await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
       await writeTenantAudit(ctx, 'membership.upsert', `organizations/${ctx.organizationId}/members/${uid}`, undefined, { uid, role:memberRole, active:body.active !== false });
