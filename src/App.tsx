@@ -82,6 +82,28 @@ export const App: React.FC = () => {
         }
         setCurrentUser(profile);
         setAllUsers([profile]);
+        const inviteToken = new URLSearchParams(window.location.search).get('invite');
+        if (inviteToken && auth.currentUser) {
+          try {
+            const token = await auth.currentUser.getIdToken();
+            const response = await fetch('/api/admin/organizations', {
+              method:'POST',
+              headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+              body:JSON.stringify({action:'acceptInvite',token:inviteToken})
+            });
+            const result = await response.json().catch(()=>({}));
+            if (response.ok) {
+              window.history.replaceState({}, '', window.location.pathname);
+              const refreshed = await loadFirestoreUser(firebaseUser.uid);
+              if (refreshed) setCurrentUser(refreshed);
+              setStudyError('');
+            } else if (result?.error) {
+              setStudyError(String(result.error));
+            }
+          } catch (inviteError) {
+            console.error('Organization invitation acceptance failed', inviteError);
+          }
+        }
       }).catch((error: unknown) => {
         console.error('VOP user profile load failed', error);
         setCurrentUser(EMPTY_USER);
