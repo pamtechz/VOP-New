@@ -255,7 +255,7 @@ export const App: React.FC = () => {
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}
-          {currentRoute === 'admin' && ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || '')) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
+          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
           {showCourse && activeGuide && (
             <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
               onBack={() => setActiveGuide(null)} onSelectLesson={lesson => { setStudyError(''); setActiveLesson(lesson); }}
