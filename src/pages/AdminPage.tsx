@@ -386,18 +386,24 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       allowed.add('certification');
       allowed.add('mentorship');
     } else if (role === 'union_admin') {
+      // Hierarchy administrators are first-class tenants. Their settings,
+      // curriculum and content access is scoped to their reconciled tenant.
+      allowed.add('settings');
       allowed.add('mentorship');
       allowed.add('conferences');
       if (canEdit) allowed.add('curriculum');
     } else if (role === 'conference_admin') {
+      allowed.add('settings');
       allowed.add('mentorship');
       allowed.add('districts');
       if (canEdit) allowed.add('curriculum');
     } else if (role === 'district_admin') {
+      allowed.add('settings');
       allowed.add('mentorship');
       allowed.add('churches');
       if (canEdit) allowed.add('curriculum');
     } else if (role === 'church_admin') {
+      allowed.add('settings');
       allowed.add('mentorship');
       if (canEdit) allowed.add('curriculum');
     }

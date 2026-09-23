@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+  collection, doc, getDoc, getDocs,
   query, where, onSnapshot, type Unsubscribe, type Firestore
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -398,40 +398,14 @@ export const saveAdminRecord = async (
 ): Promise<void> => {
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
-
-  // Sensitive canonical CRUD is authorized by the server. Keep the remaining
-  // hierarchy-only legacy collections on their Firestore rules until their
-  // scope-specific API contract is migrated.
-  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts']);
-  if (serverManaged.has(collectionName)) {
-    const token = await user.getIdToken();
-    const response = await fetch('/api/admin/content', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ action: 'upsert', collection: collectionName, id, data }),
-    });
-    const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(payload.error || 'Could not save the record.');
-    return;
-  }
-
-  const firestore = getDb();
-  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
-  const existing = await getDoc(doc(firestore, collectionName, id));
-  if (organizationId && existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
-  const now = new Date().toISOString();
-  await setDoc(doc(firestore, collectionName, id), {
-    ...data,
-    ...(organizationId ? {
-      organizationId,
-      ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
-      ownerUid: existing.data()?.ownerUid || user.uid,
-      canonical: true,
-    } : {}),
-    id,
-    createdAt: existing.exists() && existing.data()?.createdAt ? existing.data()?.createdAt : now,
-    updatedAt: now,
-  }, { merge: true });
+  const token = await user.getIdToken();
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action: 'upsert', collection: collectionName, id, data }),
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not save the record.');
 };
 
 export const deleteAdminRecord = async (
@@ -440,26 +414,14 @@ export const deleteAdminRecord = async (
 ): Promise<void> => {
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
-
-  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts']);
-  if (serverManaged.has(collectionName)) {
-    const token = await user.getIdToken();
-    const response = await fetch('/api/admin/content', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ action: 'delete', collection: collectionName, id }),
-    });
-    const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(payload.error || 'Could not delete the record.');
-    return;
-  }
-
-  const firestore = getDb();
-  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
-  const existing = await getDoc(doc(firestore, collectionName, id));
-  if (!existing.exists()) return;
-  if (organizationId && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
-  await deleteDoc(doc(firestore, collectionName, id));
+  const token = await user.getIdToken();
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action: 'delete', collection: collectionName, id }),
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not delete the record.');
 };
 
 export const subscribeTranslations = (
