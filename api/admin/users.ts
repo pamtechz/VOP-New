@@ -241,11 +241,21 @@ export default async function handler(request: Request, response: Response) {
 
     if (!uid) return response.status(400).json({ error: 'User ID is required.' });
 
+    // Resolve and authorize the target profile before any Auth mutation.
+    // A tenant administrator must never be able to mutate an account from
+    // another tenant, even for operations that do not write Firestore data.
+    const targetProfileRef = db.doc(`users/${uid}`);
+    const targetProfileSnapshot = await targetProfileRef.get();
+    const targetProfileData = targetProfileSnapshot.data() || {};
+    if (!tenant.isSuperAdmin && String(targetProfileData.organizationId || '') !== tenantOrganizationId) {
+      throw new Error('This user belongs to another organization.');
+    }
+
     if (action === 'update') {
       const existing = await authService.getUser(uid);
-      const profileRef = db.doc(`users/${uid}`);
-      const existingProfile = await profileRef.get();
-      const existingData = existingProfile.data() || {};
+      const profileRef = targetProfileRef;
+      const existingProfile = targetProfileSnapshot;
+      const existingData = targetProfileData;
       const update: Parameters<typeof authService.updateUser>[1] = {};
       if (typeof body.displayName === 'string') update.displayName = body.displayName.trim();
       if (typeof body.email === 'string' && body.email.trim()) update.email = body.email.trim().toLowerCase();
