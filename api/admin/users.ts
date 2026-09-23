@@ -272,6 +272,8 @@ export default async function handler(request: Request, response: Response) {
     }
 
     if (action === 'setStatus') {
+      const targetProfile = await db.doc(`users/${uid}`).get();
+      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
       if (typeof body.disabled !== 'boolean') return response.status(400).json({ error: 'A valid account status is required.' });
       const updated = await authService.updateUser(uid, { disabled: body.disabled });
       await db.doc(`users/${uid}`).set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -279,6 +281,8 @@ export default async function handler(request: Request, response: Response) {
     }
 
     if (action === 'resetPassword') {
+      const targetProfile = await db.doc(`users/${uid}`).get();
+      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
       const target = await authService.getUser(uid);
       if (!target.email) return response.status(400).json({ error: 'This user does not have an email address.' });
       const resetLink = await authService.generatePasswordResetLink(target.email);
