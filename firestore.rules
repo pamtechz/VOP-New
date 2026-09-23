@@ -297,6 +297,19 @@ service cloud.firestore {
       );
     }
 
+    match /candidates/{id} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()));
+      allow create: if isSuperAdmin() || (
+        request.resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+      allow update, delete: if isSuperAdmin() || (
+        resource.data.get('organizationId','') == organizationIdForUser()
+        && canManageOrg(organizationIdForUser())
+      );
+    }
+
     // Tenant-owned operational records. Published shared records remain publicly readable.
     match /announcements/{id} {
       allow get, list: if isSuperAdmin()
