@@ -38,10 +38,12 @@ export async function authenticateTenant(request: Request, requestedOrganization
   if (!profileSnap.exists) throw new Error('Account profile was not found.');
   const profile = profileSnap.data() || {};
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
+  const hierarchyAdmin = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(profile.role || ''));
   const organizationId = String(requestedOrganizationId || profile.organizationId || '').trim();
   if (!organizationId) {
     if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin };
     if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin };
+    if (hierarchyAdmin) throw new Error('This administrator account is not linked to a tenant. Reassign the administrator scope before continuing.');
     throw new Error('An organization membership is required.');
   }
   const organizationSnap = await db.doc(`organizations/${organizationId}`).get();
