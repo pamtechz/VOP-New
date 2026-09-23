@@ -111,9 +111,12 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     settingsSnap,
     languagesSnap,
     translationsSnap,
-    announcementsSnap,
-    booksSnap,
-    radioSnap,
+    announcementsSharedSnap,
+    announcementsOwnedSnap,
+    booksSharedSnap,
+    booksOwnedSnap,
+    radioSharedSnap,
+    radioOwnedSnap,
     unionsSnap,
     conferencesSnap,
     districtsSnap,
@@ -122,9 +125,12 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     getDoc(doc(firestore, 'system', 'settings')),
     getDocs(query(collection(firestore, 'languages'), where('enabled', '==', true))),
     getDocs(collection(firestore, 'translations')),
-    getDocs(query(collection(firestore, 'announcements'), where('published', '==', true))),
-    getDocs(query(collection(firestore, 'books'), where('published', '==', true))),
-    getDocs(query(collection(firestore, 'radioBroadcasts'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'announcements'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'announcements'), where('organizationId', '==', organizationId || '__none__'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'books'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'books'), where('organizationId', '==', organizationId || '__none__'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'radioBroadcasts'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
+    getDocs(query(collection(firestore, 'radioBroadcasts'), where('organizationId', '==', organizationId || '__none__'), where('published', '==', true))),
     getDocs(collection(firestore, 'unions')),
     getDocs(collection(firestore, 'conferences')),
     getDocs(collection(firestore, 'districts')),
@@ -150,21 +156,21 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     }
   });
 
-  const announcements = announcementsSnap.docs
+  const announcements = [...announcementsSharedSnap.docs, ...announcementsOwnedSnap.docs]
     .filter(item => visibleTenantContent(item.data()))
     .map(item => published<Announcement>(item.data(), item.id, {
       id: item.id, title: '', tag: '', description: '',
     }))
     .filter(item => item.published === true && item.title.trim());
 
-  const books = booksSnap.docs
+  const books = [...booksSharedSnap.docs, ...booksOwnedSnap.docs]
     .filter(item => visibleTenantContent(item.data()))
     .map(item => published<BookResource>(item.data(), item.id, {
       id: item.id, name: '', category: '', author: '', imageUrl: '', description: '',
     }))
     .filter(item => item.published === true && item.name.trim());
 
-  const radioBroadcasts = radioSnap.docs
+  const radioBroadcasts = [...radioSharedSnap.docs, ...radioOwnedSnap.docs]
     .filter(item => visibleTenantContent(item.data()))
     .map(item => published<RadioBroadcast>(item.data(), item.id, {
       id: item.id, title: '', speaker: '', series: '', durationMinutes: 0,
