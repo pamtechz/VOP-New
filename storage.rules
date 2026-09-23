@@ -19,7 +19,7 @@ service firebase.storage {
     }
 
     match /organizations/{organizationId}/radio/{fileName} {
-      allow read: if member(organizationId) || userDoc().data.get('role','') == 'super_admin';
+      allow read: if true;
       allow write: if manager(organizationId)
         && request.resource.size < 524288000
         && request.resource.contentType.matches('audio/.*|video/.*|image/.*');
