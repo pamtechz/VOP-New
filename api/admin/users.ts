@@ -191,10 +191,25 @@ export default async function handler(request: Request, response: Response) {
     const tenantOrganizationId = tenant.organizationId;
 
     if (action === 'list') {
-      const users = tenant.isSuperAdmin && !tenantOrganizationId
-        ? await listAllUsers(authService)
-        : await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
-      return response.status(200).json({ ok: true, items: await serializeUsers(db, users) });
+      let profileSnapshots;
+      if (tenant.isSuperAdmin && !tenantOrganizationId) {
+        profileSnapshots = await listAllUsers(authService);
+      } else if (tenant.tenantKind === 'legacy-hierarchy' && tenant.tenantNodeType && tenant.tenantNodeId) {
+        const field = tenant.tenantNodeType === 'union' ? 'unionId'
+          : tenant.tenantNodeType === 'conference' ? 'conferenceId'
+          : tenant.tenantNodeType === 'district' ? 'districtId'
+          : 'churchId';
+        profileSnapshots = await Promise.all(
+          (await db.collection('users').where(field, '==', tenant.tenantNodeId).get()).docs
+            .map(async snapshot => authService.getUser(snapshot.id))
+        );
+      } else {
+        profileSnapshots = await Promise.all(
+          (await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs
+            .map(async snapshot => authService.getUser(snapshot.id))
+        );
+      }
+      return response.status(200).json({ ok: true, items: await serializeUsers(db, profileSnapshots) });
     }
 
     const uid = typeof body.uid === 'string' ? body.uid.trim() : '';
