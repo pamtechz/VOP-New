@@ -19,8 +19,9 @@ export default async function handler(req: Request, res: Response) {
     const ctx = await authenticateTenant(req, requestedOrg, action === 'acceptInvite');
     if (action === 'listPlans') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can view platform plans.');
-      const snap=await bootstrapDb.collection('plans').where('active','==',true).orderBy('name').get();
-      return res.status(200).json({ok:true,items:snap.docs.map(doc=>({id:doc.id,name:String(doc.data()?.name||doc.id),active:true}))});
+      const snap=await bootstrapDb.collection('plans').where('active','==',true).get();
+      const items=snap.docs.map(doc=>({id:doc.id,name:String(doc.data()?.name||doc.id),active:true})).sort((a,b)=>a.name.localeCompare(b.name));
+      return res.status(200).json({ok:true,items});
     }
 
     if (action === 'create') {
@@ -56,7 +57,7 @@ export default async function handler(req: Request, res: Response) {
           slug: String(data.slug || organization.id),
           status: String(data.status || 'active'),
           ownerUid: String(data.ownerUid || ''),
-          plan: String(data.plan || 'standard'),
+          plan: String(data.plan || ''),
           quotas: data.quotas || {},
           createdAt: String(data.createdAt || ''),
           updatedAt: String(data.updatedAt || ''),
@@ -85,6 +86,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'update') {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       if (!ctx.isSuperAdmin && data.plan !== undefined) throw new Error('Only the VOP Super Admin can change organization plans.');
+      if (!ctx.isSuperAdmin && data.quotas !== undefined) throw new Error('Only the VOP Super Admin can change organization quotas.');
       const allowed: Record<string, unknown> = {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
