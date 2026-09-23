@@ -1,5 +1,3 @@
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, writeTenantAudit } from '../../server/tenant';
 
@@ -59,7 +57,7 @@ export default async function handler(request: Request, response: Response) {
       },
       updatedAt: FieldValue.serverTimestamp(),
       baptismStatusUpdatedAt: FieldValue.serverTimestamp(),
-      baptismStatusUpdatedBy: decoded.uid,
+      baptismStatusUpdatedBy: ctx.auth.uid,
     }, { merge: true });
 
     const saved = await candidateRef.get();
