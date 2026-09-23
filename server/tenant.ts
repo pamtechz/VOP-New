@@ -4,6 +4,15 @@ import { getFirestore, FieldValue, type Firestore, type DocumentData } from 'fir
 
 type Request = { headers?: Record<string, string | string[] | undefined> };
 
+export type LegacyTenantNodeType = 'union' | 'conference' | 'district' | 'church';
+
+const LEGACY_ADMIN_NODE_TYPES: Record<string, LegacyTenantNodeType> = {
+  union_admin: 'union',
+  conference_admin: 'conference',
+  district_admin: 'district',
+  church_admin: 'church',
+};
+
 export interface TenantContext {
   db: Firestore;
   auth: DecodedIdToken;
@@ -11,6 +20,9 @@ export interface TenantContext {
   organizationId: string;
   membership: DocumentData;
   isSuperAdmin: boolean;
+  tenantKind?: 'organization' | 'legacy-hierarchy';
+  tenantNodeType?: LegacyTenantNodeType;
+  tenantNodeId?: string;
 }
 
 function adminApp() {
@@ -27,6 +39,84 @@ function header(request: Request, name: string) {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
 }
 
+/**
+ * Legacy SDA hierarchy administrators are first-class tenants.
+ * Their stable tenant key is deliberately namespaced so a union, conference,
+ * district and church with the same source ID can never collide.
+ */
+export function legacyTenantId(nodeType: LegacyTenantNodeType, nodeId: string) {
+  const safeNodeId = String(nodeId || '').trim();
+  if (!safeNodeId || safeNodeId.includes('/')) throw new Error('A valid hierarchy tenant identifier is required.');
+  return `legacy-${nodeType}-${safeNodeId}`;
+}
+
+export function legacyTenantFromProfile(profile: DocumentData | undefined) {
+  const role = String(profile?.role || '').trim();
+  const nodeType = LEGACY_ADMIN_NODE_TYPES[role];
+  const nodeId = String(profile?.adminNodeId || '').trim();
+  if (!nodeType || !nodeId) return null;
+  return { organizationId: legacyTenantId(nodeType, nodeId), nodeType, nodeId };
+}
+
+/**
+ * Resolves a user's active tenant without requiring every legacy administrator
+ * to be manually migrated before the SaaS tenant boundary becomes effective.
+ */
+export function tenantIdForProfile(profile: DocumentData | undefined) {
+  const explicit = String(profile?.organizationId || '').trim();
+  if (explicit) return explicit;
+  return legacyTenantFromProfile(profile)?.organizationId || '';
+}
+
+async function ensureLegacyTenant(
+  db: Firestore,
+  auth: DecodedIdToken,
+  profile: DocumentData,
+  nodeType: LegacyTenantNodeType,
+  nodeId: string,
+) {
+  const organizationId = legacyTenantId(nodeType, nodeId);
+  const organizationRef = db.doc(`organizations/${organizationId}`);
+  const memberRef = organizationRef.collection('members').doc(auth.uid);
+  const existing = await organizationRef.get();
+
+  if (!existing.exists) {
+    const now = new Date().toISOString();
+    await organizationRef.set({
+      id: organizationId,
+      name: `${nodeType.charAt(0).toUpperCase() + nodeType.slice(1)} ${nodeId}`,
+      slug: organizationId,
+      status: 'active',
+      tenantKind: 'legacy-hierarchy',
+      legacyNodeType: nodeType,
+      legacyNodeId: nodeId,
+      ownerUid: auth.uid,
+      plan: '',
+      quotas: {},
+      features: {},
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
+  }
+
+  const membership = await memberRef.get();
+  if (!membership.exists || membership.data()?.active !== true) {
+    await memberRef.set({
+      uid: auth.uid,
+      organizationId,
+      role: 'owner',
+      active: true,
+      legacyRole: String(profile.role || ''),
+      legacyNodeType: nodeType,
+      legacyNodeId: nodeId,
+      joinedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  }
+
+  return { organizationId, organizationRef, membership: await memberRef.get() };
+}
+
 export function getAdminDb() { return getFirestore(adminApp()); }
 
 export async function authenticateTenant(request: Request, requestedOrganizationId?: string, allowUnassigned = false): Promise<TenantContext> {
@@ -38,17 +128,52 @@ export async function authenticateTenant(request: Request, requestedOrganization
   if (!profileSnap.exists) throw new Error('Account profile was not found.');
   const profile = profileSnap.data() || {};
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
-  const organizationId = String(requestedOrganizationId || profile.organizationId || '').trim();
+  const legacyTenant = legacyTenantFromProfile(profile);
+  const explicitOrganizationId = String(requestedOrganizationId || '').trim();
+  const profileOrganizationId = String(profile.organizationId || '').trim();
+
+  if (legacyTenant && !profileOrganizationId && explicitOrganizationId && explicitOrganizationId !== legacyTenant.organizationId && !isSuperAdmin) {
+    throw new Error('You cannot access another organization.');
+  }
+
+  const organizationId = explicitOrganizationId || profileOrganizationId || legacyTenant?.organizationId || '';
+
   if (!organizationId) {
     if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin };
     if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin };
     throw new Error('An organization membership is required.');
   }
+
+  if (legacyTenant && !profileOrganizationId && organizationId === legacyTenant.organizationId && !isSuperAdmin) {
+    const ensured = await ensureLegacyTenant(db, auth, profile, legacyTenant.nodeType, legacyTenant.nodeId);
+    return {
+      db,
+      auth,
+      profile: { ...profile, organizationId },
+      organizationId,
+      membership: ensured.membership.data() || { role: 'owner', active: true },
+      isSuperAdmin,
+      tenantKind: 'legacy-hierarchy',
+      tenantNodeType: legacyTenant.nodeType,
+      tenantNodeId: legacyTenant.nodeId,
+    };
+  }
+
   const organizationSnap = await db.doc(`organizations/${organizationId}`).get();
   if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') throw new Error('The organization is not available.');
   const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
   if (!isSuperAdmin && (!membershipSnap.exists || membershipSnap.data()?.active !== true)) throw new Error('You are not a member of this organization.');
-  return { db, auth, profile, organizationId, membership: membershipSnap.data() || { role: 'platform' }, isSuperAdmin };
+  return {
+    db,
+    auth,
+    profile,
+    organizationId,
+    membership: membershipSnap.data() || { role: 'platform' },
+    isSuperAdmin,
+    tenantKind: organizationSnap.data()?.tenantKind === 'legacy-hierarchy' ? 'legacy-hierarchy' : 'organization',
+    tenantNodeType: organizationSnap.data()?.legacyNodeType as LegacyTenantNodeType | undefined,
+    tenantNodeId: String(organizationSnap.data()?.legacyNodeId || '') || undefined,
+  };
 }
 
 export function requireOrgRole(ctx: TenantContext, roles: string[]) {
@@ -64,7 +189,6 @@ export function contentOwnedByOrg(data: DocumentData | undefined, organizationId
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
   return ctx.isSuperAdmin || (contentOwnedByOrg(data, ctx.organizationId) && ['owner','admin','editor'].includes(String(ctx.membership.role || '')));
 }
-
 
 export async function getOrganizationPlan(ctx: TenantContext) {
   if (!ctx.organizationId) return null;
@@ -102,7 +226,6 @@ export async function enforceQuota(ctx: TenantContext, collectionName: string, q
   if (current.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
 }
 
-
 export async function enforceMemberQuota(ctx: TenantContext, organizationId = ctx.organizationId) {
   if (ctx.isSuperAdmin || !organizationId) return;
   const organization = await ctx.db.doc(`organizations/${organizationId}`).get();
@@ -117,7 +240,6 @@ export async function enforceMemberQuota(ctx: TenantContext, organizationId = ct
   const current = await ctx.db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
   if (current.size + 1 > limit) throw new Error('The organization has reached its configured maxUsers limit.');
 }
-
 
 export async function writeTenantAudit(
   ctx: TenantContext,
