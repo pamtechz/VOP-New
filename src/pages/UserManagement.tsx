@@ -30,9 +30,12 @@ type ManagedUser = {
   unionName?: string;
   adminNodeType?: string;
   adminNodeId?: string;
+  organizationId?: string;
+  organizationName?: string;
 };
 
-type OrganizationOption = { id: string; name: string; type: string };
+type OrganizationOption = { id: string; name: string; type?: string };
+type TenantOrganization = { id: string; name: string; status: string };
 
 type EditorState = {
   uid?: string;
@@ -42,6 +45,7 @@ type EditorState = {
   userType: ManagedUser['userType'];
   adminNodeType: string;
   adminNodeId: string;
+  organizationId: string;
   password: string;
 };
 
@@ -76,11 +80,13 @@ function roleLabel(type: ManagedUser['userType']) {
 }
 
 function emptyEditor(): EditorState {
-  return { displayName: '', email: '', phoneNumber: '', userType: 'learner', adminNodeType: '', adminNodeId: '', password: '' };
+  return { displayName: '', email: '', phoneNumber: '', userType: 'learner', adminNodeType: '', adminNodeId: '', organizationId: '', password: '' };
 }
 
 export default function UserManagement({ onBack }: Props) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [tenantOrganizations, setTenantOrganizations] = useState<TenantOrganization[]>([]);
+  const [currentOrganizationId, setCurrentOrganizationId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -100,6 +106,13 @@ export default function UserManagement({ onBack }: Props) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const pageSize = 8;
 
+  const loadOrganizations = async () => {
+    try {
+      const body = await userApi('listOrganizations');
+      setTenantOrganizations((body.items || []) as TenantOrganization[]);
+    } catch { /* User loading remains useful even when organization metadata is unavailable. */ }
+  };
+
   const load = async () => {
     setLoading(true);
     setError('');
@@ -113,7 +126,7 @@ export default function UserManagement({ onBack }: Props) {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void Promise.all([load(), loadOrganizations()]); }, []);
   useEffect(() => { setPage(1); }, [search, roleFilter, statusFilter, conferenceFilter, districtFilter]);
 
   const roles = useMemo(() => Array.from(new Set(users.map(user => user.roleLabel).filter(Boolean))).sort(), [users]);
@@ -176,6 +189,7 @@ export default function UserManagement({ onBack }: Props) {
       userType: user.userType,
       adminNodeType: user.adminNodeType || '',
       adminNodeId: user.adminNodeId || '',
+      organizationId: user.organizationId || '',
       password: '',
     });
     setMenuUid(null);
@@ -198,6 +212,7 @@ export default function UserManagement({ onBack }: Props) {
         userType: editor.userType,
         adminNodeType: editor.adminNodeType,
         adminNodeId: editor.adminNodeId,
+        ...(editor.organizationId ? { organizationId: editor.organizationId } : {}),
         ...(editor.password ? { password: editor.password } : {}),
       });
       if (body.item?.resetLink) setResetLink(body.item.resetLink);
@@ -248,8 +263,8 @@ export default function UserManagement({ onBack }: Props) {
   };
 
   const exportUsers = () => {
-    const headers = ['User Code', 'Name', 'Email', 'Role', 'Status', 'Conference', 'District', 'Last Login'];
-    const rows = filtered.map(user => [user.userCode, user.displayName, user.email, user.roleLabel, user.status, user.conferenceName || '', user.districtName || '', user.lastLogin || '']);
+    const headers = ['User Code', 'Name', 'Email', 'Role', 'Organization', 'Status', 'Conference', 'District', 'Last Login'];
+    const rows = filtered.map(user => [user.userCode, user.displayName, user.email, user.roleLabel, user.organizationName || '', user.status, user.conferenceName || '', user.districtName || '', user.lastLogin || '']);
     const csv = [headers, ...rows].map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -360,7 +375,7 @@ export default function UserManagement({ onBack }: Props) {
                       <td>{(page - 1) * pageSize + index + 1}</td>
                       <td><div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.userCode}</span></div></div></td>
                       <td>{user.email || 'Not recorded'}</td>
-                      <td><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span></td>
+                      <td><div><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span>{user.organizationName && <small style={{display:'block',marginTop:4,color:'#7183a4'}}>{user.organizationName}</small>}</div></td>
                       <td><div className="vop-org-cell"><span>{user.conferenceName || 'Not assigned'}</span><small>{user.districtName || 'Not assigned'}</small></div></td>
                       <td><span className={'vop-user-status ' + (user.disabled ? 'inactive' : 'active')}>{user.disabled ? 'Inactive' : 'Active'}</span></td>
                       <td>{formatLastLogin(user.lastLogin)}</td>
@@ -421,7 +436,7 @@ export default function UserManagement({ onBack }: Props) {
           <div className="vop-user-profile-summary"><Avatar user={selected} large/><div><h3>{selected.displayName}</h3><span>{selected.email}</span><div className="vop-user-modal-pills"><span className={'vop-user-role-pill ' + selected.roleColor}>{selected.roleLabel}</span><span className={'vop-user-status ' + (selected.disabled ? 'inactive' : 'active')}>{selected.disabled ? 'Inactive' : 'Active'}</span></div></div></div>
           <div className="vop-user-detail-grid">
             <div><small>User ID</small><strong>{selected.userCode}</strong></div><div><small>Last Login</small><strong>{formatLastLogin(selected.lastLogin)}</strong></div>
-            <div><small>Conference</small><strong>{selected.conferenceName || 'Not assigned'}</strong></div><div><small>District</small><strong>{selected.districtName || 'Not assigned'}</strong></div>
+            <div><small>Organization</small><strong>{selected.organizationName || 'Not assigned'}</strong></div><div><small>Conference</small><strong>{selected.conferenceName || 'Not assigned'}</strong></div><div><small>District</small><strong>{selected.districtName || 'Not assigned'}</strong></div>
             <div><small>Union</small><strong>{selected.unionName || 'Not assigned'}</strong></div><div><small>Email Verified</small><strong>{selected.emailVerified ? 'Verified' : 'Not verified'}</strong></div>
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
@@ -437,7 +452,7 @@ export default function UserManagement({ onBack }: Props) {
             <label><span>Email *</span><input type="email" value={editor.email} onChange={e => setEditor({...editor,email:e.target.value})}/></label>
             <label><span>Phone</span><input value={editor.phoneNumber} onChange={e => setEditor({...editor,phoneNumber:e.target.value})}/></label>
             <label><span>Role</span><select value={editor.userType} onChange={e => setEditor({...editor,userType:e.target.value as EditorState['userType']})}><option value="super_admin">Super Admin</option><option value="admin">Admin</option><option value="teacher">Teacher</option><option value="mentor">Mentor</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
-            {editor.userType === 'admin' && <><label><span>Admin Scope</span><select value={editor.adminNodeType} onChange={e => setEditor({...editor,adminNodeType:e.target.value,adminNodeId:''})}><option value="">Select scope</option>{Array.from(new Set(organizations.map(item => item.type))).map(type => <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}</select></label><label><span>Organization</span><select value={editor.adminNodeId} onChange={e => setEditor({...editor,adminNodeId:e.target.value})}><option value="">Select organization</option>{organizations.filter(item => item.type === editor.adminNodeType).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></>}
+            <label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})}><option value="">Platform / no organization</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{editor.userType === 'admin' && <small>Choose the organization this administrator will manage.</small>}</label>
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
@@ -448,7 +463,7 @@ export default function UserManagement({ onBack }: Props) {
       {bulkInput && <div className="vop-user-modal-backdrop" onMouseDown={() => setBulkInput(false)}>
         <div className="vop-user-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
           <div className="vop-user-modal-head"><div><h2>Bulk Import Users</h2><p>Import account records from a CSV file.</p></div><button type="button" onClick={() => setBulkInput(false)}><X size={19}/></button></div>
-          <div className="vop-bulk-drop"><Upload size={28}/><strong>Select a CSV file</strong><span>Use displayName, email, phoneNumber, userType, adminNodeType and adminNodeId columns.</span><button className="vop-secondary" type="button" onClick={() => fileRef.current?.click()}>Choose CSV</button><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={async event => { const file = event.target.files?.[0]; if (!file) return; try { await importCsv(file); setBulkInput(false); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import CSV.'); } finally { event.target.value = ''; } }}/><button type="button" className="vop-link-button" onClick={downloadTemplate}>Download template</button></div>
+          <div className="vop-bulk-drop"><Upload size={28}/><strong>Select a CSV file</strong><span>Bulk import is available for operational migration; normal user assignment should use the visual organization and member controls.</span><button className="vop-secondary" type="button" onClick={() => fileRef.current?.click()}>Choose CSV</button><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={async event => { const file = event.target.files?.[0]; if (!file) return; try { await importCsv(file); setBulkInput(false); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import CSV.'); } finally { event.target.value = ''; } }}/><button type="button" className="vop-link-button" onClick={downloadTemplate}>Download template</button></div>
         </div>
       </div>}
     </div>
