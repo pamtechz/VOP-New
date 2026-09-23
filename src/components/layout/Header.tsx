@@ -37,6 +37,22 @@ export const Header: React.FC<HeaderProps> = ({
   const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings?.customTranslations, fallback);
   const availableLanguages = getAvailableLanguages(settings);
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+  const [organizations, setOrganizations] = React.useState<Array<{organizationId:string;name:string;role:string;active:boolean}>>([]);
+  React.useEffect(() => {
+    if (!auth?.currentUser || !currentUser.organizationIds || currentUser.organizationIds.length < 2) { setOrganizations([]); return; }
+    void auth.currentUser.getIdToken().then(token => fetch('/api/admin/organizations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listMyMemberships'})}))
+      .then(response => response.ok ? response.json() : null)
+      .then(result => setOrganizations(Array.isArray(result?.items) ? result.items : []))
+      .catch(() => setOrganizations([]));
+  }, [currentUser.uid, currentUser.organizationId, currentUser.organizationIds?.length]);
+  const switchOrganization = async (organizationId:string) => {
+    if (!auth?.currentUser || organizationId === currentUser.organizationId) return;
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/admin/organizations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'switchOrganization',organizationId})});
+    if (response.ok) window.location.reload();
+  };
+
+
 
   const nav = (route: AppRoute) => {
     if (onNavigate) {
@@ -95,6 +111,9 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             />
           </div>
+          {organizations.length > 1 && <select aria-label={t('organizations.switch','Switch organization')} value={currentUser.organizationId || ''} onChange={e => void switchOrganization(e.target.value)} style={{maxWidth:190,padding:'0.4rem 0.55rem',borderRadius:8}}>
+            {organizations.map(item => <option key={item.organizationId} value={item.organizationId}>{item.name}</option>)}
+          </select>}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <span style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.01em', fontFamily: 'var(--font-display)' }}>
