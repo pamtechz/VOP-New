@@ -222,6 +222,7 @@ export interface LessonContentPage {
 }
 
 export interface Lesson {
+  editable?: boolean;
   ownerOrganizationId?: string;
   ownerUid?: string;
   sharingScope?: 'private' | 'organization' | 'shared';
@@ -238,6 +239,7 @@ export interface Lesson {
 }
 
 export interface DiscoverGuide {
+  editable?: boolean;
   ownerOrganizationId?: string;
   ownerUid?: string;
   sharingScope?: 'private' | 'organization' | 'shared';
