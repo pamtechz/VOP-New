@@ -22,3 +22,4 @@ jobs:
       - run: npm run build
       - run: npm run lint
       - run: npm run verify:i18n
+      - run: npm run verify:saas
