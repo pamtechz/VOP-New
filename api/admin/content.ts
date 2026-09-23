@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota } from '../lib/tenant';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit } from '../lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -98,6 +98,7 @@ export default async function handler(req: Request, res: Response) {
         updatedBy: ctx.auth.uid,
       }, { merge: true });
       const saved = await ref.get();
+      await writeTenantAudit(ctx, existing.exists ? 'guide.update' : 'guide.create', `guides/${id}`, current, saved.data());
       return res.status(200).json({ ok: true, item: { id, ...saved.data() } });
     }
 
@@ -198,6 +199,7 @@ export default async function handler(req: Request, res: Response) {
         updatedBy: ctx.auth.uid,
       }, { merge:true });
       const saved = await ref.get();
+      await writeTenantAudit(ctx, existing.exists ? 'lesson.update' : 'lesson.create', `guides/${guideId}/lessons/${lessonId}`, existing.exists ? existing.data() : undefined, saved.data());
       return res.status(200).json({ ok:true, item:{id:lessonId,...saved.data()} });
     }
 
@@ -273,6 +275,7 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'delete') {
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization can delete this content.');
         await ref.delete();
+        await writeTenantAudit(ctx, 'content.delete', `${collection}/${id}`, existing.data(), undefined);
         return res.status(200).json({ ok:true, id });
       }
       if (action === 'upsert') {
@@ -294,6 +297,7 @@ export default async function handler(req: Request, res: Response) {
           updatedBy: ctx.auth.uid,
         }, { merge:true });
         const saved=await ref.get();
+        await writeTenantAudit(ctx, existing.exists ? 'content.update' : 'content.create', `${collection}/${id}`, existing.exists ? existing.data() : undefined, saved.data());
         return res.status(200).json({ ok:true, item:{id,...saved.data()} });
       }
     }
