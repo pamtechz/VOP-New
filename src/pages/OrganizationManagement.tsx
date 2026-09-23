@@ -20,6 +20,7 @@ async function api(action:string, payload:Record<string,unknown>={}) {
 
 export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:boolean}) {
   const [items,setItems]=useState<Organization[]>([]);
+  const [plans,setPlans]=useState<Plan[]>([]);
   const [selected,setSelected]=useState<Organization|null>(null);
   const [members,setMembers]=useState<Member[]>([]);
   const [usage,setUsage]=useState<Usage|null>(null);
@@ -54,7 +55,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
       setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>);
     } catch(e){setError(e instanceof Error?e.message:'Could not load organization details.');}
   };
-  useEffect(()=>{void load();},[]);
+  useEffect(()=>{void load(); if(isSuperAdmin) void api('listPlans').then(body=>setPlans((body.items||[]) as Plan[])).catch(()=>undefined);},[]);
 
   const create=async()=>{
     if(!name.trim()) return;
@@ -119,7 +120,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
           <div className="vop-section-title"><div><h2>{selected.name}</h2><p>{selected.id}</p></div><Edit3 size={20}/></div>
           <div className="vop-form-grid">
             <div className="vop-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div>
-            <div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value="standard">Standard</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></div>
+            <div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value="">No plan</option>{plans.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{isSuperAdmin&&plans.length===0&&<small>Create plans in Plans &amp; Entitlements before assigning one.</small>}</div>
             <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div><div className="vop-field" style={{gridColumn:'1 / -1'}}><label>Usage quotas (JSON)</label><textarea value={quotas} onChange={e=>setQuotas(e.target.value)} disabled={!isSuperAdmin} rows={4} placeholder='{"maxUsers":100,"maxGuides":20,"maxQuizzes":100,"maxAnnouncements":50,"maxRadioItems":50,"maxMaterials":100}'/><small>Leave a limit out, or use a negative value, for unlimited. Limits are enforced server-side when the organization creates new records.</small></div>
             <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button></div>
           </div>
