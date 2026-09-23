@@ -143,10 +143,10 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     getDocs(query(collection(firestore, 'books'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('sharingScope', '==', 'shared'), where('published', '==', true))),
     getDocs(query(collection(firestore, 'radioBroadcasts'), where('organizationId', '==', organizationId || ''), where('published', '==', true))),
-    hierarchyQuery('unions'),
-    hierarchyQuery('conferences'),
-    hierarchyQuery('districts'),
-    hierarchyQuery('churches'),
+    getDocs(hierarchyQuery('unions')),
+    getDocs(hierarchyQuery('conferences')),
+    getDocs(hierarchyQuery('districts')),
+    getDocs(hierarchyQuery('churches')),
   ]);
 
   const visibleTenantContent = (data: Record<string, unknown>) => {
