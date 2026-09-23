@@ -252,9 +252,9 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.phoneNumber === 'string') update.phoneNumber = body.phoneNumber.trim() || null;
       if (typeof body.photoURL === 'string') update.photoURL = body.photoURL.trim() || null;
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
+      if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
-      if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
       const profile = profileForType(type, body, tenantOrganizationId);
       await profileRef.set({
         uid,
