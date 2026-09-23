@@ -1,8 +1,8 @@
 # Voice of Prophecy — Bible Correspondence School
 
-React/TypeScript/Vite interface packaged for Android with Capacitor. The app includes Discover Bible study guides, lessons, assessments, progress tracking, administrator demo screens and explicitly unverified certificate previews.
+React/TypeScript/Vite interface packaged for Android with Capacitor. The application uses Firebase Authentication/Firestore for account and content data, Vercel server APIs for privileged operations, server-side assessment grading, tenant-scoped administration, graduation approval and official certificate issuance.
 
-> **Not production ready:** Operational records, admin roles and approval records still live in editable browser `localStorage`. `src/data/initialData.ts` contains demonstration people, organisations, curriculum and approvals; these are **fixtures**, not real identities or authoritative records. No official certificate is issued by this frontend.
+> **Security model:** Browser storage is treated only as non-authoritative UI/cache state and is namespaced to the authenticated account. Operational progress, assessment results, graduation decisions, tenant membership and official credentials are server-authoritative. No system can be guaranteed literally unhackable; the release target is defense-in-depth with least privilege, tenant isolation, immutable credential records and deny-by-default Firestore rules.
 
 ## Run and check
 
@@ -57,21 +57,22 @@ The production lesson seed script writes approved lessons to the canonical `curr
 - `src/services/certificatePreview.ts`: local preview gate requiring completed curriculum plus a matching approved and dated graduation record. These browser records remain untrusted until server verification.
 - `src/pages/CertificatesPage.tsx`: responsive **UNVERIFIED PREVIEW**; no official certificate may be inferred from its appearance, downloads or shares.
 - `src/pages/AdminPage.tsx`: administrator demo, **not a security boundary**.
-- `src/services/storage.ts`: temporary device-local persistence. A queued migration changes stale completion counts, last-test-only grading and organization defaults; this source is still legacy until that migration's verified commit appears in the branch.
+- `src/services/storage.ts`: compatibility/UI cache layer only. Cached values are namespaced by Firebase account and are never used to award study credit, grades, graduation approval or official credentials.
 - `scripts/run-vop-review-once.mjs`: guarded retry-safe migration wrapper for the VOP-only runner.
 - `docs/BACKEND_CONTRACT.md`: requirements for a separate ministry backend, authenticated roles, server-side grading, curriculum revisions and official credential issuance. It does not represent an installed service.
 
-## Production release blockers
+## Production release gate
 
-1. Establish a **dedicated VOP backend** and identity provider; do not use data or credentials from another project or assume an owner/provider.
-2. Move operational settings, languages, translations, church structure, users, curriculum, progress and assessment results into authoritative administrator-managed storage. Preserve stable IDs; do not promote demo accounts into production.
-3. Enforce role and organization scope on the server. Learners cannot write scores, privileges, graduation approvals, verified identities or organizational assignments. Audit privileged changes.
-4. Require server-side recomputation of required-guide progress and passing grades, approved graduation workflow, immutable certificate IDs and a verification endpoint before issuing official credentials.
-5. Verify build, lint, unit tests, authorization and Android/device rendering before merge/release. Visual comparisons to supplied reference screenshots remain outstanding.
+1. Keep Firebase Admin credentials server-only; web configuration may contain only public Firebase client configuration.
+2. Maintain first-class SaaS tenants for `union_admin`, `conference_admin`, `district_admin` and `church_admin`, with server-side membership and hierarchy scope checks.
+3. Keep canonical guide/lesson editing restricted to the owning organization and Super Admin. Shared published content is readable/installable across tenants only where explicitly allowed; edits require an organization-owned fork.
+4. Keep learner progress and assessment grading server-authoritative. Graduation eligibility and approval are handled by the configured multi-stage workflow with revision/concurrency protection.
+5. Official certificates are issued only by the server after tenant, guide, completion, assessment, graduation and identity checks; certificate identity is immutable and public verification returns a deliberately reduced record.
+6. Run build, lint, automated authorization/security tests and Android/device visual verification before declaring a release.
 
 ### Isolation and release gate
 
-All code here is for `Pamtech-Zambia/VOP-New` only. CI uses the organization's `KASAINSTITUTE` self-hosted runner without cancelling, modifying or interfering with unrelated repositories' jobs. The draft PR must not merge simply because the UI renders; backend/security and automated checks remain release blockers.
+All code here is for `pamtechz/VOP-New` only. Backend authorization and Firestore rules are part of the release gate; a working UI is not treated as proof of authorization. Production deployments must be verified as READY before a deployment is considered active.
 
 ## UI parity
 
