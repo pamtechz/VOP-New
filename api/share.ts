@@ -71,6 +71,24 @@ export default async function handler(req: Request, res: Response) {
       }
       const targetPath = String(body.targetPath || '').trim();
       if (!isSafeTarget(targetPath)) throw new Error('A safe internal lesson or chapter path is required.');
+      const guideId = String(body.guideId || '').trim();
+      const lessonId = String(body.lessonId || '').trim();
+      if (guideId) {
+        const guide = await db.doc(`guides/${guideId}`).get();
+        if (!guide.exists) throw new Error('The shared guide was not found.');
+        const guideData = guide.data() || {};
+        const owned = isSuperAdmin || (actorOrganizationId && String(guideData.organizationId || '') === actorOrganizationId);
+        const sharedPublished = guideData.sharingScope === 'shared' && guideData.published === true;
+        if (!owned && !sharedPublished) throw new Error('This content is not available for sharing by your organization.');
+        if (lessonId) {
+          const lesson = await guide.ref.collection('lessons').doc(lessonId).get();
+          if (!lesson.exists) throw new Error('The lesson was not found.');
+          const lessonData = lesson.data() || {};
+          const lessonOwned = isSuperAdmin || (actorOrganizationId && String(lessonData.ownerOrganizationId || lessonData.organizationId || guideData.organizationId || '') === actorOrganizationId);
+          const lessonShared = lessonData.sharingScope === 'shared' && lessonData.published === true;
+          if (!lessonOwned && !(sharedPublished && lessonShared)) throw new Error('This lesson is not available for sharing by your organization.');
+        }
+      }
       const code = randomUUID().replace(/-/g, '').slice(0, 12);
       const item = {
         code,
