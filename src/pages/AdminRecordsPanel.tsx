@@ -302,7 +302,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     }
   };
 
-  const saveTranslations = async () => {
+  const saveTranslations = async (status: 'draft'|'review'|'published' = 'draft') => {
     if (!selectedTranslation) {
       setError('Select a configured language first.');
       return;
@@ -315,7 +315,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     setSaving(true);
     setError('');
     try {
-      await saveTranslation(selectedTranslation, cleaned);
+      await saveTranslation(selectedTranslation, cleaned, status);
       const localEntries = getStoredAutoLocalization();
       if (localEntries.length) {
         saveAutoLocalization(localEntries.map(entry => ({
@@ -326,7 +326,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           }
         })), false);
       }
-      setMessage('Saved ' + Object.keys(cleaned).length + ' detected translations for ' + selectedTranslation + '.');
+      setMessage((status === 'published' ? 'Published ' : status === 'review' ? 'Submitted for review ' : 'Saved draft ') + Object.keys(cleaned).length + ' translations for ' + selectedTranslation + '.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save translations.');
     } finally {
@@ -372,7 +372,9 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         <PageHead icon={Icon} title="Translations" subtitle="The system detects translatable interface strings automatically. Select a language and translate the detected entries." action={
           <div style={{display:'flex',gap:9,flexWrap:'wrap',justifyContent:'flex-end'}}>
             <button className="vop-secondary" type="button" onClick={() => window.dispatchEvent(new Event('vop_localization_discovered'))}><RefreshCw size={17}/>Refresh Detected</button>
-            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving || !selectedTranslation}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
+            <button className="vop-secondary" type="button" onClick={()=>void saveTranslations('draft')} disabled={saving || !selectedTranslation}><Save size={17}/>{saving?'Saving…':'Save Draft'}</button>
+            <button className="vop-secondary" type="button" onClick={()=>void saveTranslations('review')} disabled={saving || !selectedTranslation}>Submit Review</button>
+            <button className="vop-primary" type="button" onClick={()=>void saveTranslations('published')} disabled={saving || !selectedTranslation}>Publish</button>
           </div>
         } />
         {error && <ErrorBox message={error} clear={()=>setError('')} />}
