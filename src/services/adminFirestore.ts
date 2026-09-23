@@ -398,12 +398,29 @@ export const saveAdminRecord = async (
 ): Promise<void> => {
   const firestore = getDb();
   const existing = await getDoc(doc(firestore, collectionName, id));
+  if (!auth?.currentUser) throw new Error('Sign in first.');
   const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
+  const isGlobal = GLOBAL_CONTENT_COLLECTIONS.has(collectionName);
   if (organizationId && existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
+  if (isGlobal && existing.exists() && String(existing.data()?.ownerUid || '') !== auth.currentUser.uid) {
+    const profile = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+    if (String(profile.data()?.role || '') !== 'super_admin') throw new Error('Only the original contributor or VOP Super Admin can edit this shared record.');
+  }
   const now = new Date().toISOString();
   await setDoc(doc(firestore, collectionName, id), {
     ...data,
-    ...(organizationId ? { organizationId } : {}),
+    ...(isGlobal ? {
+      organizationId: '',
+      ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
+      ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
+      canonical: true,
+      sharingScope: 'shared',
+    } : organizationId ? {
+      organizationId,
+      ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
+      ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
+      canonical: true,
+    } : {}),
     id,
     createdAt: existing.exists() && existing.data()?.createdAt ? existing.data()?.createdAt : now,
     updatedAt: now,
@@ -415,10 +432,15 @@ export const deleteAdminRecord = async (
   id: string
 ): Promise<void> => {
   const firestore = getDb();
+  if (!auth?.currentUser) throw new Error('Sign in first.');
   const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
-  if (organizationId) {
-    const existing = await getDoc(doc(firestore, collectionName, id));
-    if (existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
+  const isGlobal = GLOBAL_CONTENT_COLLECTIONS.has(collectionName);
+  const existing = await getDoc(doc(firestore, collectionName, id));
+  if (!existing.exists()) return;
+  if (organizationId && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
+  if (isGlobal && String(existing.data()?.ownerUid || '') !== auth.currentUser.uid) {
+    const profile = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
+    if (String(profile.data()?.role || '') !== 'super_admin') throw new Error('Only the original contributor or VOP Super Admin can delete this shared record.');
   }
   await deleteDoc(doc(firestore, collectionName, id));
 };
