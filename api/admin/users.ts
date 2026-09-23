@@ -204,9 +204,10 @@ export default async function handler(request: Request, response: Response) {
             .map(async snapshot => authService.getUser(snapshot.id))
         );
       } else {
+        const memberSnapshots = await db.collection('organizations').doc(tenantOrganizationId).collection('members')
+          .where('active','==',true).get();
         profileSnapshots = await Promise.all(
-          (await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs
-            .map(async snapshot => authService.getUser(snapshot.id))
+          memberSnapshots.docs.map(async member => authService.getUser(member.id))
         );
       }
       return response.status(200).json({ ok: true, items: await serializeUsers(db, profileSnapshots) });
@@ -267,7 +268,12 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.phoneNumber === 'string') update.phoneNumber = body.phoneNumber.trim() || null;
       if (typeof body.photoURL === 'string') update.photoURL = body.photoURL.trim() || null;
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
-      if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (tenantOrganizationId) {
+        const membershipSnapshot = await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).get();
+        if (!membershipSnapshot.exists || membershipSnapshot.data()?.active !== true) {
+          throw new Error('This user is not an active member of the organization.');
+        }
+      }
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
       const profile = profileForType(type, body, tenantOrganizationId);
