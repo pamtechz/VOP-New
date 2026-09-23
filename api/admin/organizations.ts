@@ -224,7 +224,10 @@ export default async function handler(req: Request, res: Response) {
       const userSnap = await userRef.get();
       const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
       const organizationIds = [...new Set([...existingIds, organizationId])];
-      await userRef.set({organizationId,organizationRole:String(data.role || 'learner'),organizationIds,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      const existingMemberships = Array.isArray(userSnap.data()?.organizationMemberships) ? userSnap.data()?.organizationMemberships.map((item: unknown) => item && typeof item === 'object' ? item as Record<string, unknown> : null).filter(Boolean) as Record<string, unknown>[] : [];
+      const organizationMemberships = existingMemberships.filter(item => String(item.organizationId || '') !== organizationId);
+      organizationMemberships.push({ organizationId, role: String(data.role || 'learner'), active: true });
+      await userRef.set({organizationId,organizationRole:String(data.role || 'learner'),organizationIds,organizationMemberships,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       await bootstrapDb.doc(`organizationInvites/${token}`).set({status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},{merge:true});
       return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
     }
@@ -290,8 +293,11 @@ export default async function handler(req: Request, res: Response) {
       const userSnap = await userRef.get();
       const existingIds = Array.isArray(userSnap.data()?.organizationIds) ? userSnap.data()?.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : [];
       const organizationIds = [...new Set([...existingIds, ctx.organizationId])];
+      const existingMemberships = Array.isArray(userSnap.data()?.organizationMemberships) ? userSnap.data()?.organizationMemberships.map((item: unknown) => item && typeof item === 'object' ? item as Record<string, unknown> : null).filter(Boolean) as Record<string, unknown>[] : [];
+      const organizationMemberships = existingMemberships.filter(item => String(item.organizationId || '') !== ctx.organizationId);
+      organizationMemberships.push({ organizationId: ctx.organizationId, role: memberRole, active: body.active !== false });
       const activeOrganizationId = String(userSnap.data()?.organizationId || '').trim() || ctx.organizationId;
-      await userRef.set({ organizationId: activeOrganizationId, organizationRole: activeOrganizationId === ctx.organizationId ? memberRole : userSnap.data()?.organizationRole || memberRole, organizationIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await userRef.set({ organizationId: activeOrganizationId, organizationRole: activeOrganizationId === ctx.organizationId ? memberRole : userSnap.data()?.organizationRole || memberRole, organizationIds, organizationMemberships, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
     if (action === 'setStatus') {
