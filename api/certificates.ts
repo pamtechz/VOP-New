@@ -48,8 +48,13 @@ async function verify(req:Request,res:Response){
  const db=getFirestore(admin());const [snapshot,systemConfigSnapshot]=await Promise.all([db.collection('certificates').where('certificateNumber','==',number).limit(1).get(),db.doc('system/certification').get()]);
  if(snapshot.empty)return res.status(404).json({verified:false,error:'No certificate was found with that number.'});
  const document=snapshot.docs[0],data=document.data();
- const tenantConfigSnapshot=data.organizationId ? await db.doc(`organizations/${String(data.organizationId)}/settings/certification`).get() : null;
- const configData=tenantConfigSnapshot?.exists ? tenantConfigSnapshot.data()||{} : (systemConfigSnapshot.exists ? systemConfigSnapshot.data()||{} : {});
+ const certificateOrganizationId=String(data.organizationId || '').trim();
+ const tenantConfigSnapshot=certificateOrganizationId ? await db.doc(`organizations/${certificateOrganizationId}/settings/certification`).get() : null;
+ // Tenant-issued certificates must use that tenant's certification policy. The
+ // platform fallback is reserved for legacy certificates that have no tenant.
+ const configData=certificateOrganizationId
+   ? (tenantConfigSnapshot?.exists ? tenantConfigSnapshot.data()||{} : {})
+   : (systemConfigSnapshot.exists ? systemConfigSnapshot.data()||{} : {});
  const enabled=configData.verificationEnabled===true;
  if(!enabled||data.status!=='Certified')return res.status(200).json({verified:false,certificate:publicCertificate(document.id,data),error:'This certificate is not currently available for public verification.'});
  return res.status(200).json({verified:true,certificate:publicCertificate(document.id,data),config:publicConfig(configData)});
