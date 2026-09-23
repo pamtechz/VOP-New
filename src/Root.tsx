@@ -54,7 +54,7 @@ export function Root() {
             let profile: User | null = null;
             try {
               const token = await firebaseUser.getIdToken();
-              const response = await fetch('/api/account/profile', {
+              const response = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
