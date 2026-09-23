@@ -135,6 +135,8 @@ export const CertificationManager: React.FC<Props> = ({
   const [menuId, setMenuId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [approvedCandidates, setApprovedCandidates] = useState<GraduationCandidate[]>([]);
+  const [graduationRequests, setGraduationRequests] = useState<GraduationCandidate[]>([]);
+  const [decidingRequestId, setDecidingRequestId] = useState<string | null>(null);
   const [issuerOpen, setIssuerOpen] = useState(false);
   const [issuerSearch, setIssuerSearch] = useState('');
   const [issuingCandidateId, setIssuingCandidateId] = useState<string | null>(null);
@@ -151,9 +153,9 @@ export const CertificationManager: React.FC<Props> = ({
       setCertificates(((certificateResponse.items || []) as CertificateRecord[])
         .filter(item => item && typeof item.id === 'string' && item.status !== 'Revoked'));
       setConfig(((configResponse.items || [])[0] || null) as CertificationConfig | null);
-      setApprovedCandidates(((requestResponse.items || []) as GraduationCandidate[])
-        .filter(item => item && typeof item.candidateId === 'string' && item.status === 'approved')
-        .filter(item => !item.approvedAt || Boolean(toDate(item.approvedAt))));
+      const requests = ((requestResponse.items || []) as GraduationCandidate[]).filter(item => item && typeof item.candidateId === 'string');
+      setGraduationRequests(requests);
+      setApprovedCandidates(requests.filter(item => item.status === 'approved').filter(item => !item.approvedAt || Boolean(toDate(item.approvedAt))));
     } catch (error) {
       console.error('Certification records could not be loaded', error);
     } finally {
@@ -229,6 +231,32 @@ export const CertificationManager: React.FC<Props> = ({
     });
     await load();
     showMessage('Certification configuration saved.');
+  };
+
+  const decideGraduation = async (request: GraduationCandidate, decision: 'approve' | 'reject') => {
+    if (!auth?.currentUser || decidingRequestId) return;
+    const revision = Number((request as GraduationCandidate & { revision?: number }).revision);
+    if (!Number.isInteger(revision) || revision < 1) {
+      showMessage('This graduation request has no valid revision. Refresh the certification queue.');
+      return;
+    }
+    setDecidingRequestId(request.id);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/graduations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'decision', requestId: request.id, decision, revision }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || 'Graduation decision could not be saved.');
+      await load();
+      showMessage(decision === 'approve' ? 'Graduation stage approved.' : 'Graduation request rejected.');
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : 'Graduation decision failed.');
+    } finally {
+      setDecidingRequestId(null);
+    }
   };
 
   const issueCertificate = async (candidateId: string) => {
@@ -362,6 +390,29 @@ export const CertificationManager: React.FC<Props> = ({
         <div className="vop-cert-title-icon purple"><Award size={32} /></div>
         <div><h2>Certified Candidates</h2><p>View and manage candidates who have successfully completed VOP courses.</p></div>
       </div>
+      {graduationRequests.filter(item => item.status !== 'approved' && item.status !== 'rejected').length > 0 && (
+        <section className="vop-cert-config-card" style={{marginBottom:16}}>
+          <div className="vop-cert-config-card-head">
+            <div><h2>Graduation Approval Queue</h2><p>Requests are advanced only through the server-authorized workflow stage configured by the administrator.</p></div>
+          </div>
+          <div className="vop-cert-issuer-list">
+            {graduationRequests.filter(item => item.status !== 'approved' && item.status !== 'rejected').map(request => {
+              const workflow = request as GraduationCandidate & { workflowStageId?: string; workflowStageIndex?: number; revision?: number };
+              return (
+                <div className="vop-cert-issuer-row" key={request.id}>
+                  <div className="vop-cert-issuer-avatar"><Users size={18} /></div>
+                  <div><strong>{request.candidateName || 'Unnamed candidate'}</strong><span>{request.guideTitle || 'Guide not recorded'} · Stage: {workflow.workflowStageId || request.status || 'pending'}</span></div>
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="vop-cert-primary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'approve')}>{decidingRequestId === request.id ? 'Saving…' : 'Approve'}</button>
+                    <button className="vop-cert-secondary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'reject')}>Reject</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="vop-cert-metrics">
         <div className="vop-cert-metric"><span className="blue"><GraduationCap size={28} /></span><div><small>Total Certified</small><strong>{totalCertified}</strong><em>All time</em></div></div>
         <div className="vop-cert-metric"><span className="green"><CheckCircle2 size={28} /></span><div><small>This Year</small><strong>{thisYear}</strong><em>{yearText(now)}</em></div></div>
