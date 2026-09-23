@@ -353,6 +353,12 @@ export default async function handler(request: Request, response: Response) {
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
       if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (type === 'super_admin' && !tenant.isSuperAdmin) {
+        throw new Error('Only the VOP Super Admin can assign the platform super administrator role.');
+      }
+      if (type === 'super_admin' && tenantOrganizationId) {
+        throw new Error('A platform administrator cannot be assigned to an organization tenant.');
+      }
       // Super Admin may manage users platform-wide, but changing a user's
       // display role must not silently detach that user from an existing tenant.
       // Tenant reassignment is a separate, explicit organization operation.
