@@ -182,11 +182,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   fontFamily: 'var(--font-display)'
                 }}
               >
-                {settings.certificateTitle || t('course_certificate')}
+                {settings.certificateTitle || t('certificates.courseCertificate')}
               </div>
 
               <div style={{ fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic', marginBottom: '0.5rem' }}>
-                {t('certified_text')}
+                {t('certificates.certifiedText')}
               </div>
 
               {/* Student Name */}
