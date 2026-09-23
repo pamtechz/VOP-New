@@ -195,6 +195,7 @@ export async function loadFirestoreUser(uid: string): Promise<User | null> {
     role: data.role,
     organizationId: data.organizationId,
     organizationRole: data.organizationRole,
+    organizationIds: Array.isArray(data.organizationIds) ? data.organizationIds.map(value => String(value)).filter(Boolean) : (data.organizationId ? [String(data.organizationId)] : []),
     adminNodeType: data.adminNodeType,
     adminNodeId: data.adminNodeId,
     information: {
