@@ -64,8 +64,8 @@ export default async function handler(req: Request, res: Response) {
       await ctx.db.doc(`quizzes/${id}`).set({
         ...data,
         id,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: current?.ownerOrganizationId || ctx.organizationId,
+        organizationId: current?.organizationId || ctx.organizationId,
+        ownerOrganizationId: current?.ownerOrganizationId || current?.organizationId || ctx.organizationId,
         ownerUid: current?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
