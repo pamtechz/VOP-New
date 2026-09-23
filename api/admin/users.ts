@@ -118,6 +118,29 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
   });
 }
 
+
+async function syncOwnProfile(decoded: { uid: string; email?: string; name?: string; picture?: string }, db: Firestore) {
+  const ref = db.doc(`users/${decoded.uid}`);
+  const snap = await ref.get();
+  const existing = snap.exists ? snap.data() || {} : {};
+  const profile = {
+    uid: decoded.uid,
+    email: decoded.email ?? existing.email ?? '',
+    displayName: decoded.name ?? existing.displayName ?? decoded.email?.split('@')[0] ?? 'VOP Student',
+    photoURL: decoded.picture ?? existing.photoURL ?? null,
+    role: existing.role ?? 'student',
+    adminNodeType: existing.adminNodeType ?? null,
+    adminNodeId: existing.adminNodeId ?? null,
+    privileges: existing.privileges ?? { admin:false, guardian:false, editor:false, manager:false, developer:false, coordinator:false },
+    information: existing.information ?? { enrollmentDate:new Date().toISOString(), graduating:false, graduated:false, baptismCandidate:false, baptized:false },
+    progress: existing.progress ?? { discoverProgress:0, completedGuidesCount:0, totalGuidesCount:0, guideScores:{}, completedLessons:[] },
+  };
+  await ref.set({...profile,updatedAt:FieldValue.serverTimestamp(),createdAt:existing.createdAt ?? FieldValue.serverTimestamp()},{merge:true});
+  const latest=await ref.get();
+  if(!latest.exists || latest.data()?.uid !== decoded.uid) throw new Error('Firestore profile verification failed.');
+  return latest.data();
+}
+
 async function listAllUsers(authService: ReturnType<typeof getAuth>) {
   const users: UserRecord[] = [];
   let pageToken: string | undefined;
@@ -183,6 +206,10 @@ export default async function handler(request: Request, response: Response) {
     const authService = getAuth(getFirebaseAdmin());
     const body = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
     const action = typeof body.action === 'string' ? body.action : 'list';
+    if (action === 'profile') {
+      const profile = await syncOwnProfile(decoded, getFirestore(getFirebaseAdmin()));
+      return response.status(200).json({ ok:true, profile });
+    }
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;
     const tenant = await authenticateTenant(request, requestedOrganizationId);
     const db = tenant.db;
