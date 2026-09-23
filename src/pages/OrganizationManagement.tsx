@@ -52,8 +52,8 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
   const loadDetails=async(id:string)=>{
     try {
-      const [m,u,a,an]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id}),api('listAudit',{organizationId:id}),api('getAnalytics',{organizationId:id})]);
-      setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>);setAnalytics((an.analytics||null) as Analytics|null);
+      const [m,u,a,an,iv]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id}),api('listAudit',{organizationId:id}),api('getAnalytics',{organizationId:id}),api('listInvites',{organizationId:id})]);
+      setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>);setAnalytics((an.analytics||null) as Analytics|null);setInvites((iv.items||[]) as Array<Record<string,unknown>>);
     } catch(e){setError(e instanceof Error?e.message:'Could not load organization details.');}
   };
   useEffect(()=>{void load(); if(isSuperAdmin) void api('listPlans').then(body=>setPlans((body.items||[]) as Plan[])).catch(()=>undefined);},[]);
@@ -81,6 +81,17 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     finally{setSaving(false);}
   };
   const invite=async()=>{if(!selected||!inviteEmail.trim())return;setSaving(true);setError('');try{const body=await api('sendInvite',{organizationId:selected.id,email:inviteEmail.trim(),role:inviteRole});setInviteUrl(String((body.item as {inviteUrl?:string}|undefined)?.inviteUrl||''));setInviteEmail('');setMessage('Invitation created.');}catch(e){setError(e instanceof Error?e.message:'Could not create invitation.');}finally{setSaving(false);}};
+  const revokeInvite=async(token:string)=>{
+    setSaving(true);setError('');
+    try{await api('revokeInvite',{organizationId:selected?.id,token});setMessage('Invitation revoked.');if(selected) await loadDetails(selected.id);}
+    catch(e){setError(e instanceof Error?e.message:'Could not revoke invitation.');}finally{setSaving(false);}
+  };
+  const resendInvite=async(token:string)=>{
+    setSaving(true);setError('');
+    try{const body=await api('resendInvite',{organizationId:selected?.id,token});setInviteUrl(String((body.item as {inviteUrl?:string}|undefined)?.inviteUrl||''));setMessage('Invitation resent.');if(selected) await loadDetails(selected.id);}
+    catch(e){setError(e instanceof Error?e.message:'Could not resend invitation.');}finally{setSaving(false);}
+  };
+
   const addMember=async()=>{
     if(!selected||!memberUid.trim()) return;
     setSaving(true);setError('');
@@ -90,6 +101,13 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
 
   return <div>
+    {selected && (
+      <div className="vop-card" style={{marginTop:16}}>
+        <div className="vop-section-title"><div><h2>Invitation lifecycle</h2><p>Pending invitations expire after seven days and can be resent or revoked.</p></div></div>
+        {invites.length===0 ? <div className="vop-empty">No invitations have been created.</div> : <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead><tbody>{invites.map(invite=>{const token=String(invite.token||invite.id||'');const status=String(invite.status||'pending');return <tr key={token}><td>{String(invite.email||'')}</td><td>{String(invite.role||'learner')}</td><td>{status}</td><td>{String(invite.expiresAt||'')}</td><td><div className="vop-reference-action-cell">{(status==='pending'||status==='expired')&&<button className="vop-actions" type="button" onClick={()=>void resendInvite(token)} title="Resend">↻</button>}{status==='pending'&&<button className="vop-actions" type="button" onClick={()=>void revokeInvite(token)} title="Revoke">×</button>}</div></td></tr>;})}</tbody></table></div>}
+      </div>
+    )}
+
     <div className="vop-page-header">
       <div><div className="vop-breadcrumb"><Building2 size={15}/> Platform / Organizations</div><h1>Organizations</h1><p>Manage tenant workspaces, membership, plans and usage without sharing operational data between organizations.</p></div>
       <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button>
