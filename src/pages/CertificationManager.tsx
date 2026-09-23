@@ -314,16 +314,16 @@ export const CertificationManager: React.FC<Props> = ({
           <aside className="vop-cert-candidate-card">
             <div className="vop-cert-card-head"><h3>Candidate Information</h3><span className="vop-cert-status">Official Record</span></div>
             <div className="vop-cert-profile-image">{selected.candidatePhotoURL ? <img src={selected.candidatePhotoURL} alt="" /> : <EmptyAvatar />}</div>
-                <dl className="vop-cert-details">
-                  <div><dt>Full Name</dt><dd>{selected.candidateName || '—'}</dd></div>
-                  <div><dt>Course</dt><dd>{selected.courseName || '—'}</dd></div>
-                  <div><dt>Course Code</dt><dd>{selected.courseCode || '—'}</dd></div>
-                  <div><dt>Completion Date</dt><dd>{dateText(selected.completionDate)}</dd></div>
-                  <div><dt>Enrollment No.</dt><dd>{selected.certificateNumber || '—'}</dd></div>
-                  <div><dt>Church/District</dt><dd>{[selected.churchName, selected.districtName].filter(Boolean).join(' · ') || '—'}</dd></div>
-                  <div><dt>Conference</dt><dd>{selected.conferenceName || '—'}</dd></div>
-                  <div><dt>Union</dt><dd>{selected.unionName || '—'}</dd></div>
-              </dl>}
+            <dl className="vop-cert-details">
+              <div><dt>Full Name</dt><dd>{selected.candidateName || '—'}</dd></div>
+              <div><dt>Course</dt><dd>{selected.courseName || '—'}</dd></div>
+              <div><dt>Course Code</dt><dd>{selected.courseCode || '—'}</dd></div>
+              <div><dt>Completion Date</dt><dd>{dateText(selected.completionDate)}</dd></div>
+              <div><dt>Enrollment No.</dt><dd>{selected.certificateNumber || '—'}</dd></div>
+              <div><dt>Church/District</dt><dd>{[selected.churchName, selected.districtName].filter(Boolean).join(' · ') || '—'}</dd></div>
+              <div><dt>Conference</dt><dd>{selected.conferenceName || '—'}</dd></div>
+              <div><dt>Union</dt><dd>{selected.unionName || '—'}</dd></div>
+            </dl>
           </aside>
           <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} /></section>
           <aside className="vop-cert-action-card">
