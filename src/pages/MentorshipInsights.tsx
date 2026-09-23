@@ -46,7 +46,9 @@ export const MentorshipInsights: React.FC = () => {
   const [draft, setDraft] = useState<any | null>(null);
   const [draftChannel, setDraftChannel] = useState<'in_app'|'email'>('in_app');
   const [shareLinks, setShareLinks] = useState<any[]>([]);
-  const [sharePath, setSharePath] = useState('/');
+  const [shareGuides, setShareGuides] = useState<any[]>([]);
+  const [shareGuideId, setShareGuideId] = useState('');
+  const [shareLessonId, setShareLessonId] = useState('');
   const [shareLabel, setShareLabel] = useState('');
   const [shareResult, setShareResult] = useState<any | null>(null);
   const [error, setError] = useState('');
@@ -149,9 +151,14 @@ export const MentorshipInsights: React.FC = () => {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not send draft.'); }
   };
 
+  const selectedShareGuide = shareGuides.find(item => item.id === shareGuideId);
+  const shareLessons = selectedShareGuide?.lessons || [];
+
   const createShare = async () => {
+    if (!shareGuideId) { setError('Select a course before creating the enrollment link.'); return; }
     try {
-      const result = await shareApi('create', { targetPath: sharePath, label: shareLabel });
+      const targetPath = '/?guide=' + encodeURIComponent(shareGuideId) + (shareLessonId ? '&lesson=' + encodeURIComponent(shareLessonId) : '');
+      const result = await shareApi('create', { targetPath, guideId:shareGuideId, lessonId:shareLessonId, label: shareLabel || selectedShareGuide?.title || 'Course enrollment', sharingScope:'organization' });
       setShareResult(result.item);
       setNotice('Tracked share link created.');
       await loadShares();
@@ -160,9 +167,20 @@ export const MentorshipInsights: React.FC = () => {
 
   const loadShares = async () => {
     try {
-      const result = await shareApi('list');
-      setShareLinks(result.items || []);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not load share links.'); }
+      const [shareResult, guideResult] = await Promise.all([
+        shareApi('list'),
+        (async()=> {
+          if (!auth?.currentUser) return {items:[]};
+          const token=await auth.currentUser.getIdToken();
+          const response=await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'list',collection:'guides'})});
+          const body=await response.json().catch(()=>({}));
+          if(!response.ok) throw new Error(body.error || 'Could not load courses.');
+          return body;
+        })()
+      ]);
+      setShareLinks(shareResult.items || []);
+      setShareGuides(guideResult.items || []);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not load sharing data.'); }
   };
 
   useEffect(() => { void loadCore(); void loadShares(); }, []);
@@ -228,8 +246,14 @@ export const MentorshipInsights: React.FC = () => {
 
       {tab==='sharing' && <section className="vop-mentoring-card">
         <div className="vop-mentoring-card-head"><div><h2>Tracked lesson & chapter sharing</h2><p>Create a share link that returns learners to the exact lesson or chapter and records access.</p></div></div>
-        <div className="vop-share-form"><input value={sharePath} onChange={e=>setSharePath(e.target.value)} placeholder="/?guide=...&lesson=..."/><input value={shareLabel} onChange={e=>setShareLabel(e.target.value)} placeholder="Reference label"/><button className="vop-primary" type="button" onClick={()=>void createShare()}><Link2 size={16}/>Create tracked link</button></div>
-        {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Tracked lesson reference'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy</button></div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(shareResult.url)} alt="QR code for the tracked lesson link"/></div>}
+        <div className="vop-share-form">
+          <select value={shareGuideId} onChange={e=>{setShareGuideId(e.target.value);setShareLessonId('')}}><option value="">Select a course / guide</option>{shareGuides.map(item=><option key={item.id} value={item.id}>{item.title || item.name || item.id}</option>)}</select>
+          <select value={shareLessonId} onChange={e=>setShareLessonId(e.target.value)} disabled={!shareGuideId}><option value="">Open course from the beginning</option>{shareLessons.map((lesson:any)=><option key={lesson.id} value={lesson.id}>Lesson {lesson.lessonNumber || lesson.id}: {lesson.title || ''}</option>)}</select>
+          <input value={shareLabel} onChange={e=>setShareLabel(e.target.value)} placeholder="Link name (optional)"/>
+          <button className="vop-primary" type="button" onClick={()=>void createShare()} disabled={!shareGuideId}><Link2 size={16}/>Create enrollment link</button>
+        </div>
+        <p className="vop-row-desc">Anyone opening this link can create a VOP account. After sign-in, the account is enrolled in the selected course and taken directly to the selected lesson when applicable.</p>
+        {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Course enrollment link'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy Link</button></div><div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(shareResult.url)} alt="QR code for the course enrollment link"/><small>Scan to enroll</small></div></div>}
         <div className="vop-share-list">{shareLinks.map(item=><div key={item.code}><span><strong>{item.label || item.targetPath}</strong><small>{item.targetPath}</small></span><b>{Number(item.clicks||0)} opens</b><a href={item.url || '#'} target="_blank" rel="noreferrer"><ExternalLink size={15}/></a></div>)}{!shareLinks.length&&<div className="vop-empty">No tracked share links have been created.</div>}</div>
       </section>}
 
