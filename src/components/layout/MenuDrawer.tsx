@@ -68,7 +68,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
         <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>Announcements</button>
         {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/>Talk to my mentor</button>}
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>What's New</button>
-        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management and graduation progress. The app currently stores records on this device; official certification needs a secure server.</p>}
+        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management, announcements and graduation progress are now connected to the VOP account and organization services.</p>}
         <button type="button" style={{ ...itemStyle, borderTop: '1px solid #e5e7eb' }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><BookOpen size={24}/>More ministry services {expanded ? '−' : '+'}</button>
         {expanded && <div style={{ borderRadius: '1rem', background: '#fff' }}>
           <button type="button" style={itemStyle} onClick={() => navigate('resources')}><BookOpen size={22}/>Library & Books</button>
