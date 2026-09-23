@@ -7,7 +7,7 @@ type Response = { status: (code: number) => Response; json: (body: unknown) => v
 const COLLECTIONS = new Set([
   'languages','translations','announcements','books','radioBroadcasts','unions','conferences','districts','churches',
   'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
-  'graduationRequests','settings','curriculumSettings'
+  'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
 const ORG_COLLECTIONS = new Set([
