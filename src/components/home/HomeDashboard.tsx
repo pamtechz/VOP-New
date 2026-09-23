@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, DiscoverGuide, Announcement, AppSettings, LanguageCode } from '../../types';
-import { getTranslation, getAvailableLanguages } from '../../services/i18n';
+import { useLocalization, getAvailableLanguages } from '../../services/i18n';
 import { Play, Award, CheckCircle2, ChevronRight, BookOpen, Clock, Sparkles } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -25,7 +25,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 }) => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [curriculumLangFilter, setCurriculumLangFilter] = useState<string>('all');
-  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback);
+  const { t } = useLocalization();
 
   // Auto-advance carousel every 6 seconds
   useEffect(() => {
