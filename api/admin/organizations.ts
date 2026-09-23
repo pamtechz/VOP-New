@@ -107,7 +107,6 @@ export default async function handler(req: Request, res: Response) {
       const email = String(body.email || '').trim().toLowerCase();
       const inviteRole = String(body.role || 'learner');
       if (!/^\S+@\S+\.\S+$/.test(email) || !['admin','editor','mentor','teacher','learner','viewer'].includes(inviteRole)) throw new Error('A valid email and organization role are required.');
-      await enforceMemberQuota(ctx);
       const token = crypto.randomUUID().replace(/-/g,'') + crypto.randomUUID().replace(/-/g,'');
       const now = new Date();
       const expiresAt = new Date(now.getTime()+7*24*60*60*1000).toISOString();
