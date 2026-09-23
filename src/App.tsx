@@ -5,7 +5,7 @@ import type {
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, Announcement, BookResource,
 } from './types';
 import {
-  getActiveLanguage, setActiveLanguage,
+  getStudyLanguage, setStudyLanguage,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
@@ -38,7 +38,7 @@ const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enroll
 export const App: React.FC = () => {
   useLocalization();
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
-  const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
+  const [activeLanguage, setActiveLang] = useState<LanguageCode>(getStudyLanguage());
   const [uiLocale, setUiLocaleState] = useState<LanguageCode>(getUiLocale());
   const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -288,7 +288,7 @@ export const App: React.FC = () => {
               if (auth?.currentUser) void auth.currentUser.getIdToken().then(token => fetch('/api/account/preferences',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({uiLocale:language})})).catch(()=>undefined);
             }}
             onChangeStudyLanguage={language => {
-              setActiveLang(language); setActiveLanguage(language); setStudyError('');
+              setActiveLang(language); setStudyLanguage(language); setStudyError('');
               if (auth?.currentUser) void auth.currentUser.getIdToken().then(token => fetch('/api/account/preferences',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({studyLanguage:language})})).catch(()=>undefined);
             }}
             isDarkMode={isDarkMode}
