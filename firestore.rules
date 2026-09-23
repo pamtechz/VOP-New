@@ -247,6 +247,7 @@ service cloud.firestore {
         || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
       allow create: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
+        && request.resource.data.get('ownerOrganizationId','') == organizationIdForUser()
         && canEditOrgContent(organizationIdForUser())
       );
       allow update, delete: if isSuperAdmin() ? (
@@ -293,6 +294,7 @@ service cloud.firestore {
         || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
       allow create: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
+        && request.resource.data.get('ownerOrganizationId','') == organizationIdForUser()
         && canEditOrgContent(organizationIdForUser())
       );
       allow update, delete: if isSuperAdmin() ? (
