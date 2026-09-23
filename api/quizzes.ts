@@ -48,6 +48,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'upsert') {
       requireOrgRole(ctx, ['owner','admin','editor']);
+      await enforceFeature(ctx, 'quizzes');
       if (!ctx.organizationId) throw new Error('Select an organization before creating tenant content.');
       const id = safeId(body.id || crypto.randomUUID().replace(/-/g, '').slice(0, 20));
       const existing = await ctx.db.doc(`quizzes/${id}`).get();
