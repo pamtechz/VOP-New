@@ -629,21 +629,6 @@ export const assignCandidateToChurch = (
   saveUsers(users);
 };
 
-// ---------------- Candidate Progress Tracking ---------------- //
-
-export const recordLessonCompletion = (lessonId: string) => {
-  const user = getCurrentUser();
-  const guide = getStoredGuides().find(g => g.lessons.some(l => l.id === lessonId && l.type === 'Lesson'));
-  if (!guide) return;
-  const completedLessons = [...new Set([...(user.progress.completedLessons || []), lessonId])];
-  const candidate: User = { ...user, progress: { ...user.progress, completedLessons } };
-  const state = calculateCurriculumProgress(getStoredGuides(), candidate, getStoredSettings().quizPassThreshold, getActiveLanguage());
-  updateUser({ ...candidate, progress: {
-    ...candidate.progress, discoverProgress: state.percent,
-    completedGuidesCount: state.completedGuides, totalGuidesCount: state.totalGuides
-  } });
-};
-
 // ---------------- Announcements & Resources ---------------- //
 
 export const getStoredAnnouncements = (): Announcement[] => {
@@ -728,14 +713,6 @@ export const importDatabaseBackup = (jsonString: string): boolean => {
     console.error('Import backup failed:', e);
     return false;
   }
-};
-
-export const completeLessonForCurrentUser = (guideId: string, lessonId: string) => {
-  recordLessonCompletion(lessonId);
-};
-
-export const submitQuizScore = (guideId: string, lessonId: string, scorePercent: number) => {
-  recordQuizScore(guideId, lessonId, scorePercent);
 };
 
 export const addGuide = addDiscoverGuide;
