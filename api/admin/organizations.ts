@@ -225,10 +225,13 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listMyMemberships') {
-      const snap = await ctx.db.collection('organizations').get();
-      const memberships = await Promise.all(snap.docs.map(async organization => {
+      const profileIds = Array.isArray(ctx.profile.organizationIds) ? ctx.profile.organizationIds.map((value: unknown) => String(value)).filter(Boolean) : (ctx.organizationId ? [ctx.organizationId] : []);
+      const organizationRefs = ctx.isSuperAdmin
+        ? (await ctx.db.collection('organizations').get()).docs
+        : await Promise.all([...new Set(profileIds)].map(orgId => ctx.db.doc(`organizations/${orgId}`).get()));
+      const memberships = await Promise.all(organizationRefs.map(async organization => {
         const member = await organization.ref.collection('members').doc(ctx.auth.uid).get();
-        if (!member.exists || member.data()?.active !== true) return null;
+        if (!organization.exists || organization.data()?.status !== 'active' || !member.exists || member.data()?.active !== true) return null;
         return { organizationId: organization.id, name:String(organization.data()?.name || organization.id), role:String(member.data()?.role || 'learner'), active:organization.id === ctx.organizationId };
       }));
       return res.status(200).json({ok:true,items:memberships.filter(Boolean)});
