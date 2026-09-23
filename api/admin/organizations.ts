@@ -43,6 +43,42 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
     }
 
+    if (action === 'getHierarchy') {
+      const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+      const data = organization.exists ? organization.data() || {} : {};
+      const hierarchy = data.settings && typeof data.settings === 'object' && (data.settings as Record<string, unknown>).hierarchy && typeof (data.settings as Record<string, unknown>).hierarchy === 'object'
+        ? (data.settings as Record<string, unknown>).hierarchy
+        : { levels: [{ id:'level1', label:'Level 1', parentId:null }, { id:'level2', label:'Level 2', parentId:'level1' }, { id:'level3', label:'Level 3', parentId:'level2' }] };
+      return res.status(200).json({ok:true,item:hierarchy});
+    }
+
+    if (action === 'saveHierarchy') {
+      requireOrgRole(ctx,['owner','admin']);
+      const hierarchy = body.hierarchy && typeof body.hierarchy === 'object' && !Array.isArray(body.hierarchy) ? body.hierarchy as Record<string, unknown> : null;
+      if (!hierarchy) throw new Error('A valid hierarchy configuration is required.');
+      const levels = Array.isArray(hierarchy.levels) ? hierarchy.levels : [];
+      if (levels.length > 20) throw new Error('A maximum of 20 hierarchy levels is supported.');
+      const seen = new Set<string>();
+      for (const raw of levels) {
+        if (!raw || typeof raw !== 'object') throw new Error('Each hierarchy level must be an object.');
+        const level = raw as Record<string, unknown>;
+        const id = String(level.id || '').trim();
+        const label = String(level.label || '').trim();
+        const parentId = level.parentId == null ? null : String(level.parentId).trim();
+        if (!id || !label || id.length > 64 || label.length > 120 || seen.has(id)) throw new Error('Hierarchy levels require unique IDs and non-empty labels.');
+        if (parentId && parentId === id) throw new Error('A hierarchy level cannot be its own parent.');
+        seen.add(id);
+      }
+      for (const raw of levels) {
+        const parentId = raw && typeof raw === 'object' && (raw as Record<string, unknown>).parentId != null ? String((raw as Record<string, unknown>).parentId).trim() : '';
+        if (parentId && !seen.has(parentId)) throw new Error('Hierarchy parent references must point to an existing level.');
+      }
+      const settings = ctx.profile.settings && typeof ctx.profile.settings === 'object' ? ctx.profile.settings as Record<string, unknown> : {};
+      await ctx.db.doc(`organizations/${ctx.organizationId}`).set({settings:{...settings,hierarchy:{...hierarchy,levels}} ,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await writeTenantAudit(ctx,'organization.hierarchy.update',`organizations/${ctx.organizationId}`,undefined,{levels:levels.length});
+      return res.status(200).json({ok:true,item:{...hierarchy,levels}});
+    }
+
     if (action === 'getUsage') {
       const orgId = ctx.organizationId;
       const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
