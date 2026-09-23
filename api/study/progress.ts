@@ -94,13 +94,22 @@ export default async function handler(
     const tenantGuideRef = organizationId ? db.doc(`guides/${guideId}`) : null;
     const legacyGuideRef = db.doc(`curricula/discover/languages/${language}`);
     const candidateGuide = tenantGuideRef ? await tenantGuideRef.get() : null;
-    const useTenantGuide = Boolean(candidateGuide?.exists && (String(candidateGuide?.data()?.organizationId || '') === organizationId || (candidateGuide?.data()?.sharingScope === 'shared' && candidateGuide?.data()?.published === true)));
+    const candidateGuideData = candidateGuide?.exists ? candidateGuide.data() || {} : {};
+    const candidateGuideOrganizationId = String(candidateGuideData.organizationId || '').trim();
+    const candidateGuideShared = candidateGuideData.sharingScope === 'shared' && candidateGuideData.published === true;
+    const useTenantGuide = Boolean(candidateGuide?.exists && (
+      candidateGuideOrganizationId === organizationId
+      || candidateGuideShared
+    ));
     const guideRef = useTenantGuide ? tenantGuideRef! : legacyGuideRef;
     const lessonRef = guideRef.collection('lessons').doc(lessonId);
     const [guideSnapshot, lessonSnapshot] = await Promise.all([guideRef.get(), lessonRef.get()]);
 
     if (!guideSnapshot.exists || guideSnapshot.data()?.published !== true || guideSnapshot.data()?.archived === true) {
       return res.status(404).json({ error: 'The selected guide is not published.' });
+    }
+    if (useTenantGuide && !candidateGuideShared && candidateGuideOrganizationId !== organizationId) {
+      return res.status(403).json({ error: 'The selected guide is outside your organization.' });
     }
     if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
       return res.status(409).json({ error: 'The selected guide language does not match the study request.' });
