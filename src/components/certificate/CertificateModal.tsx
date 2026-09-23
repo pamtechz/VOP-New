@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { User, AppSettings, LanguageCode } from '../../types';
-import { getTranslation } from '../../services/i18n';
+import { useLocalization } from '../../services/i18n';
 import { X, Download, Share2, Printer, CheckCircle, Award, Edit3 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
@@ -27,7 +27,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
   if (!isOpen) return null;
 
-  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback);
+  const { t } = useLocalization();
   const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate || '';
 
   const handleDownloadImage = async () => {
