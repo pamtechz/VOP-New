@@ -230,10 +230,10 @@ export const CertificationManager: React.FC<Props> = ({
     setIssuingCandidateId(candidateId);
     try {
       const token = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/certificates/issue', {
+      const response = await fetch('/api/certificates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ candidateId }),
+        body: JSON.stringify({ action: 'issue', candidateId }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string; certificate?: CertificateRecord };
       if (!response.ok || !body.certificate) throw new Error(body.error || 'Certificate could not be issued.');
