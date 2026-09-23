@@ -219,11 +219,12 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listStudents') {
+      if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('Organization membership is required.');
       const actorNodeType = legacyNodeForRole(String(actor.role || ''));
       const actorNodeId = String(actor.adminNodeId || '').trim();
       const legacyField = actorNodeType === 'union' ? 'unionId' : actorNodeType === 'conference' ? 'conferenceId' : actorNodeType === 'district' ? 'districtId' : actorNodeType === 'church' ? 'churchId' : '';
       const snapshot = actorNodeType && actorNodeId
-        ? await db.collection('users').where(legacyField, '==', actorNodeId).get()
+        ? await db.collection('users').where(legacyField, '==',actorNodeId).get()
         : organizationId
           ? await db.collection('users').where('organizationId','==',organizationId).get()
           : await db.collection('users').get();
@@ -232,11 +233,12 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listMentors') {
+      if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('Organization membership is required.');
       const actorNodeType = legacyNodeForRole(String(actor.role || ''));
       const actorNodeId = String(actor.adminNodeId || '').trim();
       const legacyField = actorNodeType === 'union' ? 'unionId' : actorNodeType === 'conference' ? 'conferenceId' : actorNodeType === 'district' ? 'districtId' : actorNodeType === 'church' ? 'churchId' : '';
       const snapshot = actorNodeType && actorNodeId
-        ? await db.collection('users').where(legacyField, '==', actorNodeId).get()
+        ? await db.collection('users').where(legacyField, '==',actorNodeId).get()
         : organizationId
           ? await db.collection('users').where('organizationId','==',organizationId).get()
           : await db.collection('users').get();
