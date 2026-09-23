@@ -282,6 +282,8 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok:true, id });
       }
       if (action === 'upsert') {
+        const featureKey = collection === 'announcements' ? 'announcements' : collection === 'books' ? 'materials' : (collection === 'radioBroadcasts' || collection === 'radioPlaylists') ? 'radio' : collection === 'certificates' ? 'certification' : '';
+        if (featureKey) await enforceFeature(ctx, featureKey);
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
         if (!existing.exists) {
           const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
