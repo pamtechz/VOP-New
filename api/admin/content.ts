@@ -329,6 +329,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (collection === 'settings' || collection === 'curriculumSettings' || collection === 'certificationConfig') {
       if (collection === 'certificationConfig') await enforceFeature(ctx, 'certification');
+      if (collection === 'curriculumSettings') await enforceFeature(ctx, 'curriculum');
       if (!ctx.organizationId) throw new Error('Select an organization before changing settings.');
       const ref=ctx.db.doc(`organizations/${ctx.organizationId}/settings/${collection === 'settings' ? 'settings' : collection === 'certificationConfig' ? 'certification' : 'curriculum'}`);
       if (action === 'delete') { await ref.delete(); return res.status(200).json({ok:true,id}); }
