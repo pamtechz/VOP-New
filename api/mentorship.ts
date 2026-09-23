@@ -371,6 +371,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'getAutomationSettings') {
+      if (!isAdmin(actor)) throw new Error('Only organization administrators can access mentorship automation settings.');
       if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('A tenant organization is required.');
       const snapshot = await db.doc(organizationId ? `organizations/${organizationId}/settings/mentorship` : 'system/mentorship').get();
       return res.status(200).json({ ok: true, item: snapshot.exists ? snapshot.data() : {
@@ -383,6 +384,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'saveAutomationSettings') {
+      if (!isAdmin(actor)) throw new Error('Only organization administrators can change mentorship automation settings.');
       if (!organizationId && String(actor.role || '') !== 'super_admin') throw new Error('A tenant organization is required.');
       const minAverageScore = Math.max(0, Math.min(100, Number(body.minAverageScore || 0)));
       const maxProgressPercent = Math.max(0, Math.min(100, Number(body.maxProgressPercent || 0)));
