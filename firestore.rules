@@ -27,13 +27,18 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && role() in [
-        'super_admin',
-        'union_admin',
-        'conference_admin',
-        'district_admin',
-        'church_admin'
-      ];
+      return isSuperAdmin()
+        || (
+          signedIn()
+          && role() in [
+            'union_admin',
+            'conference_admin',
+            'district_admin',
+            'church_admin'
+          ]
+          && organizationIdForUser() != ''
+          && isOrgMember(organizationIdForUser())
+        );
     }
 
     function organizationIdForUser() {
@@ -416,7 +421,15 @@ service cloud.firestore {
 
     // User profiles.
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || isAdmin() || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser())));
+      allow get: if signedIn() && (
+        request.auth.uid == uid
+        || isSuperAdmin()
+        || (
+          isAdmin()
+          && resource.data.get('organizationId','') == organizationIdForUser()
+          && isOrgMember(organizationIdForUser())
+        )
+      );
       allow list: if isSuperAdmin() || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser());
 
       allow create: if canCreateOwnProfile();
@@ -440,7 +453,10 @@ service cloud.firestore {
       allow get: if signedIn()
         && (
           resource.data.candidateId == request.auth.uid
-          || isAdmin()
+          || (
+            isAdmin()
+            && resource.data.get('organizationId','') == organizationIdForUser()
+          )
         );
 
       allow list: if signedIn() && (isSuperAdmin() || isAdmin() || resource.data.candidateId == request.auth.uid || resource.data.get('organizationId','') == organizationIdForUser());
@@ -451,7 +467,10 @@ service cloud.firestore {
       allow update: if signedIn()
         && (
           resource.data.candidateId == request.auth.uid
-          || isAdmin()
+          || (
+            isAdmin()
+            && resource.data.get('organizationId','') == organizationIdForUser()
+          )
         );
 
       allow delete: if isSuperAdmin();
