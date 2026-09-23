@@ -263,6 +263,13 @@ export default async function handler(req: Request, res: Response) {
       if (GLOBAL_COLLECTIONS.has(collection)) {
         if (ctx.isSuperAdmin) {
           const snap = await ctx.db.collection(collection).get();
+          if (collection === 'translations') {
+            const items = await Promise.all(snap.docs.map(async d => {
+              const proposals = await d.ref.collection('proposals').where('status', '==', 'pending').get();
+              return { id:d.id, ...d.data(), canEdit:true, proposals:proposals.docs.map(p => ({ id:p.id, ...p.data() })) };
+            }));
+            return res.status(200).json({ ok: true, items });
+          }
           return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: true })) });
         }
         const snap = await ctx.db.collection(collection).get();
