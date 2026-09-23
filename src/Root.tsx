@@ -92,14 +92,10 @@ export function Root() {
               );
             }
 
-            // Keep only the authenticated account identifier locally.
-            // The profile itself remains server/Firestore data.
-            localStorage.setItem('vop_current_user_id', firebaseUser.uid);
-
-            const guides = await loadFirestoreGuides().catch(() => []);
-            if (guides && guides.length > 0) {
-              localStorage.setItem('vop_discover_guides', JSON.stringify(guides));
-            }
+            // Operational account/content data stays in Firebase.
+            // The application-level cache is populated only by the authenticated
+            // public-content service and is namespaced per Firebase account.
+            await loadFirestoreGuides().catch(() => []);
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
             console.error(error);
