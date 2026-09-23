@@ -246,8 +246,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     const preferred = group.records.find(record => record.editable && record.published && !record.archived)
       || group.records.find(record => record.editable && !record.archived);
     if (!preferred) {
-      const shared = group.records.find(record => record.sharingScope === 'shared' && record.published && !record.archived);
-      if (shared) void fork(shared);
+      setError('This shared guide is read-only. Use Copy to create an editable organization-owned version.');
       return;
     }
     setEditing({ ...preferred });
