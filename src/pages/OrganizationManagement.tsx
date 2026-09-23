@@ -13,7 +13,7 @@ async function api(action:string, payload:Record<string,unknown>={}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch('/api/admin/organizations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action,...payload})});
-  const body=await response.json().catch(()=>({})) as {error?:string;items?:unknown[];usage?:Usage};
+  const body=await response.json().catch(()=>({})) as {error?:string;items?:unknown[];item?:Organization;usage?:Usage};
   if(!response.ok) throw new Error(body.error || 'Organization request failed.');
   return body;
 }
