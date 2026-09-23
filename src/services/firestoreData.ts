@@ -91,10 +91,12 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
   const guideSnapshots = [];
   const currentUser = auth?.currentUser;
   let organizationId = '';
+  let isSuperAdmin = false;
 
   if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
     organizationId = String(profile.data()?.organizationId || '').trim();
+    isSuperAdmin = String(profile.data()?.role || '') === 'super_admin' || profile.data()?.privileges?.superAdmin === true;
   }
 
   const sharedGuides = await getDocs(query(collection(firestore, 'guides'), where('sharingScope', '==', 'shared'), where('published', '==', true)));
@@ -127,6 +129,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       ownerUid: String(data.ownerUid ?? '').trim() || undefined,
       sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : data.organizationId ? 'organization' : undefined,
       canonical: data.canonical !== false,
+      editable: isSuperAdmin || (!!organizationId && String(data.ownerOrganizationId ?? data.organizationId ?? '').trim() === organizationId),
       discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
       title: String(data.title ?? '').trim(),
       subtitle: String(data.subtitle ?? '').trim(),
@@ -151,6 +154,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       if (!lesson) continue;
       lesson.ownerOrganizationId = String(data.ownerOrganizationId ?? entry.guide.ownerOrganizationId ?? '').trim() || undefined;
       lesson.ownerUid = String(data.ownerUid ?? entry.guide.ownerUid ?? '').trim() || undefined;
+      lesson.editable = isSuperAdmin || (!!organizationId && String(data.ownerOrganizationId ?? entry.guide.ownerOrganizationId ?? '').trim() === organizationId);
       lesson.sharingScope = data.sharingScope === 'shared' ? 'shared' : entry.guide.sharingScope;
       lesson.canonical = data.canonical !== false;
       lesson.quizId = typeof data.quizId === 'string' ? data.quizId : undefined;
