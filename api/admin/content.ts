@@ -50,10 +50,14 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listGuides') {
-      const snap = ctx.organizationId
-        ? await ctx.db.collection('guides').where('organizationId','==',ctx.organizationId).get()
-        : await ctx.db.collection('guides').get();
-      const items = await Promise.all(snap.docs.map(async d => {
+      const [ownedSnap, sharedSnap] = ctx.organizationId
+        ? await Promise.all([
+            ctx.db.collection('guides').where('organizationId','==',ctx.organizationId).get(),
+            ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).get(),
+          ])
+        : [await ctx.db.collection('guides').get(), { docs: [] as FirebaseFirestore.QueryDocumentSnapshot[] }];
+      const docs = [...ownedSnap.docs, ...sharedSnap.docs.filter(d => String(d.data().organizationId || '') !== ctx.organizationId)];
+      const items = await Promise.all(docs.map(async d => {
         const lessons = await d.ref.collection('lessons').get();
         return { id: d.id, ...d.data(), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean) };
       }));
@@ -69,7 +73,8 @@ export default async function handler(req: Request, res: Response) {
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const id = guideId(ctx.organizationId, lang);
+      const requestedId = body.id ? safeId(body.id) : '';
+      const id = requestedId || guideId(ctx.organizationId, lang);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
@@ -77,8 +82,8 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && !canEditCanonicalContent(ctx, current)) throw new Error('Only the owning organization or VOP Super Admin can edit this guide.');
       await ref.set({
         id,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: current.ownerOrganizationId || ctx.organizationId,
+        organizationId: current.organizationId || ctx.organizationId,
+        ownerOrganizationId: current.ownerOrganizationId || current.organizationId || ctx.organizationId,
         ownerUid: current.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
@@ -105,9 +110,11 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'archiveGuide') {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
-      const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim();
+      const data = (body.data as Record<string, unknown> | undefined) || {};
+      const lang = String(data.language || '').trim();
       if (!language(lang) || !ctx.organizationId) throw new Error('A valid language and organization are required.');
-      const ref = ctx.db.doc(`guides/${guideId(ctx.organizationId, lang)}`);
+      const requestedId = body.id ? safeId(body.id) : '';
+      const ref = ctx.db.doc(`guides/${requestedId || guideId(ctx.organizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can archive this guide.');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
@@ -214,11 +221,13 @@ export default async function handler(req: Request, res: Response) {
       const lang = String(data.language || '').trim();
       const lessonId = safeId(data.lessonId || body.id);
       if (!language(lang)) throw new Error('A valid language code is required.');
-      const guide = await ctx.db.doc(`guides/${guideId(ctx.organizationId, lang)}`).get();
-      if (!guide.exists || guide.data()?.archived === true) throw new Error('A valid organization guide is required.');
+      const requestedGuideId = safeId(data.guideId || body.guideId || '');
+      const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
+      if (!guide.exists || guide.data()?.archived === true || (!ctx.isSuperAdmin && String(guide.data()?.organizationId || '') !== ctx.organizationId)) throw new Error('A valid organization guide is required.');
       const ref = guide.ref.collection('lessons').doc(lessonId);
+      const existingLesson = await ref.get();
       if (action === 'unpublishLesson') {
-        const current = await ref.get();
+        const current = existingLesson;
         if (!current.exists) throw new Error('The lesson was not found.');
         if (!canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can unpublish this lesson.');
         await ref.set({ published:false, unpublishedAt:FieldValue.serverTimestamp(), unpublishedBy:ctx.auth.uid, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
@@ -228,9 +237,9 @@ export default async function handler(req: Request, res: Response) {
         ...data,
         id: lessonId,
         lessonId,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: ctx.organizationId,
-        ownerUid: ctx.auth.uid,
+        organizationId: existingLesson.data()?.organizationId || guide.data()?.organizationId || ctx.organizationId,
+        ownerOrganizationId: existingLesson.data()?.ownerOrganizationId || guide.data()?.ownerOrganizationId || guide.data()?.organizationId || ctx.organizationId,
+        ownerUid: existingLesson.data()?.ownerUid || guide.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
         published: true,
