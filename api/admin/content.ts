@@ -169,7 +169,7 @@ export default async function handler(req: Request, res: Response) {
         ownerOrganizationId: ctx.organizationId,
         ownerUid: ctx.auth.uid,
         canonical: true,
-        sharingScope: data.sharingScope === 'shared' ? 'shared' : 'organization',
+        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
         published: true,
         publishedAt: FieldValue.serverTimestamp(),
         publishedBy: ctx.auth.uid,
