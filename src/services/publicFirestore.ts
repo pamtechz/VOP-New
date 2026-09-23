@@ -189,7 +189,7 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
   return {
     settings,
     languages,
-    translations,
+    translations: {},
     announcements,
     books,
     radioBroadcasts,
