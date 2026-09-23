@@ -452,6 +452,20 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // UI localization is a platform dictionary. Learners can read published entries;
+    // only Super Admins manage the global UI locale registry and translations.
+    match /locales/{locale} {
+      allow get: if signedIn();
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+
+      match /translations/{key} {
+        allow get: if signedIn() && resource.data.get('status','draft') == 'published';
+        allow list: if signedIn();
+        allow create, update, delete: if isSuperAdmin();
+      }
+    }
+
     // Everything else is denied.
     match /{document=**} {
       allow read, write: if false;
