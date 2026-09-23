@@ -305,8 +305,8 @@ export default async function handler(req: Request, res: Response) {
         await ref.set({
           ...incoming,
           id,
-          organizationId: ctx.organizationId,
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+          organizationId: existing.data()?.organizationId || ctx.organizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || existing.data()?.organizationId || ctx.organizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
