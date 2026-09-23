@@ -1,7 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { parse as parseUrl } from 'node:url';
 
 const LOCAL_API_PREFIX = '/api/';
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -81,8 +80,7 @@ function createLocalApiMiddleware(server: {
       return;
     }
 
-    const { pathname } = parseUrl(requestUrl);
-    const route = pathname
+    const route = new URL(requestUrl, 'http://localhost').pathname
       ?.slice(LOCAL_API_PREFIX.length)
       .replace(/^\/+|\/+$/g, '');
 
