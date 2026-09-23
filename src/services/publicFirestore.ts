@@ -177,12 +177,15 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
 
   let settings = settingsSnap.exists() ? normalizeSettings(settingsSnap.data()) : emptySettings();
   if (organizationId) {
-    const tenantSettings = await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'));
-    if (tenantSettings.exists()) {
-      const tenantData = tenantSettings.data();
-      const tenantBranding = tenantData.branding && typeof tenantData.branding === 'object' ? tenantData.branding : {};
-      settings = normalizeSettings({ ...settings, ...tenantData, ...tenantBranding });
-    }
+    const [organizationSnap, tenantSettings] = await Promise.all([
+      getDoc(doc(firestore, 'organizations', organizationId)),
+      getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings')),
+    ]);
+    const organizationData = organizationSnap.exists() ? organizationSnap.data() : {};
+    const tenantData = tenantSettings.exists() ? tenantSettings.data() : {};
+    const tenantBranding = organizationData.branding && typeof organizationData.branding === 'object' ? organizationData.branding : {};
+    const storedTenantSettings = organizationData.settings && typeof organizationData.settings === 'object' ? organizationData.settings : {};
+    settings = normalizeSettings({ ...settings, ...storedTenantSettings, ...tenantData, ...tenantBranding });
   }
 
   return {
