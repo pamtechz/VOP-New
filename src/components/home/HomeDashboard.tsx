@@ -67,10 +67,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       >
         <div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {t('welcome_back', 'Welcome back to Bible Study')}
+            {t('home.welcomeBack', 'Welcome back to Bible Study')}
           </div>
           <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-            {t('greeting_prefix', 'Hello')}, {currentUser.displayName.split(' ')[0]}! 👋
+            {t('home.greeting', 'Hello')}, {currentUser.displayName.split(' ')[0]}! 👋
           </h2>
         </div>
 
