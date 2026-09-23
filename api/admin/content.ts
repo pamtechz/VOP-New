@@ -5,12 +5,12 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 const COLLECTIONS = new Set([
-  'languages','translations','announcements','books','radioBroadcasts','unions','conferences','districts','churches',
+  'languages','translations','announcements','books','radioBroadcasts','playlists','unions','conferences','districts','churches',
   'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
-const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts']);
+const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts','playlists']);
 
 const ORG_COLLECTIONS = new Set([
   'announcements','learningPaths','bibleTopics','seasons',
@@ -331,6 +331,7 @@ export default async function handler(req: Request, res: Response) {
           if (String(data.sharingScope || '') !== 'shared') return false;
           if (collection === 'languages') return data.enabled === true;
           if (collection === 'translations') return true;
+          if (collection === 'playlists') return data.published === true;
           return data.published === true;
         });
         return res.status(200).json({
