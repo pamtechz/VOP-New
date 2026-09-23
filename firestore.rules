@@ -438,6 +438,24 @@ service cloud.firestore {
     }
 
     // Platform certification configuration.
+    // Canonical translations remain immutable to non-owners. Contributors who
+    // do not own a translation submit a proposal for review instead of overwriting it.
+    match /translations/{languageId}/proposals/{proposalId} {
+      allow get, list: if isSuperAdmin()
+        || (signedIn() && resource.data.get('proposerUid', '') == request.auth.uid)
+        || (isAdmin() && resource.data.get('organizationId', '') == organizationIdForUser());
+      allow create: if signedIn()
+        && isOrgMember(organizationIdForUser())
+        && request.resource.data.get('proposerUid', '') == request.auth.uid
+        && request.resource.data.get('organizationId', '') == organizationIdForUser()
+        && request.resource.data.get('status', 'pending') == 'pending';
+      allow update: if isSuperAdmin()
+        || (isAdmin()
+          && resource.data.get('organizationId', '') == organizationIdForUser()
+          && request.resource.data.get('status', 'pending') in ['pending', 'approved', 'rejected']);
+      allow delete: if isSuperAdmin();
+    }
+
     match /system/certification {
       allow get: if resource.data.get('enabled', false) == true || isSuperAdmin();
       allow list: if false;
@@ -489,7 +507,11 @@ service cloud.firestore {
       // progress, assessment results, or any other authoritative record.
       match /settings/{settingId} {
         allow get, list: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly([
+            'theme', 'language', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
+          ]);
+        allow update: if isOwner(uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'theme', 'language', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
           ]);
