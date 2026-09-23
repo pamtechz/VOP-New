@@ -9,6 +9,7 @@ const values = {
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() ?? '',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim() ?? '',
   appId: import.meta.env.VITE_FIREBASE_APP_ID?.trim() ?? '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim() ?? '',
 };
 
 export const firebaseConfigured = Boolean(
@@ -21,6 +22,7 @@ export const firebaseConfig = {
   authDomain: values.authDomain,
   projectId: values.projectId,
   appId: values.appId,
+  storageBucket: values.storageBucket,
 };
 
 export const app = firebaseConfigured
@@ -30,6 +32,7 @@ export const app = firebaseConfigured
 export const db: Firestore | null = app ? getFirestore(app) : null;
 
 export const auth: Auth | null = app ? getAuth(app) : null;
+export const storage = app && values.storageBucket ? (await import('firebase/storage')).getStorage(app) : null;
 
 export const authPersistenceReady: Promise<void> = auth
   ? setPersistence(auth, indexedDBLocalPersistence).catch(() => setPersistence(auth, browserLocalPersistence)).then(() => undefined)
