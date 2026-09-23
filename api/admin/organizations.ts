@@ -121,6 +121,57 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true });
     }
 
+    if (action === 'listInvites') {
+      const snap = await ctx.db.collection('organizationInvites').where('organizationId','==',ctx.organizationId).orderBy('createdAt','desc').limit(100).get();
+      const now = Date.now();
+      const items = snap.docs.map(d => {
+        const data = d.data() || {};
+        const expiresAt = String(data.expiresAt || '');
+        const expired = data.status === 'pending' && (!expiresAt || new Date(expiresAt).getTime() < now);
+        return { id:d.id, ...data, status: expired ? 'expired' : String(data.status || 'pending') };
+      });
+      return res.status(200).json({ok:true,items});
+    }
+
+    if (action === 'revokeInvite') {
+      const token = String(body.token || '').trim();
+      if (!token) throw new Error('Invitation token is required.');
+      const ref = ctx.db.doc(`organizationInvites/${token}`);
+      const invite = await ref.get();
+      if (!invite.exists || String(invite.data()?.organizationId || '') !== ctx.organizationId) throw new Error('Invitation not found.');
+      if (String(invite.data()?.status || '') !== 'pending') throw new Error('Only pending invitations can be revoked.');
+      await ref.set({status:'revoked',revokedAt:new Date().toISOString(),revokedBy:ctx.auth.uid},{merge:true});
+      await writeTenantAudit(ctx,'membership.invite.revoke',`organizationInvites/${token}`,invite.data(),{status:'revoked'});
+      return res.status(200).json({ok:true});
+    }
+
+    if (action === 'resendInvite') {
+      const token = String(body.token || '').trim();
+      if (!token) throw new Error('Invitation token is required.');
+      const ref = ctx.db.doc(`organizationInvites/${token}`);
+      const invite = await ref.get();
+      if (!invite.exists || String(invite.data()?.organizationId || '') !== ctx.organizationId) throw new Error('Invitation not found.');
+      const data = invite.data() || {};
+      if (!['pending','expired'].includes(String(data.status || 'pending'))) throw new Error('Only pending or expired invitations can be resent.');
+      const email = String(data.email || '').trim().toLowerCase();
+      if (!email) throw new Error('The invitation has no recipient email.');
+      const now = new Date();
+      const expiresAt = new Date(now.getTime()+7*24*60*60*1000).toISOString();
+      await ref.set({status:'pending',expiresAt,resentAt:now.toISOString(),resentBy:ctx.auth.uid},{merge:true});
+      const origin = String(req.headers?.origin || '').trim() || `${String(req.headers?.['x-forwarded-proto'] || 'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]}`.replace(/\/$/,'');
+      const inviteUrl = `${origin}/?invite=${token}`;
+      let emailSent = false;
+      if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+        await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
+          from:process.env.RESEND_FROM_EMAIL,to:[email],subject:'VOP organization invitation',
+          html:`<p>You have been invited to join an organization in VOP.</p><p><a href="${inviteUrl}">Accept invitation</a></p><p>This invitation expires in 7 days.</p>`
+        })});
+        emailSent = true;
+      }
+      await writeTenantAudit(ctx,'membership.invite.resend',`organizationInvites/${token}`,data,{status:'pending',expiresAt});
+      return res.status(200).json({ok:true,item:{email,expiresAt,inviteUrl,emailSent}});
+    }
+
     if (action === 'sendInvite') {
       requireOrgRole(ctx, ['owner','admin']);
       const email = String(body.email || '').trim().toLowerCase();
