@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Center: Desktop Navigation Links (Hidden on small screens) */}
-        <nav aria-label="Desktop Navigation" className="hidden lg:flex items-center gap-1">
+        <nav aria-label={t('accessibility.desktopNavigation', 'Desktop Navigation')} className="hidden lg:flex items-center gap-1">
           <button
             onClick={() => nav('home')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -131,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <BookOpen size={14} />
-            <span>Library</span>
+            <span>{t('navigation.library', 'Library')}</span>
           </button>
           <button
             onClick={() => nav('prayer')}
@@ -142,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <HeartHandshake size={14} />
-            <span>Prayer</span>
+            <span>{t('navigation.prayer', 'Prayer')}</span>
           </button>
           <button
             onClick={() => nav('radio')}
@@ -153,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Radio size={14} />
-            <span>Radio</span>
+            <span>{t('navigation.radio', 'Radio')}</span>
           </button>
           <button
             onClick={() => nav('announcements')}
@@ -164,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Megaphone size={14} />
-            <span>Announcements</span>
+            <span>{t('navigation.announcements', 'Announcements')}</span>
           </button>
           {currentUser.role === 'student' && (
             <button
@@ -176,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <MessageCircle size={14} />
-              <span>Support</span>
+              <span>{t('navigation.support', 'Support')}</span>
             </button>
           )}
           <button
@@ -188,7 +188,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Info size={14} />
-            <span>About</span>
+            <span>{t('navigation.about', 'About')}</span>
           </button>
         </nav>
 
@@ -255,7 +255,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={() => nav('certificates')}
             className="btn btn-gold hide-sm"
-            title="My Certificate"
+            title={t('certificates.button', 'My Certificate')}
             style={{
               padding: '0.35rem 0.75rem',
               fontSize: '0.75rem',
@@ -290,7 +290,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onToggleMobileShell}
             className="btn btn-ghost hide-sm"
             style={{ color: 'rgba(255, 255, 255, 0.85)', padding: '0.4rem' }}
-            title={isMobileShell ? 'Switch to Full Desktop View' : 'Simulate Phone Shell (Mobile App Experience)'}
+            title={isMobileShell ? t('accessibility.desktopView', 'Switch to Full Desktop View') : t('accessibility.mobileShell', 'Simulate Phone Shell (Mobile App Experience)')}
           >
             {isMobileShell ? <Monitor size={16} /> : <Smartphone size={16} />}
           </button>
@@ -300,7 +300,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onToggleDarkMode}
             className="btn btn-ghost"
             style={{ color: 'rgba(255, 255, 255, 0.85)', padding: '0.4rem' }}
-            title={isDarkMode ? 'Light Mode' : 'Dark Mode'}
+            title={isDarkMode ? t('settings.lightMode', 'Light Mode') : t('settings.darkMode', 'Dark Mode')}
           >
             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
           </button>
@@ -321,7 +321,7 @@ export const Header: React.FC<HeaderProps> = ({
               color: '#ffffff',
               transition: 'background var(--transition-fast)'
             }}
-            title="Manage Profile & Church"
+            title={t('profile.manageProfile', 'Manage Profile & Church')}
           >
             <div
               style={{
