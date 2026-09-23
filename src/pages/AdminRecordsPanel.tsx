@@ -12,7 +12,8 @@ import {
   saveTranslation
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
-import { auth } from '../lib/firebase';
+import { auth, storage } from '../lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -33,6 +34,7 @@ interface Props {
   kind: ManagedAdminCollection;
   languages: CustomLanguage[];
   preferredLanguage?: string;
+  organizationId?: string;
 }
 
 type FormState = Record<string, string | number | boolean>;
@@ -123,7 +125,7 @@ function validateRadioMedia(form: FormState) {
   });
 }
 
-export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage }) => {
+export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage, organizationId }) => {
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
   const [translations, setTranslations] = useState<TranslationRecord[]>([]);
@@ -464,7 +466,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         </div>
         <form className="vop-card vop-form-card" onSubmit={save}>
           <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={22}/></div></div>
-          <Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/>
+          <Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]} organizationId={organizationId}/>
           <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={openNew}>Clear</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
         </form>
       </div>
@@ -539,7 +541,31 @@ function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
   }
 }
 
-function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection,'translations'>;form:FormState;setForm:React.Dispatch<React.SetStateAction<FormState>>;records:AdminRecord[]}) {
+function MediaUpload({fieldKey,label,organizationId,accept}:{fieldKey:string;label:string;organizationId?:string;accept:string}) {
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const upload=async(event:React.ChangeEvent<HTMLInputElement>)=>{
+    const file=event.target.files?.[0];
+    event.target.value='';
+    if(!file) return;
+    if(!storage || !auth?.currentUser) { setError('Media storage is not configured for this deployment.'); return; }
+    if(!organizationId) { setError('An organization must be selected before uploading media.'); return; }
+    setBusy(true);setError('');
+    try {
+      const safeName=file.name.replace(/[^a-zA-Z0-9._-]+/g,'-').slice(-140);
+      const objectPath=`organizations/${organizationId}/radio/${crypto.randomUUID()}-${safeName}`;
+      const uploaded=await uploadBytes(storageRef(storage,objectPath),file,{contentType:file.type||'application/octet-stream'});
+      const url=await getDownloadURL(uploaded.ref);
+      window.dispatchEvent(new CustomEvent('vop_media_uploaded',{detail:{fieldKey,url}}));
+    } catch(reason) { setError(reason instanceof Error?reason.message:'Media upload failed.'); }
+    finally { setBusy(false); }
+  };
+  useEffect(()=>{const handler=(event:Event)=>{const detail=(event as CustomEvent<{fieldKey:string;url:string}>).detail;if(detail?.fieldKey===fieldKey) setLocalUrl(detail.url);};return()=>window.removeEventListener('vop_media_uploaded',handler);},[fieldKey]);
+  const [localUrl,setLocalUrl]=useState('');
+  return <div className="vop-field"><label>{label}</label><input type="file" accept={accept} disabled={busy} onChange={upload}/>{busy&&<small>Uploading…</small>}{error&&<small style={{color:'#b42318'}}>{error}</small>}{localUrl&&<small>Uploaded: {localUrl}</small>}</div>;
+}
+
+function Fields({kind,form,setForm,records,organizationId}:{kind:Exclude<ManagedAdminCollection,'translations'>;form:FormState;setForm:React.Dispatch<React.SetStateAction<FormState>>;records:AdminRecord[];organizationId?:string}) {
   const field = (key:string,label:string,type='text',placeholder='') => (
     <div className="vop-field"><label>{label}</label><input type={type} value={String(form[key] ?? '')} placeholder={placeholder} onChange={e=>setForm(current=>({...current,[key]:type==='number'?Number(e.target.value):e.target.value}))}/></div>
   );
