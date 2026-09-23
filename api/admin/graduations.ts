@@ -172,6 +172,10 @@ async function decide(req: Request, res: Response) {
     const fresh = await transaction.get(ref);
     if (!fresh.exists) throw new Error('Graduation request was not found.');
     const data = fresh.data() || {};
+    const candidateRef = ctx.db.doc(`users/${text(data.candidateId)}`);
+    const candidateSnapshot = await transaction.get(candidateRef);
+    if (!candidateSnapshot.exists) throw new Error('The graduation candidate account was not found.');
+    const candidateData = candidateSnapshot.data() || {};
     const revision = Number(data.revision ?? 0);
     if (revision !== expectedRevision) throw new Error('This graduation request changed before your decision was saved. Refresh and review the current request.');
     if (['approved', 'rejected'].includes(text(data.status))) throw new Error('This graduation request has already reached a final decision.');
@@ -187,6 +191,17 @@ async function decide(req: Request, res: Response) {
       nextData.status = requestStatus(nextStage); nextData.workflowStageId = nextStage.id; nextData.workflowStageIndex = nextIndex;
     } else {
       nextData.status = 'approved'; nextData.approvedAt = timestamp; nextData.workflowStageId = stage.id; nextData.workflowStageIndex = stageIndex;
+      nextData.approverNotes = notes;
+      transaction.set(candidateRef, {
+        information: {
+          ...(candidateData.information && typeof candidateData.information === 'object' ? candidateData.information : {}),
+          graduating: false,
+          graduated: true,
+          decisionDate: new Date().toISOString(),
+          graduationDate: new Date().toISOString(),
+        },
+        updatedAt: timestamp,
+      }, { merge: true });
     }
     transaction.update(ref, nextData);
     return { ...data, ...nextData };
