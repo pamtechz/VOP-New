@@ -40,6 +40,7 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
   const organizationId = String(requestedOrganizationId || profile.organizationId || '').trim();
   if (!organizationId) {
+    if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin };
     if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin };
     throw new Error('An organization membership is required.');
   }
