@@ -86,7 +86,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
             }`}
           >
-            {t('tab_contact_offices', 'Offices & Contact')}
+            {t('about.contactOffices', 'Offices & Contact')}
           </button>
         </div>
 
