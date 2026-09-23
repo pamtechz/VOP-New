@@ -116,6 +116,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'forkGuide') {
       if (collection !== 'guides') throw new Error('Guide copying requires the guides collection.');
+      await enforceFeature(ctx, 'curriculum');
       requireOrgRole(ctx, ['owner','admin','editor']);
       if (!ctx.organizationId) throw new Error('Select an organization before copying a guide.');
       const sourceId = safeId(body.id || body.sourceId);
