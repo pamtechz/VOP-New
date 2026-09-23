@@ -182,6 +182,20 @@ export function requireOrgRole(ctx: TenantContext, roles: string[]) {
   if (!roles.includes(role)) throw new Error('You do not have permission to perform this action.');
 }
 
+/** Returns true only when a record belongs to the authenticated tenant. Legacy hierarchy tenants
+ * can temporarily authorize records written before organizationId migration by matching the
+ * tenant's stable hierarchy node field. */
+export function recordBelongsToTenant(ctx: TenantContext, data: DocumentData | undefined) {
+  if (ctx.isSuperAdmin) return true;
+  const recordOrganizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
+  if (recordOrganizationId) return recordOrganizationId === ctx.organizationId;
+  if (ctx.tenantKind !== 'legacy-hierarchy' || !ctx.tenantNodeType || !ctx.tenantNodeId) return false;
+  const field = ctx.tenantNodeType === 'union' ? 'unionId'
+    : ctx.tenantNodeType === 'conference' ? 'conferenceId'
+    : ctx.tenantNodeType === 'district' ? 'districtId' : 'churchId';
+  return String(data?.[field] || '').trim() === ctx.tenantNodeId;
+}
+
 export function contentOwnedByOrg(data: DocumentData | undefined, organizationId: string) {
   return String(data?.ownerOrganizationId || data?.organizationId || '') === organizationId;
 }
