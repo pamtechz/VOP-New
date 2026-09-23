@@ -368,7 +368,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         <PageHead icon={Icon} title="Translations" subtitle="The system detects translatable interface strings automatically. Select a language and translate the detected entries." action={
           <div style={{display:'flex',gap:9,flexWrap:'wrap',justifyContent:'flex-end'}}>
             <button className="vop-secondary" type="button" onClick={() => window.dispatchEvent(new Event('vop_localization_discovered'))}><RefreshCw size={17}/>Refresh Detected</button>
-            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving || !selectedTranslation}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
+            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving || !selectedTranslation || translations.find(item => item.id === selectedTranslation)?.canEdit === false}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
           </div>
         } />
         {error && <ErrorBox message={error} clear={()=>setError('')} />}
@@ -439,6 +439,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
                     <span className="vop-translation-input-lang">{selectedTranslation || '—'}</span>
                     <input
                       value={row.value}
+                      disabled={translations.find(item => item.id === selectedTranslation)?.canEdit === false}
                       onChange={e=>setTranslationValues(current=>({...current,[row.key]:e.target.value}))}
                       placeholder={selectedTranslation === 'en' ? row.english : 'Type the translation…'}
                       aria-label={'Translation for ' + row.english}
