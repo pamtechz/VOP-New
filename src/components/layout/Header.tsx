@@ -233,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({
               <Globe size={13} color="var(--vop-gold-400)" />
               <select
                 value={uiLocale}
-                aria-label={getTranslation('settings.uiLanguage', uiLocale, settings?.customTranslations, 'UI language')}
+                aria-label={t('settings.uiLanguage', 'UI language')}
                 onChange={(e) => onChangeLanguage(e.target.value as LanguageCode)}
                 style={{
                   background: 'transparent',
@@ -259,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
               <BookOpen size={13} color="var(--vop-gold-400)" />
               <select
                 value={activeLanguage}
-                aria-label={getTranslation('settings.studyLanguage', uiLocale, settings?.customTranslations, 'Study language')}
+                aria-label={t('settings.studyLanguage', 'Study language')}
                 onChange={(e) => onChangeStudyLanguage?.(e.target.value as LanguageCode)}
                 style={{ background:'transparent', border:'none', color:'#fff', outline:'none', fontWeight:600, fontSize:'.75rem', cursor:'pointer', maxWidth:'95px' }}
               >
