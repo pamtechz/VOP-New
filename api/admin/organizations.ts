@@ -38,70 +38,7 @@ export default async function handler(req: Request, res: Response) {
     }
     if (action === 'list') {
       if (!ctx.isSuperAdmin) {
-        requireOrgRole(ctx, ['owner','admin']);
-        const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
-        const data = organization.data() || {};
-        const members = await organization.ref.collection('members').where('active','==',true).get();
-        return res.status(200).json({ ok:true, items:[{
-          id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
-          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || ''),
-          quotas:data.quotas || {}, branding:data.branding || {}, settings:data.settings || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
-        }]});
-      }
-      const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
-      const items = await Promise.all(snap.docs.map(async organization => {
-        const data = organization.data() || {};
-        const members = await organization.ref.collection('members').where('active','==',true).get();
-        return {
-          id: organization.id,
-          name: String(data.name || organization.id),
-          slug: String(data.slug || organization.id),
-          status: String(data.status || 'active'),
-          ownerUid: String(data.ownerUid || ''),
-          plan: String(data.plan || ''),
-          quotas: data.quotas || {},
-          branding: data.branding || {}, settings: data.settings || {},
-          createdAt: String(data.createdAt || ''),
-          updatedAt: String(data.updatedAt || ''),
-          memberCount: members.size,
-        };
-      }));
-      return res.status(200).json({ ok: true, items });
-    }
-
-    requireOrgRole(ctx, ['owner','admin']);
-        const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
-        const data = organization.data() || {};
-        const members = await organization.ref.collection('members').where('active','==',true).get();
-        return res.status(200).json({ ok:true, items:[{
-          id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
-          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || ''),
-          quotas:data.quotas || {}, branding:data.branding || {}, settings:data.settings || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
-        }]});
-      }
-      const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
-      const items = await Promise.all(snap.docs.map(async organization => {
-        const data = organization.data() || {};
-        const members = await organization.ref.collection('members').where('active','==',true).get();
-        return {
-          id: organization.id,
-          name: String(data.name || organization.id),
-          slug: String(data.slug || organization.id),
-          status: String(data.status || 'active'),
-          ownerUid: String(data.ownerUid || ''),
-          plan: String(data.plan || ''),
-          quotas: data.quotas || {},
-          branding: data.branding || {}, settings: data.settings || {},
-          createdAt: String(data.createdAt || ''),
-          updatedAt: String(data.updatedAt || ''),
-          memberCount: members.size,
-        };
-      }));
-      return res.status(200).json({ ok: true, items });
-    }
-
-    requireOrgRole(ctx, ['owner','admin']);
-    if (action === 'listAudit') {
+        if (action === 'listAudit') {
       const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
     }
