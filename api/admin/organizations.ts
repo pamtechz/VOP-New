@@ -130,6 +130,11 @@ export default async function handler(req: Request, res: Response) {
       const organizationId = String(data.organizationId || '');
       const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const existingProfile = await bootstrapDb.doc(`users/${ctx.auth.uid}`).get();
+      const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
+      if (existingOrganizationId && existingOrganizationId !== organizationId) {
+        throw new Error('This account is already assigned to another organization. An account cannot accept an invitation from a second tenant.');
+      }
       const now = new Date().toISOString();
       await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
       await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
@@ -147,6 +152,11 @@ export default async function handler(req: Request, res: Response) {
       const memberRole = String(body.role || 'learner');
       if (!uid || !['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Valid member details are required.');
       if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
+      const existingProfile = await ctx.db.doc(`users/${uid}`).get();
+      const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
+      if (!ctx.isSuperAdmin && existingOrganizationId && existingOrganizationId !== ctx.organizationId) {
+        throw new Error('This user belongs to another organization.');
+      }
       const now = new Date().toISOString();
       await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
       await writeTenantAudit(ctx, 'membership.upsert', `organizations/${ctx.organizationId}/members/${uid}`, undefined, { uid, role:memberRole, active:body.active !== false });
