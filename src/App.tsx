@@ -232,8 +232,15 @@ export const App: React.FC = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
-    if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
-  }, [settings.themeColor]);
+    const root = document.documentElement;
+    if (settings.themeColor || settings.primaryColor) root.style.setProperty('--vop-navy-900', settings.themeColor || settings.primaryColor || '');
+    if (settings.primaryColor) root.style.setProperty('--vop-brand-primary', settings.primaryColor);
+    if (settings.accentColor) root.style.setProperty('--vop-brand-accent', settings.accentColor);
+    return () => {
+      root.style.removeProperty('--vop-brand-primary');
+      root.style.removeProperty('--vop-brand-accent');
+    };
+  }, [settings.themeColor, settings.primaryColor, settings.accentColor]);
 
   const orderedActiveLessons = useMemo(() => {
     if (!activeGuide) return [];
