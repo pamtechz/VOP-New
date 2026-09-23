@@ -71,7 +71,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
     }
     setLoading(true);
     try {
-      const response = await fetch('/api/certificates/verify?certificateNumber=' + encodeURIComponent(certificateNumber));
+      const response = await fetch('/api/certificates?certificateNumber=' + encodeURIComponent(certificateNumber));
       const body = await response.json().catch(() => ({})) as { verified?: boolean; certificate?: VerifiedCertificate; config?: PublicCertificateConfig; error?: string };
       if (!response.ok || body.verified !== true || !body.certificate) {
         throw new Error(body.error || 'Certificate could not be verified.');
