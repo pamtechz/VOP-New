@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../../server/tenant.js';
+import { getAuth } from 'firebase-admin/auth';
+import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceQuota } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -83,12 +84,24 @@ export default async function handler(req: Request, res: Response) {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
         plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
-        quotas: data.quotas && typeof data.quotas === 'object' ? data.quotas : undefined,
+        quotas: ctx.isSuperAdmin && data.quotas && typeof data.quotas === 'object' ? data.quotas : undefined,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
         updatedAt: FieldValue.serverTimestamp(),
       };
       Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
       const before = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+      if (!ctx.isSuperAdmin && data.quotas !== undefined) throw new Error('Only the VOP Super Admin can change organization quotas.');
+      if (allowed.quotas !== undefined) {
+        const raw = allowed.quotas as Record<string, unknown>;
+        const normalized: Record<string, number> = {};
+        for (const key of ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxMaterials']) {
+          if (raw[key] === undefined || raw[key] === null || raw[key] === '') continue;
+          const value = Number(raw[key]);
+          if (!Number.isInteger(value) || value < -1) throw new Error('Organization limits must be whole numbers of -1 or greater.');
+          normalized[key] = value;
+        }
+        allowed.quotas = normalized;
+      }
       await ctx.db.doc(`organizations/${ctx.organizationId}`).set(allowed, { merge:true });
       await writeTenantAudit(ctx, 'organization.update', `organizations/${ctx.organizationId}`, before.data(), allowed);
       return res.status(200).json({ ok:true });
@@ -142,10 +155,53 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
     }
 
+    if (action === 'searchUsers') {
+      const query = String(body.query || '').trim().toLowerCase();
+      if (query.length < 2) return res.status(200).json({ ok:true, items:[] });
+      const users = await ctx.db.collection('users').limit(1000).get();
+      const items = users.docs.map(doc => ({ uid:doc.id, ...(doc.data() || {}) }))
+        .filter(user => {
+          const orgId = String(user.organizationId || '').trim();
+          if (!ctx.isSuperAdmin && orgId && orgId !== ctx.organizationId) return false;
+          const haystack = [user.displayName, user.email, user.phoneNumber].map(value => String(value || '').toLowerCase()).join(' ');
+          return haystack.includes(query);
+        }).slice(0, 20)
+        .map(user => ({ uid:String(user.uid || ''), displayName:String(user.displayName || ''), email:String(user.email || ''), organizationId:String(user.organizationId || ''), organizationName:String(user.organizationName || '') }));
+      return res.status(200).json({ ok:true, items });
+    }
+
     if (action === 'listMembers') {
       const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/members`).get();
       return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
     }
+    if (action === 'createAndAssign') {
+      const email = String(body.email || '').trim().toLowerCase();
+      const displayName = String(body.displayName || '').trim();
+      const role = String(body.role || 'learner');
+      const password = String(body.password || '');
+      if (!/^\S+@\S+\.\S+$/.test(email) || !displayName) throw new Error('A valid name and email are required.');
+      if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) throw new Error('A valid organization role is required.');
+      if (password && password.length < 6) throw new Error('Password must contain at least 6 characters.');
+      await enforceQuota(ctx, 'users', 'maxUsers');
+      const authService = getAuth(ctx.db.app);
+      let created;
+      try {
+        created = await authService.createUser({ email, displayName, ...(password ? { password } : {}), disabled:false });
+      } catch (error) {
+        const code = String((error as { code?: string })?.code || '');
+        if (code.includes('email-already-exists')) throw new Error('An account already exists for this email. Search for the user and assign the existing account instead.');
+        throw error;
+      }
+      const now = new Date().toISOString();
+      await ctx.db.runTransaction(async transaction => {
+        transaction.set(ctx.db.doc('users/' + created.uid), { uid:created.uid, email, displayName, userType:role === 'learner' || role === 'viewer' ? 'learner' : role, role: role === 'mentor' ? 'mentor' : 'student', organizationId:ctx.organizationId, organizationRole:role, privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'}, information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]}, createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp() }, {merge:true});
+        transaction.set(ctx.db.doc('organizations/' + ctx.organizationId + '/members/' + created.uid), {uid:created.uid,organizationId:ctx.organizationId,role,active:true,invitedBy:ctx.auth.uid,joinedAt:now,updatedAt:now},{merge:true});
+      });
+      await authService.setCustomUserClaims(created.uid, { role:'student', organizationId:ctx.organizationId, organizationRole:role });
+      await writeTenantAudit(ctx,'membership.create','organizations/' + ctx.organizationId + '/members/' + created.uid,undefined,{uid:created.uid,role});
+      return res.status(200).json({ok:true,item:{uid:created.uid,email,displayName,role}});
+    }
+
     if (action === 'setMember') {
       const uid = String(body.uid || '').trim();
       if (!(await ctx.db.doc(`users/${uid}`).get()).exists) throw new Error('The selected user account does not exist.');
@@ -173,6 +229,8 @@ export default async function handler(req: Request, res: Response) {
           organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       });
+      const authService = getAuth(ctx.db.app);
+      await authService.setCustomUserClaims(uid, { role:'student', organizationId:ctx.organizationId, organizationRole:memberRole });
       await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingOrganizationId && existingOrganizationId !== ctx.organizationId ? { previousOrganizationId: existingOrganizationId } : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
     }
