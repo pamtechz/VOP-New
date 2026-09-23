@@ -69,11 +69,11 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'getUsage') {
       const orgId = ctx.organizationId;
       const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
-      const [members, guides, quizzes, announcements, radio, books] = await Promise.all([
+      const [members, guides, quizzes, announcements, radio, books, playlists] = await Promise.all([
         ctx.db.collection(`organizations/${orgId}/members`).where('active','==',true).get(),
-        count('guides'), count('quizzes'), count('announcements'), count('radioBroadcasts'), count('books'),
+        count('guides'), count('quizzes'), count('announcements'), count('radioBroadcasts'), count('books'), count('radioPlaylists'),
       ]);
-      return res.status(200).json({ ok:true, usage:{ members:members.size, guides, quizzes, announcements, radio, books } });
+      return res.status(200).json({ ok:true, usage:{ members:members.size, guides, quizzes, announcements, radio, books, playlists } });
     }
 
     if (action === 'update') {
