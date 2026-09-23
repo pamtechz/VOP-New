@@ -255,6 +255,10 @@ service cloud.firestore {
       );
       allow update, delete: if isSuperAdmin() || (
         resource.data.get('organizationId','') == organizationIdForUser()
+        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
+        && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
         && canEditOrgContent(organizationIdForUser())
       );
 
@@ -278,8 +282,12 @@ service cloud.firestore {
         );
         allow update, delete: if isSuperAdmin() || (
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
-          && canEditOrgContent(organizationIdForUser())
           && resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+          && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+          && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
+          && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
+          && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
+          && canEditOrgContent(organizationIdForUser())
         );
       }
     }
@@ -298,6 +306,10 @@ service cloud.firestore {
       );
       allow update, delete: if isSuperAdmin() || (
         resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
+        && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
         && canEditOrgContent(organizationIdForUser())
       );
     }
@@ -438,7 +450,14 @@ service cloud.firestore {
 
       match /progress/{recordId} {
         allow get, list: if signedIn()
-          && (request.auth.uid == uid || isAdmin());
+          && (
+            request.auth.uid == uid
+            || (
+              isAdmin()
+              && userDoc().data.get('organizationId','') != ''
+              && userDoc().data.get('organizationId','') == get(/databases/$(database)/documents/users/$(uid)).data.get('organizationId','')
+            )
+          );
 
         allow create: if isOwner(uid)
           && recordId == uid
@@ -459,7 +478,17 @@ service cloud.firestore {
           )
         );
 
-      allow list: if signedIn() && (isSuperAdmin() || isAdmin() || resource.data.candidateId == request.auth.uid || resource.data.get('organizationId','') == organizationIdForUser());
+      allow list: if signedIn() && (
+        resource.data.candidateId == request.auth.uid
+        || (
+          isSuperAdmin()
+          && resource.data.get('organizationId','') != ''
+        )
+        || (
+          isAdmin()
+          && resource.data.get('organizationId','') == organizationIdForUser()
+        )
+      );
 
       allow create: if signedIn()
         && (request.resource.data.candidateId == request.auth.uid || (isOrgMember(organizationIdForUser()) && request.resource.data.get('organizationId','') == organizationIdForUser()));
