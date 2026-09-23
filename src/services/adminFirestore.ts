@@ -244,15 +244,23 @@ export const subscribeSettings = (
 };
 
 export const saveSettingsToFirestore = async (settings: ExtendedAppSettings): Promise<void> => {
-  const firestore = getDb();
-  const organizationId = await currentOrganizationId();
-  const ref = organizationId ? doc(firestore, 'organizations', organizationId, 'settings', 'settings') : doc(firestore, 'system', 'settings');
-  await setDoc(ref, {
-    ...settings,
-    ...(organizationId ? { organizationId } : {}),
-    updatedAt: new Date().toISOString(),
-  }, { merge: true });
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      action: 'upsert',
+      collection: 'settings',
+      id: 'settings',
+      data: settings,
+    }),
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not save settings.');
 };
+
 
 // ------------------------------------------------------------------
 // 3. USERS / CANDIDATES
