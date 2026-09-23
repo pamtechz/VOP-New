@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, getAdminDb, requireOrgRole } from '../lib/tenant';
+import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -61,6 +61,11 @@ export default async function handler(req: Request, res: Response) {
     }
 
     requireOrgRole(ctx, ['owner','admin']);
+    if (action === 'listAudit') {
+      const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
+      return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
+    }
+
     if (action === 'getUsage') {
       const orgId = ctx.organizationId;
       const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
@@ -83,7 +88,9 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       };
       Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
+      const before = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
       await ctx.db.doc(`organizations/${ctx.organizationId}`).set(allowed, { merge:true });
+      await writeTenantAudit(ctx, 'organization.update', `organizations/${ctx.organizationId}`, before.data(), allowed);
       return res.status(200).json({ ok:true });
     }
 
@@ -99,6 +106,7 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
       const now = new Date().toISOString();
       await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
+      await writeTenantAudit(ctx, 'membership.upsert', `organizations/${ctx.organizationId}/members/${uid}`, undefined, { uid, role:memberRole, active:body.active !== false });
       await ctx.db.doc(`users/${uid}`).set({ organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
