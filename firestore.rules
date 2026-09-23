@@ -28,6 +28,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSuperAdmin()
+        || isOrganizationAdmin(organizationIdForUser())
         || (
           signedIn()
           && role() in [
@@ -64,6 +65,13 @@ service cloud.firestore {
       );
     }
 
+    function isOrganizationAdmin(orgId) {
+      return isSuperAdmin() || (
+        isOrgMember(orgId)
+        && orgRole(orgId) in ['owner', 'admin']
+      );
+    }
+
     function canEditOrgContent(orgId) {
       return isSuperAdmin() || (
         isOrgMember(orgId)
@@ -76,6 +84,25 @@ service cloud.firestore {
         || data.get('ownerOrganizationId', '') == orgId;
     }
 
+    function canEditOwnedContent(data) {
+      return isSuperAdmin()
+        || (
+          isOrgMember(organizationIdForUser())
+          && data.get('organizationId', data.get('ownerOrganizationId', '')) == organizationIdForUser()
+          && data.get('ownerUid', '') == request.auth.uid
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        );
+    }
+
+    function canEditOwnedGlobal(data) {
+      return isSuperAdmin()
+        || (
+          signedIn()
+          && data.get('ownerUid', '') == request.auth.uid
+          && isOrgMember(organizationIdForUser())
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        );
+    }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
@@ -254,12 +281,11 @@ service cloud.firestore {
         && canEditOrgContent(organizationIdForUser())
       );
       allow update, delete: if isSuperAdmin() || (
-        resource.data.get('organizationId','') == organizationIdForUser()
+        canEditOwnedContent(resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
         && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
         && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
         && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
-        && canEditOrgContent(organizationIdForUser())
       );
 
       match /lessons/{lessonId} {
@@ -282,12 +308,11 @@ service cloud.firestore {
         );
         allow update, delete: if isSuperAdmin() || (
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
-          && resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+          && canEditOwnedContent(resource.data)
           && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
           && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
           && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
           && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
-          && canEditOrgContent(organizationIdForUser())
         );
       }
     }
@@ -351,13 +376,15 @@ service cloud.firestore {
         || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
             || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
       allow create: if isSuperAdmin() || (
-        request.resource.data.get('organizationId','') == organizationIdForUser()
-        && canManageOrg(organizationIdForUser())
+        isOrgMember(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == request.auth.uid
+        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
       );
       allow update, delete: if isSuperAdmin() || (
-        resource.data.get('organizationId','') == organizationIdForUser()
+        canEditOwnedGlobal(resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && canManageOrg(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
     }
 
@@ -367,13 +394,15 @@ service cloud.firestore {
         || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
             || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
       allow create: if isSuperAdmin() || (
-        request.resource.data.get('organizationId','') == organizationIdForUser()
-        && canManageOrg(organizationIdForUser())
+        isOrgMember(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == request.auth.uid
+        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
       );
       allow update, delete: if isSuperAdmin() || (
-        resource.data.get('organizationId','') == organizationIdForUser()
+        canEditOwnedGlobal(resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && canManageOrg(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
     }
 
@@ -455,6 +484,19 @@ service cloud.firestore {
 
     // User profiles.
     match /users/{uid} {
+      // Personal settings belong only to the authenticated account.
+      // They cannot change roles, organization membership, privileges, ownership,
+      // progress, assessment results, or any other authoritative record.
+      match /settings/{settingId} {
+        allow get, list: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'theme', 'language', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
+          ]);
+        allow delete: if isOwner(uid);
+      }
+
+
       allow get: if signedIn() && (
         request.auth.uid == uid
         || isSuperAdmin()
@@ -532,6 +574,52 @@ service cloud.firestore {
         );
 
       allow delete: if isSuperAdmin();
+    }
+
+
+    // Learner-owned assessment evidence is readable only by the learner.
+    // Assessment writes remain server-authoritative.
+    match /assessmentAttempts/{id} {
+      allow get, list: if signedIn() && (
+        resource.data.get('candidateId', resource.data.get('userId', '')) == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+
+    // Question-level aggregates are operational analytics, not learner-owned data.
+    match /questionPerformance/{id} {
+      allow get, list: if isAdmin() || isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Learners may see their own graduation request/status, but cannot approve or
+    // alter the authoritative workflow directly from the client.
+    match /graduationRequests/{id} {
+      allow get, list: if signedIn() && (
+        resource.data.get('candidateId', '') == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+
+    // Certificate records are readable by the certificate holder and authorized
+    // organization/platform administrators. Issuance and mutation remain server-side.
+    match /certificates/{id} {
+      allow get, list: if signedIn() && (
+        resource.data.get('candidateId', '') == request.auth.uid
+        || isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId', '') == organizationIdForUser() && isAdmin())
+      );
+      allow create, update, delete: if false;
+    }
+
+    // Notifications are private to the recipient, with administrator oversight
+    // only within the recipient's organization.
+    match /notifications/{id} {
+      allow get, list: if signedIn() && (
+        resource.data.get('userId', resource.data.get('uid', '')) == request.auth.uid
+        || (isAdmin() && resource.data.get('organizationId', '') == organizationIdForUser())
+      );
+      allow create, update, delete: if false;
     }
 
     // Everything else is denied.
