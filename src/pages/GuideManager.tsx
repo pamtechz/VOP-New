@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
-import { getTranslation } from '../services/i18n';
+import { useLocalization } from '../services/i18n';
 
 type GuideRecord = {
   id: string;
@@ -83,7 +83,7 @@ function timestampText(value: unknown) {
 }
 
 function formatDate(value?: string) {
-  if (!value) return t('common.notRecorded','Not recorded');
+  if (!value) return 'Not recorded';
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? 'Not recorded'
@@ -162,8 +162,7 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
 }
 
 export default function GuideManager({ languages, guides, onSaved, onOpenSettings }: Props) {
-  const activeLanguage = localStorage.getItem('vop_ui_locale') || 'en';
-  const t = (key: string, fallback: string, variables?: Record<string, unknown>) => getTranslation(key, activeLanguage, variables, fallback, 'GuideManager');
+  const { t } = useLocalization();
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
   const [search, setSearch] = useState('');
