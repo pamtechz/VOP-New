@@ -112,6 +112,63 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'forkGuide') {
+      if (collection !== 'guides') throw new Error('Guide copying requires the guides collection.');
+      requireOrgRole(ctx, ['owner','admin','editor']);
+      if (!ctx.organizationId) throw new Error('Select an organization before copying a guide.');
+      const sourceId = safeId(body.id || body.sourceId);
+      const source = await ctx.db.doc(`guides/${sourceId}`).get();
+      const sourceData = source.data() || {};
+      if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared guides can be copied.');
+      await enforceQuota(ctx, 'guides', 'maxGuides');
+      const id = safeId(body.targetId || `${ctx.organizationId}__${String(sourceData.language || 'en')}__copy-${Date.now().toString(36)}`);
+      const now = new Date().toISOString();
+      const target = ctx.db.doc(`guides/${id}`);
+      await target.set({
+        ...sourceData, id, organizationId:ctx.organizationId, ownerOrganizationId:ctx.organizationId,
+        ownerUid:ctx.auth.uid, sourceContentId:sourceId, copiedAt:now, copiedBy:ctx.auth.uid,
+        canonical:true, sharingScope:'organization', published:false, archived:false,
+        createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
+      }, { merge:true });
+      const lessons = await source.ref.collection('lessons').get();
+      const batch = ctx.db.batch();
+      lessons.docs.forEach((lesson, index) => {
+        const data = lesson.data();
+        const ref = target.collection('lessons').doc(lesson.id);
+        batch.set(ref, {
+          ...data, id:lesson.id, lessonId:lesson.id, organizationId:ctx.organizationId,
+          ownerOrganizationId:ctx.organizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
+          copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
+          createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid, copyOrder:index
+        }, { merge:true });
+      });
+      await batch.commit();
+      return res.status(200).json({ ok:true, item:{id, sourceContentId:sourceId, organizationId:ctx.organizationId, copiedLessons:lessons.size} });
+    }
+
+    if (action === 'forkLesson') {
+      if (collection !== 'curriculum') throw new Error('Lesson copying requires the curriculum collection.');
+      requireOrgRole(ctx, ['owner','admin','editor']);
+      if (!ctx.organizationId) throw new Error('Select an organization before copying a lesson.');
+      const sourceGuideId = safeId(body.sourceGuideId);
+      const sourceLessonId = safeId(body.sourceLessonId || body.id);
+      const targetGuideId = safeId(body.targetGuideId);
+      const source = await ctx.db.doc(`guides/${sourceGuideId}/lessons/${sourceLessonId}`).get();
+      const targetGuide = await ctx.db.doc(`guides/${targetGuideId}`).get();
+      const sourceData = source.data() || {};
+      if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared lessons can be copied.');
+      if (!targetGuide.exists || String(targetGuide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('Choose a guide owned by your organization.');
+      const id = safeId(body.targetId || `${sourceLessonId}-copy-${Date.now().toString(36)}`);
+      const now = new Date().toISOString();
+      await targetGuide.ref.collection('lessons').doc(id).set({
+        ...sourceData, id, lessonId:id, organizationId:ctx.organizationId, ownerOrganizationId:ctx.organizationId,
+        ownerUid:ctx.auth.uid, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`,
+        copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
+        createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
+      });
+      return res.status(200).json({ ok:true, item:{id, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`, organizationId:ctx.organizationId} });
+    }
+
     if (action === 'upsertLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
       if (!ctx.organizationId) throw new Error('Select an organization before saving a lesson.');
