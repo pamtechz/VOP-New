@@ -130,7 +130,6 @@ export const CertificationManager: React.FC<Props> = ({
   const [dateFilter, setDateFilter] = useState<'all' | 'year' | 'month'>('all');
   const [page, setPage] = useState(1);
   const [menuId, setMenuId] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<CertificateRecord | null>(null);
   const [exporting, setExporting] = useState(false);
   const [approvedCandidates, setApprovedCandidates] = useState<GraduationCandidate[]>([]);
@@ -252,18 +251,8 @@ export const CertificationManager: React.FC<Props> = ({
   const openPreview = (certificate: CertificateRecord) => {
     setSelected(certificate);
     setDraft(certificate);
-    setEditing(false);
     setView('preview');
     setMenuId(null);
-  };
-
-  const updateCertificate = async () => {
-    if (!draft?.id) return;
-    await adminContent('upsert', 'certificates', draft.id, { ...draft });
-    setSelected(draft);
-    setEditing(false);
-    await load();
-    showMessage('Certificate record updated.');
   };
 
   const downloadCertificate = async () => {
@@ -302,10 +291,6 @@ export const CertificationManager: React.FC<Props> = ({
     window.location.href = `mailto:${selected.candidateEmail}?subject=${subject}&body=${body}`;
   };
 
-  const saveDraftField = (key: keyof CertificateRecord, value: string) => {
-    if (draft) setDraft({ ...draft, [key]: value });
-  };
-
   if (view === 'config') {
     return (
       <CertificationConfigStudio
@@ -329,17 +314,8 @@ export const CertificationManager: React.FC<Props> = ({
         </div>
         <div className="vop-cert-preview-grid">
           <aside className="vop-cert-candidate-card">
-            <div className="vop-cert-card-head"><h3>Candidate Information</h3><button type="button" className="vop-cert-small-button" onClick={() => setEditing(value => !value)}>{editing ? 'Close' : 'Edit'}</button></div>
-            {editing && draft ? (
-              <div className="vop-cert-edit-fields">
-                <label>Full Name<input value={draft.candidateName} onChange={e => saveDraftField('candidateName', e.target.value)} /></label>
-                <label>Course<input value={draft.courseName} onChange={e => saveDraftField('courseName', e.target.value)} /></label>
-                <label>Course Code<input value={draft.courseCode || ''} onChange={e => saveDraftField('courseCode', e.target.value)} /></label>
-                <label>Certificate No.<input value={draft.certificateNumber} onChange={e => saveDraftField('certificateNumber', e.target.value)} /></label>
-                <button type="button" className="vop-cert-primary-button" onClick={() => void updateCertificate()}>Save</button>
-              </div>
-            ) : (
-              <>
+            <div className="vop-cert-card-head"><h3>Candidate Information</h3><span className="vop-cert-status">Official Record</span></div>
+            <>
                 <div className="vop-cert-profile-image">{selected.candidatePhotoURL ? <img src={selected.candidatePhotoURL} alt="" /> : <EmptyAvatar />}</div>
                 <dl className="vop-cert-details">
                   <div><dt>Full Name</dt><dd>{selected.candidateName || '—'}</dd></div>
@@ -351,8 +327,7 @@ export const CertificationManager: React.FC<Props> = ({
                   <div><dt>Conference</dt><dd>{selected.conferenceName || '—'}</dd></div>
                   <div><dt>Union</dt><dd>{selected.unionName || '—'}</dd></div>
                 </dl>
-              </>
-            )}
+              </>}
           </aside>
           <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} /></section>
           <aside className="vop-cert-action-card">
