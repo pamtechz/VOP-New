@@ -280,6 +280,76 @@ export default async function handler(req: Request, res: Response) {
       return res.status(403).json({ error: 'This platform-level collection is managed by the VOP Super Admin.' });
     }
 
+    if (collection === 'translations' && action === 'proposeTranslation') {
+      if (!ctx.organizationId) throw new Error('An organization membership is required to submit a translation proposal.');
+      const languageId = safeId(body.languageId);
+      const key = String(body.key || '').trim();
+      const proposedValue = String(body.proposedValue || '').trim();
+      const reason = String(body.reason || '').trim();
+      if (!key || !proposedValue) throw new Error('Translation key and proposed value are required.');
+      const sourceRef = ctx.db.doc('translations/' + languageId);
+      const source = await sourceRef.get();
+      if (!source.exists) throw new Error('The selected translation record does not exist.');
+      const sourceData = source.data() || {};
+      const existingValues = sourceData.values && typeof sourceData.values === 'object' ? sourceData.values as Record<string, unknown> : {};
+      if (!(key in existingValues)) throw new Error('The selected translation key does not exist.');
+      if (String(existingValues[key] || '') === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
+      const proposalRef = ctx.db.collection('translations/' + languageId + '/proposals').doc();
+      const now = new Date().toISOString();
+      await proposalRef.set({
+        id: proposalRef.id,
+        languageId,
+        key,
+        currentValue: String(existingValues[key] || ''),
+        proposedValue,
+        reason,
+        proposerUid: ctx.auth.uid,
+        proposerOrganizationId: ctx.organizationId,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      });
+      return res.status(200).json({ ok:true, item:{id:proposalRef.id, languageId, key, status:'pending'} });
+    }
+
+    if (collection === 'translations' && action === 'reviewTranslationProposal') {
+      if (!ctx.isSuperAdmin) throw new Error('Only an authorized platform reviewer can approve or reject global translation proposals.');
+      const languageId = safeId(body.languageId);
+      const proposalId = safeId(body.proposalId);
+      const decision = body.decision === 'approve' ? 'approved' : body.decision === 'reject' ? 'rejected' : '';
+      if (!decision) throw new Error('A valid review decision is required.');
+      const proposalRef = ctx.db.doc('translations/' + languageId + '/proposals/' + proposalId);
+      const translationRef = ctx.db.doc('translations/' + languageId);
+      await ctx.db.runTransaction(async transaction => {
+        const [proposalSnapshot, translationSnapshot] = await Promise.all([transaction.get(proposalRef), transaction.get(translationRef)]);
+        if (!proposalSnapshot.exists) throw new Error('The translation proposal was not found.');
+        if (!translationSnapshot.exists) throw new Error('The canonical translation was not found.');
+        const proposal = proposalSnapshot.data() || {};
+        if (String(proposal.status || '') !== 'pending') throw new Error('This translation proposal has already been reviewed.');
+        const translation = translationSnapshot.data() || {};
+        const values = translation.values && typeof translation.values === 'object' ? { ...(translation.values as Record<string, unknown>) } : {};
+        const key = String(proposal.key || '');
+        if (!key) throw new Error('The proposal is missing its translation key.');
+        if (decision === 'approved') {
+          values[key] = String(proposal.proposedValue || '');
+          transaction.set(translationRef, {
+            values,
+            translationRevision: Number(translation.translationRevision || 0) + 1,
+            lastReviewedBy: ctx.auth.uid,
+            lastReviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge:true });
+        }
+        transaction.update(proposalRef, {
+          status: decision,
+          reviewedBy: ctx.auth.uid,
+          reviewedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      return res.status(200).json({ ok:true, decision, proposalId });
+    }
+
     const id = safeId(body.id);
     if (GLOBAL_COLLECTIONS.has(collection)) {
       if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('An organization membership is required before contributing global content.');
