@@ -541,7 +541,7 @@ function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
   }
 }
 
-function MediaUpload({fieldKey,label,organizationId,accept}:{fieldKey:string;label:string;organizationId?:string;accept:string}) {
+function MediaUpload({fieldKey,label,organizationId,accept,setForm}:{fieldKey:string;label:string;organizationId?:string;accept:string;setForm:React.Dispatch<React.SetStateAction<FormState>>}) {
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const upload=async(event:React.ChangeEvent<HTMLInputElement>)=>{
@@ -556,13 +556,11 @@ function MediaUpload({fieldKey,label,organizationId,accept}:{fieldKey:string;lab
       const objectPath=`organizations/${organizationId}/radio/${crypto.randomUUID()}-${safeName}`;
       const uploaded=await uploadBytes(storageRef(storage,objectPath),file,{contentType:file.type||'application/octet-stream'});
       const url=await getDownloadURL(uploaded.ref);
-      window.dispatchEvent(new CustomEvent('vop_media_uploaded',{detail:{fieldKey,url}}));
+      setForm(current=>({...current,[fieldKey]:url}));
     } catch(reason) { setError(reason instanceof Error?reason.message:'Media upload failed.'); }
     finally { setBusy(false); }
   };
-  useEffect(()=>{const handler=(event:Event)=>{const detail=(event as CustomEvent<{fieldKey:string;url:string}>).detail;if(detail?.fieldKey===fieldKey) setLocalUrl(detail.url);};return()=>window.removeEventListener('vop_media_uploaded',handler);},[fieldKey]);
-  const [localUrl,setLocalUrl]=useState('');
-  return <div className="vop-field"><label>{label}</label><input type="file" accept={accept} disabled={busy} onChange={upload}/>{busy&&<small>Uploading…</small>}{error&&<small style={{color:'#b42318'}}>{error}</small>}{localUrl&&<small>Uploaded: {localUrl}</small>}</div>;
+  return <div className="vop-field"><label>{label}</label><input type="file" accept={accept} disabled={busy} onChange={upload}/>{busy&&<small>Uploading…</small>}{error&&<small style={{color:'#b42318'}}>{error}</small>}</div>;
 }
 
 function Fields({kind,form,setForm,records,organizationId}:{kind:Exclude<ManagedAdminCollection,'translations'>;form:FormState;setForm:React.Dispatch<React.SetStateAction<FormState>>;records:AdminRecord[];organizationId?:string}) {
@@ -585,10 +583,10 @@ function Fields({kind,form,setForm,records,organizationId}:{kind:Exclude<Managed
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
         {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
         {select('mediaType','Primary Media Type',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
-        {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}
-        {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}
+        {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}<MediaUpload fieldKey="audioUrl" label="Upload audio file" organizationId={organizationId} accept="audio/*" setForm={setForm}/>
+        {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}<MediaUpload fieldKey="videoUrl" label="Upload video file" organizationId={organizationId} accept="video/*" setForm={setForm}/>
         {field('streamUrl','Live Stream URL','url','Direct stream/HLS URL where supported')}
-        {field('posterUrl','Video Poster URL','url','Optional poster image for video')}
+        {field('posterUrl','Video Poster URL','url','Optional poster image for video')}<MediaUpload fieldKey="posterUrl" label="Upload poster image" organizationId={organizationId} accept="image/*" setForm={setForm}/>
         <div className="vop-radio-admin-note"><strong>Automatic media intelligence:</strong> playback time, duration, buffering state and local clock display are detected from the media/browser. You do not enter a broadcast time or duration manually. The system records the creation timestamp automatically.</div>
         {area('description','Description')}{published}
         <div className="vop-radio-admin-note">Use browser-playable media URLs. The public player provides play/pause, seek, skip, volume, speed, fullscreen and picture-in-picture where the browser supports them.</div>
