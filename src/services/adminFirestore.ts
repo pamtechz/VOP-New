@@ -14,7 +14,8 @@ function getDb(): Firestore {
 }
 
 const TENANT_COLLECTIONS = new Set<string>([
-  'languages','translations','announcements','books','radioBroadcasts','churches','candidates','users'
+  'languages','translations','announcements','books','radioBroadcasts','churches','candidates','users',
+  'unions','conferences','districts'
 ]);
 
 async function currentOrganizationId(): Promise<string> {
