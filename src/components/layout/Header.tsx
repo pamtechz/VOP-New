@@ -263,7 +263,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <Award size={14} />
-            <span>{t('certificate_button', 'Certificate')}</span>
+            <span>{t('certificates.button', 'Certificate')}</span>
           </button>
 
           {/* Admin Panel Quick Link (Desktop only) */}
@@ -271,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => nav('admin')}
               className="btn btn-outline hide-sm"
-              title={t('admin_panel', 'Admin Panel')}
+              title={t('navigation.admin', 'Admin Panel')}
               style={{
                 borderColor: 'rgba(255, 255, 255, 0.25)',
                 color: '#ffffff',
@@ -281,7 +281,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <ShieldCheck size={14} color="var(--vop-gold-400)" />
-              <span>{t('admin_panel', 'Admin Panel')}</span>
+              <span>{t('navigation.admin', 'Admin Panel')}</span>
             </button>
           )}
 
