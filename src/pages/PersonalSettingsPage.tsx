@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import type { User } from '../types';
+import type { User, CustomLanguage } from '../types';
+import { loadPublicContent } from '../services/publicFirestore';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -37,11 +38,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [languages, setLanguages] = useState<CustomLanguage[]>([]);
 
   useEffect(() => {
     let active = true;
-    void callPersonalSettings('get').then(value => {
+    void Promise.all([callPersonalSettings('get'), loadPublicContent()]).then(([value, content]) => {
       if (active && value) setSettings(previous => ({ ...previous, ...value }));
+      if (active) setLanguages(content.languages || []);
     }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load settings.'); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
@@ -72,7 +75,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
       <section className="vop-card">
         <h2><Globe2 size={19}/> Interface</h2>
         <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label>Preferred language<input value={settings.language || ''} onChange={e => patch('language', e.target.value)} placeholder="Use the available language code" /></label>
+        <label>Preferred language<select value={settings.language || ''} onChange={e => patch('language', e.target.value)}><option value="">System / default</option>{languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}</select></label>
       </section>
       <section className="vop-card">
         <h2><Bell size={19}/> Notifications</h2>
