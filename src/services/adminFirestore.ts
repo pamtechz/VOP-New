@@ -427,9 +427,29 @@ export const subscribeTranslations = (
   callback: (records: AdminTranslationRecord[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  return tenantSubscription('translations',
-    snapshot => {
-      callback(snapshot.docs.map(item => {
+  const firestore = getDb();
+  let stop: Unsubscribe = () => undefined;
+  let cancelled = false;
+  void getDoc(doc(firestore, 'users', auth.currentUser?.uid || '')).then(async profile => {
+    if (cancelled) return;
+    const isSuperAdmin = String(profile.data()?.role || '') === 'super_admin';
+    const organizationId = String(profile.data()?.organizationId || '').trim();
+    const queries = isSuperAdmin
+      ? [query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'))]
+      : [
+          query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared')),
+          ...(organizationId ? [query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))] : []),
+        ];
+    stop = onSnapshot(queries[0], async first => {
+      const snapshots = [first];
+      if (queries.length > 1) snapshots.push(await import('firebase/firestore').then(({ getDocs }) => getDocs(queries[1])));
+      const seen = new Set<string>();
+      const docs = snapshots.flatMap(snapshot => snapshot.docs.filter(item => {
+        if (seen.has(item.ref.path)) return false;
+        seen.add(item.ref.path);
+        return true;
+      }));
+      callback(docs.map(item => {
         const raw = item.data();
         const values = raw.values && typeof raw.values === 'object'
           ? Object.fromEntries(
@@ -443,12 +463,12 @@ export const subscribeTranslations = (
           updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
         };
       }));
-    },
-    err => {
+    }, err => {
       console.error('Firestore translations subscription error:', err);
       onError?.(err);
-    }
-  );
+    });
+  }).catch(error => onError?.(error instanceof Error ? error : new Error('Translations could not be loaded.')));
+  return () => { cancelled = true; stop(); };
 };
 
 export const saveTranslation = async (
@@ -458,10 +478,17 @@ export const saveTranslation = async (
   const firestore = getDb();
   const id = language.trim().toLowerCase();
   if (!id) throw new Error('A language code is required.');
+  if (!auth?.currentUser) throw new Error('Sign in first.');
   const organizationId = await currentOrganizationId();
-  await setDoc(doc(firestore, 'translations', id), {
+  const ref = doc(firestore, 'translations', id);
+  const existing = await getDoc(ref);
+  await setDoc(ref, {
     values,
-    ...(organizationId ? { organizationId } : {}),
+    organizationId: '',
+    ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
+    ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
+    canonical: true,
+    sharingScope: 'shared',
     updatedAt: new Date().toISOString(),
   }, { merge: true });
 };
