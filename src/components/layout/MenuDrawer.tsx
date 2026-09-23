@@ -3,7 +3,7 @@ import type { User, AppRoute } from '../../types';
 import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck, Megaphone } from 'lucide-react';
 import { getActiveLanguage, getStoredGuides, getStoredSettings } from '../../services/storage';
 import { calculateCurriculumProgress } from '../../services/progress';
-import { getTranslation } from '../../services/i18n';
+import { useLocalization } from '../../services/i18n';
 
 interface MenuDrawerProps {
   isOpen: boolean;
@@ -23,7 +23,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
   const settings = getStoredSettings();
   const language = getActiveLanguage();
   const progress = calculateCurriculumProgress(getStoredGuides(), currentUser, settings.quizPassThreshold, language);
-  const t = (key: string, english: string, vars?: Record<string,string|number>) => getTranslation(key, language, settings.customTranslations, english, 'MenuDrawer', vars);
+  const { t } = useLocalization();
   const isAdmin = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
   const itemStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', width: '100%', gap: '1rem', border: 0, background: 'transparent', color: '#171d27', fontWeight: 650, fontSize: '.92rem', textAlign: 'left', padding: '.8rem .9rem', minHeight: '3.5rem', cursor: 'pointer' };
