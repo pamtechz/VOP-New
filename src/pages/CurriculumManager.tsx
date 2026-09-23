@@ -674,6 +674,10 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
 
   const saveRecord = async (kind: 'paths' | 'topics' | 'seasons') => {
     if (!editingRecord) return;
+    if (editingRecord.canEdit === false) {
+      setError('This curriculum record is owned by another contributor and cannot be edited here.');
+      return;
+    }
     const name = valueText(editingRecord.name).trim();
     if (!name) return setError('A name is required.');
     setSaving(true);
@@ -696,6 +700,11 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   };
 
   const deleteRecord = async (kind: 'paths' | 'topics' | 'seasons', id: string) => {
+    const target = records.find(record => record.id === id);
+    if (target?.canEdit === false) {
+      setError('This curriculum record is owned by another contributor and cannot be deleted here.');
+      return;
+    }
     if (!window.confirm('Delete this curriculum record?')) return;
     try {
       await adminContent('delete', COLLECTIONS[kind], id);
@@ -874,7 +883,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
         <div className="vop-page-head"><div className="vop-heading"><div className="vop-heading-icon vop-icon-orange"><Icon size={31}/></div><div><h1>{config[0]}</h1><p>Manage curriculum records and publishing structure.</p></div></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>Refresh</button><button className="vop-primary" type="button" onClick={() => setEditingRecord({id:'',name:'',description:'',published:false})}><Plus size={18}/>New {config[1]}</button></div></div>
         <div className="vop-reference-toolbar"><div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label={'Search '+config[0]}/></div><button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={16}/>Refresh</button></div>
         <div className="vop-admin-record-layout">
-          <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>#</th><th>Name</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filteredRecords.map((record,index)=><tr key={record.id}><td>{index+1}</td><td><strong>{valueText(record.name)}</strong></td><td>{valueText(record.description)}</td><td><span className={'vop-status '+(record.published?'published':'draft')}>{record.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" onClick={() => setEditingRecord(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" onClick={() => void deleteRecord(kind,record.id)}><Trash2 size={15}/></button></td></tr>)}</tbody></table>{filteredRecords.length===0&&<div className="vop-empty">No records are configured.</div>}</div>
+          <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>#</th><th>Name</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filteredRecords.map((record,index)=><tr key={record.id}><td>{index+1}</td><td><strong>{valueText(record.name)}</strong></td><td>{valueText(record.description)}</td><td><span className={'vop-status '+(record.published?'published':'draft')}>{record.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={() => setEditingRecord(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={() => void deleteRecord(kind,record.id)}><Trash2 size={15}/></button></td></tr>)}</tbody></table>{filteredRecords.length===0&&<div className="vop-empty">No records are configured.</div>}</div>
           {editingRecord && <form className="vop-card vop-form-card" onSubmit={e => {e.preventDefault();void saveRecord(kind);}}><div className="vop-section-title"><div><h2>{editingRecord.id?'Edit':'New'} {config[1]}</h2></div><button className="vop-actions" type="button" onClick={() => setEditingRecord(null)}><X size={16}/></button></div><div className="vop-field"><label>Name *</label><input value={valueText(editingRecord.name)} onChange={e => setEditingRecord({...editingRecord,name:e.target.value})}/></div><div className="vop-field"><label>Description</label><textarea value={valueText(editingRecord.description)} onChange={e => setEditingRecord({...editingRecord,description:e.target.value})}/></div><div className="vop-setting-row"><div><div className="vop-setting-name">Published</div></div><input type="checkbox" checked={editingRecord.published===true} onChange={e => setEditingRecord({...editingRecord,published:e.target.checked})}/></div><div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={() => setEditingRecord(null)}>Cancel</button><button className="vop-primary" type="submit" disabled={saving}><Save size={16}/>Save</button></div></form>}
         </div>
       </div>
