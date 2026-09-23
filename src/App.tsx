@@ -160,7 +160,7 @@ export const App: React.FC = () => {
     });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [currentUser.uid, currentUser.organizationId]);
 
   useEffect(() => {
     const markVerifiedInstall = () => {
