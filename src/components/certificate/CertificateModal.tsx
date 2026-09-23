@@ -39,7 +39,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         useCORS: true,
         backgroundColor: '#ffffff'
       });
-      const link = document.createElement('a');
+      const link = document.createElement('common.error');
       link.download = `VOP_Certificate_${customName.replace(/\s+/g, '_')}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
@@ -219,7 +219,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </div>
 
               <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
-                {settings.certificateBodyText || t('completed_course_text')}
+                {settings.certificateBodyText || t('certificates.completedCourse')}
               </div>
             </div>
 
@@ -276,7 +276,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   {settings.schoolName.toUpperCase()}
                 </div>
                 <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
-                  {t('issue_date')}: {issueDate}
+                  {t('certificates.issuedOn')}: {issueDate}
                 </div>
               </div>
 
@@ -338,12 +338,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={handlePrint} className="btn btn-outline" style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
               <Printer size={18} />
-              {t('print')}
+              {t('certificates.print')}
             </button>
 
             <button onClick={handleShare} className="btn btn-outline" style={{ flex: 1, padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
               <Share2 size={18} />
-              {t('share')}
+              {t('certificates.share')}
             </button>
 
             <button
@@ -360,7 +360,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               }}
             >
               <Download size={18} />
-              {isExporting ? 'Generating Image...' : t('save_image')}
+              {isExporting ? 'Generating Image...' : t('certificates.saveImage')}
             </button>
           </div>
         </div>
