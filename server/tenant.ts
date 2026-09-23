@@ -66,11 +66,33 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
 }
 
 
+export async function getOrganizationPlan(ctx: TenantContext) {
+  if (!ctx.organizationId) return null;
+  const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+  const planId = String(organization.data()?.plan || '').trim();
+  if (!planId) return null;
+  const plan = await ctx.db.doc(`plans/${planId}`).get();
+  return plan.exists ? { id: plan.id, ...(plan.data() || {}) } : null;
+}
+
+export async function enforceFeature(ctx: TenantContext, featureKey: string) {
+  if (ctx.isSuperAdmin || !ctx.organizationId) return;
+  const plan = await getOrganizationPlan(ctx);
+  if (!plan || plan.active === false) throw new Error('The organization does not have an active SaaS plan.');
+  const features = plan.features && typeof plan.features === 'object' ? plan.features as Record<string, unknown> : {};
+  if (features[featureKey] === false) throw new Error(`The ${featureKey} feature is not enabled for the organization plan.`);
+}
+
 export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
   if (ctx.isSuperAdmin || !ctx.organizationId) return;
   const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
-  const quotas = organization.data()?.quotas;
-  const limit = Number(quotas && typeof quotas === 'object' ? (quotas as Record<string, unknown>)[quotaKey] : NaN);
+  const organizationQuotas = organization.data()?.quotas;
+  const plan = await getOrganizationPlan(ctx);
+  const planQuotas = plan?.quotas;
+  const quotas = (organizationQuotas && typeof organizationQuotas === 'object' && Object.keys(organizationQuotas as object).length)
+    ? organizationQuotas as Record<string, unknown>
+    : (planQuotas && typeof planQuotas === 'object' ? planQuotas as Record<string, unknown> : {});
+  const limit = Number(quotas[quotaKey]);
   if (!Number.isFinite(limit) || limit < 0) return;
   const current = await ctx.db.collection(collectionName).where('organizationId','==',ctx.organizationId).get();
   if (current.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
