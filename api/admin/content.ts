@@ -68,7 +68,7 @@ export default async function handler(req: Request, res: Response) {
         : await ctx.db.collection('guides').get();
       const items = await Promise.all(snap.docs.map(async d => {
         const lessons = await d.ref.collection('lessons').get();
-        return { id: d.id, ...d.data(), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean) };
+        return { id: d.id, ...d.data(), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean), canEdit: ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid };
       }));
       return res.status(200).json({ ok: true, items });
     }
