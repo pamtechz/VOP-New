@@ -21,6 +21,7 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can view platform plans.');
       const snap=await bootstrapDb.collection('plans').where('active','==',true).get();
       const items=snap.docs.map(doc=>({id:doc.id,name:String(doc.data()?.name||doc.id),active:true})).sort((a,b)=>a.name.localeCompare(b.name));
+      items.sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
       return res.status(200).json({ok:true,items});
     }
 
@@ -122,7 +123,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listInvites') {
-      const snap = await ctx.db.collection('organizationInvites').where('organizationId','==',ctx.organizationId).orderBy('createdAt','desc').limit(100).get();
+      const snap = await ctx.db.collection('organizationInvites').where('organizationId','==',ctx.organizationId).limit(100).get();
       const now = Date.now();
       const items = snap.docs.map(d => {
         const data = d.data() || {};
