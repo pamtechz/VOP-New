@@ -216,8 +216,15 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listAssignments') {
       const snapshot = await db.collection('mentorAssignments').get();
       const studentSnapshots = await Promise.all(snapshot.docs.map(doc => db.doc(`users/${String(doc.data()?.studentId || '')}`).get()));
-      const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => item.id));
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => allowedStudentIds.has(String(item.studentId || '')));
+      const allowedStudents = new Map(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => [item.id, item.data() || {}]));
+      const items = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(item => {
+          const student = allowedStudents.get(String(item.studentId || ''));
+          return Boolean(student)
+            && String(item.organizationId || '') === String(student?.organizationId || '')
+            && String(item.organizationId || '') === organizationId;
+        });
       return res.status(200).json({ ok: true, items });
     }
 
@@ -278,8 +285,16 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok: true, items });
       }
       const assignment = await db.collection('mentorAssignments').where('mentorId','==',decoded.uid).get();
-      const assignedStudents = new Set(assignment.docs.map(doc => String(doc.data().studentId || '')));
+      const assignedStudents = new Set(
+        assignment.docs
+          .filter(doc => String(doc.data()?.organizationId || '') === organizationId)
+          .map(doc => String(doc.data().studentId || ''))
+      );
       let snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).get();
+      snapshot = {
+        ...snapshot,
+        docs: snapshot.docs.filter(doc => String(doc.data()?.organizationId || '') === organizationId),
+      } as typeof snapshot;
       if (requestedStudent && !assignedStudents.has(requestedStudent)) throw new Error('This learner is not assigned to you.');
       if (requestedStudent) snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).where('studentId','==',requestedStudent).get();
       return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
