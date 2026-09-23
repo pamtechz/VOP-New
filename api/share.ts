@@ -136,6 +136,46 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
     }
 
+    if (action === 'enroll') {
+      const code = String(body.code || '').trim();
+      if (!code) throw new Error('Share code is required.');
+      const shareRef = db.doc(`shareReferences/${code}`);
+      const share = await shareRef.get();
+      if (!share.exists) throw new Error('Share link not found.');
+      const shareData = share.data() || {};
+      const organizationId = String(shareData.organizationId || '').trim();
+      const guideId = String(shareData.guideId || '').trim();
+      const lessonId = String(shareData.lessonId || '').trim();
+      if (!organizationId || !guideId) throw new Error('This learning link is incomplete.');
+      const organization = await db.doc('organizations/' + organizationId).get();
+      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const guide = await db.doc('guides/' + guideId).get();
+      if (!guide.exists) throw new Error('The shared course is no longer available.');
+      const guideData = guide.data() || {};
+      if (String(guideData.organizationId || '') !== organizationId) throw new Error('This course is not owned by the sharing organization.');
+      if (guideData.published !== true || guideData.archived === true) throw new Error('This course is no longer available for enrollment.');
+      if (shareData.sharingScope === 'shared' && guideData.sharingScope !== 'shared') throw new Error('This shared course is not available.');
+      if (lessonId) {
+        const lesson = await guide.collection('lessons').doc(lessonId).get();
+        if (!lesson.exists || lesson.data()?.published !== true || lesson.data()?.archived === true) throw new Error('The selected lesson is no longer available.');
+      }
+      const profileRef = db.doc('users/' + decoded.uid);
+      const profileSnap = await profileRef.get();
+      const profile = profileSnap.data() || {};
+      const existingOrganizationId = String(profile.organizationId || '').trim();
+      if (existingOrganizationId && existingOrganizationId !== organizationId) throw new Error('Your account already belongs to another organization.');
+      const role = String(profile.role || '') === 'super_admin' ? 'learner' : String(profile.organizationRole || 'learner') || 'learner';
+      const now = new Date().toISOString();
+      await db.runTransaction(async transaction => {
+        transaction.set(profileRef, { organizationId, organizationRole: role === 'owner' || role === 'admin' ? 'learner' : role, updatedAt:FieldValue.serverTimestamp() }, {merge:true});
+        transaction.set(db.doc('organizations/' + organizationId + '/members/' + decoded.uid), {uid:decoded.uid,organizationId,role:role === 'owner' || role === 'admin' ? 'learner' : role,active:true,joinedAt:now,updatedAt:now,joinedByShareCode:code},{merge:true});
+        transaction.set(db.doc('courseEnrollments/' + organizationId + '_' + decoded.uid + '_' + guideId), {uid:decoded.uid,organizationId,guideId,lessonId,source:'share',shareCode:code,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),status:'active'},{merge:true});
+      });
+      await getAuth(admin()).setCustomUserClaims(decoded.uid, { role:'student', organizationId, organizationRole:'learner' });
+      await shareRef.set({installs:FieldValue.increment(1),lastInstallAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,item:{organizationId,guideId,lessonId}});
+    }
+
     if (action === 'markInstall') {
       const code = String(body.code || '').trim();
       if (!code) throw new Error('Share code is required.');
