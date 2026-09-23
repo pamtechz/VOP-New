@@ -10,8 +10,10 @@ const COLLECTIONS = new Set([
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
+const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts']);
+
 const ORG_COLLECTIONS = new Set([
-  'languages','translations','announcements','books','radioBroadcasts','learningPaths','bibleTopics','seasons',
+  'announcements','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides'
 ]);
 
@@ -258,6 +260,14 @@ export default async function handler(req: Request, res: Response) {
           : await ctx.db.collection('users').get();
         return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
       }
+      if (GLOBAL_COLLECTIONS.has(collection)) {
+        if (ctx.isSuperAdmin) {
+          const snap = await ctx.db.collection(collection).get();
+          return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
+        }
+        const snap = await ctx.db.collection(collection).where('ownerUid','==',ctx.auth.uid).get();
+        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
+      }
       if (ORG_COLLECTIONS.has(collection)) {
         if (!ctx.organizationId) return res.status(200).json({ ok: true, items: [] });
         const snap = await ctx.db.collection(collection).where('organizationId','==',ctx.organizationId).get();
@@ -271,6 +281,35 @@ export default async function handler(req: Request, res: Response) {
     }
 
     const id = safeId(body.id);
+    if (GLOBAL_COLLECTIONS.has(collection)) {
+      if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('An organization membership is required before contributing global content.');
+      const ref = ctx.db.doc(collection + '/' + id);
+      const existing = await ref.get();
+      if (action === 'delete') {
+        if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can delete it.');
+        await ref.delete();
+        return res.status(200).json({ ok:true, id });
+      }
+      if (action === 'upsert') {
+        const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
+        await ref.set({
+          ...incoming,
+          id,
+          organizationId: '',
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+          ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
+          canonical: true,
+          sharingScope: 'shared',
+          createdAt: existing.data()?.createdAt || new Date().toISOString(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: ctx.auth.uid,
+        }, { merge:true });
+        const saved = await ref.get();
+        return res.status(200).json({ ok:true, item:{id,...saved.data()} });
+      }
+    }
+
     if (ORG_COLLECTIONS.has(collection)) {
       if (!ctx.organizationId) throw new Error('Select an organization before managing content.');
       const ref = ctx.db.doc(`${collection}/${id}`);
