@@ -66,7 +66,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
             }`}
           >
-            {t('tab_about_ministry', 'About Ministry & Mission')}
+            {t('about.mission', 'About Ministry & Mission')}
           </button>
           <button
             onClick={() => setActiveTab('app')}
@@ -76,7 +76,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
             }`}
           >
-            {t('tab_about_app', 'About This Application')}
+            {t('about.aboutVop', 'About This Application')}
           </button>
           <button
             onClick={() => setActiveTab('contact')}
