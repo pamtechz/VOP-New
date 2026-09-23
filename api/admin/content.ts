@@ -74,7 +74,7 @@ export default async function handler(req: Request, res: Response) {
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
       const requestedId = body.id ? safeId(body.id) : (data.id ? safeId(data.id) : '');
-      const id = requestedId || guideId(ctx.organizationId, lang);
+      const id = requestedId || (ctx.organizationId ? guideId(ctx.organizationId, lang) : `platform__${lang}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
@@ -112,7 +112,7 @@ export default async function handler(req: Request, res: Response) {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
       const data = (body.data as Record<string, unknown> | undefined) || {};
       const lang = String(data.language || '').trim();
-      if (!language(lang) || !ctx.organizationId) throw new Error('A valid language and organization are required.');
+      if (!language(lang) || (!ctx.organizationId && !ctx.isSuperAdmin)) throw new Error('A valid language and organization are required.');
       const requestedId = body.id ? safeId(body.id) : (data.id ? safeId(data.id) : '');
       const ref = ctx.db.doc(`guides/${requestedId || guideId(ctx.organizationId, lang)}`);
       const current = await ref.get();
@@ -217,7 +217,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'publishLesson' || action === 'unpublishLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson publishing requires the curriculum collection.');
-      if (!ctx.organizationId) throw new Error('Select an organization before publishing lessons.');
+      if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('Select an organization before publishing lessons.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       const lessonId = safeId(data.lessonId || body.id);
