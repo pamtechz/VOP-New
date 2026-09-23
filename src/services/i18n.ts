@@ -45,6 +45,9 @@ export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promi
     document.documentElement.dir = payload?.direction === 'rtl' ? 'rtl' : 'ltr';
     document.documentElement.lang = requested;
     notify();
+    if (requested !== fallback && !dictionaryCache[fallback]) {
+      await loadUiLocale(fallback, fallback);
+    }
   } catch {
     if (requested !== fallback && !dictionaryCache[fallback]) {
       try { await loadUiLocale(fallback, fallback); } catch { /* developer fallback remains available */ }
