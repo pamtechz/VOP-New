@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Check, Edit3, Plus, RefreshCw, Shield, Users, BarChart3 } from 'lucide-react';
+import { Building2, Check, Edit3, Plus, RefreshCw, Shield, Users, BarChart3, BookOpen, Award } from 'lucide-react';
 import { auth } from '../lib/firebase';
 
 type Organization = {
@@ -14,7 +14,7 @@ async function api(action:string, payload:Record<string,unknown>={}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch('/api/admin/organizations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action,...payload})});
-  const body=await response.json().catch(()=>({})) as {error?:string;items?:unknown[];item?:Organization;usage?:Usage};
+  const body=await response.json().catch(()=>({})) as {error?:string;items?:unknown[];item?:Organization;usage?:Usage;analytics?:Analytics};
   if(!response.ok) throw new Error(body.error || 'Organization request failed.');
   return body;
 }
