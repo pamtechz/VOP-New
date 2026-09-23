@@ -290,7 +290,15 @@ export default async function handler(req: Request, res: Response) {
       const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
       if (!assignment.exists) return res.status(200).json({ ok: true, items: [] });
       const mentorId = String(assignment.data()?.mentorId || '');
+      const assignmentOrganizationId = String(assignment.data()?.organizationId || '').trim();
+      const student = await profile(db, studentId);
+      if (!assignmentOrganizationId || !String(student.organizationId || '').trim() || assignmentOrganizationId !== String(student.organizationId || '').trim()) {
+        return res.status(200).json({ ok: true, items: [] });
+      }
       const mentor = await profile(db, mentorId);
+      if (!sameTenant(student, mentor, assignmentOrganizationId)) {
+        return res.status(200).json({ ok: true, items: [] });
+      }
       const ref = db.doc(`mentorConversations/${conversationId(studentId, mentorId)}`);
       const snapshot = await ref.get();
       const item = snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : { id: ref.id, studentId, mentorId, status: 'open' };
@@ -321,7 +329,11 @@ export default async function handler(req: Request, res: Response) {
       if (String(decoded.uid) !== studentId && String(decoded.uid) !== mentorId && !isAdmin(actor)) throw new Error('You are not allowed to send to this conversation.');
       if (String(decoded.uid) === mentorId) {
         const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
-        if (!assignment.exists || String(assignment.data()?.mentorId || '') !== mentorId) throw new Error('This learner is not assigned to you.');
+        if (
+          !assignment.exists
+          || String(assignment.data()?.mentorId || '') !== mentorId
+          || String(assignment.data()?.organizationId || '') !== String(student.organizationId || '')
+        ) throw new Error('This learner is not assigned to you.');
       }
       const references = Array.isArray(body.references) ? body.references.map(safeReference).filter(Boolean) : [];
       await ref.set({
@@ -403,7 +415,9 @@ export default async function handler(req: Request, res: Response) {
       const draftSnapshot = await draftRef.get();
       if (!draftSnapshot.exists) throw new Error('Message draft was not found.');
       const draft = draftSnapshot.data() || {};
-      if (organizationId && String(draft.organizationId || '') !== organizationId) throw new Error('This draft belongs to another organization.');
+      const draftOrganizationId = String(draft.organizationId || '').trim();
+      if (!draftOrganizationId) throw new Error('The message draft is missing its organization.');
+      if (draftOrganizationId !== organizationId) throw new Error('This draft belongs to another organization.');
       const student = await profile(db, String(draft.studentId || ''));
       if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
