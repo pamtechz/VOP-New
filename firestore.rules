@@ -249,7 +249,10 @@ service cloud.firestore {
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canEditOrgContent(organizationIdForUser())
       );
-      allow update, delete: if isSuperAdmin() || (
+      allow update, delete: if isSuperAdmin() ? (
+        request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId', resource.data.get('organizationId',''))
+      ) : (
         resource.data.get('organizationId','') == organizationIdForUser()
         && canEditOrgContent(organizationIdForUser())
       );
@@ -292,7 +295,10 @@ service cloud.firestore {
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canEditOrgContent(organizationIdForUser())
       );
-      allow update, delete: if isSuperAdmin() || (
+      allow update, delete: if isSuperAdmin() ? (
+        request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId', resource.data.get('organizationId',''))
+      ) : (
         resource.data.get('ownerOrganizationId','') == organizationIdForUser()
         && canEditOrgContent(organizationIdForUser())
       );
