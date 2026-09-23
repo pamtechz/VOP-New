@@ -406,6 +406,24 @@ service cloud.firestore {
       );
     }
 
+    match /playlists/{id} {
+      allow get, list: if isSuperAdmin()
+        || (resource.data.get('ownerUid','') == request.auth.uid && isOrgMember(organizationIdForUser()))
+        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
+        || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true);
+      allow create: if isSuperAdmin() || (
+        isOrgMember(organizationIdForUser())
+        && request.resource.data.get('ownerUid','') == request.auth.uid
+        && request.resource.data.get('organizationId','') == ''
+        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+      );
+      allow update, delete: if isSuperAdmin() || (
+        canEditOwnedGlobal(resource.data)
+        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
+      );
+    }
+
     match /languages/{languageId} {
       allow get, list: if isSuperAdmin()
         || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
