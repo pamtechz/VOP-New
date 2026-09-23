@@ -290,14 +290,13 @@ export default async function handler(req: Request, res: Response) {
           .filter(doc => String(doc.data()?.organizationId || '') === organizationId)
           .map(doc => String(doc.data().studentId || ''))
       );
-      let snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).get();
-      snapshot = {
-        ...snapshot,
-        docs: snapshot.docs.filter(doc => String(doc.data()?.organizationId || '') === organizationId),
-      } as typeof snapshot;
+      const snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).get();
+      const scopedConversationDocs = snapshot.docs.filter(doc => String(doc.data()?.organizationId || '') === organizationId);
       if (requestedStudent && !assignedStudents.has(requestedStudent)) throw new Error('This learner is not assigned to you.');
-      if (requestedStudent) snapshot = await db.collection('mentorConversations').where('mentorId','==',decoded.uid).where('studentId','==',requestedStudent).get();
-      return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+      const items = requestedStudent
+        ? scopedConversationDocs.filter(doc => String(doc.data()?.studentId || '') === requestedStudent)
+        : scopedConversationDocs;
+      return res.status(200).json({ ok: true, items: items.map(doc => ({ id: doc.id, ...doc.data() })) });
     }
 
     if (action === 'listMyConversations') {
