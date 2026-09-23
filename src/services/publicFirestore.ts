@@ -202,39 +202,6 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     }))
     .filter(item => item.published === true && item.title.trim());
 
-  const languages = languagesSnap.docs
-    .map(item => normalizeLanguage(item.id, item.data()))
-    .filter(item => item.enabled)
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
-
-  const translations: Record<string, Record<string, string>> = {};
-  translationsSnap.docs.forEach(item => {
-    const values = item.data().values;
-    if (values && typeof values === 'object') {
-      translations[item.id] = values as Record<string, string>;
-    }
-  });
-
-  const announcements = announcementsSnap.docs
-    .map(item => published<Announcement>(item.data(), item.id, {
-      id: item.id, title: '', tag: '', description: '',
-    }))
-    .filter(item => item.published === true && item.title.trim());
-
-  const books = booksSnap.docs
-    .map(item => published<BookResource>(item.data(), item.id, {
-      id: item.id, name: '', category: '', author: '', imageUrl: '', description: '',
-    }))
-    .filter(item => item.published === true && item.name.trim());
-
-  const radioBroadcasts = radioSnap.docs
-    .map(item => published<RadioBroadcast>(item.data(), item.id, {
-      id: item.id, title: '', speaker: '', series: '', durationMinutes: 0,
-      audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '',
-      broadcastTime: '', description: '',
-    }))
-    .filter(item => item.published === true && item.title.trim());
-
   const guides = await loadFirestoreGuides();
 
   return {
