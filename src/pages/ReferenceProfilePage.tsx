@@ -87,7 +87,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
               type="button"
               className="vop-reference-icon-button"
               onClick={() => { setEditing(value => !value); setSaved(false); }}
-              aria-label={editing ? t('close_editor', 'Close editor') : t('edit_contact', 'Edit contact details')}
+              aria-label={editing ? t('profile.closeEditor', 'Close editor') : t('profile.editContact', 'Edit contact details')}
             >
               {editing ? <X size={20} /> : <Pencil size={18} />}
             </button>
@@ -126,7 +126,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 
         {editing ? (
           <form onSubmit={submit} className="vop-reference-form">
-            <h2>{t('contact_details', 'Contact details')}</h2>
+            <h2>{t('profile.contactDetails', 'Contact details')}</h2>
             <p className="vop-reference-muted">
               {t('identity_admin_note', 'Identity and organisation assignments are managed by authorised administration.')}
             </p>
