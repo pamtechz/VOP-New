@@ -6,6 +6,20 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 function id(value: unknown) { const v = String(value || '').trim(); if (!/^[a-zA-Z0-9_-]{2,80}$/.test(v)) throw new Error('A valid organization identifier is required.'); return v; }
+const QUOTA_KEYS = ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxMaterials'] as const;
+function normalizeQuotas(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid usage limits.');
+  const input = value as Record<string, unknown>;
+  const result: Record<string, number> = {};
+  for (const key of QUOTA_KEYS) {
+    if (input[key] === undefined || input[key] === null || input[key] === '') continue;
+    const number = Number(input[key]);
+    if (!Number.isInteger(number) || number < 0) throw new Error('Usage limits must be whole numbers zero or greater.');
+    result[key] = number;
+  }
+  return result;
+}
+
 function slug(value: unknown) { const v = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); if (!v) throw new Error('Organization name is required.'); return v.slice(0, 80); }
 
 export default async function handler(req: Request, res: Response) {
@@ -84,7 +98,7 @@ export default async function handler(req: Request, res: Response) {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
         plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
-        quotas: ctx.isSuperAdmin && data.quotas && typeof data.quotas === 'object' ? data.quotas : undefined,
+        quotas: ctx.isSuperAdmin && data.quotas !== undefined ? normalizeQuotas(data.quotas) : undefined,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
         updatedAt: FieldValue.serverTimestamp(),
       };
