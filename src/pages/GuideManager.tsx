@@ -329,13 +329,13 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         <div className="vop-heading">
           <div className="vop-heading-icon vop-icon-orange"><BookOpen size={31}/></div>
           <div>
-            <h1>Guides Management</h1>
-            <p>Create and manage study guides for each lesson and season.</p>
+            <h1>{t('guides.managementTitle','Guides Management')}</h1>
+            <p>{t('guides.managementDescription','Create and manage study guides for each lesson and season.')}</p>
           </div>
         </div>
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button>
-          <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><span><span aria-hidden="true">⚙</span> Guide Settings</span></button>
+          <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><span><span aria-hidden="true">⚙</span> {t('guides.settings','Guide Settings')}</span></button>
           <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>{t('guides.new','New Guide')}</button>
         </div>
       </div>
@@ -348,7 +348,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         <select value={languageFilter} onChange={e => setLanguageFilter(e.target.value)}><option value="all">{t('languages.all','All Languages')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select>
         <select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">{t('guides.allSeasons','All Seasons')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{t('common.allStatus','All Status')}</option><option value="published">{t('common.published','Published')}</option><option value="draft">{t('common.draft','Draft')}</option><option value="archived">{t('common.archived','Archived')}</option></select>
-        <button className="vop-primary vop-filter-button" type="button"><Filter size={17}/>Filter</button>
+        <button className="vop-primary vop-filter-button" type="button"><Filter size={17}/>{t('common.filter','Filter')}</button>
       </div>
 
       {editing && (
@@ -358,26 +358,26 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
             <button className="vop-actions" type="button" onClick={() => setEditing(null)}><X size={17}/></button>
           </div>
           <div className="vop-form-grid vop-reference-form-grid">
-            <div className="vop-field"><label>Guide Title *</label><input value={editing.title} onChange={e => setEditing({...editing,title:e.target.value})}/></div>
-            <div className="vop-field"><label>Subtitle</label><input value={editing.subtitle} onChange={e => setEditing({...editing,subtitle:e.target.value})}/></div>
-            <div className="vop-field"><label>Language *</label><select value={editing.language} onChange={e => setEditing({...editing,language:e.target.value,id:editing.id || 'discover-'+e.target.value})}><option value="">Select language</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name} · {item.code}</option>)}</select></div>
-            <div className="vop-field"><label>Discover Number</label><input type="number" min="1" value={editing.discoverNumber} onChange={e => setEditing({...editing,discoverNumber:Math.max(1,Number(e.target.value)||1)})}/></div>
-            <div className="vop-field"><label>Season</label><input value={editing.season} onChange={e => setEditing({...editing,season:e.target.value})}/></div>
-            <div className="vop-field"><label>Quarter</label><input value={editing.quarter} onChange={e => setEditing({...editing,quarter:e.target.value})}/></div>
-            <div className="vop-field"><label>Cover Image</label><input value={editing.image} onChange={e => setEditing({...editing,image:e.target.value})}/></div>
-            <div className="vop-field"><label>Guide ID</label><input value={editing.id || 'discover-'+editing.language} disabled /></div>
+            <div className="vop-field"><label>{t('guides.title','Guide Title')} *</label><input value={editing.title} onChange={e => setEditing({...editing,title:e.target.value})}/></div>
+            <div className="vop-field"><label>{t('common.subtitle','Subtitle')}</label><input value={editing.subtitle} onChange={e => setEditing({...editing,subtitle:e.target.value})}/></div>
+            <div className="vop-field"><label>{t('common.language','Language')} *</label><select value={editing.language} onChange={e => setEditing({...editing,language:e.target.value,id:editing.id || 'discover-'+e.target.value})}><option value="">{t('languages.select','Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name} · {item.code}</option>)}</select></div>
+            <div className="vop-field"><label>{t('guides.discoverNumber','Discover Number')}</label><input type="number" min="1" value={editing.discoverNumber} onChange={e => setEditing({...editing,discoverNumber:Math.max(1,Number(e.target.value)||1)})}/></div>
+            <div className="vop-field"><label>{t('guides.season','Season')}</label><input value={editing.season} onChange={e => setEditing({...editing,season:e.target.value})}/></div>
+            <div className="vop-field"><label>{t('guides.quarter','Quarter')}</label><input value={editing.quarter} onChange={e => setEditing({...editing,quarter:e.target.value})}/></div>
+            <div className="vop-field"><label>{t('guides.coverImage','Cover Image')}</label><input value={editing.image} onChange={e => setEditing({...editing,image:e.target.value})}/></div>
+            <div className="vop-field"><label>{t('common.id','Guide ID')}</label><input value={editing.id || 'discover-'+editing.language} disabled /></div>
           </div>
-          <div className="vop-field"><label>Description</label><textarea value={editing.description} onChange={e => setEditing({...editing,description:e.target.value})}/></div>
+          <div className="vop-field"><label>{t('common.description','Description')}</label><textarea value={editing.description} onChange={e => setEditing({...editing,description:e.target.value})}/></div>
           <div className="vop-setting-row">
-            <div><div className="vop-setting-name">Certificate eligibility</div><div className="vop-setting-help">Available to the configured certification workflow.</div></div>
+            <div><div className="vop-setting-name">{t('certificates.eligibility','Certificate eligibility')}</div><div className="vop-setting-help">{t('certificates.eligibilityHelp','Available to the configured certification workflow.')}</div></div>
             <input type="checkbox" checked={editing.certificateEligible} onChange={e => setEditing({...editing,certificateEligible:e.target.checked})}/>
           </div>
           <div className="vop-setting-row">
-            <div><div className="vop-setting-name">Sharing</div><div className="vop-setting-help">Shared guides can be consumed by other organizations. Canonical editing remains with the owner and VOP Super Admin.</div></div>
+            <div><div className="vop-setting-name">{t('sharing.permission','Sharing')}</div><div className="vop-setting-help">Shared guides can be consumed by other organizations. Canonical editing remains with the owner and VOP Super Admin.</div></div>
             <select value={editing.sharingScope} onChange={e => setEditing({...editing,sharingScope:e.target.value as GuideRecord['sharingScope']})}><option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared</option></select>
           </div>
           <div className="vop-setting-row">
-            <div><div className="vop-setting-name">Publication status</div><div className="vop-setting-help">Only published, non-archived guides are visible to learners.</div></div>
+            <div><div className="vop-setting-name">{t('common.publicationStatus','Publication status')}</div><div className="vop-setting-help">Only published, non-archived guides are visible to learners.</div></div>
             <select value={editing.published ? 'published' : 'draft'} onChange={e => setEditing({...editing,published:e.target.value==='published'})}><option value="draft">Draft</option><option value="published">Published</option></select>
           </div>
           {editing.image && <img src={editing.image} alt="" className="vop-reference-editor-image"/>}
@@ -394,7 +394,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         ) : (
           <table className="vop-reference-table">
             <thead>
-              <tr><th>#</th><th>Guide</th><th>Season</th><th>Lessons</th><th>Languages</th><th>Status</th><th>Updated</th><th>Actions</th></tr>
+              <tr><th>#</th><th>{t('guides.title','Guide')}</th><th>{t('guides.season','Season')}</th><th>{t('lessons.title','Lessons')}</th><th>{t('languages.title','Languages')}</th><th>{t('common.status','Status')}</th><th>{t('common.updated','Updated')}</th><th>{t('common.actions','Actions')}</th></tr>
             </thead>
             <tbody>
               {pageRows.map((group, index) => (
