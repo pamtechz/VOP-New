@@ -241,7 +241,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const area = (label: string, key: string, rows = 5) => (
     <label className="grid gap-1.5 text-xs font-bold">
       <span>{label}</span>
-      <textarea rows={rows} value={text(draft[key])} disabled={pending}
+      <textarea rows={rows} value={text(draft[key])} disabled={pending || (editingId !== '' && !editingCanEdit)}
         onChange={event => setField(key, event.target.value)}
         className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal outline-none focus:border-slate-500" />
     </label>
@@ -260,7 +260,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
 
   const publicationToggle = () => (
     <label className="flex items-center gap-2 text-xs font-bold">
-      <input type="checkbox" checked={draft.published === true} disabled={pending} onChange={event => setField('published', event.target.checked)} />
+      <input type="checkbox" checked={draft.published === true} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={event => setField('published', event.target.checked)} />
       Published
     </label>
   );
@@ -348,7 +348,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
       {active === 'translations' && <div className="grid gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
         <div><h3 className="font-black">Translation improvement workflow</h3><p className="mt-1 text-xs text-blue-900">Canonical translations owned by another contributor are read-only. Submit an improvement for Super Admin review instead of overwriting it.</p></div>
         <div className="grid gap-3 md:grid-cols-2">
-          <select value={proposalLanguage} onChange={e => { setProposalLanguage(e.target.value); setProposalKey(''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select language</option>{languages.map(lang => <option key={text(lang.code)} value={text(lang.id || lang.code)}>{text(lang.name)} ({text(lang.code).toUpperCase()})</option>)}</select>
+          <select value={proposalLanguage} onChange={e => { setProposalLanguage(e.target.value); setProposalKey(''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select language</option>{languages.map(lang => <option key={text(lang.code)} value={text(lang.code)}>{text(lang.name)} ({text(lang.code).toUpperCase()})</option>)}</select>
           <select value={proposalKey} onChange={e => { setProposalKey(e.target.value); setProposalValue(selectedProposalTranslation?.values && typeof selectedProposalTranslation.values === 'object' ? text((selectedProposalTranslation.values as Record<string, unknown>)[e.target.value]) : ''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select UI key</option>{proposalKeys.map(key => <option key={key} value={key}>{key}</option>)}</select>
           <input value={proposalValue} onChange={e => setProposalValue(e.target.value)} placeholder="Proposed translation" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
           <input value={proposalReason} onChange={e => setProposalReason(e.target.value)} placeholder="Reason (optional)" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
