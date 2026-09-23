@@ -7,7 +7,7 @@ import type {
   Conference,
   CustomLanguage,
   District,
-  RadioBroadcast,
+  RadioBroadcast, RadioPlaylist,
   Union,
 } from '../types';
 import { db, auth } from '../lib/firebase';
@@ -20,6 +20,7 @@ export interface PublicContentSnapshot {
   announcements: Announcement[];
   books: BookResource[];
   radioBroadcasts: RadioBroadcast[];
+  radioPlaylists: RadioPlaylist[];
   unions: Union[];
   conferences: Conference[];
   districts: District[];
@@ -147,6 +148,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     announcementDocs,
     bookDocs,
     radioDocs,
+    playlistDocs,
     unionsSnap,
     conferencesSnap,
     districtsSnap,
@@ -163,6 +165,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     loadScoped('announcements', 'published'),
     loadScoped('books', 'published'),
     loadScoped('radioBroadcasts', 'published'),
+    loadScoped('playlists', 'published'),
     getDocs(collection(firestore, 'unions')),
     getDocs(collection(firestore, 'conferences')),
     getDocs(collection(firestore, 'districts')),
@@ -202,6 +205,10 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     }))
     .filter(item => item.published === true && item.title.trim());
 
+  const radioPlaylists = playlistDocs
+    .map(item => ({ id:item.id, ...item.data(), itemIds:Array.isArray(item.data().itemIds) ? item.data().itemIds.map(String) : [] } as RadioPlaylist))
+    .filter(item => item.published === true && item.name.trim());
+
   const guides = await loadFirestoreGuides();
 
   return {
@@ -211,6 +218,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     announcements,
     books,
     radioBroadcasts,
+    radioPlaylists,
     unions: unionsSnap.docs.map(item => item.data() as Union),
     conferences: conferencesSnap.docs.map(item => item.data() as Conference),
     districts: districtsSnap.docs.map(item => item.data() as District),
