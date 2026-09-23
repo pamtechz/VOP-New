@@ -72,6 +72,37 @@ export default async function handler(req: Request, res: Response) {
       }
       const targetPath = String(body.targetPath || '').trim();
       if (!isSafeTarget(targetPath)) throw new Error('A safe internal lesson or chapter path is required.');
+
+      if (!isSuperAdmin) {
+        const membership = await db.doc(`organizations/${actorOrganizationId}/members/${decoded.uid}`).get();
+        const membershipRole = String(membership.data()?.role || '');
+        if (!membership.exists || membership.data()?.active !== true || !['owner','admin'].includes(membershipRole)) {
+          throw new Error('Administrator privileges are required.');
+        }
+      }
+
+      const requestedGuideId = String(body.guideId || '').trim();
+      const requestedLessonId = String(body.lessonId || '').trim();
+      if (!requestedGuideId) throw new Error('A guide reference is required to create a share link.');
+      const guideRef = db.doc(`guides/${requestedGuideId}`);
+      const guideSnapshot = await guideRef.get();
+      if (!guideSnapshot.exists) throw new Error('The guide to share was not found.');
+      const guideData = guideSnapshot.data() || {};
+      const requestedScope = body.sharingScope === 'shared' ? 'shared' : 'organization';
+
+      if (requestedScope === 'shared') {
+        if (guideData.organizationId !== actorOrganizationId && !isSuperAdmin) throw new Error('Only the owning organization can create a shared link for this guide.');
+        if (guideData.sharingScope !== 'shared' || guideData.published !== true) throw new Error('Only an approved shared guide can have a public share link.');
+        if (requestedLessonId) {
+          const lesson = await guideRef.collection('lessons').doc(requestedLessonId).get();
+          if (!lesson.exists || lesson.data()?.sharingScope !== 'shared' || lesson.data()?.published !== true) {
+            throw new Error('Only an approved shared lesson can have a public share link.');
+          }
+        }
+      } else if (!isSuperAdmin && guideData.organizationId !== actorOrganizationId) {
+        throw new Error('This guide belongs to another organization.');
+      }
+
       const code = randomUUID().replace(/-/g, '').slice(0, 12);
       const item = {
         code,
@@ -81,7 +112,7 @@ export default async function handler(req: Request, res: Response) {
         lessonId: String(body.lessonId || ''),
         label: String(body.label || ''),
         organizationId: actorOrganizationId,
-        sharingScope: body.sharingScope === 'shared' ? 'shared' : 'organization',
+        sharingScope: requestedScope,
         clicks: 0,
         installs: 0,
         createdBy: decoded.uid,
