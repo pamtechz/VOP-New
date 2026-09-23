@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation } from '../../services/i18n';
+import { auth } from '../../lib/firebase';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
 
 interface HeaderProps {
