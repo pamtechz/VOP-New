@@ -27,7 +27,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [organizationId,setOrganizationId]=useState('');
   const [plan,setPlan]=useState('standard');
   const [status,setStatus]=useState('active'); const [quotas,setQuotas]=useState('{}');
-  const [memberUid,setMemberUid]=useState('');
+  const [memberUid,setMemberUid]=useState(''); const [inviteEmail,setInviteEmail]=useState(''); const [inviteRole,setInviteRole]=useState('learner'); const [inviteUrl,setInviteUrl]=useState('');
   const [memberRole,setMemberRole]=useState('learner');
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
@@ -78,6 +78,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     }catch(e){setError(e instanceof Error?e.message:'Could not save organization.');}
     finally{setSaving(false);}
   };
+  const invite=async()=>{if(!selected||!inviteEmail.trim())return;setSaving(true);setError('');try{const body=await api('sendInvite',{organizationId:selected.id,email:inviteEmail.trim(),role:inviteRole});setInviteUrl(String((body.item as {inviteUrl?:string}|undefined)?.inviteUrl||''));setInviteEmail('');setMessage('Invitation created.');}catch(e){setError(e instanceof Error?e.message:'Could not create invitation.');}finally{setSaving(false);}};
   const addMember=async()=>{
     if(!selected||!memberUid.trim()) return;
     setSaving(true);setError('');
@@ -130,6 +131,15 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
           <div style={{marginTop:18}}>
             <div className="vop-section-title"><div><h3>Audit history</h3><p>Privileged organization changes are retained as append-only records.</p></div></div>
             <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp && typeof item.timestamp==='object' ? 'Recorded' : String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
+          </div>
+          <div style={{marginTop:18}}>
+            <div className="vop-section-title"><div><h3>Invite a member</h3><p>Send a secure invitation that expires after seven days.</p></div></div>
+            <div className="vop-form-grid">
+              <div className="vop-field"><label>Email *</label><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="member@example.org"/></div>
+              <div className="vop-field"><label>Role</label><select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}><option value="learner">Learner</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></div>
+              <div style={{display:'flex',alignItems:'end'}}><button className="vop-secondary" type="button" disabled={saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>Create Invitation</button></div>
+            </div>
+            {inviteUrl&&<div className="vop-setting-row" style={{marginTop:10}}><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this single-use link with the invited user.</div></div><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Check size={16}/>Copy Link</button></div>}
           </div>
           <div style={{marginTop:18}}>
             <div className="vop-section-title"><div><h3>Membership</h3><p>Assign an existing account to this organization.</p></div></div>
