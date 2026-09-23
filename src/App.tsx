@@ -13,7 +13,7 @@ import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
-import { getUiLocale, setUiLocale, initializeLocalization, loadUiLocale } from './services/i18n';
+import { getUiLocale, setUiLocale, initializeLocalization } from './services/i18n';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { BottomNav } from './components/layout/BottomNav';
