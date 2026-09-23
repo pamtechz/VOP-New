@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole } from '../../server/tenant';
+import { authenticateTenant } from '../../server/tenant';
 
 function cleanId(value: unknown) {
   const id = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-|-$/g, '');
