@@ -3,7 +3,7 @@ import { auth, firebaseConfigured } from '../lib/firebase';
 
 type Role = 'union_admin' | 'conference_admin' | 'district_admin' | 'church_admin';
 
-type SetupResponse = { role?: string; message?: string; email?: string };
+type SetupResponse = { role?: string; message?: string; email?: string; summary?: { scanned: number; migrated: number; skipped: number; unresolved: number } };
 
 async function callSetup(body: Record<string, unknown>): Promise<SetupResponse> {
   if (!firebaseConfigured || !auth?.currentUser) throw new Error('Sign in with a configured Firebase account first.');
@@ -62,6 +62,19 @@ export function AdminSetupPage({ onBack }: { onBack: () => void }) {
     } finally { setBusy(false); }
   }
 
+  async function reconcileHierarchyTenants() {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const data = await callSetup({ action: 'reconcile-hierarchy-tenants' });
+      const summary = data.summary;
+      setMessage(summary
+        ? `Tenant reconciliation complete: ${summary.migrated} migrated, ${summary.skipped} already linked, ${summary.unresolved} unresolved.`
+        : 'Tenant reconciliation complete.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Tenant reconciliation failed.');
+    } finally { setBusy(false); }
+  }
+
   const isSuperAdmin = role === 'super_admin';
 
   return (
@@ -99,6 +112,13 @@ export function AdminSetupPage({ onBack }: { onBack: () => void }) {
           <label htmlFor="vop-admin-node">Organization scope ID</label>
           <input id="vop-admin-node" value={nodeId} onChange={e => setNodeId(e.target.value)} placeholder="e.g. union-szuc" disabled={busy} />
           <button type="button" onClick={() => void assignAdmin()} disabled={busy || !email || !nodeId}>Assign Administrator</button>
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #ddd' }}>
+            <h3>Tenant Reconciliation</h3>
+            <p>Safely links existing hierarchy administrators who have a valid scope but are missing an organization tenant. Existing organization assignments are left unchanged.</p>
+            <button type="button" onClick={() => void reconcileHierarchyTenants()} disabled={busy}>
+              Reconcile Legacy Tenant Assignments
+            </button>
+          </div>
         </section>
       )}
 
