@@ -91,8 +91,10 @@ export default async function handler(req: Request, res: Response) {
       const roleCounts: Record<string,number> = {};
       memberSnap.docs.forEach(doc => { const role=String(doc.data()?.role || 'learner'); roleCounts[role]=(roleCounts[role]||0)+1; });
       const count = async (collection:string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
-      const [guides,quizzes,lessons,announcements,radio,materials,candidates,certificates] = await Promise.all([
-        count('guides'), count('quizzes'), count('lessons'), count('announcements'),
+      const guideSnap = await ctx.db.collection('guides').where('organizationId','==',orgId).get();
+      const lessons = (await Promise.all(guideSnap.docs.map(guide => guide.ref.collection('lessons').get()))).reduce((total, snap) => total + snap.size, 0);
+      const [guides,quizzes,announcements,radio,materials,candidates,certificates] = await Promise.all([
+        count('guides'), count('quizzes'), count('announcements'),
         count('radioBroadcasts'), count('books'), count('candidates'), count('certificates')
       ]);
       const audit = await ctx.db.collection(`organizations/${orgId}/audit`).orderBy('timestamp','desc').limit(20).get();
