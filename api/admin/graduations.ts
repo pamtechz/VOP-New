@@ -149,14 +149,17 @@ async function decide(req: Request, res: Response) {
   if (decision !== 'approve' && decision !== 'reject') return res.status(400).json({ error: 'Decision must be approve or reject.' });
   if (!Number.isInteger(expectedRevision) || expectedRevision < 1) return res.status(400).json({ error: 'The current request revision is required.' });
 
-  const ctx = await authenticateTenant(req);
-  if (!ctx.organizationId) return res.status(403).json({ error: 'An organization is required to approve graduation requests.' });
-  const stages = await loadWorkflow(ctx);
+  let ctx = await authenticateTenant(req, undefined, true);
+  if (!ctx.organizationId && !ctx.isSuperAdmin) return res.status(403).json({ error: 'An organization is required to approve graduation requests.' });
   const ref = ctx.db.doc(`graduationRequests/${requestIdValue}`);
   const snapshot = await ref.get();
   if (!snapshot.exists) return res.status(404).json({ error: 'Graduation request was not found.' });
   const current = snapshot.data() || {};
+  const requestOrganizationId = text(current.organizationId);
+  if (!requestOrganizationId) return res.status(409).json({ error: 'The graduation request has no organization scope.' });
+  if (ctx.isSuperAdmin && !ctx.organizationId) ctx = await authenticateTenant(req, requestOrganizationId);
   if (text(current.organizationId) !== ctx.organizationId) return res.status(403).json({ error: 'This graduation request belongs to another organization.' });
+  const stages = await loadWorkflow(ctx);
   if (['approved', 'rejected'].includes(text(current.status))) return res.status(409).json({ error: 'This graduation request has already reached a final decision.' });
 
   const stageIndex = Number(current.workflowStageIndex), stageId = text(current.workflowStageId), stage = stages[stageIndex];
