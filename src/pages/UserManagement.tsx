@@ -43,8 +43,6 @@ type EditorState = {
   email: string;
   phoneNumber: string;
   userType: ManagedUser['userType'];
-  adminNodeType: string;
-  adminNodeId: string;
   organizationId: string;
   password: string;
 };
@@ -80,7 +78,7 @@ function roleLabel(type: ManagedUser['userType']) {
 }
 
 function emptyEditor(): EditorState {
-  return { displayName: '', email: '', phoneNumber: '', userType: 'learner', adminNodeType: '', adminNodeId: '', organizationId: '', password: '' };
+  return { displayName: '', email: '', phoneNumber: '', userType: 'learner', organizationId: '', password: '' };
 }
 
 export default function UserManagement({ onBack }: Props) {
@@ -186,8 +184,6 @@ export default function UserManagement({ onBack }: Props) {
       email: user.email,
       phoneNumber: user.phoneNumber || '',
       userType: user.userType,
-      adminNodeType: user.adminNodeType || '',
-      adminNodeId: user.adminNodeId || '',
       organizationId: user.organizationId || '',
       password: '',
     });
@@ -215,8 +211,6 @@ export default function UserManagement({ onBack }: Props) {
         email: editor.email.trim(),
         phoneNumber: editor.phoneNumber.trim(),
         userType: editor.userType,
-        adminNodeType: editor.adminNodeType,
-        adminNodeId: editor.adminNodeId,
         ...(!editor.uid && editor.organizationId ? { organizationId: editor.organizationId } : {}),
         ...(editor.password ? { password: editor.password } : {}),
       });
@@ -282,7 +276,7 @@ export default function UserManagement({ onBack }: Props) {
   };
 
   const downloadTemplate = () => {
-    const csv = 'displayName,email,phoneNumber,userType,adminNodeType,adminNodeId\n';
+    const csv = 'displayName,email,phoneNumber,userType\n';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -305,8 +299,6 @@ export default function UserManagement({ onBack }: Props) {
         email: values[indexOf('email')]?.trim() || '',
         phoneNumber: values[indexOf('phoneNumber')]?.trim() || '',
         userType: values[indexOf('userType')]?.trim() || 'learner',
-        adminNodeType: values[indexOf('adminNodeType')]?.trim() || '',
-        adminNodeId: values[indexOf('adminNodeId')]?.trim() || '',
       };
     }).filter(row => row.displayName && row.email);
     let created = 0;
