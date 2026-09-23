@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
-import { getAvailableLanguages, getTranslation } from '../../services/i18n';
+import { getAvailableLanguages, getAvailableUiLocales, getTranslation } from '../../services/i18n';
 import { auth } from '../../lib/firebase';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
 
@@ -37,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings?.customTranslations, fallback);
   const availableLanguages = getAvailableLanguages(settings);
+  const availableUiLocales = getAvailableUiLocales();
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
   const [organizations, setOrganizations] = React.useState<Array<{organizationId:string;name:string;role:string;active:boolean}>>([]);
   React.useEffect(() => {
@@ -245,7 +246,7 @@ export const Header: React.FC<HeaderProps> = ({
                   maxWidth: '75px'
                 }}
               >
-                {availableLanguages.map((lang) => (
+                {(availableUiLocales.length ? availableUiLocales : availableLanguages).map((lang) => (
                   <option key={lang.code} value={lang.code} style={{ background: '#0b2244', color: '#ffffff' }}>
                     {lang.code.toUpperCase()} ({lang.nativeName})
                   </option>
