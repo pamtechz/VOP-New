@@ -262,7 +262,7 @@ export default async function handler(req: Request, res: Response) {
       if (!uid || !['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Valid member details are required.');
       if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
       const existingMember = await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).get();
-      if (!existingMember.exists || existingMember.data()?.active !== true) await enforceMemberQuota(ctx);
+      if (body.active !== false && (!existingMember.exists || existingMember.data()?.active !== true)) await enforceMemberQuota(ctx);
       const now = new Date().toISOString();
       await ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).set({ uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false, invitedBy: ctx.auth.uid, joinedAt: now, updatedAt: now }, { merge: true });
       await writeTenantAudit(ctx, 'membership.upsert', `organizations/${ctx.organizationId}/members/${uid}`, undefined, { uid, role:memberRole, active:body.active !== false });
