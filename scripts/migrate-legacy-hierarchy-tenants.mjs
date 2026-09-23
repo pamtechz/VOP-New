@@ -13,6 +13,8 @@ function db() {
 }
 
 const APPLY = process.argv.includes('--apply');
+const LEGACY_TENANT_PREFIXES = ['legacy-union-', 'legacy-conference-', 'legacy-district-', 'legacy-church-'];
+
 const NODE_TYPES = [
   { collection: 'unions', type: 'union', idField: 'unionId' },
   { collection: 'conferences', type: 'conference', idField: 'conferenceId' },
