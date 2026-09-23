@@ -91,7 +91,7 @@ function blankForm(kind: ManagedAdminCollection): FormState {
     case 'materials':
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
-      return { title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', description: '', published: false };
+      return { title: '', speaker: '', series: '', audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '', broadcastTime: '', scheduledStart: '', scheduledEnd: '', scheduleRepeat: 'once', timezone: '', description: '', published: false };
     case 'unions':
       return { name: '', code: '', divisionName: '', directorName: '', contactEmail: '', contactPhone: '', headquarters: '' };
     case 'conferences':
@@ -897,6 +897,12 @@ function RadioAdminDashboard({
           <div className="vop-radio-admin-library-head"><div><h2>{tab === 'audio' ? 'Audio Library' : tab === 'video' ? 'Video Library' : tab === 'playlists' ? 'Playlists' : tab === 'schedule' ? 'Schedule' : tab === 'analytics' ? 'Analytics' : 'Radio Settings'}</h2><p>{tab === 'analytics' ? 'Only metrics actually stored on published records are shown.' : 'Manage configured radio records without demo or placeholder entries.'}</p></div><div className="vop-radio-admin-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search content…"/></div></div>
           {tab === 'settings' ? <div className="vop-radio-admin-settings-note"><Settings size={28}/><strong>Provider-aware player settings</strong><p>YouTube content is controlled through the YouTube IFrame Player API. AudioVerse content keeps the embedded AudioVerse controls. Direct audio/video uses the VOP custom player.</p></div> :
            tab === 'analytics' ? <div className="vop-radio-admin-analytics"><AdminMetric label="Tracked plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'}/><AdminMetric label="Tracked listeners" value={hasListenerMetrics ? listeners.toLocaleString() : '—'}/><AdminMetric label="Configured content" value={String(records.length)}/></div> :
+           tab === 'schedule' ? <div className="vop-card vop-form-card" style={{display:'grid',gap:12}}>
+             <div><h2>Persistent Radio Schedule</h2><p>Schedules are stored with each radio item and can be edited from the content editor. The public player uses published items whose schedule window is active.</p></div>
+             <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Programme</th><th>Start</th><th>End</th><th>Repeat</th><th>Timezone</th><th>Status</th><th>Action</th></tr></thead><tbody>
+               {filtered.filter(item=>String(item.scheduledStart||item.broadcastTime||'')).sort((a,b)=>String(a.scheduledStart||a.broadcastTime).localeCompare(String(b.scheduledStart||b.broadcastTime))).map(item=><tr key={item.id}><td><strong>{String(item.title||'Untitled')}</strong><div className="vop-row-desc">{radioProvider(item)}</div></td><td>{String(item.scheduledStart||item.broadcastTime||'—')}</td><td>{String(item.scheduledEnd||'—')}</td><td>{String(item.scheduleRepeat||'once')}</td><td>{String(item.timezone||'Device')}</td><td><span className={'vop-status '+(item.published?'enabled':'disabled')}>{item.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" onClick={()=>edit(item)}><Edit3 size={15}/></button></td></tr>)}
+             </tbody></table>{!filtered.some(item=>String(item.scheduledStart||item.broadcastTime||''))&&<div className="vop-empty">No radio schedules have been configured.</div>}</div>
+           </div> :
            tab === 'playlists' ? <div className="vop-card vop-form-card" style={{display:'grid',gap:16}}>
              <div><h2>Persistent Playlists</h2><p>Create organization-owned playlists from configured radio content. Playlist membership is stored in the tenant database.</p></div>
              <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
