@@ -774,7 +774,7 @@ function RadioAdminDashboard({
     try {
       const token = await auth.currentUser.getIdToken();
       const response = await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({
-        collection:'radioPlaylists',action:'upsert',id:playlistName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || crypto.randomUUID(),
+        collection:'radioPlaylists',action:'upsert',id:crypto.randomUUID(),
         data:{name,description:playlistDescription,items:playlistItems,recordIds:playlistItems, published:true}
       })});
       const payload = await response.json().catch(()=>({}));
