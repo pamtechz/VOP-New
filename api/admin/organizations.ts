@@ -107,8 +107,8 @@ export default async function handler(req: Request, res: Response) {
         createdAt:now.toISOString(),expiresAt,status:'pending'
       });
       await writeTenantAudit(ctx,'membership.invite',`organizationInvites/${token}`,undefined,{email,role:inviteRole,expiresAt});
-      const origin = String(req.headers?.origin || '').trim();
-      const inviteUrl = `${origin || ''}/?invite=${token}`;
+      const origin = String(req.headers?.origin || '').trim() || `${String(req.headers?.['x-forwarded-proto'] || 'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]}`.replace(/\/$/,'');
+      const inviteUrl = `${origin}/?invite=${token}`;
       if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
         await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
           from:process.env.RESEND_FROM_EMAIL,to:[email],subject:'VOP organization invitation',
