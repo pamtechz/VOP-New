@@ -357,6 +357,20 @@ export interface RadioBroadcast {
   published?: boolean;
 }
 
+export interface RadioPlaylist {
+  id: string;
+  name: string;
+  description?: string;
+  coverUrl?: string;
+  itemIds: string[];
+  published?: boolean;
+  ownerOrganizationId?: string;
+  ownerUid?: string;
+  sharingScope?: 'private' | 'shared';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type AppRoute = 
   | 'home' 
   | 'guide' 
