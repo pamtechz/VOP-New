@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { authenticateTenant, requireOrgRole } from '../server/tenant';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -36,20 +37,45 @@ async function verify(req:Request,res:Response){
 }
 
 async function issue(req:Request,res:Response){
- const firebaseAdmin=admin();const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
- const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(firebaseAdmin);const actor=await db.doc('users/'+decoded.uid).get();
- if(!actor.exists||actor.data()?.role!=='super_admin')return res.status(403).json({error:'Only a super administrator can issue official certificates.'});
- const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
+ const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>: {};
+ const requestedOrganizationId=typeof body.organizationId==='string'?body.organizationId.trim():undefined;
+ const ctx=await authenticateTenant(req, requestedOrganizationId);
+ if(!ctx.isSuperAdmin) requireOrgRole(ctx,['owner','admin']);
+ const firebaseAdmin=admin();const decoded=ctx.auth;const db=ctx.db;const actor={exists:true,data:()=>ctx.profile} as unknown as {exists:boolean;data:()=>Record<string,unknown>};
+ const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
  if(!candidateId||candidateId.length>128||candidateId.includes('/'))return res.status(400).json({error:'A valid candidate ID is required.'});
- const [candidateSnapshot,configSnapshot,requestsSnapshot,guideSnapshot,settingsSnapshot]=await Promise.all([db.doc('users/'+candidateId).get(),db.doc('system/certification').get(),db.collection('graduationRequests').where('candidateId','==',candidateId).limit(50).get(),db.collection('curricula/discover/languages').get(),db.doc('system/settings').get()]);
+ const [candidateSnapshot,systemConfigSnapshot,organizationSettingsSnapshot,requestsSnapshot]=await Promise.all([
+   db.doc('users/'+candidateId).get(),
+   db.doc('system/certification').get(),
+   ctx.organizationId ? db.doc(`organizations/${ctx.organizationId}/settings/certification`).get() : Promise.resolve(null),
+   db.collection('graduationRequests').where('candidateId','==',candidateId).limit(50).get()
+ ]);
  if(!candidateSnapshot.exists)return res.status(404).json({error:'Candidate account was not found.'});
- const candidate=candidateSnapshot.data()??{},config=configSnapshot.data()??{};if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
- const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>x.status==='approved'&&typeof x.approvedAt==='string'&&Date.parse(x.approvedAt)<=Date.now()).sort((a,b)=>Date.parse(String(b.approvedAt))-Date.parse(String(a.approvedAt)))[0];
+ const candidate=candidateSnapshot.data()??{};
+ if(!ctx.isSuperAdmin && String(candidate.organizationId||'') !== ctx.organizationId) return res.status(403).json({error:'The candidate belongs to another organization.'});
+ const systemConfig=systemConfigSnapshot.data()??{};
+ const tenantConfig=organizationSettingsSnapshot?.exists ? organizationSettingsSnapshot.data()??{} : {};
+ const config={...systemConfig,...tenantConfig};
+ if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
+ const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>
+   x.status==='approved'
+   && (!ctx.organizationId || String(x.organizationId||ctx.organizationId)===ctx.organizationId)
+   && typeof x.approvedAt==='string'
+   && Date.parse(x.approvedAt)<=Date.now()
+ ).sort((a,b)=>Date.parse(String(b.approvedAt))-Date.parse(String(a.approvedAt)))[0];
  if(!approved)return res.status(409).json({error:'The candidate does not have an approved graduation record.'});
  if(candidate.information?.graduated!==true)return res.status(409).json({error:'The candidate is not marked as graduated.'});
- const matching=guideSnapshot.docs.find(s=>String(s.data().id??s.id)===String(approved.guideId??''));if(!matching)return res.status(409).json({error:'The approved graduation guide could not be found in the published curriculum.'});
  if(!String(approved.guideId??'').trim())return res.status(409).json({error:'The approved graduation record is missing its guide reference.'});
- const gd=matching.data(),lang=String(gd.language??matching.id);if(gd.published!==true||gd.archived===true||gd.certificateEligible!==true)return res.status(409).json({error:'The approved graduation guide is not currently configured as a published certificate-eligible guide.'});
+ let matching=await db.doc(`guides/${String(approved.guideId)}`).get();
+ if(!matching.exists && ctx.isSuperAdmin){
+   const legacy=await db.collection('curricula/discover/languages').get();
+   const found=legacy.docs.find(s=>String(s.data().id??s.id)===String(approved.guideId??''));
+   if(found) matching=found;
+ }
+ if(!matching.exists)return res.status(409).json({error:'The approved graduation guide could not be found in the published curriculum.'});
+ const gd=matching.data(),guideOwner=String(gd.organizationId||gd.ownerOrganizationId||'');
+ if(!ctx.isSuperAdmin && guideOwner && guideOwner!==ctx.organizationId && !(gd.sharingScope==='shared'&&gd.published===true)) return res.status(403).json({error:'The approved guide is not available to this organization.'});
+ const lang=String(gd.language??matching.id);if(gd.published!==true||gd.archived===true||gd.certificateEligible!==true)return res.status(409).json({error:'The approved graduation guide is not currently configured as a published certificate-eligible guide.'});
  const progress=(candidate.progress&&typeof candidate.progress==='object'?candidate.progress:{}) as Record<string,unknown>;const completed=new Set(Array.isArray(progress.completedLessons)?progress.completedLessons.map(String):[]);const scores=(progress.guideScores&&typeof progress.guideScores==='object'?progress.guideScores:{}) as Record<string,unknown>;
  const min=Number(config.minimumScore), configured=Number(settingsSnapshot.data()?.quizPassThreshold??0), threshold=Number.isFinite(min)&&min>=0&&min<=100?min:configured;if(!Number.isFinite(threshold)||threshold<0||threshold>100)return res.status(503).json({error:'The certification pass mark is not configured.'});
  const guideId=String(gd.id??matching.id),lessons=(await matching.ref.collection('lessons').get()).docs.map(d=>({id:d.id,...d.data()}));if(!lessons.length)return res.status(409).json({error:'The approved guide has no published curriculum items.'});
@@ -59,7 +85,7 @@ async function issue(req:Request,res:Response){
  for(const test of tests){if(!Array.isArray(test.questions)||!test.questions.length)return res.status(409).json({error:'The approved guide has an invalid assessment configuration.'});const score=normalizeScore(scores[scoreKey(lang,guideId,String(test.id))]);if(score===null||score<threshold)return res.status(409).json({error:'The candidate has not passed all required assessments.'});}
  const [church,district,conference,union]=await Promise.all([candidate.churchId?db.doc('churches/'+candidate.churchId).get():Promise.resolve(null),candidate.districtId?db.doc('districts/'+candidate.districtId).get():Promise.resolve(null),candidate.conferenceId?db.doc('conferences/'+candidate.conferenceId).get():Promise.resolve(null),candidate.unionId?db.doc('unions/'+candidate.unionId).get():Promise.resolve(null)]);
  const certificateRef=db.collection('certificates').doc(certificateDocumentId(candidateId,lang)),issuedAt=FieldValue.serverTimestamp(),certificateNumber='VOP-'+new Date().getUTCFullYear()+'-'+certificateRef.id.toUpperCase();
- const certificate={candidateId,candidateName:String(candidate.displayName??''),candidateEmail:String(candidate.email??''),candidatePhotoURL:String(candidate.photoURL??''),language:lang,courseName:String(config.courseName??gd.title??''),courseCode:String(config.courseCode??''),certificateNumber,completionDate:String(candidate.information?.completionDate??candidate.information?.graduationDate??''),issuedAt,churchName:church?.exists?String(church.data()?.name??''):'',districtName:district?.exists?String(district.data()?.name??''):'',conferenceName:conference?.exists?String(conference.data()?.name??''):'',unionName:union?.exists?String(union.data()?.name??''):'',guideId,guideTitle:String(gd.title??''),status:'Certified',downloadCount:0,issuedBy:decoded.uid,verificationEnabled:config.verificationEnabled===true,createdAt:issuedAt,updatedAt:issuedAt};
+ const certificate={organizationId:ctx.organizationId || String(candidate.organizationId||''),ownerOrganizationId:ctx.organizationId || String(candidate.organizationId||''),candidateId,candidateName:String(candidate.displayName??''),candidateEmail:String(candidate.email??''),candidatePhotoURL:String(candidate.photoURL??''),language:lang,courseName:String(config.courseName??gd.title??''),courseCode:String(config.courseCode??''),certificateNumber,completionDate:String(candidate.information?.completionDate??candidate.information?.graduationDate??''),issuedAt,churchName:church?.exists?String(church.data()?.name??''):'',districtName:district?.exists?String(district.data()?.name??''):'',conferenceName:conference?.exists?String(conference.data()?.name??''):'',unionName:union?.exists?String(union.data()?.name??''):'',guideId,guideTitle:String(gd.title??''),status:'Certified',downloadCount:0,issuedBy:decoded.uid,verificationEnabled:config.verificationEnabled===true,createdAt:issuedAt,updatedAt:issuedAt};
  const result=await db.runTransaction(async tx=>{const existing=await tx.get(certificateRef);if(existing.exists)return {created:false};tx.create(certificateRef,certificate);return {created:true};});const saved=await certificateRef.get();
  return res.status(result.created?201:200).json({ok:true,created:result.created,certificate:{id:saved.id,...saved.data()}});
 }
