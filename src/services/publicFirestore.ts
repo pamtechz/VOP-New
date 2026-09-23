@@ -171,7 +171,7 @@ export async function loadPublicContent(organizationId = ''): Promise<PublicCont
     }))
     .filter(item => item.published === true && item.title.trim());
 
-  const guides = await loadFirestoreGuides();
+  const guides = await loadFirestoreGuides(undefined, organizationId);
 
   let settings = settingsSnap.exists() ? normalizeSettings(settingsSnap.data()) : emptySettings();
   if (organizationId) {
