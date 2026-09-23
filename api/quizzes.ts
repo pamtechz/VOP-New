@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota } from './lib/tenant';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit } from './lib/tenant';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -76,6 +76,7 @@ export default async function handler(req: Request, res: Response) {
         updatedBy: ctx.auth.uid,
       }, { merge: true });
       const saved = await ctx.db.doc(`quizzes/${id}`).get();
+      await writeTenantAudit(ctx, existing.exists ? 'quiz.update' : 'quiz.create', `quizzes/${id}`, current, saved.data());
       return res.status(200).json({ ok: true, item: { id, ...saved.data() } });
     }
 
@@ -104,6 +105,7 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
       });
+      await writeTenantAudit(ctx, 'quiz.fork', `quizzes/${id}`, undefined, { sourceContentId:sourceId, id });
       return res.status(200).json({ ok: true, item: { id, sourceContentId: sourceId, organizationId: ctx.organizationId } });
     }
 
