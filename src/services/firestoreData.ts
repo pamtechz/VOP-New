@@ -146,7 +146,10 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
   }
 
   for (const entry of guides.values()) {
-    const lessonSnapshot = await getDocs(entry.lessonsRef);
+    const lessonQuery = entry.guide.sharingScope === 'shared'
+      ? query(entry.lessonsRef, where('sharingScope', '==', 'shared'), where('published', '==', true))
+      : entry.lessonsRef;
+    const lessonSnapshot = await getDocs(lessonQuery);
     for (const item of lessonSnapshot.docs) {
       const data = item.data() as FirestoreLesson & Record<string, unknown>;
       if (data.published === false || data.archived === true) continue;
