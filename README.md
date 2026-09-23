@@ -80,3 +80,10 @@ The learner account, certificate, and administrator overview screens use the sup
 
 
 <!-- vop-esm-runtime-check -->
+
+
+## Production build safety gates
+
+The production build runs `scripts/verify-server-esm-imports.mjs` before TypeScript/Vite compilation. This prevents extensionless relative imports into server modules from reaching Vercel's ESM runtime, where they can otherwise cause API `500` responses after deployment.
+
+Firebase Web popup authentication is served with `Cross-Origin-Opener-Policy: same-origin-allow-popups`, which preserves the opener relationship required by the Firebase popup flow without disabling COOP protection entirely.
