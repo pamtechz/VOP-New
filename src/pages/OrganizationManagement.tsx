@@ -8,7 +8,7 @@ type Organization = {
 };
 type Member = { id:string; uid:string; role:string; active:boolean; joinedAt?:string };
 type Plan = { id:string; name:string; description?:string; active:boolean; quotas:Record<string,unknown>; features:Record<string,boolean> };
-type Usage = { members:number; guides:number; quizzes:number; announcements:number; radio:number; books:number };
+type Usage = { members:number; guides:number; quizzes:number; announcements:number; radio:number; books:number; playlists?:number }; type Analytics = { members:number; roleCounts:Record<string,number>; content:Record<string,number>; recentActivity:Array<Record<string,unknown>> };
 
 async function api(action:string, payload:Record<string,unknown>={}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -24,7 +24,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [plans,setPlans]=useState<Plan[]>([]);
   const [selected,setSelected]=useState<Organization|null>(null);
   const [members,setMembers]=useState<Member[]>([]);
-  const [usage,setUsage]=useState<Usage|null>(null);
+  const [usage,setUsage]=useState<Usage|null>(null); const [analytics,setAnalytics]=useState<Analytics|null>(null);
   const [name,setName]=useState('');
   const [organizationId,setOrganizationId]=useState('');
   const [plan,setPlan]=useState('');
@@ -52,8 +52,8 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
   const loadDetails=async(id:string)=>{
     try {
-      const [m,u,a]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id}),api('listAudit',{organizationId:id})]);
-      setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>);
+      const [m,u,a,an]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id}),api('listAudit',{organizationId:id}),api('getAnalytics',{organizationId:id})]);
+      setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>);setAnalytics((an.analytics||null) as Analytics|null);
     } catch(e){setError(e instanceof Error?e.message:'Could not load organization details.');}
   };
   useEffect(()=>{void load(); if(isSuperAdmin) void api('listPlans').then(body=>setPlans((body.items||[]) as Plan[])).catch(()=>undefined);},[]);
@@ -127,6 +127,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
             <div className="vop-field"><label>Tenant settings (JSON)</label><textarea value={tenantSettings} onChange={e=>setTenantSettings(e.target.value)} rows={4} placeholder='{"timezone":"Africa/Lusaka","defaultUiLocale":"en"}'/><small>Organization-specific runtime settings. Do not place secrets here.</small></div>
             <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button></div>
           </div>
+          {analytics&&<div style={{marginTop:16}}><div className="vop-section-title"><div><h3>Tenant analytics</h3><p>Aggregated only from this organization's tenant-scoped records.</p></div><BarChart3 size={20}/></div><div className="vop-grid-3"><div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{analytics.members}</strong><span>Active members</span></div></div><div className="vop-card vop-mini-stat"><BookOpen size={20}/><div><strong>{analytics.content.lessons||0}</strong><span>Lessons</span></div></div><div className="vop-card vop-mini-stat"><Award size={20}/><div><strong>{analytics.content.certificates||0}</strong><span>Certificates</span></div></div></div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>{Object.entries(analytics.roleCounts).map(([role,count])=><span key={role} className="vop-chip">{role}: {count}</span>)}</div></div>}
           {usage&&<div className="vop-grid-3" style={{marginTop:16}}>
             <div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{usage.members}</strong><span>Members</span></div></div>
             <div className="vop-card vop-mini-stat"><BarChart3 size={20}/><div><strong>{usage.guides}</strong><span>Guides</span></div></div>
