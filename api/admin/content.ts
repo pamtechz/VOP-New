@@ -156,8 +156,9 @@ export default async function handler(req: Request, res: Response) {
       const ref = guide.ref.collection('lessons').doc(lessonId);
       if (action === 'unpublishLesson') {
         const current = await ref.get();
-        if (current.exists && !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can unpublish this lesson.');
-        await ref.delete();
+        if (!current.exists) throw new Error('The lesson was not found.');
+        if (!canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can unpublish this lesson.');
+        await ref.set({ published:false, unpublishedAt:FieldValue.serverTimestamp(), unpublishedBy:ctx.auth.uid, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
         return res.status(200).json({ ok: true, item: { id: lessonId, published: false } });
       }
       await ref.set({
