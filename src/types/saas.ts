@@ -1,6 +1,22 @@
 export type OrganizationStatus = 'active' | 'suspended' | 'archived';
 export type OrganizationMemberRole = 'owner' | 'admin' | 'editor' | 'mentor' | 'teacher' | 'learner' | 'viewer';
 export type ContentSharingScope = 'private' | 'organization' | 'shared';
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'cancelled' | 'expired' | 'suspended';
+
+export interface OrganizationSubscription {
+  id: string;
+  organizationId: string;
+  planId: string;
+  status: SubscriptionStatus;
+  startedAt: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd?: boolean;
+  cancelledAt?: string;
+  provider?: string;
+  providerSubscriptionId?: string;
+  updatedAt: string;
+}
 
 export interface Organization {
   id: string;
@@ -11,6 +27,7 @@ export interface Organization {
   createdAt: string;
   updatedAt: string;
   plan?: string;
+  subscription?: OrganizationSubscription;
   quotas?: Record<string, number>;
   features?: Record<string, boolean>;
   settings?: Record<string, unknown>;
