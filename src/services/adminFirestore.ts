@@ -81,76 +81,65 @@ export const subscribeLanguages = (
 };
 
 export const saveLanguageToFirestore = async (language: CustomLanguage): Promise<void> => {
-  const firestore = getDb();
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  const token = await user.getIdToken();
   const id = language.code.toLowerCase().trim();
-  const organizationId = await currentOrganizationId();
-  if (!auth?.currentUser) throw new Error('Sign in first.');
-  const ref = doc(firestore, 'languages', id);
-  const existing = await getDoc(ref);
-  await setDoc(ref, {
-    ...language,
-    organizationId: '',
-    ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
-    ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
-    sharingScope: 'shared',
-    code: language.code.toUpperCase(),
-    updatedAt: new Date().toISOString(),
-  }, { merge: true });
+  if (!id) throw new Error('A language code is required.');
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      action: 'upsert',
+      collection: 'languages',
+      id,
+      data: {
+        ...language,
+        code: language.code.toUpperCase(),
+        languageCode: id,
+        enabled: language.enabled !== false,
+        sharingScope: 'shared',
+      },
+    }),
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not save the language.');
 };
 
 export const updateLanguageStatusInFirestore = async (code: string, enabled: boolean): Promise<void> => {
-  const firestore = getDb();
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  const token = await user.getIdToken();
   const id = code.toLowerCase().trim();
-  const ref = doc(firestore, 'languages', id);
-  await updateDoc(ref, {
-    enabled,
-    updatedAt: new Date().toISOString(),
+  if (!id) throw new Error('A language code is required.');
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      action: 'upsert',
+      collection: 'languages',
+      id,
+      data: { code: code.toUpperCase(), languageCode: id, enabled, sharingScope: 'shared' },
+    }),
   });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not update the language.');
 };
 
 export const deleteLanguageFromFirestore = async (code: string): Promise<void> => {
-  const firestore = getDb();
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  const token = await user.getIdToken();
   const id = code.toLowerCase().trim();
-  await deleteDoc(doc(firestore, 'languages', id));
+  if (!id) throw new Error('A language code is required.');
+  const response = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action: 'delete', collection: 'languages', id }),
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not delete the language.');
 };
-
-// ------------------------------------------------------------------
-// 2. SETTINGS (Live Firestore)
-// ------------------------------------------------------------------
-
-export interface ExtendedAppSettings extends AppSettings {
-  appTagline?: string;
-  timezone?: string;
-  website?: string;
-  welcomeMessage?: string;
-  systemOptions?: {
-    allowRegistrations: boolean;
-    requireApproval: boolean;
-    enableEmailNotifications: boolean;
-    showChurchInfo: boolean;
-    enablePwa: boolean;
-    maintenanceMode: boolean;
-  };
-  features?: {
-    candidatesModule: boolean;
-    curriculumStudio: boolean;
-    translations: boolean;
-    radio: boolean;
-    announcements: boolean;
-    certification: boolean;
-  };
-  security?: {
-    sessionTimeoutMinutes?: number;
-    allowMultipleSessions?: boolean;
-    enforceSecureConnections?: boolean;
-  };
-  notifications?: {
-    emailEnabled?: boolean;
-    enrollmentNotifications?: boolean;
-    announcementNotifications?: boolean;
-    certificateNotifications?: boolean;
-  };
-}
 
 export const subscribeSettings = (
   callback: (settings: ExtendedAppSettings) => void,
@@ -399,29 +388,36 @@ export const saveAdminRecord = async (
   id: string,
   data: Record<string, unknown>
 ): Promise<void> => {
-  const firestore = getDb();
-  const existing = await getDoc(doc(firestore, collectionName, id));
-  if (!auth?.currentUser) throw new Error('Sign in first.');
-  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
-  const isGlobal = GLOBAL_CONTENT_COLLECTIONS.has(collectionName);
-  if (organizationId && existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
-  if (isGlobal && existing.exists() && String(existing.data()?.ownerUid || '') !== auth.currentUser.uid) {
-    const profile = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
-    if (String(profile.data()?.role || '') !== 'super_admin') throw new Error('Only the original contributor or VOP Super Admin can edit this shared record.');
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+
+  // Sensitive canonical CRUD is authorized by the server. Keep the remaining
+  // hierarchy-only legacy collections on their Firestore rules until their
+  // scope-specific API contract is migrated.
+  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts']);
+  if (serverManaged.has(collectionName)) {
+    const token = await user.getIdToken();
+    const response = await fetch('/api/admin/content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ action: 'upsert', collection: collectionName, id, data }),
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) throw new Error(payload.error || 'Could not save the record.');
+    return;
   }
+
+  const firestore = getDb();
+  const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
+  const existing = await getDoc(doc(firestore, collectionName, id));
+  if (organizationId && existing.exists() && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
   const now = new Date().toISOString();
   await setDoc(doc(firestore, collectionName, id), {
     ...data,
-    ...(isGlobal ? {
-      organizationId: '',
-      ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
-      ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
-      canonical: true,
-      sharingScope: 'shared',
-    } : organizationId ? {
+    ...(organizationId ? {
       organizationId,
       ownerOrganizationId: existing.data()?.ownerOrganizationId || organizationId,
-      ownerUid: existing.data()?.ownerUid || auth.currentUser.uid,
+      ownerUid: existing.data()?.ownerUid || user.uid,
       canonical: true,
     } : {}),
     id,
@@ -434,17 +430,27 @@ export const deleteAdminRecord = async (
   collectionName: AdminRecordCollection,
   id: string
 ): Promise<void> => {
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Sign in first.');
+
+  const serverManaged = new Set<AdminRecordCollection>(['announcements', 'books', 'radioBroadcasts']);
+  if (serverManaged.has(collectionName)) {
+    const token = await user.getIdToken();
+    const response = await fetch('/api/admin/content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ action: 'delete', collection: collectionName, id }),
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) throw new Error(payload.error || 'Could not delete the record.');
+    return;
+  }
+
   const firestore = getDb();
-  if (!auth?.currentUser) throw new Error('Sign in first.');
   const organizationId = TENANT_COLLECTIONS.has(collectionName) ? await currentOrganizationId() : '';
-  const isGlobal = GLOBAL_CONTENT_COLLECTIONS.has(collectionName);
   const existing = await getDoc(doc(firestore, collectionName, id));
   if (!existing.exists()) return;
   if (organizationId && String(existing.data()?.organizationId || '') !== organizationId) throw new Error('This record belongs to another organization.');
-  if (isGlobal && String(existing.data()?.ownerUid || '') !== auth.currentUser.uid) {
-    const profile = await getDoc(doc(firestore, 'users', auth.currentUser.uid));
-    if (String(profile.data()?.role || '') !== 'super_admin') throw new Error('Only the original contributor or VOP Super Admin can delete this shared record.');
-  }
   await deleteDoc(doc(firestore, collectionName, id));
 };
 
