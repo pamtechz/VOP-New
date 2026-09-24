@@ -156,7 +156,7 @@ function tenantSubscription(
       source = null;
     }
     if (!source) {
-      callback({ docs: [] } as import('firebase/firestore').QuerySnapshot);
+      callback({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot);
       return;
     }
     stop = onSnapshot(source, callback, err => onError?.(err));
