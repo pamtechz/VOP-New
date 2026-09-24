@@ -82,9 +82,16 @@ function globalCollectionSubscription(
     const firestore = getDb();
     const ref = collection(firestore, collectionName);
     const uid = auth?.currentUser?.uid || '__none__';
+    const publishedField = collectionName === 'languages' ? 'enabled' : collectionName === 'translations' ? null : 'published';
+    const sharedQuery = publishedField
+      ? query(ref, where('sharingScope', '==', 'shared'), where(publishedField, '==', true))
+      : query(ref, where('sharingScope', '==', 'shared'));
+    const platformQuery = publishedField
+      ? query(ref, where('organizationId', '==', ''), where(publishedField, '==', true))
+      : query(ref, where('organizationId', '==', ''));
     const sources = [
-      query(ref, where('sharingScope', '==', 'shared')),
-      query(ref, where('organizationId', '==', '')),
+      sharedQuery,
+      platformQuery,
       ...(organizationId ? [query(ref, where('organizationId', '==', organizationId))] : []),
       query(ref, where('ownerUid', '==', uid)),
     ];
