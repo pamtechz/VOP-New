@@ -199,7 +199,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              aria-label="{t('accessibility.close_lesson','Close lesson')}"
+              aria-label={t('accessibility.close_lesson','Close lesson')}
               style={{
                 border: 0,
                 background: 'rgba(255,255,255,0.1)',
