@@ -24,11 +24,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const [customName, setCustomName] = useState(currentUser.displayName);
   const [isEditingName, setIsEditingName] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
 
   if (!isOpen) return null;
 
   const t = (key: string) => getTranslation(key, activeLanguage, settings.customTranslations);
-  const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate || '12 June, 2023';
+  const issueDate = currentUser.information.graduationDate || currentUser.information.completionDate || 'Issue date pending';
 
   const handleDownloadImage = async () => {
     if (!certificateRef.current) return;
@@ -47,7 +48,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err) {
       console.error('Failed to export certificate:', err);
-      alert('Could not export certificate image. Please try again.');
+      setActionMessage('Could not export the certificate image. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -69,8 +70,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         // Ignored or cancelled
       }
     } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert('Certificate verification link copied to clipboard!');
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setActionMessage('Certificate verification link copied to your clipboard.');
+      } catch {
+        setActionMessage('Sharing is unavailable on this browser. Please use the Print or Save Image option.');
+      }
+      window.setTimeout(() => setActionMessage(''), 3500);
     }
   };
 
@@ -328,6 +334,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '1rem' }}>
             <span>Save</span> • <span>Screenshot</span> • <span>Share</span>
           </div>
+
+          {actionMessage && (
+            <div role="status" style={{ textAlign: 'center', color: 'var(--vop-navy-800)', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+              {actionMessage}
+            </div>
+          )}
 
           {saveSuccess && (
             <div style={{ textAlign: 'center', color: 'var(--vop-success)', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
