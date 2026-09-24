@@ -241,6 +241,19 @@ service cloud.firestore {
             == userDoc().data.get('adminNodeId', '');
     }
 
+    function hierarchyTenantForField(data, fieldName) {
+      return signedIn()
+        && role() in ['union_admin','conference_admin','district_admin','church_admin']
+        && data.get(fieldName, '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function canViewHierarchyCertificate(data) {
+      return hierarchyTenantForField(data, 'unionId')
+        || hierarchyTenantForField(data, 'conferenceId')
+        || hierarchyTenantForField(data, 'districtId')
+        || hierarchyTenantForField(data, 'churchId');
+    }
+
     // Platform configuration remains controlled by the VOP Super Admin.
     match /system/settings {
       allow get: if true;
@@ -697,6 +710,7 @@ service cloud.firestore {
         resource.data.get('candidateId', '') == request.auth.uid
         || isSuperAdmin()
         || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId', '') == organizationIdForUser() && isAdmin())
+        || canViewHierarchyCertificate(resource.data)
       );
       allow create, update, delete: if false;
     }
