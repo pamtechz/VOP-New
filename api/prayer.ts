@@ -22,6 +22,8 @@ export default async function handler(req: Request, res: Response) {
 
     if (req.method === 'GET') {
       const own = String(req.query?.mine || '') === 'true';
+      const ministry = String(req.query?.ministry || '') === 'true';
+      if (ministry && !admin) throw new Error('Only authorized ministry administrators can open the ministry inbox.');
       const snapshot = own
         ? await collection.where('candidateId','==',ctx.auth.uid).limit(100).get()
         : await collection.where('organizationId','==',ctx.organizationId).limit(100).get();
@@ -31,7 +33,8 @@ export default async function handler(req: Request, res: Response) {
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
           if (item.candidateId === ctx.auth.uid) return true;
-          return admin && item.organizationId === ctx.organizationId && item.isPrivate !== true;
+          if (item.organizationId !== ctx.organizationId) return false;
+          return ministry ? true : item.isPrivate !== true;
         });
 
       return res.status(200).json({ ok:true, items });
