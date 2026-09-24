@@ -354,7 +354,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
 
       match /members/{uid} {
-        allow get: if isSuperAdmin() || uid == request.auth.uid || canManageOrg(organizationId);
+        allow get: if isSuperAdmin() || canManageOrg(organizationId) || (uid == request.auth.uid && (organizationId == organizationIdForUser() || hierarchyOrganizationScope(organizationId)));
         allow list: if isSuperAdmin() || canManageOrg(organizationId);
 
         // Membership is an authorization record. Non-platform administrators may
