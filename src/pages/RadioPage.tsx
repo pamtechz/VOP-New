@@ -1,6 +1,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { RadioBroadcast, RadioPlaylist } from '../types';
+import { getTranslation } from '../services/i18n';
+import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
@@ -311,7 +313,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   const live = broadcasts.filter(item => detectMedia(item)?.live);
   useEffect(() => { playlistIndexRef.current = playlistIndex; playlistItemsRef.current = playlistItems; }, [playlistIndex, playlistItems]);
 
-  if (!broadcasts.length) return <div className="vop-audience-radio"><header className="vop-public-radio-top"><button type="button" onClick={onBack}><ArrowLeft size={19}/> Back</button></header><main className="vop-public-radio-empty"><Radio size={48}/><h1>Radio</h1><p>No published radio programmes are currently available.</p></main></div>;
+  if (!broadcasts.length) return <div className="vop-audience-radio"><header className="vop-public-radio-top"><button type="button" onClick={onBack}><ArrowLeft size={19}/> Back</button></header><main className="vop-public-radio-empty"><Radio size={48}/><h1>{t('navigation.radio','Radio')}</h1><p>{t('radio.empty','No published radio programmes are currently available.')}</p></main></div>;
 
   return (
     <div className="vop-audience-radio">
@@ -319,7 +321,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
         <div className="vop-radio-hero-inner">
           <div className="vop-radio-hero-copy">
             <button type="button" className="vop-radio-hero-back" onClick={onBack}><ArrowLeft size={17}/> Radio</button>
-            <div className="vop-radio-kicker">Voice of Prophecy</div>
+            <div className="vop-radio-kicker">{t('common.app_title','Voice of Prophecy')}</div>
             <h1>{heroItem?.title || 'Radio'}</h1>
             <div className="vop-radio-tagline">{heroItem?.series || 'Inspire · Equip · Transform'}</div>
             <p>{heroItem?.description || 'Bible truth, practical life teaching and messages of hope for everyone, everywhere.'}</p>
@@ -335,24 +337,24 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
               {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} allow="autoplay; encrypted-media; picture-in-picture" />}
               {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster || undefined} playsInline preload="metadata" {...mediaEvents}/>}
               {source?.provider === 'direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents} />}
-              {!source && <div className="vop-radio-provider-empty"><Radio size={26}/>No playable source configured.</div>}
+              {!source && <div className="vop-radio-provider-empty"><Radio size={26}/>{t('radio.no_source','No playable source configured.')}</div>}
             </div>
             <div className="vop-radio-live-body">
               <div className="vop-radio-cover" style={selectedPoster ? {backgroundImage: 'url("' + selectedPoster + '" )'} : undefined}><Radio size={28}/></div>
               <div><strong>{heroItem?.title}</strong><span>{heroItem?.speaker || 'Voice of Prophecy'}</span><span>{heroItem?.broadcastTime ? dateTime(heroItem.broadcastTime) : localTime(now)}</span></div>
             </div>
             <div className="vop-radio-wave">{Array.from({length:24},(_,i)=><b key={i} style={{height: (12 + ((i*17)%30)) + 'px'}}/>)}</div>
-            {source?.provider === 'audioverse' ? <div className="vop-radio-provider-note">AudioVerse controls are provided by the embedded player.</div> : <div className="vop-radio-mini-controls"><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/><button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button type="button" onClick={fullscreen}><Maximize2 size={16}/></button></div>}
+            {source?.provider === 'audioverse' ? <div className="vop-radio-provider-note">{t('radio.audioverse_controls','AudioVerse controls are provided by the embedded player.')}</div> : <div className="vop-radio-mini-controls"><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/><button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button type="button" onClick={fullscreen}><Maximize2 size={16}/></button></div>}
           </div>
         </div>
       </section>
 
       <section className="vop-radio-feature-strip">
-        <div><span><Radio size={24}/></span><div><strong>Radio</strong><small>Live & On-Demand</small></div></div>
-        <div><span><Video size={24}/></span><div><strong>Videos</strong><small>Sermons, Bible Studies & More</small></div></div>
-        <div><span><BookOpen size={24}/></span><div><strong>Bible Study Materials</strong><small>Guides, PDFs, eBooks</small></div></div>
-        <div><span><Headphones size={24}/></span><div><strong>Listen Anywhere</strong><small>Web, Mobile, YouTube, AudioVerse</small></div></div>
-        <div><span><Globe2 size={24}/></span><div><strong>Multiple Languages</strong><small>Reaching Everyone</small></div></div>
+        <div><span><Radio size={24}/></span><div><strong>{t('navigation.radio','Radio')}</strong><small>{t('radio.live_on_demand','Live & On-Demand')}</small></div></div>
+        <div><span><Video size={24}/></span><div><strong>{t('radio.videos','Videos')}</strong><small>{t('radio.sermons','Sermons, Bible Studies & More')}</small></div></div>
+        <div><span><BookOpen size={24}/></span><div><strong>{t('radio.materials','Bible Study Materials')}</strong><small>{t('radio.materials_desc','Guides, PDFs, eBooks')}</small></div></div>
+        <div><span><Headphones size={24}/></span><div><strong>{t('radio.listen_anywhere','Listen Anywhere')}</strong><small>{t('radio.platforms','Web, Mobile, YouTube, AudioVerse')}</small></div></div>
+        <div><span><Globe2 size={24}/></span><div><strong>{t('radio.languages','Multiple Languages')}</strong><small>{t('radio.reaching_everyone','Reaching Everyone')}</small></div></div>
       </section>
 
       <main className="vop-radio-audience-main">
@@ -367,8 +369,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
               ))}
             </div>
             <div className="vop-radio-schedule-list">
-              {schedule.map(item=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime ? localTime(new Date(item.broadcastTime)) : '—'}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{detectMedia(item)?.live && <em>LIVE</em>}</button>)}
-              {!schedule.length && <div className="vop-radio-muted">No scheduled programmes configured.</div>}
+              {schedule.map(item=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime ? localTime(new Date(item.broadcastTime)) : '—'}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{detectMedia(item)?.live && <em>{t('radio.live','LIVE')}</em>}</button>)}
+              {!schedule.length && <div className="vop-radio-muted">{t('radio.no_schedule','No scheduled programmes configured.')}</div>}
             </div>
           </div>
           <div className="vop-radio-featured-card">
@@ -401,7 +403,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       </main>
 
       <section className="vop-radio-docked-player">
-        <div className="vop-radio-docked-meta"><div className="vop-radio-docked-cover" style={selectedPoster?{backgroundImage:'url("' + selectedPoster + '")'}:undefined}><Radio size={18}/></div><div><strong>{selected?.title}</strong><small>{selected?.speaker||selected?.series||'Voice of Prophecy'}</small></div>{source?.live&&<em>LIVE</em>}</div>
+        <div className="vop-radio-docked-meta"><div className="vop-radio-docked-cover" style={selectedPoster?{backgroundImage:'url("' + selectedPoster + '")'}:undefined}><Radio size={18}/></div><div><strong>{selected?.title}</strong><small>{selected?.speaker||selected?.series||'Voice of Prophecy'}</small></div>{source?.live&&<em>{t('radio.live','LIVE')}</em>}</div>
         <div className="vop-radio-docked-center"><button type="button" onClick={()=>skip(-10)} disabled={!duration}><SkipBack size={17}/></button><button className="main" type="button" onClick={()=>void togglePlay()} disabled={!source||(source.provider==='youtube'&&!ytReady)||(source.provider==='audioverse')}>{playing?<Pause size={19}/>:<Play size={19} fill="currentColor"/>}</button><button type="button" onClick={()=>skip(10)} disabled={!duration}><SkipForward size={17}/></button></div>
         <div className="vop-radio-docked-progress"><span>{formatTime(current)}</span><input type="range" min="0" max={duration||0} step=".1" value={Math.min(current,duration||0)} onChange={e=>seek(Number(e.target.value))} disabled={!duration}/><span>{duration?formatTime(duration):source?.live?'LIVE':'—'}</span></div>
         <div className="vop-radio-docked-actions">{source?.provider!=='audioverse'&&<><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/></>}{source?.provider !== 'audioverse' && <label><Gauge size={15}/><select value={rate} onChange={e=>changeRate(Number(e.target.value))}>{[.5,.75,1,1.25,1.5,1.75,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>}{(source?.provider==='direct-video'||source?.provider==='youtube')&&<button type="button" onClick={fullscreen}><Maximize2 size={17}/></button>}<a href={source?.url||'#'} target="_blank" rel="noreferrer"><ExternalLink size={17}/></a></div>
