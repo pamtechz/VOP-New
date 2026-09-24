@@ -159,7 +159,9 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertSucceeds(unionAdmin.doc('radioBroadcasts/radio-owned').update({ published: true }));
     await assertFails(unionAdmin.doc('radioBroadcasts/radio-foreign').update({ published: true }));
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').get());
+    await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').update({ organizationName: 'Updated Scoped Tenant' }));
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').get());
+    await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').set({ organizationName: 'Foreign' }));
     await assertFails(unionAdmin.doc('system/settings').get());
     await assertFails(unionAdmin.doc('system/permissions').get());
     await assertSucceeds(superAdmin.doc('system/permissions').get());
