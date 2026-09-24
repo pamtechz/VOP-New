@@ -128,6 +128,7 @@ function validateRadioMedia(form: FormState) {
 }
 
 export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage }) => {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [playlists, setPlaylists] = useState<AdminRecord[]>([]);
   const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
