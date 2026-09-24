@@ -291,7 +291,7 @@ export const subscribeSettings = (
       ? doc(firestore, 'system', 'settings')
       : scope.organizationId
         ? doc(firestore, 'organizations', scope.organizationId, 'settings', 'settings')
-        : doc(firestore, 'tenantSettings', scope.role + ':' + scope.nodeId, 'settings');
+        : doc(firestore, 'tenantSettings', scope.role + ':' + scope.nodeId, 'settings', 'settings');
     stop = onSnapshot(ref,
     (snap) => {
       if (snap.exists()) {
