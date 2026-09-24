@@ -95,3 +95,64 @@ test('Firestore rules enforce authenticated ownership and append-only unverified
     await environment.cleanup();
   }
 });
+
+
+test('hierarchy tenant scope cannot cross organizations', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminDb => {
+      await adminDb.doc('users/union-admin').set({
+        uid: 'union-admin',
+        role: 'union_admin',
+        adminNodeId: 'union-1',
+        adminNodeType: 'union',
+        organizationId: '',
+      });
+      await adminDb.doc('organizations/org-1').set({
+        id: 'org-1', name: 'Scoped Organization', status: 'active', unionId: 'union-1',
+      });
+      await adminDb.doc('organizations/org-2').set({
+        id: 'org-2', name: 'Foreign Organization', status: 'active', unionId: 'union-2',
+      });
+      await adminDb.doc('organizations/org-1/members/union-admin').set({
+        uid: 'union-admin', organizationId: 'org-1', role: 'admin', active: true,
+      });
+      await adminDb.doc('candidates/candidate-1').set({
+        uid: 'candidate-1', organizationId: 'org-1', displayName: 'Scoped Learner',
+      });
+      await adminDb.doc('candidates/candidate-2').set({
+        uid: 'candidate-2', organizationId: 'org-2', displayName: 'Foreign Learner',
+      });
+      await adminDb.doc('radioBroadcasts/radio-owned').set({
+        ownerUid: 'union-admin',
+        ownerTenantId: 'union_admin:union-1',
+        organizationId: '',
+        sharingScope: 'private',
+        published: false,
+      });
+      await adminDb.doc('radioBroadcasts/radio-foreign').set({
+        ownerUid: 'other-user',
+        ownerTenantId: 'union_admin:union-2',
+        organizationId: '',
+        sharingScope: 'private',
+        published: false,
+      });
+    });
+
+    const unionAdmin = environment.authenticatedContext('union-admin').firestore();
+    await assertSucceeds(unionAdmin.doc('organizations/org-1').get());
+    await assertFails(unionAdmin.doc('organizations/org-2').get());
+    await assertSucceeds(unionAdmin.doc('organizations/org-1/members/union-admin').get());
+    await assertFails(unionAdmin.doc('organizations/org-2/members/union-admin').get());
+    await assertSucceeds(unionAdmin.doc('candidates/candidate-1').get());
+    await assertFails(unionAdmin.doc('candidates/candidate-2').get());
+    await assertSucceeds(unionAdmin.doc('radioBroadcasts/radio-owned').update({ published: true }));
+    await assertFails(unionAdmin.doc('radioBroadcasts/radio-foreign').update({ published: true }));
+  } finally {
+    await environment.cleanup();
+  }
+});
