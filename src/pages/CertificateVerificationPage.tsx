@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Printer } from 'lucide-react';
-import CertificateArtwork from '../components/certificates/CertificateArtwork';
+import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
 
 interface Props { onBack: () => void; }
 
@@ -36,6 +36,7 @@ interface PublicCertificateConfig {
   backgroundUrl?: string;
   verificationEnabled?: boolean;
   verificationBaseUrl?: string;
+  template?: CertificateTemplateConfig;
 }
 
 function dateText(value?: string | null) {
