@@ -191,6 +191,13 @@ export default async function handler(
           progress: {
             ...progress,
             completedLessons,
+            lessonResume: Object.fromEntries(
+              Object.entries(
+                progress.lessonResume && typeof progress.lessonResume === 'object'
+                  ? progress.lessonResume as Record<string, unknown>
+                  : {},
+              ).filter(([key]) => key !== completionKey),
+            ),
             updatedAt: FieldValue.serverTimestamp(),
           },
           updatedAt: FieldValue.serverTimestamp(),

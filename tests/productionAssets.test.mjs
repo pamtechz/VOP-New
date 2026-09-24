@@ -11,6 +11,7 @@ const runtimeFiles = [
   'src/config/deployment.ts',
   'src/pages/FirebaseStudyApp.tsx',
   'src/pages/LessonViewer.tsx',
+  'src/pages/ReferenceProfilePage.tsx',
   'src/pages/SignInPage.tsx',
   'src/services/firebaseAuth.ts',
   'src/services/offlineManifest.ts',

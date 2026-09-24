@@ -213,6 +213,22 @@ export const App: React.FC = () => {
   }, [currentUser.uid, currentUser.organizationId]);
 
   useEffect(() => {
+    const refreshOwnProfile = () => {
+      if (!auth?.currentUser) return;
+      void loadFirestoreUser(auth.currentUser.uid).then(profile => {
+        if (profile) {
+          setCurrentUser(profile);
+          setAllUsers([profile]);
+        }
+      }).catch(error => {
+        console.warn('VOP profile refresh failed', error);
+      });
+    };
+    window.addEventListener('vop_profile_updated', refreshOwnProfile);
+    return () => window.removeEventListener('vop_profile_updated', refreshOwnProfile);
+  }, []);
+
+  useEffect(() => {
     if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
   }, [isDarkMode]);

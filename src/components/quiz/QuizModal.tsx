@@ -16,10 +16,10 @@ interface QuizModalProps {
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
-  lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false,
+  lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false, passThreshold,
 }) => {
   const questions = lesson.questions ?? [];
-  const threshold = getStoredSettings().quizPassThreshold;
+  const threshold = passThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 100;
   const validQuiz = isQuizConfigured(questions);
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');

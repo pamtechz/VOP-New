@@ -5,8 +5,8 @@ import type {
 } from '../types';
 import { ArrowLeft, Pencil, X, Check } from 'lucide-react';
 import { calculateCurriculumProgress } from '../services/progress';
-import { updateUser } from '../services/storage';
 import { getTranslation } from '../services/i18n';
+import { auth } from '../lib/firebase';
 
 interface ProfileProps {
   currentUser: User;
@@ -66,11 +66,36 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
       : undefined;
   };
 
-  const submit = (event: React.FormEvent) => {
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    updateUser({ ...currentUser, phoneNumber: phone.trim(), address: address.trim() });
-    setEditing(false);
-    setSaved(true);
+    if (!auth?.currentUser) return;
+    setSavingProfile(true);
+    setSaved(false);
+    setProfileError('');
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({
+          action: 'updateOwnProfile',
+          profile: { phoneNumber: phone.trim(), address: address.trim() },
+        }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || 'Could not save your contact details.');
+      setEditing(false);
+      setSaved(true);
+      window.dispatchEvent(new Event('vop_profile_updated'));
+    } catch (error) {
+      setSaved(false);
+      setProfileError(error instanceof Error ? error.message : 'Could not save your contact details.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   return (
@@ -118,9 +143,10 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 
       {/* Main Body */}
       <main className="vop-reference-main">
+        {profileError && <p role="alert" className="vop-reference-error">{profileError}</p>}
         {saved && (
           <p role="status" className="vop-reference-success">
-            <Check size={16} /> {t('contact_saved_local', 'Contact details saved on this device.')}
+            <Check size={16} /> {t('contact_saved_local', 'Contact details saved to your VOP account.')}
           </p>
         )}
 
@@ -138,7 +164,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
               {t('address', 'Address')}
               <input value={address} onChange={event => setAddress(event.target.value)} />
             </label>
-            <button type="submit" className="vop-cert-action-btn" style={{ minHeight: '2.85rem' }}>{t('save', 'Save')}</button>
+            <button type="submit" className="vop-cert-action-btn" disabled={savingProfile} style={{ minHeight: '2.85rem' }}>{savingProfile ? t('saving', 'Saving…') : t('save', 'Save')}</button>
           </form>
         ) : (
           <>
