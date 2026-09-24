@@ -53,7 +53,7 @@ export interface CertificateTemplateStudioConfig {
 
 const CANVAS_WIDTH = 1513;
 const CANVAS_HEIGHT = 1040;
-const DEFAULT_BACKGROUND = '/assets/certificates/vop-course-certificate-bg.png';
+const DEFAULT_BACKGROUND = '/assets/certificate_bg.png';
 
 const DEFAULT_TEMPLATE: CertificateTemplateStudioConfig = {
   width: CANVAS_WIDTH,
@@ -118,7 +118,7 @@ const assetFields: Array<{ key: StringConfigKey; label: string; hint: string }> 
 
 const CANVAS_WIDTH = 1513;
 const CANVAS_HEIGHT = 1040;
-const DEFAULT_BACKGROUND = '/assets/certificates/vop-course-certificate-bg.png';
+const DEFAULT_BACKGROUND = '/assets/certificate_bg.png';
 
 const emptyPreviewCertificate: CertificateArtworkRecord = {
   candidateName: 'Aubrey Matende',
