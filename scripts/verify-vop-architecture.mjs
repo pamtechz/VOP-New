@@ -20,7 +20,7 @@ const checks = [
     'organizationInHierarchyScope',
     'accessibleOrganizationIds', 'canManageOrganizationContent'
   ]],
-  ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2','Updated Scoped Tenant','system/permissions']],
+  ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2','Updated Scoped Tenant','system/permissions','cert-org-1','cert-org-2']],
   ['firestore.rules', [
     "'union_admin'",
     "'conference_admin'",
