@@ -315,6 +315,18 @@ service cloud.firestore {
         );
     }
 
+    function churchAdminForCreateUpdate(collectionName, recordId) {
+      return role() == 'church_admin'
+        && collectionName == 'churches'
+        && recordId == userDoc().data.get('adminNodeId', '');
+    }
+
+    function churchAdminForDelete(collectionName, recordId) {
+      return role() == 'church_admin'
+        && collectionName == 'churches'
+        && recordId == userDoc().data.get('adminNodeId', '');
+    }
+
     function hierarchyTenantForField(data, fieldName) {
       return signedIn()
         && role() in ['union_admin','conference_admin','district_admin','church_admin']
@@ -730,21 +742,25 @@ service cloud.firestore {
       allow get, list: if canReadHierarchyRecord('districts', id, resource.data);
       allow create, update: if isSuperAdmin()
         || unionAdminForCreateUpdate('districts', id)
-        || conferenceAdminForCreateUpdate('districts', id);
+        || conferenceAdminForCreateUpdate('districts', id)
+        || districtAdminForCreateUpdate('districts', id);
       allow delete: if isSuperAdmin()
         || unionAdminForDelete('districts', id)
-        || conferenceAdminForDelete('districts', id);
+        || conferenceAdminForDelete('districts', id)
+        || districtAdminForDelete('districts', id);
     }
     match /churches/{id} {
       allow get, list: if canReadHierarchyRecord('churches', id, resource.data);
       allow create, update: if isSuperAdmin()
         || unionAdminForCreateUpdate('churches', id)
         || conferenceAdminForCreateUpdate('churches', id)
-        || districtAdminForCreateUpdate('churches', id);
+        || districtAdminForCreateUpdate('churches', id)
+        || churchAdminForCreateUpdate('churches', id);
       allow delete: if isSuperAdmin()
         || unionAdminForDelete('churches', id)
         || conferenceAdminForDelete('churches', id)
-        || districtAdminForDelete('churches', id);
+        || districtAdminForDelete('churches', id)
+        || churchAdminForDelete('churches', id);
     }
 
     // Legacy platform curriculum remains available only when explicitly published.
