@@ -86,6 +86,7 @@ export default function UserManagement({ onBack }: Props) {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tenantOrganizations, setTenantOrganizations] = useState<TenantOrganization[]>([]);
+  const [tenantOrganizationsLoading, setTenantOrganizationsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -106,10 +107,19 @@ export default function UserManagement({ onBack }: Props) {
   const pageSize = 8;
 
   const loadOrganizations = async () => {
+    setTenantOrganizationsLoading(true);
     try {
       const body = await userApi<TenantOrganization>('listOrganizations');
-      setTenantOrganizations((body.items || []).filter((item: unknown): item is TenantOrganization => { const value = item as Partial<TenantOrganization>; return typeof value.id === 'string' && typeof value.name === 'string'; }));
-    } catch { /* User loading remains useful even when organization metadata is unavailable. */ }
+      setTenantOrganizations((body.items || []).filter((item: unknown): item is TenantOrganization => {
+        const value = item as Partial<TenantOrganization>;
+        return typeof value.id === 'string' && typeof value.name === 'string';
+      }));
+    } catch (reason) {
+      setTenantOrganizations([]);
+      setError(reason instanceof Error ? reason.message : 'Could not load organizations.');
+    } finally {
+      setTenantOrganizationsLoading(false);
+    }
   };
 
   const load = async () => {
@@ -451,7 +461,7 @@ export default function UserManagement({ onBack }: Props) {
             <label><span>Email *</span><input type="email" value={editor.email} onChange={e => setEditor({...editor,email:e.target.value})}/></label>
             <label><span>Phone</span><input value={editor.phoneNumber} onChange={e => setEditor({...editor,phoneNumber:e.target.value})}/></label>
             <label><span>Role</span><select value={editor.userType} onChange={e => setEditor({...editor,userType:e.target.value as EditorState['userType']})}><option value="super_admin">Super Admin</option><option value="admin">Admin</option><option value="teacher">Teacher</option><option value="mentor">Mentor</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
-            <label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})}><option value="">Platform / no organization</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{editor.userType === 'admin' && <small>Choose the organization this administrator will manage.</small>}</label>
+            <label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})} disabled={tenantOrganizationsLoading}><option value="">{tenantOrganizationsLoading ? 'Loading organizations…' : 'Platform / no organization'}</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{tenantOrganizations.length === 0 && !tenantOrganizationsLoading && <small>No organization tenants are available to this administrator. Hierarchy administrators only see organizations assigned to their hierarchy scope.</small>}{editor.userType === 'admin' && <small>Choose the organization this administrator will manage.</small>}</label>
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
