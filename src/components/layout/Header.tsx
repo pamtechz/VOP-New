@@ -94,14 +94,14 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <span style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.01em', fontFamily: 'var(--font-display)' }}>
-                {t('app_title', settings.appName || 'Voice of Prophecy')}
+                {t('common.app_title', settings.appName || 'Voice of Prophecy')}
               </span>
               <span className="badge badge-gold hide-sm" style={{ fontSize: '0.6rem', padding: '0.1rem 0.4rem' }}>
                 v4.0 PRO
               </span>
             </div>
             <div className="hide-sm" style={{ fontSize: '0.68rem', color: 'rgba(255, 255, 255, 0.7)', fontWeight: 500 }}>
-              {t('school_subtitle', settings.schoolName || 'Bible Correspondence School')}
+              {t('common.school_subtitle', settings.schoolName || 'Bible Correspondence School')}
             </div>
           </div>
         </div>
@@ -116,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-slate-300 hover:text-white hover:bg-white/5'
             }`}
           >
-            Discover
+            {t('navigation.discover','Discover')}
           </button>
           <button
             onClick={() => nav('resources')}
@@ -127,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <BookOpen size={14} />
-            <span>Library</span>
+            <span>{t('navigation.library','Library')}</span>
           </button>
           <button
             onClick={() => nav('prayer')}
@@ -138,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <HeartHandshake size={14} />
-            <span>Prayer</span>
+            <span>{t('navigation.prayer','Prayer')}</span>
           </button>
           <button
             onClick={() => nav('radio')}
@@ -149,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Radio size={14} />
-            <span>Radio</span>
+            <span>{t('navigation.radio','Radio')}</span>
           </button>
           <button
             onClick={() => nav('announcements')}
@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Megaphone size={14} />
-            <span>Announcements</span>
+            <span>{t('navigation.announcements','Announcements')}</span>
           </button>
           {currentUser.role === 'student' && (
             <button
@@ -172,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <MessageCircle size={14} />
-              <span>Support</span>
+              <span>{t('navigation.support','Support')}</span>
             </button>
           )}
           <button
@@ -184,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Info size={14} />
-            <span>About</span>
+            <span>{t('navigation.about','About')}</span>
           </button>
         </nav>
 
@@ -241,7 +241,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <Award size={14} />
-            <span>{t('certificate_button', 'Certificate')}</span>
+            <span>{t('navigation.certificate', 'Certificate')}</span>
           </button>
 
           {/* Admin Panel Quick Link (Desktop only) */}
@@ -249,7 +249,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => nav('admin')}
               className="btn btn-outline hide-sm"
-              title={t('admin_panel', 'Admin Panel')}
+              title={t('navigation.admin', 'Admin Panel')}
               style={{
                 borderColor: 'rgba(255, 255, 255, 0.25)',
                 color: '#ffffff',
