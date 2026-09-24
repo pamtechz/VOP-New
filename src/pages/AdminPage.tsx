@@ -698,7 +698,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>Use configuration controls carefully. Destructive data operations are intentionally not exposed by this screen.</p><button type="button" onClick={()=>showMessage('No destructive reset was performed.')}>Reset to Defaults</button></div>
         </div>
       </div>}
-      {isSuperAdmin && {settingsSubtab === 'features' && <div className="vop-grid-2">
+      {isSuperAdmin && settingsSubtab === 'features' && <div className="vop-grid-2">
         <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
         <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
       </div>}
