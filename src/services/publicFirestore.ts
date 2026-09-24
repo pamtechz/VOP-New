@@ -195,8 +195,6 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     loadHierarchy<ChurchOrganization>('churches', 'churchId'),
   ]);
 
-  const hierarchyDocs = <T,>(snapshot: import('firebase/firestore').QuerySnapshot<T> | null) => snapshot?.docs.map(item => item.data()) || [];
-
   const languages = languageDocs
     .map(item => normalizeLanguage(item.id, item.data()))
     .filter(item => item.enabled)
@@ -244,10 +242,10 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     books,
     radioBroadcasts,
     radioPlaylists,
-    unions: unionsSnap.docs.map(item => item.data() as Union),
-    conferences: conferencesSnap.docs.map(item => item.data() as Conference),
-    districts: districtsSnap.docs.map(item => item.data() as District),
-    churches: churchesSnap.docs.map(item => item.data() as ChurchOrganization),
+    unions: unionsSnap?.docs.map(item => item.data() as Union) || [],
+    conferences: conferencesSnap?.docs.map(item => item.data() as Conference) || [],
+    districts: districtsSnap?.docs.map(item => item.data() as District) || [],
+    churches: churchesSnap?.docs.map(item => item.data() as ChurchOrganization) || [],
     guides,
   };
 }
