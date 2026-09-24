@@ -204,6 +204,7 @@ export interface User {
   information: UserInformation;
   privileges: UserPrivileges;
   progress: AccountProgress;
+  preferences?: { uiLocale?: string; studyLanguage?: string; };
 }
 
 export interface Question {
