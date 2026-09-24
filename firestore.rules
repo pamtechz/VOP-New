@@ -640,10 +640,18 @@ service cloud.firestore {
     match /playlists/{id} {
       allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
-        isOrgMember(organizationIdForUser())
-        && request.resource.data.get('ownerUid','') == request.auth.uid
-        && request.resource.data.get('organizationId','') == ''
-        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        (
+          isOrgMember(organizationIdForUser())
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('organizationId','') == ''
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
+          && request.resource.data.get('organizationId','') == ''
+        )
       );
       allow update, delete: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
