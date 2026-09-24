@@ -61,20 +61,63 @@ async function currentOrganizationId(): Promise<string> {
   return String(profile.data()?.organizationId || '').trim();
 }
 
+function globalCollectionSubscription(
+  collectionName: string,
+  callback: (snapshot: import('firebase/firestore').QuerySnapshot) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  let cancelled = false;
+  const stops: Unsubscribe[] = [];
+  const buckets = new Map<string, import('firebase/firestore').QuerySnapshot>();
+
+  const emit = () => {
+    if (cancelled) return;
+    const docs = new Map<string, import('firebase/firestore').QueryDocumentSnapshot>();
+    buckets.forEach(snapshot => snapshot.docs.forEach(item => docs.set(item.ref.path, item)));
+    callback({ docs: [...docs.values()] } as import('firebase/firestore').QuerySnapshot);
+  };
+
+  void currentOrganizationId().then(organizationId => {
+    if (cancelled) return;
+    const firestore = getDb();
+    const ref = collection(firestore, collectionName);
+    const uid = auth?.currentUser?.uid || '__none__';
+    const sources = [
+      query(ref, where('sharingScope', '==', 'shared')),
+      query(ref, where('organizationId', '==', '')),
+      ...(organizationId ? [query(ref, where('organizationId', '==', organizationId))] : []),
+      query(ref, where('ownerUid', '==', uid)),
+    ];
+    sources.forEach((source, index) => {
+      stops.push(onSnapshot(source, snapshot => {
+        buckets.set(String(index), snapshot);
+        emit();
+      }, err => onError?.(err)));
+    });
+  }).catch(error => onError?.(error instanceof Error ? error : new Error('Global content could not be loaded.')));
+
+  return () => {
+    cancelled = true;
+    stops.splice(0).forEach(stop => stop());
+  };
+}
+
 function tenantSubscription(
   collectionName: string,
   callback: (snapshot: import('firebase/firestore').QuerySnapshot) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
+  if (GLOBAL_CONTENT_COLLECTIONS.has(collectionName)) {
+    return globalCollectionSubscription(collectionName, callback, onError);
+  }
+
   let stop: Unsubscribe = () => undefined;
   let cancelled = false;
   void currentOrganizationId().then(organizationId => {
     if (cancelled) return;
     const source = organizationId && TENANT_COLLECTIONS.has(collectionName)
       ? query(collection(getDb(), collectionName), where('organizationId', '==', organizationId))
-      : GLOBAL_CONTENT_COLLECTIONS.has(collectionName)
-        ? collection(getDb(), collectionName)
-        : collection(getDb(), collectionName);
+      : collection(getDb(), collectionName);
     stop = onSnapshot(source, callback, err => onError?.(err));
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Tenant data could not be loaded.')));
   return () => { cancelled = true; stop(); };
