@@ -4,7 +4,7 @@ import { ArrowLeft, Award, Download, Share2, Printer, ShieldCheck } from 'lucide
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
-import CertificateArtwork from '../components/certificates/CertificateArtwork';
+import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
 
 interface CertificatesPageProps { currentUser: User; settings: AppSettings; activeLanguage: LanguageCode; onBack: () => void; }
 interface OfficialCertificate {
@@ -14,7 +14,7 @@ interface OfficialCertificate {
 }
 interface CertificateConfig {
   certificateTitle?: string; certificateBodyText?: string; issuerName?: string; issuerSubtitle?: string;
-  directorName?: string; directorTitle?: string; signatureUrl?: string; sealUrl?: string; logoUrl?: string; backgroundUrl?: string; verificationEnabled?: boolean; verificationBaseUrl?: string;
+  directorName?: string; directorTitle?: string; signatureUrl?: string; sealUrl?: string; logoUrl?: string; backgroundUrl?: string; verificationEnabled?: boolean; verificationBaseUrl?: string; template?: CertificateTemplateConfig;
 }
 function dateText(value?: string | null) {
   if (!value) return '—';
