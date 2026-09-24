@@ -561,6 +561,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (['unions','conferences','districts','churches'].includes(collection) && action !== 'list') {
+      await requirePermission(ctx, 'hierarchy', action === 'delete' ? 'delete' : action === 'upsert' ? 'update' : 'manage');
       if (!ctx.isSuperAdmin && !['union_admin','conference_admin','district_admin','church_admin'].includes(String(ctx.profile.role || ''))) {
         throw new Error('Only an authorized hierarchy administrator can manage this record.');
       }
