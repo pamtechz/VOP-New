@@ -71,6 +71,25 @@ function hierarchyScopeQuery(role: string, nodeId: string) {
   return null;
 }
 
+function organizationInHierarchy(data: Record<string, unknown>, role: string, nodeId: string) {
+  const directField = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : role === 'church_admin' ? 'churchId' : '';
+  if (directField && String(data[directField] || '').trim() === nodeId) return true;
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+  if (directField && String(hierarchy[directField] || '').trim() === nodeId) return true;
+  if (String(data.hierarchyType || '').trim() === directField.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId) return true;
+  if (String(data.adminNodeType || '').trim() === directField.replace('Id','') && String(data.adminNodeId || '').trim() === nodeId) return true;
+  return false;
+}
+
+async function hierarchyOrganizations(db: Firestore, role: string, nodeId: string) {
+  if (!nodeId) return [];
+  const snapshot = await db.collection('organizations').get();
+  return snapshot.docs.filter(doc => {
+    const data = doc.data() || {};
+    return data.status === 'active' && organizationInHierarchy(data, role, nodeId);
+  }).map(doc => ({ id: doc.id, name: String(doc.data().name || doc.id), status: String(doc.data().status || 'active') }));
+}
+
 function displayRole(type: ProfileType, profile: Record<string, unknown> | undefined): string {
   if (type === 'super_admin') return 'Super Admin';
   if (type === 'admin') return 'Admin';
@@ -290,11 +309,24 @@ export default async function handler(request: Request, response: Response) {
     const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || '')) || Boolean(hierarchyTenant);
     if (!canManageTenantUsers) throw new Error('Only an authorized tenant administrator can manage users.');
     const tenantOrganizationId = tenant.organizationId;
+    const requestedManagedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    const hierarchyNodeId = String(tenant.profile.adminNodeId || '').trim();
+    const managedOrganizationId = tenantOrganizationId || (hierarchyTenant && requestedManagedOrganizationId ? requestedManagedOrganizationId : '');
+    if (hierarchyTenant && managedOrganizationId) {
+      const organizationSnap = await db.doc('organizations/' + managedOrganizationId).get();
+      if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active' || !organizationInHierarchy(organizationSnap.data() || {}, hierarchyTenant, hierarchyNodeId)) {
+        throw new Error('The selected organization is outside your assigned hierarchy scope.');
+      }
+    }
 
     if (action === 'listOrganizations') {
       if (tenant.isSuperAdmin) {
         const snapshot = await db.collection('organizations').orderBy('name').get();
         return response.status(200).json({ ok:true, items:snapshot.docs.map(doc => ({ id:doc.id, name:String(doc.data().name || doc.id), status:String(doc.data().status || 'active') })) });
+      }
+      if (hierarchyTenant && !tenantOrganizationId) {
+        const items = await hierarchyOrganizations(db, hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
+        return response.status(200).json({ ok:true, items });
       }
       const organization = await db.doc('organizations/' + tenantOrganizationId).get();
       return response.status(200).json({ ok:true, items: organization.exists ? [{ id:organization.id, name:String(organization.data()?.name || organization.id), status:String(organization.data()?.status || 'active') }] : [] });
@@ -304,6 +336,8 @@ export default async function handler(request: Request, response: Response) {
       let users: UserRecord[] = [];
       if (tenant.isSuperAdmin && !tenantOrganizationId) {
         users = await listAllUsers(authService);
+      } else if (hierarchyTenant && managedOrganizationId) {
+        users = await Promise.all((await db.collection('users').where('organizationId','==',managedOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
       } else if (hierarchyTenant) {
         const scope = hierarchyScopeQuery(hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
         if (!scope) throw new Error('The hierarchy tenant scope is not configured.');
@@ -326,13 +360,13 @@ export default async function handler(request: Request, response: Response) {
 
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
-      if (type === 'admin' && !tenantOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
+      if (type === 'admin' && !managedOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
       if (type === 'super_admin' && !tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can create platform administrators.');
       if (type === 'admin' && tenantOrganizationId && !['owner','admin'].includes(String(tenant.membership.role || ''))) {
         throw new Error('Only an organization owner or administrator can create organization administrators.');
       }
 
-      if (tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
+      if (managedOrganizationId && tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
       const created = await authService.createUser({
         email,
         displayName,
@@ -340,7 +374,8 @@ export default async function handler(request: Request, response: Response) {
         ...(password ? { password } : {}),
         disabled: false,
       });
-      const profile = profileForType(type, body, tenantOrganizationId);
+      const baseProfile = profileForType(type, body, managedOrganizationId);
+      const profile = hierarchyTenant ? { ...baseProfile, role: hierarchyTenant, adminNodeType: tenant.profile.adminNodeType || hierarchyTenant.replace('_admin',''), adminNodeId: hierarchyNodeId } : baseProfile;
       await db.doc(`users/${created.uid}`).set({
         uid: created.uid,
         email,
@@ -354,19 +389,20 @@ export default async function handler(request: Request, response: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
-      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:tenantOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
-      await authService.setCustomUserClaims(created.uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
+      if (managedOrganizationId) await db.doc(`organizations/${managedOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:tenantOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
+      await authService.setCustomUserClaims(created.uid, managedOrganizationId ? { role: hierarchyTenant || 'student', adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId, organizationId:managedOrganizationId, organizationRole:profile.organizationRole } : claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
     }
 
     if (action === 'assignOrganization') {
-      if (!tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can reassign a user between organizations.');
+      if (!tenant.isSuperAdmin && !hierarchyTenant) throw new Error('Only an authorized tenant administrator can assign organization membership.');
       const targetOrganizationId = String(body.organizationId || '').trim();
       const memberRole = String(body.organizationRole || 'learner').trim();
       if (!targetOrganizationId) throw new Error('Select an organization.');
       if (!['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Select a valid organization role.');
       const organization = await db.doc('organizations/' + targetOrganizationId).get();
+      if (hierarchyTenant && (!organization.exists || !organizationInHierarchy(organization.data() || {}, hierarchyTenant, hierarchyNodeId))) throw new Error('The selected organization is outside your assigned hierarchy scope.');
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The selected organization is not available.');
       const targetProfile = await db.doc('users/' + uid).get();
       if (!targetProfile.exists) throw new Error('The selected user account does not exist.');
@@ -380,10 +416,8 @@ export default async function handler(request: Request, response: Response) {
         transaction.set(db.doc('organizations/' + targetOrganizationId + '/members/' + uid), { uid, organizationId:targetOrganizationId, role:memberRole, active:true, joinedAt:previousOrganizationId === targetOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt:now, assignedBy:decoded.uid }, { merge:true });
         transaction.set(db.doc('users/' + uid), { organizationId:targetOrganizationId, organizationRole:memberRole, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       });
-      const preservedPlatformRole = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(existingData.role || '')) && memberRole === 'admin'
-        ? String(existingData.role)
-        : 'student';
-      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, organizationId:targetOrganizationId, organizationRole:memberRole });
+      const preservedPlatformRole = hierarchyRole(String(existingData.role || '')) || 'student';
+      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, ...(hierarchyRole(preservedPlatformRole) ? { adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId } : {}), organizationId:targetOrganizationId, organizationRole:memberRole });
       return response.status(200).json({ ok:true, item:{uid, organizationId:targetOrganizationId, organizationRole:memberRole} });
     }
 
@@ -397,7 +431,11 @@ export default async function handler(request: Request, response: Response) {
     const targetProfileData = targetProfileSnapshot.data() || {};
     if (!tenant.isSuperAdmin) {
       if (hierarchyTenant) {
-        if (!hierarchyUserInScope(hierarchyTenant, String(tenant.profile.adminNodeId || '').trim(), targetProfileData)) {
+        const targetOrg = String(targetProfileData.organizationId || '').trim();
+        if (targetOrg) {
+          const targetOrganizationSnap = await db.doc('organizations/' + targetOrg).get();
+          if (!targetOrganizationSnap.exists || !organizationInHierarchy(targetOrganizationSnap.data() || {}, hierarchyTenant, hierarchyNodeId)) throw new Error('This user is outside your assigned hierarchy scope.');
+        } else if (!hierarchyUserInScope(hierarchyTenant, hierarchyNodeId, targetProfileData)) {
           throw new Error('This user is outside your assigned hierarchy scope.');
         }
       } else if (String(targetProfileData.organizationId || '') !== tenantOrganizationId) {
