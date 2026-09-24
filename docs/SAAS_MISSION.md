@@ -695,3 +695,23 @@ tenant/hierarchy scope
 
 and the full Super Admin → hierarchy → organisation → learner regression is validated.
 
+
+
+## Configurable Permission Matrix
+
+The platform has a Super Admin-managed default permission matrix in `shared/permissions.ts`, persisted at `system/permissions`. It is intentionally additive to—not a replacement for—tenant, hierarchy, ownership, membership, and resource-specific authorization.
+
+- Super Admin is always platform-wide and cannot be restricted by the matrix.
+- Organisation roles resolve from the active organisation membership before the base profile role.
+- Default roles include owner, admin, editor, teacher, mentor, staff and student, plus union/conference/district/church hierarchy tenants.
+- The matrix controls actions such as view, create, update, delete, publish, approve, assign and manage.
+- The Admin → Settings → Permissions surface lets Super Admin restore defaults or customize the matrix.
+- Server APIs enforce the matrix; Firestore rules remain the final data-isolation boundary.
+
+## Prayer Ministry Administration
+
+Prayer requests are a first-class Admin navigation item. Authorized organisation and hierarchy administrators can open the scoped Prayer Requests inbox, filter requests by status, refresh, mark requests as praying or answered, and never cross their tenant/hierarchy scope. Learners retain access to their own requests.
+
+## Certificate Template Authority
+
+The certificate template is the single source of truth for the live preview and certificate artwork renderer. The supplied `/assets/certificate_bg.png` artwork is the default 1513×1040 background layer; template elements are rendered above it. The Certificate canvas opens at 40% by default, with a 40% reset control. Legacy decorative overlays are not applied on top of the supplied background.
