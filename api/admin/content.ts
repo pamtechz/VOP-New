@@ -75,8 +75,11 @@ export default async function handler(req: Request, res: Response) {
       : ['owner','admin'];
     if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
-      if (collection === 'settings' && ctx.organizationId) {
-        requireOrgRole(ctx, ['owner','admin']);
+      if (collection === 'certificationConfig') {
+        throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
+      }
+      if (collection === 'settings' && (ctx.organizationId || effectiveOrganizationId)) {
+        if (ctx.tenantType !== 'hierarchy') requireOrgRole(ctx, ['owner','admin']);
       } else {
         throw new Error('Only the VOP Super Admin can manage platform configuration.');
       }
@@ -345,15 +348,15 @@ export default async function handler(req: Request, res: Response) {
         });
       }
       if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
-        if (collection === 'certificationConfig' && ctx.isSuperAdmin) {
+        if (collection === 'certificationConfig') {
+          if (!ctx.isSuperAdmin) return res.status(200).json({ ok: true, items: [] });
           const s = await ctx.db.doc('system/certification').get();
           return res.status(200).json({ ok: true, items: s.exists ? [{ id:'certification', ...s.data() }] : [] });
         }
         const id = collection === 'settings' ? 'settings' : 'curriculum';
-        if (!ctx.organizationId) {
-          return res.status(200).json({ ok: true, items: [] });
-        }
-        const s = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/${id}`).get();
+        const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
+        if (!targetOrganizationId) return res.status(200).json({ ok: true, items: [] });
+        const s = await ctx.db.doc(`organizations/${targetOrganizationId}/settings/${id}`).get();
         return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data() }] : [] });
       }
       if (collection === 'users') {
@@ -661,11 +664,12 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (collection === 'settings' || collection === 'curriculumSettings') {
-      if (!ctx.organizationId) throw new Error('Select an organization before changing settings.');
-      if (!ctx.isSuperAdmin && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
+      const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
+      if (!targetOrganizationId) throw new Error('Select an organization within your authorized scope before changing settings.');
+      if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
         throw new Error('Only the organization owner or administrator can change organization settings.');
       }
-      const ref=ctx.db.doc(`organizations/${ctx.organizationId}/settings/${collection === 'settings' ? 'settings' : 'curriculum'}`);
+      const ref=ctx.db.doc(`organizations/${targetOrganizationId}/settings/${collection === 'settings' ? 'settings' : 'curriculum'}`);
       if (action === 'delete') {
         const existing = await ref.get();
         if (!existing.exists) return res.status(200).json({ok:true,id});
@@ -674,7 +678,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ok:true,id});
       }
       const incoming=body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
-      await ref.set({...incoming, organizationId:ctx.organizationId, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid},{merge:true});
+      await ref.set({...incoming, organizationId:targetOrganizationId, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid},{merge:true});
       return res.status(200).json({ok:true,item:{id,...(await ref.get()).data()}});
     }
 
