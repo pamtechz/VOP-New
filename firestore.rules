@@ -715,13 +715,23 @@ service cloud.firestore {
     }
     match /districts/{id} {
       allow get, list: if canReadHierarchyRecord('districts', id, resource.data);
-      allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate('districts', id);
-      allow delete: if isSuperAdmin() || conferenceAdminForDelete('districts', id);
+      allow create, update: if isSuperAdmin()
+        || unionAdminForCreateUpdate('districts', id)
+        || conferenceAdminForCreateUpdate('districts', id);
+      allow delete: if isSuperAdmin()
+        || unionAdminForDelete('districts', id)
+        || conferenceAdminForDelete('districts', id);
     }
     match /churches/{id} {
       allow get, list: if canReadHierarchyRecord('churches', id, resource.data);
-      allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate('churches', id);
-      allow delete: if isSuperAdmin() || districtAdminForDelete('churches', id);
+      allow create, update: if isSuperAdmin()
+        || unionAdminForCreateUpdate('churches', id)
+        || conferenceAdminForCreateUpdate('churches', id)
+        || districtAdminForCreateUpdate('churches', id);
+      allow delete: if isSuperAdmin()
+        || unionAdminForDelete('churches', id)
+        || conferenceAdminForDelete('churches', id)
+        || districtAdminForDelete('churches', id);
     }
 
     // Legacy platform curriculum remains available only when explicitly published.
