@@ -39,13 +39,37 @@ export default async function handler(req: Request, res: Response) {
       const ref = bootstrapDb.doc(`organizations/${organizationId}`);
       if ((await ref.get()).exists) throw new Error('That organization already exists.');
       const now = new Date().toISOString();
-      await ref.set({ id: organizationId, name, slug: slug(name), status: 'active', ownerUid: ctx.auth.uid, createdAt: now, updatedAt: now });
-      await ref.collection('members').doc(ctx.auth.uid).set({ uid: ctx.auth.uid, organizationId, role: 'owner', active: true, joinedAt: now, updatedAt: now });
+      await ref.set({ id: organizationId, name, slug: slug(name), status: 'active', ownerUid: '', createdAt: now, updatedAt: now });
       return res.status(200).json({ ok: true, item: { id: organizationId, name, status: 'active' } });
     }
     if (action === 'list') {
       if (!ctx.isSuperAdmin) {
-        requireOrgRole(ctx, ['owner','admin']);
+        if (action === 'acceptInvite') {
+      const token = String(body.token || '').trim();
+      if (!token) throw new Error('Invitation token is required.');
+      const invite = await bootstrapDb.doc(`organizationInvites/${token}`).get();
+      if (!invite.exists) throw new Error('This invitation is not valid.');
+      const data = invite.data() || {};
+      if (data.status !== 'pending' || new Date(String(data.expiresAt || 0)).getTime() < Date.now()) throw new Error('This invitation has expired or has already been used.');
+      const email = String(ctx.auth.email || '').trim().toLowerCase();
+      if (email !== String(data.email || '').trim().toLowerCase()) throw new Error('Sign in with the email address that received this invitation.');
+      const organizationId = String(data.organizationId || '');
+      const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
+      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const existingProfile = await bootstrapDb.doc(`users/${ctx.auth.uid}`).get();
+      const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
+      if (existingOrganizationId && existingOrganizationId !== organizationId) {
+        throw new Error('This account is already assigned to another organization. An account cannot accept an invitation from a second tenant.');
+      }
+      const now = new Date().toISOString();
+      await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
+      await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await bootstrapDb.doc(`organizationInvites/${token}`).set({status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},{merge:true});
+      return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
+    }
+
+
+    requireOrgRole(ctx, ['owner','admin']);
         const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
         const data = organization.data() || {};
         const members = await organization.ref.collection('members').where('active','==',true).get();
@@ -145,28 +169,63 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ok:true,item:{email,role:inviteRole,expiresAt,inviteUrl,emailSent:Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL)}});
     }
 
-    if (action === 'acceptInvite') {
-      const token = String(body.token || '').trim();
-      if (!token) throw new Error('Invitation token is required.');
-      const invite = await bootstrapDb.doc(`organizationInvites/${token}`).get();
-      if (!invite.exists) throw new Error('This invitation is not valid.');
-      const data = invite.data() || {};
-      if (data.status !== 'pending' || new Date(String(data.expiresAt || 0)).getTime() < Date.now()) throw new Error('This invitation has expired or has already been used.');
-      const email = String(ctx.auth.email || '').trim().toLowerCase();
-      if (email !== String(data.email || '').trim().toLowerCase()) throw new Error('Sign in with the email address that received this invitation.');
-      const organizationId = String(data.organizationId || '');
-      const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
-      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
-      const existingProfile = await bootstrapDb.doc(`users/${ctx.auth.uid}`).get();
-      const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
-      if (existingOrganizationId && existingOrganizationId !== organizationId) {
-        throw new Error('This account is already assigned to another organization. An account cannot accept an invitation from a second tenant.');
+    if (action === 'assignOwner') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can assign organization ownership.');
+      const uid = String(body.uid || '').trim();
+      const organizationId = String(body.organizationId || '').trim();
+      if (!uid || !organizationId) throw new Error('An organization and user are required.');
+      const organizationRef = bootstrapDb.doc(`organizations/${organizationId}`);
+      const organizationSnap = await organizationRef.get();
+      if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') throw new Error('The organization is not available.');
+
+      const targetProfileRef = bootstrapDb.doc(`users/${uid}`);
+      const targetProfileSnap = await targetProfileRef.get();
+      if (!targetProfileSnap.exists) throw new Error('The selected user account does not exist.');
+      const targetProfile = targetProfileSnap.data() || {};
+      const platformRole = String(targetProfile.role || '').trim();
+      if (platformRole === 'super_admin' || ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole)) {
+        throw new Error('Platform or hierarchy administrators cannot be assigned as organization owners.');
       }
+
+      const previousOwnerUid = String(organizationSnap.data()?.ownerUid || '').trim();
+      const previousOwnerProfileRef = previousOwnerUid ? bootstrapDb.doc(`users/${previousOwnerUid}`) : null;
+      const previousOwnerMemberRef = previousOwnerUid ? organizationRef.collection('members').doc(previousOwnerUid) : null;
+      const targetMemberRef = organizationRef.collection('members').doc(uid);
       const now = new Date().toISOString();
-      await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
-      await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      await bootstrapDb.doc(`organizationInvites/${token}`).set({status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},{merge:true});
-      return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
+
+      await bootstrapDb.runTransaction(async transaction => {
+        if (previousOwnerUid && previousOwnerUid !== uid && previousOwnerProfileRef && previousOwnerMemberRef) {
+          const previousProfileSnap = await transaction.get(previousOwnerProfileRef);
+          const previousMemberSnap = await transaction.get(previousOwnerMemberRef);
+          if (previousMemberSnap.exists && previousProfileSnap.exists) {
+            transaction.set(previousOwnerMemberRef, { role:'admin', active:true, updatedAt:now }, { merge:true });
+            transaction.set(previousOwnerProfileRef, { organizationId, organizationRole:'admin', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+          }
+        }
+        transaction.set(targetMemberRef, {
+          uid, organizationId, role:'owner', active:true,
+          joinedAt:String(targetProfile.organizationId || '') === organizationId ? String(targetProfile.joinedAt || now) : now,
+          assignedBy:ctx.auth.uid, updatedAt:now
+        }, { merge:true });
+        transaction.set(targetProfileRef, {
+          organizationId, organizationRole:'owner', updatedAt:FieldValue.serverTimestamp()
+        }, { merge:true });
+        transaction.set(organizationRef, { ownerUid:uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      });
+
+      const authService = getAuth(bootstrapDb.app);
+      await authService.setCustomUserClaims(uid, { role:'student', organizationId, organizationRole:'owner' });
+      if (previousOwnerUid && previousOwnerUid !== uid) {
+        await authService.setCustomUserClaims(previousOwnerUid, { role:'student', organizationId, organizationRole:'admin' }).catch(() => undefined);
+      }
+      await writeTenantAudit(
+        { db:bootstrapDb, auth:ctx.auth, profile:ctx.profile, organizationId, membership:{role:'owner',active:true}, isSuperAdmin:true },
+        'organization.owner.assign',
+        organizationRef.path,
+        organizationSnap.data(),
+        { ownerUid:uid }
+      );
+      return res.status(200).json({ ok:true, item:{organizationId, ownerUid:uid} });
     }
 
     if (action === 'searchUsers') {
