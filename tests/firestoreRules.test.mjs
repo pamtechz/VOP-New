@@ -344,3 +344,51 @@ test('global resource ownership is isolated across organization and hierarchy co
     await environment.cleanup();
   }
 });
+
+
+test('nested hierarchy fields remain authorized by Firestore rules', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const db = adminContext.firestore();
+      await db.doc('users/union-admin').set({
+        uid:'union-admin', role:'union_admin', adminNodeId:'union-1', adminNodeType:'union', organizationId:'',
+      });
+      await db.doc('organizations/nested-org').set({
+        id:'nested-org', name:'Nested Organization', hierarchy:{ unionId:'union-1' },
+      });
+      await db.doc('conferences/nested-conf').set({
+        id:'nested-conf', name:'Nested Conference', hierarchy:{ unionId:'union-1' },
+      });
+      await db.doc('districts/nested-dist').set({
+        id:'nested-dist', name:'Nested District', hierarchy:{ unionId:'union-1', conferenceId:'nested-conf' },
+      });
+      await db.doc('churches/nested-church').set({
+        id:'nested-church', name:'Nested Church', hierarchy:{ unionId:'union-1', conferenceId:'nested-conf', districtId:'nested-dist', churchId:'nested-church' },
+      });
+      await db.doc('users/nested-user').set({
+        uid:'nested-user', role:'student', organizationId:'nested-org',
+        hierarchy:{ unionId:'union-1' },
+      });
+      await db.doc('certificates/nested-cert').set({
+        candidateId:'nested-user', organizationId:'nested-org',
+        hierarchy:{ unionId:'union-1' }, certificateNumber:'NESTED-1',
+      });
+    });
+
+    const unionAdmin = environment.authenticatedContext('union-admin').firestore();
+    await assertSucceeds(unionAdmin.doc('organizations/nested-org').get());
+    await assertSucceeds(unionAdmin.doc('conferences/nested-conf').get());
+    await assertSucceeds(unionAdmin.doc('districts/nested-dist').get());
+    await assertSucceeds(unionAdmin.doc('churches/nested-church').get());
+    await assertSucceeds(unionAdmin.doc('users/nested-user').get());
+    await assertSucceeds(unionAdmin.doc('certificates/nested-cert').get());
+    await assertFails(unionAdmin.doc('organizations/foreign-nested').get());
+  } finally {
+    await environment.cleanup();
+  }
+});
