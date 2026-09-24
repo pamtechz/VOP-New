@@ -156,7 +156,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'archiveGuide') {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
       const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim();
-      if (!language(lang) || !effectiveOrganizationId) throw new Error('A valid language and organization are required.');
+      if (!language(lang) || (!effectiveOrganizationId && !ctx.isSuperAdmin)) throw new Error('A valid language is required; an organization is required unless you are the VOP Super Admin.');
       const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
