@@ -334,9 +334,15 @@ service cloud.firestore {
 
     // Platform configuration remains controlled by the VOP Super Admin.
     match /system/settings {
-      allow get: if true;
+      allow get: if isSuperAdmin();
       allow list: if false;
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /tenantSettings/{tenantId}/settings {
+      allow get: if isHierarchyTenant() && tenantId == hierarchyTenantId();
+      allow list: if false;
+      allow create, update, delete: if isHierarchyTenant() && tenantId == hierarchyTenantId();
     }
 
     // First-class SaaS organizations and memberships.
