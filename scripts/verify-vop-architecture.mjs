@@ -44,7 +44,7 @@ const checks = [
 ];
 const errors = [];
 const localizationGuardSource = read('src/components/admin/ContentStudio.tsx');
-if (/<\\{t\\(|'\\{t\\(|"\\{t\\(/.test(localizationGuardSource)) {
+if (localizationGuardSource.includes('<{t(') || localizationGuardSource.includes("'{t(") || localizationGuardSource.includes('"{t(')) {
   errors.push('src/components/admin/ContentStudio.tsx: malformed localization expression detected');
 }
 for (const [file, needles] of checks) {
