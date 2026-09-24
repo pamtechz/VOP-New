@@ -61,20 +61,20 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
             <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
           </div>
           {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('navigation.admin', 'Admin Panel')}</button>}
-          <button type="button" style={itemStyle} onClick={() => navigate('personal-settings')}><UserCheck size={24}/<>{t('navigation.personal_settings','Personal Settings')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/<>{t('navigation.about','About')}</button>
-          <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/<>{t('navigation.logout','Logout')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('personal-settings')}><UserCheck size={24}/>{t('navigation.personal_settings','Personal Settings')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>{t('navigation.about','About')}</button>
+          <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/>{t('navigation.logout','Logout')}</button>
         </div>
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('certificates.my_certificate', 'My Certificate')}</button>
-        <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/<>{t('navigation.announcements','Announcements')}</button>
-        {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/<>{t('navigation.mentor','Talk to my mentor')}</button>}
-        <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/<>{t('common.whats_new',"What's New")}</button>
+        <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>{t('navigation.announcements','Announcements')}</button>
+        {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/>{t('navigation.mentor','Talk to my mentor')}</button>}
+        <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>{t('common.whats_new',"What's New")}</button>
         {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management, announcements and graduation progress are now connected to the VOP account and organization services.</p>}
-        <button type="button" style={{ ...itemStyle, borderTop: '1px solid #e5e7eb' }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><BookOpen size={24}/<>{t('navigation.ministry_services','More ministry services')} {expanded ? '−' : '+'}</button>
+        <button type="button" style={{ ...itemStyle, borderTop: '1px solid #e5e7eb' }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><BookOpen size={24}/>{t('navigation.ministry_services','More ministry services')} {expanded ? '−' : '+'}</button>
         {expanded && <div style={{ borderRadius: '1rem', background: '#fff' }}>
-          <button type="button" style={itemStyle} onClick={() => navigate('resources')}><BookOpen size={22}/<>{t('navigation.library_books','Library & Books')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('prayer')}><HeartHandshake size={22}/<>{t('navigation.prayer_requests','Prayer Requests')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('radio')}><Radio size={22}/<>{t('navigation.radio_broadcasts','Radio & Broadcasts')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('resources')}><BookOpen size={22}/>{t('navigation.library_books','Library & Books')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('prayer')}><HeartHandshake size={22}/>{t('navigation.prayer_requests','Prayer Requests')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('radio')}><Radio size={22}/>{t('navigation.radio_broadcasts','Radio & Broadcasts')}</button>
           {settings.whatsappNumber && <a style={{ ...itemStyle, textDecoration: 'none' }} href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={22}/>Contact WhatsApp</a>}
         </div>}
       </div>
