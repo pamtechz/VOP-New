@@ -312,8 +312,41 @@ service cloud.firestore {
         && data.get(fieldName, '') == userDoc().data.get('adminNodeId', '');
     }
 
+    function userHierarchyRecordScope(collectionName, recordId, data) {
+      return signedIn()
+        && (
+          (collectionName == 'unions' && (
+            recordId == userDoc().data.get('unionId', '')
+            || data.get('id', '') == userDoc().data.get('unionId', '')
+          ))
+          || (collectionName == 'conferences' && (
+            recordId == userDoc().data.get('conferenceId', '')
+            || data.get('id', '') == userDoc().data.get('conferenceId', '')
+          ))
+          || (collectionName == 'districts' && (
+            recordId == userDoc().data.get('districtId', '')
+            || data.get('id', '') == userDoc().data.get('districtId', '')
+          ))
+          || (collectionName == 'churches' && (
+            recordId == userDoc().data.get('churchId', '')
+            || data.get('id', '') == userDoc().data.get('churchId', '')
+          ))
+          || (
+            isOrgMember(organizationIdForUser())
+            && exists(/databases/$(database)/documents/organizations/$(organizationIdForUser()))
+            && (
+              (collectionName == 'unions' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('unionId', ''))
+              || (collectionName == 'conferences' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('conferenceId', ''))
+              || (collectionName == 'districts' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('districtId', ''))
+              || (collectionName == 'churches' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('churchId', ''))
+            )
+          )
+        );
+    }
+
     function canReadHierarchyRecord(collectionName, recordId, data) {
       return isSuperAdmin()
+        || userHierarchyRecordScope(collectionName, recordId, data)
         || (
           isHierarchyTenant()
           && (
