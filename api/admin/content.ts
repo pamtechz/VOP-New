@@ -36,11 +36,24 @@ function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<str
   if (ctx.isSuperAdmin) return true;
   const role = String(ctx.profile.role || '');
   const nodeId = String(ctx.profile.adminNodeId || '');
-  if (!nodeId) return false;
-  if (collection === 'unions') return role === 'super_admin';
-  if (collection === 'conferences') return role === 'union_admin' && String(data?.unionId || '') === nodeId;
-  if (collection === 'districts') return role === 'conference_admin' && String(data?.conferenceId || '') === nodeId;
-  if (collection === 'churches') return (role === 'district_admin' && String(data?.districtId || '') === nodeId) || (role === 'church_admin' && String(data?.id || '') === nodeId);
+  if (!nodeId || !data) return false;
+  const id = String(data.id || '');
+  if (role === 'union_admin') {
+    if (collection === 'unions') return id === nodeId;
+    if (collection === 'conferences') return String(data.unionId || '') === nodeId;
+    if (collection === 'districts') return String(data.unionId || '') === nodeId;
+    if (collection === 'churches') return String(data.unionId || '') === nodeId;
+  }
+  if (role === 'conference_admin') {
+    if (collection === 'conferences') return id === nodeId;
+    if (collection === 'districts') return String(data.conferenceId || '') === nodeId;
+    if (collection === 'churches') return String(data.conferenceId || '') === nodeId;
+  }
+  if (role === 'district_admin') {
+    if (collection === 'districts') return id === nodeId;
+    if (collection === 'churches') return String(data.districtId || '') === nodeId;
+  }
+  if (role === 'church_admin' && collection === 'churches') return id === nodeId;
   return false;
 }
 
@@ -304,8 +317,18 @@ export default async function handler(req: Request, res: Response) {
           snap = await ctx.db.collection('unions').where('__name__','==',nodeId).get();
         } else if (collection === 'conferences' && role === 'union_admin') {
           snap = await ctx.db.collection('conferences').where('unionId','==',nodeId).get();
+        } else if (collection === 'districts' && role === 'union_admin') {
+          snap = await ctx.db.collection('districts').where('unionId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'union_admin') {
+          snap = await ctx.db.collection('churches').where('unionId','==',nodeId).get();
+        } else if (collection === 'conferences' && role === 'conference_admin') {
+          snap = await ctx.db.collection('conferences').where('__name__','==',nodeId).get();
         } else if (collection === 'districts' && role === 'conference_admin') {
           snap = await ctx.db.collection('districts').where('conferenceId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'conference_admin') {
+          snap = await ctx.db.collection('churches').where('conferenceId','==',nodeId).get();
+        } else if (collection === 'districts' && role === 'district_admin') {
+          snap = await ctx.db.collection('districts').where('__name__','==',nodeId).get();
         } else if (collection === 'churches' && role === 'district_admin') {
           snap = await ctx.db.collection('churches').where('districtId','==',nodeId).get();
         } else if (collection === 'churches' && role === 'church_admin') {
@@ -485,7 +508,7 @@ export default async function handler(req: Request, res: Response) {
 
     const id = safeId(body.id);
     if (GLOBAL_COLLECTIONS.has(collection)) {
-      if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('An organization membership is required before contributing global content.');
+      if (!ctx.organizationId && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required before contributing global content.');
       const ref = ctx.db.doc(collection + '/' + id);
       const existing = await ref.get();
       if (action === 'delete') {
