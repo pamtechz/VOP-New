@@ -44,6 +44,33 @@ function profileType(profile: Record<string, unknown> | undefined, authUser: Use
   return 'learner';
 }
 
+function hierarchyRole(role: string) {
+  return ['union_admin','conference_admin','district_admin','church_admin'].includes(role) ? role : '';
+}
+
+function hierarchyUserInScope(adminRole: string, nodeId: string, profile: Record<string, unknown>) {
+  if (!nodeId) return false;
+  const userRole = String(profile.role || '');
+  if (userRole === 'super_admin') return false;
+  const unionId = String(profile.unionId || '').trim();
+  const conferenceId = String(profile.conferenceId || '').trim();
+  const districtId = String(profile.districtId || '').trim();
+  const churchId = String(profile.churchId || '').trim();
+  if (adminRole === 'union_admin') return unionId === nodeId;
+  if (adminRole === 'conference_admin') return conferenceId === nodeId;
+  if (adminRole === 'district_admin') return districtId === nodeId;
+  if (adminRole === 'church_admin') return churchId === nodeId;
+  return false;
+}
+
+function hierarchyScopeQuery(role: string, nodeId: string) {
+  if (role === 'union_admin') return { field: 'unionId', value: nodeId };
+  if (role === 'conference_admin') return { field: 'conferenceId', value: nodeId };
+  if (role === 'district_admin') return { field: 'districtId', value: nodeId };
+  if (role === 'church_admin') return { field: 'churchId', value: nodeId };
+  return null;
+}
+
 function displayRole(type: ProfileType, profile: Record<string, unknown> | undefined): string {
   if (type === 'super_admin') return 'Super Admin';
   if (type === 'admin') return 'Admin';
@@ -258,8 +285,10 @@ export default async function handler(request: Request, response: Response) {
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;
     const tenant = await authenticateTenant(request, requestedOrganizationId);
     const db = tenant.db;
-    const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || ''));
-    if (!canManageTenantUsers) throw new Error('Only an organization owner or administrator can manage organization users.');
+    const tenantRole = String(tenant.profile.role || '').trim();
+    const hierarchyTenant = hierarchyRole(tenantRole);
+    const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || '')) || Boolean(hierarchyTenant);
+    if (!canManageTenantUsers) throw new Error('Only an authorized tenant administrator can manage users.');
     const tenantOrganizationId = tenant.organizationId;
 
     if (action === 'listOrganizations') {
@@ -272,9 +301,17 @@ export default async function handler(request: Request, response: Response) {
     }
 
     if (action === 'list') {
-      const users = tenant.isSuperAdmin && !tenantOrganizationId
-        ? await listAllUsers(authService)
-        : await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
+      let users: UserRecord[] = [];
+      if (tenant.isSuperAdmin && !tenantOrganizationId) {
+        users = await listAllUsers(authService);
+      } else if (hierarchyTenant) {
+        const scope = hierarchyScopeQuery(hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
+        if (!scope) throw new Error('The hierarchy tenant scope is not configured.');
+        const snapshots = await db.collection('users').where(scope.field, '==', scope.value).get();
+        users = await Promise.all(snapshots.docs.map(async snapshot => authService.getUser(snapshot.id)));
+      } else {
+        users = await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
+      }
       return response.status(200).json({ ok: true, items: await serializeUsers(db, users) });
     }
 
@@ -358,8 +395,14 @@ export default async function handler(request: Request, response: Response) {
     const targetProfileRef = db.doc(`users/${uid}`);
     const targetProfileSnapshot = await targetProfileRef.get();
     const targetProfileData = targetProfileSnapshot.data() || {};
-    if (!tenant.isSuperAdmin && String(targetProfileData.organizationId || '') !== tenantOrganizationId) {
-      throw new Error('This user belongs to another organization.');
+    if (!tenant.isSuperAdmin) {
+      if (hierarchyTenant) {
+        if (!hierarchyUserInScope(hierarchyTenant, String(tenant.profile.adminNodeId || '').trim(), targetProfileData)) {
+          throw new Error('This user is outside your assigned hierarchy scope.');
+        }
+      } else if (String(targetProfileData.organizationId || '') !== tenantOrganizationId) {
+        throw new Error('This user belongs to another organization.');
+      }
     }
 
     if (action === 'update') {
@@ -437,16 +480,16 @@ export default async function handler(request: Request, response: Response) {
 
       // Super Admin may delete any user who belongs to an organization. Tenant
       // administrators are restricted to their own tenant.
-      if (!tenant.isSuperAdmin && targetOrganizationId !== tenantOrganizationId) {
+      if (!tenant.isSuperAdmin && !hierarchyTenant && targetOrganizationId !== tenantOrganizationId) {
         throw new Error('This user belongs to another organization.');
       }
       if (tenant.isSuperAdmin && tenantOrganizationId && targetOrganizationId !== tenantOrganizationId) {
         throw new Error('This user does not belong to the selected organization.');
       }
       if (!targetOrganizationId) {
-        if (!tenant.isSuperAdmin) throw new Error('This user is not a member of your organization.');
+        if (!tenant.isSuperAdmin && !hierarchyTenant) throw new Error('This user is not a member of your organization.');
         const platformRole = String(targetData.role || '').trim();
-        if (platformRole === 'super_admin') throw new Error('Super Admin accounts are platform-level accounts and are not organization members.');
+        if (platformRole === 'super_admin' || hierarchyRole(platformRole)) throw new Error('Platform and hierarchy administrator accounts cannot be removed through organization membership management.');
       }
 
       if (targetOrganizationId) {
