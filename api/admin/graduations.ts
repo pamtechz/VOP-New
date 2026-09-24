@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -150,7 +150,6 @@ async function decide(req: Request, res: Response) {
   if (!Number.isInteger(expectedRevision) || expectedRevision < 1) return res.status(400).json({ error: 'The current request revision is required.' });
 
   let ctx = await authenticateTenant(req, undefined, true);
-  if (!ctx.organizationId && !ctx.isSuperAdmin) return res.status(403).json({ error: 'An organization is required to approve graduation requests.' });
   const ref = ctx.db.doc(`graduationRequests/${requestIdValue}`);
   const snapshot = await ref.get();
   if (!snapshot.exists) return res.status(404).json({ error: 'Graduation request was not found.' });
@@ -158,7 +157,15 @@ async function decide(req: Request, res: Response) {
   const requestOrganizationId = text(current.organizationId);
   if (!requestOrganizationId) return res.status(409).json({ error: 'The graduation request has no organization scope.' });
   if (ctx.isSuperAdmin && !ctx.organizationId) ctx = await authenticateTenant(req, requestOrganizationId);
-  if (text(current.organizationId) !== ctx.organizationId) return res.status(403).json({ error: 'This graduation request belongs to another organization.' });
+  if (!ctx.isSuperAdmin) {
+    if (ctx.tenantType === 'organization') {
+      if (text(current.organizationId) !== ctx.organizationId) return res.status(403).json({ error: 'This graduation request belongs to another organization.' });
+    } else if (ctx.tenantType === 'hierarchy') {
+      if (!(await organizationInHierarchyScope(ctx, requestOrganizationId))) return res.status(403).json({ error: 'This graduation request belongs outside your hierarchy scope.' });
+    } else {
+      return res.status(403).json({ error: 'An authorized tenant is required to approve graduation requests.' });
+    }
+  }
   const stages = await loadWorkflow(ctx);
   if (['approved', 'rejected'].includes(text(current.status))) return res.status(409).json({ error: 'This graduation request has already reached a final decision.' });
 
