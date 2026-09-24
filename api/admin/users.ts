@@ -83,10 +83,13 @@ function organizationInHierarchy(data: Record<string, unknown>, role: string, no
 
 async function hierarchyOrganizations(db: Firestore, role: string, nodeId: string) {
   if (!nodeId) return [];
+  const scope = hierarchyScopeQuery(role, nodeId);
+  const scopedUsers = scope ? await db.collection('users').where(scope.field, '==', scope.value).get() : { docs: [] };
+  const inferredOrganizationIds = new Set(scopedUsers.docs.map(doc => String(doc.data()?.organizationId || '').trim()).filter(Boolean));
   const snapshot = await db.collection('organizations').get();
   return snapshot.docs.filter(doc => {
     const data = doc.data() || {};
-    return data.status === 'active' && organizationInHierarchy(data, role, nodeId);
+    return data.status === 'active' && (organizationInHierarchy(data, role, nodeId) || inferredOrganizationIds.has(doc.id));
   }).map(doc => ({ id: doc.id, name: String(doc.data().name || doc.id), status: String(doc.data().status || 'active') }));
 }
 
