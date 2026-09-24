@@ -710,8 +710,12 @@ service cloud.firestore {
     }
     match /conferences/{id} {
       allow get, list: if canReadHierarchyRecord('conferences', id, resource.data);
-      allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate('conferences', id);
-      allow delete: if isSuperAdmin() || unionAdminForDelete('conferences', id);
+      allow create, update: if isSuperAdmin()
+        || unionAdminForCreateUpdate('conferences', id)
+        || conferenceAdminForCreateUpdate('conferences', id);
+      allow delete: if isSuperAdmin()
+        || unionAdminForDelete('conferences', id)
+        || conferenceAdminForDelete('conferences', id);
     }
     match /districts/{id} {
       allow get, list: if canReadHierarchyRecord('districts', id, resource.data);
