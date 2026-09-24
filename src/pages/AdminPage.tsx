@@ -167,6 +167,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {id:'notifications',label:'Notifications',icon:Bell},
       ];
 
+  useEffect(() => {
+    if (!availableSettingsTabs.some(tab => tab.id === settingsSubtab)) setSettingsSubtab('general');
+  }, [currentUser.role, settingsSubtab]);
+
   const showMessage = (value: string) => {
     setMessage(value);
     setError('');
