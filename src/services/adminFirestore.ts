@@ -154,58 +154,87 @@ function tenantSubscription(
   void currentTenantScope().then(scope => {
     if (cancelled) return;
     const ref = collection(getDb(), collectionName);
-    let source: import('firebase/firestore').Query | null = null;
+    let sources: import('firebase/firestore').Query[] = [];
     if (scope.organizationId && TENANT_COLLECTIONS.has(collectionName)) {
-      source = query(ref, where('organizationId', '==', scope.organizationId));
+      sources = [query(ref, where('organizationId', '==', scope.organizationId))];
     } else if (scope.superAdmin) {
-      source = ref;
+      sources = [ref];
     } else if (scope.nodeId && ['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
-      // Hierarchy administrators must receive only the hierarchy records they
-      // are authorized to manage. These queries mirror firestore.rules so the
-      // UI does not appear empty merely because a scoped administrator is not
-      // allowed to query the whole platform collection.
+      // Hierarchy administrators can see only records in their hierarchy scope.
+      // Query both legacy flat hierarchy fields and the canonical nested
+      // hierarchy.* representation, then merge snapshots by document path.
       const hierarchyField =
         scope.role === 'union_admin' ? 'unionId'
         : scope.role === 'conference_admin' ? 'conferenceId'
         : scope.role === 'district_admin' ? 'districtId'
         : 'churchId';
 
+      const addHierarchyQueries = (field: string) => {
+        sources.push(query(ref, where(field, '==', scope.nodeId)));
+        sources.push(query(ref, where('hierarchy.' + field, '==', scope.nodeId)));
+      };
+
       if (collectionName === 'unions') {
-        source = scope.role === 'union_admin'
-          ? query(ref, where('__name__', '==', scope.nodeId))
-          : null;
+        if (scope.role === 'union_admin') {
+          sources.push(query(ref, where('__name__', '==', scope.nodeId)));
+          sources.push(query(ref, where('id', '==', scope.nodeId)));
+          sources.push(query(ref, where('hierarchy.unionId', '==', scope.nodeId)));
+        }
       } else if (collectionName === 'conferences') {
-        source = scope.role === 'conference_admin'
-          ? query(ref, where('__name__', '==', scope.nodeId))
-          : scope.role === 'union_admin'
-            ? query(ref, where('unionId', '==', scope.nodeId))
-            : null;
+        if (scope.role === 'conference_admin') {
+          sources.push(query(ref, where('__name__', '==', scope.nodeId)));
+          sources.push(query(ref, where('id', '==', scope.nodeId)));
+          sources.push(query(ref, where('hierarchy.conferenceId', '==', scope.nodeId)));
+        } else if (scope.role === 'union_admin') {
+          addHierarchyQueries('unionId');
+        }
       } else if (collectionName === 'districts') {
-        source = scope.role === 'district_admin'
-          ? query(ref, where('__name__', '==', scope.nodeId))
-          : scope.role === 'conference_admin'
-            ? query(ref, where('conferenceId', '==', scope.nodeId))
-            : scope.role === 'union_admin'
-              ? query(ref, where('unionId', '==', scope.nodeId))
-              : null;
+        if (scope.role === 'district_admin') {
+          sources.push(query(ref, where('__name__', '==', scope.nodeId)));
+          sources.push(query(ref, where('id', '==', scope.nodeId)));
+          sources.push(query(ref, where('hierarchy.districtId', '==', scope.nodeId)));
+        } else if (scope.role === 'conference_admin') {
+          addHierarchyQueries('conferenceId');
+        } else if (scope.role === 'union_admin') {
+          addHierarchyQueries('unionId');
+        }
       } else if (collectionName === 'churches') {
-        source = scope.role === 'church_admin'
-          ? query(ref, where('__name__', '==', scope.nodeId))
-          : query(ref, where(hierarchyField, '==', scope.nodeId));
+        if (scope.role === 'church_admin') {
+          sources.push(query(ref, where('__name__', '==', scope.nodeId)));
+          sources.push(query(ref, where('id', '==', scope.nodeId)));
+          sources.push(query(ref, where('hierarchy.churchId', '==', scope.nodeId)));
+        } else if (scope.role === 'district_admin') {
+          addHierarchyQueries('districtId');
+        } else if (scope.role === 'conference_admin') {
+          addHierarchyQueries('conferenceId');
+        } else if (scope.role === 'union_admin') {
+          addHierarchyQueries('unionId');
+        }
       } else if (['users','candidates'].includes(collectionName)) {
-        source = query(ref, where(hierarchyField, '==', scope.nodeId));
-      } else {
-        // Hierarchy tenants must never fall back to an unscoped collection read.
-        source = null;
+        addHierarchyQueries(hierarchyField);
       }
-    } else {
-      source = null;
     }
-    if (!source) {
+    if (!sources.length) {
       callback({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot);
       return;
     }
-    stop = onSnapshot(source, callback, err => onError?.(err));
+    if (sources.length === 1) {
+      stop = onSnapshot(sources[0], callback, err => onError?.(err));
+      return;
+    }
+    const buckets = new Map<string, import('firebase/firestore').QuerySnapshot>();
+    const emit = () => {
+      const docs = new Map<string, import('firebase/firestore').QueryDocumentSnapshot>();
+      buckets.forEach(snapshot => snapshot.docs.forEach(item => docs.set(item.ref.path, item)));
+      callback({ docs: [...docs.values()] } as unknown as import('firebase/firestore').QuerySnapshot);
+    };
+    const childStops = sources.map((source, index) =>
+      onSnapshot(source, snapshot => {
+        buckets.set(String(index), snapshot);
+        emit();
+      }, err => onError?.(err))
+    );
+    stop = () => childStops.forEach(unsubscribe => unsubscribe());
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Tenant data could not be loaded.')));
   return () => { cancelled = true; stop(); };
 }
