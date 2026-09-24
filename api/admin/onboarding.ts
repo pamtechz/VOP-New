@@ -48,7 +48,6 @@ export default async function handler(req: Request, res: Response) {
     const batch = ctx.db.batch();
     batch.set(ref, data);
     batch.set(ref.collection('settings').doc('organization'), { ...settings, organizationId, updatedAt: now }, { merge: true });
-    batch.set(ref.collection('members').doc(ctx.auth.uid), { uid: ctx.auth.uid, organizationId, role: 'owner', active: true, joinedAt: now, createdBy: ctx.auth.uid }, { merge: true });
     batch.set(ref.collection('onboarding').doc('state'), { status: 'initialized', profile, branding, settings, completedSteps: [], updatedAt: now }, { merge: true });
     await batch.commit();
     await writeTenantAudit(ctx, 'organization.initialize', ref.path, undefined, data);
