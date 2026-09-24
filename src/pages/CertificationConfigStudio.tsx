@@ -42,7 +42,6 @@ const EMPTY_PREVIEW_CERTIFICATE: CertificateArtworkRecord = {
 const DEFAULT_TEMPLATE: CertificateTemplateConfig = {
   width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundUrl: DEFAULT_BACKGROUND,
   elements: [
-    { id: 'title', type: 'text', x: 35.5, y: 1.7, width: 29, height: 4.4, text: 'COURSE CERTIFICATE', fontSize: 27, fontWeight: 800, color: '#111111', textAlign: 'center' },
     { id: 'certify', type: 'text', x: 38.0, y: 30.8, width: 24, height: 3.3, text: 'This is to certify that', fontSize: 14.5, fontWeight: 600, color: '#111111', textAlign: 'center' },
     { id: 'candidateName', type: 'candidateName', x: 25.5, y: 36.2, width: 49, height: 6.8, fontSize: 39, fontWeight: 800, color: '#111111', textAlign: 'center' },
     { id: 'completed', type: 'text', x: 36.0, y: 44.6, width: 28, height: 3.2, text: 'has successfully completed the', fontSize: 14.5, fontWeight: 600, color: '#111111', textAlign: 'center' },
@@ -82,7 +81,7 @@ function normalizeTemplate(template?: CertificateTemplateConfig, backgroundUrl?:
   const source = template?.elements?.length ? template : DEFAULT_TEMPLATE;
   return {
     width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundUrl: source.backgroundUrl || backgroundUrl || DEFAULT_BACKGROUND,
-    elements: (source.elements || []).map(element => {
+    elements: (source.elements || []).filter(element => element.id !== 'title').map(element => {
       const isImage = element.type === 'image';
       const normalized: CertificateTemplateElement = {
         ...element,
@@ -109,7 +108,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
   const [selectedId, setSelectedId] = useState('title');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [zoom, setZoom] = useState(0.72);
+  const [zoom, setZoom] = useState(0.4);
 
   useEffect(() => {
     const nextTemplate = normalizeTemplate(config?.template, config?.backgroundUrl);
@@ -226,7 +225,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
         </aside>
 
         <section className="vop-cert-template-editor-stage">
-          <div className="vop-cert-template-stage-toolbar"><div><strong>Certificate canvas</strong><span>1513 × 1040 fixed artboard</span></div><div className="vop-cert-template-zoom"><button type="button" onClick={() => setZoom(value => clamp(value - .1, .4, 1))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(value => clamp(value + .1, .4, 1))}>+</button></div></div>
+          <div className="vop-cert-template-stage-toolbar"><div><strong>Certificate canvas</strong><span>1513 × 1040 fixed artboard · default view 40%</span></div><div className="vop-cert-template-zoom"><button type="button" onClick={() => setZoom(value => clamp(value - .1, .4, 1))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(value => clamp(value + .1, .4, 1))}>+</button><button type="button" onClick={() => setZoom(.4)} aria-label="Reset zoom">40%</button></div></div>
           <div className="vop-cert-template-scroll"><div className="vop-cert-template-artboard" tabIndex={0} role="application" aria-label="Certificate template editor. Use arrow keys to move the selected element." onKeyDown={handleCanvasKeyDown} style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
             <img className="vop-cert-template-editor-background" src={template.backgroundUrl || DEFAULT_BACKGROUND} alt=""/>
             {elements.map(element => {
