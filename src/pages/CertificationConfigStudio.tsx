@@ -83,7 +83,20 @@ function normalizeTemplate(template?: CertificateTemplateConfig, backgroundUrl?:
   const source = template?.elements?.length ? template : DEFAULT_TEMPLATE;
   return {
     width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundUrl: source.backgroundUrl || backgroundUrl || DEFAULT_BACKGROUND,
-    elements: (source.elements || []).map(element => ({ ...element, x: clamp(Number(element.x) || 0, 0, 100), y: clamp(Number(element.y) || 0, 0, 100), width: clamp(Number(element.width) || 1, 1, 100), height: clamp(Number(element.height) || 1, 1, 100) })),
+    elements: (source.elements || []).map(element => {
+      const isImage = element.type === 'image';
+      const normalized: CertificateTemplateElement = {
+        ...element,
+        x: clamp(Number(element.x) || 0, 0, 100),
+        y: clamp(Number(element.y) || 0, 0, 100),
+        width: clamp(Number(element.width) || 1, 1, 100),
+        height: clamp(Number(element.height) || 1, 1, 100),
+      };
+      if (isImage && normalized.id === 'seal' && !normalized.src) normalized.src = '/assets/vop_logo.png';
+      if (isImage && normalized.id === 'signature' && !normalized.src) normalized.src = '/assets/pm_logo.png';
+      if (isImage && normalized.id === 'appLogo' && !normalized.src) normalized.src = '/assets/vop_logo_2.png';
+      return normalized;
+    }),
   };
 }
 function normalizeBaseUrl(value: string) {
@@ -200,7 +213,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
               if (element.type === 'courseCode') content = previewCertificate.courseCode || '';
               if (element.type === 'date') content = '12 June 2023';
               if (element.type === 'certificateNumber') content = previewCertificate.certificateNumber;
-              if (element.type === 'image') { const src = element.id === 'seal' ? draft.sealUrl : element.id === 'signature' ? draft.signatureUrl : element.id === 'logo' ? draft.logoUrl : element.src; return src ? <img key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={{ ...style, objectFit: 'contain' }} src={src} alt=""/> : <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>Image</div>; }
+              if (element.type === 'image') {
+                const src = element.id === 'seal' ? (draft.sealUrl || element.src) : element.id === 'signature' ? (draft.signatureUrl || element.src) : element.id === 'logo' ? (draft.logoUrl || element.src) : element.src;
+                return src
+                  ? <img key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={{ ...style, objectFit: 'contain' }} src={src} alt=""/>
+                  : <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>Image</div>;
+              }
               return <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>{content}</div>;
             })}
           </div></div>
