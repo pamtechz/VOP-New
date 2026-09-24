@@ -110,9 +110,11 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const firestore = requireDb();
   const currentUser = auth?.currentUser;
   let organizationId = '';
+  let profileData: Record<string, unknown> = {};
   if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
-    organizationId = String(profile.data()?.organizationId || '').trim();
+    profileData = (profile.data() || {}) as Record<string, unknown>;
+    organizationId = String(profileData.organizationId || '').trim();
   }
 
   // Split queries by visibility. Firestore rules are not filters, so each query
@@ -142,6 +144,27 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
     : await getDoc(doc(firestore, 'system', 'settings'));
 
+  const hierarchyRole = String(profileData.role || '');
+  const hierarchyNodeId = String(profileData.adminNodeId || '').trim();
+  const ownHierarchyIds = {
+    unionId: String(profileData.unionId || '').trim(),
+    conferenceId: String(profileData.conferenceId || '').trim(),
+    districtId: String(profileData.districtId || '').trim(),
+    churchId: String(profileData.churchId || '').trim(),
+  };
+
+  const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
+    const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;
+    if (!currentUser) return null;
+    if (hierarchyRole === 'super_admin') return getDocs(ref);
+    if (hierarchyRole === 'union_admin' && idField === 'unionId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    if (hierarchyRole === 'conference_admin' && idField === 'conferenceId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    if (hierarchyRole === 'district_admin' && idField === 'districtId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    if (hierarchyRole === 'church_admin' && idField === 'churchId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    const id = ownHierarchyIds[idField];
+    return id ? getDocs(query(ref, where('__name__', '==', id))) : null;
+  };
+
   const [
     languageDocs,
     translationDocs,
@@ -166,11 +189,13 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     loadScoped('books', 'published'),
     loadScoped('radioBroadcasts', 'published'),
     loadScoped('playlists', 'published'),
-    getDocs(collection(firestore, 'unions')),
-    getDocs(collection(firestore, 'conferences')),
-    getDocs(collection(firestore, 'districts')),
-    getDocs(collection(firestore, 'churches')),
+    loadHierarchy<Union>('unions', 'unionId'),
+    loadHierarchy<Conference>('conferences', 'conferenceId'),
+    loadHierarchy<District>('districts', 'districtId'),
+    loadHierarchy<ChurchOrganization>('churches', 'churchId'),
   ]);
+
+  const hierarchyDocs = <T,>(snapshot: import('firebase/firestore').QuerySnapshot<T> | null) => snapshot?.docs.map(item => item.data()) || [];
 
   const languages = languageDocs
     .map(item => normalizeLanguage(item.id, item.data()))
