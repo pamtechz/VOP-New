@@ -240,12 +240,19 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
     else { const media = source?.provider === 'direct-video' ? videoRef.current : audioRef.current; if (media) media.playbackRate = next; }
   };
   const fullscreen = () => { const element = source?.provider === 'youtube' ? ytMountRef.current : videoRef.current; if (element) void element.requestFullscreen?.(); };
+  const advancePlaylist = () => {
+    if (playlistIndex >= 0 && playlistIndex < playlistItems.length - 1) {
+      selectProgramme(playlistItems[playlistIndex + 1]);
+      return true;
+    }
+    return false;
+  };
   const mediaEvents = {
     onTimeUpdate: (event: React.SyntheticEvent<HTMLMediaElement>) => setCurrent(event.currentTarget.currentTime || 0),
     onLoadedMetadata: (event: React.SyntheticEvent<HTMLMediaElement>) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0),
     onDurationChange: (event: React.SyntheticEvent<HTMLMediaElement>) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0),
     onPlay: () => { setPlaying(true); setWaiting(false); }, onPlaying: () => setWaiting(false), onPause: () => setPlaying(false),
-    onWaiting: () => setWaiting(true), onCanPlay: () => setWaiting(false), onEnded: () => setPlaying(false),
+    onWaiting: () => setWaiting(true), onCanPlay: () => setWaiting(false), onEnded: () => { if (!advancePlaylist()) setPlaying(false); },
     onVolumeChange: (event: React.SyntheticEvent<HTMLMediaElement>) => { setMuted(event.currentTarget.muted); setVolume(event.currentTarget.volume); },
     onRateChange: (event: React.SyntheticEvent<HTMLMediaElement>) => setRate(event.currentTarget.playbackRate),
     onError: () => { setPlaying(false); setError('The configured media could not be loaded.'); }
