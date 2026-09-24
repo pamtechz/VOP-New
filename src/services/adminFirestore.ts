@@ -103,6 +103,16 @@ function globalCollectionSubscription(
       return;
     }
     const organizationId = scope.organizationId;
+    // Hierarchy administrators have read access to global resources platform-wide,
+    // but mutation remains owner-only. Loading the full global collection here keeps
+    // the admin UI consistent with that policy; canEdit is still decided server-side.
+    if (['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
+      stops.push(onSnapshot(ref, snapshot => {
+        buckets.set('hierarchy-global', snapshot);
+        emit();
+      }, err => onError?.(err)));
+      return;
+    }
     const publishedField = collectionName === 'languages' ? 'enabled' : collectionName === 'translations' ? null : 'published';
     const sharedQuery = publishedField
       ? query(ref, where('sharingScope', '==', 'shared'), where(publishedField, '==', true))
@@ -607,14 +617,18 @@ export const subscribeTranslations = (
   void getDoc(doc(firestore, 'users', uid)).then(profile => {
     if (cancelled) return;
     const isSuperAdmin = String(profile.data()?.role || '') === 'super_admin';
+    const role = String(profile.data()?.role || '');
     const organizationId = String(profile.data()?.organizationId || '').trim();
     const superQuery = isSuperAdmin ? collection(firestore, 'translations') : null;
+    const hierarchyQuery = ['union_admin','conference_admin','district_admin','church_admin'].includes(role)
+      ? collection(firestore, 'translations')
+      : null;
     const sharedQuery = query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'));
     const organizationQuery = organizationId && !isSuperAdmin
       ? query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))
       : null;
 
-    stop = onSnapshot(superQuery || sharedQuery, snapshot => {
+    stop = onSnapshot(hierarchyQuery || superQuery || sharedQuery, snapshot => {
       void (async () => {
         const docs = [...snapshot.docs];
         if (organizationQuery) {
