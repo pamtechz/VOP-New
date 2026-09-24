@@ -91,15 +91,39 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
   const guideSnapshots = [];
   const currentUser = auth?.currentUser;
   let organizationId = '';
+  let profileRole = '';
+  let adminNodeId = '';
+  let scopedOrganizationIds: string[] = [];
 
   if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
-    organizationId = String(profile.data()?.organizationId || '').trim();
+    const profileData = profile.data() || {};
+    organizationId = String(profileData.organizationId || '').trim();
+    profileRole = String(profileData.role || '').trim();
+    adminNodeId = String(profileData.adminNodeId || '').trim();
   }
 
   const sharedGuides = await getDocs(query(collection(firestore, 'guides'), where('sharingScope', '==', 'shared'), where('published', '==', true)));
   guideSnapshots.push(...sharedGuides.docs);
-  if (organizationId) {
+
+  if (profileRole === 'super_admin') {
+    const platformGuides = await getDocs(query(collection(firestore, 'guides'), where('published', '==', true)));
+    guideSnapshots.push(...platformGuides.docs);
+  } else if (['union_admin','conference_admin','district_admin','church_admin'].includes(profileRole) && adminNodeId) {
+    const hierarchyField =
+      profileRole === 'union_admin' ? 'unionId'
+      : profileRole === 'conference_admin' ? 'conferenceId'
+      : profileRole === 'district_admin' ? 'districtId'
+      : 'churchId';
+    const organizations = await getDocs(query(collection(firestore, 'organizations'), where(hierarchyField, '==', adminNodeId)));
+    scopedOrganizationIds = organizations.docs.map(item => item.id).filter(Boolean);
+    if (scopedOrganizationIds.length) {
+      const scopedGuides = await Promise.all(scopedOrganizationIds.map(id =>
+        getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', id), where('published', '==', true)))
+      ));
+      scopedGuides.forEach(snapshot => guideSnapshots.push(...snapshot.docs));
+    }
+  } else if (organizationId) {
     const owned = await getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', organizationId)));
     guideSnapshots.push(...owned.docs.filter(item => item.data().sharingScope !== 'shared'));
   }
