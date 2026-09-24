@@ -179,7 +179,7 @@ export default async function handler(req: Request, res: Response) {
       await target.set({
         ...sourceData, id, organizationId:effectiveOrganizationId, ownerOrganizationId:effectiveOrganizationId,
         ownerUid:ctx.auth.uid, sourceContentId:sourceId, copiedAt:now, copiedBy:ctx.auth.uid,
-        canonical:true, sharingScope:'organization', published:false, archived:false,
+        canonical:true, sharingScope:effectiveOrganizationId ? 'organization' : 'shared', published:false, archived:false,
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
       }, { merge:true });
       const lessons = await source.ref.collection('lessons').get();
@@ -190,7 +190,7 @@ export default async function handler(req: Request, res: Response) {
         batch.set(ref, {
           ...data, id:lesson.id, lessonId:lesson.id, organizationId:ctx.organizationId,
           ownerOrganizationId:effectiveOrganizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
-          copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
+          copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:effectiveOrganizationId ? 'organization' : 'shared', published:false,
           createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid, copyOrder:index
         }, { merge:true });
       });
