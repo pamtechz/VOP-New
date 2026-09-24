@@ -34,8 +34,8 @@ async function organizationAllowedForHierarchy(ctx: Awaited<ReturnType<typeof au
   if (!organization.exists || organization.data()?.status !== 'active') return false;
   if (organizationInHierarchy(organization.data() || {}, role, nodeId)) return true;
   const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
-  const users = await ctx.db.collection('users').where(field, '==', nodeId).where('organizationId', '==', organizationId).limit(1).get();
-  return !users.empty;
+  const users = await ctx.db.collection('users').where(field, '==', nodeId).limit(100).get();
+  return users.docs.some(doc => String(doc.data()?.organizationId || '').trim() === organizationId);
 }
 async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authenticateTenant>>, requestedOrg: string) {
   if (ctx.isSuperAdmin) return requestedOrg || ctx.organizationId;
