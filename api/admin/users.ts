@@ -81,6 +81,16 @@ function organizationInHierarchy(data: Record<string, unknown>, role: string, no
   return false;
 }
 
+async function organizationAllowedForHierarchy(db: Firestore, organizationId: string, role: string, nodeId: string) {
+  const organization = await db.doc('organizations/' + organizationId).get();
+  if (!organization.exists || organization.data()?.status !== 'active') return false;
+  if (organizationInHierarchy(organization.data() || {}, role, nodeId)) return true;
+  const scope = hierarchyScopeQuery(role, nodeId);
+  if (!scope) return false;
+  const users = await db.collection('users').where(scope.field, '==', scope.value).where('organizationId', '==', organizationId).limit(1).get();
+  return !users.empty;
+}
+
 async function hierarchyOrganizations(db: Firestore, role: string, nodeId: string) {
   if (!nodeId) return [];
   const scope = hierarchyScopeQuery(role, nodeId);
@@ -317,7 +327,7 @@ export default async function handler(request: Request, response: Response) {
     const managedOrganizationId = tenantOrganizationId || (hierarchyTenant && requestedManagedOrganizationId ? requestedManagedOrganizationId : '');
     if (hierarchyTenant && managedOrganizationId) {
       const organizationSnap = await db.doc('organizations/' + managedOrganizationId).get();
-      if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active' || !organizationInHierarchy(organizationSnap.data() || {}, hierarchyTenant, hierarchyNodeId)) {
+      if (!(await organizationAllowedForHierarchy(db, managedOrganizationId, hierarchyTenant, hierarchyNodeId))) {
         throw new Error('The selected organization is outside your assigned hierarchy scope.');
       }
     }
@@ -413,7 +423,7 @@ export default async function handler(request: Request, response: Response) {
       if (!targetOrganizationId) throw new Error('Select an organization.');
       if (!['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Select a valid organization role.');
       const organization = await db.doc('organizations/' + targetOrganizationId).get();
-      if (hierarchyTenant && (!organization.exists || !organizationInHierarchy(organization.data() || {}, hierarchyTenant, hierarchyNodeId))) throw new Error('The selected organization is outside your assigned hierarchy scope.');
+      if (hierarchyTenant && !(await organizationAllowedForHierarchy(db, targetOrganizationId, hierarchyTenant, hierarchyNodeId))) throw new Error('The selected organization is outside your assigned hierarchy scope.');
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The selected organization is not available.');
       const targetProfile = await db.doc('users/' + uid).get();
       if (!targetProfile.exists) throw new Error('The selected user account does not exist.');
@@ -445,7 +455,7 @@ export default async function handler(request: Request, response: Response) {
         const targetOrg = String(targetProfileData.organizationId || '').trim();
         if (targetOrg) {
           const targetOrganizationSnap = await db.doc('organizations/' + targetOrg).get();
-          if (!targetOrganizationSnap.exists || !organizationInHierarchy(targetOrganizationSnap.data() || {}, hierarchyTenant, hierarchyNodeId)) throw new Error('This user is outside your assigned hierarchy scope.');
+          if (!(await organizationAllowedForHierarchy(db, targetOrg, hierarchyTenant, hierarchyNodeId))) throw new Error('This user is outside your assigned hierarchy scope.');
         } else if (!hierarchyUserInScope(hierarchyTenant, hierarchyNodeId, targetProfileData)) {
           throw new Error('This user is outside your assigned hierarchy scope.');
         }
