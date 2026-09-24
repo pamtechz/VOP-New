@@ -660,15 +660,48 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       return { x, y, item };
     });
     const path = points.map((p, index) => (index === 0 ? 'M ' : 'L ') + p.x + ' ' + p.y).join(' ');
+    const roleDashboard = isSuperAdmin
+      ? { title: adminT('dashboard_platform_title','Platform Dashboard'), subtitle: adminT('dashboard_platform_subtitle','Platform-wide VOP administration and governance.') }
+      : isHierarchyAdmin
+        ? { title: adminT('dashboard_hierarchy_title','Hierarchy Dashboard'), subtitle: adminT('dashboard_hierarchy_subtitle','Scoped overview of your hierarchy and descendant organisations.') }
+        : { title: adminT('dashboard_organization_title','Organisation Dashboard'), subtitle: adminT('dashboard_organization_subtitle','Overview of your organisation, learners and ministry activity.') };
+    const dashboardMetrics = isSuperAdmin
+      ? [
+          { label: adminT('dashboard_candidates','Total Candidates'), value: candidates.length, tone: '#e9f2ff', color: '#1261cf', icon: Users },
+          { label: adminT('dashboard_lessons','Lessons'), value: totalLessons, tone: '#e5fbf4', color: '#099568', icon: BookOpen },
+          { label: adminT('dashboard_languages','Languages'), value: activeLanguages.length, tone: '#f2eaff', color: '#7135d5', icon: Globe },
+          { label: adminT('dashboard_churches','Churches'), value: churches.length, tone: '#fff0dc', color: '#f27b00', icon: Church },
+        ]
+      : isHierarchyAdmin
+        ? [
+            { label: adminT('dashboard_scoped_candidates','Scoped Learners'), value: candidates.length, tone: '#e9f2ff', color: '#1261cf', icon: Users },
+            { label: adminT('dashboard_scoped_lessons','Available Lessons'), value: totalLessons, tone: '#e5fbf4', color: '#099568', icon: BookOpen },
+            { label: adminT('dashboard_languages','Languages'), value: activeLanguages.length, tone: '#f2eaff', color: '#7135d5', icon: Globe },
+            { label: adminT('dashboard_scoped_churches','Scoped Churches'), value: churches.length, tone: '#fff0dc', color: '#f27b00', icon: Church },
+          ]
+        : [
+            { label: adminT('dashboard_my_candidates','My Organisation Learners'), value: candidates.length, tone: '#e9f2ff', color: '#1261cf', icon: Users },
+            { label: adminT('dashboard_my_lessons','Organisation Lessons'), value: totalLessons, tone: '#e5fbf4', color: '#099568', icon: BookOpen },
+            { label: adminT('dashboard_languages','Languages'), value: activeLanguages.length, tone: '#f2eaff', color: '#7135d5', icon: Globe },
+            { label: adminT('dashboard_my_churches','Organisation Churches'), value: churches.length, tone: '#fff0dc', color: '#f27b00', icon: Church },
+          ];
+    const quickActions = isSuperAdmin
+      ? [
+          {label:adminT('manage_organizations','Manage Organisations'),desc:adminT('manage_organizations_desc','Manage tenants and organisation lifecycle.'),icon:Building2,tab:'organizations' as AdminTab},
+          {label:adminT('manage_users','Manage Users'),desc:adminT('manage_users_desc','Manage platform users and hierarchy scope.'),icon:Users,tab:'userManagement' as AdminTab},
+          {label:adminT('manage_curriculum','Global Curriculum'),desc:adminT('manage_curriculum_desc','Build and publish system-wide content.'),icon:BookOpen,tab:'curriculum' as AdminTab},
+          {label:adminT('manage_certification','Certification'),desc:adminT('manage_certification_desc','Configure and administer certification.'),icon:Award,tab:'certification' as AdminTab},
+        ]
+      : [
+          {label:adminT('manage_candidates','Manage Learners'),desc:adminT('manage_candidates_desc','Manage learners within your permitted scope.'),icon:Users,tab:'candidates' as AdminTab},
+          {label:adminT('manage_curriculum','Curriculum Studio'),desc:adminT('manage_curriculum_desc','Build and manage permitted curriculum.'),icon:BookOpen,tab:'curriculum' as AdminTab},
+          {label:adminT('manage_mentoring','Mentoring'),desc:adminT('manage_mentoring_desc','Support learners and review mentoring activity.'),icon:UserCheck,tab:'mentorship' as AdminTab},
+          {label:adminT('manage_certification','Certification'),desc:adminT('manage_certification_desc','View certification within your permitted scope.'),icon:Award,tab:'certification' as AdminTab},
+        ];
     return <div>
-      {renderHeader(LayoutDashboard, 'Dashboard', 'Overview of the VOP system', <div className="vop-secondary"><CalendarDays size={17}/>{currentDate}<ChevronDown size={14}/></div>)}
+      {renderHeader(LayoutDashboard, roleDashboard.title, roleDashboard.subtitle, <div className="vop-secondary"><CalendarDays size={17}/>{currentDate}<ChevronDown size={14}/></div>)}
       <div className="vop-grid-4">
-        {[
-          { label: 'Total Candidates', value: candidates.length, tone: '#e9f2ff', color: '#1261cf', icon: Users },
-          { label: 'Lessons', value: totalLessons, tone: '#e5fbf4', color: '#099568', icon: BookOpen },
-          { label: 'Languages', value: activeLanguages.length, tone: '#f2eaff', color: '#7135d5', icon: Globe },
-          { label: 'Churches', value: churches.length, tone: '#fff0dc', color: '#f27b00', icon: Church },
-        ].map(metric => {
+        {dashboardMetrics.map(metric => {
           const Icon = metric.icon;
           return <div className="vop-card vop-metric" key={metric.label}>
             <div className="vop-metric-icon" style={{background:metric.tone,color:metric.color}}><Icon size={29}/></div>
@@ -698,12 +731,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       </div>
       <div style={{height:18}} />
       <div className="vop-grid-4">
-        {[
-          {label:'Manage Candidates',desc:'Add, edit and track candidates.',icon:Users,tab:'candidates' as AdminTab},
-          {label:'Create Lesson',desc:'Build and publish content.',icon:BookOpen,tab:'curriculum' as AdminTab},
-          {label:'Add Announcement',desc:'Share news and updates.',icon:Megaphone,tab:'announcements' as AdminTab},
-          {label:'Manage Radio',desc:'Add and schedule broadcasts.',icon:Radio,tab:'radio' as AdminTab},
-        ].map((item,index)=>{const Icon=item.icon;return <button key={item.label} type="button" className="vop-card vop-quick" onClick={()=>setActiveTab(item.tab)} style={{background:index===0?'#eef6ff':index===1?'#ecfbf4':index===2?'#f7efff':'#fff4e7'}}><div style={{display:'flex',alignItems:'center',gap:12}}><Icon size={25}/><div><div className="vop-quick-title">{item.label}</div><div className="vop-quick-desc">{item.desc}</div></div></div><ChevronRight size={20}/></button>;})}
+        {quickActions.map((item,index)=>{const Icon=item.icon;return <button key={item.label} type="button" className="vop-card vop-quick" onClick={()=>setActiveTab(item.tab)} style={{background:index===0?'#eef6ff':index===1?'#ecfbf4':index===2?'#f7efff':'#fff4e7'}}><div style={{display:'flex',alignItems:'center',gap:12}}><Icon size={25}/><div><div className="vop-quick-title">{item.label}</div><div className="vop-quick-desc">{item.desc}</div></div></div><ChevronRight size={20}/></button>;})}
       </div>
     </div>;
   };
