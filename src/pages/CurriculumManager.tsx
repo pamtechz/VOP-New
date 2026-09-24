@@ -760,20 +760,20 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const tabs: Array<{ id: CurriculumStudioTab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
-    { id: 'lessons', label: 'Lessons', icon: FileText },
-    { id: 'guides', label: 'Guides', icon: BookOpen },
-    { id: 'quizzes', label: 'Quizzes', icon: CircleHelp },
-    { id: 'paths', label: 'Learning Paths', icon: Layers },
-    { id: 'topics', label: 'Bible Topics', icon: Book },
-    { id: 'seasons', label: 'Seasons', icon: CalendarDays },
+    { id: 'lessons', label: tx('curriculum.lessons', 'Lessons'), icon: FileText },
+    { id: 'guides', label: tx('curriculum.guides', 'Guides'), icon: BookOpen },
+    { id: 'quizzes', label: tx('curriculum.quizzes', 'Quizzes'), icon: CircleHelp },
+    { id: 'paths', label: tx('curriculum.learningPaths', 'Learning Paths'), icon: Layers },
+    { id: 'topics', label: tx('curriculum.bibleTopics', 'Bible Topics'), icon: Book },
+    { id: 'seasons', label: tx('curriculum.seasons', 'Seasons'), icon: CalendarDays },
   ];
 
   if (editor) {
     if (previewOpen) return <LearnerPreview editor={editor} guideTitle={editor.guideTitle} onClose={() => setPreviewOpen(false)} />;
 
     const editorTabs = [
-      ['content', 'Content'], ['media', 'Media'], ['bible', 'Bible References'],
-      ['quiz', 'Quiz'], ['notes', 'Teacher Notes'], ['settings', 'Settings'],
+      ['content', tx('curriculum.content', 'Content')], ['media', tx('curriculum.media', 'Media')], ['bible', tx('curriculum.bibleReferences', 'Bible References')],
+      ['quiz', tx('curriculum.quiz', 'Quiz')], ['notes', tx('curriculum.teacherNotes', 'Teacher Notes')], ['settings', tx('common.settings', 'Settings')],
     ] as const;
 
     const wordCount = editor.content.trim() ? editor.content.trim().split(/\\s+/).filter(Boolean).length : 0;
