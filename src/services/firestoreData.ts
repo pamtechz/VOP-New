@@ -115,8 +115,15 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       : profileRole === 'conference_admin' ? 'conferenceId'
       : profileRole === 'district_admin' ? 'districtId'
       : 'churchId';
-    const organizations = await getDocs(query(collection(firestore, 'organizations'), where(hierarchyField, '==', adminNodeId)));
-    scopedOrganizationIds = organizations.docs.map(item => item.id).filter(Boolean);
+    const organizationsRef = collection(firestore, 'organizations');
+    const [flatOrganizations, nestedOrganizations] = await Promise.all([
+      getDocs(query(organizationsRef, where(hierarchyField, '==', adminNodeId))),
+      getDocs(query(organizationsRef, where(`hierarchy.${hierarchyField}`, '==', adminNodeId))),
+    ]);
+    scopedOrganizationIds = Array.from(new Set([
+      ...flatOrganizations.docs.map(item => item.id),
+      ...nestedOrganizations.docs.map(item => item.id),
+    ])).filter(Boolean);
     if (scopedOrganizationIds.length) {
       const scopedGuides = await Promise.all(scopedOrganizationIds.map(id =>
         getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', id), where('published', '==', true)))
