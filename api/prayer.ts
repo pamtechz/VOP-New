@@ -1,4 +1,5 @@
-import { authenticateTenant, writeTenantAudit } from '../server/tenant.js';
+import { authenticateTenant, writeTenantAudit, accessibleOrganizationIds, organizationInHierarchyScope } from '../server/tenant.js';
+import { requirePermission } from '../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown; query?: Record<string, string | string[] | undefined> };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -23,19 +24,33 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const own = String(req.query?.mine || '') === 'true';
       const ministry = String(req.query?.ministry || '') === 'true';
+      if (own) await requirePermission(ctx, 'prayer', 'read');
+      else await requirePermission(ctx, 'prayer', 'view');
       if (ministry && !admin) throw new Error('Only authorized ministry administrators can open the ministry inbox.');
-      const snapshot = own
-        ? await collection.where('candidateId','==',ctx.auth.uid).limit(100).get()
-        : ctx.isSuperAdmin && ministry
-          ? await collection.limit(100).get()
-          : await collection.where('organizationId','==',ctx.organizationId).limit(100).get();
 
-      const items = snapshot.docs
+      let docs = [] as FirebaseFirestore.QueryDocumentSnapshot[];
+      if (own) {
+        const snapshot = await collection.where('candidateId','==',ctx.auth.uid).limit(100).get();
+        docs = snapshot.docs;
+      } else if (ctx.isSuperAdmin && ministry) {
+        const snapshot = await collection.limit(200).get();
+        docs = snapshot.docs;
+      } else if (ctx.tenantType === 'hierarchy') {
+        const organizationIds = await accessibleOrganizationIds(ctx);
+        const snapshots = await Promise.all(organizationIds.map(orgId => collection.where('organizationId','==',orgId).limit(100).get()));
+        docs = snapshots.flatMap(snapshot => snapshot.docs);
+      } else if (ctx.organizationId) {
+        const snapshot = await collection.where('organizationId','==',ctx.organizationId).limit(100).get();
+        docs = snapshot.docs;
+      }
+
+      const items = docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
           if (item.candidateId === ctx.auth.uid) return true;
-          if (!ctx.isSuperAdmin && item.organizationId !== ctx.organizationId) return false;
+          if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && item.organizationId !== ctx.organizationId) return false;
+          if (ctx.tenantType === 'hierarchy' && !ctx.isSuperAdmin) return true;
           return ministry ? true : item.isPrivate !== true;
         });
 
@@ -47,6 +62,7 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || 'create');
 
     if (action === 'create') {
+      await requirePermission(ctx, 'prayer', 'create');
       const requestText = String(body.requestText || '').trim();
       const category = String(body.category || 'Other');
       if (requestText.length < 5) throw new Error('Prayer request must contain at least 5 characters.');
@@ -74,6 +90,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'status') {
+      await requirePermission(ctx, 'prayer', 'update');
       if (!admin) throw new Error('Only authorized ministry administrators can update prayer status.');
       const requestId = id(body.id);
       const status = String(body.status || '');
@@ -82,20 +99,21 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       if (!existing.exists) throw new Error('Prayer request not found.');
       const data = existing.data() || {};
-      if (String(data.organizationId || '') !== ctx.organizationId) throw new Error('You cannot manage a prayer request outside your organization.');
+      if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot manage a prayer request outside your authorized scope.');
       await ref.update({ status, updatedAt: new Date().toISOString(), updatedBy: ctx.auth.uid });
       await writeTenantAudit(ctx,'prayer.status',`prayerRequests/${requestId}`,data,{...data,status});
       return res.status(200).json({ ok:true, id:requestId, status });
     }
 
     if (action === 'delete') {
+      await requirePermission(ctx, 'prayer', 'delete');
       const requestId = id(body.id);
       const ref = collection.doc(requestId);
       const existing = await ref.get();
       if (!existing.exists) return res.status(200).json({ ok:true,id:requestId });
       const data = existing.data() || {};
       if (data.candidateId !== ctx.auth.uid && !admin) throw new Error('You can only delete your own prayer request.');
-      if (data.organizationId !== ctx.organizationId && !ctx.isSuperAdmin) throw new Error('You cannot delete a prayer request outside your organization.');
+      if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot delete a prayer request outside your authorized scope.');
       await ref.delete();
       await writeTenantAudit(ctx,'prayer.delete',`prayerRequests/${requestId}`,data,undefined);
       return res.status(200).json({ ok:true,id:requestId });
