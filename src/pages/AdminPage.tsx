@@ -410,7 +410,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       allowed.add('mentorship');
       if (canEdit) allowed.add('curriculum');
     }
-    return NAV.filter(item => allowed.has(item.id));
+    return NAV.filter(item => allowed.has(item.id)).map(item => ({ ...item, label: adminT(item.id, item.label) }));
   }, [currentUser]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
@@ -868,7 +868,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     </header>
     <div className="vop-shell">
       {sidebarOpen && <button className="vop-sidebar-backdrop" type="button" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)} />}
-      <aside className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}><nav className="vop-nav">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?'Back to App':undefined} onClick={onBack}><ArrowLeft size={19}/><span>Back to App</span></button></aside>
+      <aside className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}><nav className="vop-nav">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined} onClick={onBack}><ArrowLeft size={19}/><span<span>{adminT('back_to_app','Back to App')}</span></button></aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}
