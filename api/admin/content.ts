@@ -405,7 +405,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (collection === 'translations' && action === 'proposeTranslation') {
-      if (!ctx.organizationId) throw new Error('An organization membership is required to submit a translation proposal.');
+      if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
       const languageId = safeId(body.languageId);
       const key = String(body.key || '').trim();
       const proposedValue = String(body.proposedValue || '').trim();
@@ -428,8 +428,11 @@ export default async function handler(req: Request, res: Response) {
         proposedValue,
         reason,
         proposerUid: ctx.auth.uid,
-        proposerOrganizationId: ctx.organizationId,
-        organizationId: ctx.organizationId,
+        proposerOrganizationId: ctx.organizationId || '',
+        proposerTenantId: tenantOwnerKey(ctx),
+        organizationId: ctx.organizationId || '',
+        tenantType: ctx.tenantType,
+        tenantId: tenantOwnerKey(ctx),
         status: 'pending',
         createdAt: now,
         updatedAt: now,
