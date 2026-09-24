@@ -505,9 +505,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
 
   return (
     <div>
-      <PageHead icon={Icon} title={primaryTitle} subtitle={subtitleFor(kind)} action={
-        {canCreate && <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>Add {singular(kind)}</button>}
-      } />
+      <PageHead icon={Icon} title={primaryTitle} subtitle={subtitleFor(kind)} action={canCreate ? <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>Add {singular(kind)}</button> : undefined} />
       {error && <ErrorBox message={error} clear={()=>setError('')} />}
       {message && <Toast message={message}/>}
       <div className="vop-toolbar">
