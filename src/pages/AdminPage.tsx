@@ -5,7 +5,7 @@ import {
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
   Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload,
   Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
-  Send, FileText, Grid2X2, Building2
+  Send, FileText, Grid2X2, Building2, HeartHandshake
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson } from '../types';
