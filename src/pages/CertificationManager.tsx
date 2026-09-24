@@ -226,6 +226,15 @@ export const CertificationManager: React.FC<Props> = ({
       sealUrl: nextConfig.sealUrl || '',
       signatureUrl: nextConfig.signatureUrl || '',
       logoUrl: nextConfig.logoUrl || '',
+      // Persist the authoritative template itself. The live preview and issued
+      // certificate renderer must use the same template edited in the studio.
+      backgroundUrl: nextConfig.backgroundUrl || nextConfig.template?.backgroundUrl || '/assets/certificate_bg.png',
+      template: nextConfig.template || {
+        width: 1513,
+        height: 1040,
+        backgroundUrl: nextConfig.backgroundUrl || '/assets/certificate_bg.png',
+        elements: [],
+      },
       verificationBaseUrl: nextConfig.verificationBaseUrl || '',
       approvalStages: (nextConfig.approvalStages || []).map(stage => ({
         id: String(stage.id || '').trim(), label: String(stage.label || '').trim(),
