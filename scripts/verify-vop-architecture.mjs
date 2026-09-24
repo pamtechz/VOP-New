@@ -91,6 +91,7 @@ const checks = [
   ['server/permissions.ts', ['loadPermissionMatrix','requirePermission','resourceForCollection','decidePermission']],
   ['src/services/permissions.ts', ['loadPermissionMatrixClient','permissionRoleForUser','clearPermissionMatrixCache']],
   ['src/services/publicFirestore.ts', ['profileData','loadHierarchy','organizationId']],
+  ['src/services/firestoreData.ts', ['createFirestoreStudentProfile','/api/admin/users','action: 'profile'']],
   ['src/services/firestoreData.ts', ['organizationsRef','flatOrganizations','nestedOrganizations','scopedOrganizationIds']],
   ['docs/VOP_MODULAR_COMPONENT_MISSION.md', ['Component priority by system influence','Module contract','Communication rule','Super Admin rule','Completion rule']],
   ['docs/CERTIFICATE_BACKGROUND_SPEC.md', ['1513 × 1040','/assets/certificate_bg.png','40%','template renders **above** this background']],
