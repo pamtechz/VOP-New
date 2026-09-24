@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 
 type Request = {
   method?: string;
@@ -25,8 +25,13 @@ export default async function handler(request: Request, response: Response) {
   try {
     const body = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
     if (body.action !== 'updateBaptism') return response.status(400).json({ error: 'Unsupported candidate action.' });
-    const ctx = await authenticateTenant(request, typeof body.organizationId === 'string' ? body.organizationId : undefined);
-    requireOrgRole(ctx, ['owner','admin']);
+    const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    const ctx = await authenticateTenant(request, requestedOrganizationId || undefined);
+    if (ctx.tenantType === 'hierarchy') {
+      if (!requestedOrganizationId || !(await organizationInHierarchyScope(ctx, requestedOrganizationId))) return response.status(403).json({ error: 'The selected organization is outside your hierarchy scope.' });
+    } else {
+      requireOrgRole(ctx, ['owner','admin']);
+    }
     const candidateId = typeof body.candidateId === 'string' ? body.candidateId.trim() : '';
     if (!candidateId || !/^[A-Za-z0-9_-]{1,160}$/.test(candidateId)) {
       return response.status(400).json({ error: 'A valid candidate ID is required.' });
@@ -45,7 +50,8 @@ export default async function handler(request: Request, response: Response) {
     const candidateRef = ctx.db.doc(`users/${candidateId}`);
     const candidateSnapshot = await candidateRef.get();
     if (!candidateSnapshot.exists) return response.status(404).json({ error: 'Candidate was not found.' });
-    if (String(candidateSnapshot.data()?.organizationId || '') !== ctx.organizationId && !ctx.isSuperAdmin) return response.status(403).json({ error: 'This candidate belongs to another organization.' });
+    const candidateOrganizationId = String(candidateSnapshot.data()?.organizationId || '').trim();
+    if (!ctx.isSuperAdmin && (ctx.tenantType === 'organization' ? candidateOrganizationId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, candidateOrganizationId)))) return response.status(403).json({ error: 'This candidate belongs outside your authorized organization scope.' });
 
     const information = (candidateSnapshot.data()?.information || {}) as Record<string, unknown>;
     await candidateRef.set({
