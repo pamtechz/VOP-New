@@ -167,7 +167,7 @@ function LessonContent({ lang, languageLabel, lessonId, onBack }: Props) {
         body: JSON.stringify({
           action: 'submitQuiz',
           language: lesson.language,
-          guideId: lesson.source.file.split('/').slice(-2, -1)[0] || lesson.lessonId,
+          guideId: 'discover',
           lessonId: lesson.lessonId,
           answers: Object.fromEntries(selections.map((answer, index) => [String(index), answer])),
         }),
