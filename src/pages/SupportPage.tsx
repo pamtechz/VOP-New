@@ -79,9 +79,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       setReference(null);
       setError('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not send your message.');
+      setError(reason instanceof Error ? reason.message : t('support.send_error','Could not send your message.'));
     } finally {
-      set{t('common.send','Send')}ing(false);
+      setSending(false);
     }
   };
 
@@ -103,33 +103,33 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
       {error && <div className="vop-support-error">{error}<button type="button" onClick={()=>setError('')}><X size={16}/></button></div>}
 
-      {loading ? <div className="vop-support-empty">Loading your support channel…</div> : !conversation ? (
+      {loading ? <div className="vop-support-empty">{t('support.loading','Loading your support channel…')}</div> : !conversation ? (
         <div className="vop-support-empty"><UserRound size={40}/><h2>{t('support.no_mentor','No mentor assigned yet')}</h2><p>{t('support.no_mentor_desc','Your administrator will assign a mentor to your account. Once assigned, your private support conversation will appear here.')}</p></div>
       ) : (
         <div className="vop-support-layout">
           <section className="vop-support-chat">
             <div className="vop-support-chat-head">
               {conversation.mentorPhotoURL ? <img src={conversation.mentorPhotoURL} alt="" /> : <div><UserRound size={22}/></div>}
-              <div><strong>{conversation.mentorName || 'Your Mentor'}</strong><span>{t('support.channel','Mentor support channel')}</span></div>
+              <div><strong>{conversation.mentorName || t('support.your_mentor','Your Mentor')}</strong><span>{t('support.channel','Mentor support channel')}</span></div>
             </div>
             <div className="vop-support-messages">
               {messages.length === 0 && <div className="vop-support-empty-inline">{t('support.start','Start the conversation with your question.')}</div>}
-              {messages.map(item => <article key={item.id} className={item.senderId === currentUser.uid ? 'mine' : 'theirs'}><p>{item.body}</p>{Array.isArray(item.references) && item.references.map((ref:any)=><span key={ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}<time>{item.createdAt ? new Date(item.createdAt).toLocaleString() : '{t('common.send','Send')}ing…'}</time></article>)}
+              {messages.map(item => <article key={item.id} className={item.senderId === currentUser.uid ? 'mine' : 'theirs'}><p>{item.body}</p>{Array.isArray(item.references) && item.references.map((ref:any)=><span key={ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}<time>{item.createdAt ? new Date(item.createdAt).toLocaleString() : t('common.sending','Sending…')}</time></article>)}
             </div>
             <div className="vop-support-compose">
               {reference && <div className="vop-support-reference"><BookOpen size={14}/><span>{reference.label}</span><button type="button" onClick={()=>setReference(null)}><X size={14}/></button></div>}
-              <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="Ask your mentor a question…" onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send()}}}/>
-              <button type="button" onClick={()=>void send()} disabled={sending || !message.trim()}><{t('common.send','Send')} size={17}/>{sending?'{t('common.send','Send')}ing…':'{t('common.send','Send')}'}</button>
+              <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder={t('support.ask_question','Ask your mentor a question…')} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send()}}}/>
+              <button type="button" onClick={()=>void send()} disabled={sending || !message.trim()}><{t('common.send','Send')} size={17}/>{sending?t('common.sending','Sending…'):'{t('common.send','Send')}'}</button>
             </div>
           </section>
 
           <aside className="vop-support-reference-panel">
             <div className="vop-support-panel-title"><BookOpen size={19}/><strong>{t('support.reference_content','Reference study content')}</strong></div>
             <p>{t('support.reference_desc','Select a guide and lesson before sending a question. Your mentor will see the exact reference.')}</p>
-            <select value={referenceType} onChange={e=>setReferenceType(e.target.value as typeof referenceType)}><option value="lesson">Lesson</option><option value="section">Section</option><option value="topic">Topic</option><option value="block">Block</option></select>
+            <select value={referenceType} onChange={e=>setReferenceType(e.target.value as typeof referenceType)}><option value="lesson">{t('common.lesson','Lesson')}</option><option value="section">{t('common.section','Section')}</option><option value="topic">{t('common.topic','Topic')}</option><option value="block">{t('common.block','Block')}</option></select>
             <select value={selectedGuide} onChange={e=>{setSelectedGuide(e.target.value);setSelectedLesson('');setReference(null)}}><option value="">{t('support.select_guide','Select guide')}</option>{guides.map(item=><option key={item.id} value={item.id}>{item.title} · {item.language}</option>)}</select>
             <select value={selectedLesson} onChange={e=>chooseLesson(e.target.value)} disabled={!guide}><option value="">{t('support.select_lesson','Select lesson / source')}</option>{lessons.map(item=><option key={item.id} value={item.id}>{item.lessonNumber} · {item.title}</option>)}</select>
-            <input value={referenceLabel} onChange={e=>setReferenceLabel(e.target.value)} placeholder="Optional section, topic or block label"/>
+            <input value={referenceLabel} onChange={e=>setReferenceLabel(e.target.value)} placeholder={t('support.reference_label','Optional section, topic or block label')}/>
             {reference && <div className="vop-support-selected"><span>{t('support.attached_reference','Attached reference')}</span><strong>{reference.label}</strong></div>}
           </aside>
         </div>
