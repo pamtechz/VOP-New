@@ -182,6 +182,10 @@ export default async function handler(req: Request, res: Response) {
       const targetProfileSnap = await targetProfileRef.get();
       if (!targetProfileSnap.exists) throw new Error('The selected user account does not exist.');
       const targetProfile = targetProfileSnap.data() || {};
+      const targetOrganizationId = String(targetProfile.organizationId || '').trim();
+      if (targetOrganizationId && targetOrganizationId !== organizationId) {
+        throw new Error('The selected user belongs to another organization. Remove or reassign that membership before assigning ownership.');
+      }
       const platformRole = String(targetProfile.role || '').trim();
       if (platformRole === 'super_admin' || ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole)) {
         throw new Error('Platform or hierarchy administrators cannot be assigned as organization owners.');
@@ -197,8 +201,10 @@ export default async function handler(req: Request, res: Response) {
         if (previousOwnerUid && previousOwnerUid !== uid && previousOwnerProfileRef && previousOwnerMemberRef) {
           const previousProfileSnap = await transaction.get(previousOwnerProfileRef);
           const previousMemberSnap = await transaction.get(previousOwnerMemberRef);
-          if (previousMemberSnap.exists && previousProfileSnap.exists) {
+          if (previousMemberSnap.exists) {
             transaction.set(previousOwnerMemberRef, { role:'admin', active:true, updatedAt:now }, { merge:true });
+          }
+          if (previousProfileSnap.exists) {
             transaction.set(previousOwnerProfileRef, { organizationId, organizationRole:'admin', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
           }
         }
