@@ -637,7 +637,7 @@ export default async function handler(req: Request, res: Response) {
           ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
           ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-          scope: ctx.tenantType === 'hierarchy' ? 'hierarchy' : 'platform',
+          scope: 'platform',
           canonical: true,
           sharingScope: 'shared',
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
