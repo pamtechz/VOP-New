@@ -40,18 +40,28 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const isSuperAdmin = String(profile.role || '') === 'super_admin';
   const hierarchyAdmin = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(String(profile.role || ''));
   const profileOrganizationId = String(profile.organizationId || '').trim();
+  const adminNodeType = String(profile.adminNodeType || '').trim();
+  const adminNodeId = String(profile.adminNodeId || '').trim();
+  const hierarchyTenantId = hierarchyAdmin && adminNodeType && adminNodeId
+    ? `${adminNodeType}-${adminNodeId}`
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80)
+    : '';
   const requestedId = String(requestedOrganizationId || '').trim();
 
-  // Tenant identity is derived from the authenticated profile. A client-supplied
-  // organizationId may select a tenant only for Super Admin; ordinary and
-  // hierarchy-admin accounts must never switch tenant context by request payload.
-  if (!isSuperAdmin && requestedId && requestedId !== profileOrganizationId) {
+  // Tenant identity is derived from authenticated server-side state. A client
+  // supplied organizationId may select a tenant only for Super Admin. A
+  // hierarchy administrator is itself a first-class tenant, so its tenant is
+  // deterministically derived from its immutable hierarchy scope.
+  if (!isSuperAdmin && requestedId && requestedId !== (hierarchyTenantId || profileOrganizationId)) {
     throw new Error('You cannot access another organization.');
   }
 
   const organizationId = isSuperAdmin
     ? requestedId
-    : profileOrganizationId;
+    : hierarchyTenantId || profileOrganizationId;
 
   if (!organizationId) {
     if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin };
@@ -61,6 +71,15 @@ export async function authenticateTenant(request: Request, requestedOrganization
   }
   const organizationSnap = await db.doc(`organizations/${organizationId}`).get();
   if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') throw new Error('The organization is not available.');
+
+  if (hierarchyAdmin) {
+    const tenant = organizationSnap.data() || {};
+    if (String(tenant.tenantType || '') !== adminNodeType
+      || String(tenant.adminNodeType || '') !== adminNodeType
+      || String(tenant.adminNodeId || '') !== adminNodeId) {
+      throw new Error('The hierarchy administrator tenant scope is invalid or no longer matches the assigned administrator scope.');
+    }
+  }
   const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
   if (!isSuperAdmin && (!membershipSnap.exists || membershipSnap.data()?.active !== true)) throw new Error('You are not a member of this organization.');
 
