@@ -19,19 +19,35 @@ function certificateDocumentId(candidateId:string,language:string,organizationId
 function publicCertificate(id:string,data:Record<string,unknown>){return {...safe({...data,id})};}
 
 async function mine(req:Request,res:Response){
- const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
- const decoded=await getAuth(admin()).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(admin());
- const profile=await db.doc(`users/${decoded.uid}`).get();
- if (!profile.exists) return res.status(404).json({error:'VOP account profile was not found.'});
- const profileData=profile.data()||{};
- const organizationId=String(profileData.organizationId||'').trim();
- if (!organizationId && String(profileData.role||'') !== 'super_admin') return res.status(403).json({error:'Your account is not linked to an organization.'});
- const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
- const [snapshot,configSnapshot]=await Promise.all([organizationId?certificateQuery.where('organizationId','==',organizationId).limit(20).get():certificateQuery.limit(20).get(),db.doc('system/certification').get()]);
- const certificates=snapshot.docs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified');const config=configSnapshot.exists?configSnapshot.data()??{}:{};
- return res.status(200).json({certificates,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??'')}});
+ const ctx=await authenticateTenant(req);
+ const db=ctx.db;
+ const organizationId=ctx.organizationId;
+ if(!organizationId&&!ctx.isSuperAdmin)return res.status(403).json({error:'Your account is not linked to an organization.'});
+ const certificateQuery=db.collection('certificates').where('candidateId','==',ctx.auth.uid);
+ const [snapshot,configSnapshot]=await Promise.all([
+   organizationId?certificateQuery.where('organizationId','==',organizationId).limit(20).get():certificateQuery.limit(20).get(),
+   db.doc('system/certification').get(),
+ ]);
+ const certificates=snapshot.docs
+   .map(d=>safe({id:d.id,...d.data()}))
+   .filter(x=>x.status==='Certified');
+ const config=configSnapshot.exists?configSnapshot.data()??{}:{};
+ return res.status(200).json({
+   certificates,
+   config:{
+     certificateTitle:String(config.certificateTitle??''),
+     certificateBodyText:String(config.certificateBodyText??''),
+     issuerName:String(config.issuerName??''),
+     issuerSubtitle:String(config.issuerSubtitle??''),
+     directorName:String(config.directorName??''),
+     directorTitle:String(config.directorTitle??''),
+     signatureUrl:String(config.signatureUrl??''),
+     sealUrl:String(config.sealUrl??''),
+     logoUrl:String(config.logoUrl??''),
+     backgroundUrl:String(config.backgroundUrl??''),
+   },
+ });
 }
-
 async function verify(req:Request,res:Response){
  const number=queryValue(req,'certificateNumber').trim();if(!number||number.length>160)return res.status(400).json({error:'Enter a certificate number.'});
  const db=getFirestore(admin());const [snapshot,configSnapshot]=await Promise.all([db.collection('certificates').where('certificateNumber','==',number).limit(1).get(),db.doc('system/certification').get()]);
