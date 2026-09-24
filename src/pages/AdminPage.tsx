@@ -981,7 +981,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='userManagement'&&<UserManagement onBack={onBack} scope={{ isSuperAdmin: currentUser.role === 'super_admin', organizationId: currentUser.organizationId, role: currentUser.role }} />}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
-        {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={languages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
+        {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={languages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
         {activeTab==='candidates'&&<div>
           {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
           <div className="vop-toolbar">
