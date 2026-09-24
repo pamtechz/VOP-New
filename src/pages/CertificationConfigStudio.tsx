@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Copy, ExternalLink, Image, LockKeyhole, Move, Plus, RotateCw, Save, ShieldCheck, Trash2, Type, Upload } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Copy, ExternalLink, Eye, EyeOff, Image, LockKeyhole, Move, Plus, RotateCw, Save, ShieldCheck, Trash2, Type, Upload } from 'lucide-react';
 import CertificateArtwork, { CertificateArtworkRecord, CertificateTemplateConfig, CertificateTemplateElement } from '../components/certificates/CertificateArtwork';
 
 export interface CertificationConfig {
@@ -48,8 +48,7 @@ const DEFAULT_TEMPLATE: CertificateTemplateConfig = {
     { id: 'completed', type: 'text', x: 36.0, y: 44.6, width: 28, height: 3.2, text: 'has successfully completed the', fontSize: 14.5, fontWeight: 600, color: '#111111', textAlign: 'center' },
     { id: 'courseName', type: 'courseName', x: 22.0, y: 49.0, width: 56, height: 4.8, fontSize: 22, fontWeight: 800, color: '#111111', textAlign: 'center' },
     { id: 'courseSubtitle', type: 'text', x: 28.0, y: 53.9, width: 44, height: 5.0, text: 'as outlined by the Seventh-day Adventist Church', fontSize: 13.2, fontWeight: 600, color: '#111111', textAlign: 'center' },
-    { id: 'seal', type: 'image', x: 4.6, y: 66.7, width: 20.0, height: 22.5, src: '/assets/vop_logo.png', visible: true },
-    { id: 'signature', type: 'image', x: 83.8, y: 65.0, width: 13.5, height: 12.0, src: '/assets/pm_logo.png', visible: true },
+    { id: 'signature', type: 'image', x: 84.4, y: 64.5, width: 11.8, height: 10.5, visible: true },
     { id: 'directorName', type: 'text', x: 83.4, y: 77.0, width: 16.2, height: 4.2, text: 'Pr. Ernest', fontSize: 10.8, fontWeight: 800, color: '#111111', textAlign: 'center' },
     { id: 'directorTitle', type: 'text', x: 82.1, y: 81.0, width: 18.3, height: 3.7, text: 'BIBLE PHIL DIRECTOR', fontSize: 7.2, fontWeight: 700, color: '#111111', textAlign: 'center' },
     { id: 'appLogo', type: 'image', x: 45.2, y: 86.4, width: 2.0, height: 3.3, src: '/assets/vop_logo_2.png', visible: true },
@@ -149,6 +148,31 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
   const removeSelected = () => { if (!selected) return; const next = elements.filter(element => element.id !== selected.id); updateTemplate({ elements: next }); setSelectedId(next[0]?.id || ''); };
   const duplicateSelected = () => { if (!selected) return; const id = selected.id + '-copy-' + Date.now(); const clone = { ...selected, id, x: clamp(selected.x + 2, 0, 100 - selected.width), y: clamp(selected.y + 2, 0, 100 - selected.height) }; updateTemplate({ elements: [...elements, clone] }); setSelectedId(id); };
 
+  const handleCanvasKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!selected) return;
+    const step = event.shiftKey ? 1 : 0.25;
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      removeSelected();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      duplicateSelected();
+      return;
+    }
+    const movement: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step],
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    updateElement(selected.id, {
+      x: clamp(selected.x + delta[0], 0, 100 - selected.width),
+      y: clamp(selected.y + delta[1], 0, 100 - selected.height),
+    });
+  };
+
   const startDrag = (event: React.PointerEvent<HTMLElement>, element: CertificateTemplateElement) => {
     if (event.button !== 0) return;
     const artboard = event.currentTarget.closest('.vop-cert-template-artboard') as HTMLElement | null; const rect = artboard?.getBoundingClientRect(); if (!rect) return;
@@ -197,12 +221,13 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
           <button type="button" onClick={() => addElement('line')}><Move size={16}/><span>Line</span><Plus size={14}/></button>
           <div className="vop-cert-template-tool-divider"/>
           <button type="button" onClick={() => updateTemplate({ backgroundUrl: DEFAULT_BACKGROUND })}><Upload size={16}/><span>Use supplied background</span></button>
+          <div className="vop-cert-template-tool-note">The supplied VOP artwork is the base layer. Its border, blue ribbons, honeycomb pattern, VOP seal and SDA mark stay intact while editable fields sit above it.</div>
           <button type="button" onClick={() => { updateTemplate(JSON.parse(JSON.stringify(DEFAULT_TEMPLATE))); setSelectedId('title'); }}><RotateCw size={16}/><span>Reset to sample</span></button>
         </aside>
 
         <section className="vop-cert-template-editor-stage">
           <div className="vop-cert-template-stage-toolbar"><div><strong>Certificate canvas</strong><span>1513 × 1040 fixed artboard</span></div><div className="vop-cert-template-zoom"><button type="button" onClick={() => setZoom(value => clamp(value - .1, .4, 1))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(value => clamp(value + .1, .4, 1))}>+</button></div></div>
-          <div className="vop-cert-template-scroll"><div className="vop-cert-template-artboard" style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
+          <div className="vop-cert-template-scroll"><div className="vop-cert-template-artboard" tabIndex={0} role="application" aria-label="Certificate template editor. Use arrow keys to move the selected element." onKeyDown={handleCanvasKeyDown} style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
             <img className="vop-cert-template-editor-background" src={template.backgroundUrl || DEFAULT_BACKGROUND} alt=""/>
             {elements.map(element => {
               const style: React.CSSProperties = { left: element.x + '%', top: element.y + '%', width: element.width + '%', height: element.height + '%', transform: 'rotate(' + Number(element.rotate || 0) + 'deg)', color: element.color || '#111111', fontSize: Math.max(7, (element.fontSize || 16) * zoom) + 'px', fontWeight: element.fontWeight || 600, textAlign: element.textAlign || 'center', opacity: element.opacity ?? 1 };
@@ -222,13 +247,22 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
               return <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>{content}</div>;
             })}
           </div></div>
-          <div className="vop-cert-template-hint"><Move size={15}/> Drag any field to reposition it. Use the inspector to change text, size, colour, alignment, dimensions and rotation.</div>
+          <div className="vop-cert-template-hint"><Move size={15}/> Drag to reposition • Arrow keys nudge • Shift + Arrow moves farther • Ctrl/Cmd + D duplicates • Delete removes • Use the inspector for text, dimensions, rotation and visibility.</div>
         </section>
 
         <aside className="vop-cert-template-inspector">
           <div className="vop-cert-template-panel-head"><strong>Properties</strong><span>{selected?.type || 'Nothing selected'}</span></div>
           {selected ? <>
-            <div className="vop-cert-template-inspector-actions"><button type="button" onClick={duplicateSelected} title="Duplicate"><Copy size={15}/></button><button type="button" onClick={removeSelected} title="Delete"><Trash2 size={15}/></button></div>
+            <div className="vop-cert-template-inspector-actions">
+              <button type="button" onClick={duplicateSelected} title="Duplicate (Ctrl/Cmd+D)"><Copy size={15}/></button>
+              <button type="button" onClick={removeSelected} title="Delete (Backspace/Delete)"><Trash2 size={15}/></button>
+              <button type="button" onClick={() => updateElement(selected.id, { visible: selected.visible === false })} title={selected.visible === false ? 'Show element' : 'Hide element'}>{selected.visible === false ? <EyeOff size={15}/> : <Eye size={15}/>}</button>
+              {['text','candidateName','courseName','courseCode','date','certificateNumber'].includes(selected.type) && <>
+                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'left' })} title="Align left"><AlignLeft size={15}/></button>
+                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'center' })} title="Align center"><AlignCenter size={15}/></button>
+                <button type="button" onClick={() => updateElement(selected.id, { textAlign: 'right' })} title="Align right"><AlignRight size={15}/></button>
+              </>}
+            </div>
             {selected.type === 'text' && <label><span>Text</span><textarea value={selected.text || ''} onChange={event => updateElement(selected.id, { text: event.target.value })}/></label>}
             {selected.type === 'image' && <label><span>Image URL</span><input value={selected.src || ''} onChange={event => updateElement(selected.id, { src: event.target.value })}/></label>}
             {['text','candidateName','courseName','courseCode','date','certificateNumber'].includes(selected.type) && <>
