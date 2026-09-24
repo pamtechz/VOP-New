@@ -297,7 +297,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     if (record.sharingScope !== 'shared' || !record.published) return;
     setSaving(true); setError('');
     try {
-      await guideAdmin('forkGuide', { sourceId: record.id });
+      await guideAdmin('forkGuide', { sourceId: record.id }, organizationId);
       setMessage('Shared guide copied into your organization as a draft.');
       onSaved?.(); await load();
     } catch (reason) {
@@ -310,7 +310,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     setSaving(true);
     setError('');
     try {
-      await guideAdmin('archiveGuide', { language: record.language });
+      await guideAdmin('archiveGuide', { language: record.language }, organizationId);
       setMessage('Guide archived.');
       onSaved?.();
       await load();
