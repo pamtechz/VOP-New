@@ -27,7 +27,7 @@ export const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ announceme
       <div className="vop-ann-top-icon"><Bell size={20}/></div>
     </div>
     {featured ? <section className="vop-ann-hero" style={featured.imageUrl?{backgroundImage:`linear-gradient(90deg,#061c43f2 0%,#0b2c66cf 48%,#071a35a0 100%),url("${featured.imageUrl}")`}:undefined}>
-      <div><span className="vop-ann-featured">{t('announcements.featured','★ FEATURED')}</span><h2>{featured.title}</h2><p>{featured.description}</p>{featured.actionUrl&&<a href={featured.actionUrl} target="_blank" rel="noreferrer">{featured.actionText || '{t('common.learn_more','Learn More')}'} <ArrowRight size={16}/></a>}</div>
+      <div><span className="vop-ann-featured">{t('announcements.featured','★ FEATURED')}</span><h2>{featured.title}</h2><p>{featured.description}</p>{featured.actionUrl&&<a href={featured.actionUrl} target="_blank" rel="noreferrer">{featured.actionText || t('common.learn_more','Learn More')} <ArrowRight size={16}/></a>}</div>
     </section> : <div className="vop-ann-empty"><Megaphone size={40}/><h2>{t('announcements.empty_title','No published announcements')}</h2><p>{t('announcements.empty_desc','There are no announcements available at the moment.')}</p></div>}
     <div className="vop-ann-categories">{categories.map(item=><button key={item} type="button" className={category===item?'active':''} onClick={()=>setCategory(item)}>{item}</button>)}</div>
     <div className="vop-ann-toolbar"><h2>{t('announcements.latest','Latest Updates')}</h2><div><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t('announcements.search','Search announcements…')}/></div></div>
