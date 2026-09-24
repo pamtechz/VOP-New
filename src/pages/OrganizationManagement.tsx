@@ -49,6 +49,9 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [memberSearch,setMemberSearch]=useState('');
   const [memberMatches,setMemberMatches]=useState<DirectoryUser[]>([]);
   const [selectedUser,setSelectedUser]=useState<DirectoryUser|null>(null);
+  const [ownerSearch,setOwnerSearch]=useState('');
+  const [ownerMatches,setOwnerMatches]=useState<DirectoryUser[]>([]);
+  const [selectedOwner,setSelectedOwner]=useState<DirectoryUser|null>(null);
   const [showCreateMember,setShowCreateMember]=useState(false);
   const [newMemberName,setNewMemberName]=useState('');
   const [newMemberEmail,setNewMemberEmail]=useState('');
@@ -82,6 +85,17 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   useEffect(()=>{void load();},[]);
 
   useEffect(()=>{
+    if(ownerSearch.trim().length<2){setOwnerMatches([]);return;}
+    const timer=window.setTimeout(()=>void (async()=>{
+      try {
+        const body=await api('searchUsers',{organizationId:selected?.id,query:ownerSearch.trim()});
+        setOwnerMatches((body.items||[]) as DirectoryUser[]);
+      } catch(e){setError(e instanceof Error?e.message:'Could not search accounts.');}
+    })(),250);
+    return()=>window.clearTimeout(timer);
+  },[ownerSearch,selected?.id]);
+
+  useEffect(()=>{
     if(memberSearch.trim().length<2){setMemberMatches([]);return;}
     const timer=window.setTimeout(()=>void (async()=>{
       try {
@@ -91,6 +105,17 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     })(),250);
     return()=>window.clearTimeout(timer);
   },[memberSearch,selected?.id]);
+
+  const assignOwner=async()=>{
+    if(!selected||!selectedOwner)return;
+    setSaving(true);setError('');
+    try{
+      await api('assignOwner',{organizationId:selected.id,uid:selectedOwner.uid});
+      setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);
+      setMessage('Organization owner assigned.');await load();await loadDetails(selected.id);
+    }catch(e){setError(e instanceof Error?e.message:'Could not assign the organization owner.');}
+    finally{setSaving(false);}
+  };
 
   const create=async()=>{
     if(!name.trim()) return;
@@ -107,7 +132,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
 
   const selectOrganization=(item:Organization)=>{
     setSelected(item);setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(quotaState(item.quotas||{}));
-    setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setInviteUrl('');void loadDetails(item.id);
+    setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteUrl('');void loadDetails(item.id);
   };
 
   const save=async()=>{
@@ -205,6 +230,23 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
             <div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value="standard">Standard</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></div>
             <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div>
           </div>
+
+          {isSuperAdmin&&<div style={{marginTop:16}}>
+            <div className="vop-section-title"><div><h3>Organization owner</h3><p>{selected.ownerUid ? 'The current owner is shown in the member list below. Assigning a new owner transfers ownership from the previous owner.' : 'No owner is assigned yet. The Super Admin must assign an organization owner.'}</p></div><Shield size={18}/></div>
+            <div className="vop-form-grid">
+              <div className="vop-field" style={{position:'relative'}}>
+                <label>Find owner by name or email</label>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}><Search size={17}/><input value={ownerSearch} onChange={e=>{setOwnerSearch(e.target.value);setSelectedOwner(null)}} placeholder="Search an existing VOP account"/></div>
+                {ownerMatches.length>0&&<div style={{position:'absolute',zIndex:20,left:0,right:0,top:'100%',background:'#fff',border:'1px solid #dbe3ef',borderRadius:10,boxShadow:'0 12px 30px rgba(20,40,80,.12)',overflow:'hidden'}}>
+                  {ownerMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedOwner(user);setOwnerSearch(user.displayName||user.email);setOwnerMatches([])}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',border:0,borderBottom:'1px solid #eef2f7',background:'#fff',cursor:'pointer'}}>
+                    <strong>{user.displayName||'Unnamed account'}</strong><span style={{display:'block',fontSize:12,color:'#7183a4'}}>{user.email}</span>
+                    {user.organizationId&&<small style={{color:'#9a6700'}}>Already assigned to an organization</small>}
+                  </button>)}
+                </div>}
+              </div>
+              <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!selectedOwner} onClick={()=>void assignOwner()}><Shield size={16}/>Assign Owner</button></div>
+            </div>
+          </div>}
 
           {isSuperAdmin&&<div style={{marginTop:16}}>
             <div className="vop-section-title"><div><h3>Usage limits</h3><p>Set limits with simple fields. Leave a field empty for unlimited.</p></div><Shield size={18}/></div>
