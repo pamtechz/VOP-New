@@ -179,7 +179,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
             <label>{t('prayer.request','Your request')}<textarea value={requestText} onChange={e => setRequestText(e.target.value)} maxLength={3000} rows={7} placeholder="Share only what you are comfortable sharing with the ministry…"/></label>
             <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? 'Private prayer' : 'Community prayer'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? 'Make community' : 'Keep private'}</button></div>
           </div>
-          <footer><button type="button" onClick={() => setShowComposer(false)}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/{saving ? t('common.sending','Sending…') : t('prayer.send','Send request')}</button></footer>
+          <footer><button type="button" onClick={() => setShowComposer(false)}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? t('common.sending','Sending…') : t('prayer.send','Send request')}</button></footer>
         </form>
       </div>}
     </div>
