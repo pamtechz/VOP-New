@@ -162,15 +162,34 @@ export async function writeTenantAudit(
   before?: DocumentData,
   after?: DocumentData,
 ) {
-  if (!ctx.organizationId) return;
-  await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).add({
-    actorUid: ctx.auth.uid,
-    actorEmail: ctx.auth.email || '',
-    action,
-    target,
-    organizationId: ctx.organizationId,
-    before: before || null,
-    after: after || null,
-    timestamp: FieldValue.serverTimestamp(),
-  });
+  const tenantKey = tenantOwnerKey(ctx);
+  if (!tenantKey) return;
+  if (ctx.tenantType === 'organization') {
+    await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).add({
+      actorUid: ctx.auth.uid,
+      actorEmail: ctx.auth.email || '',
+      action,
+      target,
+      organizationId: ctx.organizationId,
+      tenantType: ctx.tenantType,
+      tenantId: tenantKey,
+      before: before || null,
+      after: after || null,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+    return;
+  }
+  if (ctx.tenantType === 'hierarchy') {
+    await ctx.db.collection('tenantAudit').doc(tenantKey).collection('entries').add({
+      actorUid: ctx.auth.uid,
+      actorEmail: ctx.auth.email || '',
+      action,
+      target,
+      tenantType: ctx.tenantType,
+      tenantId: tenantKey,
+      before: before || null,
+      after: after || null,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+  }
 }
