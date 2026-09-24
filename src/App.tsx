@@ -76,39 +76,45 @@ export const App: React.FC = () => {
         setAllUsers([]);
         return;
       }
+      const params = new URLSearchParams(window.location.search);
+      const inviteToken = params.get('invite');
+      const shareCode = params.get('ref');
+
+      // An invited account may be a newly created Firebase account with no
+      // Firestore profile yet. Accept the invitation first so the server can
+      // provision the tenant membership/profile before the normal profile
+      // bootstrap check runs.
+      if (inviteToken && firebaseAuth.currentUser) {
+        try {
+          const token = await firebaseAuth.currentUser.getIdToken();
+          const response = await fetch('/api/admin/organizations', {
+            method:'POST',
+            headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+            body:JSON.stringify({action:'acceptInvite',token:inviteToken})
+          });
+          const result = await response.json().catch(()=>({}));
+          if (response.ok) {
+            await firebaseAuth.currentUser.getIdToken(true);
+            window.history.replaceState({}, '', window.location.pathname);
+            setStudyError('');
+          } else if (result?.error) {
+            setStudyError(String(result.error));
+          }
+        } catch (inviteError) {
+          console.error('Organization invitation acceptance failed', inviteError);
+          setStudyError(inviteError instanceof Error ? inviteError.message : 'The organization invitation could not be accepted.');
+        }
+      }
+
       void loadFirestoreUser(firebaseUser.uid).then(async (profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
-          setStudyError('Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
+          setStudyError(previous => previous || 'Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
           return;
         }
         setCurrentUser(profile);
         setAllUsers([profile]);
-        const params = new URLSearchParams(window.location.search);
-        const inviteToken = params.get('invite');
-        const shareCode = params.get('ref');
-        if (inviteToken && firebaseAuth.currentUser) {
-          try {
-            const token = await firebaseAuth.currentUser.getIdToken();
-            const response = await fetch('/api/admin/organizations', {
-              method:'POST',
-              headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-              body:JSON.stringify({action:'acceptInvite',token:inviteToken})
-            });
-            const result = await response.json().catch(()=>({}));
-            if (response.ok) {
-              window.history.replaceState({}, '', window.location.pathname);
-              const refreshed = await loadFirestoreUser(firebaseUser.uid);
-              if (refreshed) setCurrentUser(refreshed);
-              setStudyError('');
-            } else if (result?.error) {
-              setStudyError(String(result.error));
-            }
-          } catch (inviteError) {
-            console.error('Organization invitation acceptance failed', inviteError);
-          }
-        }
         if (shareCode && firebaseAuth.currentUser) {
           try {
             const token = await firebaseAuth.currentUser.getIdToken();
