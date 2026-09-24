@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit } from '../server/tenant.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey } from '../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -8,6 +8,10 @@ function safeId(value: unknown) {
   const id = String(value || '').trim();
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) throw new Error('A valid quiz ID is required.');
   return id;
+}
+
+function canManageQuizTenant(ctx: Awaited<ReturnType<typeof authenticateTenant>>) {
+  return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor'].includes(String(ctx.membership.role || ''));
 }
 
 function normalizeQuestions(value: unknown) {
@@ -27,11 +31,14 @@ export default async function handler(req: Request, res: Response) {
         const snap = await ctx.db.collection('quizzes').get();
         return res.status(200).json({ ok:true, items:snap.docs.map(d => ({id:d.id,...d.data()})) });
       }
-      const [owned, shared] = await Promise.all([
-        ctx.db.collection('quizzes').where('organizationId','==',ctx.organizationId).get(),
-        ctx.db.collection('quizzes').where('sharingScope','==','shared').where('published','==',true).get(),
-      ]);
-      const items = [...owned.docs, ...shared.docs.filter(doc => String(doc.data().organizationId || '') !== ctx.organizationId)]
+      const ownerTenantId = tenantOwnerKey(ctx);
+      const owned = ctx.tenantType === 'hierarchy'
+        ? await ctx.db.collection('quizzes').where('ownerTenantId','==',ownerTenantId).get()
+        : await ctx.db.collection('quizzes').where('organizationId','==',ctx.organizationId).get();
+      const shared = await ctx.db.collection('quizzes').where('sharingScope','==','shared').where('published','==',true).get();
+      const items = [...owned.docs, ...shared.docs.filter(doc => ctx.tenantType === 'hierarchy'
+        ? String(doc.data().ownerTenantId || '') !== ownerTenantId
+        : String(doc.data().organizationId || '') !== ctx.organizationId)]
         .map(d => ({
           id:d.id,
           ...d.data(),
@@ -51,14 +58,14 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'upsert') {
-      requireOrgRole(ctx, ['owner','admin','editor']);
-      if (!ctx.organizationId) throw new Error('Select an organization before creating tenant content.');
+      if (!canManageQuizTenant(ctx)) throw new Error('You do not have permission to manage quizzes for this tenant.');
+      if (ctx.tenantType === 'platform' && !ctx.isSuperAdmin) throw new Error('Select a tenant before creating content.');
       const id = safeId(body.id || crypto.randomUUID().replace(/-/g, '').slice(0, 20));
       const existing = await ctx.db.doc(`quizzes/${id}`).get();
       const current = existing.exists ? existing.data() : undefined;
       if (!existing.exists) await enforceQuota(ctx, 'quizzes', 'maxQuizzes');
       if (existing.exists && !canEditCanonicalContent(ctx, current)) throw new Error('Only the owning organization or VOP Super Admin can edit this quiz.');
-      if (existing.exists && String(current?.organizationId || '') !== ctx.organizationId && !ctx.isSuperAdmin) throw new Error('This quiz belongs to another organization.');
+      if (existing.exists && !ctx.isSuperAdmin && !canEditCanonicalContent(ctx, current)) throw new Error('This quiz belongs to another tenant or contributor.');
       const now = new Date().toISOString();
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
@@ -68,8 +75,9 @@ export default async function handler(req: Request, res: Response) {
       await ctx.db.doc(`quizzes/${id}`).set({
         ...data,
         id,
-        organizationId: current?.organizationId || ctx.organizationId,
-        ownerOrganizationId: current?.ownerOrganizationId || current?.organizationId || ctx.organizationId,
+        organizationId: current?.organizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
+        ownerOrganizationId: current?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
+        ownerTenantId: current?.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: current?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
@@ -85,8 +93,8 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'fork') {
-      requireOrgRole(ctx, ['owner','admin','editor']);
-      if (!ctx.organizationId) throw new Error('Select an organization before copying content.');
+      if (!canManageQuizTenant(ctx)) throw new Error('You do not have permission to copy quizzes for this tenant.');
+      if (ctx.tenantType === 'platform' && !ctx.isSuperAdmin) throw new Error('Select a tenant before copying content.');
       const sourceId = safeId(body.sourceId);
       const source = await ctx.db.doc(`quizzes/${sourceId}`).get();
       if (!source.exists || source.data()?.published !== true || source.data()?.sharingScope !== 'shared') throw new Error('Only approved shared quizzes can be copied.');
@@ -96,8 +104,9 @@ export default async function handler(req: Request, res: Response) {
       await ctx.db.doc(`quizzes/${id}`).set({
         ...data,
         id,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: ctx.organizationId,
+        organizationId: ctx.tenantType === 'organization' ? ctx.organizationId : '',
+        ownerOrganizationId: ctx.tenantType === 'organization' ? ctx.organizationId : '',
+        ownerTenantId: tenantOwnerKey(ctx),
         ownerUid: ctx.auth.uid,
         sourceContentId: sourceId,
         canonical: true,
