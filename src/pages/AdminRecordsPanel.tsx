@@ -776,7 +776,7 @@ function RadioAdminDashboard({
   records: AdminRecord[]; playlists: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editingId: string | null; saving: boolean; error: string; message: string;
   openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
-  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void;
+  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void; setMessage: (value: string) => void;
 }) {
   const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
   const [search, setSearch] = useState('');
