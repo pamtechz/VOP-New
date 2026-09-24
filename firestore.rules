@@ -256,7 +256,7 @@ service cloud.firestore {
       }
 
       match /settings/{settingId} {
-        allow get: if canManageOrg(organizationId);
+        allow get: if isSuperAdmin() || isOrgMember(organizationId);
         allow list: if false;
         allow create, update, delete: if canManageOrg(organizationId);
       }
