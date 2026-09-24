@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey } from '../server/tenant.js';
+import { requirePermission } from '../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -61,6 +62,8 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'upsert') {
+      const existingForPermission = await ctx.db.doc(`quizzes/${safeId(body.id)}`).get();
+      await requirePermission(ctx, 'quizzes', existingForPermission.exists ? 'update' : 'create');
       if (!canManageQuizTenant(ctx)) throw new Error('You do not have permission to manage quizzes for this tenant.');
       if (ctx.tenantType === 'platform' && !ctx.isSuperAdmin) throw new Error('Select a tenant before creating content.');
       const id = safeId(body.id || crypto.randomUUID().replace(/-/g, '').slice(0, 20));
