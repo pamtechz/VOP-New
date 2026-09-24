@@ -123,7 +123,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
   const elements = template.elements || [];
   const selected = elements.find(element => element.id === selectedId) || elements[0] || null;
 
-  const update = <K extends keyof CertificationConfig>(key: K, value: CertificationConfig[K]) => { setError(''); setDraft(current => ({ ...current, [key]: value })); };
+  const update = <K extends keyof CertificationConfig>(key: K, value: CertificationConfig[K]) => {
+    setError('');
+    setDraft(current => key === 'backgroundUrl'
+      ? { ...current, [key]: value, template: { ...(current.template || normalizeTemplate()), backgroundUrl: String(value || DEFAULT_BACKGROUND) } }
+      : { ...current, [key]: value });
+  };
   const updateTemplate = (patch: Partial<CertificateTemplateConfig>) => { setError(''); setDraft(current => ({ ...current, template: { ...(current.template || normalizeTemplate()), ...patch } })); };
   const updateElement = (id: string, patch: Partial<CertificateTemplateElement>) => {
     setDraft(current => { const currentTemplate = current.template || normalizeTemplate(); return { ...current, template: { ...currentTemplate, elements: (currentTemplate.elements || []).map(element => element.id === id ? { ...element, ...patch } : element) } }; });
