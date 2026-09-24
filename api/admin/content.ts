@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -16,6 +16,8 @@ const ORG_COLLECTIONS = new Set([
   'announcements','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides'
 ]);
+
+const HIERARCHY_COLLECTIONS = new Set(['unions','conferences','districts','churches']);
 
 function safeId(value: unknown) {
   const id = String(value || '').trim();
@@ -52,8 +54,10 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
-    const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection) ? ['owner','admin','editor'] : ['owner','admin'];
-    if (action !== 'list' && action !== 'listGuides') requireOrgRole(ctx, editorRoles);
+    const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
+      ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
+      : ['owner','admin'];
+    if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection)) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'settings' && ctx.organizationId) {
         requireOrgRole(ctx, ['owner','admin']);
@@ -292,6 +296,28 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'list') {
+      if (HIERARCHY_COLLECTIONS.has(collection) && !ctx.isSuperAdmin) {
+        const role = String(ctx.profile.role || '');
+        const nodeId = String(ctx.profile.adminNodeId || '');
+        let snap;
+        if (collection === 'unions' && role === 'union_admin') {
+          snap = await ctx.db.collection('unions').where('__name__','==',nodeId).get();
+        } else if (collection === 'conferences' && role === 'union_admin') {
+          snap = await ctx.db.collection('conferences').where('unionId','==',nodeId).get();
+        } else if (collection === 'districts' && role === 'conference_admin') {
+          snap = await ctx.db.collection('districts').where('conferenceId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'district_admin') {
+          snap = await ctx.db.collection('churches').where('districtId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'church_admin') {
+          snap = await ctx.db.collection('churches').where('__name__','==',nodeId).get();
+        } else {
+          return res.status(200).json({ ok:true, items:[] });
+        }
+        return res.status(200).json({
+          ok:true,
+          items:snap.docs.map(d=>({id:d.id,...d.data(),canEdit:true}))
+        });
+      }
       if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
         if (collection === 'certificationConfig' && ctx.isSuperAdmin) {
           const s = await ctx.db.doc('system/certification').get();
@@ -482,7 +508,8 @@ export default async function handler(req: Request, res: Response) {
           ...incoming,
           id,
           organizationId: '',
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
+          ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
           canonical: true,
           sharingScope: 'shared',
