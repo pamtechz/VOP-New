@@ -65,6 +65,14 @@ service cloud.firestore {
       );
     }
 
+    function validOrganizationMemberData(data, organizationId) {
+      return data.get('uid', '') is string
+        && data.get('uid', '') != ''
+        && data.get('organizationId', '') == organizationId
+        && data.get('role', '') in ['owner', 'admin', 'editor', 'mentor', 'teacher', 'learner', 'viewer']
+        && data.get('active', false) is bool;
+    }
+
     function isOrganizationAdmin(orgId) {
       return isSuperAdmin() || (
         isOrgMember(orgId)
@@ -251,8 +259,40 @@ service cloud.firestore {
       match /members/{uid} {
         allow get: if isSuperAdmin() || uid == request.auth.uid || canManageOrg(organizationId);
         allow list: if isSuperAdmin() || canManageOrg(organizationId);
-        allow create, update: if isSuperAdmin() || (canManageOrg(organizationId) && uid != request.auth.uid);
-        allow delete: if isSuperAdmin() || (canManageOrg(organizationId) && uid != request.auth.uid);
+
+        // Membership is an authorization record. Non-platform administrators may
+        // manage non-owner members, but cannot create an owner, change the tenant
+        // identifier, or modify their own membership directly from the client.
+        // The server-side organization API performs the coordinated membership +
+        // user-profile + Auth-claim update for assignment/removal.
+        allow create: if isSuperAdmin()
+          || (
+            canManageOrg(organizationId)
+            && uid != request.auth.uid
+            && request.resource.data.get('uid', '') == uid
+            && validOrganizationMemberData(request.resource.data, organizationId)
+            && request.resource.data.get('role', '') != 'owner'
+            && get(/databases/$(database)/documents/users/$(uid)).data.get('organizationId', '') == organizationId
+            && get(/databases/$(database)/documents/users/$(uid)).data.get('organizationRole', '') == request.resource.data.get('role', '')
+          );
+
+        allow update: if isSuperAdmin()
+          || (
+            canManageOrg(organizationId)
+            && uid != request.auth.uid
+            && validOrganizationMemberData(resource.data, organizationId)
+            && validOrganizationMemberData(request.resource.data, organizationId)
+            && resource.data.get('role', '') != 'owner'
+            && request.resource.data.get('role', '') != 'owner'
+            && request.resource.data.get('organizationId', '') == resource.data.get('organizationId', '')
+            && request.resource.data.get('uid', '') == resource.data.get('uid', '')
+            && get(/databases/$(database)/documents/users/$(uid)).data.get('organizationId', '') == organizationId
+            && get(/databases/$(database)/documents/users/$(uid)).data.get('organizationRole', '') == request.resource.data.get('role', '')
+          );
+
+        // Removal must go through the canonical server API so the user's profile
+        // and authentication claims are cleared atomically with the membership.
+        allow delete: if isSuperAdmin();
       }
 
       match /settings/{settingId} {

@@ -385,6 +385,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       allowed.add('radio');
       allowed.add('certification');
       allowed.add('mentorship');
+      allowed.add('organizations');
     } else if (role === 'union_admin') {
       // Hierarchy administrators are first-class tenants. Their settings,
       // curriculum and content access is scoped to their reconciled tenant.

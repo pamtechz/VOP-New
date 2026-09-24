@@ -147,6 +147,23 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     finally{setSaving(false);}
   };
 
+  const changeMemberRole=async(uid:string,role:string)=>{
+    if(!selected||role==='owner')return;
+    setSaving(true);setError('');
+    try{await api('setMember',{organizationId:selected.id,uid,role,active:true});setMessage('Member role updated.');await loadDetails(selected.id);await load();}
+    catch(e){setError(e instanceof Error?e.message:'Could not update the member role.');}
+    finally{setSaving(false);}
+  };
+
+  const removeMember=async(member:Member)=>{
+    if(!selected||member.role==='owner')return;
+    if(!window.confirm(`Remove ${member.displayName||member.email||'this user'} from ${selected.name}? Their VOP account will remain active, but they will no longer belong to this organization.`))return;
+    setSaving(true);setError('');
+    try{await api('removeMember',{organizationId:selected.id,uid:member.uid});setMessage('Member removed from the organization.');await loadDetails(selected.id);await load();}
+    catch(e){setError(e instanceof Error?e.message:'Could not remove the member.');}
+    finally{setSaving(false);}
+  };
+
   const quotaLabels:Record<keyof Quotas,string>={maxUsers:'Members / users',maxGuides:'Guides',maxQuizzes:'Quizzes',maxAnnouncements:'Announcements',maxRadioItems:'Radio items',maxMaterials:'Materials'};
 
   return <div>
@@ -231,7 +248,25 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
               </div>
             </div>}
 
-            <div className="vop-table-wrap" style={{marginTop:12}}><table className="vop-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>{members.map(item=><tr key={item.uid}><td>{item.displayName||'Account'}</td><td>{item.email||'—'}</td><td>{item.role}</td><td>{item.active?'Active':'Inactive'}</td></tr>)}</tbody></table>{!members.length&&<div className="vop-empty">No members have been added yet.</div>}</div>
+            <div className="vop-table-wrap" style={{marginTop:12}}>
+              <table className="vop-table"><thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Status</th><th style={{textAlign:'right'}}>Actions</th></tr></thead><tbody>
+                {members.map(item=>{
+                  const isOwner=item.role==='owner';
+                  return <tr key={item.uid}>
+                    <td><strong>{item.displayName||'Account'}</strong>{isOwner&&<span className="vop-chip" style={{marginLeft:8}}>Owner</span>}</td>
+                    <td>{item.email||'—'}</td>
+                    <td>
+                      {isOwner?<span className="vop-chip">Owner</span>:<select value={item.role} disabled={saving} aria-label={`Role for ${item.displayName||item.email||'member'}`} onChange={e=>void changeMemberRole(item.uid,e.target.value)}>
+                        <option value="admin">Admin</option><option value="editor">Editor</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="learner">Learner</option><option value="viewer">Viewer</option>
+                      </select>}
+                    </td>
+                    <td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td>
+                    <td style={{textAlign:'right'}}>{isOwner?<span style={{fontSize:12,color:'#7183a4'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={saving||!item.active} onClick={()=>void removeMember(item)}>Remove</button>}</td>
+                  </tr>;
+                })}
+              </tbody></table>
+              {!members.length&&<div className="vop-empty"><Users size={30}/><h4>No members yet</h4><p>Assign an existing account or create a new one above.</p></div>}
+            </div>
           </div>
 
           <div style={{marginTop:18}}>

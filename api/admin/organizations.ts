@@ -224,19 +224,24 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'setMember') {
       const uid = String(body.uid || '').trim();
-      if (!(await ctx.db.doc(`users/${uid}`).get()).exists) throw new Error('The selected user account does not exist.');
+      if (!uid || uid === ctx.auth.uid) throw new Error('An administrator cannot change their own organization membership from this screen.');
+      const profileRef = ctx.db.doc(`users/${uid}`);
+      const existingProfile = await profileRef.get();
+      if (!existingProfile.exists) throw new Error('The selected user account does not exist.');
       const memberRole = String(body.role || 'learner');
-      if (!uid || !['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Valid member details are required.');
-      if (!ctx.isSuperAdmin && memberRole === 'owner') throw new Error('Only the VOP Super Admin can assign platform ownership.');
-      const existingProfile = await ctx.db.doc(`users/${uid}`).get();
+      if (!['admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('A valid organization role is required.');
       const existingData = existingProfile.data() || {};
       const existingOrganizationId = String(existingData.organizationId || '').trim();
+      const targetMemberRef = ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`);
+      const existingMember = await targetMemberRef.get();
+      if (String(existingMember.data()?.role || '') === 'owner' || String(existingData.organizationRole || '') === 'owner') {
+        throw new Error('The organization owner cannot be changed from the member manager.');
+      }
       if (!ctx.isSuperAdmin && existingOrganizationId && existingOrganizationId !== ctx.organizationId) {
         throw new Error('This user belongs to another organization.');
       }
       const now = new Date().toISOString();
-      const targetMemberRef = ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`);
-      const previousMemberRef = existingOrganizationId && existingOrganizationId !== ctx.organizationId
+      const previousMemberRef = ctx.isSuperAdmin && existingOrganizationId && existingOrganizationId !== ctx.organizationId
         ? ctx.db.doc(`organizations/${existingOrganizationId}/members/${uid}`)
         : null;
       await ctx.db.runTransaction(async transaction => {
@@ -245,14 +250,44 @@ export default async function handler(req: Request, res: Response) {
           uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false,
           invitedBy: ctx.auth.uid, joinedAt: String(existingData.organizationId || '') === ctx.organizationId ? String(existingData.joinedAt || now) : now, updatedAt: now
         }, { merge: true });
-        transaction.set(ctx.db.doc(`users/${uid}`), {
+        transaction.set(profileRef, {
           organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       });
       const authService = getAuth(ctx.db.app);
       await authService.setCustomUserClaims(uid, { role:'student', organizationId:ctx.organizationId, organizationRole:memberRole });
-      await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingOrganizationId && existingOrganizationId !== ctx.organizationId ? { previousOrganizationId: existingOrganizationId } : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
+      await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingMember.exists ? existingMember.data() : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'removeMember') {
+      const uid = String(body.uid || '').trim();
+      if (!uid || uid === ctx.auth.uid) throw new Error('An administrator cannot remove their own organization membership from this screen.');
+      const organizationRef = ctx.db.doc(`organizations/${ctx.organizationId}`);
+      const [organizationSnap, memberSnap, profileSnap] = await Promise.all([
+        organizationRef.get(),
+        ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).get(),
+        ctx.db.doc(`users/${uid}`).get()
+      ]);
+      if (!memberSnap.exists) throw new Error('That user is not a member of this organization.');
+      const memberData = memberSnap.data() || {};
+      const profileData = profileSnap.data() || {};
+      if (String(memberData.role || '') === 'owner' || String(organizationSnap.data()?.ownerUid || '') === uid || String(profileData.organizationRole || '') === 'owner') {
+        throw new Error('The organization owner cannot be removed. Transfer ownership through the Super Admin workflow first.');
+      }
+      const now = new Date().toISOString();
+      await ctx.db.runTransaction(async transaction => {
+        transaction.set(memberSnap.ref, {
+          active:false, removedAt:now, removedBy:ctx.auth.uid, updatedAt:now
+        }, { merge:true });
+        transaction.set(profileSnap.ref, {
+          organizationId:'', organizationRole:'learner', updatedAt:FieldValue.serverTimestamp()
+        }, { merge:true });
+      });
+      const authService = getAuth(ctx.db.app);
+      await authService.setCustomUserClaims(uid, { role:'student', organizationId:'', organizationRole:'learner' });
+      await writeTenantAudit(ctx, 'membership.remove', memberSnap.ref.path, memberData, { uid, active:false, removedBy:ctx.auth.uid });
+      return res.status(200).json({ ok:true });
     }
     if (action === 'setStatus') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can change organization status.');
