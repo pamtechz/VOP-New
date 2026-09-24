@@ -429,7 +429,7 @@ service cloud.firestore {
 
     // First-class SaaS organizations and memberships.
     match /organizations/{organizationId} {
-      allow get: if isSuperAdmin() || isOrgMember(organizationId);
+      allow get: if isSuperAdmin() || isOrgMember(organizationId) || hierarchyOrganizationScope(organizationId);
       allow list: if isSuperAdmin();
       allow create: if isSuperAdmin();
       allow update: if isSuperAdmin() || canManageOrg(organizationId);
