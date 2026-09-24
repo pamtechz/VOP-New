@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, hierarchyRole, organizationInHierarchyScope, accessibleOrganizationIds } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -582,7 +582,7 @@ export default async function handler(req: Request, res: Response) {
       }
     }
 
-    if (ORG_COLLECTIONS.has(collection) {
+    if (ORG_COLLECTIONS.has(collection)) {
       if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before managing content.');
       if (ctx.tenantType === 'hierarchy' && !(await organizationInHierarchyScope(ctx, effectiveOrganizationId))) throw new Error('The organization is outside your hierarchy scope.');
       const ref = ctx.db.doc(`${collection}/${id}`);
