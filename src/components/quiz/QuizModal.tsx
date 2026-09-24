@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { getStoredSettings } from '../../services/storage';
 import { gradeQuiz, isQuizConfigured } from '../../services/quiz';
 
 interface QuizModalProps {
@@ -13,6 +12,7 @@ interface QuizModalProps {
   onOpenCertificate: () => void;
   onContinue?: () => void;
   hasNextLesson?: boolean;
+  passThreshold: number;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
