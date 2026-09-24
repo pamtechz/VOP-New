@@ -590,37 +590,45 @@ service cloud.firestore {
       allow list: if signedIn() && (
         resource.data.candidateId == request.auth.uid
         || (
-          isSuperAdmin()
-          && resource.data.get('organizationId','') != ''
-        )
-        || (
           isAdmin()
           && resource.data.get('organizationId','') == organizationIdForUser()
+        )
+        || (
+          isOrgMember(organizationIdForUser())
+          && resource.data.get('organizationId','') == organizationIdForUser()
+          && resource.data.get('isPrivate',false) != true
         )
       );
 
       allow create: if signedIn()
-        && (request.resource.data.candidateId == request.auth.uid || (isOrgMember(organizationIdForUser()) && request.resource.data.get('organizationId','') == organizationIdForUser()));
+        && resource == null
+        && request.resource.data.candidateId == request.auth.uid
+        && request.resource.data.get('organizationId','') == organizationIdForUser()
+        && isOrgMember(organizationIdForUser());
 
       allow update: if signedIn()
         && (
           (
             resource.data.candidateId == request.auth.uid
             && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+            && request.resource.data.candidateId == request.auth.uid
           )
           || (
             isAdmin()
             && resource.data.get('organizationId','') == organizationIdForUser()
             && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+            && request.resource.data.candidateId == resource.data.candidateId
           )
         );
 
-      allow delete: if isSuperAdmin();
+      allow delete: if signedIn()
+        && (
+          resource.data.candidateId == request.auth.uid
+          || isSuperAdmin()
+        );
     }
 
-
-    // Learner-owned assessment evidence is readable only by the learner.
-    // Assessment writes remain server-authoritative.
+    
     match /assessmentAttempts/{id} {
       allow get, list: if signedIn() && (
         resource.data.get('candidateId', resource.data.get('userId', '')) == request.auth.uid
