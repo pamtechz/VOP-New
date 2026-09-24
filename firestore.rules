@@ -320,7 +320,8 @@ service cloud.firestore {
       return hierarchyTenantForField(data, 'unionId')
         || hierarchyTenantForField(data, 'conferenceId')
         || hierarchyTenantForField(data, 'districtId')
-        || hierarchyTenantForField(data, 'churchId');
+        || hierarchyTenantForField(data, 'churchId')
+        || hierarchyOrganizationScope(data.get('organizationId', ''));
     }
 
     function canManageHierarchyUser(data) {
@@ -471,15 +472,12 @@ service cloud.firestore {
 
     match /candidates/{id} {
       allow get, list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()));
-      allow create: if isSuperAdmin() || (
-        request.resource.data.get('organizationId','') == organizationIdForUser()
-        && canManageOrg(organizationIdForUser())
-      );
+        || canManageOrg(resource.data.get('organizationId',''));
+      allow create: if isSuperAdmin()
+        || canManageOrg(request.resource.data.get('organizationId',''));
       allow update, delete: if isSuperAdmin() || (
-        resource.data.get('organizationId','') == organizationIdForUser()
+        canManageOrg(resource.data.get('organizationId',''))
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && canManageOrg(organizationIdForUser())
       );
     }
 
