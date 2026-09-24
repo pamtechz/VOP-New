@@ -101,31 +101,76 @@ async function assertAdmin(db: FirebaseFirestore.Firestore, uid: string) {
   return actor;
 }
 
+async function hierarchyOrganizationContext(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+  actor: Record<string, unknown>,
+) {
+  const actorRole = String(actor.role || '');
+  return {
+    db,
+    auth: { uid } as never,
+    profile: actor,
+    organizationId: '',
+    membership: { role: actorRole, active: true },
+    isSuperAdmin: false,
+    tenantType: 'hierarchy' as const,
+    tenantId: actorRole + ':' + String(actor.adminNodeId || ''),
+  };
+}
+
 async function assertParticipant(db: FirebaseFirestore.Firestore, uid: string, conversation: Record<string, unknown>) {
   const actor = await profile(db, uid);
   const actorRole = String(actor.role || '');
   if (actorRole === 'super_admin') return;
 
-  const actorOrganizationId = String(actor.organizationId || '').trim();
   const conversationOrganizationId = String(conversation.organizationId || '').trim();
-  if (!actorOrganizationId || !conversationOrganizationId || actorOrganizationId !== conversationOrganizationId) {
-    throw new Error('You cannot access this conversation.');
-  }
+  if (!conversationOrganizationId) throw new Error('This conversation is missing its organization scope.');
 
-  if (['owner','admin'].includes(String(actor.organizationRole || ''))) return;
-
-  if (['union_admin','conference_admin','district_admin','church_admin'].includes(actorRole)) {
-    const studentId = String(conversation.studentId || '').trim();
-    if (!studentId) throw new Error('You cannot access this conversation.');
-    const student = await profile(db, studentId);
-    if (!sameTenant(actor, student, actorOrganizationId) || !sameScope(actor, student)) {
+  if (['owner','admin'].includes(String(actor.organizationRole || ''))) {
+    const actorOrganizationId = String(actor.organizationId || '').trim();
+    if (!actorOrganizationId || actorOrganizationId !== conversationOrganizationId) {
       throw new Error('You cannot access this conversation.');
     }
     return;
   }
 
-  if (String(conversation.studentId || '') === uid || String(conversation.mentorId || '') === uid) return;
-  throw new Error('You are not a participant in this conversation.');
+  if (['union_admin','conference_admin','district_admin','church_admin'].includes(actorRole)) {
+    const context = await hierarchyOrganizationContext(db, uid, actor);
+    if (!(await organizationInHierarchyScope(context, conversationOrganizationId))) {
+      throw new Error('You cannot access this conversation.');
+    }
+
+    const studentId = String(conversation.studentId || '').trim();
+    const mentorId = String(conversation.mentorId || '').trim();
+    if (!studentId || !mentorId) throw new Error('This conversation is missing a participant.');
+
+    const [student, mentor, assignment] = await Promise.all([
+      profile(db, studentId),
+      profile(db, mentorId),
+      db.doc(`mentorAssignments/${studentId}`).get(),
+    ]);
+    if (
+      String(student.organizationId || '').trim() !== conversationOrganizationId
+      || String(mentor.organizationId || '').trim() !== conversationOrganizationId
+      || !assignment.exists
+      || String(assignment.data()?.mentorId || '') !== mentorId
+      || String(assignment.data()?.organizationId || '') !== conversationOrganizationId
+      || assignment.data()?.status === 'inactive'
+    ) {
+      throw new Error('You cannot access this conversation.');
+    }
+    return;
+  }
+
+  if (String(conversation.studentId || '') !== uid && String(conversation.mentorId || '') !== uid) {
+    throw new Error('You are not a participant in this conversation.');
+  }
+
+  const participant = await profile(db, uid);
+  if (String(participant.organizationId || '').trim() !== conversationOrganizationId) {
+    throw new Error('You cannot access this conversation.');
+  }
 }
 
 function iso(value: unknown) {
