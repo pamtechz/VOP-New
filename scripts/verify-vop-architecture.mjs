@@ -14,6 +14,7 @@ const checks = [
     "tenantOwnerKey",
     "ownerTenantId",
     "ownerUid",
+    "ctx.tenantType === 'hierarchy'",
   ]],
   ['firestore.rules', [
     "'union_admin'",
