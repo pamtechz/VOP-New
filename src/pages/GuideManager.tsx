@@ -281,7 +281,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         published: editing.published,
         archived: false,
         sharingScope: editing.sharingScope,
-      });
+      }, organizationId);
       setEditing(null);
       setMessage(editing.published ? 'Guide published.' : 'Guide saved as draft.');
       onSaved?.();
