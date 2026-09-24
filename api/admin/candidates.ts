@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
+import { requirePermission } from '../../server/permissions.js';
 
 type Request = {
   method?: string;
@@ -27,6 +28,7 @@ export default async function handler(request: Request, response: Response) {
     if (body.action !== 'updateBaptism') return response.status(400).json({ error: 'Unsupported candidate action.' });
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
     const ctx = await authenticateTenant(request, requestedOrganizationId || undefined);
+    await requirePermission(ctx, 'users', 'update');
     if (ctx.tenantType === 'hierarchy') {
       if (!requestedOrganizationId || !(await organizationInHierarchyScope(ctx, requestedOrganizationId))) return response.status(403).json({ error: 'The selected organization is outside your hierarchy scope.' });
     } else {
