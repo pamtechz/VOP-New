@@ -24,9 +24,9 @@ const checks = [
   ['api/localization.ts', ['authenticateTenant','isSuperAdmin','published','bulkSave']],
   ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
   ['src/components/home/HomeDashboard.tsx', ['evangelism.title','evangelism.prayer','evangelism.radio']],
-  ['src/pages/PrayerPage.tsx', ['prayer.title','prayer.submit']],
+  ['src/pages/PrayerPage.tsx', ['prayer.hero_title','prayer.submit']],
   ['src/pages/ResourcesPage.tsx', ['vop-materials-page']],
-  ['src/pages/RadioPage.tsx', ['vop-radio-page']],
+  ['src/pages/RadioPage.tsx', ['vop-audience-radio']],
   ['src/components/reader/LessonReaderModal.tsx', ['lesson.next_page','lesson.complete']],
 ];
 const errors = [];
