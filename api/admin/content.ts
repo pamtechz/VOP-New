@@ -155,7 +155,7 @@ export default async function handler(req: Request, res: Response) {
       if (!language(lang) || !effectiveOrganizationId) throw new Error('A valid language and organization are required.');
       const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
-      if (!current.exists || !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can archive this guide.');
+      if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
       return res.status(200).json({ ok: true });
     }
@@ -230,7 +230,7 @@ export default async function handler(req: Request, res: Response) {
       if (!guide.exists || String(guide.data()?.organizationId || '') !== effectiveOrganizationId) throw new Error('The selected guide does not belong to this organization.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
-      if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
+      if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
         id: lessonId,
@@ -263,7 +263,7 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'unpublishLesson') {
         const current = await ref.get();
         if (!current.exists) throw new Error('The lesson was not found.');
-        if (!canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can unpublish this lesson.');
+        if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can unpublish this lesson.');
         await ref.set({ published:false, unpublishedAt:FieldValue.serverTimestamp(), unpublishedBy:ctx.auth.uid, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
         return res.status(200).json({ ok: true, item: { id: lessonId, published: false } });
       }
