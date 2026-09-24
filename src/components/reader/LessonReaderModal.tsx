@@ -396,7 +396,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               opacity: currentPageIndex === 0 || !configured ? 0.5 : 1,
             }}
           >
-            <ChevronLeft size={18} /> {currentPageIndex === 0 && hasPreviousLesson ? '{t('lesson.previous_lesson','Previous Lesson')}' : '{t('lesson.previous_page','Previous Page')}'}
+            <ChevronLeft size={18} /> {currentPageIndex === 0 && hasPreviousLesson ? t('lesson.previous_lesson','Previous Lesson') : t('lesson.previous_page','Previous Page')}
           </button>
 
           <button
