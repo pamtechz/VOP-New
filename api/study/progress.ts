@@ -284,6 +284,8 @@ export default async function handler(
       }, { merge: true });
 
       transaction.set(attemptRef, {
+        candidateId: decoded.uid,
+        userId: decoded.uid,
         score,
         passed,
         threshold,
