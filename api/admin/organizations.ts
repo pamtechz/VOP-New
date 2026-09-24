@@ -42,9 +42,7 @@ export default async function handler(req: Request, res: Response) {
       await ref.set({ id: organizationId, name, slug: slug(name), status: 'active', ownerUid: '', createdAt: now, updatedAt: now });
       return res.status(200).json({ ok: true, item: { id: organizationId, name, status: 'active' } });
     }
-    if (action === 'list') {
-      if (!ctx.isSuperAdmin) {
-        if (action === 'acceptInvite') {
+    if (action === 'acceptInvite') {
       const token = String(body.token || '').trim();
       if (!token) throw new Error('Invitation token is required.');
       const invite = await bootstrapDb.doc(`organizationInvites/${token}`).get();
@@ -53,7 +51,7 @@ export default async function handler(req: Request, res: Response) {
       if (data.status !== 'pending' || new Date(String(data.expiresAt || 0)).getTime() < Date.now()) throw new Error('This invitation has expired or has already been used.');
       const email = String(ctx.auth.email || '').trim().toLowerCase();
       if (email !== String(data.email || '').trim().toLowerCase()) throw new Error('Sign in with the email address that received this invitation.');
-      const organizationId = String(data.organizationId || '');
+      const organizationId = String(data.organizationId || '').trim();
       const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
       const existingProfile = await bootstrapDb.doc(`users/${ctx.auth.uid}`).get();
@@ -61,15 +59,40 @@ export default async function handler(req: Request, res: Response) {
       if (existingOrganizationId && existingOrganizationId !== organizationId) {
         throw new Error('This account is already assigned to another organization. An account cannot accept an invitation from a second tenant.');
       }
+      const role = String(data.role || 'learner');
+      if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) throw new Error('This invitation contains an invalid organization role.');
       const now = new Date().toISOString();
-      await bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`).set({uid:ctx.auth.uid,organizationId,role:String(data.role || 'learner'),active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},{merge:true});
-      await bootstrapDb.doc(`users/${ctx.auth.uid}`).set({organizationId,organizationRole:String(data.role || 'learner'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      await bootstrapDb.doc(`organizationInvites/${token}`).set({status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},{merge:true});
-      return res.status(200).json({ok:true,organizationId,role:String(data.role || 'learner')});
+      await bootstrapDb.runTransaction(async transaction => {
+        transaction.set(
+          bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`),
+          {uid:ctx.auth.uid,organizationId,role,active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},
+          {merge:true},
+        );
+        transaction.set(
+          bootstrapDb.doc(`users/${ctx.auth.uid}`),
+          {organizationId,organizationRole:role,updatedAt:FieldValue.serverTimestamp()},
+          {merge:true},
+        );
+        transaction.set(
+          bootstrapDb.doc(`organizationInvites/${token}`),
+          {status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},
+          {merge:true},
+        );
+      });
+      const authService = getAuth(bootstrapDb.app);
+      const currentRole = String(ctx.profile.role || '').trim();
+      const preservedPlatformRole = ['union_admin','conference_admin','district_admin','church_admin'].includes(currentRole) ? currentRole : 'student';
+      await authService.setCustomUserClaims(ctx.auth.uid, {
+        role: preservedPlatformRole,
+        organizationId,
+        organizationRole: role,
+      });
+      return res.status(200).json({ok:true,organizationId,role});
     }
 
-
-    requireOrgRole(ctx, ['owner','admin']);
+    if (action === 'list') {
+      if (!ctx.isSuperAdmin) {
+        requireOrgRole(ctx, ['owner','admin']);
         const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
         const data = organization.data() || {};
         const members = await organization.ref.collection('members').where('active','==',true).get();
@@ -98,6 +121,7 @@ export default async function handler(req: Request, res: Response) {
       }));
       return res.status(200).json({ ok: true, items });
     }
+
 
     requireOrgRole(ctx, ['owner','admin']);
     if (action === 'listAudit') {
