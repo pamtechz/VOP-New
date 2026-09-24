@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, RefreshCw, {t('common.save','Save')}, {t('common.search','Search')}, Trash2 } from 'lucide-react';
+import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
 import { getTranslation } from '../../services/i18n';
@@ -223,7 +223,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const remove = async (id: string) => {
     const item = state[active].find(candidate => identity(active, candidate) === id);
     if (item?.canEdit === false) { setError('This record is read-only. Only its contributor or the VOP Super Admin can delete it.'); return; }
-    if (!id || !window.confirm('{t('common.delete','Delete')} this record permanently?')) return;
+    if (!id || !window.confirm(`${t('common.delete','Delete')} this record permanently?`)) return;
     setPending(true); setError(''); setMessage('');
     try {
       await adminContent('delete', active, id);
