@@ -225,7 +225,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
     void loadDrafts();
     if (currentUser.role === 'super_admin') void loadCertification();
-    if (currentUser.role === 'super_admin') void loadPermissionMatrix();
+    if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) void loadPermissionMatrix();
     return () => unsubs.forEach(unsub => unsub());
   }, []);
 
@@ -399,10 +399,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     return NAV.filter(item => {
       if (!canSee(item.id)) return false;
       const role = String(currentUser.role || '');
-      if (item.id === 'conferences' && role !== 'super_admin' && !['union_admin'].includes(role)) return false;
-      if (item.id === 'districts' && role !== 'super_admin' && !['conference_admin'].includes(role)) return false;
-      if (item.id === 'churches' && role !== 'super_admin' && !['district_admin'].includes(role)) return false;
-      if (item.id === 'unions' && role !== 'super_admin') return false;
+      if (item.id === 'conferences' && !['super_admin','union_admin','conference_admin'].includes(role)) return false;
+      if (item.id === 'districts' && !['super_admin','union_admin','conference_admin','district_admin'].includes(role)) return false;
+      if (item.id === 'churches' && !['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role)) return false;
+      if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
       return true;
     }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
   }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations]);
@@ -475,8 +475,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
 
   const loadPermissionMatrix = async () => {
-    if (!isSuperAdmin) return;
-    setPermissionLoading(true);
+    if (!isSuperAdmin) setPermissionLoading(true);
     try {
       if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
       const token = await auth.currentUser.getIdToken();
