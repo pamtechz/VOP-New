@@ -929,8 +929,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     translations:'translations', announcements:'announcements', materials:'materials', radio:'radio',
     unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
   };
-  const canAdminResource = (kind: ManagedAdminCollection, action: PermissionAction) =>
-    permissionAllowed(permissionMatrix, currentPermissionRole, adminResourceForCollection[kind], action);
+  const canAdminResource = (kind: ManagedAdminCollection, action: PermissionAction) => {
+    if (kind === 'unions' && currentUser.role === 'union_admin' && action === 'create') return false;
+    return permissionAllowed(permissionMatrix, currentPermissionRole, adminResourceForCollection[kind], action);
+  };
 
   const managedTabs: ManagedAdminCollection[] = [
     'translations',
