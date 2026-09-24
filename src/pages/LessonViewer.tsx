@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type Auth, type User } from 'firebase/auth';
-import { auth, getProgressFirestore } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 
 type TextBlock = { type: 'text'; text: string };
 type ImageBlock = { type: 'image'; src: string; alt: string };
@@ -157,19 +157,24 @@ function LessonContent({ lang, languageLabel, lessonId, onBack }: Props) {
     setPracticeScore(score);
     setSubmitState('queued');
     try {
-      // The only Firestore write path. Discovery, reading and navigation use packaged JSON.
-      const [db, firestore] = await Promise.all([getProgressFirestore(), import('firebase/firestore')]);
-      const progressRef = firestore.doc(firestore.collection(db, 'users', account.uid, 'progress'), account.uid);
-      await firestore.setDoc(progressRef, {
-        ownerUid: account.uid,
-        language: lesson.language,
-        lessonId: lesson.lessonId,
-        revision: lesson.revision,
-        answers: selections,
-        practiceScore: score,
-        status: 'practice_unverified',
-        submittedAt: firestore.serverTimestamp(),
+      const token = await account.getIdToken();
+      const response = await fetch('/api/study/progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({
+          action: 'submitQuiz',
+          language: lesson.language,
+          guideId: lesson.source.file.split('/').slice(-2, -1)[0] || lesson.lessonId,
+          lessonId: lesson.lessonId,
+          answers: Object.fromEntries(selections.map((answer, index) => [String(index), answer])),
+        }),
       });
+      const result = await response.json().catch(() => ({})) as { error?: string; score?: number };
+      if (!response.ok) throw new Error(result.error || 'Practice record could not synchronize.');
+      if (typeof result.score === 'number') setPracticeScore(result.score);
       setSubmitState('synced');
     } catch (error) {
       submitting.current = false;
