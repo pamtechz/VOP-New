@@ -275,29 +275,32 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if ((collection === 'settings' || collection === 'curriculumSettings') && action === 'upsert') {
-      if (!ctx.organizationId) {
-        if (!ctx.isSuperAdmin) throw new Error('An organization membership is required for organization settings.');
+      const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
+      if (!targetOrganizationId) {
+        if (!ctx.isSuperAdmin) throw new Error('An organization within your authorized scope is required for organization settings.');
         if (collection !== 'settings') throw new Error('Curriculum settings require an organization tenant.');
       }
-      if (!ctx.isSuperAdmin && !ctx.organizationId) throw new Error('Organization membership is required.');
-      if (!ctx.isSuperAdmin && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
+      if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
         throw new Error('Only the organization owner or administrator can change organization settings.');
+      }
+      if (!ctx.isSuperAdmin && ctx.tenantType === 'hierarchy' && !(await organizationInHierarchyScope(ctx, targetOrganizationId))) {
+        throw new Error('The organization is outside your hierarchy scope.');
       }
 
       const settingsId = collection === 'settings' ? 'settings' : 'curriculum';
-      const ref = ctx.isSuperAdmin && !ctx.organizationId
+      const ref = ctx.isSuperAdmin && !targetOrganizationId
         ? ctx.db.doc(`system/settings`)
-        : ctx.db.doc(`organizations/${ctx.organizationId}/settings/${settingsId}`);
+        : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
       const existing = await ref.get();
       const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
 
-      if (collection === 'curriculumSettings' && !ctx.organizationId) {
+      if (collection === 'curriculumSettings' && !targetOrganizationId) {
         throw new Error('Curriculum settings belong to an organization tenant.');
       }
 
       await ref.set({
         ...incoming,
-        ...(ctx.organizationId ? { organizationId: ctx.organizationId } : {}),
+        ...(targetOrganizationId ? { organizationId: targetOrganizationId } : {}),
         updatedBy: ctx.auth.uid,
         updatedAt: FieldValue.serverTimestamp(),
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
