@@ -671,8 +671,15 @@ export default async function handler(req: Request, res: Response) {
           if (!Number.isInteger(next) || next < current) {
             throw new Error('Certificate download count must be a non-decreasing integer.');
           }
-          if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && String(existing.data()?.organizationId || '') !== ctx.organizationId) {
-            throw new Error('This certificate belongs to another organization.');
+          if (!ctx.isSuperAdmin) {
+            const certificateOrganizationId = String(existing.data()?.organizationId || '');
+            if (ctx.tenantType === 'hierarchy') {
+              if (!certificateOrganizationId || !(await organizationInHierarchyScope(ctx, certificateOrganizationId))) {
+                throw new Error('This certificate is outside your hierarchy scope.');
+              }
+            } else if (certificateOrganizationId !== ctx.organizationId) {
+              throw new Error('This certificate belongs to another organization.');
+            }
           }
           await ref.set({
             downloadCount: next,
@@ -709,7 +716,7 @@ export default async function handler(req: Request, res: Response) {
           organizationId: effectiveOrganizationId,
           ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-          scope: ctx.tenantType === 'hierarchy' ? 'hierarchy' : 'platform',
+          scope: 'organization',
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
