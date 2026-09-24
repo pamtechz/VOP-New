@@ -68,6 +68,7 @@ const checks = [
   ['src/services/permissions.ts', ['loadPermissionMatrixClient','permissionRoleForUser','clearPermissionMatrixCache']],
   ['src/services/publicFirestore.ts', ['profileData','loadHierarchy','organizationId']],
   ['docs/VOP_MODULAR_COMPONENT_MISSION.md', ['Component priority by system influence','Module contract','Communication rule','Super Admin rule','Completion rule']],
+  ['docs/CERTIFICATE_BACKGROUND_SPEC.md', ['1513 × 1040','/assets/certificate_bg.png','40%','template renders **above** this background']],
   ['api/admin/permissions.ts', ['system/permissions','DEFAULT_PERMISSION_MATRIX','Only the VOP Super Admin']],
   ['src/services/adminFirestore.ts', ['tenantSettings', "'settings', 'settings'", "collectionName === 'unions'", "collectionName === 'conferences'", "collectionName === 'districts'", "collectionName === 'churches'"]],
   ['src/pages/CurriculumManager.tsx', ['Publishing scope','System-wide','scopeOrganizationId','organizationOptions']],
