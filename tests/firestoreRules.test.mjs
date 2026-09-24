@@ -263,3 +263,84 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await environment.cleanup();
   }
 });
+
+
+test('global resource ownership is isolated across organization and hierarchy contributors', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const db = adminContext.firestore();
+      await db.doc('users/super-admin').set({ uid:'super-admin', role:'super_admin', organizationId:'' });
+      await db.doc('users/org-admin').set({ uid:'org-admin', role:'student', organizationId:'org-1', organizationRole:'admin' });
+      await db.doc('users/org-editor').set({ uid:'org-editor', role:'student', organizationId:'org-1', organizationRole:'editor' });
+      await db.doc('users/union-admin').set({ uid:'union-admin', role:'union_admin', adminNodeId:'union-1', adminNodeType:'union', organizationId:'' });
+      await db.doc('users/foreign-admin').set({ uid:'foreign-admin', role:'union_admin', adminNodeId:'union-2', adminNodeType:'union', organizationId:'' });
+      await db.doc('organizations/org-1').set({ id:'org-1', unionId:'union-1', status:'active' });
+      await db.doc('organizations/org-2').set({ id:'org-2', unionId:'union-2', status:'active' });
+      await db.doc('organizations/org-1/members/org-admin').set({ uid:'org-admin', organizationId:'org-1', role:'admin', active:true });
+      await db.doc('organizations/org-1/members/org-editor').set({ uid:'org-editor', organizationId:'org-1', role:'editor', active:true });
+      const collections = ['languages','translations','books','radioBroadcasts','playlists'];
+      for (const collection of collections) {
+        await db.doc(`${collection}/org-owned`).set({
+          ownerUid:'org-admin', ownerOrganizationId:'org-1', ownerTenantId:'',
+          organizationId:'', sharingScope:'private', enabled:true, published:false,
+        });
+        await db.doc(`${collection}/org-other`).set({
+          ownerUid:'org-editor', ownerOrganizationId:'org-1', ownerTenantId:'',
+          organizationId:'', sharingScope:'private', enabled:true, published:false,
+        });
+        await db.doc(`${collection}/hierarchy-owned`).set({
+          ownerUid:'union-admin', ownerOrganizationId:'', ownerTenantId:'union_admin:union-1',
+          organizationId:'', sharingScope:'private', enabled:true, published:false,
+        });
+        await db.doc(`${collection}/hierarchy-foreign`).set({
+          ownerUid:'foreign-admin', ownerOrganizationId:'', ownerTenantId:'union_admin:union-2',
+          organizationId:'', sharingScope:'private', enabled:true, published:false,
+        });
+      }
+    });
+
+    const orgAdmin = environment.authenticatedContext('org-admin').firestore();
+    const orgEditor = environment.authenticatedContext('org-editor').firestore();
+    const unionAdmin = environment.authenticatedContext('union-admin').firestore();
+    const foreignAdmin = environment.authenticatedContext('foreign-admin').firestore();
+    const superAdmin = environment.authenticatedContext('super-admin').firestore();
+
+    for (const collection of ['languages','translations','books','radioBroadcasts','playlists']) {
+      await assertSucceeds(orgAdmin.doc(`${collection}/org-owned`).update({ title:'org update' }));
+      await assertFails(orgEditor.doc(`${collection}/org-owned`).update({ title:'cross contributor update' }));
+      await assertFails(orgEditor.doc(`${collection}/org-owned`).delete());
+      await assertSucceeds(unionAdmin.doc(`${collection}/hierarchy-owned`).update({ title:'hierarchy update' }));
+      await assertFails(foreignAdmin.doc(`${collection}/hierarchy-owned`).update({ title:'foreign hierarchy update' }));
+      await assertFails(foreignAdmin.doc(`${collection}/hierarchy-owned`).delete());
+      await assertSucceeds(superAdmin.doc(`${collection}/hierarchy-foreign`).update({ title:'platform update' }));
+    }
+
+    // Organization contributors may create their own global contribution.
+    await assertSucceeds(orgEditor.doc('radioBroadcasts/org-editor-created').set({
+      ownerUid:'org-editor', ownerOrganizationId:'org-1', organizationId:'',
+      sharingScope:'private', published:false,
+    }));
+    // Hierarchy contributors may create their own global contribution, including
+    // playlists (the same ownership contract as other global collections).
+    await assertSucceeds(unionAdmin.doc('radioBroadcasts/union-created').set({
+      ownerUid:'union-admin', ownerTenantId:'union_admin:union-1', organizationId:'',
+      sharingScope:'private', published:false,
+    }));
+    await assertSucceeds(unionAdmin.doc('playlists/union-playlist-created').set({
+      ownerUid:'union-admin', ownerTenantId:'union_admin:union-1', organizationId:'',
+      sharingScope:'private', published:false,
+    }));
+
+    // Hierarchy admins can read the global library, but ownership still controls
+    // mutation.
+    await assertSucceeds(unionAdmin.doc('radioBroadcasts/hierarchy-foreign').get());
+    await assertSucceeds(unionAdmin.doc('books/org-other').get());
+  } finally {
+    await environment.cleanup();
+  }
+});
