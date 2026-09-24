@@ -496,11 +496,11 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   }
 
   if (kind === 'announcements') {
-    return <AnnouncementAdminDashboard records={records} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} />;
+    return <AnnouncementAdminDashboard records={records} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} />;
   }
 
   if (kind === 'radio') {
-    return <RadioAdminDashboard records={records} playlists={playlists} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} setMessage={setMessage} />;
+    return <RadioAdminDashboard records={records} playlists={playlists} form={form} setForm={setForm} editingId={editingId} saving={saving} error={error} message={message} openNew={openNew} edit={edit} remove={remove} save={save} setError={setError} setMessage={setMessage} canCreate={canCreate} canUpdate={canUpdate} canDelete={canDelete} />;
   }
 
   const primaryTitle = LABELS[kind];
@@ -649,12 +649,13 @@ export default AdminRecordsPanel;
 
 
 function AnnouncementAdminDashboard({
-  records, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError
+  records, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError, canCreate, canUpdate, canDelete
 }: {
   records: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editingId: string | null; saving: boolean; error: string; message: string;
   openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
   save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void;
+  canCreate: boolean; canUpdate: boolean; canDelete: boolean;
 }) {
   const [filter, setFilter] = useState<'all'|'published'|'scheduled'|'draft'|'archived'>('all');
   const [search, setSearch] = useState('');
@@ -677,7 +678,7 @@ function AnnouncementAdminDashboard({
   const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
 
   return <div className="vop-ann-admin">
-    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>{t('admin.announcements','Announcements')}</span><h1>Manage Announcements</h1><p>Create, manage and publish announcements for learners and users.</p></section></div><button className="vop-primary" type="button" onClick={openNew}><Plus size={17}/> New Announcement</button></div>
+    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>{t('admin.announcements','Announcements')}</span><h1>Manage Announcements</h1><p>Create, manage and publish announcements for learners and users.</p></section></div><button className="vop-primary" type="button" onClick={openNew} disabled={!canCreate}><Plus size={17}/> New Announcement</button></div>
     <div className="vop-ann-admin-stats">
       <div><Megaphone/><span>Total Announcements<strong>{records.length}</strong><small>All time</small></span></div>
       <div><Check/><span>Published<strong>{published.length}</strong><small>{records.length ? Math.round(published.length*100/records.length) : 0}%</small></span></div>
@@ -691,7 +692,7 @@ function AnnouncementAdminDashboard({
         const status=item.archived?'Archived':item.scheduledAt&&item.published!==true?'Scheduled':item.published?'Published':'Draft';
         return <tr key={item.id}><td>{index+1}</td><td><strong>{valueOf(item,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></td><td><span className="vop-ann-tag">{valueOf(item,'tag')||'Uncategorized'}</span></td><td>{valueOf(item,'targetAudience')||'All Users'}</td><td><span className={'vop-status '+(status==='Published'?'enabled':status==='Scheduled'?'review':'disabled')}>{status}</span></td><td>{valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—'}</td><td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" disabled={!canUpdate || item.canEdit === false} onClick={()=>edit(item)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={!canDelete || item.canEdit === false} onClick={()=>void remove(item.id)}><Trash2 size={15}/></button></div></td></tr>;
       })}</tbody></table>{!visible.length&&<div className="vop-empty">No announcements match the current filters.</div>}</div>
-      <form className="vop-card vop-form-card" onSubmit={save}><div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div></div>{field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">Published</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={openNew}>Clear</button><button className="vop-primary" type="submit" disabled={saving}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div></form>
+      <form className="vop-card vop-form-card" onSubmit={save}><div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div></div>{field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">Published</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={openNew}>Clear</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div></form>
     </div>
     {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}{message&&<div className="vop-radio-admin-alert success">{message}</div>}
   </div>;
@@ -794,12 +795,13 @@ function RadioAdminMediaPreview({record}: {record: AdminRecord}) {
 }
 
 function RadioAdminDashboard({
-  records, playlists, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError, setMessage
+  records, playlists, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError, setMessage, canCreate, canUpdate, canDelete
 }: {
   records: AdminRecord[]; playlists: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editingId: string | null; saving: boolean; error: string; message: string;
   openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
   save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void; setMessage: (value: string) => void;
+  canCreate: boolean; canUpdate: boolean; canDelete: boolean;
 }) {
   const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
   const [search, setSearch] = useState('');
