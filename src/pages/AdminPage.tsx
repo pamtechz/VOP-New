@@ -706,7 +706,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
         <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
       </div>}
-      {isSuperAdmin && {settingsSubtab === 'appInfo' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+      {isSuperAdmin && settingsSubtab === 'appInfo' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>App Information</h2><p>Manage public application identity and version metadata.</p></div></div>
         <div className="vop-form-grid">
           <div className="vop-field"><label>School name</label><input value={settings.schoolName} onChange={e=>setSettings({...settings,schoolName:e.target.value})}/></div>
@@ -721,13 +721,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>{settingsSaving?'Saving…':'Save App Information'}</button></div>
       </form>}
 
-      {isSuperAdmin && {settingsSubtab === 'services' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+      {isSuperAdmin && settingsSubtab === 'services' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>Services</h2><p>Operational services are configured securely outside the administrator interface.</p></div></div>
            <div className="vop-setting-list">
              
            </div></form>}
 
-      {isSuperAdmin && {settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
+      {isSuperAdmin && settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>Security</h2><p>Application-level security preferences. Secrets remain server-side.</p></div></div>
         <div className="vop-form-grid">
           <div className="vop-field"><label>Session timeout (minutes)</label><input type="number" min="5" max="1440" value={Number(settings.security?.sessionTimeoutMinutes ?? 60)} onChange={e=>setSettings({...settings,security:{...settings.security,sessionTimeoutMinutes:Number(e.target.value)}})} /></div>
