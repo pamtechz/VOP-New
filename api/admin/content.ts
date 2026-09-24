@@ -32,7 +32,7 @@ function orgCollection(ctx: { db: FirebaseFirestore.Firestore; organizationId: s
   if (!ctx.organizationId) throw new Error('Select an organization before managing organization content.');
   return ctx.db.collection(collection);
 }
-function guideId(orgId: string, lang: string) { return `${orgId}__${lang}`; }
+function guideId(orgId: string, lang: string) { return `${orgId || 'platform'}__${lang}`; }
 function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<string, unknown> }, collection: string, data: Record<string, unknown> | undefined) {
   if (ctx.isSuperAdmin) return true;
   const role = String(ctx.profile.role || '');
@@ -113,7 +113,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'upsertGuide') {
       if (collection !== 'guides') throw new Error('Guide management requires the guides collection.');
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before creating a guide.');
+      if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before creating a guide.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
@@ -167,7 +167,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'forkGuide') {
       if (collection !== 'guides') throw new Error('Guide copying requires the guides collection.');
       if (ctx.tenantType !== 'hierarchy') requireOrgRole(ctx, ['owner','admin','editor']);
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before copying a guide.');
+      if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before copying a guide.');
       const sourceId = safeId(body.id || body.sourceId);
       const source = await ctx.db.doc(`guides/${sourceId}`).get();
       const sourceData = source.data() || {};
@@ -201,7 +201,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'forkLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson copying requires the curriculum collection.');
       if (ctx.tenantType !== 'hierarchy') requireOrgRole(ctx, ['owner','admin','editor']);
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before copying a lesson.');
+      if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before copying a lesson.');
       const sourceGuideId = safeId(body.sourceGuideId);
       const sourceLessonId = safeId(body.sourceLessonId || body.id);
       const targetGuideId = safeId(body.targetGuideId);
@@ -223,7 +223,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'upsertLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before saving a lesson.');
+      if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before saving a lesson.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
       const guideId = safeId(data.guideId);
@@ -256,7 +256,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'publishLesson' || action === 'unpublishLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson publishing requires the curriculum collection.');
-      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before publishing lessons.');
+      if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before publishing lessons.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       const lessonId = safeId(data.lessonId || body.id);
@@ -448,13 +448,23 @@ export default async function handler(req: Request, res: Response) {
         });
       }
       if (ORG_COLLECTIONS.has(collection)) {
+        if (ctx.isSuperAdmin) {
+          const snap = await ctx.db.collection(collection).get();
+          return res.status(200).json({ ok:true, items:snap.docs.map(d=>({
+            id:d.id,
+            ...d.data(),
+            scope: String(d.data()?.organizationId || '').trim() ? 'organization' : 'platform',
+            canEdit:true,
+          })) });
+        }
         const organizationIds = ctx.tenantType === 'hierarchy' ? await accessibleOrganizationIds(ctx) : (ctx.organizationId ? [ctx.organizationId] : []);
         if (!organizationIds.length) return res.status(200).json({ ok: true, items: [] });
         const snapshots = await Promise.all(organizationIds.map(orgId => ctx.db.collection(collection).where('organizationId','==',orgId).get()));
         const items = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
-          canEdit: ctx.isSuperAdmin || (ctx.tenantType === 'hierarchy' ? true : String(d.data().ownerUid || '') === ctx.auth.uid),
+          canEdit: ctx.tenantType === 'hierarchy' ? true : String(d.data().ownerUid || '') === ctx.auth.uid,
+          scope: 'organization',
         })));
         return res.status(200).json({ ok: true, items });
       }
