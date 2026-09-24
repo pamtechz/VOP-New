@@ -104,7 +104,8 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     firestore: { rules, host: '127.0.0.1', port: 8080 },
   });
   try {
-    await environment.withSecurityRulesDisabled(async adminDb => {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const adminDb = adminContext.firestore();
       await adminDb.doc('users/union-admin').set({
         uid: 'union-admin',
         role: 'union_admin',
