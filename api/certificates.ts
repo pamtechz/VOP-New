@@ -43,7 +43,7 @@ async function mine(req:Request,res:Response){
  else certificateSnapshot=await db.collection('certificates').where(hierarchyField,'==',adminNodeId).limit(20).get();
  const [snapshot,configSnapshot]=await Promise.all([Promise.resolve(certificateSnapshot),db.doc('system/certification').get()]);
  const certificates=snapshot.docs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified');const config=configSnapshot.exists?configSnapshot.data()??{}:{};
- return res.status(200).json({certificates,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??'')}});
+ return res.status(200).json({certificates,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??''),verificationEnabled:config.verificationEnabled===true,verificationBaseUrl:String(config.verificationBaseUrl??''),template:config.template&&typeof config.template==='object'?config.template:null}});
 }
 
 async function verify(req:Request,res:Response){
