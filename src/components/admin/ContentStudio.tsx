@@ -360,6 +360,22 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
           <input value={proposalReason} onChange={e => setProposalReason(e.target.value)} placeholder="Reason (optional)" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
         </div>
         <button type="button" onClick={() => void submitTranslationProposal()} disabled={proposalBusy} className="w-fit rounded-lg bg-blue-900 px-4 py-2.5 text-xs font-bold text-white">{proposalBusy ? 'Submitting…' : 'Submit proposal'}</button>
+        {!isSuperAdmin && <div className="rounded-lg border border-slate-200 bg-white p-3">
+          <div className="mb-2 text-xs font-black">{t('translation.my_proposals','My translation proposals')}</div>
+          <div className="grid gap-2">
+            {state.translations.flatMap(item => Array.isArray(item.proposals) ? (item.proposals as ContentItem[]).map(proposal => ({ ...proposal, languageId: text(item.id) })) : []).map(proposal => (
+              <div key={text(proposal.id)} className="rounded-lg border border-slate-200 p-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <strong>{text(proposal.languageId)} · {text(proposal.key)}</strong>
+                  <span className="vop-chip">{text(proposal.status) || t('common.pending','Pending')}</span>
+                </div>
+                <div className="mt-1 text-slate-500">{text(proposal.currentValue)} → {text(proposal.proposedValue)}</div>
+                {text(proposal.reason) && <div className="mt-1 text-slate-500">{text(proposal.reason)}</div>}
+              </div>
+            ))}
+            {!state.translations.some(item => Array.isArray(item.proposals) && item.proposals.length > 0) && <div className="text-xs text-slate-500">{t('translation.no_proposals','You have not submitted any translation proposals yet.')}</div>}
+          </div>
+        </div>}
         {isSuperAdmin && <div className="rounded-lg border border-amber-200 bg-white p-3"><div className="mb-2 text-xs font-black">{t('translation.pending_proposals','Pending proposals')}</div><div className="grid gap-2">{state.translations.flatMap(t => Array.isArray(t.proposals) ? (t.proposals as ContentItem[]).map(p => ({...p, languageId:text(t.id)})) : []).filter(p => text(p.status) === 'pending').map(p => <div key={text(p.id)} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"><div><strong>{text(p.languageId)} · {text(p.key)}</strong><div className="text-slate-500">{text(p.currentValue)} → {text(p.proposedValue)}</div></div><div className="flex gap-2"><button type="button" onClick={() => void reviewProposal(p,'approve')} className="rounded-md bg-emerald-700 px-3 py-1.5 font-bold text-white">{t('common.approve','Approve')}</button><button type="button" onClick={() => void reviewProposal(p,'reject')} className="rounded-md bg-rose-700 px-3 py-1.5 font-bold text-white">{t('common.reject','Reject')}</button></div></div>)}</div></div>}
       </div>}
 
