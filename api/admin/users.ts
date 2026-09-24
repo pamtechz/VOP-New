@@ -414,7 +414,13 @@ export default async function handler(request: Request, response: Response) {
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
       if (managedOrganizationId) await db.doc(`organizations/${managedOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:managedOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
-      await authService.setCustomUserClaims(created.uid, managedOrganizationId ? { role:'student', organizationId:managedOrganizationId, organizationRole:profile.organizationRole } : claims);
+      // Preserve an authoritative platform/hierarchy role in custom claims even when
+      // the account is also attached to an organization. Organization membership is
+      // additive and must never downgrade a hierarchy administrator to student.
+      const membershipClaims = managedOrganizationId
+        ? { organizationId: managedOrganizationId, organizationRole: profile.organizationRole }
+        : {};
+      await authService.setCustomUserClaims(created.uid, { ...claims, ...membershipClaims });
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
     }
