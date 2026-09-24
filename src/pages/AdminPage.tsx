@@ -921,6 +921,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             settings={settings}
             adminContent={adminContent}
             showMessage={showMessage}
+            isSuperAdmin={currentUser.role === 'super_admin'}
           />
         )}
         {activeTab==='mentorship'&&<MentorshipInsights />}
