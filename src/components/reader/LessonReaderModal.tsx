@@ -182,7 +182,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               type="button"
               onClick={toggleSpeech}
               disabled={!configured}
-              aria-label={isSpeaking ? '{t('accessibility.stop_reading','Stop reading aloud')}' : '{t('accessibility.read_aloud','Read this page aloud')}'}
+              aria-label={isSpeaking ? t('accessibility.stop_reading','Stop reading aloud') : t('accessibility.read_aloud','Read this page aloud')}
               style={{
                 border: 0,
                 background: isSpeaking ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.1)',
