@@ -41,7 +41,7 @@ const checks = [
   ]],
   ['src/services/i18n.ts', ['getUiLocale','loadUiLocaleRegistry','dictionaryCache','localeFallbacks']],
   ['api/localization.ts', ['authenticateTenant','isSuperAdmin','published','bulkSave']],
-  ['api/admin/content.ts', ['HIERARCHY_COLLECTIONS','tenantOwnerKey','ownerTenantId','proposeTranslation','reviewTranslationProposal','proposerUid','pending proposal for this translation key','effectiveOrganizationId','accessibleOrganizationIds','organizationInHierarchyScope','scope: effectiveOrganizationId ? \'organization\' : \'platform\''],
+  ['api/admin/content.ts', ['HIERARCHY_COLLECTIONS','tenantOwnerKey','ownerTenantId','proposeTranslation','reviewTranslationProposal','proposerUid','pending proposal for this translation key','effectiveOrganizationId','accessibleOrganizationIds','organizationInHierarchyScope','scope: effectiveOrganizationId ? \'organization\' : \'platform\'','scope: ctx.tenantType === \'hierarchy\' ? \'hierarchy\' : \'platform\''],
   ['api/admin/users.ts', ['Super Admin may delete any user','replacementUid','organizationRole','hierarchyUserInScope','hierarchyScopeQuery', 'organizationInHierarchy', 'hierarchyOrganizations', 'managedOrganizationId', 'preservedPlatformRole']],
   ['src/pages/UserManagement.tsx', ['tenantOrganizationsLoading','listOrganizations','scope?.organizationId','Locked to your current organisation']],
   ['api/admin/organizations.ts', ['assignOwner','organization owner cannot be removed','resolveManagedOrganization','organizationAllowedForHierarchy','managedOrganizationId']],
@@ -75,6 +75,7 @@ const checks = [
   ['src/pages/GuideManager.tsx', ['organizationId?: string','organizationId: organizationId || undefined']],
   ['api/prayer.ts', ['accessibleOrganizationIds','organizationInHierarchyScope','requirePermission']],
   ['src/components/reader/LessonReaderModal.tsx', ['lesson.next_page','lesson.complete']],
+  ['firestore.rules', ['match /announcements/{id}','canEditOwnedContent(resource.data)','ownerUid','ownerOrganizationId']],
 ];
 const errors = [];
 const localizationGuardSource = read('src/components/admin/ContentStudio.tsx');
