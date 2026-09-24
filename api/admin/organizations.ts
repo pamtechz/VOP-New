@@ -161,8 +161,11 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin && hierarchyRole(String(ctx.profile.role || ''))) {
         const role = hierarchyRole(String(ctx.profile.role || ''));
         const nodeId = String(ctx.profile.adminNodeId || '').trim();
+        const scopeField = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+        const scopedUsers = await bootstrapDb.collection('users').where(scopeField, '==', nodeId).get();
+        const inferredOrganizationIds = new Set(scopedUsers.docs.map(doc => String(doc.data()?.organizationId || '').trim()).filter(Boolean));
         const snap = await bootstrapDb.collection('organizations').get();
-        const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId)).map(async organization => {
+        const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId) || inferredOrganizationIds.has(doc.id)).map(async organization => {
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
           return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
