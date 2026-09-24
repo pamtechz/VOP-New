@@ -27,6 +27,7 @@ import UserManagement from './UserManagement';
 import MentorshipInsights from './MentorshipInsights';
 import OrganizationManagement from './OrganizationManagement';
 import PrayerManagementPanel from './PrayerManagementPanel';
+import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 
 interface AdminPageProps {
   currentUser: User;
@@ -477,12 +478,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const loadPermissionMatrix = async () => {
     if (!isSuperAdmin) setPermissionLoading(true);
     try {
-      if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
-      const token = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/admin/permissions', { headers: { Authorization: 'Bearer ' + token } });
-      const body = await response.json().catch(() => ({})) as { error?: string; matrix?: unknown };
-      if (!response.ok) throw new Error(body.error || 'Could not load the permission matrix.');
-      setPermissionMatrix(normalizePermissionMatrix(body.matrix));
+      setPermissionMatrix(await loadPermissionMatrixClient());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load the permission matrix.');
     } finally {
@@ -503,7 +499,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       });
       const body = await response.json().catch(() => ({})) as {error?:string;matrix?:unknown};
       if (!response.ok) throw new Error(body.error || 'Could not save the permission matrix.');
+      clearPermissionMatrixCache();
       setPermissionMatrix(normalizePermissionMatrix(body.matrix));
+      await loadPermissionMatrixClient(true);
       showMessage('Permission matrix saved.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save the permission matrix.');
