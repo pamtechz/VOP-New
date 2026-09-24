@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Printer } from 'lucide-react';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
+import { getTranslation } from '../services/i18n';
+import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 interface Props { onBack: () => void; }
 
@@ -51,6 +53,9 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<PublicCertificateConfig | null>(null);
+  const settings = getStoredSettings();
+  const language = getActiveLanguage();
+  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'CertificateVerificationPage');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -67,7 +72,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
     setCertificate(null);
     setConfig(null);
     if (!certificateNumber) {
-      setError('Enter a certificate number.');
+      setError(t('enter_number','Enter a certificate number.'));
       return;
     }
     setLoading(true);
@@ -75,7 +80,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
       const response = await fetch('/api/certificates?certificateNumber=' + encodeURIComponent(certificateNumber));
       const body = await response.json().catch(() => ({})) as { verified?: boolean; certificate?: VerifiedCertificate; config?: PublicCertificateConfig; error?: string };
       if (!response.ok || body.verified !== true || !body.certificate) {
-        throw new Error(body.error || 'Certificate could not be verified.');
+        throw new Error(body.error || t('verification_failed','Certificate could not be verified.'));
       }
       setCertificate(body.certificate);
       setConfig(body.config || null);
@@ -83,7 +88,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
       url.searchParams.set('certificate', certificateNumber);
       window.history.replaceState({}, '', url);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Certificate verification failed.');
+      setError(reason instanceof Error ? reason.message : t('verification_failed','Certificate verification failed.'));
     } finally {
       setLoading(false);
     }
@@ -92,44 +97,44 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
   return (
     <section className="vop-certificate-verification">
       <header className="vop-certificate-verification-head">
-        <button type="button" onClick={onBack} aria-label="Back"><ArrowLeft size={21} /> Back</button>
-        <div><div className="vop-cert-kicker">Credential Verification</div><h1>Verify Certificate</h1><p>Confirm an official VOP certificate using its certificate number.</p></div>
+        <button type="button" onClick={onBack} aria-label={t('back','Back')}><ArrowLeft size={21} /> {t('back','Back')}</button>
+        <div><div className="vop-cert-kicker">{t('credential_verification','Credential Verification')}</div><h1>{t('verify_certificate','Verify Certificate')}</h1><p>{t('verification_subtitle','Confirm an official VOP certificate using its certificate number.')}</p></div>
       </header>
 
       <main className="vop-certificate-verification-body">
         <div className="vop-certificate-verification-search">
           <Award size={28} aria-hidden="true" />
           <div className="vop-certificate-search-field">
-            <label htmlFor="certificate-number">Certificate Number</label>
-            <div><Search size={18} /><input id="certificate-number" value={number} onChange={event => setNumber(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void verify(); }} placeholder="Enter certificate number" autoComplete="off" /></div>
+            <label htmlFor="certificate-number">{t('certificate_number','Certificate Number')}</label>
+            <div><Search size={18} /><input id="certificate-number" value={number} onChange={event => setNumber(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void verify(); }} placeholder={t('enter_number_placeholder','Enter certificate number')} autoComplete="off" /></div>
           </div>
-          <button type="button" onClick={() => void verify()} disabled={loading}>{loading ? 'Verifying…' : 'Verify Certificate'}</button>
+          <button type="button" onClick={() => void verify()} disabled={loading}>{loading ? t('verifying','Verifying…') : t('verify_certificate','Verify Certificate')}</button>
         </div>
 
-        {error && <div className="vop-certificate-verification-result invalid"><XCircle size={25} /><div><strong>Certificate not verified</strong><span>{error}</span></div></div>}
+        {error && <div className="vop-certificate-verification-result invalid"><XCircle size={25} /><div><strong>{t('certificate_not_verified','Certificate not verified')}</strong><span>{error}</span></div></div>}
 
         {certificate && (
           <article className="vop-certificate-verification-result valid">
-            <div className="vop-verification-status"><CheckCircle2 size={28} /><div><strong>Certificate Verified</strong><span>This certificate is recorded as an official VOP credential.</span></div></div>
+            <div className="vop-verification-status"><CheckCircle2 size={28} /><div><strong>{t('certificate_verified','Certificate Verified')}</strong><span>{t('official_credential','This certificate is recorded as an official VOP credential.')}</span></div></div>
             <div className="vop-verification-grid">
-              <div><small>Certificate Number</small><strong>{certificate.certificateNumber}</strong></div>
-              <div><small>Candidate</small><strong>{certificate.candidateName}</strong></div>
-              <div><small>Course</small><strong>{certificate.courseName}</strong></div>
-              {certificate.courseCode && <div><small>Course Code</small><strong>{certificate.courseCode}</strong></div>}
-              <div><small>Completion Date</small><strong>{dateText(certificate.completionDate)}</strong></div>
-              <div><small>Issue Date</small><strong>{dateText(certificate.issuedAt)}</strong></div>
-              {certificate.churchName && <div><small>Church</small><strong>{certificate.churchName}</strong></div>}
-              {certificate.districtName && <div><small>District</small><strong>{certificate.districtName}</strong></div>}
-              {certificate.conferenceName && <div><small>Conference</small><strong>{certificate.conferenceName}</strong></div>}
-              {certificate.unionName && <div><small>Union</small><strong>{certificate.unionName}</strong></div>}
+              <div><small>{t('certificate_number','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
+              <div><small>{t('candidate','Candidate')}</small><strong>{certificate.candidateName}</strong></div>
+              <div><small>{t('course','Course')}</small><strong>{certificate.courseName}</strong></div>
+              {certificate.courseCode && <div><small>{t('course_code','Course Code')}</small><strong>{certificate.courseCode}</strong></div>}
+              <div><small>{t('completion_date','Completion Date')}</small><strong>{dateText(certificate.completionDate)}</strong></div>
+              <div><small>{t('issue_date','Issue Date')}</small><strong>{dateText(certificate.issuedAt)}</strong></div>
+              {certificate.churchName && <div><small>{t('church','Church')}</small><strong>{certificate.churchName}</strong></div>}
+              {certificate.districtName && <div><small>{t('district','District')}</small><strong>{certificate.districtName}</strong></div>}
+              {certificate.conferenceName && <div><small>{t('conference','Conference')}</small><strong>{certificate.conferenceName}</strong></div>}
+              {certificate.unionName && <div><small>{t('union','Union')}</small><strong>{certificate.unionName}</strong></div>}
             </div>
-            <div className="vop-verification-foot"><ShieldCheck size={19} /><span>Verification is performed against the VOP server record. Certificate status: {certificate.status || 'Certified'}.</span></div>
+            <div className="vop-verification-foot"><ShieldCheck size={19} /><span>{t('server_verification','Verification is performed against the VOP server record. Certificate status:')} {certificate.status || 'Certified'}.</span></div>
             {config && (
               <div className="vop-public-certificate-preview">
                 <div className="vop-public-certificate-preview-head">
-                  <div><strong>Official Certificate</strong><span>The verified record and certificate presentation use the same official configuration.</span></div>
+                  <div><strong>{t('official_certificate','Official Certificate')}</strong><span>{t('official_config','The verified record and certificate presentation use the same official configuration.')}</span></div>
                   <div className="vop-public-certificate-preview-actions">
-                    <button type="button" onClick={() => window.print()}><Printer size={16} />Print</button>
+                    <button type="button" onClick={() => window.print()}><Printer size={16} />{t('print','Print')}</button>
                   </div>
                 </div>
                 <CertificateArtwork certificate={certificate} config={config} />
