@@ -479,12 +479,6 @@ export default async function handler(req: Request, res: Response) {
         })));
         return res.status(200).json({ ok: true, items });
       }
-      if (ctx.isSuperAdmin) {
-        const snap = await ctx.db.collection(collection).get();
-        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
-      }
-      return res.status(403).json({ error: 'This platform-level collection is managed by the VOP Super Admin.' });
-    }
 
     if (collection === 'translations' && action === 'proposeTranslation') {
       if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
