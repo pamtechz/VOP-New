@@ -802,11 +802,11 @@ service cloud.firestore {
         allow get, list: if isOwner(uid);
         allow create: if isOwner(uid)
           && request.resource.data.keys().hasOnly([
-            'theme', 'language', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
+            'theme', 'language', 'uiLocale', 'studyLanguage', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
           ]);
         allow update: if isOwner(uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'theme', 'language', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
+            'theme', 'language', 'uiLocale', 'studyLanguage', 'notifications', 'accessibility', 'privacy', 'studyPreferences', 'updatedAt'
           ]);
         allow delete: if isOwner(uid);
       }
