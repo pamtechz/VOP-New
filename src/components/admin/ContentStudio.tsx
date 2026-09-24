@@ -337,15 +337,15 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     <section className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><h2 className="text-xl font-black">{t('admin.content_studio','Content Studio')}</h2><p className="mt-1 text-xs text-slate-500">{t('admin.content_studio_desc','Managed languages, translations, public content and organizational records.')}</p></div>
-        <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} />New</button></div>
+        <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} /{t('common.new','New')}</button></div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {TABS.map(tab => { const Icon = tab.icon; return <button key={tab.id} type="button" onClick={() => startNew(tab.id)} disabled={pending} className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold ${active === tab.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}><Icon size={14} />{tab.label}<span className="opacity-60">({state[tab.id].length})</span></button>; })}
+        {TABS.map(tab => { const Icon = tab.icon; return <button key={tab.id} type="button" onClick={() => startNew(tab.id)} disabled={pending} className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold ${active === tab.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}><Icon size={14} />{t('admin.' + tab.id, tab.label)}<span className="opacity-60">({state[tab.id].length})</span></button>; })}
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative min-w-0 flex-1"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t('common.search','Search')} ${TABS.find(t => t.id === active)?.label.toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
+        <div className="relative min-w-0 flex-1"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t('common.search','Search')} ${t('admin.' + active, TABS.find(t => t.id === active)?.label || active).toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
         <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3"><Filter size={14} className="text-slate-500" /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-transparent py-2.5 text-xs font-bold outline-none"><option value="all">{t('common.all','All records')}</option><option value="published">{t('common.published','Published')}</option><option value="draft">{t('common.draft','Draft')}</option><option value="enabled">{t('common.enabled','Enabled')}</option><option value="disabled">{t('common.disabled','Disabled')}</option></select></div>
       </div>
 
@@ -376,9 +376,9 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         </div>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? <>{t('common.edit','Edit')} record</> : <>{t('common.create','Create')} record</>}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? <>{t('common.edit','Edit')} record</> : <>{t('common.create','Create')} record</>}</h3><p className="text-xs text-slate-500">{{t('admin.' + active, TABS.find(tab => tab.id === active)?.label || active)} · {t('admin.data_securely_persisted','admin data is securely persisted')}</p></div></div>
           {renderEditor()}
-          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? <>{t('common.save','Save')} changes</> : <>{t('common.create','Create')} record</>}</button>
+          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? t('common.saving','Saving…') : editingId ? <>{t('common.save','Save')} changes</> : <>{t('common.create','Create')} record</>}</button>
         </div>
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-500"><Globe size={13} />Admin language: {activeLanguage || 'not configured'} · {languages.length} configured languages</div>
