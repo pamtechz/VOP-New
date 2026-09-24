@@ -133,6 +133,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   const [ytReady, setYtReady] = useState(false);
   const [scheduleRange, setScheduleRange] = useState<'today' | 'tomorrow' | 'week'>('today');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+  const playlistIndexRef = useRef(-1);
+  const playlistItemsRef = useRef<RadioBroadcast[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
   const ytMountRef = useRef<HTMLDivElement | null>(null), ytPlayerRef = useRef<YTPlayer | null>(null);
   const source = useMemo(() => selected ? detectMedia(selected) : null, [selected]);
@@ -162,7 +164,12 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
             const state = event.target.getPlayerState();
             setPlaying(state === YT.PlayerState.PLAYING); setWaiting(state === YT.PlayerState.BUFFERING);
             setCurrent(event.target.getCurrentTime() || 0); setDuration(event.target.getDuration() || 0);
-            if (state === YT.PlayerState.ENDED) { if (playlistIndex >= 0 && playlistIndex < playlistItems.length - 1) nextPlaylistItem(); else setPlaying(false); }
+            if (state === YT.PlayerState.ENDED) {
+              const index = playlistIndexRef.current;
+              const items = playlistItemsRef.current;
+              if (index >= 0 && index < items.length - 1) { setSelectedPlaylistId(selectedPlaylistId || ''); setSelected(items[index + 1]); }
+              else setPlaying(false);
+            }
           }
         }
       });
@@ -295,6 +302,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
     : [];
   const playlistIndex = selected?.id ? playlistItems.findIndex(item => item.id === selected.id) : -1;
   const live = broadcasts.filter(item => detectMedia(item)?.live);
+  useEffect(() => { playlistIndexRef.current = playlistIndex; playlistItemsRef.current = playlistItems; }, [playlistIndex, playlistItems]);
 
   if (!broadcasts.length) return <div className="vop-audience-radio"><header className="vop-public-radio-top"><button type="button" onClick={onBack}><ArrowLeft size={19}/> Back</button></header><main className="vop-public-radio-empty"><Radio size={48}/><h1>Radio</h1><p>No published radio programmes are currently available.</p></main></div>;
 
