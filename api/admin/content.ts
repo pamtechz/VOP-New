@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, hierarchyRole, organizationInHierarchyScope, accessibleOrganizationIds } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -66,11 +66,14 @@ export default async function handler(req: Request, res: Response) {
     if (!COLLECTIONS.has(collection)) return res.status(400).json({ error: 'Unsupported content collection.' });
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
+    const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
+    const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
-    if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection)) requireOrgRole(ctx, editorRoles);
+    if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'settings' && ctx.organizationId) {
         requireOrgRole(ctx, ['owner','admin']);
@@ -408,9 +411,15 @@ export default async function handler(req: Request, res: Response) {
         });
       }
       if (ORG_COLLECTIONS.has(collection)) {
-        if (!ctx.organizationId) return res.status(200).json({ ok: true, items: [] });
-        const snap = await ctx.db.collection(collection).where('organizationId','==',ctx.organizationId).get();
-        return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid })) });
+        const organizationIds = ctx.tenantType === 'hierarchy' ? await accessibleOrganizationIds(ctx) : (ctx.organizationId ? [ctx.organizationId] : []);
+        if (!organizationIds.length) return res.status(200).json({ ok: true, items: [] });
+        const snapshots = await Promise.all(organizationIds.map(orgId => ctx.db.collection(collection).where('organizationId','==',orgId).get()));
+        const items = snapshots.flatMap(snap => snap.docs.map(d => ({
+          id:d.id,
+          ...d.data(),
+          canEdit: ctx.isSuperAdmin || (ctx.tenantType === 'hierarchy' ? true : String(d.data().ownerUid || '') === ctx.auth.uid),
+        })));
+        return res.status(200).json({ ok: true, items });
       }
       if (ctx.isSuperAdmin) {
         const snap = await ctx.db.collection(collection).get();
@@ -552,7 +561,7 @@ export default async function handler(req: Request, res: Response) {
             collection === 'announcements' ? 'maxAnnouncements' :
             collection === 'radioBroadcasts' ? 'maxRadioItems' :
             collection === 'playlists' ? 'maxRadioPlaylists' : '';
-          if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
+          if (quotaKey && ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
         await ref.set({
@@ -573,8 +582,9 @@ export default async function handler(req: Request, res: Response) {
       }
     }
 
-    if (ORG_COLLECTIONS.has(collection)) {
-      if (!ctx.organizationId) throw new Error('Select an organization before managing content.');
+    if (ORG_COLLECTIONS.has(collection) {
+      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before managing content.');
+      if (ctx.tenantType === 'hierarchy' && !(await organizationInHierarchyScope(ctx, effectiveOrganizationId))) throw new Error('The organization is outside your hierarchy scope.');
       const ref = ctx.db.doc(`${collection}/${id}`);
       const existing = await ref.get();
 
@@ -603,7 +613,7 @@ export default async function handler(req: Request, res: Response) {
           if (!Number.isInteger(next) || next < current) {
             throw new Error('Certificate download count must be a non-decreasing integer.');
           }
-          if (!ctx.isSuperAdmin && String(existing.data()?.organizationId || '') !== ctx.organizationId) {
+          if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && String(existing.data()?.organizationId || '') !== ctx.organizationId) {
             throw new Error('This certificate belongs to another organization.');
           }
           await ref.set({
@@ -632,12 +642,12 @@ export default async function handler(req: Request, res: Response) {
           const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'playlists' ? 'maxRadioPlaylists' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
         }
-        if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
+        if (existing.exists && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
         await ref.set({
           ...incoming,
           id,
-          organizationId: ctx.organizationId,
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+          organizationId: effectiveOrganizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
