@@ -129,7 +129,7 @@ function validateRadioMedia(form: FormState) {
   });
 }
 
-export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage }) => {
+export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage, canCreate = true, canUpdate = true, canDelete = true }) => {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [playlists, setPlaylists] = useState<AdminRecord[]>([]);
@@ -243,11 +243,13 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   }, [records, search]);
 
   const openNew = () => {
+    if (!canCreate) { setError('You do not have permission to create this resource.'); return; }
     setEditingId(null);
     setForm(blankForm(kind));
   };
 
   const edit = (record: AdminRecord) => {
+    if (!canUpdate) { setError('You do not have permission to edit this resource.'); return; }
     if (record.canEdit === false) {
       setError('This record is owned by another contributor and cannot be edited. Only the contributor who added it or VOP Super Admin can edit it.');
       return;
@@ -264,6 +266,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (editingId ? !canUpdate : !canCreate) { setError('You do not have permission to perform this action.'); return; }
     setSaving(true);
     setError('');
     try {
@@ -308,6 +311,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   };
 
   const remove = async (id: string) => {
+    if (!canDelete) { setError('You do not have permission to delete this resource.'); return; }
     const target = records.find(record => record.id === id);
     if (target?.canEdit === false) {
       setError('This record is owned by another contributor and cannot be deleted. Only the contributor who added it or VOP Super Admin can delete it.');
@@ -342,6 +346,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     setSaving(true);
     setError('');
     try {
+      if (!canUpdate) throw new Error('You do not have permission to update translations.');
       await saveTranslation(selectedTranslation, cleaned);
       const localEntries = getStoredAutoLocalization();
       if (localEntries.length) {
@@ -399,7 +404,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         <PageHead icon={Icon} title="Translations" subtitle="The system detects translatable interface strings automatically. Select a language and translate the detected entries." action={
           <div style={{display:'flex',gap:9,flexWrap:'wrap',justifyContent:'flex-end'}}>
             <button className="vop-secondary" type="button" onClick={() => window.dispatchEvent(new Event('vop_localization_discovered'))}><RefreshCw size={17}/>Refresh Detected</button>
-            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving || !selectedTranslation || translations.find(item => item.id === selectedTranslation)?.canEdit === false}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
+            <button className="vop-primary" type="button" onClick={()=>void saveTranslations()} disabled={saving || !canUpdate || !selectedTranslation || translations.find(item => item.id === selectedTranslation)?.canEdit === false}><Save size={17}/>{saving?'Saving…':'Save Translations'}</button>
           </div>
         } />
         {error && <ErrorBox message={error} clear={()=>setError('')} />}
@@ -501,7 +506,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   return (
     <div>
       <PageHead icon={Icon} title={primaryTitle} subtitle={subtitleFor(kind)} action={
-        <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>Add {singular(kind)}</button>
+        {canCreate && <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>Add {singular(kind)}</button>}
       } />
       {error && <ErrorBox message={error} clear={()=>setError('')} />}
       {message && <Toast message={message}/>}
@@ -517,7 +522,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
               {visibleRecords.map((record,index)=><tr key={record.id}>
                 <td>{index+1}</td>
                 {tableCells(kind, record)}
-                <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
+                <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" disabled={record.canEdit === false || !canUpdate} title={record.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'} onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false || !canDelete} title={record.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'} onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
               </tr>)}
             </tbody>
           </table>
@@ -806,7 +811,7 @@ function RadioAdminDashboard({
   const [playlistItems, setPlaylistItems] = useState<string[]>([]);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  const startNewEditor = () => { setMessage(''); setError(''); openNew(); setEditorOpen(true); };
+  const startNewEditor = () => { if (!canCreate) { setError('You do not have permission to create radio content.'); return; } setMessage(''); setError(''); openNew(); setEditorOpen(true); };
   const startEditEditor = (item: AdminRecord) => { setMessage(''); setError(''); edit(item); setEditorOpen(true); };
   useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
 
@@ -925,7 +930,7 @@ function RadioAdminDashboard({
                <label className="vop-setting-row"><span>Published</span><input type="checkbox" checked={playlistPublished} onChange={e=>setPlaylistPublished(e.target.checked)}/></label>
                <button className="vop-primary" type="button" disabled={playlistSaving} onClick={()=>void savePlaylist()}><Save size={16}/>{playlistSaving ? 'Saving…' : playlistEditingId ? 'Save Playlist' : 'Create Playlist'}</button>
              </div>
-             <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false}>{t('common.edit','Edit')}</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false}>{t('common.delete','Delete')}</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">No playlists configured.</div>}</div>
+             <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false || !canUpdate}>{t('common.edit','Edit')}</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false || !canDelete}>{t('common.delete','Delete')}</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">No playlists configured.</div>}</div>
            </div> :
            <div className="vop-radio-admin-library-grid">
              {filtered
