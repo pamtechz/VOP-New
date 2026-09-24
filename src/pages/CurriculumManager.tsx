@@ -947,6 +947,15 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         </div>
       </div>
 
+      {(isSuperAdmin || isHierarchyAdmin) && <div className="vop-content-scope-bar">
+        <div><strong>Publishing scope</strong><span>{isSuperAdmin ? 'Super Admin can publish system-wide or target an organisation.' : 'You can only target organisations within your authorized hierarchy.'}</span></div>
+        <label><span>Organisation target</span><select value={scopeOrganizationId} onChange={e=>setScopeOrganizationId(e.target.value)} disabled={organizationLoading}>
+          {isSuperAdmin && <option value="">System-wide</option>}
+          {!isSuperAdmin && currentUser?.organizationId && !organizationOptions.some(item=>item.id===currentUser.organizationId) && <option value={currentUser.organizationId}>{currentUser.organizationId}</option>}
+          {organizationOptions.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+        </select></label>
+      </div>}
+      
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;
@@ -956,7 +965,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       </div>
 
       {tab === 'quizzes' ? <QuizLibrary /> : tab === 'guides' ? (
-        <GuideManager languages={languages} guides={guides} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
+        <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
       ) : (
         <>
           <div className="vop-reference-toolbar">
