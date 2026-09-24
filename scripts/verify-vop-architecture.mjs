@@ -70,7 +70,7 @@ const checks = [
   ['api/admin/organizations.ts', ['assignOwner','organization owner cannot be removed','resolveManagedOrganization','organizationAllowedForHierarchy','managedOrganizationId']],
   ['api/admin/candidates.ts', ['organizationInHierarchyScope','candidate belongs outside your authorized organization scope']],
   ['api/admin/graduations.ts', ['organizationInHierarchyScope','graduation request belongs outside your hierarchy scope']],
-  ['api/mentorship.ts', ['organizationInHierarchyScope','requested organization is outside your hierarchy scope']],
+  ['api/mentorship.ts', ['organizationInHierarchyScope','requested organization is outside your hierarchy scope','hierarchyOrganizationContext','This conversation is missing its organization scope','mentorAssignments','You cannot access this conversation.']],
   ['src/pages/AdminPage.tsx', ['Permission Matrix','organizations','userManagement','certification','Prayer Requests']],
   ['src/pages/CertificationManager.tsx', ['isSuperAdmin','Certificate Settings','Issue Certificate','CertificateTemplateConfig']],
   ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','certificate_bg.png','fixed artboard','default view 40%','setZoom(0.4)','template','Aubrey Matende','/assets/vop_logo.png','/assets/pm_logo.png','/assets/vop_logo_2.png','setSelectedId(DEFAULT_TEMPLATE.elements?.[0]?.id || \'certify\')']],
@@ -98,7 +98,7 @@ const checks = [
   ['src/pages/GuideManager.tsx', ['organizationId?: string','organizationId: organizationId || undefined']],
   ['api/prayer.ts', ['accessibleOrganizationIds','organizationInHierarchyScope','requirePermission']],
   ['src/components/reader/LessonReaderModal.tsx', ['lesson.next_page','lesson.complete']],
-  ['firestore.rules', ['match /announcements/{id}','canEditOwnedContent(resource.data)','ownerUid','ownerOrganizationId']],
+  ['firestore.rules', ['match /announcements/{id}','canEditOwnedContent(resource.data)','ownerUid','ownerOrganizationId','match /playlists/{id}','canReadGlobal(resource.data, \'published\')']],
 ];
 const errors = [];
 const localizationGuardSource = read('src/components/admin/ContentStudio.tsx');
