@@ -51,18 +51,20 @@ type Props = {
   guides: DiscoverGuide[];
   onSaved?: () => void;
   onOpenSettings?: () => void;
+  organizationId?: string;
 };
 
 async function guideAdmin(
   action: 'listGuides' | 'upsertGuide' | 'archiveGuide' | 'forkGuide',
   data?: Record<string, unknown>,
+  organizationId?: string,
 ) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ action, collection: 'guides', data }),
+    body: JSON.stringify({ action, collection: 'guides', data, organizationId: organizationId || undefined }),
   });
   const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
   if (!response.ok) throw new Error(body.error || 'Guide request failed.');
@@ -158,7 +160,7 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
   return [...groups.values()].sort((a, b) => a.discoverNumber - b.discoverNumber || a.title.localeCompare(b.title));
 }
 
-export default function GuideManager({ languages, guides, onSaved, onOpenSettings }: Props) {
+export default function GuideManager({ languages, guides, onSaved, onOpenSettings, organizationId = '' }: Props) {
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
   const [search, setSearch] = useState('');
@@ -181,7 +183,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     setLoading(true);
     setError('');
     try {
-      const response = await guideAdmin('listGuides');
+      const response = await guideAdmin('listGuides', undefined, organizationId);
       const apiRecords = (response.items || []) as Array<Record<string, unknown>>;
       const lessonCounts = new Map(guides.map(guide => [guide.language, guide.lessons.length]));
       setRecords(apiRecords.map(item => makeRecord(item, lessonCounts.get(valueText(item.language)) || 0)));
@@ -192,7 +194,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     }
   };
 
-  useEffect(() => { void load(); }, [guides]);
+  useEffect(() => { void load(); }, [guides, organizationId]);
 
   const groups = useMemo(() => groupGuides(records), [records]);
   const seasons = useMemo(
@@ -235,7 +237,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       certificateEligible: false,
       published: false,
       archived: false,
-      sharingScope: 'organization',
+      sharingScope: organizationId ? 'organization' : 'shared',
       lessonCount: 0,
     });
   };
