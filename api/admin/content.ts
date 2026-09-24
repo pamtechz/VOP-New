@@ -86,12 +86,23 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listGuides') {
-      const snap = ctx.organizationId
-        ? await ctx.db.collection('guides').where('organizationId','==',ctx.organizationId).get()
-        : await ctx.db.collection('guides').get();
-      const items = await Promise.all(snap.docs.map(async d => {
+      const organizationIds = ctx.isSuperAdmin
+        ? []
+        : ctx.tenantType === 'hierarchy'
+          ? await accessibleOrganizationIds(ctx)
+          : (ctx.organizationId ? [ctx.organizationId] : []);
+      const snapshots = ctx.isSuperAdmin
+        ? [await ctx.db.collection('guides').get()]
+        : await Promise.all(organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()));
+      const items = await Promise.all(snapshots.flatMap(snap => snap.docs).map(async d => {
         const lessons = await d.ref.collection('lessons').get();
-        return { id: d.id, ...d.data(), lessonCount: lessons.size, languages: [String(d.data().language || '')].filter(Boolean), canEdit: ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid };
+        return {
+          id: d.id,
+          ...d.data(),
+          lessonCount: lessons.size,
+          languages: [String(d.data().language || '')].filter(Boolean),
+          canEdit: ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid,
+        };
       }));
       return res.status(200).json({ ok: true, items });
     }
