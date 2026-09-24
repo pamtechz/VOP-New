@@ -19,7 +19,7 @@ const checks = [
     "collectionGroup('members')",
     'organizationInHierarchyScope',
     'accessibleOrganizationIds'
-  ],
+  ]],
   ['firestore.rules', [
     "'union_admin'",
     "'conference_admin'",
