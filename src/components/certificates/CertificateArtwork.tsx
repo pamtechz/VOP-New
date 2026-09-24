@@ -9,6 +9,31 @@ export interface CertificateArtworkRecord {
   issuedAt?: string | null;
 }
 
+export interface CertificateTemplateElement {
+  id: string;
+  type: 'text' | 'image' | 'line' | 'date' | 'certificateNumber' | 'candidateName' | 'courseName' | 'courseCode';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text?: string;
+  src?: string;
+  fontSize?: number;
+  fontWeight?: number | string;
+  color?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  rotate?: number;
+  opacity?: number;
+  visible?: boolean;
+}
+
+export interface CertificateTemplateConfig {
+  width?: number;
+  height?: number;
+  backgroundUrl?: string;
+  elements?: CertificateTemplateElement[];
+}
+
 export interface CertificateArtworkConfig {
   certificateTitle?: string;
   certificateBodyText?: string;
@@ -23,6 +48,7 @@ export interface CertificateArtworkConfig {
   backgroundUrl?: string;
   verificationEnabled?: boolean;
   verificationBaseUrl?: string;
+  template?: CertificateTemplateConfig;
 }
 
 interface Props {
@@ -51,7 +77,53 @@ function qrUrl(value: string) {
   return `https://quickchart.io/qr?format=png&size=180&margin=1&ecLevel=H&text=${encodeURIComponent(value)}`;
 }
 
+function templateText(element: CertificateTemplateElement, certificate: CertificateArtworkRecord, config: CertificateArtworkConfig | null) {
+  switch (element.type) {
+    case 'candidateName': return certificate.candidateName || '';
+    case 'courseName': return certificate.courseName || config?.courseName?.trim() || '';
+    case 'courseCode': return certificate.courseCode || '';
+    case 'certificateNumber': return certificate.certificateNumber || '';
+    case 'date': return dateText(certificate.issuedAt || certificate.completionDate);
+    case 'text':
+    default: return element.text || '';
+  }
+}
+
+function renderTemplate(certificate: CertificateArtworkRecord, config: CertificateArtworkConfig | null, verification: boolean) {
+  const template = config?.template;
+  if (!template?.elements?.length) return null;
+  const width = Number(template.width) || 1513;
+  const height = Number(template.height) || 1040;
+  const backgroundUrl = template.backgroundUrl || config?.backgroundUrl || '';
+  const verifyUrl = verification ? verificationUrl(certificate, config) : '';
+  return (
+    <div className="vop-certificate-template-canvas" style={{ aspectRatio: `${width} / ${height}` }} data-template-width={width} data-template-height={height}>
+      {backgroundUrl && <img className="vop-certificate-template-background" src={backgroundUrl} alt="" />}
+      {template.elements.filter(element => element.visible !== false).map(element => {
+        let src = element.src || '';
+        if (element.type === 'image' && element.id === 'seal') src = src || config?.sealUrl || '';
+        if (element.type === 'image' && element.id === 'signature') src = src || config?.signatureUrl || '';
+        if (element.type === 'image' && element.id === 'logo') src = src || config?.logoUrl || '';
+        if (element.id === 'verificationQr') src = verifyUrl ? qrUrl(verifyUrl) : '';
+        if (element.id === 'verificationQr' && !verifyUrl) return null;
+        const style: React.CSSProperties = {
+          left: `${element.x}%`, top: `${element.y}%`, width: `${element.width}%`, height: `${element.height}%`,
+          transform: `rotate(${Number(element.rotate || 0)}deg)`, opacity: element.opacity ?? 1,
+          fontSize: element.fontSize ? `${element.fontSize}px` : undefined,
+          fontWeight: element.fontWeight ?? 600, color: element.color || '#111', textAlign: element.textAlign || 'center',
+        };
+        const className = `vop-certificate-template-element vop-certificate-template-${element.type}`;
+        if (element.type === 'image') return src ? <img key={element.id} className={className} style={{ ...style, objectFit: 'contain' }} src={src} alt="" /> : null;
+        if (element.type === 'line') return <div key={element.id} className={className} style={{ ...style, height: 1, background: element.color || '#111' }} />;
+        return <div key={element.id} className={className} style={style}>{templateText(element, certificate, config)}</div>;
+      })}
+    </div>
+  );
+}
+
 export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verification = true }) => {
+  const templateMarkup = renderTemplate(certificate, config, verification);
+  if (templateMarkup) return templateMarkup;
   const title = config?.certificateTitle?.trim() || '';
   const body = config?.certificateBodyText?.trim() || '';
   const issuer = config?.issuerName?.trim() || '';
