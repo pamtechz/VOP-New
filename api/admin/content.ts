@@ -300,8 +300,10 @@ export default async function handler(req: Request, res: Response) {
 
       const settingsId = collection === 'settings' ? 'settings' : 'curriculum';
       const ref = ctx.isSuperAdmin && !targetOrganizationId
-        ? ctx.db.doc(`system/settings`)
-        : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
+        ? ctx.db.doc('system/settings')
+        : ctx.tenantType === 'hierarchy' && !targetOrganizationId
+          ? ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings`)
+          : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
       const existing = await ref.get();
       const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
 
@@ -368,10 +370,20 @@ export default async function handler(req: Request, res: Response) {
           return res.status(200).json({ ok: true, items: s.exists ? [{ id:'certification', ...s.data() }] : [] });
         }
         const id = collection === 'settings' ? 'settings' : 'curriculum';
-        const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
-        if (!targetOrganizationId) return res.status(200).json({ ok: true, items: [] });
-        const s = await ctx.db.doc(`organizations/${targetOrganizationId}/settings/${id}`).get();
-        return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data() }] : [] });
+        if (ctx.organizationId) {
+          const s = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/${id}`).get();
+          return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data() }] : [] });
+        }
+        if (ctx.tenantType === 'hierarchy') {
+          if (collection !== 'settings') return res.status(200).json({ ok: true, items: [] });
+          const s = await ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings`).get();
+          return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data(), tenantId:ctx.tenantId }] : [] });
+        }
+        if (ctx.isSuperAdmin) {
+          const s = await ctx.db.doc('system/settings').get();
+          return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data() }] : [] });
+        }
+        return res.status(200).json({ ok: true, items: [] });
       }
       if (collection === 'users') {
         if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('Organization membership is required.');
