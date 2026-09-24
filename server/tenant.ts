@@ -44,6 +44,28 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const profileOrganizationId = String(profile.organizationId || '').trim();
   const requestedId = String(requestedOrganizationId || '').trim();
 
+  // Hierarchy roles are authoritative even when the same person is also
+  // attached to an organization. Organization membership must never silently
+  // downgrade a Union/Conference/District/Church administrator into an
+  // organization tenant. Organization targets are validated separately by
+  // organizationInHierarchyScope() in the operation that needs one.
+  if (hierarchyAdmin) {
+    const nodeId = String(profile.adminNodeId || '').trim();
+    if (!nodeId) throw new Error('This administrator account is not linked to a hierarchy tenant.');
+    const role = String(profile.role || '');
+    const collection = role === 'union_admin' ? 'unions'
+      : role === 'conference_admin' ? 'conferences'
+      : role === 'district_admin' ? 'districts'
+      : 'churches';
+    const node = await db.doc(collection + '/' + nodeId).get();
+    if (!node.exists) throw new Error('The assigned hierarchy tenant does not exist.');
+    return {
+      db, auth, profile, organizationId: '',
+      membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId },
+      isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId,
+    };
+  }
+
   // Tenant identity is derived from the authenticated profile. A client-supplied
   // organizationId may select a tenant only for Super Admin; ordinary and
   // hierarchy-admin accounts must never switch tenant context by request payload.
