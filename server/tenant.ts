@@ -48,12 +48,40 @@ export async function authenticateTenant(request: Request, requestedOrganization
   // organizationId may select a tenant only for Super Admin; ordinary and
   // hierarchy-admin accounts must never switch tenant context by request payload.
   if (!isSuperAdmin && requestedId && requestedId !== profileOrganizationId) {
-    throw new Error('You cannot access another organization.');
+    const requestedMembership = await db.doc(`organizations/${requestedId}/members/${auth.uid}`).get();
+    if (!requestedMembership.exists || requestedMembership.data()?.active !== true) {
+      // A hierarchy administrator may still use its hierarchy tenant context;
+      // it must not impersonate an unrelated organization.
+      if (!hierarchyAdmin) throw new Error('You cannot access another organization.');
+    }
   }
 
-  const organizationId = isSuperAdmin
-    ? requestedId
-    : profileOrganizationId;
+  // Explicit organization membership takes precedence over a platform/hierarchy
+  // role. This is important for accounts that serve at a hierarchy level while
+  // also being assigned to an organization as owner/member.
+  let organizationId = isSuperAdmin ? requestedId : profileOrganizationId;
+  if (!isSuperAdmin && requestedId) {
+    const requestedOrganization = await db.doc(`organizations/${requestedId}`).get();
+    if (!requestedOrganization.exists || requestedOrganization.data()?.status !== 'active') {
+      throw new Error('The organization is not available.');
+    }
+    const requestedMembership = await db.doc(`organizations/${requestedId}/members/${auth.uid}`).get();
+    if (requestedMembership.exists && requestedMembership.data()?.active === true) {
+      organizationId = requestedId;
+    }
+  }
+  if (!organizationId && !isSuperAdmin) {
+    const memberships = await db.collectionGroup('members')
+      .where('uid', '==', auth.uid)
+      .where('active', '==', true)
+      .limit(20)
+      .get();
+    const organizationMembership = memberships.docs.find(doc => doc.ref.path.startsWith('organizations/'));
+    if (organizationMembership) {
+      const parts = organizationMembership.ref.path.split('/');
+      if (parts.length >= 4) organizationId = parts[1];
+    }
+  }
 
   if (!organizationId) {
     if (hierarchyAdmin) {
