@@ -404,13 +404,11 @@ export default async function handler(req: Request, res: Response) {
         throw error;
       }
       const now = new Date().toISOString();
-      const hierarchyPlatformRole = hierarchyRole(String(ctx.profile.role || ''));
       await ctx.db.runTransaction(async transaction => {
         transaction.set(ctx.db.doc('users/' + created.uid), {
           uid:created.uid, email, displayName,
           userType:role === 'learner' || role === 'viewer' ? 'learner' : role,
-          role: hierarchyPlatformRole || (role === 'mentor' ? 'mentor' : 'student'),
-          ...(hierarchyPlatformRole ? { adminNodeType:ctx.profile.adminNodeType, adminNodeId:ctx.profile.adminNodeId } : {}),
+          role: role === 'mentor' ? 'mentor' : 'student',
           organizationId:managedOrganizationId, organizationRole:role,
           privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'},
           information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false},
@@ -419,7 +417,7 @@ export default async function handler(req: Request, res: Response) {
         }, {merge:true});
         transaction.set(ctx.db.doc('organizations/' + managedOrganizationId + '/members/' + created.uid), {uid:created.uid,organizationId:managedOrganizationId,role,active:true,invitedBy:ctx.auth.uid,joinedAt:now,updatedAt:now},{merge:true});
       });
-      await authService.setCustomUserClaims(created.uid, { role: hierarchyRole(String(ctx.profile.role || '')) || 'student', ...(hierarchyRole(String(ctx.profile.role || '')) ? { adminNodeType:ctx.profile.adminNodeType, adminNodeId:ctx.profile.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:role });
+      await authService.setCustomUserClaims(created.uid, { role:'student', organizationId:managedOrganizationId, organizationRole:role });
       await writeTenantAudit(ctx,'membership.create','organizations/' + managedOrganizationId + '/members/' + created.uid,undefined,{uid:created.uid,role});
       return res.status(200).json({ok:true,item:{uid:created.uid,email,displayName,role}});
     }
