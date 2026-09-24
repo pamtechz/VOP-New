@@ -16,6 +16,13 @@ function normalizeScore(value:unknown){const n=Number(value);return Number.isFin
 function completionKey(language:string,guideId:string,lessonId:string){return language+':'+guideId+':'+lessonId;}
 function scoreKey(language:string,guideId:string,testId:string){return language+':'+guideId+':'+testId;}
 function certificateDocumentId(candidateId:string,language:string,organizationId:string){return 'cert-'+createHash('sha256').update(organizationId+':'+candidateId+':'+language).digest('hex').slice(0,48);}
+function hierarchyScopeField(role:string){
+ if(role==='union_admin') return 'unionId';
+ if(role==='conference_admin') return 'conferenceId';
+ if(role==='district_admin') return 'districtId';
+ if(role==='church_admin') return 'churchId';
+ return '';
+}
 function publicCertificate(id:string,data:Record<string,unknown>){return {...safe({...data,id})};}
 
 async function mine(req:Request,res:Response){
@@ -25,9 +32,16 @@ async function mine(req:Request,res:Response){
  if (!profile.exists) return res.status(404).json({error:'VOP account profile was not found.'});
  const profileData=profile.data()||{};
  const organizationId=String(profileData.organizationId||'').trim();
- if (!organizationId && String(profileData.role||'') !== 'super_admin') return res.status(403).json({error:'Your account is not linked to an organization.'});
+ const profileRole=String(profileData.role||'');
+ const adminNodeId=String(profileData.adminNodeId||'').trim();
+ const hierarchyField=hierarchyScopeField(profileRole);
+ if (!organizationId && profileRole !== 'super_admin' && !hierarchyField) return res.status(403).json({error:'Your account is not linked to an organization or hierarchy tenant.'});
  const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
- const [snapshot,configSnapshot]=await Promise.all([organizationId?certificateQuery.where('organizationId','==',organizationId).limit(20).get():certificateQuery.limit(20).get(),db.doc('system/certification').get()]);
+ let certificateSnapshot;
+ if (organizationId) certificateSnapshot=await certificateQuery.where('organizationId','==',organizationId).limit(20).get();
+ else if (profileRole === 'super_admin') certificateSnapshot=await certificateQuery.limit(20).get();
+ else certificateSnapshot=await db.collection('certificates').where(hierarchyField,'==',adminNodeId).limit(20).get();
+ const [snapshot,configSnapshot]=await Promise.all([Promise.resolve(certificateSnapshot),db.doc('system/certification').get()]);
  const certificates=snapshot.docs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified');const config=configSnapshot.exists?configSnapshot.data()??{}:{};
  return res.status(200).json({certificates,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??'')}});
 }
@@ -69,7 +83,7 @@ async function issue(req:Request,res:Response){
  for(const test of tests){if(!Array.isArray(test.questions)||!test.questions.length)return res.status(409).json({error:'The approved guide has an invalid assessment configuration.'});const score=normalizeScore(scores[`${organizationId}:${lang}:${guideId}:${String(test.id)}`]);if(score===null||score<threshold)return res.status(409).json({error:'The candidate has not passed all required assessments.'});}
  const [church,district,conference,union]=await Promise.all([candidate.churchId?db.doc('churches/'+candidate.churchId).get():Promise.resolve(null),candidate.districtId?db.doc('districts/'+candidate.districtId).get():Promise.resolve(null),candidate.conferenceId?db.doc('conferences/'+candidate.conferenceId).get():Promise.resolve(null),candidate.unionId?db.doc('unions/'+candidate.unionId).get():Promise.resolve(null)]);
  const certificateRef=db.collection('certificates').doc(certificateDocumentId(candidateId,lang,organizationId)),issuedAt=FieldValue.serverTimestamp(),certificateNumber='VOP-'+new Date().getUTCFullYear()+'-'+certificateRef.id.toUpperCase();
- const certificate={candidateId,organizationId,candidateName:String(candidate.displayName??''),candidateEmail:String(candidate.email??''),candidatePhotoURL:String(candidate.photoURL??''),language:lang,courseName:String(config.courseName??gd.title??''),courseCode:String(config.courseCode??''),certificateNumber,completionDate:String(candidate.information?.completionDate??candidate.information?.graduationDate??''),issuedAt,churchName:church?.exists?String(church.data()?.name??''):'',districtName:district?.exists?String(district.data()?.name??''):'',conferenceName:conference?.exists?String(conference.data()?.name??''):'',unionName:union?.exists?String(union.data()?.name??''):'',guideId,guideTitle:String(gd.title??''),status:'Certified',downloadCount:0,issuedBy:decoded.uid,verificationEnabled:config.verificationEnabled===true,createdAt:issuedAt,updatedAt:issuedAt};
+ const certificate={candidateId,organizationId,unionId:String(candidate.unionId||''),conferenceId:String(candidate.conferenceId||''),districtId:String(candidate.districtId||''),churchId:String(candidate.churchId||''),candidateName:String(candidate.displayName??''),candidateEmail:String(candidate.email??''),candidatePhotoURL:String(candidate.photoURL??''),language:lang,courseName:String(config.courseName??gd.title??''),courseCode:String(config.courseCode??''),certificateNumber,completionDate:String(candidate.information?.completionDate??candidate.information?.graduationDate??''),issuedAt,churchName:church?.exists?String(church.data()?.name??''):'',districtName:district?.exists?String(district.data()?.name??''):'',conferenceName:conference?.exists?String(conference.data()?.name??''):'',unionName:union?.exists?String(union.data()?.name??''):'',guideId,guideTitle:String(gd.title??''),status:'Certified',downloadCount:0,issuedBy:decoded.uid,verificationEnabled:config.verificationEnabled===true,createdAt:issuedAt,updatedAt:issuedAt};
  const candidateRef=db.doc(`users/${candidateId}`);
  const approvedRequestRef=db.doc(`graduationRequests/${String(approved.id)}`);
  const result=await db.runTransaction(async tx=>{
