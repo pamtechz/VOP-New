@@ -21,6 +21,23 @@ function normalizeQuotas(value: unknown) {
 }
 
 function slug(value: unknown) { const v = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); if (!v) throw new Error('Organization name is required.'); return v.slice(0, 80); }
+function hierarchyRole(role: string) { return ['union_admin','conference_admin','district_admin','church_admin'].includes(role) ? role : ''; }
+function organizationInHierarchy(data: Record<string, unknown>, role: string, nodeId: string) {
+  const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : role === 'church_admin' ? 'churchId' : '';
+  if (field && String(data[field] || '').trim() === nodeId) return true;
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+  if (field && String(hierarchy[field] || '').trim() === nodeId) return true;
+  return String(data.hierarchyType || '').trim() === field.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId;
+}
+async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authenticateTenant>>, requestedOrg: string) {
+  if (ctx.isSuperAdmin) return requestedOrg || ctx.organizationId;
+  if (ctx.organizationId) return ctx.organizationId;
+  const role = hierarchyRole(String(ctx.profile.role || ''));
+  if (!role || !requestedOrg) throw new Error('Select an organization within your hierarchy.');
+  const organization = await ctx.db.doc('organizations/' + requestedOrg).get();
+  if (!organization.exists || organization.data()?.status !== 'active' || !organizationInHierarchy(organization.data() || {}, role, String(ctx.profile.adminNodeId || '').trim())) throw new Error('The selected organization is outside your assigned hierarchy scope.');
+  return requestedOrg;
+}
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
@@ -141,9 +158,20 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'list') {
+      if (!ctx.isSuperAdmin && hierarchyRole(String(ctx.profile.role || ''))) {
+        const role = hierarchyRole(String(ctx.profile.role || ''));
+        const nodeId = String(ctx.profile.adminNodeId || '').trim();
+        const snap = await bootstrapDb.collection('organizations').get();
+        const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId)).map(async organization => {
+          const data = organization.data() || {};
+          const members = await organization.ref.collection('members').where('active','==',true).get();
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
+        }));
+        return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
+      }
       if (!ctx.isSuperAdmin) {
         requireOrgRole(ctx, ['owner','admin']);
-        const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
+        const organization = await bootstrapDb.doc(`organizations/${managedOrganizationId}`).get();
         const data = organization.data() || {};
         const members = await organization.ref.collection('members').where('active','==',true).get();
         return res.status(200).json({ ok:true, items:[{
@@ -173,14 +201,15 @@ export default async function handler(req: Request, res: Response) {
     }
 
 
-    requireOrgRole(ctx, ['owner','admin']);
+    const managedOrganizationId = await resolveManagedOrganization(ctx, String(requestedOrg || '').trim());
+    if (!ctx.isSuperAdmin && !hierarchyRole(String(ctx.profile.role || ''))) requireOrgRole(ctx, ['owner','admin']);
     if (action === 'listAudit') {
-      const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
+      const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
     }
 
     if (action === 'getUsage') {
-      const orgId = ctx.organizationId;
+      const orgId = managedOrganizationId;
       const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
       const [members, guides, quizzes, announcements, radio, books] = await Promise.all([
         ctx.db.collection(`organizations/${orgId}/members`).where('active','==',true).get(),
@@ -201,7 +230,7 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       };
       Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
-      const before = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+      const before = await ctx.db.doc(`organizations/${managedOrganizationId}`).get();
       if (!ctx.isSuperAdmin && data.quotas !== undefined) throw new Error('Only the VOP Super Admin can change organization quotas.');
       if (allowed.quotas !== undefined) {
         const raw = allowed.quotas as Record<string, unknown>;
@@ -214,7 +243,7 @@ export default async function handler(req: Request, res: Response) {
         }
         allowed.quotas = normalized;
       }
-      await ctx.db.doc(`organizations/${ctx.organizationId}`).set(allowed, { merge:true });
+      await ctx.db.doc(`organizations/${managedOrganizationId}`).set(allowed, { merge:true });
       await writeTenantAudit(ctx, 'organization.update', `organizations/${ctx.organizationId}`, before.data(), allowed);
       return res.status(200).json({ ok:true });
     }
@@ -452,7 +481,7 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can change organization status.');
       const status = ['active','suspended','archived'].includes(String(body.status)) ? String(body.status) : '';
       if (!status) throw new Error('Invalid organization status.');
-      await ctx.db.doc(`organizations/${ctx.organizationId}`).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await ctx.db.doc(`organizations/${managedOrganizationId}`).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
     return res.status(400).json({ error: 'Unsupported organization action.' });
