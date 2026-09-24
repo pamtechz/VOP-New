@@ -6,7 +6,7 @@ import {
   MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings,
   Table2, Trash2, Underline, Undo2, Video, Volume2, X
 } from 'lucide-react';
-import type { CustomLanguage, DiscoverGuide, Lesson } from '../types';
+import type { CustomLanguage, DiscoverGuide, Lesson, User } from '../types';
 import { auth } from '../lib/firebase';
 import { loadFirestoreGuides } from '../services/firestoreData';
 import GuideManager from './GuideManager';
@@ -18,6 +18,7 @@ type RecordItem = { id: string; [key: string]: unknown };
 
 type Props = {
   languages: CustomLanguage[];
+  currentUser?: User;
   initialTab?: CurriculumStudioTab;
   onBack?: () => void;
   onTabChange?: (tab: CurriculumStudioTab) => void;
@@ -82,18 +83,19 @@ type EditorState = {
   sharingScope: 'private' | 'organization' | 'shared';
 };
 
-async function adminContent(
+async function adminContentRequest(
   action: 'list' | 'listGuides' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
+  organizationId?: string,
 ) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ action, collection, id, data }),
+    body: JSON.stringify({ action, collection, id, data, organizationId: organizationId || undefined }),
   });
   const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[]; item?: unknown };
   if (!response.ok) throw new Error(body.error || 'Request failed.');
@@ -357,7 +359,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
   );
 }
 
-export default function CurriculumManager({ languages, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
+export default function CurriculumManager({ languages, currentUser, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
   const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
@@ -379,8 +381,47 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
   const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'quiz' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
+  const [organizationLoading, setOrganizationLoading] = useState(false);
+  const [scopeOrganizationId, setScopeOrganizationId] = useState(currentUser?.role === 'super_admin' ? '' : String(currentUser?.organizationId || ''));
 
   const enabledLanguages = useMemo(() => languages.filter(item => item.enabled !== false), [languages]);
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isHierarchyAdmin = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser?.role || ''));
+  const organizationLabel = scopeOrganizationId ? (organizationOptions.find(item => item.id === scopeOrganizationId)?.name || scopeOrganizationId) : 'System-wide';
+  const adminContent = (action: Parameters<typeof adminContentRequest>[0], collection: string, id?: string, data?: Record<string, unknown>) =>
+    adminContentRequest(action, collection, id, data, scopeOrganizationId);
+
+  useEffect(() => {
+    if (!currentUser || (!isSuperAdmin && !isHierarchyAdmin)) return;
+    let cancelled = false;
+    const loadOrganizations = async () => {
+      setOrganizationLoading(true);
+      try {
+        if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+        const token = await auth.currentUser.getIdToken();
+        const response = await fetch('/api/admin/users', {
+          method:'POST',
+          headers:{'Content-Type':'application/json',Authorization:'Bearer ' + token},
+          body:JSON.stringify({action:'listOrganizations'}),
+        });
+        const body = await response.json().catch(() => ({})) as {error?:string;items?:Array<{id?:string;name?:string}>};
+        if (!response.ok) throw new Error(body.error || 'Could not load organizations.');
+        if (cancelled) return;
+        const items=(body.items||[]).filter(item=>item.id && item.name).map(item=>({id:String(item.id),name:String(item.name)}));
+        setOrganizationOptions(items);
+        if (!isSuperAdmin && currentUser.organizationId) setScopeOrganizationId(String(currentUser.organizationId));
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not load organizations.');
+      } finally {
+        if (!cancelled) setOrganizationLoading(false);
+      }
+    };
+    void loadOrganizations();
+    return () => { cancelled=true; };
+  }, [currentUser?.uid, currentUser?.role, currentUser?.organizationId, isSuperAdmin, isHierarchyAdmin]);
+
+
 
   const guideLookup = useMemo(() => new Map(guides.map(guide => [guide.language + '|' + guide.id, guide])), [guides]);
 
@@ -534,7 +575,7 @@ export default function CurriculumManager({ languages, initialTab = 'lessons', o
     }
   };
 
-  useEffect(() => { void load(); }, [tab]);
+  useEffect(() => { void load(); }, [tab, scopeOrganizationId]);
 
   const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
