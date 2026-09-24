@@ -31,6 +31,8 @@ const checks = [
     "String(profile.role || '') === 'super_admin'",
     "organizationId = isSuperAdmin",
     "requestedId !== profileOrganizationId",
+    "if (hierarchyAdmin)",
+    "organizationId: ''",
     "canEditCanonicalContent",
     "String(data?.ownerUid || '') === ctx.auth.uid",
     "tenantType: 'platform' | 'organization' | 'hierarchy'",
