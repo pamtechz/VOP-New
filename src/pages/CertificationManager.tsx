@@ -7,7 +7,7 @@ import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import CertificationConfigStudio from './CertificationConfigStudio';
-import CertificateArtwork from '../components/certificates/CertificateArtwork';
+import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
 
@@ -51,6 +51,7 @@ interface CertificationConfig {
   verificationEnabled?: boolean;
   minimumScore?: number;
   verificationBaseUrl?: string;
+  template?: CertificateTemplateConfig;
   approvalStages?: CertificationApprovalStage[];
 }
 
