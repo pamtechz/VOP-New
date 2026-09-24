@@ -46,7 +46,7 @@ const checks = [
   ['api/mentorship.ts', ['organizationInHierarchyScope','requested organization is outside your hierarchy scope']],
   ['src/pages/AdminPage.tsx', ['tenant-scoped, never platform-wide','organizations','userManagement','certification']],
   ['src/pages/CertificationManager.tsx', ['isSuperAdmin','Certificate Settings','Issue Certificate','CertificateTemplateConfig']],
-  ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','certificate_bg.png','fixed artboard','Drag any field','template','Aubrey Matende','/assets/vop_logo.png','/assets/pm_logo.png','/assets/vop_logo_2.png']],
+  ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','certificate_bg.png','fixed artboard','Arrow keys nudge','template','Aubrey Matende','/assets/vop_logo.png','/assets/pm_logo.png','/assets/vop_logo_2.png']],
   ['api/quizzes.ts', ['tenantOwnerKey','ownerTenantId','canManageQuizTenant']],
   ['api/certificates.ts', ['hierarchyScopeField','unionId:String(candidate.unionId','const organizationId=String(profileData.organizationId','template']],
   ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
