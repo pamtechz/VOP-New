@@ -583,7 +583,9 @@ Do not create one universal settings screen with disabled controls.
 - audit;
 - system configuration.
 
-**Organisation Admin Settings**
+**Hierarchy tenant settings are stored separately under `tenantSettings/{tenantId}/settings` when no active organisation membership exists. An active organisation membership still takes precedence and uses that organisation's settings.
+
+**Organisation Admin Settings****
 - organisation profile;
 - users;
 - roles/access;
