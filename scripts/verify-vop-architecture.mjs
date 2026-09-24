@@ -48,7 +48,7 @@ const checks = [
   ['src/pages/CertificationManager.tsx', ['isSuperAdmin','Certificate Settings','Issue Certificate','CertificateTemplateConfig']],
   ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','vop-course-certificate-bg.png','fixed artboard','Drag any field','template']],
   ['api/quizzes.ts', ['tenantOwnerKey','ownerTenantId','canManageQuizTenant']],
-  ['api/certificates.ts', ['hierarchyScopeField','unionId:String(candidate.unionId','const organizationId=String(profileData.organizationId','template']]],
+  ['api/certificates.ts', ['hierarchyScopeField','unionId:String(candidate.unionId','const organizationId=String(profileData.organizationId','template']],
   ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
   ['src/components/home/HomeDashboard.tsx', ['evangelism.title','evangelism.prayer','evangelism.radio']],
   ['src/pages/PrayerPage.tsx', ['prayer.hero_title','prayer.submit']],
