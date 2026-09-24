@@ -105,7 +105,7 @@ function stringValue(config: CertificationConfig, key: keyof CertificationConfig
 
 export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onBack }) => {
   const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), id: config?.id || 'certification', template: normalizeTemplate(config?.template, config?.backgroundUrl) }));
-  const [selectedId, setSelectedId] = useState('title');
+  const [selectedId, setSelectedId] = useState('certify');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [zoom, setZoom] = useState(0.4);
@@ -113,7 +113,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
   useEffect(() => {
     const nextTemplate = normalizeTemplate(config?.template, config?.backgroundUrl);
     setDraft({ ...(config || {}), id: config?.id || 'certification', template: nextTemplate });
-    setSelectedId(nextTemplate.elements?.[0]?.id || 'title');
+    setSelectedId(nextTemplate.elements?.[0]?.id || 'certify');
     setError('');
   }, [config]);
 
