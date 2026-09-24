@@ -138,11 +138,6 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
   return (
     <div className="vop-certificate-artwork">
       <img className="vop-certificate-background-image" src={config?.backgroundUrl || DEFAULT_CERTIFICATE_BACKGROUND} alt="" />
-      <div className="vop-certificate-honeycomb" aria-hidden="true" />
-      <div className="vop-certificate-blue-corner vop-certificate-blue-corner-a" aria-hidden="true" />
-      <div className="vop-certificate-blue-corner vop-certificate-blue-corner-b" aria-hidden="true" />
-      <div className="vop-certificate-blue-ribbon" aria-hidden="true" />
-
       {title && <div className="vop-certificate-artwork-title">{title}</div>}
 
       <div className="vop-certificate-artwork-body">
