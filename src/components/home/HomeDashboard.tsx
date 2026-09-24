@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { User, DiscoverGuide, Announcement, AppSettings, LanguageCode } from '../../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { User, DiscoverGuide, Announcement, AppSettings, LanguageCode } from '../../types';
 import { getTranslation, getAvailableLanguages } from '../../services/i18n';
-import { Play, Award, CheckCircle2, ChevronRight, BookOpen, Clock, Sparkles } from 'lucide-react';
+import { Award, ArrowRight, BookOpen, CheckCircle2, Clock3, Languages, Play, Sparkles, Target, TrendingUp } from 'lucide-react';
 
 interface HomeDashboardProps {
   currentUser: User;
@@ -15,342 +15,93 @@ interface HomeDashboardProps {
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
-  currentUser,
-  guides,
-  announcements,
-  settings,
-  activeLanguage,
-  onSelectGuide,
-  onOpenCertificate
+  currentUser, guides, announcements, settings, activeLanguage, onSelectGuide, onOpenCertificate, onOpenBooks
 }) => {
-  const [carouselIndex, setCarouselIndex] = useState(0);
-  const [curriculumLangFilter, setCurriculumLangFilter] = useState<string>('all');
+  const [announcementIndex, setAnnouncementIndex] = useState(0);
+  const [languageFilter, setLanguageFilter] = useState<string>('all');
   const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback);
 
-  // Auto-advance carousel every 6 seconds
   useEffect(() => {
-    if (announcements.length <= 1) return;
-    const interval = setInterval(() => {
-      setCarouselIndex((prev) => (prev + 1) % announcements.length);
-    }, 6000);
-    return () => clearInterval(interval);
+    if (announcements.length < 2) return;
+    const timer = window.setInterval(() => setAnnouncementIndex(index => (index + 1) % announcements.length), 6500);
+    return () => window.clearInterval(timer);
   }, [announcements.length]);
 
-  const activeAnnouncement = announcements[carouselIndex];
-  const primaryGuide = guides[0];
-  const completedCount = primaryGuide
-    ? primaryGuide.lessons.filter((l) => currentUser.progress.completedLessons.includes(l.id)).length
-    : 0;
+  const languageOptions = getAvailableLanguages(settings).filter(item => item.enabled !== false);
+  const filteredGuides = useMemo(() => guides.filter(guide => languageFilter === 'all' || (guide.language || 'en') === languageFilter), [guides, languageFilter]);
+  const completedLessons = currentUser.progress.completedLessons.length;
+  const primaryGuide = filteredGuides.find(guide => guide.lessons.some(lesson => !currentUser.progress.completedLessons.includes(lesson.id))) || filteredGuides[0];
+  const primaryCompleted = primaryGuide ? primaryGuide.lessons.filter(lesson => currentUser.progress.completedLessons.includes(lesson.id)).length : 0;
+  const primaryPercent = primaryGuide?.lessons.length ? Math.round((primaryCompleted / primaryGuide.lessons.length) * 100) : 0;
+  const announcement = announcements[announcementIndex % Math.max(announcements.length, 1)];
+  const firstName = currentUser.displayName?.split(' ')[0] || t('learner','Learner');
 
   return (
-    <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '1.5rem 1.25rem' }}>
-      {/* Welcome Banner / Greeting Bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: '1rem'
-        }}
-      >
+    <main className="vop-home">
+      <section className="vop-home-welcome">
         <div>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {t('welcome_back', 'Welcome back to Bible Study')}
-          </div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-            {t('greeting_prefix', 'Hello')}, {currentUser.displayName.split(' ')[0]}! 👋
-          </h2>
+          <span className="vop-home-kicker"><Sparkles size={14}/> {t('welcome_back','Welcome back')}</span>
+          <h1>{t('greeting_prefix','Hello')}, {firstName}.</h1>
+          <p>{t('home_subtitle','Continue your Bible study journey and discover your next lesson.')}</p>
         </div>
-
-        {/* Quick Certificate Badge */}
-        {currentUser.progress.completedGuidesCount > 0 && (
-          <button
-            onClick={onOpenCertificate}
-            className="btn btn-gold"
-            style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem 1.25rem' }}
-          >
-            <Award size={18} />
-            <span>{t('certificate_button', 'Certificate')} {t('completed', 'Completed')}</span>
-          </button>
-        )}
-      </div>
-
-      {/* Announcements Carousel */}
-      {activeAnnouncement && (
-        <div
-          style={{
-            background: 'linear-gradient(135deg, var(--vop-navy-950) 0%, var(--vop-navy-900) 50%, var(--vop-navy-800) 100%)',
-            borderRadius: 'var(--radius-xl)',
-            padding: '1.75rem 2rem',
-            color: '#ffffff',
-            position: 'relative',
-            overflow: 'hidden',
-            marginBottom: '2rem',
-            boxShadow: 'var(--shadow-lg)'
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: '-40px',
-              right: '-40px',
-              width: '160px',
-              height: '160px',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(245, 176, 38, 0.25) 0%, transparent 70%)',
-              pointerEvents: 'none'
-            }}
-          />
-
-          <div style={{ position: 'relative', zIndex: 2, maxWidth: '640px' }}>
-            <span
-              className="badge badge-gold"
-              style={{
-                background: 'rgba(245, 176, 38, 0.2)',
-                color: 'var(--vop-gold-300)',
-                marginBottom: '0.75rem'
-              }}
-            >
-              <Sparkles size={12} />
-              {activeAnnouncement.tag}
-            </span>
-
-            <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.5rem' }}>
-              {activeAnnouncement.title}
-            </h3>
-
-            <p style={{ fontSize: '0.925rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-              {activeAnnouncement.description}
-            </p>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <button
-                onClick={() => primaryGuide && onSelectGuide(primaryGuide)}
-                disabled={!primaryGuide}
-                className="btn btn-gold"
-                style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
-              >
-                {activeAnnouncement.actionText || t('explore_now', 'Explore Now')}
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '6px',
-              position: 'absolute',
-              bottom: '1.25rem',
-              right: '1.75rem',
-              zIndex: 3
-            }}
-          >
-            {announcements.map((_, i) => (
-              <div
-                key={i}
-                onClick={() => setCarouselIndex(i)}
-                style={{
-                  width: i === carouselIndex ? '20px' : '8px',
-                  height: '8px',
-                  borderRadius: '4px',
-                  background: i === carouselIndex ? 'var(--vop-gold-400)' : 'rgba(255, 255, 255, 0.3)',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-              />
-            ))}
-          </div>
+        <div className="vop-home-actions">
+          {currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> Certificates</button>}
+          <button type="button" className="secondary" onClick={onOpenBooks}><BookOpen size={16}/> Library</button>
         </div>
-      )}
+      </section>
 
-      {/* Quick Resume Card */}
-      {primaryGuide && (
-        <div style={{ marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('recent_guides', 'Recent Guides')}</h4>
-            <span style={{ fontSize: '0.85rem', color: 'var(--vop-navy-700)', fontWeight: 600, cursor: 'pointer' }} onClick={() => onSelectGuide(primaryGuide)}>
-              {t('view_all', 'View all')} ({guides.length})
-            </span>
-          </div>
-          <div onClick={() => onSelectGuide(primaryGuide)} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem', flexWrap: 'wrap', transition: 'all var(--transition-normal)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-              <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, var(--vop-navy-900), var(--vop-navy-800))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <BookOpen size={30} color="var(--vop-gold-400)" />
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
-                  <span className="badge badge-gold">{primaryGuide.subtitle}</span>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>• {primaryGuide.lessons.length} {t('modules', 'Modules')}</span>
-                </div>
-                <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>{primaryGuide.title}</h4>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '460px' }}>{primaryGuide.description}</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{completedCount}/{primaryGuide.lessons.length} {t('completed', 'Completed')}</div>
-                <div style={{ width: '110px', height: '6px', background: 'var(--border-subtle)', borderRadius: '999px', overflow: 'hidden', marginTop: '4px' }}>
-                  <div style={{ width: (primaryGuide.lessons.length > 0 ? (completedCount / primaryGuide.lessons.length) * 100 : 0) + '%', height: '100%', background: completedCount === primaryGuide.lessons.length ? 'var(--vop-success)' : 'var(--vop-gold-500)', borderRadius: '999px' }} />
-                </div>
-              </div>
-              <button className="btn btn-gold" style={{ borderRadius: 'var(--radius-full)', padding: '0.55rem 1.25rem' }}>
-                <Play size={16} fill="currentColor" />
-                <span>{completedCount === primaryGuide.lessons.length ? t('review', 'Review') : t('continue', 'Continue')}</span>
-              </button>
-            </div>
-          </div>
+      <section className="vop-home-metrics">
+        <div><span><Target size={15}/> Overall progress</span><strong>{currentUser.progress.discoverProgress || 0}%</strong><small>Across your study journey</small></div>
+        <div><span><BookOpen size={15}/> Lessons completed</span><strong>{completedLessons}</strong><small>Keep building your knowledge</small></div>
+        <div><span><Award size={15}/> Guides completed</span><strong>{currentUser.progress.completedGuidesCount}</strong><small>Certificates become available as eligible</small></div>
+        <div><span><TrendingUp size={15}/> Current path</span><strong>{primaryPercent}%</strong><small>{primaryGuide?.title || 'Choose a guide to begin'}</small></div>
+      </section>
+
+      {announcement && <section className="vop-home-announcement">
+        <div className="vop-home-announcement-copy">
+          <span><Sparkles size={14}/> {announcement.tag || 'From VOP'}</span>
+          <h2>{announcement.title}</h2>
+          <p>{announcement.description}</p>
+          <button type="button" onClick={() => primaryGuide && onSelectGuide(primaryGuide)} disabled={!primaryGuide}>{announcement.actionText || t('explore_now','Explore now')} <ArrowRight size={16}/></button>
         </div>
-      )}
-      {/* Discover Guides Grid */}
-      <div style={{ marginBottom: '3rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
-          <div>
-            <h4 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{t('discover_curriculum', 'Discover Bible Curriculum')}</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              {t('discover_curriculum_description', 'Systematic lessons uncovering spiritual truth, prophecy, and salvation.')}
-            </p>
-          </div>
+        {announcement.imageUrl && <img src={announcement.imageUrl} alt="" />}
+        {announcements.length > 1 && <div className="vop-home-dots">{announcements.map((item,index)=><button key={item.id || index} aria-label={'Announcement '+(index+1)} className={index===announcementIndex?'active':''} onClick={()=>setAnnouncementIndex(index)}/>)}</div>}
+      </section>}
 
-          {/* Language Filter Pills */}
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button
-              onClick={() => setCurriculumLangFilter('all')}
-              className={`btn ${curriculumLangFilter === 'all' ? 'btn-navy' : 'btn-ghost'}`}
-              style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', borderRadius: 'var(--radius-full)' }}
-            >
-              {t('all', 'All')} ({guides.length})
-            </button>
-            {getAvailableLanguages(settings).map((lang) => {
-              const count = guides.filter((g) => (g.language || 'en') === lang.code).length;
-              if (count === 0 && lang.code !== activeLanguage) return null;
-              return (
-                <button
-                  key={lang.code}
-                  onClick={() => setCurriculumLangFilter(lang.code)}
-                  className={`btn ${curriculumLangFilter === lang.code ? 'btn-navy' : 'btn-ghost'}`}
-                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', borderRadius: 'var(--radius-full)' }}
-                >
-                  {lang.nativeName} ({count})
-                </button>
-              );
-            })}
-          </div>
+      <section className="vop-home-resume">
+        <div className="vop-home-section-head">
+          <div><span className="vop-home-eyebrow">Continue studying</span><h2>Your next lesson</h2></div>
+          {primaryGuide && <button type="button" onClick={() => onSelectGuide(primaryGuide)}>Open guide <ArrowRight size={15}/></button>}
         </div>
-
-        {guides.length === 0 ? (
-          <div style={{ border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            <BookOpen size={36} style={{ marginBottom: '0.75rem' }} />
-            <h5 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.35rem' }}>{t('no_guides_available', 'No guides are available yet')}</h5>
-            <p style={{ fontSize: '0.85rem' }}>{t('no_guides_available_description', 'Published Bible-study guides will appear here when they are available to your organization.')}</p>
+        {primaryGuide ? <button type="button" className="vop-home-resume-card" onClick={() => onSelectGuide(primaryGuide)}>
+          <div className="vop-home-book-icon"><BookOpen size={30}/></div>
+          <div className="vop-home-resume-copy">
+            <div><span>{primaryGuide.subtitle || 'Bible Study'}</span><small>{primaryCompleted}/{primaryGuide.lessons.length} lessons</small></div>
+            <h3>{primaryGuide.title}</h3><p>{primaryGuide.description}</p>
+            <div className="vop-home-progress"><div><span>Guide progress</span><b>{primaryPercent}%</b></div><i><em style={{width: primaryPercent + '%'}}/></i></div>
           </div>
-        ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '1.25rem'
-          }}
-        >
-          {guides
-            .filter((g) => curriculumLangFilter === 'all' || (g.language || 'en') === curriculumLangFilter)
-            .map((g) => {
-            const isDone = g.lessons.length > 0 && g.lessons.every((les) => currentUser.progress.completedLessons.includes(les.id));
-            const doneCount = g.lessons.filter((les) => currentUser.progress.completedLessons.includes(les.id)).length;
-            const langObj = getAvailableLanguages(settings).find((l) => l.code === (g.language || 'en'));
+          <div className="vop-home-resume-play"><Play size={20} fill="currentColor"/></div>
+        </button> : <div className="vop-home-empty"><BookOpen size={30}/><h3>No study guide available yet</h3><p>Choose another language or check back when new lessons are published.</p></div>}
+      </section>
 
-            return (
-              <div
-                key={g.id}
-                onClick={() => onSelectGuide(g)}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '1.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: 'var(--shadow-sm)',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-normal)'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                      <span className="badge badge-navy">{t('guide_label', 'Guide')} {g.discoverNumber}</span>
-                      {langObj && (
-                        <span className="badge badge-gold" style={{ fontSize: '0.65rem' }}>
-                          {langObj.nativeName}
-                        </span>
-                      )}
-                    </div>
-                    {isDone ? (
-                      <span className="badge badge-success">
-                        <CheckCircle2 size={12} />
-                        {t('completed', 'Completed')}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                        {doneCount > 0 ? t('in_progress', 'In Progress') : t('ready_to_learn', 'Ready to Learn')}
-                      </span>
-                    )}
-                  </div>
-
-                  <h5 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.4rem' }}>
-                    {g.title}
-                  </h5>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '1.25rem' }}>
-                    {g.description}
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <Clock size={14} />
-                    <span>{t('estimated_total_time', '~40 mins total')}</span>
-                  </div>
-
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--vop-navy-700)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    {t('open_guide', 'Open Guide')}
-                    <ChevronRight size={16} />
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+      <section className="vop-home-guides">
+        <div className="vop-home-section-head">
+          <div><span className="vop-home-eyebrow">Bible study library</span><h2>Discover guides</h2></div>
+          <label className="vop-home-language"><Languages size={15}/><select value={languageFilter} onChange={e=>setLanguageFilter(e.target.value)}><option value="all">All languages</option>{languageOptions.map(language=><option key={language.code} value={language.code}>{language.nativeName || language.name}</option>)}</select></label>
         </div>
-        )}
-      </div>
+        {filteredGuides.length ? <div className="vop-home-guide-grid">{filteredGuides.map(guide => {
+          const done = guide.lessons.filter(lesson => currentUser.progress.completedLessons.includes(lesson.id)).length;
+          const complete = guide.lessons.length > 0 && done === guide.lessons.length;
+          const percent = guide.lessons.length ? Math.round((done / guide.lessons.length) * 100) : 0;
+          const language = languageOptions.find(item => item.code === (guide.language || 'en'));
+          return <button type="button" key={guide.id} className="vop-home-guide-card" onClick={() => onSelectGuide(guide)}>
+            <div className="vop-home-guide-cover"><BookOpen size={27}/><span>{language?.nativeName || guide.language || 'English'}</span></div>
+            <div className="vop-home-guide-body"><div className="vop-home-guide-meta"><span>Guide {guide.discoverNumber}</span>{complete ? <b><CheckCircle2 size={13}/> Completed</b> : <small>{done ? 'In progress' : 'Ready to start'}</small>}</div><h3>{guide.title}</h3><p>{guide.description}</p><div className="vop-home-guide-footer"><span><Clock3 size={13}/> {guide.lessons.length} lessons</span><strong>{percent}%</strong></div></div>
+          </button>;
+        })}</div> : <div className="vop-home-empty"><BookOpen size={30}/><h3>No guides match your language</h3><p>Try another language filter.</p></div>}
+      </section>
 
-      {/* Footer */}
-      <footer
-        style={{
-          borderTop: '1px solid var(--border-subtle)',
-          paddingTop: '2.5rem',
-          paddingBottom: '2.5rem',
-          textAlign: 'center',
-          color: 'var(--text-secondary)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-          <img src="/assets/vop_logo_2.png" alt="VOP" style={{ width: '36px', height: '36px' }} />
-          <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--vop-navy-900)' }}>
-            {settings.appName}
-          </span>
-        </div>
-
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-          {settings.schoolName} • {settings.organizationName}
-        </p>
-
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          {settings.copyrightText || settings.versionLabel ? `${settings.copyrightText || ''}${settings.copyrightText && settings.versionLabel ? ' | ' : ''}${settings.versionLabel || ''}` : ''}
-        </p>
-      </footer>
-    </div>
+      <footer className="vop-home-footer"><img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/><div><strong>{settings.appName || 'Voice of Prophecy'}</strong><span>{settings.copyrightText || 'Bible study, discipleship and hope.'}</span></div></footer>
+    </main>
   );
 };

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
-  Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, Announcement, BookResource,
+  Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, RadioPlaylist, Announcement, BookResource,
 } from './types';
 import {
   getActiveLanguage, setActiveLanguage,
@@ -49,6 +49,7 @@ export const App: React.FC = () => {
   const [churches, setChurches] = useState<ChurchOrganization[]>([]);
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
   const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>([]);
+  const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
@@ -167,6 +168,7 @@ export const App: React.FC = () => {
       setDistricts(snapshot.districts);
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
+      setRadioPlaylists(snapshot.radioPlaylists);
 
       const deepLinkParams = new URLSearchParams(window.location.search);
       const guideParam = deepLinkParams.get('guide');
@@ -280,7 +282,7 @@ export const App: React.FC = () => {
           )}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
-          {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} onBack={returnHome} />}
+          {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={returnHome} />}
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={returnHome} />}
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}

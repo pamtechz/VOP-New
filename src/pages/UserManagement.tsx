@@ -49,7 +49,7 @@ type EditorState = {
 
 type Props = { onBack: () => void };
 
-async function userApi(action: string, payload: Record<string, unknown> = {}) {
+async function userApi<T = ManagedUser>(action: string, payload: Record<string, unknown> = {}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/admin/users', {
@@ -57,7 +57,7 @@ async function userApi(action: string, payload: Record<string, unknown> = {}) {
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action, ...payload }),
   });
-  const body = await response.json().catch(() => ({})) as { error?: string; items?: ManagedUser[]; item?: { resetLink?: string } };
+  const body = await response.json().catch(() => ({})) as { error?: string; items?: T[]; item?: { resetLink?: string } };
   if (!response.ok) throw new Error(body.error || 'User management request failed.');
   return body;
 }
@@ -105,7 +105,7 @@ export default function UserManagement({ onBack }: Props) {
 
   const loadOrganizations = async () => {
     try {
-      const body = await userApi('listOrganizations');
+      const body = await userApi<TenantOrganization>('listOrganizations');
       setTenantOrganizations((body.items || []).filter((item: unknown): item is TenantOrganization => { const value = item as Partial<TenantOrganization>; return typeof value.id === 'string' && typeof value.name === 'string'; }));
     } catch { /* User loading remains useful even when organization metadata is unavailable. */ }
   };

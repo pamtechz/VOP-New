@@ -1,13 +1,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { RadioBroadcast } from '../types';
+import type { RadioBroadcast, RadioPlaylist } from '../types';
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
   ChevronRight, ListMusic, Clock3, Video, Headphones
 } from 'lucide-react';
 
-interface RadioPageProps { broadcasts: RadioBroadcast[]; onBack: () => void; }
+interface RadioPageProps { broadcasts: RadioBroadcast[]; playlists?: RadioPlaylist[]; onBack: () => void; }
 
 type YTPlayer = {
   playVideo: () => void; pauseVideo: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void;
@@ -125,13 +125,16 @@ function sourceLabel(source: MediaSource) {
   return source.live ? 'Live stream' : 'Audio';
 }
 
-export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
+export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = [], onBack }) => {
   const [selected, setSelected] = useState<RadioBroadcast | null>(broadcasts[0] || null);
   const [playing, setPlaying] = useState(false), [muted, setMuted] = useState(false), [volume, setVolume] = useState(1);
   const [current, setCurrent] = useState(0), [duration, setDuration] = useState(0), [rate, setRate] = useState(1);
   const [error, setError] = useState(''), [waiting, setWaiting] = useState(false), [now, setNow] = useState(() => new Date());
   const [ytReady, setYtReady] = useState(false);
   const [scheduleRange, setScheduleRange] = useState<'today' | 'tomorrow' | 'week'>('today');
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+  const playlistIndexRef = useRef(-1);
+  const playlistItemsRef = useRef<RadioBroadcast[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
   const ytMountRef = useRef<HTMLDivElement | null>(null), ytPlayerRef = useRef<YTPlayer | null>(null);
   const source = useMemo(() => selected ? detectMedia(selected) : null, [selected]);
@@ -161,6 +164,12 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
             const state = event.target.getPlayerState();
             setPlaying(state === YT.PlayerState.PLAYING); setWaiting(state === YT.PlayerState.BUFFERING);
             setCurrent(event.target.getCurrentTime() || 0); setDuration(event.target.getDuration() || 0);
+            if (state === YT.PlayerState.ENDED) {
+              const index = playlistIndexRef.current;
+              const items = playlistItemsRef.current;
+              if (index >= 0 && index < items.length - 1) { setSelectedPlaylistId(selectedPlaylistId || ''); setSelected(items[index + 1]); }
+              else setPlaying(false);
+            }
           }
         }
       });
@@ -198,6 +207,15 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
     } catch { setPlaying(false); setError('The configured media could not be played. Check the source and browser permissions.'); }
   };
   const selectProgramme = (item: RadioBroadcast) => { if (selected?.id === item.id) void togglePlay(); else setSelected(item); };
+  const selectPlaylist = (playlist: RadioPlaylist) => {
+    const items = playlist.itemIds.map(id => broadcasts.find(item => item.id === id)).filter((item): item is RadioBroadcast => Boolean(item && detectMedia(item)));
+    if (!items.length) return;
+    setSelectedPlaylistId(playlist.id);
+    selectProgramme(items[0]);
+  };
+  const playPlaylistItem = (item: RadioBroadcast) => { setSelectedPlaylistId(selectedPlaylist?.id || ''); selectProgramme(item); };
+  const nextPlaylistItem = () => { if (playlistIndex >= 0 && playlistIndex < playlistItems.length - 1) selectProgramme(playlistItems[playlistIndex + 1]); };
+  const previousPlaylistItem = () => { if (playlistIndex > 0) selectProgramme(playlistItems[playlistIndex - 1]); };
   const seek = (value: number) => {
     if (!source || !duration) return; const next = Math.max(0, Math.min(value, duration));
     if (source.provider === 'youtube') ytPlayerRef.current?.seekTo(next, true);
@@ -222,12 +240,19 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
     else { const media = source?.provider === 'direct-video' ? videoRef.current : audioRef.current; if (media) media.playbackRate = next; }
   };
   const fullscreen = () => { const element = source?.provider === 'youtube' ? ytMountRef.current : videoRef.current; if (element) void element.requestFullscreen?.(); };
+  const advancePlaylist = () => {
+    if (playlistIndex >= 0 && playlistIndex < playlistItems.length - 1) {
+      selectProgramme(playlistItems[playlistIndex + 1]);
+      return true;
+    }
+    return false;
+  };
   const mediaEvents = {
     onTimeUpdate: (event: React.SyntheticEvent<HTMLMediaElement>) => setCurrent(event.currentTarget.currentTime || 0),
     onLoadedMetadata: (event: React.SyntheticEvent<HTMLMediaElement>) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0),
     onDurationChange: (event: React.SyntheticEvent<HTMLMediaElement>) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0),
     onPlay: () => { setPlaying(true); setWaiting(false); }, onPlaying: () => setWaiting(false), onPause: () => setPlaying(false),
-    onWaiting: () => setWaiting(true), onCanPlay: () => setWaiting(false), onEnded: () => setPlaying(false),
+    onWaiting: () => setWaiting(true), onCanPlay: () => setWaiting(false), onEnded: () => { if (!advancePlaylist()) setPlaying(false); },
     onVolumeChange: (event: React.SyntheticEvent<HTMLMediaElement>) => { setMuted(event.currentTarget.muted); setVolume(event.currentTarget.volume); },
     onRateChange: (event: React.SyntheticEvent<HTMLMediaElement>) => setRate(event.currentTarget.playbackRate),
     onError: () => { setPlaying(false); setError('The configured media could not be loaded.'); }
@@ -277,7 +302,14 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
       .slice(0, 10);
   }, [broadcasts, scheduleRange]);
   const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
+  const publishedPlaylists = playlists.filter(item => item.published === true && item.itemIds.length).slice(0, 8);
+  const selectedPlaylist = publishedPlaylists.find(item => item.id === selectedPlaylistId) || null;
+  const playlistItems = selectedPlaylist
+    ? selectedPlaylist.itemIds.map(id => broadcasts.find(item => item.id === id)).filter((item): item is RadioBroadcast => Boolean(item && detectMedia(item)))
+    : [];
+  const playlistIndex = selected?.id ? playlistItems.findIndex(item => item.id === selected.id) : -1;
   const live = broadcasts.filter(item => detectMedia(item)?.live);
+  useEffect(() => { playlistIndexRef.current = playlistIndex; playlistItemsRef.current = playlistItems; }, [playlistIndex, playlistItems]);
 
   if (!broadcasts.length) return <div className="vop-audience-radio"><header className="vop-public-radio-top"><button type="button" onClick={onBack}><ArrowLeft size={19}/> Back</button></header><main className="vop-public-radio-empty"><Radio size={48}/><h1>Radio</h1><p>No published radio programmes are currently available.</p></main></div>;
 
@@ -346,6 +378,22 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, onBack }) => {
             </div>
           </div>
         </section>
+
+        {publishedPlaylists.length>0 && <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><ListMusic size={19}/> Playlists</h2><span>{publishedPlaylists.length} available</span></div><div className="vop-radio-featured-grid">{publishedPlaylists.map(playlist=>{return <button key={playlist.id} type="button" className={selectedPlaylistId===playlist.id?'active':''} onClick={()=>selectPlaylist(playlist)}><div className="vop-radio-feature-image" style={playlist.coverUrl?{backgroundImage:'url("' + playlist.coverUrl + '")'}:undefined}><span><ListMusic/></span><small>{playlist.itemIds.length} programmes</small></div><strong>{playlist.name}</strong><span>{playlist.description || 'Curated radio programmes'}</span></button>})}</div></section>}
+
+        {selectedPlaylist && <section className="vop-radio-audience-block">
+          <div className="vop-radio-section-head"><h2><ListMusic size={19}/> {selectedPlaylist.name}</h2><span>{playlistItems.length} playable programme{playlistItems.length === 1 ? '' : 's'}</span></div>
+          <div className="vop-radio-schedule-list">
+            {playlistItems.map((item, index) => <button key={item.id} type="button" className={selected?.id === item.id ? 'active' : ''} onClick={() => playPlaylistItem(item)}>
+              <time>{String(index + 1).padStart(2, '0')}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{selected?.id === item.id && playing && <em>PLAYING</em>}
+            </button>)}
+          </div>
+          <div className="vop-radio-mini-controls">
+            <button type="button" onClick={previousPlaylistItem} disabled={playlistIndex <= 0}><SkipBack size={16}/></button>
+            <button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()} disabled={!selected}>{playing ? <Pause size={16}/> : <Play size={16} fill="currentColor"/>}</button>
+            <button type="button" onClick={nextPlaylistItem} disabled={playlistIndex < 0 || playlistIndex >= playlistItems.length - 1}><SkipForward size={16}/></button>
+          </div>
+        </section>}
 
         {categories.length>0 && <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><ListMusic size={19}/> Browse by Category</h2><span>{categories.length} configured</span></div><div className="vop-radio-category-grid">{categories.slice(0,6).map(category=><button key={category} type="button" onClick={()=>setSelected(broadcasts.find(item=>item.series===category)||selected)}><span><BookOpen size={25}/></span><strong>{category}</strong><small>{broadcasts.filter(item=>item.series===category).length} programme{broadcasts.filter(item=>item.series===category).length===1?'':'s'}</small></button>)}</div></section>}
 

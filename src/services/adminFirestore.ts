@@ -8,12 +8,47 @@ import type {
   Announcement, BookResource, RadioBroadcast, DiscoverGuide
 } from '../types';
 
+
+export interface ExtendedAppSettings extends AppSettings {
+  appTagline?: string;
+  timezone?: string;
+  website?: string;
+  welcomeMessage?: string;
+  systemOptions?: {
+    allowRegistrations?: boolean;
+    requireApproval?: boolean;
+    enableEmailNotifications?: boolean;
+    showChurchInfo?: boolean;
+    enablePwa?: boolean;
+    maintenanceMode?: boolean;
+  };
+  features?: {
+    candidatesModule: boolean;
+    curriculumStudio: boolean;
+    translations: boolean;
+    radio: boolean;
+    announcements: boolean;
+    certification: boolean;
+  };
+  security?: {
+    sessionTimeoutMinutes?: number;
+    allowMultipleSessions?: boolean;
+    enforceSecureConnections?: boolean;
+  };
+  notifications?: {
+    emailEnabled?: boolean;
+    enrollmentNotifications?: boolean;
+    announcementNotifications?: boolean;
+    certificateNotifications?: boolean;
+  };
+}
+
 function getDb(): Firestore {
   if (!db) throw new Error('The application data service is not initialized.');
   return db;
 }
 
-const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts']);
+const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts','playlists']);
 const TENANT_COLLECTIONS = new Set<string>([
   'announcements','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
 ]);
@@ -358,6 +393,7 @@ export type AdminRecordCollection =
   | 'announcements'
   | 'books'
   | 'radioBroadcasts'
+  | 'playlists'
   | 'unions'
   | 'conferences'
   | 'districts'

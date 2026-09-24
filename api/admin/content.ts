@@ -5,12 +5,12 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 const COLLECTIONS = new Set([
-  'languages','translations','announcements','books','radioBroadcasts','unions','conferences','districts','churches',
+  'languages','translations','announcements','books','radioBroadcasts','playlists','unions','conferences','districts','churches',
   'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
-const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts']);
+const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts','playlists']);
 
 const ORG_COLLECTIONS = new Set([
   'announcements','learningPaths','bibleTopics','seasons',
@@ -38,7 +38,7 @@ function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<str
   if (collection === 'unions') return role === 'super_admin';
   if (collection === 'conferences') return role === 'union_admin' && String(data?.unionId || '') === nodeId;
   if (collection === 'districts') return role === 'conference_admin' && String(data?.conferenceId || '') === nodeId;
-  if (collection === 'churches') return role === 'district_admin' && String(data?.districtId || '') === nodeId;
+  if (collection === 'churches') return (role === 'district_admin' && String(data?.districtId || '') === nodeId) || (role === 'church_admin' && String(data?.id || '') === nodeId);
   return false;
 }
 
@@ -52,7 +52,7 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
-    const editorRoles = curriculum ? ['owner','admin','editor'] : ['owner','admin'];
+    const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection) ? ['owner','admin','editor'] : ['owner','admin'];
     if (action !== 'list' && action !== 'listGuides') requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'settings' && ctx.organizationId) {
@@ -331,6 +331,7 @@ export default async function handler(req: Request, res: Response) {
           if (String(data.sharingScope || '') !== 'shared') return false;
           if (collection === 'languages') return data.enabled === true;
           if (collection === 'translations') return true;
+          if (collection === 'playlists') return data.published === true;
           return data.published === true;
         });
         return res.status(200).json({
@@ -426,7 +427,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (['unions','conferences','districts','churches'].includes(collection) && action !== 'list') {
-      if (!ctx.isSuperAdmin && !['union_admin','conference_admin','district_admin'].includes(String(ctx.profile.role || ''))) {
+      if (!ctx.isSuperAdmin && !['union_admin','conference_admin','district_admin','church_admin'].includes(String(ctx.profile.role || ''))) {
         throw new Error('Only an authorized hierarchy administrator can manage this record.');
       }
       const id = safeId(body.id);
@@ -468,6 +469,13 @@ export default async function handler(req: Request, res: Response) {
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (!existing.exists) {
+          const quotaKey =
+            collection === 'books' ? 'maxMaterials' :
+            collection === 'radioBroadcasts' ? 'maxRadioItems' :
+            collection === 'playlists' ? 'maxRadioPlaylists' : '';
+          if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
+        }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
         await ref.set({
           ...incoming,
@@ -542,7 +550,7 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
         if (!existing.exists) {
-          const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
+          const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'playlists' ? 'maxRadioPlaylists' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
