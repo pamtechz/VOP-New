@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { PrayerRequest, User } from '../types';
-import { addPrayerRequest, updatePrayerStatus } from '../services/storage';
-import { ArrowLeft, HeartHandshake, Plus, Check, Clock } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, HeartHandshake, Plus, Check, Clock3, ShieldCheck, Trash2, Send, Lock, Users, Sparkles } from 'lucide-react';
+import { auth } from '../lib/firebase';
+import type { PrayerRequest, User } from '../types';
 
 interface PrayerPageProps {
   currentUser: User;
@@ -9,273 +9,173 @@ interface PrayerPageProps {
   onBack: () => void;
 }
 
-export const PrayerPage: React.FC<PrayerPageProps> = ({
-  currentUser,
-  prayerRequests,
-  onBack
-}) => {
+type PrayerTab = 'mine' | 'community' | 'ministry';
+
+const categories: PrayerRequest['category'][] = ['Spiritual','Health','Family','Guidance','Thanksgiving','Other'];
+
+async function prayerApi(action: string, payload: Record<string, unknown> = {}) {
+  const user = auth?.currentUser;
+  if (!user) throw new Error('Please sign in to use Prayer Ministry.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/prayer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; item?: PrayerRequest; items?: PrayerRequest[] };
+  if (!response.ok) throw new Error(body.error || 'Prayer service is unavailable.');
+  return body;
+}
+
+export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) => {
+  const [requests, setRequests] = useState<PrayerRequest[]>([]);
+  const [tab, setTab] = useState<PrayerTab>('mine');
+  const [filter, setFilter] = useState<'All' | PrayerRequest['category']>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | PrayerRequest['status']>('All');
+  const [showComposer, setShowComposer] = useState(false);
   const [requestText, setRequestText] = useState('');
   const [category, setCategory] = useState<PrayerRequest['category']>('Spiritual');
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [isPrivate, setIsPrivate] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
 
-  const categories: PrayerRequest['category'][] = [
-    'Spiritual',
-    'Health',
-    'Family',
-    'Guidance',
-    'Thanksgiving',
-    'Other'
-  ];
+  const role = String(currentUser.role || '');
+  const isAdmin = Boolean(currentUser.privileges?.admin) || ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role);
 
-  const filteredRequests = prayerRequests.filter(p => {
-    if (p.isPrivate && p.candidateId !== currentUser.uid && !currentUser.privileges?.admin) {
-      return false;
-    }
-    if (filterCategory !== 'All' && p.category !== filterCategory) {
-      return false;
-    }
-    return true;
-  });
+  const load = async (mine: boolean) => {
+    setLoading(true); setError('');
+    try {
+      const user = auth?.currentUser;
+      if (!user) { setRequests([]); return; }
+      const token = await user.getIdToken();
+      const response = await fetch('/api/prayer?mine=' + String(mine), { headers: { Authorization: 'Bearer ' + token } });
+      const body = await response.json().catch(() => ({})) as { error?: string; items?: PrayerRequest[] };
+      if (!response.ok) throw new Error(body.error || 'Could not load prayer requests.');
+      setRequests(Array.isArray(body.items) ? body.items : []);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not load prayer requests.');
+    } finally { setLoading(false); }
+  };
 
-  const handleSubmitPrayer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requestText.trim()) return;
+  useEffect(() => { void load(tab === 'mine'); }, [tab]);
 
-    addPrayerRequest({
-      candidateId: currentUser.uid,
-      candidateName: currentUser.displayName,
-      churchId: currentUser.churchId,
-      category,
-      isPrivate,
-      status: 'Received',
-      requestText: requestText.trim()
-    });
+  const visible = useMemo(() => requests.filter(request => {
+    const categoryMatch = filter === 'All' || request.category === filter;
+    const statusMatch = statusFilter === 'All' || request.status === statusFilter;
+    return categoryMatch && statusMatch;
+  }), [requests, filter, statusFilter]);
 
-    setRequestText('');
-    setShowSubmitModal(false);
+  const counts = useMemo(() => ({
+    total: requests.length,
+    praying: requests.filter(r => r.status === 'Praying').length,
+    answered: requests.filter(r => r.status === 'Answered').length,
+  }), [requests]);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const text = requestText.trim();
+    if (text.length < 5) { setError('Please share a little more so the ministry team can understand your request.'); return; }
+    setSaving(true); setError(''); setNotice('');
+    try {
+      const result = await prayerApi('create', { requestText: text, category, isPrivate });
+      if (result.item) setRequests(current => [result.item!, ...current]);
+      setRequestText(''); setCategory('Spiritual'); setIsPrivate(true); setShowComposer(false);
+      setNotice('Your prayer request has been received. The ministry team will pray with you.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not submit your prayer request.'); }
+    finally { setSaving(false); }
+  };
+
+  const updateStatus = async (id: string, status: PrayerRequest['status']) => {
+    try {
+      await prayerApi('status', { id, status });
+      setRequests(current => current.map(item => item.id === id ? { ...item, status } : item));
+      setNotice('Prayer request status updated.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not update prayer status.'); }
+  };
+
+  const remove = async (id: string) => {
+    if (!window.confirm('Delete this prayer request?')) return;
+    try {
+      await prayerApi('delete', { id });
+      setRequests(current => current.filter(item => item.id !== id));
+      setNotice('Prayer request removed.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete prayer request.'); }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6fa] text-slate-800 pb-24 md:pb-12">
-      {/* Top Banner - Deep Royal Blue (#002d72) Matching Original APK */}
-      <div className="bg-[#002d72] text-white pt-5 pb-6 px-4 sm:px-6 shadow-md">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1"
-            >
-              <ArrowLeft size={22} />
-              <span className="font-bold text-base sm:text-lg">Prayer Ministry</span>
-            </button>
-            <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
-              Pastoral Care & Petitions
-            </span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="vop-prayer-page">
+      <header className="vop-prayer-hero">
+        <div className="vop-prayer-hero-inner">
+          <button type="button" className="vop-prayer-back" onClick={onBack}><ArrowLeft size={18}/> Prayer Ministry</button>
+          <div className="vop-prayer-hero-grid">
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Prayer Requests & Ministry Care
-              </h1>
-              <p className="text-xs sm:text-sm text-blue-100/90 mt-0.5">
-                "Cast all your anxiety on Him because He cares for you." — 1 Peter 5:7
-              </p>
+              <span className="vop-prayer-kicker"><HeartHandshake size={15}/> Ministry care</span>
+              <h1>A place to pray, share and be supported.</h1>
+              <p>Bring what is on your heart. Your request can remain private or be shared with your VOP community for prayer.</p>
+              <button type="button" className="vop-prayer-primary" onClick={() => setShowComposer(true)}><Plus size={18}/> Submit a prayer request</button>
             </div>
-
-            <button
-              onClick={() => setShowSubmitModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#ff9900] hover:bg-[#e68a00] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-md cursor-pointer"
-            >
-              <Plus size={16} />
-              <span>Request Prayer</span>
-            </button>
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-2 mt-5 overflow-x-auto pb-1">
-            <button
-              onClick={() => setFilterCategory('All')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
-                filterCategory === 'All'
-                  ? 'bg-[#ff9900] text-white shadow-xs'
-                  : 'bg-white/15 border border-white/25 text-white hover:bg-white/25'
-              }`}
-            >
-              All Petitions
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
-                  filterCategory === cat
-                    ? 'bg-[#ff9900] text-white shadow-xs'
-                    : 'bg-white/15 border border-white/25 text-white hover:bg-white/25'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+            <div className="vop-prayer-scripture"><Sparkles size={18}/><p>“Cast all your anxiety on Him because He cares for you.”</p><strong>1 Peter 5:7</strong></div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Requests Feed */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <div className="space-y-4">
-          {filteredRequests.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
-              <p className="text-slate-500 text-sm">No prayer requests in this category yet.</p>
-            </div>
-          ) : (
-            filteredRequests.map((req) => (
-              <div
-                key={req.id}
-                className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-blue-50 border border-blue-100 text-[#002d72] flex items-center justify-center text-xs font-extrabold">
-                      {req.candidateName.charAt(0)}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        {req.candidateName}
-                        {req.isPrivate && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 font-semibold">
-                            Private Request
-                          </span>
-                        )}
-                      </h4>
-                      <span className="text-[11px] text-slate-400 font-medium">
-                        Submitted on {new Date(req.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
+      <main className="vop-prayer-main">
+        <section className="vop-prayer-summary">
+          <div><span>My requests</span><strong>{counts.total}</strong></div>
+          <div><span>Being prayed for</span><strong>{counts.praying}</strong></div>
+          <div><span>Answered</span><strong>{counts.answered}</strong></div>
+          <div className="vop-prayer-privacy"><ShieldCheck size={18}/><span>Prayer information is protected by your organization.</span></div>
+        </section>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      {req.category}
-                    </span>
-                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full ${
-                      req.status === 'Answered'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : req.status === 'Praying'
-                        ? 'bg-blue-50 text-[#002d72] border border-blue-200'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}>
-                      {req.status}
-                    </span>
-                  </div>
+        <div className="vop-prayer-toolbar">
+          <div className="vop-prayer-tabs" role="tablist">
+            <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}><Lock size={15}/> My requests</button>
+            <button className={tab === 'community' ? 'active' : ''} onClick={() => setTab('community')}><Users size={15}/> Community prayer</button>
+            {isAdmin && <button className={tab === 'ministry' ? 'active' : ''} onClick={() => setTab('ministry')}><HeartHandshake size={15}/> Ministry inbox</button>}
+          </div>
+          <div className="vop-prayer-filters">
+            <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="All">All topics</option>{categories.map(item => <option key={item}>{item}</option>)}</select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}><option value="All">All statuses</option><option>Received</option><option>Praying</option><option>Answered</option></select>
+          </div>
+        </div>
+
+        {notice && <div className="vop-prayer-notice success"><Check size={16}/>{notice}</div>}
+        {error && <div className="vop-prayer-notice error">{error}</div>}
+
+        {loading ? <div className="vop-prayer-loading"><div className="vop-spinner"/>Loading prayer ministry…</div> :
+          visible.length === 0 ? <div className="vop-prayer-empty"><HeartHandshake size={42}/><h2>{tab === 'mine' ? 'Your prayer journal is ready.' : 'No requests to show.'}</h2><p>{tab === 'mine' ? 'Start by sharing a prayer request with the ministry.' : 'There are no requests matching the selected filters.'}</p>{tab === 'mine' && <button onClick={() => setShowComposer(true)}><Plus size={16}/> Share a request</button>}</div> :
+          <section className="vop-prayer-list">
+            {visible.map(request => (
+              <article className="vop-prayer-card" key={request.id}>
+                <div className="vop-prayer-card-head">
+                  <div className="vop-prayer-avatar">{request.candidateName?.charAt(0).toUpperCase() || 'P'}</div>
+                  <div className="vop-prayer-card-person"><strong>{tab === 'mine' ? 'My prayer request' : request.candidateName}</strong><span>{new Date(request.createdAt).toLocaleDateString(undefined,{dateStyle:'medium'})} · {request.category}</span></div>
+                  <span className={'vop-prayer-status ' + request.status.toLowerCase()}>{request.status === 'Answered' ? <Check size={13}/> : <Clock3 size={13}/>} {request.status}</span>
                 </div>
+                <p className="vop-prayer-text">{request.requestText}</p>
+                <div className="vop-prayer-card-foot">
+                  <span>{request.isPrivate ? <><Lock size={13}/> Private to ministry</> : <><Users size={13}/> Shared for prayer</>}</span>
+                  {tab === 'mine' && <button className="vop-prayer-delete" onClick={() => void remove(request.id)}><Trash2 size={14}/> Delete</button>}
+                  {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'Praying')}>Mark praying</button><button onClick={() => void updateStatus(request.id,'Answered')}>Mark answered</button></div>}
+                </div>
+              </article>
+            ))}
+          </section>}
+      </main>
 
-                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed pl-11">
-                  {req.requestText}
-                </p>
-
-                {currentUser.privileges?.admin && (
-                  <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => updatePrayerStatus(req.id, 'Praying')}
-                      className="px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-xs font-bold text-[#002d72] transition-colors cursor-pointer"
-                    >
-                      Mark Praying
-                    </button>
-                    <button
-                      onClick={() => updatePrayerStatus(req.id, 'Answered')}
-                      className="px-3 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-xs font-bold text-emerald-700 transition-colors cursor-pointer"
-                    >
-                      Mark Answered
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Request Submission Modal */}
-      {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">Submit Prayer Petition</h3>
-              <button
-                onClick={() => setShowSubmitModal(false)}
-                className="text-slate-400 hover:text-slate-700 cursor-pointer font-bold text-lg"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitPrayer} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Category
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as PrayerRequest['category'])}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:border-[#002d72] focus:bg-white focus:outline-none"
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Your Prayer Request
-                </label>
-                <textarea
-                  rows={4}
-                  value={requestText}
-                  onChange={(e) => setRequestText(e.target.value)}
-                  placeholder="Share your personal prayer petition..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:border-[#002d72] focus:bg-white focus:outline-none resize-none"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="privateReq"
-                  checked={isPrivate}
-                  onChange={(e) => setIsPrivate(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#002d72] border-slate-300"
-                />
-                <label htmlFor="privateReq" className="text-xs text-slate-600">
-                  Keep private (only visible to VOP Coordinators and District Pastors)
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowSubmitModal(false)}
-                  className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-full bg-[#002d72] hover:bg-[#002257] text-white text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer"
-                >
-                  Send Petition
-                </button>
-              </div>
-            </form>
+      {showComposer && <div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowComposer(false); }}>
+        <form className="vop-prayer-composer" onSubmit={submit}>
+          <div className="vop-prayer-composer-head"><div><span>Prayer Ministry</span><h2>What would you like us to pray about?</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
+          <div className="vop-prayer-composer-body">
+            <label>Topic<select value={category} onChange={e => setCategory(e.target.value as PrayerRequest['category'])}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
+            <label>Your request<textarea value={requestText} onChange={e => setRequestText(e.target.value)} maxLength={3000} rows={7} placeholder="Share only what you are comfortable sharing with the ministry…"/></label>
+            <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? 'Private prayer' : 'Community prayer'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? 'Make community' : 'Keep private'}</button></div>
           </div>
-        </div>
-      )}
+          <footer><button type="button" onClick={() => setShowComposer(false)}>Cancel</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? 'Sending…' : 'Send request'}</button></footer>
+        </form>
+      </div>}
     </div>
   );
 };
