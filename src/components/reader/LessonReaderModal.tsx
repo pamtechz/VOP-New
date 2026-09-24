@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
+import { auth } from '../../lib/firebase';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -60,16 +61,42 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     setIsSpeaking(true);
   };
 
+  const persistResume = async (pageIndex: number) => {
+    const account = auth?.currentUser;
+    if (!account || !configured || pages.length < 1) return;
+    try {
+      const token = await account.getIdToken();
+      await fetch('/api/study/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'saveLessonResume',
+          language: guide.language,
+          guideId: guide.id,
+          lessonId: lesson.id,
+          pageIndex,
+          pageCount: pages.length,
+        }),
+      });
+    } catch {
+      // Resume is an enhancement; failure must never interrupt reading or completion.
+    }
+  };
+
   const handleNext = async () => {
     if (!configured || !currentPage) return;
     stopSpeech();
     if (currentPageIndex < pages.length - 1) {
-      setCurrentPageIndex(index => index + 1);
+      const nextIndex = currentPageIndex + 1;
+      setCurrentPageIndex(nextIndex);
+      void persistResume(nextIndex);
     } else if (hasNextLesson && onNextLesson) {
+      void persistResume(currentPageIndex);
       const accepted = await onComplete();
       if (accepted === false) return;
       onNextLesson();
     } else {
+      void persistResume(currentPageIndex);
       onComplete();
     }
   };
@@ -77,7 +104,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const handlePrev = () => {
     if (currentPageIndex === 0) return;
     stopSpeech();
-    setCurrentPageIndex(index => index - 1);
+    const previousIndex = Math.max(0, currentPageIndex - 1);
+    setCurrentPageIndex(previousIndex);
+    void persistResume(previousIndex);
   };
 
   const progressPercent = pages.length > 0

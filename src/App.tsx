@@ -290,7 +290,12 @@ export const App: React.FC = () => {
           {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
           {showCourse && activeGuide && (
             <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
-              onBack={() => setActiveGuide(null)} onSelectLesson={lesson => { setStudyError(''); setActiveLesson(lesson); }}
+              onBack={() => setActiveGuide(null)} onSelectLesson={lesson => {
+                setStudyError('');
+                const resumeKey = `${activeLanguage}:${activeGuide.id}:${lesson.id}`;
+                setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
+                setActiveLesson(lesson);
+              }}
               onOpenCertificate={() => navigate('certificates')} />
           )}
           {showDashboardShell && (
@@ -316,10 +321,18 @@ export const App: React.FC = () => {
           hasPreviousLesson={Boolean(previousLesson)}
           hasNextLesson={Boolean(nextLesson)}
           onPreviousLesson={() => {
-            if (previousLesson) { setDeepLinkPageIndex(0); setActiveLesson(previousLesson); }
+            if (previousLesson) {
+              const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`;
+              setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
+              setActiveLesson(previousLesson);
+            }
           }}
           onNextLesson={() => {
-            if (nextLesson) { setDeepLinkPageIndex(0); setActiveLesson(nextLesson); }
+            if (nextLesson) {
+              const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`;
+              setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
+              setActiveLesson(nextLesson);
+            }
           }}
           onComplete={async () => {
             const accepted = await completeLesson(activeGuide.id, activeLesson.id);

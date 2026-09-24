@@ -81,7 +81,7 @@ export default async function handler(
     const guideId = String(body.guideId ?? '').trim();
     const lessonId = String(body.lessonId ?? '').trim();
 
-    if (!language || !guideId || !lessonId || !['completeLesson', 'submitQuiz'].includes(action)) {
+    if (!language || !guideId || !lessonId || !['completeLesson', 'submitQuiz', 'saveLessonResume'].includes(action)) {
       return res.status(400).json({ error: 'A valid study progress request is required.' });
     }
 
@@ -122,6 +122,49 @@ export default async function handler(
     const lessonData = lessonSnapshot.data() ?? {};
     if (String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
+    }
+
+    if (action === 'saveLessonResume') {
+      const pageIndex = Number(body.pageIndex);
+      const maxPageIndex = Math.max(0, Number(body.pageCount) - 1);
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || !Number.isInteger(Number(body.pageCount)) || Number(body.pageCount) < 1 || pageIndex > maxPageIndex) {
+        return res.status(400).json({ error: 'A valid lesson page position is required.' });
+      }
+      if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
+        return res.status(409).json({ error: 'Only study lessons support resume positions.' });
+      }
+
+      const resumeKey = `${language}:${guideId}:${lessonId}`;
+      await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(userRef);
+        if (!snapshot.exists) throw new Error('VOP account profile was not found.');
+        const data = snapshot.data() ?? {};
+        const progress = data.progress && typeof data.progress === 'object'
+          ? data.progress as Record<string, unknown>
+          : {};
+        const existingResume = progress.lessonResume && typeof progress.lessonResume === 'object'
+          ? progress.lessonResume as Record<string, unknown>
+          : {};
+        transaction.set(userRef, {
+          progress: {
+            ...progress,
+            lessonResume: {
+              ...existingResume,
+              [resumeKey]: {
+                language,
+                guideId,
+                lessonId,
+                pageIndex,
+                updatedAt: new Date().toISOString(),
+              },
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+
+      return res.status(200).json({ ok: true, resumeKey, pageIndex });
     }
 
     if (action === 'completeLesson') {

@@ -167,12 +167,21 @@ export interface UserPrivileges {
   coordinator?: boolean;
 }
 
+export interface LessonResumeState {
+  language: LanguageCode;
+  guideId: string;
+  lessonId: string;
+  pageIndex: number;
+  updatedAt?: string;
+}
+
 export interface AccountProgress {
   discoverProgress: number; // 0-100%
   completedGuidesCount: number;
   totalGuidesCount: number;
   guideScores: Record<string, number>; // guideId -> score percentage
   completedLessons: string[]; // lessonIds
+  lessonResume?: Record<string, LessonResumeState>;
 }
 
 export interface User {
