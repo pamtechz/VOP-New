@@ -120,7 +120,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
               <span className="vop-prayer-kicker"><HeartHandshake size={15}/> Ministry care</span>
               <h1>{t('prayer.hero_title','A place to pray, share and be supported.')}</h1>
               <p>{t('prayer.hero_desc','Bring what is on your heart. Your request can remain private or be shared with your VOP community for prayer.')}</p>
-              <button type="button" className="vop-prayer-primary" onClick={() => setShowComposer(true)}><Plus size={18}/> Submit a prayer request</button>
+              <button type="button" className="vop-prayer-primary" onClick={() => setShowComposer(true)}><Plus size={18}/> {t('prayer.submit','Submit a prayer request')}</button>
             </div>
             <div className="vop-prayer-scripture"><Sparkles size={18}/><p>“Cast all your anxiety on Him because He cares for you.”</p><strong>1 Peter 5:7</strong></div>
           </div>
