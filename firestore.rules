@@ -548,10 +548,15 @@ service cloud.firestore {
       allow get, list: if canReadGlobal(resource.data, 'published')
         || canManageOrg(resource.data.get('organizationId',''));
       allow create: if isSuperAdmin()
-        || canManageOrg(request.resource.data.get('organizationId',''));
+        || (
+          canManageOrg(request.resource.data.get('organizationId',''))
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+        );
       allow update, delete: if isSuperAdmin() || (
-        canManageOrg(resource.data.get('organizationId',''))
+        canEditOwnedContent(resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
     }
 
