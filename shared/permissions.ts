@@ -1,6 +1,6 @@
 export const PERMISSION_ROLES = [
   'super_admin','union_admin','conference_admin','district_admin','church_admin',
-  'owner','admin','editor','mentor','staff','student',
+  'owner','admin','editor','teacher','mentor','staff','student','learner',
 ] as const;
 
 export const PERMISSION_RESOURCES = [
@@ -81,6 +81,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     announcements: read, prayer: ['view','read','create','update'], mentoring: ['view','read'], certificates: read,
     analytics: read,
   },
+  teacher: {
+    dashboard: read, users: ['view','read'], curriculum: read, lessons: contributor, quizzes: ['view','read','create','update'], materials: contributor, radio: read,
+    languages: read, translations: read, announcements: read, prayer: ['view','read','create','update'], mentoring: ['view','read','create','update'],
+    certificates: read, analytics: read, settings: ['view','read'],
+  },
   student: {
     dashboard: read, curriculum: read, lessons: read, quizzes: ['view','read','create'], materials: read, radio: read,
     languages: read, translations: read, announcements: read, prayer: ['view','read','create','update','delete'],
@@ -110,10 +115,11 @@ export function normalizePermissionMatrix(value: unknown): PermissionMatrix {
 }
 
 export function roleForPermission(profile: { role?: unknown; organizationRole?: unknown; privileges?: Record<string, unknown> }): PermissionRole {
-  const role = String(profile.role || '');
-  if (PERMISSION_ROLES.includes(role as PermissionRole)) return role as PermissionRole;
   const organizationRole = String(profile.organizationRole || '');
-  if (organizationRole === 'owner' || organizationRole === 'admin' || organizationRole === 'editor') return organizationRole;
+  if (organizationRole === 'owner' || organizationRole === 'admin' || organizationRole === 'editor' || organizationRole === 'teacher' || organizationRole === 'mentor') return organizationRole;
+  const role = String(profile.role || '');
+  if (role === 'learner') return 'student';
+  if (PERMISSION_ROLES.includes(role as PermissionRole)) return role as PermissionRole;
   if (profile.privileges?.manager === true) return 'staff';
   if (profile.privileges?.editor === true) return 'editor';
   return 'student';
