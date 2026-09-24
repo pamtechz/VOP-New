@@ -1,6 +1,7 @@
 export type OrganizationStatus = 'active' | 'suspended' | 'archived';
 export type OrganizationMemberRole = 'owner' | 'admin' | 'editor' | 'mentor' | 'teacher' | 'learner' | 'viewer';
 export type ContentSharingScope = 'private' | 'organization' | 'shared';
+export type ResourceScope = 'platform' | 'hierarchy' | 'organization' | 'owned' | 'assigned' | 'personal' | 'public';
 
 export interface Organization {
   id: string;
@@ -25,6 +26,7 @@ export interface OrganizationMembership {
 }
 
 export interface OwnedContentMetadata {
+  scope?: ResourceScope;
   ownerOrganizationId: string;
   ownerUid: string;
   sharingScope: ContentSharingScope;
