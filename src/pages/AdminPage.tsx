@@ -26,6 +26,7 @@ import CertificationManager from './CertificationManager';
 import UserManagement from './UserManagement';
 import MentorshipInsights from './MentorshipInsights';
 import OrganizationManagement from './OrganizationManagement';
+import PrayerManagementPanel from './PrayerManagementPanel';
 
 interface AdminPageProps {
   currentUser: User;
@@ -36,7 +37,7 @@ interface AdminPageProps {
 
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
-  | 'translations' | 'announcements' | 'materials' | 'radio'
+  | 'translations' | 'announcements' | 'materials' | 'radio' | 'prayer'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
@@ -53,6 +54,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'announcements', label: 'Announcements', icon: Megaphone },
   { id: 'materials', label: 'Materials', icon: Book },
   { id: 'radio', label: 'Radio', icon: Radio },
+  { id: 'prayer', label: 'Prayer Requests', icon: HeartHandshake },
   { id: 'unions', label: 'Unions', icon: Shield },
   { id: 'conferences', label: 'Conferences', icon: Users },
   { id: 'districts', label: 'Districts', icon: Layers },
@@ -393,6 +395,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       'announcements',
       'materials',
       'radio',
+      'prayer',
     ]);
     if (isSuper) {
       NAV.forEach(item => allowed.add(item.id));
@@ -412,7 +415,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     } else if (['union_admin','conference_admin','district_admin','church_admin'].includes(role)) {
       // Hierarchy administrators are first-class tenants. Their operational
       // navigation is tenant-scoped, never platform-wide.
-      ['settings','mentorship','organizations','userManagement','candidates','materials','radio','translations','languages','announcements','certification'].forEach(id => allowed.add(id as AdminTab));
+      ['settings','mentorship','organizations','userManagement','candidates','materials','radio','prayer','translations','languages','announcements','certification'].forEach(id => allowed.add(id as AdminTab));
       if (role === 'union_admin') allowed.add('conferences');
       if (role === 'conference_admin') allowed.add('districts');
       if (role === 'district_admin') allowed.add('churches');
@@ -1038,6 +1041,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             isSuperAdmin={currentUser.role === 'super_admin'}
           />
         )}
+        {activeTab==='prayer'&&<PrayerManagementPanel />}
         {activeTab==='mentorship'&&<MentorshipInsights />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
