@@ -30,6 +30,8 @@ type StringConfigKey = 'courseName' | 'courseCode' | 'certificateTitle' | 'certi
 const CANVAS_WIDTH = 1513;
 const CANVAS_HEIGHT = 1040;
 const DEFAULT_BACKGROUND = '/assets/certificate_bg.png';
+const DEFAULT_BACKGROUND_WIDTH = 1513;
+const DEFAULT_BACKGROUND_HEIGHT = 1040;
 
 const EMPTY_PREVIEW_CERTIFICATE: CertificateArtworkRecord = {
   candidateName: 'Aubrey Matende',
@@ -50,9 +52,6 @@ const DEFAULT_TEMPLATE: CertificateTemplateConfig = {
     { id: 'signature', type: 'image', x: 84.4, y: 64.5, width: 11.8, height: 10.5, visible: true },
     { id: 'directorName', type: 'text', x: 83.4, y: 77.0, width: 16.2, height: 4.2, text: 'Pr. Ernest', fontSize: 10.8, fontWeight: 800, color: '#111111', textAlign: 'center' },
     { id: 'directorTitle', type: 'text', x: 82.1, y: 81.0, width: 18.3, height: 3.7, text: 'BIBLE PHIL DIRECTOR', fontSize: 7.2, fontWeight: 700, color: '#111111', textAlign: 'center' },
-    { id: 'appLogo', type: 'image', x: 45.2, y: 86.4, width: 2.0, height: 3.3, src: '/assets/vop_logo_2.png', visible: true },
-    { id: 'brandName', type: 'text', x: 47.2, y: 86.2, width: 11.4, height: 3.8, text: 'vop app', fontSize: 15.5, fontWeight: 800, color: '#111111', textAlign: 'center' },
-    { id: 'brandSubtitle', type: 'text', x: 40.0, y: 90.0, width: 21.5, height: 3.0, text: 'BIBLE CORRESPONDENCE SCHOOL', fontSize: 7.2, fontWeight: 700, color: '#111111', textAlign: 'center' },
     { id: 'issuedAt', type: 'date', x: 42.0, y: 93.2, width: 17.0, height: 2.8, fontSize: 8.2, fontWeight: 600, color: '#111111', textAlign: 'center' },
   ],
 };
@@ -80,7 +79,7 @@ function clamp(value: number, min: number, max: number) { return Math.min(max, M
 function normalizeTemplate(template?: CertificateTemplateConfig, backgroundUrl?: string): CertificateTemplateConfig {
   const source = template?.elements?.length ? template : DEFAULT_TEMPLATE;
   return {
-    width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundUrl: source.backgroundUrl || backgroundUrl || DEFAULT_BACKGROUND,
+    width: DEFAULT_BACKGROUND_WIDTH, height: DEFAULT_BACKGROUND_HEIGHT, backgroundUrl: source.backgroundUrl || backgroundUrl || DEFAULT_BACKGROUND,
     elements: (source.elements || []).filter(element => element.id !== 'title').map(element => {
       const isImage = element.type === 'image';
       const normalized: CertificateTemplateElement = {
