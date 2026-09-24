@@ -267,9 +267,23 @@ export const subscribeSettings = (
   const firestore = getDb();
   let stop: Unsubscribe = () => undefined;
   let cancelled = false;
-  void currentOrganizationId().then(organizationId => {
+  void currentTenantScope().then(scope => {
     if (cancelled) return;
-    const ref = organizationId ? doc(firestore, 'organizations', organizationId, 'settings', 'settings') : doc(firestore, 'system', 'settings');
+    if (!scope.superAdmin && !scope.organizationId && !['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
+      callback({
+        appName:'', organizationName:'', schoolName:'', directorName:'', directorTitle:'',
+        contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'',
+        appTagline:'', timezone:'', website:'', welcomeMessage:'',
+        systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
+        features:{candidatesModule:false,curriculumStudio:false,translations:false,radio:false,announcements:false,certification:false},
+      });
+      return;
+    }
+    const ref = scope.superAdmin
+      ? doc(firestore, 'system', 'settings')
+      : scope.organizationId
+        ? doc(firestore, 'organizations', scope.organizationId, 'settings', 'settings')
+        : doc(firestore, 'tenantSettings', scope.role + ':' + scope.nodeId, 'settings');
     stop = onSnapshot(ref,
     (snap) => {
       if (snap.exists()) {
