@@ -6,7 +6,7 @@ export const PERMISSION_ROLES = [
 export const PERMISSION_RESOURCES = [
   'dashboard','organizations','users','hierarchy','curriculum','lessons','quizzes',
   'materials','radio','languages','translations','announcements','prayer',
-  'mentoring','certificates','analytics','settings','audit',
+  'mentoring','certificates','analytics','audit','billing','settings',
 ] as const;
 
 export const PERMISSION_ACTIONS = [
@@ -23,6 +23,7 @@ const read = ['view','read'] as PermissionAction[];
 const manage = [...PERMISSION_ACTIONS] as PermissionAction[];
 const contentManager = ['view','read','create','update','delete','publish'] as PermissionAction[];
 const contributor = ['view','read','create','update'] as PermissionAction[];
+const billingRead = ['view','read'] as PermissionAction[];
 
 export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   super_admin: Object.fromEntries(PERMISSION_RESOURCES.map(resource => [resource, manage])) as PermissionMatrix['super_admin'],
@@ -31,45 +32,47 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contributor, radio: contributor, languages: contributor, translations: contributor,
     announcements: contributor, prayer: ['view','read','update','manage'], mentoring: ['view','read','assign','manage'],
-    certificates: ['view','read','manage'], analytics: read, settings: ['view','read','update','manage'],
+    certificates: ['view','read','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
   },
   conference_admin: {
     dashboard: read, organizations: ['view','read','update','manage'], users: ['view','read','update','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contributor, radio: contributor, languages: contributor, translations: contributor,
     announcements: contributor, prayer: ['view','read','update','manage'], mentoring: ['view','read','assign','manage'],
-    certificates: ['view','read','manage'], analytics: read, settings: ['view','read','update','manage'],
+    certificates: ['view','read','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
   },
   district_admin: {
     dashboard: read, organizations: ['view','read','update','manage'], users: ['view','read','update','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contributor, radio: contributor, languages: contributor, translations: contributor,
     announcements: contributor, prayer: ['view','read','update','manage'], mentoring: ['view','read','assign','manage'],
-    certificates: ['view','read','manage'], analytics: read, settings: ['view','read','update','manage'],
+    certificates: ['view','read','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
   },
   church_admin: {
     dashboard: read, organizations: ['view','read','update','manage'], users: ['view','read','update','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contributor, radio: contributor, languages: contributor, translations: contributor,
     announcements: contributor, prayer: ['view','read','update','manage'], mentoring: ['view','read','assign','manage'],
-    certificates: ['view','read','manage'], analytics: read, settings: ['view','read','update','manage'],
+    certificates: ['view','read','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
   },
   owner: {
     dashboard: read, organizations: ['view','read','update'], users: ['view','read','create','update','delete','assign','manage'],
     curriculum: contentManager, lessons: contentManager, quizzes: contentManager, materials: contributor, radio: contributor,
     languages: contributor, translations: contributor, announcements: contributor, prayer: ['view','read','update','manage'],
-    mentoring: ['view','read','assign','manage'], certificates: ['view','read'], analytics: read, settings: ['view','read','update','manage'],
+    mentoring: ['view','read','assign','manage'], certificates: ['view','read'], analytics: read, audit: read, billing: billingRead,
+    settings: ['view','read','update','manage'],
   },
   admin: {
     dashboard: read, organizations: ['view','read'], users: ['view','read','create','update','delete','assign','manage'],
     curriculum: contentManager, lessons: contentManager, quizzes: contentManager, materials: contributor, radio: contributor,
     languages: contributor, translations: contributor, announcements: contributor, prayer: ['view','read','update','manage'],
-    mentoring: ['view','read','assign','manage'], certificates: ['view','read'], analytics: read, settings: ['view','read','update','manage'],
+    mentoring: ['view','read','assign','manage'], certificates: ['view','read'], analytics: read, audit: read, billing: billingRead,
+    settings: ['view','read','update','manage'],
   },
   editor: {
     dashboard: read, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contributor, radio: contributor, languages: contributor, translations: contributor, announcements: contributor,
-    prayer: read, mentoring: read, certificates: read, analytics: read,
+    prayer: read, mentoring: read, certificates: read, analytics: read, audit: read,
   },
   mentor: {
     dashboard: read, users: ['view','read'], curriculum: read, lessons: read, materials: read, radio: read,
@@ -102,11 +105,8 @@ export function normalizePermissionMatrix(value: unknown): PermissionMatrix {
     const resources: Partial<Record<PermissionResource, PermissionAction[]>> = {};
     for (const resource of PERMISSION_RESOURCES) {
       const raw = roleValue[resource];
-      if (Array.isArray(raw)) {
-        resources[resource] = raw.filter((action): action is PermissionAction => PERMISSION_ACTIONS.includes(action as PermissionAction));
-      } else if (defaults[resource]) {
-        resources[resource] = [...defaults[resource]!];
-      }
+      if (Array.isArray(raw)) resources[resource] = raw.filter((action): action is PermissionAction => PERMISSION_ACTIONS.includes(action as PermissionAction));
+      else if (defaults[resource]) resources[resource] = [...defaults[resource]!];
     }
     output[role] = resources;
   }
@@ -116,11 +116,7 @@ export function normalizePermissionMatrix(value: unknown): PermissionMatrix {
 
 export function roleForPermission(profile: { role?: unknown; organizationRole?: unknown; privileges?: Record<string, unknown> }): PermissionRole {
   const role = String(profile.role || '');
-  // Platform and hierarchy roles are authoritative. An organization membership
-  // role must never downgrade a hierarchy administrator or Super Admin.
-  if (role === 'super_admin' || role === 'union_admin' || role === 'conference_admin' || role === 'district_admin' || role === 'church_admin') {
-    return role;
-  }
+  if (role === 'super_admin' || role === 'union_admin' || role === 'conference_admin' || role === 'district_admin' || role === 'church_admin') return role;
   const organizationRole = String(profile.organizationRole || '');
   if (organizationRole === 'owner' || organizationRole === 'admin' || organizationRole === 'editor' || organizationRole === 'teacher' || organizationRole === 'mentor') return organizationRole;
   if (role === 'learner') return 'student';
@@ -130,12 +126,7 @@ export function roleForPermission(profile: { role?: unknown; organizationRole?: 
   return 'student';
 }
 
-export function permissionAllowed(
-  matrix: PermissionMatrix,
-  role: PermissionRole,
-  resource: PermissionResource,
-  action: PermissionAction,
-): boolean {
+export function permissionAllowed(matrix: PermissionMatrix, role: PermissionRole, resource: PermissionResource, action: PermissionAction): boolean {
   if (role === 'super_admin') return true;
   return Boolean(matrix[role]?.[resource]?.includes(action));
 }
