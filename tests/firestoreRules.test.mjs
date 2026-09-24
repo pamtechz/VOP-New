@@ -121,6 +121,20 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
       await adminDb.doc('organizations/org-2').set({
         id: 'org-2', name: 'Foreign Organization', status: 'active', unionId: 'union-2',
       });
+      await adminDb.doc('organizations/org-1/members/org-admin').set({
+        uid:'org-admin', organizationId:'org-1', role:'admin', active:true,
+      });
+      await adminDb.doc('users/org-admin').set({
+        uid:'org-admin', role:'student', organizationId:'org-1', organizationRole:'admin',
+      });
+      await adminDb.doc('announcements/org-owned').set({
+        ownerUid:'org-admin', ownerOrganizationId:'org-1', organizationId:'org-1',
+        sharingScope:'private', published:false, title:'Owned',
+      });
+      await adminDb.doc('announcements/org-foreign').set({
+        ownerUid:'other-user', ownerOrganizationId:'org-1', organizationId:'org-1',
+        sharingScope:'private', published:false, title:'Foreign',
+      });
       await adminDb.doc('organizations/org-1/members/union-admin').set({
         uid: 'union-admin', organizationId: 'org-1', role: 'admin', active: true,
       });
@@ -183,6 +197,7 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
 
     const superAdmin = environment.authenticatedContext('super-admin').firestore();
     const unionAdmin = environment.authenticatedContext('union-admin').firestore();
+    const orgAdmin = environment.authenticatedContext('org-admin').firestore();
     await assertSucceeds(unionAdmin.doc('organizations/org-1').get());
     await assertFails(unionAdmin.doc('organizations/org-2').get());
     await assertSucceeds(unionAdmin.doc('organizations/org-1/members/union-admin').get());
@@ -191,6 +206,9 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertFails(unionAdmin.doc('candidates/candidate-2').get());
     await assertSucceeds(unionAdmin.doc('radioBroadcasts/radio-owned').update({ published: true }));
     await assertFails(unionAdmin.doc('radioBroadcasts/radio-foreign').update({ published: true }));
+    await assertSucceeds(orgAdmin.doc('announcements/org-owned').update({ title:'Updated Owned' }));
+    await assertFails(orgAdmin.doc('announcements/org-foreign').update({ title:'Blocked Foreign' }));
+    await assertFails(orgAdmin.doc('announcements/org-foreign').delete());
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').get());
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').update({ organizationName: 'Updated Scoped Tenant' }));
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').get());
