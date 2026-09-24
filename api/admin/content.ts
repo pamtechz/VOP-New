@@ -294,6 +294,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if ((collection === 'settings' || collection === 'curriculumSettings') && action === 'upsert') {
+      await requirePermission(ctx, 'settings', 'update');
       const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
       if (!targetOrganizationId) {
         if (!ctx.isSuperAdmin) throw new Error('An organization within your authorized scope is required for organization settings.');
@@ -712,6 +713,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (collection === 'settings' || collection === 'curriculumSettings') {
+      await requirePermission(ctx, 'settings', action === 'delete' ? 'delete' : 'update');
       const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
       if (!targetOrganizationId) throw new Error('Select an organization within your authorized scope before changing settings.');
       if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
