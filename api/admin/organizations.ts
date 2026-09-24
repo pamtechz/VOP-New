@@ -182,7 +182,7 @@ export default async function handler(req: Request, res: Response) {
       }
       if (!ctx.isSuperAdmin) {
         requireOrgRole(ctx, ['owner','admin']);
-        const organization = await bootstrapDb.doc(`organizations/${managedOrganizationId}`).get();
+        const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
         const data = organization.data() || {};
         const members = await organization.ref.collection('members').where('active','==',true).get();
         return res.status(200).json({ ok:true, items:[{
