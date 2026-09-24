@@ -802,8 +802,9 @@ function RadioAdminDashboard({
   const [playlistItems, setPlaylistItems] = useState<string[]>([]);
   const [playlistSaving, setPlaylistSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  const startNewEditor = () => { openNew(); setEditorOpen(true); };
-  const startEditEditor = (item: AdminRecord) => { edit(item); setEditorOpen(true); };
+  const startNewEditor = () => { setMessage(''); setError(''); openNew(); setEditorOpen(true); };
+  const startEditEditor = (item: AdminRecord) => { setMessage(''); setError(''); edit(item); setEditorOpen(true); };
+  useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
 
   const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
   const nowPlaying = live[0] || records[0] || null;
@@ -952,7 +953,7 @@ function RadioAdminDashboard({
       {error && <div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
       {message && <div className="vop-radio-admin-alert success">{message}</div>}
       {editorOpen && <div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
-        <form className="vop-radio-editor-modal" onSubmit={async event => { await submit(event); if (!error) setEditorOpen(false); }}>
+        <form className="vop-radio-editor-modal" onSubmit={submit}>
           <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
           <div className="vop-radio-editor-body"><Fields kind="radio" form={form} setForm={setForm} records={records} /></div>
           <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>Cancel</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
