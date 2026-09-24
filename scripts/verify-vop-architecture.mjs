@@ -20,7 +20,7 @@ const checks = [
     'organizationInHierarchyScope',
     'accessibleOrganizationIds', 'canManageOrganizationContent'
   ]],
-  ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2']],
+  ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2','Updated Scoped Tenant','system/permissions']],
   ['firestore.rules', [
     "'union_admin'",
     "'conference_admin'",
@@ -59,6 +59,7 @@ const checks = [
   ['shared/permissions.ts', ['DEFAULT_PERMISSION_MATRIX','PERMISSION_ROLES','PERMISSION_RESOURCES','PERMISSION_ACTIONS','normalizePermissionMatrix']],
   ['server/permissions.ts', ['loadPermissionMatrix','requirePermission','resourceForCollection']],
   ['api/admin/permissions.ts', ['system/permissions','DEFAULT_PERMISSION_MATRIX','Only the VOP Super Admin']],
+  ['src/services/adminFirestore.ts', ['tenantSettings', "'settings', 'settings'"]],
   ['src/pages/CurriculumManager.tsx', ['Publishing scope','System-wide','scopeOrganizationId','organizationOptions']],
   ['src/pages/GuideManager.tsx', ['organizationId?: string','organizationId: organizationId || undefined']],
   ['api/prayer.ts', ['accessibleOrganizationIds','organizationInHierarchyScope','requirePermission']],
