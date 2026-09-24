@@ -422,8 +422,11 @@ export default async function handler(req: Request, res: Response) {
       if (!memberSnap.exists) throw new Error('That user is not a member of this organization.');
       const memberData = memberSnap.data() || {};
       const profileData = profileSnap.data() || {};
-      if (String(memberData.role || '') === 'owner' || String(organizationSnap.data()?.ownerUid || '') === uid || String(profileData.organizationRole || '') === 'owner') {
-        throw new Error('The organization owner cannot be removed. Transfer ownership through the Super Admin workflow first.');
+      const isOwner = String(memberData.role || '') === 'owner'
+        || String(organizationSnap.data()?.ownerUid || '') === uid
+        || String(profileData.organizationRole || '') === 'owner';
+      if (isOwner && !ctx.isSuperAdmin) {
+        throw new Error('The organization owner cannot be removed by an organization administrator. Assign organization ownership to another user first.');
       }
       const now = new Date().toISOString();
       await ctx.db.runTransaction(async transaction => {
@@ -433,6 +436,12 @@ export default async function handler(req: Request, res: Response) {
         transaction.set(profileSnap.ref, {
           organizationId:'', organizationRole:'learner', updatedAt:FieldValue.serverTimestamp()
         }, { merge:true });
+        if (isOwner && ctx.isSuperAdmin) {
+          transaction.set(organizationRef, {
+            ownerUid:'',
+            updatedAt:FieldValue.serverTimestamp()
+          }, { merge:true });
+        }
       });
       const authService = getAuth(ctx.db.app);
       await authService.setCustomUserClaims(uid, { role:'student', organizationId:'', organizationRole:'learner' });
