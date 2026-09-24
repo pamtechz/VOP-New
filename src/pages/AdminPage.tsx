@@ -386,7 +386,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const permissionRole = roleForPermission({
       role: currentUser.role,
       organizationRole: currentUser.organizationRole,
-      privileges: currentUser.privileges as Record<string, unknown> | undefined,
+      privileges: currentUser.privileges as unknown as Record<string, unknown> | undefined,
     });
     const resourceForNav: Record<AdminTab, PermissionResource> = {
       dashboard:'dashboard', userManagement:'users', settings:'settings', candidates:'users',
@@ -926,7 +926,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const currentPermissionRole = roleForPermission({
     role: currentUser.role,
     organizationRole: currentUser.organizationRole,
-    privileges: currentUser.privileges as Record<string, unknown> | undefined,
+    privileges: currentUser.privileges as unknown as Record<string, unknown> | undefined,
   });
   const adminResourceForCollection: Record<ManagedAdminCollection, PermissionResource> = {
     translations:'translations', announcements:'announcements', materials:'materials', radio:'radio',
