@@ -369,6 +369,18 @@ Do not merely describe future work when implementation is possible. Make the req
 When deployment is rate-limited or unavailable, continue local/repository implementation and validation without falsely claiming deployment.
 
 
+## Platform-wide Super Admin and configurable permissions
+
+Super Admin is platform-wide by default. An organisation target is optional and is required only when the Super Admin explicitly creates or publishes content for a particular organisation. System-wide resources do not require an organisation selector.
+
+The permission model is centralized in `shared/permissions.ts`, persisted for Super Admin customization at `system/permissions`, enforced by server authorization helpers, reflected in admin navigation and CRUD controls, and bounded by tenant scope and ownership. The default matrix covers Super Admin, union/conference/district/church tenants, organisation owner/admin/editor, mentor, staff and learner roles.
+
+The matrix never expands tenant or ownership scope. A checked permission means the role may attempt the operation only when the resource is otherwise within its authorized hierarchy/organisation/ownership boundary.
+
+Prayer requests have a dedicated Admin → Prayer Requests ministry inbox with hierarchy-scoped access. The student radio surface includes explicit back navigation.
+
+Certificate authoring uses the approved VOP certificate template and default supplied background asset `/assets/certificate_bg.png`. The Certificate canvas opens at 40% zoom and can be adjusted or reset to 40%.
+
 ## Final VOP role, access, ownership and UI model
 
 This is the governing authorization and UI model for the SaaS implementation. It supplements all earlier tenant and ownership requirements.
