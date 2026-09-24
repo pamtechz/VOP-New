@@ -43,6 +43,59 @@ type StringConfigKey =
   | 'signatureUrl'
   | 'backgroundUrl';
 
+export interface CertificateTemplateStudioConfig {
+  width: number;
+  height: number;
+  backgroundUrl: string;
+  elements: CertificateTemplateElement[];
+}
+
+const CANVAS_WIDTH = 1513;
+const CANVAS_HEIGHT = 1040;
+const DEFAULT_BACKGROUND = '/assets/certificates/vop-course-certificate-bg.png';
+
+const DEFAULT_TEMPLATE: CertificateTemplateStudioConfig = {
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  backgroundUrl: DEFAULT_BACKGROUND,
+  elements: [
+    { id: 'title', type: 'text', x: 24, y: 2.2, width: 52, height: 5, text: 'COURSE CERTIFICATE', fontSize: 31, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'certify', type: 'text', x: 32, y: 31.4, width: 36, height: 4, text: 'This is to certify that', fontSize: 15, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'candidateName', type: 'candidateName', x: 22, y: 36.8, width: 56, height: 7, fontSize: 43, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'completed', type: 'text', x: 29, y: 45.8, width: 42, height: 4, text: 'has successfully completed the', fontSize: 15, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'courseName', type: 'courseName', x: 19, y: 49.2, width: 62, height: 5, fontSize: 24, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'courseSubtitle', type: 'text', x: 25, y: 54.5, width: 50, height: 6, text: 'as outlined by the Seventh-day Adventist Church', fontSize: 14, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'brandName', type: 'text', x: 42, y: 87.3, width: 18, height: 3.5, text: 'vop app', fontSize: 20, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'brandSubtitle', type: 'text', x: 38, y: 91, width: 26, height: 3.2, text: 'BIBLE CORRESPONDENCE SCHOOL', fontSize: 10, fontWeight: 700, color: '#111111', textAlign: 'center' },
+    { id: 'issuedAt', type: 'date', x: 38, y: 95.6, width: 26, height: 3, fontSize: 9, fontWeight: 600, color: '#111111', textAlign: 'center' },
+  ],
+};
+
+function cloneTemplate(): CertificateTemplateStudioConfig {
+  return JSON.parse(JSON.stringify(DEFAULT_TEMPLATE)) as CertificateTemplateStudioConfig;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeTemplate(value: CertificateTemplateConfig | undefined, backgroundUrl?: string): CertificateTemplateStudioConfig {
+  const source = value?.elements?.length ? value : DEFAULT_TEMPLATE;
+  return {
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    backgroundUrl: source.backgroundUrl || backgroundUrl || DEFAULT_BACKGROUND,
+    elements: (source.elements || []).map(element => ({
+      ...element,
+      x: clamp(Number(element.x) || 0, 0, 100),
+      y: clamp(Number(element.y) || 0, 0, 100),
+      width: clamp(Number(element.width) || 1, 1, 100),
+      height: clamp(Number(element.height) || 1, 1, 100),
+    })),
+  };
+}
+
+
 const textFields: Array<{ key: StringConfigKey; label: string; hint: string; multiline?: boolean }> = [
   { key: 'courseName', label: 'Course name', hint: 'The official course name printed on certificates.' },
   { key: 'courseCode', label: 'Course code', hint: 'Optional official course or programme code.' },
