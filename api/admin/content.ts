@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -98,22 +98,22 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'upsertGuide') {
       if (collection !== 'guides') throw new Error('Guide management requires the guides collection.');
-      if (!ctx.organizationId) throw new Error('Select an organization before creating a guide.');
+      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before creating a guide.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const id = guideId(ctx.organizationId, lang);
+      const id = guideId(effectiveOrganizationId, lang);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
-      if (!existing.exists) await enforceQuota(ctx, 'guides', 'maxGuides');
-      if (existing.exists && !canEditCanonicalContent(ctx, current)) throw new Error('Only the owning organization or VOP Super Admin can edit this guide.');
+      if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
+      if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       await ref.set({
         id,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: current.ownerOrganizationId || ctx.organizationId,
+        organizationId: effectiveOrganizationId,
+        ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: current.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
@@ -141,8 +141,8 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'archiveGuide') {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
       const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim();
-      if (!language(lang) || !ctx.organizationId) throw new Error('A valid language and organization are required.');
-      const ref = ctx.db.doc(`guides/${guideId(ctx.organizationId, lang)}`);
+      if (!language(lang) || !effectiveOrganizationId) throw new Error('A valid language and organization are required.');
+      const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !canEditCanonicalContent(ctx, current.data())) throw new Error('Only the owning organization or VOP Super Admin can archive this guide.');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
@@ -151,18 +151,18 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'forkGuide') {
       if (collection !== 'guides') throw new Error('Guide copying requires the guides collection.');
-      requireOrgRole(ctx, ['owner','admin','editor']);
-      if (!ctx.organizationId) throw new Error('Select an organization before copying a guide.');
+      if (ctx.tenantType !== 'hierarchy') requireOrgRole(ctx, ['owner','admin','editor']);
+      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before copying a guide.');
       const sourceId = safeId(body.id || body.sourceId);
       const source = await ctx.db.doc(`guides/${sourceId}`).get();
       const sourceData = source.data() || {};
       if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared guides can be copied.');
       await enforceQuota(ctx, 'guides', 'maxGuides');
-      const id = safeId(body.targetId || `${ctx.organizationId}__${String(sourceData.language || 'en')}__copy-${Date.now().toString(36)}`);
+      const id = safeId(body.targetId || `${effectiveOrganizationId}__${String(sourceData.language || 'en')}__copy-${Date.now().toString(36)}`);
       const now = new Date().toISOString();
       const target = ctx.db.doc(`guides/${id}`);
       await target.set({
-        ...sourceData, id, organizationId:ctx.organizationId, ownerOrganizationId:ctx.organizationId,
+        ...sourceData, id, organizationId:effectiveOrganizationId, ownerOrganizationId:effectiveOrganizationId,
         ownerUid:ctx.auth.uid, sourceContentId:sourceId, copiedAt:now, copiedBy:ctx.auth.uid,
         canonical:true, sharingScope:'organization', published:false, archived:false,
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
@@ -186,7 +186,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'forkLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson copying requires the curriculum collection.');
       requireOrgRole(ctx, ['owner','admin','editor']);
-      if (!ctx.organizationId) throw new Error('Select an organization before copying a lesson.');
+      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before copying a lesson.');
       const sourceGuideId = safeId(body.sourceGuideId);
       const sourceLessonId = safeId(body.sourceLessonId || body.id);
       const targetGuideId = safeId(body.targetGuideId);
@@ -194,11 +194,11 @@ export default async function handler(req: Request, res: Response) {
       const targetGuide = await ctx.db.doc(`guides/${targetGuideId}`).get();
       const sourceData = source.data() || {};
       if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared lessons can be copied.');
-      if (!targetGuide.exists || String(targetGuide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('Choose a guide owned by your organization.');
+      if (!targetGuide.exists || String(targetGuide.data()?.organizationId || '') !== effectiveOrganizationId) throw new Error('Choose a guide owned by your organization.');
       const id = safeId(body.targetId || `${sourceLessonId}-copy-${Date.now().toString(36)}`);
       const now = new Date().toISOString();
       await targetGuide.ref.collection('lessons').doc(id).set({
-        ...sourceData, id, lessonId:id, organizationId:ctx.organizationId, ownerOrganizationId:ctx.organizationId,
+        ...sourceData, id, lessonId:id, organizationId:effectiveOrganizationId, ownerOrganizationId:effectiveOrganizationId,
         ownerUid:ctx.auth.uid, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`,
         copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
@@ -208,7 +208,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'upsertLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
-      if (!ctx.organizationId) throw new Error('Select an organization before saving a lesson.');
+      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before saving a lesson.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const language = String(data.language || '').trim();
       const guideId = safeId(data.guideId);
@@ -216,7 +216,7 @@ export default async function handler(req: Request, res: Response) {
       if (!language || !guideId) throw new Error('A guide and language are required for a lesson.');
       const guideRef = ctx.db.doc(`guides/${guideId}`);
       const guide = await guideRef.get();
-      if (!guide.exists || String(guide.data()?.organizationId || '') !== ctx.organizationId) throw new Error('The selected guide does not belong to this organization.');
+      if (!guide.exists || String(guide.data()?.organizationId || '') !== effectiveOrganizationId) throw new Error('The selected guide does not belong to this organization.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this lesson.');
@@ -224,8 +224,8 @@ export default async function handler(req: Request, res: Response) {
         ...data,
         id: lessonId,
         lessonId,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+        organizationId: effectiveOrganizationId,
+        ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
@@ -241,12 +241,12 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'publishLesson' || action === 'unpublishLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson publishing requires the curriculum collection.');
-      if (!ctx.organizationId) throw new Error('Select an organization before publishing lessons.');
+      if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before publishing lessons.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim();
       const lessonId = safeId(data.lessonId || body.id);
       if (!language(lang)) throw new Error('A valid language code is required.');
-      const guide = await ctx.db.doc(`guides/${guideId(ctx.organizationId, lang)}`).get();
+      const guide = await ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`).get();
       if (!guide.exists || guide.data()?.archived === true) throw new Error('A valid organization guide is required.');
       const ref = guide.ref.collection('lessons').doc(lessonId);
       if (action === 'unpublishLesson') {
@@ -260,8 +260,8 @@ export default async function handler(req: Request, res: Response) {
         ...data,
         id: lessonId,
         lessonId,
-        organizationId: ctx.organizationId,
-        ownerOrganizationId: ctx.organizationId,
+        organizationId: effectiveOrganizationId,
+        ownerOrganizationId: effectiveOrganizationId,
         ownerUid: ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
