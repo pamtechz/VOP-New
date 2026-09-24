@@ -23,11 +23,12 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const own = String(req.query?.mine || '') === 'true';
       const snapshot = own
-        ? await collection.where('candidateId','==',ctx.auth.uid).orderBy('createdAt','desc').limit(100).get()
-        : await collection.where('organizationId','==',ctx.organizationId).orderBy('createdAt','desc').limit(100).get();
+        ? await collection.where('candidateId','==',ctx.auth.uid).limit(100).get()
+        : await collection.where('organizationId','==',ctx.organizationId).limit(100).get();
 
       const items = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
           if (item.candidateId === ctx.auth.uid) return true;
           return admin && item.organizationId === ctx.organizationId && item.isPrivate !== true;
