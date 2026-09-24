@@ -17,7 +17,7 @@ const categories: PrayerRequest['category'][] = ['Spiritual','Health','Family','
 
 async function prayerApi(action: string, payload: Record<string, unknown> = {}) {
   const user = auth?.currentUser;
-  if (!user) throw new Error('Please sign in to use {t('prayer.title','Prayer Ministry')}.');
+  if (!user) throw new Error('Please sign in to use Prayer Ministry.');
   const token = await user.getIdToken();
   const response = await fetch('/api/prayer', {
     method: 'POST',
@@ -75,8 +75,8 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
 
   const counts = useMemo(() => ({
     total: requests.length,
-    praying: requests.filter(r => r.status === '{t('prayer.praying','Praying')}').length,
-    answered: requests.filter(r => r.status === '{t('prayer.answered','Answered')}').length,
+    praying: requests.filter(r => r.status === 'Praying').length,
+    answered: requests.filter(r => r.status === 'Answered').length,
   }), [requests]);
 
   const submit = async (event: React.FormEvent) => {
@@ -114,13 +114,13 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
     <div className="vop-prayer-page">
       <header className="vop-prayer-hero">
         <div className="vop-prayer-hero-inner">
-          <button type="button" className="vop-prayer-back" onClick={onBack}><ArrowLeft size={18}/> {t('prayer.title','Prayer Ministry')}</button>
+          <button type="button" className="vop-prayer-back" onClick={onBack}><ArrowLeft size={18}/> Prayer Ministry</button>
           <div className="vop-prayer-hero-grid">
             <div>
               <span className="vop-prayer-kicker"><HeartHandshake size={15}/> Ministry care</span>
               <h1>{t('prayer.hero_title','A place to pray, share and be supported.')}</h1>
-              <p>{t('prayer.hero_desc','Bring what is on your heart. {t('prayer.request','Your request')} can remain private or be shared with your VOP community for prayer.')}</p>
-              <button type="button" className="vop-prayer-primary" onClick={() => setShowComposer(true)}><Plus size={18}/> {t('prayer.submit','Submit a prayer request')}</button>
+              <p>{t('prayer.hero_desc','Bring what is on your heart. Your request can remain private or be shared with your VOP community for prayer.')}</p>
+              <button type="button" className="vop-prayer-primary" onClick={() => setShowComposer(true)}><Plus size={18}/> Submit a prayer request</button>
             </div>
             <div className="vop-prayer-scripture"><Sparkles size={18}/><p>“Cast all your anxiety on Him because He cares for you.”</p><strong>1 Peter 5:7</strong></div>
           </div>
@@ -129,21 +129,21 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
 
       <main className="vop-prayer-main">
         <section className="vop-prayer-summary">
-          <div><span>{t('prayer.my_requests','My requests')}</span><strong>{counts.total}</strong></div>
+          <div><span>My requests</span><strong>{counts.total}</strong></div>
           <div><span>Being prayed for</span><strong>{counts.praying}</strong></div>
-          <div><span>{t('prayer.answered','Answered')}</span><strong>{counts.answered}</strong></div>
+          <div><span>Answered</span><strong>{counts.answered}</strong></div>
           <div className="vop-prayer-privacy"><ShieldCheck size={18}/><span>Prayer information is protected by your organization.</span></div>
         </section>
 
         <div className="vop-prayer-toolbar">
           <div className="vop-prayer-tabs" role="tablist">
-            <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}><Lock size={15}/> {t('prayer.my_requests','My requests')}</button>
-            <button className={tab === 'community' ? 'active' : ''} onClick={() => setTab('community')}><Users size={15}/> {t('prayer.community','Community prayer')}</button>
-            {isAdmin && <button className={tab === 'ministry' ? 'active' : ''} onClick={() => setTab('ministry')}><HeartHandshake size={15}/> {t('prayer.inbox','Ministry inbox')}</button>}
+            <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}><Lock size={15}/> My requests</button>
+            <button className={tab === 'community' ? 'active' : ''} onClick={() => setTab('community')}><Users size={15}/> Community prayer</button>
+            {isAdmin && <button className={tab === 'ministry' ? 'active' : ''} onClick={() => setTab('ministry')}><HeartHandshake size={15}/> Ministry inbox</button>}
           </div>
           <div className="vop-prayer-filters">
             <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="All">{t('prayer.all_topics','All topics')}</option>{categories.map(item => <option key={item}>{item}</option>)}</select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}><option value="All">{t('prayer.all_statuses','All statuses')}</option><option>Received</option><option>{t('prayer.praying','Praying')}</option><option>{t('prayer.answered','Answered')}</option></select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}><option value="All">{t('prayer.all_statuses','All statuses')}</option><option>Received</option><option>Praying</option><option>Answered</option></select>
           </div>
         </div>
 
@@ -151,20 +151,20 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
         {error && <div className="vop-prayer-notice error">{error}</div>}
 
         {loading ? <div className="vop-prayer-loading"><div className="vop-spinner"/>Loading prayer ministry…</div> :
-          visible.length === 0 ? <div className="vop-prayer-empty"><HeartHandshake size={42}/><h2>{tab === 'mine' ? '{t('prayer.empty_title','Your prayer journal is ready.')}' : 'No requests to show.'}</h2><p>{tab === 'mine' ? 'Start by sharing a prayer request with the ministry.' : 'There are no requests matching the selected filters.'}</p>{tab === 'mine' && <button onClick={() => setShowComposer(true)}><Plus size={16}/> {t('prayer.share_request','Share a request')}</button>}</div> :
+          visible.length === 0 ? <div className="vop-prayer-empty"><HeartHandshake size={42}/><h2>{tab === 'mine' ? t('prayer.empty_title','Your prayer journal is ready.') : t('prayer.no_requests','No requests to show.')}</h2><p>{tab === 'mine' ? 'Start by sharing a prayer request with the ministry.' : 'There are no requests matching the selected filters.'}</p>{tab === 'mine' && <button onClick={() => setShowComposer(true)}><Plus size={16}/> Share a request</button>}</div> :
           <section className="vop-prayer-list">
             {visible.map(request => (
               <article className="vop-prayer-card" key={request.id}>
                 <div className="vop-prayer-card-head">
                   <div className="vop-prayer-avatar">{request.candidateName?.charAt(0).toUpperCase() || 'P'}</div>
                   <div className="vop-prayer-card-person"><strong>{tab === 'mine' ? 'My prayer request' : request.candidateName}</strong><span>{new Date(request.createdAt).toLocaleDateString(undefined,{dateStyle:'medium'})} · {request.category}</span></div>
-                  <span className={'vop-prayer-status ' + request.status.toLowerCase()}>{request.status === '{t('prayer.answered','Answered')}' ? <Check size={13}/> : <Clock3 size={13}/>} {request.status}</span>
+                  <span className={'vop-prayer-status ' + request.status.toLowerCase()}>{request.status === 'Answered' ? <Check size={13}/> : <Clock3 size={13}/>} {request.status}</span>
                 </div>
                 <p className="vop-prayer-text">{request.requestText}</p>
                 <div className="vop-prayer-card-foot">
                   <span>{request.isPrivate ? <><Lock size={13}/> Private to ministry</> : <><Users size={13}/> Shared for prayer</>}</span>
                   {tab === 'mine' && <button className="vop-prayer-delete" onClick={() => void remove(request.id)}><Trash2 size={14}/> Delete</button>}
-                  {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'{t('prayer.praying','Praying')}')}>Mark praying</button><button onClick={() => void updateStatus(request.id,'{t('prayer.answered','Answered')}')}>Mark answered</button></div>}
+                  {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'Praying')}>Mark praying</button><button onClick={() => void updateStatus(request.id,'Answered')}>Mark answered</button></div>}
                 </div>
               </article>
             ))}
@@ -173,13 +173,13 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
 
       {showComposer && <div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowComposer(false); }}>
         <form className="vop-prayer-composer" onSubmit={submit}>
-          <div className="vop-prayer-composer-head"><div><span>{t('prayer.title','Prayer Ministry')}</span><h2>{t('prayer.composer_title','What would you like us to pray about?')}</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
+          <div className="vop-prayer-composer-head"><div><span>Prayer Ministry</span><h2>{t('prayer.composer_title','What would you like us to pray about?')}</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
           <div className="vop-prayer-composer-body">
             <label>{t('prayer.topic','Topic')}<select value={category} onChange={e => setCategory(e.target.value as PrayerRequest['category'])}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
             <label>{t('prayer.request','Your request')}<textarea value={requestText} onChange={e => setRequestText(e.target.value)} maxLength={3000} rows={7} placeholder="Share only what you are comfortable sharing with the ministry…"/></label>
-            <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? 'Private prayer' : '{t('prayer.community','Community prayer')}'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? 'Make community' : 'Keep private'}</button></div>
+            <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? 'Private prayer' : 'Community prayer'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? 'Make community' : 'Keep private'}</button></div>
           </div>
-          <footer><button type="button" onClick={() => setShowComposer(false)}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? '{t('common.sending','Sending…')}' : '{t('prayer.send','Send request')}'}</button></footer>
+          <footer><button type="button" onClick={() => setShowComposer(false)}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/{saving ? t('common.sending','Sending…') : t('prayer.send','Send request')}</button></footer>
         </form>
       </div>}
     </div>
