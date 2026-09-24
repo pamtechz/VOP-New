@@ -135,6 +135,19 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteUrl('');void loadDetails(item.id);
   };
 
+  const deleteOrganization=async()=>{
+    if(!selected||!isSuperAdmin)return;
+    const confirmed=window.confirm('Permanently delete the organization "'+selected.name+'"? This removes its tenant membership, invitations, settings and organization-scoped records. This action cannot be undone.');
+    if(!confirmed)return;
+    setSaving(true);setError('');
+    try{
+      await api('delete',{organizationId:selected.id});
+      setSelected(null);setMembers([]);setUsage(null);setAudit([]);setName('');setOrganizationId('');setMessage('Organization deleted.');
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:'Could not delete the organization.');}
+    finally{setSaving(false);}
+  };
+
   const save=async()=>{
     if(!selected) return;
     setSaving(true);setError('');
@@ -254,7 +267,10 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
               {(Object.keys(quotaLabels) as Array<keyof Quotas>).map(key=><div className="vop-field" key={key}><label>{quotaLabels[key]}</label><input type="number" min="-1" step="1" value={quotas[key]} onChange={e=>setQuotas(current=>({...current,[key]:e.target.value}))} placeholder="Unlimited"/></div>)}
             </div>
           </div>}
-          <div style={{display:'flex',justifyContent:'flex-end',marginTop:14}}><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button></div>
+          <div style={{display:'flex',justifyContent:'space-between',gap:12,marginTop:14,flexWrap:'wrap'}}>
+            {isSuperAdmin&&<button className="vop-secondary" type="button" disabled={saving} onClick={()=>void deleteOrganization()} style={{color:'#b42318',borderColor:'#f0b7b7'}}>Delete Organization</button>}
+            <button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button>
+          </div>
 
           {usage&&<div className="vop-grid-3" style={{marginTop:16}}>
             <div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{usage.members}</strong><span>Members</span></div></div>
