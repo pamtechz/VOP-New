@@ -226,7 +226,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
           <div className="vop-cert-template-tool-divider"/>
           <button type="button" onClick={() => updateTemplate({ backgroundUrl: DEFAULT_BACKGROUND })}><Upload size={16}/><span>Use supplied background</span></button>
           <div className="vop-cert-template-tool-note">The supplied VOP artwork is the base layer. Its border, blue ribbons, honeycomb pattern, VOP seal and SDA mark stay intact while editable fields sit above it.</div>
-          <button type="button" onClick={() => { updateTemplate(JSON.parse(JSON.stringify(DEFAULT_TEMPLATE))); setSelectedId('title'); }}><RotateCw size={16}/><span>Reset to sample</span></button>
+          <button type="button" onClick={() => { updateTemplate(JSON.parse(JSON.stringify(DEFAULT_TEMPLATE))); setSelectedId(DEFAULT_TEMPLATE.elements?.[0]?.id || 'certify'); }}><RotateCw size={16}/><span>Reset to sample</span></button>
         </aside>
 
         <section className="vop-cert-template-editor-stage">
