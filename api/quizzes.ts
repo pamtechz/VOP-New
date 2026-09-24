@@ -26,6 +26,8 @@ export default async function handler(req: Request, res: Response) {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const action = String(body.action || 'list');
+    if (action === 'list' || action === 'get') await requirePermission(ctx, 'quizzes', 'view');
+    else if (action === 'fork') await requirePermission(ctx, 'quizzes', 'create');
 
     if (action === 'list') {
       if (ctx.isSuperAdmin && !ctx.organizationId) {
