@@ -431,10 +431,98 @@ export default async function handler(request: Request, response: Response) {
     if (action === 'delete') {
       if (uid === String(decoded.uid)) return response.status(400).json({ error: 'The signed-in administrator cannot delete their own account.' });
       const targetProfile = await db.doc(`users/${uid}`).get();
-      if (tenantOrganizationId && String(targetProfile.data()?.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (!targetProfile.exists) return response.status(404).json({ error: 'The selected user account does not exist.' });
+      const targetData = targetProfile.data() || {};
+      const targetOrganizationId = String(targetData.organizationId || '').trim();
+
+      // Super Admin may delete any user who belongs to an organization. Tenant
+      // administrators are restricted to their own tenant.
+      if (!tenant.isSuperAdmin && targetOrganizationId !== tenantOrganizationId) {
+        throw new Error('This user belongs to another organization.');
+      }
+      if (tenant.isSuperAdmin && tenantOrganizationId && targetOrganizationId !== tenantOrganizationId) {
+        throw new Error('This user does not belong to the selected organization.');
+      }
+      if (!targetOrganizationId) {
+        if (!tenant.isSuperAdmin) throw new Error('This user is not a member of your organization.');
+        const platformRole = String(targetData.role || '').trim();
+        if (platformRole === 'super_admin') throw new Error('Super Admin accounts are platform-level accounts and are not organization members.');
+      }
+
+      if (targetOrganizationId) {
+        const organizationRef = db.doc(`organizations/${targetOrganizationId}`);
+        const organizationSnap = await organizationRef.get();
+        if (!organizationSnap.exists) throw new Error('The target organization does not exist.');
+        const targetMemberRef = organizationRef.collection('members').doc(uid);
+        const targetMemberSnap = await targetMemberRef.get();
+        const targetMember = targetMemberSnap.data() || {};
+        const targetRole = String(targetMember.role || targetData.organizationRole || '').trim();
+        const activeMembersSnap = await organizationRef.collection('members').where('active','==',true).get();
+        const activeMembers = activeMembersSnap.docs.filter(doc => doc.id !== uid);
+        const remainingAdministrators = activeMembers.filter(doc => {
+          const role = String(doc.data()?.role || '').trim();
+          return role === 'owner' || role === 'admin';
+        });
+
+        // Never leave an organization with members but without an administrator.
+        // The sole member may be deleted. An owner with other members must
+        // transfer ownership in the same operation; the replacement must already
+        // belong to the organization.
+        if (['owner','admin'].includes(targetRole) && activeMembers.length > 0) {
+          const replacementUid = String(body.replacementUid || '').trim();
+          if (targetRole === 'owner') {
+            if (!replacementUid || replacementUid === uid) {
+              throw new Error('Transfer organization ownership to another member before deleting the owner.');
+            }
+            const replacementProfileRef = db.doc(`users/${replacementUid}`);
+            const replacementProfileSnap = await replacementProfileRef.get();
+            const replacementMemberRef = organizationRef.collection('members').doc(replacementUid);
+            const replacementMemberSnap = await replacementMemberRef.get();
+            if (!replacementProfileSnap.exists || String(replacementProfileSnap.data()?.organizationId || '').trim() !== targetOrganizationId
+              || !replacementMemberSnap.exists || replacementMemberSnap.data()?.active !== true) {
+              throw new Error('The replacement owner must be an active member of this organization.');
+            }
+            const now = new Date().toISOString();
+            await db.runTransaction(async transaction => {
+              transaction.set(targetMemberRef, { role:'admin', updatedAt:now }, { merge:true });
+              transaction.set(replacementMemberRef, { role:'owner', active:true, updatedAt:now }, { merge:true });
+              transaction.set(targetProfile.ref, { organizationRole:'admin', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+              transaction.set(replacementProfileRef, { organizationRole:'owner', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+              transaction.set(organizationRef, { ownerUid:replacementUid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+            });
+            await authService.setCustomUserClaims(uid, { role:'student', organizationId:targetOrganizationId, organizationRole:'admin' });
+            await authService.setCustomUserClaims(replacementUid, { role:'student', organizationId:targetOrganizationId, organizationRole:'owner' });
+          } else {
+            const hasOtherAdministrator = remainingAdministrators.length > 0;
+            if (!hasOtherAdministrator) {
+              if (!replacementUid || replacementUid === uid) {
+                throw new Error('Assign another administrator before deleting the last administrator in an organization with other members.');
+              }
+              const replacementProfileRef = db.doc(`users/${replacementUid}`);
+              const replacementProfileSnap = await replacementProfileRef.get();
+              const replacementMemberRef = organizationRef.collection('members').doc(replacementUid);
+              const replacementMemberSnap = await replacementMemberRef.get();
+              if (!replacementProfileSnap.exists || String(replacementProfileSnap.data()?.organizationId || '').trim() !== targetOrganizationId
+                || !replacementMemberSnap.exists || replacementMemberSnap.data()?.active !== true) {
+                throw new Error('The replacement administrator must already be an active member of this organization.');
+              }
+              const replacementRole = String(replacementMemberSnap.data()?.role || '').trim();
+              if (!['learner','viewer','editor','mentor','teacher'].includes(replacementRole)) {
+                throw new Error('Select an eligible organization member as the replacement administrator.');
+              }
+              const now = new Date().toISOString();
+              await db.runTransaction(async transaction => {
+                transaction.set(replacementMemberRef, { role:'admin', active:true, updatedAt:now }, { merge:true });
+                transaction.set(replacementProfileRef, { organizationRole:'admin', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+              });
+              await authService.setCustomUserClaims(replacementUid, { role:'student', organizationId:targetOrganizationId, organizationRole:'admin' });
+            }
+          }
+        }      }
+
       await authService.deleteUser(uid);
-      await db.doc(`users/${uid}`).delete();
-      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${uid}`).delete().catch(() => undefined);
+      await targetProfile.ref.delete();
+      if (targetOrganizationId) await db.doc(`organizations/${targetOrganizationId}/members/${uid}`).delete().catch(() => undefined);
       return response.status(200).json({ ok: true, uid });
     }
 

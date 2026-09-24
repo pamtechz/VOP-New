@@ -472,6 +472,7 @@ export default async function handler(req: Request, res: Response) {
         if (!existing.exists) {
           const quotaKey =
             collection === 'books' ? 'maxMaterials' :
+            collection === 'announcements' ? 'maxAnnouncements' :
             collection === 'radioBroadcasts' ? 'maxRadioItems' :
             collection === 'playlists' ? 'maxRadioPlaylists' : '';
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);

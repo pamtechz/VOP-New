@@ -9,7 +9,7 @@ type Organization = {
 type Member = { id:string; uid:string; role:string; active:boolean; joinedAt?:string; displayName?:string; email?:string };
 type DirectoryUser = { uid:string; displayName:string; email:string; organizationId?:string; organizationName?:string };
 type Usage = { members:number; guides:number; quizzes:number; announcements:number; radio:number; books:number };
-type Quotas = { maxUsers:string; maxGuides:string; maxQuizzes:string; maxAnnouncements:string; maxRadioItems:string; maxMaterials:string };
+type Quotas = { maxUsers:string; maxGuides:string; maxQuizzes:string; maxAnnouncements:string; maxRadioItems:string; maxRadioPlaylists:string; maxMaterials:string };
 
 async function api(action:string, payload:Record<string,unknown>={}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -20,7 +20,7 @@ async function api(action:string, payload:Record<string,unknown>={}) {
   return body;
 }
 
-const emptyQuotas=():Quotas=>({maxUsers:'',maxGuides:'',maxQuizzes:'',maxAnnouncements:'',maxRadioItems:'',maxMaterials:''});
+const emptyQuotas=():Quotas=>({maxUsers:'',maxGuides:'',maxQuizzes:'',maxAnnouncements:'',maxRadioItems:'',maxRadioPlaylists:'',maxMaterials:''});
 function quotaState(value:Record<string,unknown>):Quotas {
   const result=emptyQuotas();
   (Object.keys(result) as Array<keyof Quotas>).forEach(key=>{ const valueForKey=value[key]; if(valueForKey!==undefined&&valueForKey!==null&&Number(valueForKey)>=0) result[key]=String(valueForKey); });
@@ -202,7 +202,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     finally{setSaving(false);}
   };
 
-  const quotaLabels:Record<keyof Quotas,string>={maxUsers:'Members / users',maxGuides:'Guides',maxQuizzes:'Quizzes',maxAnnouncements:'Announcements',maxRadioItems:'Radio items',maxMaterials:'Materials'};
+  const quotaLabels:Record<keyof Quotas,string>={maxUsers:'Members / users',maxGuides:'Guides',maxQuizzes:'Quizzes',maxAnnouncements:'Announcements',maxRadioItems:'Radio items',maxRadioPlaylists:'Radio playlists',maxMaterials:'Materials'};
 
   return <div>
     <div className="vop-page-header">
