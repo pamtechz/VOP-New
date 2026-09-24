@@ -585,7 +585,9 @@ export default async function handler(req: Request, res: Response) {
         } else if (!hierarchyScopeMatches(ctx, collection, candidate)) {
           throw new Error('The hierarchy record does not belong to your assigned scope.');
         }
-        if (collection === 'unions' && !ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage unions.');
+        if (collection === 'unions' && !ctx.isSuperAdmin && String(ctx.profile.role || '') !== 'union_admin') {
+          throw new Error('Only the assigned Union administrator or VOP Super Admin can manage this union profile.');
+        }
         await ref.set({ ...candidate, id, updatedAt: FieldValue.serverTimestamp(), createdAt: existing.data()?.createdAt || new Date().toISOString() }, { merge:true });
         return res.status(200).json({ ok:true, id });
       }
