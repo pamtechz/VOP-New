@@ -1,0 +1,37 @@
+name: Install exact certificate background
+
+on:
+  push:
+    paths:
+      - '.github/workflows/install-certificate-background.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download supplied certificate background
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o /tmp/certificate_bg.png 'https://at.adobe.com/w3AYxCqQOHFD5YEs'
+          test "$(sha256sum /tmp/certificate_bg.png | awk '{print $1}')" = '3e3051618c632c7142b09e5257fc4526269bff98df6c0032af3a4743e8f59478'
+          mkdir -p public/assets
+          cp /tmp/certificate_bg.png public/assets/certificate_bg.png
+
+      - name: Commit exact supplied asset
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/assets/certificate_bg.png
+          if git diff --cached --quiet; then
+            echo 'Exact certificate background already installed.'
+            exit 0
+          fi
+          git commit -m 'fix: install exact supplied certificate background'
+          git push
