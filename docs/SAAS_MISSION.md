@@ -367,3 +367,317 @@ Continue implementing this mission directly in the VOP-New repository. Inspect t
 Do not merely describe future work when implementation is possible. Make the required code, schema, authorization, UI, and documentation changes, validate them, commit them, and report exactly what was completed and what remains.
 
 When deployment is rate-limited or unavailable, continue local/repository implementation and validation without falsely claiming deployment.
+
+
+## Final VOP role, access, ownership and UI model
+
+This is the governing authorization and UI model for the SaaS implementation. It supplements all earlier tenant and ownership requirements.
+
+### Authority hierarchy
+
+```
+SUPER ADMIN
+├── Global Platform
+│   ├── All organisations
+│   ├── All hierarchy tenants
+│   ├── Global languages
+│   ├── Global translations
+│   ├── Global curriculum
+│   ├── Global radio
+│   ├── Global materials
+│   ├── Certificates
+│   ├── Announcements
+│   ├── Audit logs
+│   └── Platform configuration
+├── UNION
+│   └── CONFERENCE
+│       └── DISTRICT
+│           └── CHURCH
+│               └── ORGANISATION / LEARNERS
+└── Direct organisations
+```
+
+**Role determines capability. Tenant relationship and resource ownership determine scope.**
+
+### Effective authorization
+
+Every protected operation must resolve:
+
+```
+User
+ + platformRole
+ + active membership
+ + hierarchy scope
+ + organisation scope
+ + resource scope
+ + resource ownership
+ + action
+ = ALLOW / DENY
+```
+
+Do not implement authorization as scattered `user.role === 'admin'` checks. Centralized permission decisions should be used by the UI, while the API/server and Firestore rules remain authoritative enforcement boundaries.
+
+### Super Admin
+
+Super Admin is platform-wide and may manage all organisations, hierarchy tenants, users, learners, mentors, curriculum, languages, translations, radio, materials, certificates, announcements, audit records, platform settings, ownership and supported deletion/suspension/reassignment operations.
+
+Super Admin authority overrides ownership for administration but must preserve creator/owner provenance in the resource.
+
+### Organisation Admin
+
+Organisation Admin is scoped to:
+
+```
+organizationId === currentUser.organizationId
+```
+
+It may manage users, learners, mentors, assignments, progress, certificates and organisation operations only inside that organisation.
+
+An Organisation Admin must not enumerate or mutate another organisation, hierarchy tenant or global content owned by another contributor.
+
+For hierarchy administrators:
+
+```
+tenantId === currentUser.tenantId
+AND
+target organisation/resource is contained by that hierarchy tenant
+```
+
+### Privilege precedence
+
+When a user has both a hierarchy role and an explicit active organisation owner/member relationship, the active organisation relationship takes precedence for organisation-scoped operations.
+
+Resolution:
+
+1. Super Admin platform authority.
+2. Explicit active tenant/organisation relationship.
+3. Tenant administrative role.
+4. Assigned member capability.
+5. Resource ownership.
+6. Public/global read permission.
+
+Precedence never bypasses a higher security boundary. Membership cannot grant unrelated-tenant access.
+
+### User-management organisation selector
+
+The selector must be scope-aware:
+
+- **Super Admin:** searchable active organisation selector covering all authorised organisations.
+- **Organisation Admin:** current organisation only, locked/read-only.
+- **Hierarchy Admin:** only organisations inside the assigned hierarchy.
+- **Learner/member:** no administrative organisation selector.
+
+The backend must independently reject an out-of-scope organisation ID. UI hiding is not authorization.
+
+When an account is already an active owner/member of an organisation, that explicit relationship must be respected even if the account also carries a hierarchy role.
+
+### Organisation administrator deletion protection
+
+Organisation administrators may manage users inside their organisation subject to ownership/admin continuity safeguards.
+
+- Removing an owner/admin must not leave an organisation without required administrative coverage.
+- Ownership/adminship transfer must be explicit where required.
+- Super Admin may delete any organisation user and may clear/reassign ownership according to the platform workflow.
+- Cross-organisation deletion is always denied to ordinary organisation administrators.
+
+### Global content ownership
+
+The following are globally available resources where published:
+
+- languages;
+- translations;
+- radio;
+- materials/books;
+- playlists;
+- approved shared curriculum resources.
+
+Global visibility does not mean global editability.
+
+Contributor resources retain immutable ownership/provenance such as:
+
+```
+ownerUid
+ownerTenantId
+ownerOrganizationId (legacy compatibility where needed)
+createdBy
+review/publication state
+```
+
+Organisation or hierarchy contributors can mutate only resources they own within their authorized tenant, except where an explicit higher-level authority permits management. Super Admin has the platform override.
+
+### Translation review
+
+Use:
+
+```
+Draft → Submitted → Under Review → Approved → Published
+```
+
+Rules:
+- own translation: edit/delete/submit according to state;
+- another contributor's translation: View + Suggest Improvement;
+- suggestion creates a review proposal without modifying canonical translation;
+- proposer sees status;
+- proposer cannot approve their own proposal;
+- reviewer/Super Admin may approve, reject or request changes;
+- approval creates a reviewed canonical revision and preserves audit history.
+
+### Radio and materials
+
+Radio and materials are globally discoverable according to publication state.
+
+Organisation/hierarchy contributors may:
+- create their own;
+- edit their own;
+- delete their own;
+- publish/unpublish only where their authority and workflow permit.
+
+They may not edit/delete another contributor's resource.
+
+Super Admin has full platform management.
+
+### Curriculum
+
+Canonical curriculum, lessons, chapters, quizzes and questions remain platform-controlled unless an explicit curriculum-author capability exists.
+
+Organisation Admins can read, assign and track canonical curriculum. Customization of shared material must use a fork/copy that creates tenant-owned content; the original canonical resource is never silently transferred.
+
+### Learners and mentors
+
+Organisation Admins can manage only learners and mentors in their authorized organisation. Mentor assignment should remain inside the same tenant unless an explicit hierarchy rule authorizes cross-tenant allocation.
+
+Hierarchy administrators may manage child-organisation learners/mentors only inside their hierarchy scope.
+
+### Certificates
+
+Certificates are tenant-scoped authoritative records.
+
+- Organisation Admin: own organisation certificates.
+- Hierarchy Admin: certificates belonging to organisations in the hierarchy.
+- Super Admin: all certificates.
+- Official issuance/configuration remains platform-controlled unless a specific delegated certification authority is explicitly implemented.
+- Public verification exposes only intentionally public certificate data.
+- Guessing a certificate ID must never bypass tenant authorization.
+
+### Announcements
+
+- Global announcements: Super Admin managed.
+- Organisation announcements: organisation/creator scoped.
+- Hierarchy announcements: hierarchy scoped.
+- Another tenant's unpublished/private announcement is not visible to ordinary organisation administrators.
+
+### Settings separation
+
+Do not create one universal settings screen with disabled controls.
+
+**Super Admin Settings**
+- platform;
+- authentication/security;
+- organisations;
+- hierarchy;
+- languages/translations;
+- curriculum;
+- radio/materials;
+- certificates;
+- notifications/email;
+- audit;
+- system configuration.
+
+**Organisation Admin Settings**
+- organisation profile;
+- users;
+- roles/access;
+- mentors;
+- learners;
+- notifications;
+- preferences.
+
+**Learner/User Settings**
+- profile;
+- UI locale;
+- study language;
+- accessibility;
+- notifications;
+- privacy;
+- study preferences.
+
+Organisation users must not see platform-security, all-organisation, global-database or system-administration settings.
+
+### Role-specific UI information architecture
+
+Super Admin navigation:
+
+`Dashboard · Organisations · Hierarchy · Users · Candidates · Mentors · Curriculum · Languages · Translations · Radio · Materials · Certificates · Announcements · Audit Logs · Settings`
+
+Organisation Admin navigation:
+
+`Dashboard · Learners · Mentors · Users · Curriculum · Translations · Radio · Materials · Certificates · Announcements · Settings`
+
+Hierarchy navigation must use the same operational concepts but scoped to the hierarchy tenant and its child organisations.
+
+The UI must not merely display a global navigation tree and disable buttons. Scope should be communicated through navigation, headings, selectors and data views.
+
+### Ownership-aware controls
+
+Editable resources must expose ownership/provenance to the permission system.
+
+- Current owner/contributor: Edit/Delete where state permits.
+- Other contributor: View/Suggest Improvement.
+- Super Admin: full platform management.
+- Hierarchy authority: scoped management only where the resource/organisation falls within the hierarchy and the action is delegated by the authorization model.
+
+The API must enforce the same decision regardless of whether a UI control is visible.
+
+### Final regression mission
+
+Every implementation pass must test the complete chain:
+
+```
+Super Admin
+  ↓
+Hierarchy Tenant
+  ↓
+Organisation
+  ↓
+Organisation Admin
+  ↓
+Mentor / Staff
+  ↓
+Learner
+  ↓
+Study → Pray → Listen → Connect → Share → Disciple
+```
+
+For each transition verify:
+
+1. correct navigation is visible;
+2. correct settings surface is visible;
+3. organisation selector is correctly scoped/locked;
+4. user listing is correctly scoped;
+5. learners and mentors are correctly scoped;
+6. global content is readable according to publication rules;
+7. global content mutation is owner-restricted;
+8. translation proposals cannot modify canonical content directly;
+9. certificates cannot cross tenant boundaries;
+10. API calls with guessed foreign IDs are rejected;
+11. Firestore queries cannot bypass the same scope;
+12. membership precedence does not create a cross-tenant escalation.
+
+### Completion standard
+
+This mission is not complete when controls are merely hidden. It is complete only when:
+
+```
+UI scope
+   =
+API authorization
+   =
+Firestore authorization
+   =
+resource ownership
+   =
+tenant/hierarchy scope
+```
+
+and the full Super Admin → hierarchy → organisation → learner regression is validated.
+
