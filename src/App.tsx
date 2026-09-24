@@ -329,7 +329,7 @@ export const App: React.FC = () => {
           {showDashboardShell && (
             <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements}
               settings={settings} activeLanguage={activeLanguage} onSelectGuide={setActiveGuide}
-              onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} />
+              onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />
           )}
         </main>
         {showDashboardShell && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
