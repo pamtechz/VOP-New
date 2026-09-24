@@ -337,7 +337,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     <section className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><h2 className="text-xl font-black">{t('admin.content_studio','Content Studio')}</h2><p className="mt-1 text-xs text-slate-500">{t('admin.content_studio_desc','Managed languages, translations, public content and organizational records.')}</p></div>
-        <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} /{t('common.new','New')}</button></div>
+        <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} />{t('common.new','New')}</button></div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
