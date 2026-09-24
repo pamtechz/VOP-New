@@ -314,7 +314,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     if (active === 'languages') return (
       <div className="grid gap-3">
         {field('Language code', 'code')}{field('Display name', 'name')}{field('Native name', 'nativeName')}{field('Sort order', 'sortOrder', 'number')}
-        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('enabled', e.target.checked)} />{t('language.enabled_for_learners','{t('common.enabled','Enabled')} for learners')}</label>
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('enabled', e.target.checked)} />{t('language.enabled_for_learners','Enabled for learners')}</label>
         <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.rtl === true} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('rtl', e.target.checked)} />{t('language.rtl','Right-to-left')}</label>
       </div>
     );
@@ -345,7 +345,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative min-w-0 flex-1"><{t('common.search','Search')} size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`{t('common.search','Search')} ${TABS.find(t => t.id === active)?.label.toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
+        <div className="relative min-w-0 flex-1"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t('common.search','Search')} ${TABS.find(t => t.id === active)?.label.toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
         <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3"><Filter size={14} className="text-slate-500" /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-transparent py-2.5 text-xs font-bold outline-none"><option value="all">{t('common.all','All records')}</option><option value="published">{t('common.published','Published')}</option><option value="draft">{t('common.draft','Draft')}</option><option value="enabled">{t('common.enabled','Enabled')}</option><option value="disabled">{t('common.disabled','Disabled')}</option></select></div>
       </div>
 
@@ -368,17 +368,17 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
           {activeItems.map(item => {
             const id = identity(active, item);
             return <div key={id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.canEdit === false ? 'Read only' : 'Your contribution'}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? '{t('common.disabled','Disabled')}' : '{t('common.enabled','Enabled')}'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? '{t('common.published','Published')}' : '{t('common.draft','Draft')}') : text(item.id))}</div></button>
-              <button type="button" onClick={() => void remove(id)} disabled={pending || item.canEdit === false} title={item.canEdit === false ? "Read-only: only the contributor or VOP Super Admin can delete this record." : "{t('common.delete','Delete')} record"} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`{t('common.delete','Delete')} ${title(active,item)}`}><Trash2 size={14} /></button>
+              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.canEdit === false ? 'Read only' : 'Your contribution'}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? '{t('common.disabled','Disabled')}' : '{t('common.enabled','Enabled')}'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? t('common.published','Published') : t('common.draft','Draft')) : text(item.id))}</div></button>
+              <button type="button" onClick={() => void remove(id)} disabled={pending || item.canEdit === false} title={item.canEdit === false ? 'Read-only: only the contributor or VOP Super Admin can delete this record.' : t('common.delete','Delete') + ' record'} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`${t('common.delete','Delete')} ${title(active,item)}`}><Trash2 size={14} /></button>
             </div>;
           })}
-          {!pending && activeItems.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">{search || statusFilter !== 'all' ? 'No records match the current filter.' : 'No records configured. {t('common.create','Create')} the first record with New.'}</div>}
+          {!pending && activeItems.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">{search || statusFilter !== 'all' ? 'No records match the current filter.' : <>No records configured. {t('common.create','Create')} the first record with New.</>}</div>}
         </div>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? '{t('common.edit','Edit')} record' : '{t('common.create','Create')} record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? <>{t('common.edit','Edit')} record</> : <>{t('common.create','Create')} record</>}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
           {renderEditor()}
-          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><{t('common.save','Save')} size={15} />{pending ? 'Saving…' : editingId ? '{t('common.save','Save')} changes' : '{t('common.create','Create')} record'}</button>
+          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? <>{t('common.save','Save')} changes</> : <>{t('common.create','Create')} record</>}</button>
         </div>
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-500"><Globe size={13} />Admin language: {activeLanguage || 'not configured'} · {languages.length} configured languages</div>
