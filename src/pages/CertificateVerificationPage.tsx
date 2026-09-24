@@ -116,7 +116,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
           <article className="vop-certificate-verification-result valid">
             <div className="vop-verification-status"><CheckCircle2 size={28} /><div><strong>{t('certificate_verified','Certificate Verified')}</strong><span>{t('official_credential','This certificate is recorded as an official VOP credential.')}</span></div></div>
             <div className="vop-verification-grid">
-              <div><small>Certificate Number</small><strong>{certificate.certificateNumber}</strong></div>
+              <div><small>{t('certificate_number','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
               <div><small>{t('candidate','Candidate')}</small><strong>{certificate.candidateName}</strong></div>
               <div><small>{t('course','Course')}</small><strong>{certificate.courseName}</strong></div>
               {certificate.courseCode && <div><small>{t('course_code','Course Code')}</small><strong>{certificate.courseCode}</strong></div>}
