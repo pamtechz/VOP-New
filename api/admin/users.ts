@@ -512,7 +512,16 @@ export default async function handler(request: Request, response: Response) {
         ...profile,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
+      const preservedHierarchyRole = hierarchyRole(String(profile.role || existingData.role || ''));
+      const claims = type === 'super_admin'
+        ? { role: 'super_admin' }
+        : preservedHierarchyRole
+          ? { role: preservedHierarchyRole, adminNodeType: profile.adminNodeType || existingData.adminNodeType, adminNodeId: profile.adminNodeId || existingData.adminNodeId }
+          : type === 'admin'
+            ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId }
+            : type === 'mentor'
+              ? { role: 'mentor' }
+              : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
@@ -524,7 +533,7 @@ export default async function handler(request: Request, response: Response) {
       await authService.setCustomUserClaims(
         uid,
         membershipOrganizationId && profile.organizationRole
-          ? { role:'student', organizationId:membershipOrganizationId, organizationRole:profile.organizationRole }
+          ? { ...claims, organizationId:membershipOrganizationId, organizationRole:profile.organizationRole }
           : claims,
       );
       return response.status(200).json({ ok: true, item: { uid, email: updated.email, displayName: updated.displayName } });
