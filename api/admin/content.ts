@@ -39,20 +39,24 @@ function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<str
   const nodeId = String(ctx.profile.adminNodeId || '');
   if (!nodeId || !data) return false;
   const id = String(data.id || '');
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object'
+    ? data.hierarchy as Record<string, unknown>
+    : {};
+  const value = (field: string) => String(data[field] || hierarchy[field] || '').trim();
   if (role === 'union_admin') {
     if (collection === 'unions') return id === nodeId;
-    if (collection === 'conferences') return String(data.unionId || '') === nodeId;
-    if (collection === 'districts') return String(data.unionId || '') === nodeId;
-    if (collection === 'churches') return String(data.unionId || '') === nodeId;
+    if (collection === 'conferences') return value('unionId') === nodeId;
+    if (collection === 'districts') return value('unionId') === nodeId;
+    if (collection === 'churches') return value('unionId') === nodeId;
   }
   if (role === 'conference_admin') {
     if (collection === 'conferences') return id === nodeId;
-    if (collection === 'districts') return String(data.conferenceId || '') === nodeId;
-    if (collection === 'churches') return String(data.conferenceId || '') === nodeId;
+    if (collection === 'districts') return value('conferenceId') === nodeId;
+    if (collection === 'churches') return value('conferenceId') === nodeId;
   }
   if (role === 'district_admin') {
     if (collection === 'districts') return id === nodeId;
-    if (collection === 'churches') return String(data.districtId || '') === nodeId;
+    if (collection === 'churches') return value('districtId') === nodeId;
   }
   if (role === 'church_admin' && collection === 'churches') return id === nodeId;
   return false;
@@ -345,26 +349,28 @@ export default async function handler(req: Request, res: Response) {
         const role = String(ctx.profile.role || '');
         const nodeId = String(ctx.profile.adminNodeId || '');
         let snap;
+        const hierarchyField = collection === 'conferences' ? 'unionId'
+          : collection === 'districts' ? (role === 'union_admin' ? 'unionId' : 'conferenceId')
+          : collection === 'churches' ? (role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : 'districtId')
+          : '';
+        const nodeCollectionMatches = (target: string) => collection === target;
         if (collection === 'unions' && role === 'union_admin') {
           snap = await ctx.db.collection('unions').where('__name__','==',nodeId).get();
-        } else if (collection === 'conferences' && role === 'union_admin') {
-          snap = await ctx.db.collection('conferences').where('unionId','==',nodeId).get();
-        } else if (collection === 'districts' && role === 'union_admin') {
-          snap = await ctx.db.collection('districts').where('unionId','==',nodeId).get();
-        } else if (collection === 'churches' && role === 'union_admin') {
-          snap = await ctx.db.collection('churches').where('unionId','==',nodeId).get();
         } else if (collection === 'conferences' && role === 'conference_admin') {
           snap = await ctx.db.collection('conferences').where('__name__','==',nodeId).get();
-        } else if (collection === 'districts' && role === 'conference_admin') {
-          snap = await ctx.db.collection('districts').where('conferenceId','==',nodeId).get();
-        } else if (collection === 'churches' && role === 'conference_admin') {
-          snap = await ctx.db.collection('churches').where('conferenceId','==',nodeId).get();
         } else if (collection === 'districts' && role === 'district_admin') {
           snap = await ctx.db.collection('districts').where('__name__','==',nodeId).get();
-        } else if (collection === 'churches' && role === 'district_admin') {
-          snap = await ctx.db.collection('churches').where('districtId','==',nodeId).get();
         } else if (collection === 'churches' && role === 'church_admin') {
           snap = await ctx.db.collection('churches').where('__name__','==',nodeId).get();
+        } else if (hierarchyField && (nodeCollectionMatches('conferences') || nodeCollectionMatches('districts') || nodeCollectionMatches('churches'))) {
+          const [flat, nested] = await Promise.all([
+            ctx.db.collection(collection).where(hierarchyField,'==',nodeId).get(),
+            ctx.db.collection(collection).where(`hierarchy.${hierarchyField}`,'==',nodeId).get(),
+          ]);
+          const byId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+          [...flat.docs, ...nested.docs].forEach(doc => byId.set(doc.id, doc));
+          snap = { docs: [...byId.values()] } as FirebaseFirestore.QuerySnapshot;
+        }
         } else {
           return res.status(200).json({ ok:true, items:[] });
         }
