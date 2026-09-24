@@ -15,7 +15,7 @@ const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBro
 
 const ORG_COLLECTIONS = new Set([
   'announcements','learningPaths','bibleTopics','seasons',
-  'certificates','graduationRequests','candidates','curriculum','guides'
+  'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
 ]);
 
 const HIERARCHY_COLLECTIONS = new Set(['unions','conferences','districts','churches']);
