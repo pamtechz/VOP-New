@@ -38,7 +38,7 @@ function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<str
   if (collection === 'unions') return role === 'super_admin';
   if (collection === 'conferences') return role === 'union_admin' && String(data?.unionId || '') === nodeId;
   if (collection === 'districts') return role === 'conference_admin' && String(data?.conferenceId || '') === nodeId;
-  if (collection === 'churches') return role === 'district_admin' && String(data?.districtId || '') === nodeId;
+  if (collection === 'churches') return (role === 'district_admin' && String(data?.districtId || '') === nodeId) || (role === 'church_admin' && String(data?.id || '') === nodeId);
   return false;
 }
 
@@ -427,7 +427,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (['unions','conferences','districts','churches'].includes(collection) && action !== 'list') {
-      if (!ctx.isSuperAdmin && !['union_admin','conference_admin','district_admin'].includes(String(ctx.profile.role || ''))) {
+      if (!ctx.isSuperAdmin && !['union_admin','conference_admin','district_admin','church_admin'].includes(String(ctx.profile.role || ''))) {
         throw new Error('Only an authorized hierarchy administrator can manage this record.');
       }
       const id = safeId(body.id);
