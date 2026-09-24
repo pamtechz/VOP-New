@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, ChevronRight, MessageCircle, {t('common.send','Send')}, UserRound, X } from 'lucide-react';
+import { BookOpen, ChevronRight, MessageCircle, Send, UserRound, X } from 'lucide-react';
 import type { DiscoverGuide, User } from '../types';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
@@ -37,7 +37,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [referenceType, setReferenceType] = useState<'lesson'|'section'|'topic'|'block'>('lesson');
   const [referenceLabel, setReferenceLabel] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sending, set{t('common.send','Send')}ing] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
   const guide = guides.find(item => item.id === selectedGuide);
@@ -66,7 +66,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const send = async () => {
     const body = message.trim();
     if (!body || !conversation?.studentId || !conversation?.mentorId) return;
-    set{t('common.send','Send')}ing(true);
+    setSending(true);
     try {
       const result = await supportApi('sendMessage', {
         studentId: conversation.studentId,
@@ -119,7 +119,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             <div className="vop-support-compose">
               {reference && <div className="vop-support-reference"><BookOpen size={14}/><span>{reference.label}</span><button type="button" onClick={()=>setReference(null)}><X size={14}/></button></div>}
               <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder={t('support.ask_question','Ask your mentor a question…')} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send()}}}/>
-              <button type="button" onClick={()=>void send()} disabled={sending || !message.trim()}><{t('common.send','Send')} size={17}/>{sending?t('common.sending','Sending…'):'{t('common.send','Send')}'}</button>
+              <button type="button" onClick={()=>void send()} disabled={sending || !message.trim()}><Send size={17}/>{sending ? t('common.sending','Sending…') : t('common.send','Send')}</button>
             </div>
           </section>
 
