@@ -11,6 +11,8 @@ export interface TenantContext {
   organizationId: string;
   membership: DocumentData;
   isSuperAdmin: boolean;
+  tenantType: 'platform' | 'organization' | 'hierarchy';
+  tenantId: string;
 }
 
 function adminApp() {
@@ -54,9 +56,21 @@ export async function authenticateTenant(request: Request, requestedOrganization
     : profileOrganizationId;
 
   if (!organizationId) {
-    if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin };
-    if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin };
-    if (hierarchyAdmin) throw new Error('This administrator account is not linked to a tenant. Reassign the administrator scope before continuing.');
+    if (hierarchyAdmin) {
+      const nodeId = String(profile.adminNodeId || '').trim();
+      if (!nodeId) throw new Error('This administrator account is not linked to a hierarchy tenant.');
+      const role = String(profile.role || '');
+      const collection = role === 'union_admin' ? 'unions' : role === 'conference_admin' ? 'conferences' : role === 'district_admin' ? 'districts' : 'churches';
+      const node = await db.doc(collection + '/' + nodeId).get();
+      if (!node.exists) throw new Error('The assigned hierarchy tenant does not exist.');
+      return {
+        db, auth, profile, organizationId: '',
+        membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId },
+        isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId,
+      };
+    }
+    if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin, tenantType: 'platform', tenantId: '' };
+    if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin, tenantType: 'platform', tenantId: '' };
     throw new Error('An organization membership is required.');
   }
   const organizationSnap = await db.doc(`organizations/${organizationId}`).get();
@@ -87,13 +101,21 @@ export async function authenticateTenant(request: Request, requestedOrganization
     }
   }
 
-  return { db, auth, profile, organizationId, membership, isSuperAdmin };
+  return { db, auth, profile, organizationId, membership, isSuperAdmin, tenantType: 'organization', tenantId: organizationId };
 }
 
 export function requireOrgRole(ctx: TenantContext, roles: string[]) {
   if (ctx.isSuperAdmin) return;
   const role = String(ctx.membership.role || '');
   if (!roles.includes(role)) throw new Error('You do not have permission to perform this action.');
+}
+
+export function tenantOwnerKey(ctx: TenantContext) {
+  return ctx.tenantType === 'organization'
+    ? ctx.organizationId
+    : ctx.tenantType === 'hierarchy'
+      ? ctx.tenantId
+      : '';
 }
 
 export function contentOwnedByOrg(data: DocumentData | undefined, organizationId: string) {
@@ -104,11 +126,14 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
   // Organization membership grants access to the organization, not ownership of
   // another contributor's canonical content. Only the recorded creator/owner or
   // the platform Super Admin may mutate canonical content.
+  const ownerKey = String(data?.ownerTenantId || data?.ownerOrganizationId || data?.organizationId || '');
+  const currentTenant = tenantOwnerKey(ctx);
   return ctx.isSuperAdmin
     || (
-      contentOwnedByOrg(data, ctx.organizationId)
+      !!currentTenant
+      && ownerKey === currentTenant
       && String(data?.ownerUid || '') === ctx.auth.uid
-      && ['owner','admin','editor'].includes(String(ctx.membership.role || ''))
+      && ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin'].includes(String(ctx.membership.role || ''))
     );
 }
 
