@@ -106,6 +106,8 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
   try {
     await environment.withSecurityRulesDisabled(async adminContext => {
       const adminDb = adminContext.firestore();
+      await adminDb.doc('users/super-admin').set({ uid:'super-admin', role:'super_admin', organizationId:'' });
+      await adminDb.doc('system/permissions').set({ version:1, matrix:{}});
       await adminDb.doc('users/union-admin').set({
         uid: 'union-admin',
         role: 'union_admin',
@@ -146,6 +148,7 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
       await adminDb.doc('system/settings').set({ appName: 'Platform VOP' });
     });
 
+    const superAdmin = environment.authenticatedContext('super-admin').firestore();
     const unionAdmin = environment.authenticatedContext('union-admin').firestore();
     await assertSucceeds(unionAdmin.doc('organizations/org-1').get());
     await assertFails(unionAdmin.doc('organizations/org-2').get());
@@ -158,6 +161,8 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').get());
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').get());
     await assertFails(unionAdmin.doc('system/settings').get());
+    await assertFails(unionAdmin.doc('system/permissions').get());
+    await assertSucceeds(superAdmin.doc('system/permissions').get());
   } finally {
     await environment.cleanup();
   }
