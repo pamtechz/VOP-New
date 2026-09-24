@@ -18,6 +18,7 @@ import {
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import { getTranslation } from '../services/i18n';
+import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
 import CurriculumSettings from './CurriculumSettings';
@@ -38,7 +39,7 @@ type AdminTab =
   | 'translations' | 'announcements' | 'materials' | 'radio'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
 
-type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications';
+type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
 type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
 const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?: number}>}> = [
@@ -129,6 +130,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [languageDraft, setLanguageDraft] = useState({ code: '', name: '', nativeName: '', enabled: true });
   const [editingLanguage, setEditingLanguage] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [permissionMatrix, setPermissionMatrix] = useState<PermissionMatrix>(DEFAULT_PERMISSION_MATRIX);
+  const [permissionSaving, setPermissionSaving] = useState(false);
+  const [permissionLoading, setPermissionLoading] = useState(false);
   const [lessonSearch, setLessonSearch] = useState('');
   const [lessonLanguage, setLessonLanguage] = useState('all');
   const [lessonStatus, setLessonStatus] = useState('all');
@@ -160,7 +164,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const availableSettingsTabs: Array<{id: SettingsSubtab; label: string; icon: React.ComponentType<{size?:number}>}> = isSuperAdmin
     ? [
         {id:'general',label:'General',icon:Settings},{id:'appInfo',label:'App Info',icon:Book},{id:'features',label:'Features',icon:Grid2X2},
-        {id:'services',label:'Services',icon:Link2},{id:'security',label:'Security',icon:Lock},{id:'notifications',label:'Notifications',icon:Bell},
+        {id:'services',label:'Services',icon:Link2},{id:'security',label:'Security',icon:Lock},{id:'notifications',label:'Notifications',icon:Bell},{id:'permissions',label:'Permissions',icon:Shield},
       ]
     : [
         {id:'general',label:isHierarchyAdmin ? 'Tenant Profile' : 'Organisation Profile',icon:Building2},
@@ -219,6 +223,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
     void loadDrafts();
     if (currentUser.role === 'super_admin') void loadCertification();
+    if (currentUser.role === 'super_admin') void loadPermissionMatrix();
     return () => unsubs.forEach(unsub => unsub());
   }, []);
 
@@ -481,6 +486,78 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not delete language.');
     }
+  };
+
+  const loadPermissionMatrix = async () => {
+    if (!isSuperAdmin) return;
+    setPermissionLoading(true);
+    try {
+      if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/permissions', { headers: { Authorization: 'Bearer ' + token } });
+      const body = await response.json().catch(() => ({})) as { error?: string; matrix?: unknown };
+      if (!response.ok) throw new Error(body.error || 'Could not load the permission matrix.');
+      setPermissionMatrix(normalizePermissionMatrix(body.matrix));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not load the permission matrix.');
+    } finally {
+      setPermissionLoading(false);
+    }
+  };
+
+  const savePermissionMatrix = async () => {
+    if (!isSuperAdmin) return;
+    setPermissionSaving(true);
+    try {
+      if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/permissions', {
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer ' + token},
+        body:JSON.stringify({action:'save',matrix:permissionMatrix}),
+      });
+      const body = await response.json().catch(() => ({})) as {error?:string;matrix?:unknown};
+      if (!response.ok) throw new Error(body.error || 'Could not save the permission matrix.');
+      setPermissionMatrix(normalizePermissionMatrix(body.matrix));
+      showMessage('Permission matrix saved.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save the permission matrix.');
+    } finally {
+      setPermissionSaving(false);
+    }
+  };
+
+  const resetPermissionMatrix = async () => {
+    if (!isSuperAdmin || !window.confirm('Reset all configurable permissions to the VOP default matrix?')) return;
+    setPermissionSaving(true);
+    try {
+      if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/admin/permissions', {
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer ' + token},
+        body:JSON.stringify({action:'reset'}),
+      });
+      const body = await response.json().catch(() => ({})) as {error?:string;matrix?:unknown};
+      if (!response.ok) throw new Error(body.error || 'Could not reset the permission matrix.');
+      setPermissionMatrix(normalizePermissionMatrix(body.matrix));
+      showMessage('Permission matrix restored to defaults.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not reset the permission matrix.');
+    } finally {
+      setPermissionSaving(false);
+    }
+  };
+
+  const togglePermission = (role: PermissionRole, resource: PermissionResource, action: PermissionAction) => {
+    if (role === 'super_admin') return;
+    setPermissionMatrix(current => {
+      const next = normalizePermissionMatrix(current);
+      const currentActions = next[role]?.[resource] || [];
+      const has = currentActions.includes(action);
+      next[role] = { ...next[role], [resource]: has ? currentActions.filter(item => item !== action) : [...currentActions, action] };
+      return next;
+    });
   };
 
   const saveSettings = async (event: React.FormEvent) => {
@@ -753,6 +830,31 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         </div>
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Notification Settings</button></div>
       </form>}
+
+      {isSuperAdmin && settingsSubtab === 'permissions' && <div className="vop-card vop-form-card vop-permission-matrix-card">
+        <div className="vop-section-title">
+          <div><h2>Permission Matrix</h2><p>Customize what each role may view, create, update, delete, publish, approve, assign or manage. Super Admin remains platform-wide and always retains full authority.</p></div>
+          <div style={{display:'flex',gap:8}}><button className="vop-secondary" type="button" onClick={()=>void resetPermissionMatrix()} disabled={permissionSaving}>Reset defaults</button><button className="vop-primary" type="button" onClick={()=>void savePermissionMatrix()} disabled={permissionSaving || permissionLoading}><Save size={16}/>{permissionSaving?'Saving…':'Save Matrix'}</button></div>
+        </div>
+        {permissionLoading ? <div className="vop-empty">Loading permission matrix…</div> :
+          <div className="vop-permission-matrix-wrap">
+            <table className="vop-permission-matrix">
+              <thead><tr><th>Role</th>{PERMISSION_RESOURCES.map(resource => <th key={resource}>{resource}</th>)}</tr></thead>
+              <tbody>{PERMISSION_ROLES.filter(role => role !== 'super_admin').map(role => <tr key={role}>
+                <th><span className="vop-permission-role">{role.replaceAll('_',' ')}</span></th>
+                {PERMISSION_RESOURCES.map(resource => <td key={resource}>
+                  <div className="vop-permission-actions">
+                    {PERMISSION_ACTIONS.map(action => {
+                      const checked = Boolean(permissionMatrix[role]?.[resource]?.includes(action));
+                      return <label key={action} title={action}><input type="checkbox" checked={checked} onChange={()=>togglePermission(role,resource,action)}/><span>{action}</span></label>;
+                    })}
+                  </div>
+                </td>)}
+              </tr>)}</tbody>
+            </table>
+          </div>}
+        <div className="vop-permission-note"><Shield size={17}/><span>These are default operational permissions. Tenant scope, ownership, hierarchy scope and resource-specific rules still apply; the matrix never grants access outside those boundaries.</span></div>
+      </div>}
     </div>;
   };
 
