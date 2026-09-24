@@ -11,7 +11,8 @@
     "lint": "oxlint src/main.tsx src/Root.tsx src/config src/lib src/pages/FirebaseStudyApp.tsx src/pages/LessonViewer.tsx src/pages/SignInPage.tsx src/services/firebaseAuth.ts src/services/offlineManifest.ts",
     "lint:legacy": "oxlint src",
     "preview": "vite preview",
-    "verify:architecture": "node scripts/verify-vop-architecture.mjs"
+    "verify:architecture": "node scripts/verify-vop-architecture.mjs",
+    "inventory:ui-localization": "node scripts/inventory-ui-localization.mjs"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "8.5.2",
