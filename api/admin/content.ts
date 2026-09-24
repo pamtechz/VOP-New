@@ -306,7 +306,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.isSuperAdmin && !targetOrganizationId
         ? ctx.db.doc('system/settings')
         : ctx.tenantType === 'hierarchy' && !targetOrganizationId
-          ? ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings`)
+          ? ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings/settings`)
           : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
       const existing = await ref.get();
       const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
@@ -380,7 +380,7 @@ export default async function handler(req: Request, res: Response) {
         }
         if (ctx.tenantType === 'hierarchy') {
           if (collection !== 'settings') return res.status(200).json({ ok: true, items: [] });
-          const s = await ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings`).get();
+          const s = await ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings/settings`).get();
           return res.status(200).json({ ok: true, items: s.exists ? [{ id, ...s.data(), tenantId:ctx.tenantId }] : [] });
         }
         if (ctx.isSuperAdmin) {
