@@ -216,9 +216,19 @@ export async function canManageOrganizationContent(ctx: TenantContext, data: Doc
   if (ctx.isSuperAdmin) return true;
   const organizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
   if (!organizationId) return false;
-  if (ctx.tenantType === 'hierarchy') return organizationInHierarchyScope(ctx, organizationId);
+
+  // Hierarchy administrators manage canonical content belonging to organizations
+  // inside their assigned hierarchy. Organization membership administrators do
+  // not inherit ownership of another contributor's content: even an organization
+  // owner/admin may only mutate content they personally created, unless they are
+  // the platform Super Admin.
+  if (ctx.tenantType === 'hierarchy') {
+    return organizationInHierarchyScope(ctx, organizationId);
+  }
+
   return organizationId === ctx.organizationId
-    && ['owner', 'admin'].includes(String(ctx.membership.role || ''));
+    && ['owner', 'admin'].includes(String(ctx.membership.role || ''))
+    && String(data?.ownerUid || '') === ctx.auth.uid;
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
