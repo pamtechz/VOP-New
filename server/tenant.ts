@@ -63,7 +63,31 @@ export async function authenticateTenant(request: Request, requestedOrganization
   if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') throw new Error('The organization is not available.');
   const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
   if (!isSuperAdmin && (!membershipSnap.exists || membershipSnap.data()?.active !== true)) throw new Error('You are not a member of this organization.');
-  return { db, auth, profile, organizationId, membership: membershipSnap.data() || { role: 'platform' }, isSuperAdmin };
+
+  // Organization authorization has historically been represented in both the
+  // user profile and the tenant membership document. Older assignment flows
+  // could leave those two records temporarily inconsistent (for example,
+  // profile.organizationRole === 'admin' while membership.role is stale).
+  // Never grant access from a client-supplied role: only reconcile a role that
+  // is already present in the server-side authenticated profile and only when
+  // the tenant membership itself is active.
+  let membership = membershipSnap.data() || { role: 'platform' };
+  if (!isSuperAdmin && membershipSnap.exists) {
+    const profileRole = String(profile.organizationRole || '').trim();
+    const membershipRole = String(membership.role || '').trim();
+    if (['owner', 'admin'].includes(profileRole) && membershipRole !== profileRole) {
+      membership = { ...membership, role: profileRole };
+      await db.doc(`organizations/${organizationId}/members/${auth.uid}`).set({
+        uid: auth.uid,
+        organizationId,
+        role: profileRole,
+        active: true,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
+  }
+
+  return { db, auth, profile, organizationId, membership, isSuperAdmin };
 }
 
 export function requireOrgRole(ctx: TenantContext, roles: string[]) {
