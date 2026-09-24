@@ -75,3 +75,31 @@ export function permissionRole(ctx: TenantContext): PermissionRole {
     privileges: ctx.profile.privileges,
   });
 }
+
+export async function canPermissionForProfile(
+  db: FirebaseFirestore.Firestore,
+  profile: Record<string, unknown>,
+  resource: PermissionResource,
+  action: PermissionAction,
+): Promise<boolean> {
+  if (String(profile.role || '') === 'super_admin') return true;
+  const snapshot = await db.doc('system/permissions').get();
+  const matrix = normalizePermissionMatrix(snapshot.exists ? snapshot.data()?.matrix : DEFAULT_PERMISSION_MATRIX);
+  const role = roleForPermission({
+    role: profile.role,
+    organizationRole: profile.organizationRole,
+    privileges: profile.privileges as Record<string, unknown> | undefined,
+  });
+  return permissionAllowed(matrix, role, resource, action);
+}
+
+export async function requirePermissionForProfile(
+  db: FirebaseFirestore.Firestore,
+  profile: Record<string, unknown>,
+  resource: PermissionResource,
+  action: PermissionAction,
+) {
+  if (!(await canPermissionForProfile(db, profile, resource, action))) {
+    throw new Error('You do not have permission to perform this action.');
+  }
+}
