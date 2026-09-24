@@ -53,14 +53,14 @@ function hierarchyUserInScope(adminRole: string, nodeId: string, profile: Record
   if (!nodeId) return false;
   const userRole = String(profile.role || '');
   if (userRole === 'super_admin') return false;
-  const unionId = String(profile.unionId || '').trim();
-  const conferenceId = String(profile.conferenceId || '').trim();
-  const districtId = String(profile.districtId || '').trim();
-  const churchId = String(profile.churchId || '').trim();
-  if (adminRole === 'union_admin') return unionId === nodeId;
-  if (adminRole === 'conference_admin') return conferenceId === nodeId;
-  if (adminRole === 'district_admin') return districtId === nodeId;
-  if (adminRole === 'church_admin') return churchId === nodeId;
+  const hierarchy = profile.hierarchy && typeof profile.hierarchy === 'object'
+    ? profile.hierarchy as Record<string, unknown>
+    : {};
+  const value = (field: string) => String(profile[field] || hierarchy[field] || '').trim();
+  if (adminRole === 'union_admin') return value('unionId') === nodeId;
+  if (adminRole === 'conference_admin') return value('conferenceId') === nodeId;
+  if (adminRole === 'district_admin') return value('districtId') === nodeId;
+  if (adminRole === 'church_admin') return value('churchId') === nodeId;
   return false;
 }
 
@@ -82,21 +82,31 @@ function organizationInHierarchy(data: Record<string, unknown>, role: string, no
   return false;
 }
 
+async function scopedUserSnapshots(db: Firestore, role: string, nodeId: string) {
+  const scope = hierarchyScopeQuery(role, nodeId);
+  if (!scope) return [];
+  const [flat, nested] = await Promise.all([
+    db.collection('users').where(scope.field, '==', scope.value).get(),
+    db.collection('users').where('hierarchy.' + scope.field, '==', scope.value).get(),
+  ]);
+  const byId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+  [...flat.docs, ...nested.docs].forEach(doc => byId.set(doc.id, doc));
+  return [...byId.values()];
+}
+
 async function organizationAllowedForHierarchy(db: Firestore, organizationId: string, role: string, nodeId: string) {
   const organization = await db.doc('organizations/' + organizationId).get();
   if (!organization.exists || organization.data()?.status !== 'active') return false;
   if (organizationInHierarchy(organization.data() || {}, role, nodeId)) return true;
-  const scope = hierarchyScopeQuery(role, nodeId);
-  if (!scope) return false;
-  const users = await db.collection('users').where(scope.field, '==', scope.value).where('organizationId', '==', organizationId).limit(1).get();
-  return !users.empty;
+  const users = (await scopedUserSnapshots(db, role, nodeId))
+    .filter(snapshot => String(snapshot.data()?.organizationId || '').trim() === organizationId);
+  return users.length > 0;
 }
 
 async function hierarchyOrganizations(db: Firestore, role: string, nodeId: string) {
   if (!nodeId) return [];
-  const scope = hierarchyScopeQuery(role, nodeId);
-  const scopedUsers = scope ? await db.collection('users').where(scope.field, '==', scope.value).get() : { docs: [] };
-  const inferredOrganizationIds = new Set(scopedUsers.docs.map(doc => String(doc.data()?.organizationId || '').trim()).filter(Boolean));
+  const scopedUsers = await scopedUserSnapshots(db, role, nodeId);
+  const inferredOrganizationIds = new Set(scopedUsers.map(doc => String(doc.data()?.organizationId || '').trim()).filter(Boolean));
   const snapshot = await db.collection('organizations').get();
   return snapshot.docs.filter(doc => {
     const data = doc.data() || {};
@@ -355,10 +365,8 @@ export default async function handler(request: Request, response: Response) {
       } else if (hierarchyTenant && managedOrganizationId) {
         users = await Promise.all((await db.collection('users').where('organizationId','==',managedOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
       } else if (hierarchyTenant) {
-        const scope = hierarchyScopeQuery(hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
-        if (!scope) throw new Error('The hierarchy tenant scope is not configured.');
-        const snapshots = await db.collection('users').where(scope.field, '==', scope.value).get();
-        users = await Promise.all(snapshots.docs.map(async snapshot => authService.getUser(snapshot.id)));
+        const snapshots = await scopedUserSnapshots(db, hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
+        users = await Promise.all(snapshots.map(async snapshot => authService.getUser(snapshot.id)));
       } else {
         users = await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
       }
