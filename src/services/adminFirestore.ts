@@ -61,6 +61,19 @@ async function currentOrganizationId(): Promise<string> {
   return String(profile.data()?.organizationId || '').trim();
 }
 
+async function currentTenantScope(): Promise<{ role:string; nodeId:string; organizationId:string; superAdmin:boolean }> {
+  if (!auth?.currentUser) return { role:'', nodeId:'', organizationId:'', superAdmin:false };
+  const profile = await getDoc(doc(getDb(), 'users', auth.currentUser.uid));
+  const data = profile.data() || {};
+  const role = String(data.role || '');
+  return {
+    role,
+    nodeId: String(data.adminNodeId || '').trim(),
+    organizationId: String(data.organizationId || '').trim(),
+    superAdmin: role === 'super_admin',
+  };
+}
+
 function globalCollectionSubscription(
   collectionName: string,
   callback: (snapshot: import('firebase/firestore').QuerySnapshot) => void,
@@ -120,11 +133,32 @@ function tenantSubscription(
 
   let stop: Unsubscribe = () => undefined;
   let cancelled = false;
-  void currentOrganizationId().then(organizationId => {
+  void currentTenantScope().then(scope => {
     if (cancelled) return;
-    const source = organizationId && TENANT_COLLECTIONS.has(collectionName)
-      ? query(collection(getDb(), collectionName), where('organizationId', '==', organizationId))
-      : collection(getDb(), collectionName);
+    const ref = collection(getDb(), collectionName);
+    let source: import('firebase/firestore').Query | null = null;
+    if (scope.organizationId && TENANT_COLLECTIONS.has(collectionName)) {
+      source = query(ref, where('organizationId', '==', scope.organizationId));
+    } else if (scope.superAdmin) {
+      source = ref;
+    } else if (scope.nodeId && ['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
+      if (['churches','users','candidates'].includes(collectionName)) {
+        const field = scope.role === 'union_admin' ? 'unionId'
+          : scope.role === 'conference_admin' ? 'conferenceId'
+          : scope.role === 'district_admin' ? 'districtId'
+          : 'churchId';
+        source = query(ref, where(field, '==', scope.nodeId));
+      } else {
+        // Hierarchy tenants must never fall back to an unscoped collection read.
+        source = null;
+      }
+    } else {
+      source = null;
+    }
+    if (!source) {
+      callback({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot);
+      return;
+    }
     stop = onSnapshot(source, callback, err => onError?.(err));
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Tenant data could not be loaded.')));
   return () => { cancelled = true; stop(); };

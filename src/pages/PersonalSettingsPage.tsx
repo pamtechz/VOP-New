@@ -3,10 +3,14 @@ import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } f
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
+import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale } from '../services/i18n';
+import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
   language?: string;
+  uiLocale?: string;
+  studyLanguage?: string;
   notifications?: { enabled?: boolean; email?: boolean; announcements?: boolean; certificates?: boolean };
   accessibility?: { reducedMotion?: boolean; largeText?: boolean; highContrast?: boolean };
   privacy?: { profileVisibility?: 'private' | 'organization' };
@@ -39,12 +43,17 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
+  const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
+  const language = getActiveLanguage();
+  const appSettings = getStoredSettings();
+  const t = (key: string, fallback: string) => getTranslation(key, language, appSettings.customTranslations, fallback, 'PersonalSettingsPage');
 
   useEffect(() => {
     let active = true;
     const loadSettings = callPersonalSettings('get')
       .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
+    void loadUiLocaleRegistry().then(setUiLocales).catch(() => undefined);
     const loadLanguages = loadPublicContent()
       .then(content => { if (active) setLanguages(content.languages || []); })
       .catch(error => {
@@ -70,8 +79,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
 
   return <div className="vop-page-shell" style={{ maxWidth: 980, margin: '0 auto', padding: '1rem' }}>
     <div className="vop-page-head">
-      <div><p className="vop-kicker">My Account</p><h1>Personal Settings</h1><p>These settings apply only to your VOP account.</p></div>
-      <button className="vop-secondary" type="button" onClick={onBack}>Back</button>
+      <div><p className="vop-kicker">{t('account.my_account','My Account')}</p><h1>{t('settings.personal_title','Personal Settings')}</h1><p>{t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
+      <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
     </div>
     {message && <div className="vop-card" role="status" style={{ marginBottom: 16 }}>{message}</div>}
     {busy ? <div className="vop-card">Loading your settings…</div> : <div style={{ display:'grid', gap:16 }}>
@@ -102,7 +111,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
         <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>
-      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? 'Saving…' : 'Save personal settings'}</button>
+      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
     </div>}
   </div>;
 };

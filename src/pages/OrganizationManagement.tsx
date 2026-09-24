@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Check, Edit3, Plus, RefreshCw, Shield, Users, BarChart3, UserPlus, Search } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { getTranslation } from '../services/i18n';
 
 type Organization = {
   id:string; name:string; slug:string; status:string; ownerUid:string; plan:string;
@@ -33,6 +34,7 @@ function quotaPayload(value:Quotas):Record<string,number> {
 }
 
 export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:boolean}) {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [items,setItems]=useState<Organization[]>([]);
   const [selected,setSelected]=useState<Organization|null>(null);
   const [members,setMembers]=useState<Member[]>([]);
@@ -194,7 +196,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
 
   const removeMember=async(member:Member)=>{
-    if(!selected||member.role==='owner')return;
+    if(!selected||(!isSuperAdmin&&member.role==='owner'))return;
     if(!window.confirm(`Remove ${member.displayName||member.email||'this user'} from ${selected.name}? Their VOP account will remain active, but they will no longer belong to this organization.`))return;
     setSaving(true);setError('');
     try{await api('removeMember',{organizationId:selected.id,uid:member.uid});setMessage('Member removed from the organization.');await loadDetails(selected.id);await load();}
@@ -206,24 +208,24 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
 
   return <div>
     <div className="vop-page-header">
-      <div><div className="vop-breadcrumb"><Building2 size={15}/> Platform / Organizations</div><h1>Organizations</h1><p>Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.</p></div>
-      <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button>
+      <div><div className="vop-breadcrumb"><Building2 size={15}/> Platform / Organizations</div><h1>{t('admin.organizations','Organizations')}</h1><p>Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.</p></div>
+      <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>
     </div>
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}
     {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}
 
     {isSuperAdmin&&<div className="vop-card vop-form-card" style={{marginBottom:16}}>
-      <div className="vop-section-title"><div><h2>Create organization</h2><p>Create an isolated workspace for an institution or ministry.</p></div><Shield size={22}/></div>
+      <div className="vop-section-title"><div><h2>{t('admin.create_organization','Create organization')}</h2><p>Create an isolated workspace for an institution or ministry.</p></div><Shield size={22}/></div>
       <div className="vop-form-grid">
         <div className="vop-field"><label>Organization name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Organization name"/></div>
         <div className="vop-field"><label>Organization ID <small>(optional)</small></label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} placeholder="Generated automatically"/></div>
-        <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!name.trim()} onClick={()=>void create()}><Plus size={17}/>Create Organization</button></div>
+        <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!name.trim()} onClick={()=>void create()}><Plus size={17}/>{t('admin.create_organization','Create Organization')}</button></div>
       </div>
     </div>}
 
     <div className="vop-grid-2">
       <div className="vop-card vop-form-card">
-        <div className="vop-section-title"><div><h2>Tenant workspaces</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>
+        <div className="vop-section-title"><div><h2>{t('admin.tenant_workspaces','Tenant workspaces')}</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>
         <div style={{display:'grid',gap:9}}>
           {items.map(item=><button key={item.id} type="button" onClick={()=>selectOrganization(item)} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div>
@@ -234,9 +236,9 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
       </div>
 
       <div className="vop-card vop-form-card">
-        {!selected?<div className="vop-empty"><Building2 size={34}/><h3>Select an organization</h3><p>Organization settings, membership and usage appear here.</p></div>:
+        {!selected?<div className="vop-empty"><Building2 size={34}/><h3>Select an organization</h3><p>{t('admin.organization_select_desc','Organization settings, membership and usage appear here.')}</p></div>:
         <>
-          <div className="vop-section-title"><div><h2>{selected.name}</h2><p>Organization settings and members</p></div><Edit3 size={20}/></div>
+          <div className="vop-section-title"><div><h2>{selected.name}</h2><p>{t('admin.organization_settings_members','Organization settings and members')}</p></div><Edit3 size={20}/></div>
 
           <div className="vop-form-grid">
             <div className="vop-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div>
@@ -245,7 +247,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
           </div>
 
           {isSuperAdmin&&<div style={{marginTop:16}}>
-            <div className="vop-section-title"><div><h3>Organization owner</h3><p>{selected.ownerUid ? 'The current owner is shown in the member list below. Assigning a new owner transfers ownership from the previous owner.' : 'No owner is assigned yet. The Super Admin must assign an organization owner.'}</p></div><Shield size={18}/></div>
+            <div className="vop-section-title"><div><h3>{t('admin.organization_owner','Organization owner')}</h3><p>{selected.ownerUid ? 'The current owner is shown in the member list below. Assigning a new owner transfers ownership from the previous owner.' : 'No owner is assigned yet. The Super Admin must assign an organization owner.'}</p></div><Shield size={18}/></div>
             <div className="vop-form-grid">
               <div className="vop-field" style={{position:'relative'}}>
                 <label>Find owner by name or email</label>
@@ -253,7 +255,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
                 {ownerMatches.length>0&&<div style={{position:'absolute',zIndex:20,left:0,right:0,top:'100%',background:'#fff',border:'1px solid #dbe3ef',borderRadius:10,boxShadow:'0 12px 30px rgba(20,40,80,.12)',overflow:'hidden'}}>
                   {ownerMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedOwner(user);setOwnerSearch(user.displayName||user.email);setOwnerMatches([])}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',border:0,borderBottom:'1px solid #eef2f7',background:'#fff',cursor:'pointer'}}>
                     <strong>{user.displayName||'Unnamed account'}</strong><span style={{display:'block',fontSize:12,color:'#7183a4'}}>{user.email}</span>
-                    {user.organizationId&&<small style={{color:'#9a6700'}}>Already assigned to an organization</small>}
+                    {user.organizationId&&<small style={{color:'#9a6700'}}>{t('admin.already_assigned','Already assigned to an organization')}</small>}
                   </button>)}
                 </div>}
               </div>
@@ -262,47 +264,47 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
           </div>}
 
           {isSuperAdmin&&<div style={{marginTop:16}}>
-            <div className="vop-section-title"><div><h3>Usage limits</h3><p>Set limits with simple fields. Leave a field empty for unlimited.</p></div><Shield size={18}/></div>
+            <div className="vop-section-title"><div><h3>{t('admin.usage_limits','Usage limits')}</h3><p>Set limits with simple fields. Leave a field empty for unlimited.</p></div><Shield size={18}/></div>
             <div className="vop-form-grid">
               {(Object.keys(quotaLabels) as Array<keyof Quotas>).map(key=><div className="vop-field" key={key}><label>{quotaLabels[key]}</label><input type="number" min="-1" step="1" value={quotas[key]} onChange={e=>setQuotas(current=>({...current,[key]:e.target.value}))} placeholder="Unlimited"/></div>)}
             </div>
           </div>}
           <div style={{display:'flex',justifyContent:'space-between',gap:12,marginTop:14,flexWrap:'wrap'}}>
-            {isSuperAdmin&&<button className="vop-secondary" type="button" disabled={saving} onClick={()=>void deleteOrganization()} style={{color:'#b42318',borderColor:'#f0b7b7'}}>Delete Organization</button>}
-            <button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>Save Settings</button>
+            {isSuperAdmin&&<button className="vop-secondary" type="button" disabled={saving} onClick={()=>void deleteOrganization()} style={{color:'#b42318',borderColor:'#f0b7b7'}}>{t('admin.delete_organization','Delete Organization')}</button>}
+            <button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>{t('common.save_settings','Save Settings')}</button>
           </div>
 
           {usage&&<div className="vop-grid-3" style={{marginTop:16}}>
-            <div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{usage.members}</strong><span>Members</span></div></div>
-            <div className="vop-card vop-mini-stat"><BarChart3 size={20}/><div><strong>{usage.guides}</strong><span>Guides</span></div></div>
-            <div className="vop-card vop-mini-stat"><Shield size={20}/><div><strong>{usage.quizzes}</strong><span>Quizzes</span></div></div>
+            <div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{usage.members}</strong><span>{t('common.members','Members')}</span></div></div>
+            <div className="vop-card vop-mini-stat"><BarChart3 size={20}/><div><strong>{usage.guides}</strong><span>{t('common.guides','Guides')}</span></div></div>
+            <div className="vop-card vop-mini-stat"><Shield size={20}/><div><strong>{usage.quizzes}</strong><span>{t('common.quizzes','Quizzes')}</span></div></div>
           </div>}
 
           <div style={{marginTop:18}}>
-            <div className="vop-section-title"><div><h3>Members</h3><p>Add an existing VOP account by searching their name or email, or create the account here.</p></div><Users size={20}/></div>
+            <div className="vop-section-title"><div><h3>{t('common.members','Members')}</h3><p>Add an existing VOP account by searching their name or email, or create the account here.</p></div><Users size={20}/></div>
             <div className="vop-form-grid">
               <div className="vop-field" style={{position:'relative'}}>
-                <label>Find an existing account</label>
+                <label>{t('admin.find_existing_account','Find an existing account')}</label>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}><Search size={17}/><input value={memberSearch} onChange={e=>{setMemberSearch(e.target.value);setSelectedUser(null)}} placeholder="Search by name or email"/></div>
                 {memberMatches.length>0&&<div style={{position:'absolute',zIndex:20,left:0,right:0,top:'100%',background:'#fff',border:'1px solid #dbe3ef',borderRadius:10,boxShadow:'0 12px 30px rgba(20,40,80,.12)',overflow:'hidden'}}>
                   {memberMatches.map(user=><button key={user.uid} type="button" onClick={()=>{setSelectedUser(user);setMemberSearch(user.displayName||user.email);setMemberMatches([])}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',border:0,borderBottom:'1px solid #eef2f7',background:'#fff',cursor:'pointer'}}>
                     <strong>{user.displayName||'Unnamed account'}</strong><span style={{display:'block',fontSize:12,color:'#7183a4'}}>{user.email}</span>
-                    {user.organizationId&&<small style={{color:'#9a6700'}}>Already assigned to an organization</small>}
+                    {user.organizationId&&<small style={{color:'#9a6700'}}>{t('admin.already_assigned','Already assigned to an organization')}</small>}
                   </button>)}
                 </div>}
               </div>
               <div className="vop-field"><label>Role</label><select value={memberRole} onChange={e=>setMemberRole(e.target.value)}><option value="learner">Learner</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></div>
-              <div style={{display:'flex',alignItems:'end',gap:8}}><button className="vop-secondary" type="button" disabled={saving||!selectedUser} onClick={()=>void addExistingMember()}><UserPlus size={16}/>Assign selected</button><button className="vop-primary" type="button" onClick={()=>setShowCreateMember(value=>!value)}><Plus size={16}/>Add new account</button></div>
+              <div style={{display:'flex',alignItems:'end',gap:8}}><button className="vop-secondary" type="button" disabled={saving||!selectedUser} onClick={()=>void addExistingMember()}><UserPlus size={16}/>{t('admin.assign_selected','Assign selected')}</button><button className="vop-primary" type="button" onClick={()=>setShowCreateMember(value=>!value)}><Plus size={16}/>{t('admin.add_new_account','Add new account')}</button></div>
             </div>
 
             {showCreateMember&&<div className="vop-card" style={{marginTop:12,border:'1px solid #dce6f3'}}>
-              <h3>Create account and add it here</h3>
+              <h3>{t('admin.create_account_here','Create account and add it here')}</h3>
               <p style={{color:'#7183a4'}}>The user receives a normal VOP account. No Firebase ID or technical setup is required.</p>
               <div className="vop-form-grid">
                 <div className="vop-field"><label>Full name *</label><input value={newMemberName} onChange={e=>setNewMemberName(e.target.value)} placeholder="Full name"/></div>
                 <div className="vop-field"><label>Email *</label><input type="email" value={newMemberEmail} onChange={e=>setNewMemberEmail(e.target.value)} placeholder="name@example.com"/></div>
                 <div className="vop-field"><label>Temporary password <small>(optional)</small></label><input type="password" value={newMemberPassword} onChange={e=>setNewMemberPassword(e.target.value)} placeholder="Leave empty to send/reset later"/></div>
-                <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!newMemberName.trim()||!newMemberEmail.trim()} onClick={()=>void createAndAssign()}><UserPlus size={16}/>Create & Assign</button></div>
+                <div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!newMemberName.trim()||!newMemberEmail.trim()} onClick={()=>void createAndAssign()}><UserPlus size={16}/>{t('admin.create_assign','Create & Assign')}</button></div>
               </div>
             </div>}
 
@@ -319,26 +321,26 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
                       </select>}
                     </td>
                     <td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td>
-                    <td style={{textAlign:'right'}}>{isOwner?<span style={{fontSize:12,color:'#7183a4'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={saving||!item.active} onClick={()=>void removeMember(item)}>Remove</button>}</td>
+                    <td style={{textAlign:'right'}}>{isOwner&&!isSuperAdmin?<span style={{fontSize:12,color:'#7183a4'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={saving||!item.active} onClick={()=>void removeMember(item)}>{t('common.remove','Remove')}</button>}</td>
                   </tr>;
                 })}
               </tbody></table>
-              {!members.length&&<div className="vop-empty"><Users size={30}/><h4>No members yet</h4><p>Assign an existing account or create a new one above.</p></div>}
+              {!members.length&&<div className="vop-empty"><Users size={30}/><h4>{t('admin.no_members_yet','No members yet')}</h4><p>Assign an existing account or create a new one above.</p></div>}
             </div>
           </div>
 
           <div style={{marginTop:18}}>
-            <div className="vop-section-title"><div><h3>Invitation by email</h3><p>Send a secure invitation to an existing email address.</p></div></div>
+            <div className="vop-section-title"><div><h3>{t('admin.invitation_by_email','Invitation by email')}</h3><p>Send a secure invitation to an existing email address.</p></div></div>
             <div className="vop-form-grid">
               <div className="vop-field"><label>Email *</label><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="member@example.org"/></div>
               <div className="vop-field"><label>Role</label><select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}><option value="learner">Learner</option><option value="mentor">Mentor</option><option value="teacher">Teacher</option><option value="editor">Editor</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></div>
-              <div style={{display:'flex',alignItems:'end'}}><button className="vop-secondary" type="button" disabled={saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>Create Invitation</button></div>
+              <div style={{display:'flex',alignItems:'end'}}><button className="vop-secondary" type="button" disabled={saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>{t('admin.create_invitation','Create Invitation')}</button></div>
             </div>
             {inviteUrl&&<div className="vop-setting-row" style={{marginTop:10}}><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this link with the invited user.</div></div><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Check size={16}/>Copy Link</button></div>}
           </div>
 
           <div style={{marginTop:18}}>
-            <div className="vop-section-title"><div><h3>Audit history</h3><p>Privileged organization changes are retained automatically.</p></div></div>
+            <div className="vop-section-title"><div><h3>{t('admin.audit_history','Audit history')}</h3><p>Privileged organization changes are retained automatically.</p></div></div>
             <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
           </div>
         </>}

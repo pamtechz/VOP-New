@@ -3,6 +3,8 @@ import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
 import { auth } from '../../lib/firebase';
+import { getTranslation } from '../../services/i18n';
+import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -20,6 +22,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson,
   hasPreviousLesson = false, hasNextLesson = false, initialPageIndex = 0,
 }) => {
+  const language = getActiveLanguage();
+  const settings = getStoredSettings();
+  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'LessonReaderModal');
   const configured = isLessonConfigured(lesson);
   const pages = configured ? lesson.contentPages! : [];
   const [currentPageIndex, setCurrentPageIndex] = useState(() => Math.max(0, initialPageIndex));
@@ -177,7 +182,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               type="button"
               onClick={toggleSpeech}
               disabled={!configured}
-              aria-label={isSpeaking ? 'Stop reading aloud' : 'Read this page aloud'}
+              aria-label={isSpeaking ? t('accessibility.stop_reading','Stop reading aloud') : t('accessibility.read_aloud','Read this page aloud')}
               style={{
                 border: 0,
                 background: isSpeaking ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.1)',
@@ -194,7 +199,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close lesson"
+              aria-label={t('accessibility.close_lesson','Close lesson')}
               style={{
                 border: 0,
                 background: 'rgba(255,255,255,0.1)',
@@ -248,9 +253,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               borderRadius: '1rem',
               background: '#fffbeb',
             }}>
-              <h3 style={{ fontSize: '1rem', color: '#92400e', marginBottom: '0.4rem' }}>Study content is not configured</h3>
+              <h3 style={{ fontSize: '1rem', color: '#92400e', marginBottom: '0.4rem' }}>{t('lesson.not_configured','Study content is not configured')}</h3>
               <p style={{ fontSize: '0.875rem', color: '#a16207', lineHeight: 1.5 }}>
-                This lesson has no complete published pages. Ask a Voice of Prophecy course administrator to add the study material before completion can be recorded.
+                {t('lesson.not_configured_desc','This lesson has no complete published pages. Ask a Voice of Prophecy course administrator to add the study material before completion can be recorded.')}
               </p>
             </div>
           ) : (
@@ -302,7 +307,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                     alignItems: 'center',
                     gap: '0.35rem',
                   }}>
-                    <Quote size={14} /> Holy Scripture
+                    <Quote size={14} /> {t('lesson.scripture','Holy Scripture')}
                   </p>
                   <p style={{
                     fontFamily: 'Georgia, "Playfair Display", serif',
@@ -341,7 +346,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                   <Sparkles size={18} color="#2563eb" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
                   <div>
                     <p style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
-                      Key Truth
+                      {t('lesson.key_truth','Key Truth')}
                     </p>
                     <p style={{ fontSize: '0.9rem', color: '#1e3a8a', lineHeight: 1.55 }}>
                       {currentPage.keyTakeaway}
@@ -391,7 +396,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               opacity: currentPageIndex === 0 || !configured ? 0.5 : 1,
             }}
           >
-            <ChevronLeft size={18} /> {currentPageIndex === 0 && hasPreviousLesson ? 'Previous Lesson' : 'Previous Page'}
+            <ChevronLeft size={18} /> {currentPageIndex === 0 && hasPreviousLesson ? t('lesson.previous_lesson','Previous Lesson') : t('lesson.previous_page','Previous Page')}
           </button>
 
           <button
@@ -415,10 +420,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
             }}
           >
             {configured && currentPageIndex < pages.length - 1
-              ? <><span>Next Page</span><ChevronRight size={18} /></>
+              ? <><span>{t('lesson.next_page','Next Page')}</span><ChevronRight size={18} /></>
               : hasNextLesson
-                ? <><span>Complete & Continue</span><ChevronRight size={18} /></>
-                : <><CheckCircle size={18} /><span>Complete Lesson</span></>}
+                ? <><span>{t('lesson.complete_continue','Complete & Continue')}</span><ChevronRight size={18} /></>
+                : <><CheckCircle size={18} /><span>{t('lesson.complete','Complete Lesson')}</span></>}
           </button>
         </footer>
       </section>

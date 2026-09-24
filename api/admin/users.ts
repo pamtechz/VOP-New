@@ -44,6 +44,65 @@ function profileType(profile: Record<string, unknown> | undefined, authUser: Use
   return 'learner';
 }
 
+function hierarchyRole(role: string) {
+  return ['union_admin','conference_admin','district_admin','church_admin'].includes(role) ? role : '';
+}
+
+function hierarchyUserInScope(adminRole: string, nodeId: string, profile: Record<string, unknown>) {
+  if (!nodeId) return false;
+  const userRole = String(profile.role || '');
+  if (userRole === 'super_admin') return false;
+  const unionId = String(profile.unionId || '').trim();
+  const conferenceId = String(profile.conferenceId || '').trim();
+  const districtId = String(profile.districtId || '').trim();
+  const churchId = String(profile.churchId || '').trim();
+  if (adminRole === 'union_admin') return unionId === nodeId;
+  if (adminRole === 'conference_admin') return conferenceId === nodeId;
+  if (adminRole === 'district_admin') return districtId === nodeId;
+  if (adminRole === 'church_admin') return churchId === nodeId;
+  return false;
+}
+
+function hierarchyScopeQuery(role: string, nodeId: string) {
+  if (role === 'union_admin') return { field: 'unionId', value: nodeId };
+  if (role === 'conference_admin') return { field: 'conferenceId', value: nodeId };
+  if (role === 'district_admin') return { field: 'districtId', value: nodeId };
+  if (role === 'church_admin') return { field: 'churchId', value: nodeId };
+  return null;
+}
+
+function organizationInHierarchy(data: Record<string, unknown>, role: string, nodeId: string) {
+  const directField = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : role === 'church_admin' ? 'churchId' : '';
+  if (directField && String(data[directField] || '').trim() === nodeId) return true;
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+  if (directField && String(hierarchy[directField] || '').trim() === nodeId) return true;
+  if (String(data.hierarchyType || '').trim() === directField.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId) return true;
+  if (String(data.adminNodeType || '').trim() === directField.replace('Id','') && String(data.adminNodeId || '').trim() === nodeId) return true;
+  return false;
+}
+
+async function organizationAllowedForHierarchy(db: Firestore, organizationId: string, role: string, nodeId: string) {
+  const organization = await db.doc('organizations/' + organizationId).get();
+  if (!organization.exists || organization.data()?.status !== 'active') return false;
+  if (organizationInHierarchy(organization.data() || {}, role, nodeId)) return true;
+  const scope = hierarchyScopeQuery(role, nodeId);
+  if (!scope) return false;
+  const users = await db.collection('users').where(scope.field, '==', scope.value).where('organizationId', '==', organizationId).limit(1).get();
+  return !users.empty;
+}
+
+async function hierarchyOrganizations(db: Firestore, role: string, nodeId: string) {
+  if (!nodeId) return [];
+  const scope = hierarchyScopeQuery(role, nodeId);
+  const scopedUsers = scope ? await db.collection('users').where(scope.field, '==', scope.value).get() : { docs: [] };
+  const inferredOrganizationIds = new Set(scopedUsers.docs.map(doc => String(doc.data()?.organizationId || '').trim()).filter(Boolean));
+  const snapshot = await db.collection('organizations').get();
+  return snapshot.docs.filter(doc => {
+    const data = doc.data() || {};
+    return data.status === 'active' && (organizationInHierarchy(data, role, nodeId) || inferredOrganizationIds.has(doc.id));
+  }).map(doc => ({ id: doc.id, name: String(doc.data().name || doc.id), status: String(doc.data().status || 'active') }));
+}
+
 function displayRole(type: ProfileType, profile: Record<string, unknown> | undefined): string {
   if (type === 'super_admin') return 'Super Admin';
   if (type === 'admin') return 'Admin';
@@ -247,7 +306,7 @@ export default async function handler(request: Request, response: Response) {
       const incoming = body.settings && typeof body.settings === 'object'
         ? body.settings as Record<string, unknown>
         : {};
-      const allowed = ['theme','language','notifications','accessibility','privacy','studyPreferences'];
+      const allowed = ['theme','language','uiLocale','studyLanguage','notifications','accessibility','privacy','studyPreferences'];
       const invalid = Object.keys(incoming).filter(key => !allowed.includes(key));
       if (invalid.length) return response.status(400).json({ error:'Unsupported personal setting.' });
       await ref.set({ ...incoming, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
@@ -258,23 +317,48 @@ export default async function handler(request: Request, response: Response) {
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;
     const tenant = await authenticateTenant(request, requestedOrganizationId);
     const db = tenant.db;
-    const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || ''));
-    if (!canManageTenantUsers) throw new Error('Only an organization owner or administrator can manage organization users.');
+    const tenantRole = String(tenant.profile.role || '').trim();
+    const hierarchyTenant = hierarchyRole(tenantRole);
+    const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || '')) || Boolean(hierarchyTenant);
+    if (!canManageTenantUsers) throw new Error('Only an authorized tenant administrator can manage users.');
     const tenantOrganizationId = tenant.organizationId;
+    const requestedManagedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    const hierarchyNodeId = String(tenant.profile.adminNodeId || '').trim();
+    const managedOrganizationId = tenantOrganizationId || (hierarchyTenant && requestedManagedOrganizationId ? requestedManagedOrganizationId : '');
+    if (hierarchyTenant && managedOrganizationId) {
+      const organizationSnap = await db.doc('organizations/' + managedOrganizationId).get();
+      if (!(await organizationAllowedForHierarchy(db, managedOrganizationId, hierarchyTenant, hierarchyNodeId))) {
+        throw new Error('The selected organization is outside your assigned hierarchy scope.');
+      }
+    }
 
     if (action === 'listOrganizations') {
       if (tenant.isSuperAdmin) {
         const snapshot = await db.collection('organizations').orderBy('name').get();
         return response.status(200).json({ ok:true, items:snapshot.docs.map(doc => ({ id:doc.id, name:String(doc.data().name || doc.id), status:String(doc.data().status || 'active') })) });
       }
+      if (hierarchyTenant && !tenantOrganizationId) {
+        const items = await hierarchyOrganizations(db, hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
+        return response.status(200).json({ ok:true, items });
+      }
       const organization = await db.doc('organizations/' + tenantOrganizationId).get();
       return response.status(200).json({ ok:true, items: organization.exists ? [{ id:organization.id, name:String(organization.data()?.name || organization.id), status:String(organization.data()?.status || 'active') }] : [] });
     }
 
     if (action === 'list') {
-      const users = tenant.isSuperAdmin && !tenantOrganizationId
-        ? await listAllUsers(authService)
-        : await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
+      let users: UserRecord[] = [];
+      if (tenant.isSuperAdmin && !tenantOrganizationId) {
+        users = await listAllUsers(authService);
+      } else if (hierarchyTenant && managedOrganizationId) {
+        users = await Promise.all((await db.collection('users').where('organizationId','==',managedOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
+      } else if (hierarchyTenant) {
+        const scope = hierarchyScopeQuery(hierarchyTenant, String(tenant.profile.adminNodeId || '').trim());
+        if (!scope) throw new Error('The hierarchy tenant scope is not configured.');
+        const snapshots = await db.collection('users').where(scope.field, '==', scope.value).get();
+        users = await Promise.all(snapshots.docs.map(async snapshot => authService.getUser(snapshot.id)));
+      } else {
+        users = await Promise.all((await db.collection('users').where('organizationId','==',tenantOrganizationId).get()).docs.map(async snapshot => authService.getUser(snapshot.id)));
+      }
       return response.status(200).json({ ok: true, items: await serializeUsers(db, users) });
     }
 
@@ -289,13 +373,13 @@ export default async function handler(request: Request, response: Response) {
 
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
-      if (type === 'admin' && !tenantOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
+      if (type === 'admin' && !managedOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
       if (type === 'super_admin' && !tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can create platform administrators.');
       if (type === 'admin' && tenantOrganizationId && !['owner','admin'].includes(String(tenant.membership.role || ''))) {
         throw new Error('Only an organization owner or administrator can create organization administrators.');
       }
 
-      if (tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
+      if (managedOrganizationId && tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
       const created = await authService.createUser({
         email,
         displayName,
@@ -303,7 +387,7 @@ export default async function handler(request: Request, response: Response) {
         ...(password ? { password } : {}),
         disabled: false,
       });
-      const profile = profileForType(type, body, tenantOrganizationId);
+      const profile = profileForType(type, body, managedOrganizationId);
       await db.doc(`users/${created.uid}`).set({
         uid: created.uid,
         email,
@@ -317,19 +401,20 @@ export default async function handler(request: Request, response: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
-      if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:tenantOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
-      await authService.setCustomUserClaims(created.uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
+      if (managedOrganizationId) await db.doc(`organizations/${managedOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:managedOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
+      await authService.setCustomUserClaims(created.uid, managedOrganizationId ? { role:'student', organizationId:managedOrganizationId, organizationRole:profile.organizationRole } : claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
       return response.status(200).json({ ok: true, item: { uid: created.uid, resetLink } });
     }
 
     if (action === 'assignOrganization') {
-      if (!tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can reassign a user between organizations.');
+      if (!tenant.isSuperAdmin && !hierarchyTenant) throw new Error('Only an authorized tenant administrator can assign organization membership.');
       const targetOrganizationId = String(body.organizationId || '').trim();
       const memberRole = String(body.organizationRole || 'learner').trim();
       if (!targetOrganizationId) throw new Error('Select an organization.');
       if (!['owner','admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('Select a valid organization role.');
       const organization = await db.doc('organizations/' + targetOrganizationId).get();
+      if (hierarchyTenant && !(await organizationAllowedForHierarchy(db, targetOrganizationId, hierarchyTenant, hierarchyNodeId))) throw new Error('The selected organization is outside your assigned hierarchy scope.');
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The selected organization is not available.');
       const targetProfile = await db.doc('users/' + uid).get();
       if (!targetProfile.exists) throw new Error('The selected user account does not exist.');
@@ -343,10 +428,8 @@ export default async function handler(request: Request, response: Response) {
         transaction.set(db.doc('organizations/' + targetOrganizationId + '/members/' + uid), { uid, organizationId:targetOrganizationId, role:memberRole, active:true, joinedAt:previousOrganizationId === targetOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt:now, assignedBy:decoded.uid }, { merge:true });
         transaction.set(db.doc('users/' + uid), { organizationId:targetOrganizationId, organizationRole:memberRole, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       });
-      const preservedPlatformRole = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(existingData.role || '')) && memberRole === 'admin'
-        ? String(existingData.role)
-        : 'student';
-      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, organizationId:targetOrganizationId, organizationRole:memberRole });
+      const preservedPlatformRole = hierarchyRole(String(existingData.role || '')) || 'student';
+      await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, ...(hierarchyRole(preservedPlatformRole) ? { adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId } : {}), organizationId:targetOrganizationId, organizationRole:memberRole });
       return response.status(200).json({ ok:true, item:{uid, organizationId:targetOrganizationId, organizationRole:memberRole} });
     }
 
@@ -358,8 +441,18 @@ export default async function handler(request: Request, response: Response) {
     const targetProfileRef = db.doc(`users/${uid}`);
     const targetProfileSnapshot = await targetProfileRef.get();
     const targetProfileData = targetProfileSnapshot.data() || {};
-    if (!tenant.isSuperAdmin && String(targetProfileData.organizationId || '') !== tenantOrganizationId) {
-      throw new Error('This user belongs to another organization.');
+    if (!tenant.isSuperAdmin) {
+      if (hierarchyTenant) {
+        const targetOrg = String(targetProfileData.organizationId || '').trim();
+        if (targetOrg) {
+          const targetOrganizationSnap = await db.doc('organizations/' + targetOrg).get();
+          if (!(await organizationAllowedForHierarchy(db, targetOrg, hierarchyTenant, hierarchyNodeId))) throw new Error('This user is outside your assigned hierarchy scope.');
+        } else if (!hierarchyUserInScope(hierarchyTenant, hierarchyNodeId, targetProfileData)) {
+          throw new Error('This user is outside your assigned hierarchy scope.');
+        }
+      } else if (String(targetProfileData.organizationId || '') !== tenantOrganizationId) {
+        throw new Error('This user belongs to another organization.');
+      }
     }
 
     if (action === 'update') {
@@ -386,7 +479,11 @@ export default async function handler(request: Request, response: Response) {
       // display role must not silently detach that user from an existing tenant.
       // Tenant reassignment is a separate, explicit organization operation.
       const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
-      const profile = profileForType(type, body, effectiveOrganizationId);
+      const baseProfile = profileForType(type, body, effectiveOrganizationId);
+      const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
+      const profile = existingPlatformRole
+        ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
+        : baseProfile;
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
@@ -437,16 +534,16 @@ export default async function handler(request: Request, response: Response) {
 
       // Super Admin may delete any user who belongs to an organization. Tenant
       // administrators are restricted to their own tenant.
-      if (!tenant.isSuperAdmin && targetOrganizationId !== tenantOrganizationId) {
+      if (!tenant.isSuperAdmin && !hierarchyTenant && targetOrganizationId !== tenantOrganizationId) {
         throw new Error('This user belongs to another organization.');
       }
       if (tenant.isSuperAdmin && tenantOrganizationId && targetOrganizationId !== tenantOrganizationId) {
         throw new Error('This user does not belong to the selected organization.');
       }
       if (!targetOrganizationId) {
-        if (!tenant.isSuperAdmin) throw new Error('This user is not a member of your organization.');
+        if (!tenant.isSuperAdmin && !hierarchyTenant) throw new Error('This user is not a member of your organization.');
         const platformRole = String(targetData.role || '').trim();
-        if (platformRole === 'super_admin') throw new Error('Super Admin accounts are platform-level accounts and are not organization members.');
+        if (platformRole === 'super_admin' || hierarchyRole(platformRole)) throw new Error('Platform and hierarchy administrator accounts cannot be removed through organization membership management.');
       }
 
       if (targetOrganizationId) {
@@ -468,7 +565,7 @@ export default async function handler(request: Request, response: Response) {
         // The sole member may be deleted. An owner with other members must
         // transfer ownership in the same operation; the replacement must already
         // belong to the organization.
-        if (['owner','admin'].includes(targetRole) && activeMembers.length > 0) {
+        if (['owner','admin'].includes(targetRole) && activeMembers.length > 0 && !tenant.isSuperAdmin) {
           const replacementUid = String(body.replacementUid || '').trim();
           if (targetRole === 'owner') {
             if (!replacementUid || replacementUid === uid) {
@@ -522,7 +619,16 @@ export default async function handler(request: Request, response: Response) {
 
       await authService.deleteUser(uid);
       await targetProfile.ref.delete();
-      if (targetOrganizationId) await db.doc(`organizations/${targetOrganizationId}/members/${uid}`).delete().catch(() => undefined);
+      if (targetOrganizationId) {
+        await db.doc(`organizations/${targetOrganizationId}/members/${uid}`).delete().catch(() => undefined);
+        if (tenant.isSuperAdmin && ['owner','admin'].includes(String(targetData.organizationRole || '').trim())) {
+          const organizationRef = db.doc(`organizations/${targetOrganizationId}`);
+          const organizationSnap = await organizationRef.get();
+          if (String(organizationSnap.data()?.ownerUid || '') === uid) {
+            await organizationRef.set({ ownerUid:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+          }
+        }
+      }
       return response.status(200).json({ ok: true, uid });
     }
 

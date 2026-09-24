@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
+import { getTranslation } from '../services/i18n';
 import CertificationConfigStudio from './CertificationConfigStudio';
 import CertificateArtwork from '../components/certificates/CertificateArtwork';
 
@@ -122,6 +123,7 @@ const EmptyAvatar = () => (
 export const CertificationManager: React.FC<Props> = ({
   settings, adminContent, showMessage,
 }) => {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [view, setView] = useState<'list' | 'preview' | 'config'>('list');
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [config, setConfig] = useState<CertificationConfig | null>(null);
@@ -339,36 +341,36 @@ export const CertificationManager: React.FC<Props> = ({
     return (
       <div className="vop-cert-page">
         <div className="vop-cert-preview-head">
-          <div><div className="vop-cert-kicker">Certification</div><h1>Certificate Preview</h1></div>
+          <div><div className="vop-cert-kicker">{t('admin.certification','Certification')}</div><h1>{t('admin.certificate_preview','Certificate Preview')}</h1></div>
           <button className="vop-cert-icon-button" type="button" onClick={() => setView('list')} aria-label="Close preview"><X size={20} /></button>
         </div>
         <div className="vop-cert-preview-title-row">
           <div className="vop-cert-title-icon orange"><Award size={32} /></div>
-          <div><h2>Certificate Preview</h2><p>Preview the official course certificate. This is the exact design that will be generated for qualified candidates.</p></div>
+          <div><h2>{t('admin.certificate_preview','Certificate Preview')}</h2><p>Preview the official course certificate. This is the exact design that will be generated for qualified candidates.</p></div>
         </div>
         <div className="vop-cert-preview-grid">
           <aside className="vop-cert-candidate-card">
-            <div className="vop-cert-card-head"><h3>Candidate Information</h3><span className="vop-cert-status">Official Record</span></div>
+            <div className="vop-cert-card-head"><h3>{t('admin.candidate_information','Candidate Information')}</h3><span className="vop-cert-status">{t('admin.official_record','Official Record')}</span></div>
             <div className="vop-cert-profile-image">{selected.candidatePhotoURL ? <img src={selected.candidatePhotoURL} alt="" /> : <EmptyAvatar />}</div>
             <dl className="vop-cert-details">
-              <div><dt>Full Name</dt><dd>{selected.candidateName || '—'}</dd></div>
+              <div><dt>{t('common.full_name','Full Name')}</dt><dd>{selected.candidateName || '—'}</dd></div>
               <div><dt>Course</dt><dd>{selected.courseName || '—'}</dd></div>
-              <div><dt>Course Code</dt><dd>{selected.courseCode || '—'}</dd></div>
-              <div><dt>Completion Date</dt><dd>{dateText(selected.completionDate)}</dd></div>
+              <div><dt>{t('common.course_code','Course Code')}</dt><dd>{selected.courseCode || '—'}</dd></div>
+              <div><dt>{t('common.completion_date','Completion Date')}</dt><dd>{dateText(selected.completionDate)}</dd></div>
               <div><dt>Enrollment No.</dt><dd>{selected.certificateNumber || '—'}</dd></div>
-              <div><dt>Church/District</dt><dd>{[selected.churchName, selected.districtName].filter(Boolean).join(' · ') || '—'}</dd></div>
-              <div><dt>Conference</dt><dd>{selected.conferenceName || '—'}</dd></div>
-              <div><dt>Union</dt><dd>{selected.unionName || '—'}</dd></div>
+              <div><dt>{t('admin.church_district','Church/District')}</dt><dd>{[selected.churchName, selected.districtName].filter(Boolean).join(' · ') || '—'}</dd></div>
+              <div><dt>{t('common.conference','Conference')}</dt><dd>{selected.conferenceName || '—'}</dd></div>
+              <div><dt>{t('common.union','Union')}</dt><dd>{selected.unionName || '—'}</dd></div>
             </dl>
           </aside>
           <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} /></section>
           <aside className="vop-cert-action-card">
             <div className="vop-cert-info"><Info size={22} /><p>The certificate design is controlled by certification configuration. Generated records use the stored candidate and completion data.</p></div>
             <button className="vop-cert-primary-button" type="button" onClick={() => void downloadCertificate()} disabled={exporting}><Download size={18} />{exporting ? 'Generating…' : 'Download Certificate'}</button>
-            <button className="vop-cert-secondary-button" type="button" onClick={() => window.print()}><Printer size={18} />Print Certificate</button>
-            <button className="vop-cert-secondary-button" type="button" onClick={() => void shareCertificate()}><Share2 size={18} />Share Certificate</button>
-            <button className="vop-cert-secondary-button" type="button" onClick={sendCertificate} disabled={!selected.candidateEmail}><Mail size={18} />Send to Candidate</button>
-            <div className="vop-cert-ready"><CheckCircle2 size={26} /><div><strong>Certificate Ready</strong><span>Certificate record is securely stored.</span></div></div>
+            <button className="vop-cert-secondary-button" type="button" onClick={() => window.print()}><Printer size={18} />{t('admin.print_certificate','Print Certificate')}</button>
+            <button className="vop-cert-secondary-button" type="button" onClick={() => void shareCertificate()}><Share2 size={18} />{t('admin.share_certificate','Share Certificate')}</button>
+            <button className="vop-cert-secondary-button" type="button" onClick={sendCertificate} disabled={!selected.candidateEmail}><Mail size={18} />{t('admin.send_to_candidate','Send to Candidate')}</button>
+            <div className="vop-cert-ready"><CheckCircle2 size={26} /><div><strong>{t('admin.certificate_ready','Certificate Ready')}</strong><span>Certificate record is securely stored.</span></div></div>
           </aside>
         </div>
         <div className="vop-cert-note"><Info size={22} /><div><strong>Note</strong><span>The certificate is generated from the stored candidate record, completion date and configured certification assets.</span></div></div>
@@ -379,21 +381,21 @@ export const CertificationManager: React.FC<Props> = ({
   return (
     <div className="vop-cert-page">
       <div className="vop-cert-list-head">
-        <div><div className="vop-cert-kicker">Certification</div><h1>Certified Candidates</h1><p>View and manage candidates who have successfully completed VOP courses.</p></div>
+        <div><div className="vop-cert-kicker">{t('admin.certification','Certification')}</div><h1>{t('admin.certified_candidates','Certified Candidates')}</h1><p>View and manage candidates who have successfully completed VOP courses.</p></div>
         <div className="vop-cert-head-actions">
-          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />Certificate Settings</button>
-          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />Issue Certificate</button>
-          <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />Export List (PDF)</button>
+          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />{t('admin.certificate_settings','Certificate Settings')}</button>
+          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />{t('admin.issue_certificate','Issue Certificate')}</button>
+          <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />{t('admin.export_pdf','Export List (PDF)')}</button>
         </div>
       </div>
       <div className="vop-cert-title-row">
         <div className="vop-cert-title-icon purple"><Award size={32} /></div>
-        <div><h2>Certified Candidates</h2><p>View and manage candidates who have successfully completed VOP courses.</p></div>
+        <div><h2>{t('admin.certified_candidates','Certified Candidates')}</h2><p>View and manage candidates who have successfully completed VOP courses.</p></div>
       </div>
       {graduationRequests.filter(item => item.status !== 'approved' && item.status !== 'rejected').length > 0 && (
         <section className="vop-cert-config-card" style={{marginBottom:16}}>
           <div className="vop-cert-config-card-head">
-            <div><h2>Graduation Approval Queue</h2><p>Requests are advanced only through the server-authorized workflow stage configured by the administrator.</p></div>
+            <div><h2>{t('admin.graduation_approval_queue','Graduation Approval Queue')}</h2><p>Requests are advanced only through the server-authorized workflow stage configured by the administrator.</p></div>
           </div>
           <div className="vop-cert-issuer-list">
             {graduationRequests.filter(item => item.status !== 'approved' && item.status !== 'rejected').map(request => {
@@ -404,7 +406,7 @@ export const CertificationManager: React.FC<Props> = ({
                   <div><strong>{request.candidateName || 'Unnamed candidate'}</strong><span>{request.guideTitle || 'Guide not recorded'} · Stage: {workflow.workflowStageId || request.status || 'pending'}</span></div>
                   <div style={{display:'flex',gap:8}}>
                     <button className="vop-cert-primary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'approve')}>{decidingRequestId === request.id ? 'Saving…' : 'Approve'}</button>
-                    <button className="vop-cert-secondary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'reject')}>Reject</button>
+                    <button className="vop-cert-secondary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'reject')}>{t('common.reject','Reject')}</button>
                   </div>
                 </div>
               );
@@ -414,23 +416,23 @@ export const CertificationManager: React.FC<Props> = ({
       )}
 
       <div className="vop-cert-metrics">
-        <div className="vop-cert-metric"><span className="blue"><GraduationCap size={28} /></span><div><small>Total Certified</small><strong>{totalCertified}</strong><em>All time</em></div></div>
-        <div className="vop-cert-metric"><span className="green"><CheckCircle2 size={28} /></span><div><small>This Year</small><strong>{thisYear}</strong><em>{yearText(now)}</em></div></div>
-        <div className="vop-cert-metric"><span className="purple"><Users size={28} /></span><div><small>This Month</small><strong>{thisMonth}</strong><em>{now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</em></div></div>
-        <div className="vop-cert-metric"><span className="orange"><FileText size={28} /></span><div><small>Certificates Downloaded</small><strong>{downloaded}</strong><em>{downloadRate.toFixed(1)}%</em></div></div>
+        <div className="vop-cert-metric"><span className="blue"><GraduationCap size={28} /></span><div><small>{t('admin.total_certified','Total Certified')}</small><strong>{totalCertified}</strong><em>All time</em></div></div>
+        <div className="vop-cert-metric"><span className="green"><CheckCircle2 size={28} /></span><div><small>{t('common.this_year','This Year')}</small><strong>{thisYear}</strong><em>{yearText(now)}</em></div></div>
+        <div className="vop-cert-metric"><span className="purple"><Users size={28} /></span><div><small>{t('common.this_month','This Month')}</small><strong>{thisMonth}</strong><em>{now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</em></div></div>
+        <div className="vop-cert-metric"><span className="orange"><FileText size={28} /></span><div><small>{t('admin.certificates_downloaded','Certificates Downloaded')}</small><strong>{downloaded}</strong><em>{downloadRate.toFixed(1)}%</em></div></div>
       </div>
       <div className="vop-cert-toolbar">
         <div className="vop-cert-search"><Search size={20} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search by name, email, course, certificate number…" /></div>
-        <select value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1); }}><option value="">All Courses</option>{courses.map(course => <option key={course} value={course}>{course}</option>)}</select>
+        <select value={courseFilter} onChange={e => { setCourseFilter(e.target.value); setPage(1); }}><option value="">{t('common.all_courses','All Courses')}</option>{courses.map(course => <option key={course} value={course}>{course}</option>)}</select>
         <select value={conferenceFilter} onChange={e => { setConferenceFilter(e.target.value); setPage(1); }}><option value="">All Conferences</option>{conferences.map(item => <option key={item} value={item}>{item}</option>)}</select>
-        <select value={dateFilter} onChange={e => { setDateFilter(e.target.value as 'all' | 'year' | 'month'); setPage(1); }}><option value="all">All Time</option><option value="year">This Year</option><option value="month">This Month</option></select>
-        <button className="vop-cert-filter-button" type="button"><Filter size={18} />Filter</button>
+        <select value={dateFilter} onChange={e => { setDateFilter(e.target.value as 'all' | 'year' | 'month'); setPage(1); }}><option value="all">{t('common.all_time','All Time')}</option><option value="year">{t('common.this_year','This Year')}</option><option value="month">{t('common.this_month','This Month')}</option></select>
+        <button className="vop-cert-filter-button" type="button"><Filter size={18} />{t('common.filter','Filter')}</button>
       </div>
       {loading ? <div className="vop-cert-empty"><Award size={36} /><strong>Loading certified candidates…</strong></div> : (
         <>
           <div className="vop-cert-table-wrap">
             <table className="vop-cert-table">
-              <thead><tr><th>#</th><th>Candidate</th><th>Course</th><th>Certificate No.</th><th>Completion Date</th><th>Church / District</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>#</th><th>Candidate</th><th>Course</th><th>Certificate No.</th><th>{t('common.completion_date','Completion Date')}</th><th>Church / District</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>{visible.map((item, index) => (
                 <tr key={item.id}>
                   <td>{(page - 1) * pageSize + index + 1}</td>
@@ -451,7 +453,7 @@ export const CertificationManager: React.FC<Props> = ({
         <div className="vop-cert-issuer-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setIssuerOpen(false); }}>
           <section className="vop-cert-issuer-modal" role="dialog" aria-modal="true" aria-labelledby="vop-cert-issuer-title">
             <div className="vop-cert-issuer-head">
-              <div><div className="vop-cert-kicker">Certification</div><h2 id="vop-cert-issuer-title">Issue Certificate</h2><p>Only candidates with a server-verified approved graduation record are shown.</p></div>
+              <div><div className="vop-cert-kicker">{t('admin.certification','Certification')}</div><h2 id="vop-cert-issuer-title">{t('admin.issue_certificate','Issue Certificate')}</h2><p>Only candidates with a server-verified approved graduation record are shown.</p></div>
               <button className="vop-cert-icon-button" type="button" onClick={() => setIssuerOpen(false)} aria-label="Close"><X size={20} /></button>
             </div>
             <div className="vop-cert-search vop-cert-issuer-search"><Search size={19} /><input value={issuerSearch} onChange={event => setIssuerSearch(event.target.value)} placeholder="Search approved candidates…" /></div>

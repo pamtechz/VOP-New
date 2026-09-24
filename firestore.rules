@@ -102,6 +102,15 @@ service cloud.firestore {
         );
     }
 
+    function isHierarchyTenant() {
+      return signedIn() && role() in ['union_admin','conference_admin','district_admin','church_admin']
+        && userDoc().data.get('adminNodeId', '') != '';
+    }
+
+    function hierarchyTenantId() {
+      return role() + ':' + userDoc().data.get('adminNodeId', '');
+    }
+
     function canEditOwnedGlobal(data) {
       return isSuperAdmin()
         || (
@@ -109,7 +118,20 @@ service cloud.firestore {
           && data.get('ownerUid', '') == request.auth.uid
           && isOrgMember(organizationIdForUser())
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && data.get('ownerUid', '') == request.auth.uid
+          && data.get('ownerTenantId', '') == hierarchyTenantId()
         );
+    }
+
+    function canReadGlobal(data, publishedField) {
+      return isSuperAdmin()
+        || (isOrgMember(organizationIdForUser()) && data.get('organizationId', '') == organizationIdForUser())
+        || (isHierarchyTenant())
+        || (data.get('sharingScope', 'private') == 'shared' && data.get(publishedField, false) == true)
+        || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true);
     }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
@@ -239,6 +261,26 @@ service cloud.firestore {
       return role() == 'district_admin'
         && resource.data.get('districtId', '')
             == userDoc().data.get('adminNodeId', '');
+    }
+
+    function hierarchyTenantForField(data, fieldName) {
+      return signedIn()
+        && role() in ['union_admin','conference_admin','district_admin','church_admin']
+        && data.get(fieldName, '') == userDoc().data.get('adminNodeId', '');
+    }
+
+    function canViewHierarchyCertificate(data) {
+      return hierarchyTenantForField(data, 'unionId')
+        || hierarchyTenantForField(data, 'conferenceId')
+        || hierarchyTenantForField(data, 'districtId')
+        || hierarchyTenantForField(data, 'churchId');
+    }
+
+    function canManageHierarchyUser(data) {
+      return hierarchyTenantForField(data, 'unionId')
+        || hierarchyTenantForField(data, 'conferenceId')
+        || hierarchyTenantForField(data, 'districtId')
+        || hierarchyTenantForField(data, 'churchId');
     }
 
     // Platform configuration remains controlled by the VOP Super Admin.
@@ -395,10 +437,7 @@ service cloud.firestore {
 
     // Tenant-owned operational records. Published shared records remain publicly readable.
     match /announcements/{id} {
-      allow get, list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
-            || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
+      allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
         && canManageOrg(organizationIdForUser())
@@ -416,10 +455,18 @@ service cloud.firestore {
         || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
             || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
       allow create: if isSuperAdmin() || (
-        isOrgMember(organizationIdForUser())
-        && request.resource.data.get('ownerUid','') == request.auth.uid
-        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        (
+          isOrgMember(organizationIdForUser())
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
+          && request.resource.data.get('organizationId','') == ''
+        )
       );
       allow update, delete: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
@@ -434,10 +481,18 @@ service cloud.firestore {
         || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
             || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
       allow create: if isSuperAdmin() || (
-        isOrgMember(organizationIdForUser())
-        && request.resource.data.get('ownerUid','') == request.auth.uid
-        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        (
+          isOrgMember(organizationIdForUser())
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
+          && request.resource.data.get('organizationId','') == ''
+        )
       );
       allow update, delete: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
@@ -465,15 +520,20 @@ service cloud.firestore {
     }
 
     match /languages/{languageId} {
-      allow get, list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('enabled',false) == true)
-            || (resource.data.get('organizationId','') == '' && resource.data.get('enabled',false) == true));
+      allow get, list: if canReadGlobal(resource.data, 'enabled');
       allow create: if isSuperAdmin() || (
-        isOrgMember(organizationIdForUser())
-        && request.resource.data.get('ownerUid','') == request.auth.uid
-        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        (
+          isOrgMember(organizationIdForUser())
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
+          && request.resource.data.get('organizationId','') == ''
+        )
       );
       allow update, delete: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
@@ -484,13 +544,22 @@ service cloud.firestore {
 
     match /translations/{languageId} {
       allow get, list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
+        || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser())
+        || isHierarchyTenant()
         || resource.data.get('sharingScope','private') == 'shared';
       allow create: if isSuperAdmin() || (
-        isOrgMember(organizationIdForUser())
-        && request.resource.data.get('ownerUid','') == request.auth.uid
-        && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-        && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        (
+          isOrgMember(organizationIdForUser())
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
+          && request.resource.data.get('organizationId','') == ''
+        )
       );
       allow update, delete: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
@@ -586,12 +655,14 @@ service cloud.firestore {
           canManageOrg(organizationIdForUser())
           && resource.data.get('organizationId','') == organizationIdForUser()
         )
+        || canManageHierarchyUser(resource.data)
       );
       allow list: if isSuperAdmin()
         || (
           canManageOrg(organizationIdForUser())
           && resource.data.get('organizationId','') == organizationIdForUser()
-        );
+        )
+        || canManageHierarchyUser(resource.data);
 
       allow create: if canCreateOwnProfile();
       allow update: if isSuperAdmin() || canUpdateOwnProfile();
@@ -606,6 +677,7 @@ service cloud.firestore {
               && userDoc().data.get('organizationId','') != ''
               && userDoc().data.get('organizationId','') == get(/databases/$(database)/documents/users/$(uid)).data.get('organizationId','')
             )
+            || canManageHierarchyUser(get(/databases/$(database)/documents/users/$(uid)).data)
           );
 
         allow create: if isOwner(uid)
@@ -697,6 +769,7 @@ service cloud.firestore {
         resource.data.get('candidateId', '') == request.auth.uid
         || isSuperAdmin()
         || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId', '') == organizationIdForUser() && isAdmin())
+        || canViewHierarchyCertificate(resource.data)
       );
       allow create, update, delete: if false;
     }

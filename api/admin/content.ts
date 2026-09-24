@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey } from '../../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -16,6 +16,8 @@ const ORG_COLLECTIONS = new Set([
   'announcements','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides'
 ]);
+
+const HIERARCHY_COLLECTIONS = new Set(['unions','conferences','districts','churches']);
 
 function safeId(value: unknown) {
   const id = String(value || '').trim();
@@ -34,11 +36,24 @@ function hierarchyScopeMatches(ctx: { isSuperAdmin: boolean; profile: Record<str
   if (ctx.isSuperAdmin) return true;
   const role = String(ctx.profile.role || '');
   const nodeId = String(ctx.profile.adminNodeId || '');
-  if (!nodeId) return false;
-  if (collection === 'unions') return role === 'super_admin';
-  if (collection === 'conferences') return role === 'union_admin' && String(data?.unionId || '') === nodeId;
-  if (collection === 'districts') return role === 'conference_admin' && String(data?.conferenceId || '') === nodeId;
-  if (collection === 'churches') return (role === 'district_admin' && String(data?.districtId || '') === nodeId) || (role === 'church_admin' && String(data?.id || '') === nodeId);
+  if (!nodeId || !data) return false;
+  const id = String(data.id || '');
+  if (role === 'union_admin') {
+    if (collection === 'unions') return id === nodeId;
+    if (collection === 'conferences') return String(data.unionId || '') === nodeId;
+    if (collection === 'districts') return String(data.unionId || '') === nodeId;
+    if (collection === 'churches') return String(data.unionId || '') === nodeId;
+  }
+  if (role === 'conference_admin') {
+    if (collection === 'conferences') return id === nodeId;
+    if (collection === 'districts') return String(data.conferenceId || '') === nodeId;
+    if (collection === 'churches') return String(data.conferenceId || '') === nodeId;
+  }
+  if (role === 'district_admin') {
+    if (collection === 'districts') return id === nodeId;
+    if (collection === 'churches') return String(data.districtId || '') === nodeId;
+  }
+  if (role === 'church_admin' && collection === 'churches') return id === nodeId;
   return false;
 }
 
@@ -52,8 +67,10 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
-    const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection) ? ['owner','admin','editor'] : ['owner','admin'];
-    if (action !== 'list' && action !== 'listGuides') requireOrgRole(ctx, editorRoles);
+    const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
+      ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
+      : ['owner','admin'];
+    if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection)) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'settings' && ctx.organizationId) {
         requireOrgRole(ctx, ['owner','admin']);
@@ -292,6 +309,38 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'list') {
+      if (HIERARCHY_COLLECTIONS.has(collection) && !ctx.isSuperAdmin) {
+        const role = String(ctx.profile.role || '');
+        const nodeId = String(ctx.profile.adminNodeId || '');
+        let snap;
+        if (collection === 'unions' && role === 'union_admin') {
+          snap = await ctx.db.collection('unions').where('__name__','==',nodeId).get();
+        } else if (collection === 'conferences' && role === 'union_admin') {
+          snap = await ctx.db.collection('conferences').where('unionId','==',nodeId).get();
+        } else if (collection === 'districts' && role === 'union_admin') {
+          snap = await ctx.db.collection('districts').where('unionId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'union_admin') {
+          snap = await ctx.db.collection('churches').where('unionId','==',nodeId).get();
+        } else if (collection === 'conferences' && role === 'conference_admin') {
+          snap = await ctx.db.collection('conferences').where('__name__','==',nodeId).get();
+        } else if (collection === 'districts' && role === 'conference_admin') {
+          snap = await ctx.db.collection('districts').where('conferenceId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'conference_admin') {
+          snap = await ctx.db.collection('churches').where('conferenceId','==',nodeId).get();
+        } else if (collection === 'districts' && role === 'district_admin') {
+          snap = await ctx.db.collection('districts').where('__name__','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'district_admin') {
+          snap = await ctx.db.collection('churches').where('districtId','==',nodeId).get();
+        } else if (collection === 'churches' && role === 'church_admin') {
+          snap = await ctx.db.collection('churches').where('__name__','==',nodeId).get();
+        } else {
+          return res.status(200).json({ ok:true, items:[] });
+        }
+        return res.status(200).json({
+          ok:true,
+          items:snap.docs.map(d=>({id:d.id,...d.data(),canEdit:true}))
+        });
+      }
       if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
         if (collection === 'certificationConfig' && ctx.isSuperAdmin) {
           const s = await ctx.db.doc('system/certification').get();
@@ -334,6 +383,21 @@ export default async function handler(req: Request, res: Response) {
           if (collection === 'playlists') return data.published === true;
           return data.published === true;
         });
+        if (collection === 'translations') {
+          const items = await Promise.all(visible.map(async d => {
+            const proposals = await d.ref.collection('proposals')
+              .where('proposerUid','==',ctx.auth.uid)
+              .limit(20)
+              .get();
+            return {
+              id:d.id,
+              ...d.data(),
+              canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
+              proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() })).sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
+            };
+          }));
+          return res.status(200).json({ ok:true, items });
+        }
         return res.status(200).json({
           ok: true,
           items: visible.map(d => ({
@@ -356,7 +420,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (collection === 'translations' && action === 'proposeTranslation') {
-      if (!ctx.organizationId) throw new Error('An organization membership is required to submit a translation proposal.');
+      if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
       const languageId = safeId(body.languageId);
       const key = String(body.key || '').trim();
       const proposedValue = String(body.proposedValue || '').trim();
@@ -369,7 +433,17 @@ export default async function handler(req: Request, res: Response) {
       const existingValues = sourceData.values && typeof sourceData.values === 'object' ? sourceData.values as Record<string, unknown> : {};
       if (!(key in existingValues)) throw new Error('The selected translation key does not exist.');
       if (String(existingValues[key] || '') === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
-      const proposalRef = ctx.db.collection('translations/' + languageId + '/proposals').doc();
+      const proposalCollection = ctx.db.collection('translations/' + languageId + '/proposals');
+      const existingProposals = await proposalCollection
+        .where('proposerUid','==',ctx.auth.uid)
+        .limit(50)
+        .get();
+      const duplicate = existingProposals.docs.some(doc => {
+        const proposal = doc.data() || {};
+        return String(proposal.key || '') === key && String(proposal.status || '') === 'pending';
+      });
+      if (duplicate) throw new Error('You already have a pending proposal for this translation key.');
+      const proposalRef = proposalCollection.doc();
       const now = new Date().toISOString();
       await proposalRef.set({
         id: proposalRef.id,
@@ -379,8 +453,11 @@ export default async function handler(req: Request, res: Response) {
         proposedValue,
         reason,
         proposerUid: ctx.auth.uid,
-        proposerOrganizationId: ctx.organizationId,
-        organizationId: ctx.organizationId,
+        proposerOrganizationId: ctx.organizationId || '',
+        proposerTenantId: tenantOwnerKey(ctx),
+        organizationId: ctx.organizationId || '',
+        tenantType: ctx.tenantType,
+        tenantId: tenantOwnerKey(ctx),
         status: 'pending',
         createdAt: now,
         updatedAt: now,
@@ -459,7 +536,7 @@ export default async function handler(req: Request, res: Response) {
 
     const id = safeId(body.id);
     if (GLOBAL_COLLECTIONS.has(collection)) {
-      if (!ctx.organizationId && !ctx.isSuperAdmin) throw new Error('An organization membership is required before contributing global content.');
+      if (!ctx.organizationId && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required before contributing global content.');
       const ref = ctx.db.doc(collection + '/' + id);
       const existing = await ref.get();
       if (action === 'delete') {
@@ -482,7 +559,8 @@ export default async function handler(req: Request, res: Response) {
           ...incoming,
           id,
           organizationId: '',
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || ctx.organizationId,
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
+          ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
           canonical: true,
           sharingScope: 'shared',

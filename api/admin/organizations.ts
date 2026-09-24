@@ -21,6 +21,31 @@ function normalizeQuotas(value: unknown) {
 }
 
 function slug(value: unknown) { const v = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); if (!v) throw new Error('Organization name is required.'); return v.slice(0, 80); }
+function hierarchyRole(role: string) { return ['union_admin','conference_admin','district_admin','church_admin'].includes(role) ? role : ''; }
+function organizationInHierarchy(data: Record<string, unknown>, role: string, nodeId: string) {
+  const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : role === 'church_admin' ? 'churchId' : '';
+  if (field && String(data[field] || '').trim() === nodeId) return true;
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+  if (field && String(hierarchy[field] || '').trim() === nodeId) return true;
+  return String(data.hierarchyType || '').trim() === field.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId;
+}
+async function organizationAllowedForHierarchy(ctx: Awaited<ReturnType<typeof authenticateTenant>>, organizationId: string, role: string, nodeId: string) {
+  const organization = await ctx.db.doc('organizations/' + organizationId).get();
+  if (!organization.exists || organization.data()?.status !== 'active') return false;
+  if (organizationInHierarchy(organization.data() || {}, role, nodeId)) return true;
+  const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+  const users = await ctx.db.collection('users').where(field, '==', nodeId).limit(100).get();
+  return users.docs.some(doc => String(doc.data()?.organizationId || '').trim() === organizationId);
+}
+async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authenticateTenant>>, requestedOrg: string) {
+  if (ctx.isSuperAdmin) return requestedOrg || ctx.organizationId;
+  if (ctx.organizationId) return ctx.organizationId;
+  const role = hierarchyRole(String(ctx.profile.role || ''));
+  if (!role || !requestedOrg) throw new Error('Select an organization within your hierarchy.');
+  const organization = await ctx.db.doc('organizations/' + requestedOrg).get();
+  if (!(await organizationAllowedForHierarchy(ctx, requestedOrg, role, String(ctx.profile.adminNodeId || '').trim()))) throw new Error('The selected organization is outside your assigned hierarchy scope.');
+  return requestedOrg;
+}
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
@@ -141,6 +166,20 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'list') {
+      if (!ctx.isSuperAdmin && hierarchyRole(String(ctx.profile.role || ''))) {
+        const role = hierarchyRole(String(ctx.profile.role || ''));
+        const nodeId = String(ctx.profile.adminNodeId || '').trim();
+        const scopeField = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+        const scopedUsers = await bootstrapDb.collection('users').where(scopeField, '==', nodeId).get();
+        const inferredOrganizationIds = new Set(scopedUsers.docs.map(doc => String(doc.data()?.organizationId || '').trim()).filter(Boolean));
+        const snap = await bootstrapDb.collection('organizations').get();
+        const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId) || inferredOrganizationIds.has(doc.id)).map(async organization => {
+          const data = organization.data() || {};
+          const members = await organization.ref.collection('members').where('active','==',true).get();
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
+        }));
+        return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
+      }
       if (!ctx.isSuperAdmin) {
         requireOrgRole(ctx, ['owner','admin']);
         const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
@@ -173,14 +212,15 @@ export default async function handler(req: Request, res: Response) {
     }
 
 
-    requireOrgRole(ctx, ['owner','admin']);
+    const managedOrganizationId = await resolveManagedOrganization(ctx, String(requestedOrg || '').trim());
+    if (!ctx.isSuperAdmin && !hierarchyRole(String(ctx.profile.role || ''))) requireOrgRole(ctx, ['owner','admin']);
     if (action === 'listAudit') {
-      const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
+      const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
     }
 
     if (action === 'getUsage') {
-      const orgId = ctx.organizationId;
+      const orgId = managedOrganizationId;
       const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
       const [members, guides, quizzes, announcements, radio, books] = await Promise.all([
         ctx.db.collection(`organizations/${orgId}/members`).where('active','==',true).get(),
@@ -201,7 +241,7 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       };
       Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
-      const before = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+      const before = await ctx.db.doc(`organizations/${managedOrganizationId}`).get();
       if (!ctx.isSuperAdmin && data.quotas !== undefined) throw new Error('Only the VOP Super Admin can change organization quotas.');
       if (allowed.quotas !== undefined) {
         const raw = allowed.quotas as Record<string, unknown>;
@@ -214,13 +254,13 @@ export default async function handler(req: Request, res: Response) {
         }
         allowed.quotas = normalized;
       }
-      await ctx.db.doc(`organizations/${ctx.organizationId}`).set(allowed, { merge:true });
-      await writeTenantAudit(ctx, 'organization.update', `organizations/${ctx.organizationId}`, before.data(), allowed);
+      await ctx.db.doc(`organizations/${managedOrganizationId}`).set(allowed, { merge:true });
+      await writeTenantAudit(ctx, 'organization.update', `organizations/${managedOrganizationId}`, before.data(), allowed);
       return res.status(200).json({ ok:true });
     }
 
     if (action === 'sendInvite') {
-      requireOrgRole(ctx, ['owner','admin']);
+      if (!hierarchyRole(String(ctx.profile.role || ''))) requireOrgRole(ctx, ['owner','admin']);
       const email = String(body.email || '').trim().toLowerCase();
       const inviteRole = String(body.role || 'learner');
       if (!/^\S+@\S+\.\S+$/.test(email) || !['admin','editor','mentor','teacher','learner','viewer'].includes(inviteRole)) throw new Error('A valid email and organization role are required.');
@@ -228,7 +268,7 @@ export default async function handler(req: Request, res: Response) {
       const now = new Date();
       const expiresAt = new Date(now.getTime()+7*24*60*60*1000).toISOString();
       await ctx.db.doc(`organizationInvites/${token}`).set({
-        token,email,organizationId:ctx.organizationId,role:inviteRole,invitedBy:ctx.auth.uid,
+        token,email,organizationId:managedOrganizationId,role:inviteRole,invitedBy:ctx.auth.uid,
         createdAt:now.toISOString(),expiresAt,status:'pending'
       });
       await writeTenantAudit(ctx,'membership.invite',`organizationInvites/${token}`,undefined,{email,role:inviteRole,expiresAt});
@@ -261,9 +301,7 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('The selected user belongs to another organization. Remove or reassign that membership before assigning ownership.');
       }
       const platformRole = String(targetProfile.role || '').trim();
-      if (platformRole === 'super_admin' || ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole)) {
-        throw new Error('Platform or hierarchy administrators cannot be assigned as organization owners.');
-      }
+      if (platformRole === 'super_admin') throw new Error('The platform Super Admin cannot be assigned as an organization owner.');
 
       const previousOwnerUid = String(organizationSnap.data()?.ownerUid || '').trim();
       const previousOwnerProfileRef = previousOwnerUid ? bootstrapDb.doc(`users/${previousOwnerUid}`) : null;
@@ -294,12 +332,12 @@ export default async function handler(req: Request, res: Response) {
       });
 
       const authService = getAuth(bootstrapDb.app);
-      await authService.setCustomUserClaims(uid, { role:'student', organizationId, organizationRole:'owner' });
+      await authService.setCustomUserClaims(uid, { role: ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? platformRole : 'student', ...( ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? { adminNodeType:targetProfile.adminNodeType, adminNodeId:targetProfile.adminNodeId } : {} ), organizationId, organizationRole:'owner' });
       if (previousOwnerUid && previousOwnerUid !== uid) {
-        await authService.setCustomUserClaims(previousOwnerUid, { role:'student', organizationId, organizationRole:'admin' }).catch(() => undefined);
+        await authService.setCustomUserClaims(previousOwnerUid, { role: hierarchyRole(String((await previousOwnerProfileRef?.get())?.data()?.role || '')) || 'student', organizationId, organizationRole:'admin' }).catch(() => undefined);
       }
       await writeTenantAudit(
-        { db:bootstrapDb, auth:ctx.auth, profile:ctx.profile, organizationId, membership:{role:'owner',active:true}, isSuperAdmin:true },
+        { db:bootstrapDb, auth:ctx.auth, profile:ctx.profile, organizationId, membership:{role:'owner',active:true}, isSuperAdmin:true, tenantType:'organization', tenantId:organizationId },
         'organization.owner.assign',
         organizationRef.path,
         organizationSnap.data(),
@@ -310,7 +348,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'searchUsers') {
       const query = String(body.query || '').trim().toLowerCase();
-      const searchOrganizationId = String(requestedOrg || ctx.organizationId || '').trim();
+      const searchOrganizationId = managedOrganizationId;
       if (!searchOrganizationId) throw new Error('Select an organization before searching accounts.');
       if (query.length < 2) return res.status(200).json({ ok:true, items:[] });
       const users = await ctx.db.collection('users').limit(1000).get();
@@ -336,7 +374,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listMembers') {
-      const memberOrganizationId = String(requestedOrg || ctx.organizationId || '').trim();
+      const memberOrganizationId = managedOrganizationId;
       if (!memberOrganizationId) throw new Error('Select an organization before loading members.');
       const snap = await ctx.db.collection(`organizations/${memberOrganizationId}/members`).where('active','==',true).get();
       const items = await Promise.all(snap.docs.map(async d => {
@@ -355,7 +393,7 @@ export default async function handler(req: Request, res: Response) {
       if (!/^\S+@\S+\.\S+$/.test(email) || !displayName) throw new Error('A valid name and email are required.');
       if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) throw new Error('A valid organization role is required.');
       if (password && password.length < 6) throw new Error('Password must contain at least 6 characters.');
-      await enforceQuota(ctx, 'users', 'maxUsers');
+      if (ctx.organizationId) await enforceQuota(ctx, 'users', 'maxUsers');
       const authService = getAuth(ctx.db.app);
       let created;
       try {
@@ -367,11 +405,20 @@ export default async function handler(req: Request, res: Response) {
       }
       const now = new Date().toISOString();
       await ctx.db.runTransaction(async transaction => {
-        transaction.set(ctx.db.doc('users/' + created.uid), { uid:created.uid, email, displayName, userType:role === 'learner' || role === 'viewer' ? 'learner' : role, role: role === 'mentor' ? 'mentor' : 'student', organizationId:ctx.organizationId, organizationRole:role, privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'}, information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]}, createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp() }, {merge:true});
-        transaction.set(ctx.db.doc('organizations/' + ctx.organizationId + '/members/' + created.uid), {uid:created.uid,organizationId:ctx.organizationId,role,active:true,invitedBy:ctx.auth.uid,joinedAt:now,updatedAt:now},{merge:true});
+        transaction.set(ctx.db.doc('users/' + created.uid), {
+          uid:created.uid, email, displayName,
+          userType:role === 'learner' || role === 'viewer' ? 'learner' : role,
+          role: role === 'mentor' ? 'mentor' : 'student',
+          organizationId:managedOrganizationId, organizationRole:role,
+          privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'},
+          information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false},
+          progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]},
+          createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()
+        }, {merge:true});
+        transaction.set(ctx.db.doc('organizations/' + managedOrganizationId + '/members/' + created.uid), {uid:created.uid,organizationId:managedOrganizationId,role,active:true,invitedBy:ctx.auth.uid,joinedAt:now,updatedAt:now},{merge:true});
       });
-      await authService.setCustomUserClaims(created.uid, { role:'student', organizationId:ctx.organizationId, organizationRole:role });
-      await writeTenantAudit(ctx,'membership.create','organizations/' + ctx.organizationId + '/members/' + created.uid,undefined,{uid:created.uid,role});
+      await authService.setCustomUserClaims(created.uid, { role:'student', organizationId:managedOrganizationId, organizationRole:role });
+      await writeTenantAudit(ctx,'membership.create','organizations/' + managedOrganizationId + '/members/' + created.uid,undefined,{uid:created.uid,role});
       return res.status(200).json({ok:true,item:{uid:created.uid,email,displayName,role}});
     }
 
@@ -385,7 +432,7 @@ export default async function handler(req: Request, res: Response) {
       if (!['admin','editor','mentor','teacher','learner','viewer'].includes(memberRole)) throw new Error('A valid organization role is required.');
       const existingData = existingProfile.data() || {};
       const existingOrganizationId = String(existingData.organizationId || '').trim();
-      const targetMemberRef = ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`);
+      const targetMemberRef = ctx.db.doc(`organizations/${managedOrganizationId}/members/${uid}`);
       const existingMember = await targetMemberRef.get();
       if (String(existingMember.data()?.role || '') === 'owner' || String(existingData.organizationRole || '') === 'owner') {
         throw new Error('The organization owner cannot be changed from the member manager.');
@@ -397,15 +444,15 @@ export default async function handler(req: Request, res: Response) {
       const previousMemberRef = null;
       await ctx.db.runTransaction(async transaction => {
         transaction.set(targetMemberRef, {
-          uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false,
-          invitedBy: ctx.auth.uid, joinedAt: String(existingData.organizationId || '') === ctx.organizationId ? String(existingData.joinedAt || now) : now, updatedAt: now
+          uid, organizationId: managedOrganizationId, role: memberRole, active: body.active !== false,
+          invitedBy: ctx.auth.uid, joinedAt: String(existingData.organizationId || '') === managedOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt: now
         }, { merge: true });
         transaction.set(profileRef, {
-          organizationId: ctx.organizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
+          organizationId: managedOrganizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       });
       const authService = getAuth(ctx.db.app);
-      await authService.setCustomUserClaims(uid, { role:'student', organizationId:ctx.organizationId, organizationRole:memberRole });
+      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(existingData.role || '')) || 'student', ...(hierarchyRole(String(existingData.role || '')) ? { adminNodeType:existingData.adminNodeType, adminNodeId:existingData.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:memberRole });
       await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingMember.exists ? existingMember.data() : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
     }
@@ -413,17 +460,20 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'removeMember') {
       const uid = String(body.uid || '').trim();
       if (!uid || uid === ctx.auth.uid) throw new Error('An administrator cannot remove their own organization membership from this screen.');
-      const organizationRef = ctx.db.doc(`organizations/${ctx.organizationId}`);
+      const organizationRef = ctx.db.doc(`organizations/${managedOrganizationId}`);
       const [organizationSnap, memberSnap, profileSnap] = await Promise.all([
         organizationRef.get(),
-        ctx.db.doc(`organizations/${ctx.organizationId}/members/${uid}`).get(),
+        ctx.db.doc(`organizations/${managedOrganizationId}/members/${uid}`).get(),
         ctx.db.doc(`users/${uid}`).get()
       ]);
       if (!memberSnap.exists) throw new Error('That user is not a member of this organization.');
       const memberData = memberSnap.data() || {};
       const profileData = profileSnap.data() || {};
-      if (String(memberData.role || '') === 'owner' || String(organizationSnap.data()?.ownerUid || '') === uid || String(profileData.organizationRole || '') === 'owner') {
-        throw new Error('The organization owner cannot be removed. Transfer ownership through the Super Admin workflow first.');
+      const isOwner = String(memberData.role || '') === 'owner'
+        || String(organizationSnap.data()?.ownerUid || '') === uid
+        || String(profileData.organizationRole || '') === 'owner';
+      if (isOwner && !ctx.isSuperAdmin) {
+        throw new Error('The organization owner cannot be removed by an organization administrator. Assign organization ownership to another user first.');
       }
       const now = new Date().toISOString();
       await ctx.db.runTransaction(async transaction => {
@@ -431,11 +481,18 @@ export default async function handler(req: Request, res: Response) {
           active:false, removedAt:now, removedBy:ctx.auth.uid, updatedAt:now
         }, { merge:true });
         transaction.set(profileSnap.ref, {
-          organizationId:'', organizationRole:'learner', updatedAt:FieldValue.serverTimestamp()
+          ...(hierarchyRole(String(profileData.role || '')) ? { organizationRole:'learner' } : { organizationId:'', organizationRole:'learner' }),
+          updatedAt:FieldValue.serverTimestamp()
         }, { merge:true });
+        if (isOwner && ctx.isSuperAdmin) {
+          transaction.set(organizationRef, {
+            ownerUid:'',
+            updatedAt:FieldValue.serverTimestamp()
+          }, { merge:true });
+        }
       });
       const authService = getAuth(ctx.db.app);
-      await authService.setCustomUserClaims(uid, { role:'student', organizationId:'', organizationRole:'learner' });
+      await authService.setCustomUserClaims(uid, hierarchyRole(String(profileData.role || '')) || 'student');
       await writeTenantAudit(ctx, 'membership.remove', memberSnap.ref.path, memberData, { uid, active:false, removedBy:ctx.auth.uid });
       return res.status(200).json({ ok:true });
     }
@@ -443,7 +500,7 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can change organization status.');
       const status = ['active','suspended','archived'].includes(String(body.status)) ? String(body.status) : '';
       if (!status) throw new Error('Invalid organization status.');
-      await ctx.db.doc(`organizations/${ctx.organizationId}`).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await ctx.db.doc(`organizations/${managedOrganizationId}`).set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ ok: true });
     }
     return res.status(400).json({ error: 'Unsupported organization action.' });

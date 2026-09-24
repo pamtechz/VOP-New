@@ -13,6 +13,9 @@ import {
   saveTranslation
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
+import { getTranslation } from '../services/i18n';
+
+const t = (key: string, fallback: string) => getTranslation(key, fallback);
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -127,6 +130,7 @@ function validateRadioMedia(form: FormState) {
 }
 
 export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage }) => {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [playlists, setPlaylists] = useState<AdminRecord[]>([]);
   const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
@@ -503,7 +507,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       {message && <Toast message={message}/>}
       <div className="vop-toolbar">
         <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={'Search '+primaryTitle.toLowerCase()+'…'}/>{search&&<button type="button" onClick={()=>setSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div>
-        <button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/>Refresh</button>
+        <button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>
       </div>
       <div className="vop-admin-record-layout">
         <div className="vop-table-wrap">
@@ -667,7 +671,7 @@ function AnnouncementAdminDashboard({
   const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
 
   return <div className="vop-ann-admin">
-    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>Announcements</span><h1>Manage Announcements</h1><p>Create, manage and publish announcements for learners and users.</p></section></div><button className="vop-primary" type="button" onClick={openNew}><Plus size={17}/> New Announcement</button></div>
+    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>{t('admin.announcements','Announcements')}</span><h1>Manage Announcements</h1><p>Create, manage and publish announcements for learners and users.</p></section></div><button className="vop-primary" type="button" onClick={openNew}><Plus size={17}/> New Announcement</button></div>
     <div className="vop-ann-admin-stats">
       <div><Megaphone/><span>Total Announcements<strong>{records.length}</strong><small>All time</small></span></div>
       <div><Check/><span>Published<strong>{published.length}</strong><small>{records.length ? Math.round(published.length*100/records.length) : 0}%</small></span></div>
@@ -848,7 +852,7 @@ function RadioAdminDashboard({
       <div className="vop-radio-admin-topbar">
         <div className="vop-radio-admin-title">
           <div className="vop-radio-admin-icon"><Radio size={28}/></div>
-          <div><span>Radio</span><h1>Audio / Video Streaming</h1></div>
+          <div><span>{t('admin.radio','Radio')}</span><h1>Audio / Video Streaming</h1></div>
         </div>
         <div className="vop-radio-admin-actions"><button className="vop-radio-admin-public" type="button" onClick={() => window.open('/?radio=1','_blank')}><ExternalLink size={16}/> View Public Radio</button><button className="vop-radio-admin-add" type="button" onClick={startNewEditor}><Plus size={17}/> Add Content <span>⌄</span></button></div>
       </div>
@@ -921,7 +925,7 @@ function RadioAdminDashboard({
                <label className="vop-setting-row"><span>Published</span><input type="checkbox" checked={playlistPublished} onChange={e=>setPlaylistPublished(e.target.checked)}/></label>
                <button className="vop-primary" type="button" disabled={playlistSaving} onClick={()=>void savePlaylist()}><Save size={16}/>{playlistSaving ? 'Saving…' : playlistEditingId ? 'Save Playlist' : 'Create Playlist'}</button>
              </div>
-             <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false}>Edit</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false}>Delete</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">No playlists configured.</div>}</div>
+             <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false}>{t('common.edit','Edit')}</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false}>{t('common.delete','Delete')}</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">No playlists configured.</div>}</div>
            </div> :
            <div className="vop-radio-admin-library-grid">
              {filtered
@@ -940,8 +944,8 @@ function RadioAdminDashboard({
                    <p>{String(item.speaker || item.series || '')}</p>
                    <div>
                      <small>{radioTime(item)}</small>
-                     <button type="button" onClick={() => edit(item)}>Edit</button>
-                     <button type="button" onClick={() => void remove(item.id)}>Delete</button>
+                     <button type="button" onClick={() => edit(item)}>{t('common.edit','Edit')}</button>
+                     <button type="button" onClick={() => void remove(item.id)}>{t('common.delete','Delete')}</button>
                    </div>
                  </article>
                ))}
@@ -956,7 +960,7 @@ function RadioAdminDashboard({
         <form className="vop-radio-editor-modal" onSubmit={submit}>
           <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
           <div className="vop-radio-editor-body"><Fields kind="radio" form={form} setForm={setForm} records={records} /></div>
-          <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>Cancel</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
+          <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
         </form>
       </div>}
     </div>
