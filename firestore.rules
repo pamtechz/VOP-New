@@ -294,6 +294,28 @@ service cloud.firestore {
         && data.get(fieldName, '') == userDoc().data.get('adminNodeId', '');
     }
 
+    function canReadHierarchyRecord(collectionName, recordId, data) {
+      return isSuperAdmin()
+        || (
+          isHierarchyTenant()
+          && (
+            (role() == 'union_admin' && (
+              (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
+              || (collectionName in ['conferences','districts','churches'] && data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+            ))
+            || (role() == 'conference_admin' && (
+              (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
+              || (collectionName in ['districts','churches'] && data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+            ))
+            || (role() == 'district_admin' && (
+              (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
+              || (collectionName == 'churches' && data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+            ))
+            || (role() == 'church_admin' && collectionName == 'churches' && recordId == userDoc().data.get('adminNodeId', ''))
+          )
+        );
+    }
+
     function canViewHierarchyCertificate(data) {
       return hierarchyTenantForField(data, 'unionId')
         || hierarchyTenantForField(data, 'conferenceId')
@@ -619,21 +641,21 @@ service cloud.firestore {
 
     // Organization reference data remains platform-managed.
     match /unions/{id} {
-      allow get, list: if signedIn();
+      allow get, list: if canReadHierarchyRecord('unions', id, resource.data);
       allow create, update, delete: if isSuperAdmin();
     }
     match /conferences/{id} {
-      allow get, list: if signedIn();
+      allow get, list: if canReadHierarchyRecord('conferences', id, resource.data);
       allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate();
       allow delete: if isSuperAdmin() || unionAdminForDelete();
     }
     match /districts/{id} {
-      allow get, list: if signedIn();
+      allow get, list: if canReadHierarchyRecord('districts', id, resource.data);
       allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate();
       allow delete: if isSuperAdmin() || conferenceAdminForDelete();
     }
     match /churches/{id} {
-      allow get, list: if signedIn();
+      allow get, list: if canReadHierarchyRecord('churches', id, resource.data);
       allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate();
       allow delete: if isSuperAdmin() || districtAdminForDelete();
     }
