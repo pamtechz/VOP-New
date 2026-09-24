@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -54,6 +55,7 @@ async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>)
 
 async function submit(req: Request, res: Response) {
   const ctx = await authenticateTenant(req);
+  await requirePermission(ctx, 'certificates', 'create');
   if (ctx.isSuperAdmin) return res.status(403).json({ error: 'Super administrators do not submit candidate graduation requests.' });
   const body = bodyOf(req);
   const guideId = text(body.guideId);
@@ -151,6 +153,7 @@ async function decide(req: Request, res: Response) {
   if (!Number.isInteger(expectedRevision) || expectedRevision < 1) return res.status(400).json({ error: 'The current request revision is required.' });
 
   let ctx = await authenticateTenant(req, undefined, true);
+  await requirePermission(ctx, 'certificates', 'manage');
   const ref = ctx.db.doc(`graduationRequests/${requestIdValue}`);
   const snapshot = await ref.get();
   if (!snapshot.exists) return res.status(404).json({ error: 'Graduation request was not found.' });
