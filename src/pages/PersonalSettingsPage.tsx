@@ -3,12 +3,14 @@ import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } f
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
   language?: string;
+  uiLocale?: string;
+  studyLanguage?: string;
   notifications?: { enabled?: boolean; email?: boolean; announcements?: boolean; certificates?: boolean };
   accessibility?: { reducedMotion?: boolean; largeText?: boolean; highContrast?: boolean };
   privacy?: { profileVisibility?: 'private' | 'organization' };
@@ -41,6 +43,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
+  const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
   const language = getActiveLanguage();
   const appSettings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, language, appSettings.customTranslations, fallback, 'PersonalSettingsPage');
@@ -50,6 +53,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
     const loadSettings = callPersonalSettings('get')
       .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
+    void loadUiLocaleRegistry().then(setUiLocales).catch(() => undefined);
     const loadLanguages = loadPublicContent()
       .then(content => { if (active) setLanguages(content.languages || []); })
       .catch(error => {
