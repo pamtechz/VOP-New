@@ -1,8 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const root = process.cwd();
+
+function verifyCertificateBackgroundAsset() {
+  const assetPath = path.join(root, 'public', 'assets', 'certificate_bg.png');
+  if (!fs.existsSync(assetPath)) throw new Error('Missing authoritative certificate background asset: public/assets/certificate_bg.png');
+  const bytes = fs.readFileSync(assetPath);
+  if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    throw new Error('Certificate background is not a valid PNG.');
+  }
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (width !== 1513 || height !== 1040) {
+    throw new Error(`Certificate background dimensions must be 1513x1040; found ${width}x${height}.`);
+  }
+  const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  const expected = '3e3051618c632c7142b09e5257fc4526269bff98df6c0032af3a4743e8f59478';
+  if (sha256 !== expected) {
+    throw new Error('Certificate background does not match the supplied authoritative artwork.');
+  }
+}
+
 const read = file => fs.readFileSync(path.join(root,file),'utf8');
+verifyCertificateBackgroundAsset();
+
 const checks = [
   ['server/tenant.ts', [
     "String(profile.role || '') === 'super_admin'",
