@@ -104,7 +104,7 @@ function normalizeBaseUrl(value: string) {
 function stringValue(config: CertificationConfig, key: keyof CertificationConfig) { const value = config[key]; return typeof value === 'string' ? value : ''; }
 
 export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onBack }) => {
-  const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), id: config?.id || 'certification', template: normalizeTemplate(config?.template, config?.backgroundUrl) }));
+  const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }));
   const [selectedId, setSelectedId] = useState('certify');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -112,12 +112,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
 
   useEffect(() => {
     const nextTemplate = normalizeTemplate(config?.template, config?.backgroundUrl);
-    setDraft({ ...(config || {}), id: config?.id || 'certification', template: nextTemplate });
+    setDraft({ ...(config || {}), id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: nextTemplate });
     setSelectedId(nextTemplate.elements?.[0]?.id || 'certify');
     setError('');
   }, [config]);
 
-  const baseline = useMemo(() => ({ ...(config || {}), id: config?.id || 'certification', template: normalizeTemplate(config?.template, config?.backgroundUrl) }), [config]);
+  const baseline = useMemo(() => ({ ...(config || {}), id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }), [config]);
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(baseline), [draft, baseline]);
   const template = draft.template || DEFAULT_TEMPLATE;
   const elements = template.elements || [];
