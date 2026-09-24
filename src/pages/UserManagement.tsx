@@ -83,6 +83,7 @@ function emptyEditor(): EditorState {
 }
 
 export default function UserManagement({ onBack }: Props) {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tenantOrganizations, setTenantOrganizations] = useState<TenantOrganization[]>([]);
   const [loading, setLoading] = useState(true);
