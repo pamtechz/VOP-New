@@ -299,7 +299,7 @@ export default async function handler(req: Request, res: Response) {
         await authService.setCustomUserClaims(previousOwnerUid, { role:'student', organizationId, organizationRole:'admin' }).catch(() => undefined);
       }
       await writeTenantAudit(
-        { db:bootstrapDb, auth:ctx.auth, profile:ctx.profile, organizationId, membership:{role:'owner',active:true}, isSuperAdmin:true },
+        { db:bootstrapDb, auth:ctx.auth, profile:ctx.profile, organizationId, membership:{role:'owner',active:true}, isSuperAdmin:true, tenantType:'organization', tenantId:organizationId },
         'organization.owner.assign',
         organizationRef.path,
         organizationSnap.data(),
