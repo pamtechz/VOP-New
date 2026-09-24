@@ -150,12 +150,40 @@ function tenantSubscription(
     } else if (scope.superAdmin) {
       source = ref;
     } else if (scope.nodeId && ['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
-      if (['churches','users','candidates'].includes(collectionName)) {
-        const field = scope.role === 'union_admin' ? 'unionId'
-          : scope.role === 'conference_admin' ? 'conferenceId'
-          : scope.role === 'district_admin' ? 'districtId'
-          : 'churchId';
-        source = query(ref, where(field, '==', scope.nodeId));
+      // Hierarchy administrators must receive only the hierarchy records they
+      // are authorized to manage. These queries mirror firestore.rules so the
+      // UI does not appear empty merely because a scoped administrator is not
+      // allowed to query the whole platform collection.
+      const hierarchyField =
+        scope.role === 'union_admin' ? 'unionId'
+        : scope.role === 'conference_admin' ? 'conferenceId'
+        : scope.role === 'district_admin' ? 'districtId'
+        : 'churchId';
+
+      if (collectionName === 'unions') {
+        source = scope.role === 'union_admin'
+          ? query(ref, where('__name__', '==', scope.nodeId))
+          : null;
+      } else if (collectionName === 'conferences') {
+        source = scope.role === 'conference_admin'
+          ? query(ref, where('__name__', '==', scope.nodeId))
+          : scope.role === 'union_admin'
+            ? query(ref, where('unionId', '==', scope.nodeId))
+            : null;
+      } else if (collectionName === 'districts') {
+        source = scope.role === 'district_admin'
+          ? query(ref, where('__name__', '==', scope.nodeId))
+          : scope.role === 'conference_admin'
+            ? query(ref, where('conferenceId', '==', scope.nodeId))
+            : scope.role === 'union_admin'
+              ? query(ref, where('unionId', '==', scope.nodeId))
+              : null;
+      } else if (collectionName === 'churches') {
+        source = scope.role === 'church_admin'
+          ? query(ref, where('__name__', '==', scope.nodeId))
+          : query(ref, where(hierarchyField, '==', scope.nodeId));
+      } else if (['users','candidates'].includes(collectionName)) {
+        source = query(ref, where(hierarchyField, '==', scope.nodeId));
       } else {
         // Hierarchy tenants must never fall back to an unscoped collection read.
         source = null;
