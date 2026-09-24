@@ -612,20 +612,20 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const saveLesson = async (publish: boolean) => {
     if (!editor) return;
-    if (!editor.title.trim()) return setError('Lesson title is required.');
-    if (!editor.lessonNumber.trim()) return setError('Lesson number is required.');
-    if (!editor.language.trim()) return setError('Select a language before saving.');
-    if (!editor.guideId.trim()) return setError('Select a guide before saving.');
+    if (!editor.title.trim()) return setError(tx('curriculum.lessonTitleRequired', 'Lesson title is required.'));
+    if (!editor.lessonNumber.trim()) return setError(tx('curriculum.lessonNumberRequiredMessage', 'Lesson number is required.'));
+    if (!editor.language.trim()) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a language before saving.'));
+    if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));
 
     const guide = guides.find(item => item.id === editor.guideId && item.language === editor.language);
-    if (!guide && publish) return setError('The selected guide is not available for this language.');
+    if (!guide && publish) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
 
     const duplicate = lessonRows.some(row =>
       row.key !== editor.language + '|' + editor.id
       && row.guide?.id === editor.guideId
       && Number.parseFloat(row.lesson.lessonNumber) === Number.parseFloat(editor.lessonNumber),
     );
-    if (duplicate) return setError('Lesson number is already used in the selected guide.');
+    if (duplicate) return setError(tx('curriculum.lessonNumberDuplicate', 'Lesson number is already used in the selected guide.'));
 
     setSaving(true);
     setError('');
@@ -692,9 +692,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload);
       await load();
       setEditor({ ...editor, id, guideTitle: guide?.title || editor.guideTitle, published: publish });
-      notify(publish ? 'Lesson published.' : 'Lesson draft saved.');
+      notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save lesson.');
+      setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
     } finally {
       setSaving(false);
     }
@@ -702,15 +702,15 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const unpublishLesson = async () => {
     if (!editor?.id || !editor.published) return;
-    if (!window.confirm('Unpublish this lesson from the learner curriculum?')) return;
+    if (!window.confirm(tx('curriculum.confirmUnpublish', 'Unpublish this lesson from the learner curriculum?'))) return;
     setSaving(true);
     try {
       await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, lessonId: editor.id });
       setEditor({ ...editor, published: false });
       await load();
-      notify('Lesson unpublished.');
+      notify(tx('curriculum.lessonUnpublished', 'Lesson unpublished.'));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not unpublish lesson.');
+      setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotUnpublishLesson', 'Could not unpublish lesson.'));
     } finally {
       setSaving(false);
     }
@@ -719,11 +719,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const saveRecord = async (kind: 'paths' | 'topics' | 'seasons') => {
     if (!editingRecord) return;
     if (editingRecord.canEdit === false) {
-      setError('This curriculum record is owned by another contributor and cannot be edited here.');
+      setError(tx('curriculum.recordOwnedByAnotherEdit', 'This curriculum record is owned by another contributor and cannot be edited here.'));
       return;
     }
     const name = valueText(editingRecord.name).trim();
-    if (!name) return setError('A name is required.');
+    if (!name) return setError(tx('common.nameRequired', 'A name is required.'));
     setSaving(true);
     try {
       const id = editingRecord.id || newId(kind);
@@ -735,9 +735,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       });
       setEditingRecord(null);
       await load();
-      notify('Record saved.');
+      notify(tx('common.recordSaved', 'Record saved.'));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save record.');
+      setError(reason instanceof Error ? reason.message : tx('common.couldNotSaveRecord', 'Could not save record.'));
     } finally {
       setSaving(false);
     }
@@ -746,16 +746,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const deleteRecord = async (kind: 'paths' | 'topics' | 'seasons', id: string) => {
     const target = records.find(record => record.id === id);
     if (target?.canEdit === false) {
-      setError('This curriculum record is owned by another contributor and cannot be deleted here.');
+      setError(tx('curriculum.recordOwnedByAnotherDelete', 'This curriculum record is owned by another contributor and cannot be deleted here.'));
       return;
     }
-    if (!window.confirm('Delete this curriculum record?')) return;
+    if (!window.confirm(tx('common.confirmDelete', 'Delete this curriculum record?'))) return;
     try {
       await adminContent('delete', COLLECTIONS[kind], id);
       await load();
-      notify('Record deleted.');
+      notify(tx('common.recordDeleted', 'Record deleted.'));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete record.');
+      setError(reason instanceof Error ? reason.message : tx('common.couldNotDeleteRecord', 'Could not delete record.'));
     }
   };
 
