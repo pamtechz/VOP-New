@@ -33,8 +33,8 @@ function gradeServerQuiz(questions: QuestionRecord[], answers: Record<string, un
 
   for (let index = 0; index < questions.length; index += 1) {
     const question = questions[index];
-    const key = typeof question?.key === 'string' ? question.key.trim() : '';
-    const text = typeof question?.question === 'string' ? question.question.trim() : '';
+    const key = typeof question?.key === 'string' ? question.key.trim() : typeof question?.id === 'string' ? question.id.trim() : '';
+    const text = typeof question?.question === 'string' ? question.question.trim() : typeof question?.prompt === 'string' ? question.prompt.trim() : '';
     if (!key || !text || keys.has(key)) return null;
     keys.add(key);
 
@@ -246,7 +246,7 @@ export default async function handler(
       const questionKey = typeof question.key === 'string' ? question.key : String(index);
       return {
         key: questionKey,
-        question: String(question.question ?? ''),
+        question: String(question.question ?? question.prompt ?? ''),
         correct,
         answer: answer ?? null,
         lessonId,
