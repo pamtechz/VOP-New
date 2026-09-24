@@ -90,11 +90,19 @@ function globalCollectionSubscription(
     callback({ docs: [...docs.values()] } as import('firebase/firestore').QuerySnapshot);
   };
 
-  void currentOrganizationId().then(organizationId => {
+  void currentTenantScope().then(scope => {
     if (cancelled) return;
     const firestore = getDb();
     const ref = collection(firestore, collectionName);
     const uid = auth?.currentUser?.uid || '__none__';
+    if (scope.superAdmin) {
+      stops.push(onSnapshot(ref, snapshot => {
+        buckets.set('super', snapshot);
+        emit();
+      }, err => onError?.(err)));
+      return;
+    }
+    const organizationId = scope.organizationId;
     const publishedField = collectionName === 'languages' ? 'enabled' : collectionName === 'translations' ? null : 'published';
     const sharedQuery = publishedField
       ? query(ref, where('sharingScope', '==', 'shared'), where(publishedField, '==', true))
@@ -572,12 +580,13 @@ export const subscribeTranslations = (
     if (cancelled) return;
     const isSuperAdmin = String(profile.data()?.role || '') === 'super_admin';
     const organizationId = String(profile.data()?.organizationId || '').trim();
+    const superQuery = isSuperAdmin ? collection(firestore, 'translations') : null;
     const sharedQuery = query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'));
     const organizationQuery = organizationId && !isSuperAdmin
       ? query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))
       : null;
 
-    stop = onSnapshot(sharedQuery, snapshot => {
+    stop = onSnapshot(superQuery || sharedQuery, snapshot => {
       void (async () => {
         const docs = [...snapshot.docs];
         if (organizationQuery) {
