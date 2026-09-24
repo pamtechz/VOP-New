@@ -32,7 +32,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
           <button type="button" onClick={onBack} className="vop-materials-back"><ArrowLeft size={18}/> {t('navigation.library','Library')}</button>
           <div className="vop-materials-hero-grid">
             <div><span className="vop-materials-kicker"><Sparkles size={14}/> {t('materials.kicker','Study resources')}</span><h1>{t('materials.title','Materials for your journey.')}</h1><p>{t('materials.description','Explore Bible study resources, guides and supporting materials prepared for your learning experience.')}</p></div>
-            <div className="vop-materials-search"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="{t('materials.search','Search materials, authors or topics…')}" aria-label="Search materials"/></div>
+            <div className="vop-materials-search"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('materials.search','Search materials, authors or topics…')} aria-label="Search materials"/></div>
           </div>
         </div>
       </header>
