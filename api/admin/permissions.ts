@@ -11,7 +11,6 @@ function sanitizeMatrix(value: unknown): PermissionMatrix {
 export default async function handler(req: Request, res: Response) {
   try {
     const ctx = await authenticateTenant(req);
-    if (!ctx.isSuperAdmin) return res.status(403).json({ error:'Only the VOP Super Admin can manage the permission matrix.' });
 
     if (req.method === 'GET') {
       const snapshot = await ctx.db.doc('system/permissions').get();
@@ -26,6 +25,7 @@ export default async function handler(req: Request, res: Response) {
       });
     }
 
+    if (!ctx.isSuperAdmin) return res.status(403).json({ error:'Only the VOP Super Admin can manage the permission matrix.' });
     if (req.method !== 'POST') return res.status(405).json({ error:'Method not allowed.' });
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || 'save');
