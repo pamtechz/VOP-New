@@ -225,7 +225,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
         </aside>
 
         <section className="vop-cert-template-editor-stage">
-          <div className="vop-cert-template-stage-toolbar"><div><strong>Certificate canvas</strong><span>1513 × 1040 fixed artboard · default view 40%</span></div><div className="vop-cert-template-zoom"><button type="button" onClick={() => setZoom(value => clamp(value - .1, .4, 1))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(value => clamp(value + .1, .4, 1))}>+</button><button type="button" onClick={() => setZoom(.4)} aria-label="Reset zoom">40%</button></div></div>
+          <div className="vop-cert-template-stage-toolbar"><div><strong>Certificate canvas</strong><span>1513 × 1040 fixed artboard · default view 40%</span></div><div className="vop-cert-template-zoom"><button type="button" onClick={() => setZoom(value => clamp(value - .1, .4, 1))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(value => clamp(value + .1, .4, 1))}>+</button><button type="button" onClick={() => setZoom(0.4)} aria-label="Reset zoom">40%</button></div></div>
           <div className="vop-cert-template-scroll"><div className="vop-cert-template-artboard" tabIndex={0} role="application" aria-label="Certificate template editor. Use arrow keys to move the selected element." onKeyDown={handleCanvasKeyDown} style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
             <img className="vop-cert-template-editor-background" src={template.backgroundUrl || DEFAULT_BACKGROUND} alt=""/>
             {elements.map(element => {
