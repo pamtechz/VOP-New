@@ -28,7 +28,7 @@ const checks = [
     "'church_admin'",
     'organizationIdForUser()',
     'canEditOwnedContent',
-    'tenantSettings/{tenantId}/settings',
+    'tenantSettings/{tenantId}/settings/{settingId}',
     'canViewHierarchyCertificate',
     'canManageHierarchyUser',
     'isHierarchyTenant',
