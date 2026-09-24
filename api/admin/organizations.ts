@@ -73,39 +73,64 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'acceptInvite') {
       const token = String(body.token || '').trim();
       if (!token) throw new Error('Invitation token is required.');
-      const invite = await bootstrapDb.doc(`organizationInvites/${token}`).get();
-      if (!invite.exists) throw new Error('This invitation is not valid.');
-      const data = invite.data() || {};
-      if (data.status !== 'pending' || new Date(String(data.expiresAt || 0)).getTime() < Date.now()) throw new Error('This invitation has expired or has already been used.');
+      const inviteRef = bootstrapDb.doc(`organizationInvites/${token}`);
       const email = String(ctx.auth.email || '').trim().toLowerCase();
-      if (email !== String(data.email || '').trim().toLowerCase()) throw new Error('Sign in with the email address that received this invitation.');
-      const organizationId = String(data.organizationId || '').trim();
-      const organization = await bootstrapDb.doc(`organizations/${organizationId}`).get();
-      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
-      const existingProfile = await bootstrapDb.doc(`users/${ctx.auth.uid}`).get();
-      const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
-      if (existingOrganizationId && existingOrganizationId !== organizationId) {
-        throw new Error('This account is already assigned to another organization. An account cannot accept an invitation from a second tenant.');
-      }
-      const role = String(data.role || 'learner');
-      if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) throw new Error('This invitation contains an invalid organization role.');
+      const existingProfileRef = bootstrapDb.doc(`users/${ctx.auth.uid}`);
       const now = new Date().toISOString();
+      let organizationId = '';
+      let role = 'learner';
+      let invitedBy = '';
+
+      // Read and consume the invitation in the same transaction so the same
+      // invitation cannot be accepted concurrently by two browser sessions.
       await bootstrapDb.runTransaction(async transaction => {
+        const inviteSnapshot = await transaction.get(inviteRef);
+        if (!inviteSnapshot.exists) throw new Error('This invitation is not valid.');
+        const data = inviteSnapshot.data() || {};
+        const expiresAt = new Date(String(data.expiresAt || 0)).getTime();
+        if (data.status !== 'pending' || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+          throw new Error('This invitation has expired or has already been used.');
+        }
+        if (email !== String(data.email || '').trim().toLowerCase()) {
+          throw new Error('Sign in with the email address that received this invitation.');
+        }
+
+        organizationId = String(data.organizationId || '').trim();
+        role = String(data.role || 'learner');
+        invitedBy = String(data.invitedBy || '');
+        if (!organizationId) throw new Error('This invitation is missing its organization.');
+        if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) {
+          throw new Error('This invitation contains an invalid organization role.');
+        }
+
+        const organizationRef = bootstrapDb.doc(`organizations/${organizationId}`);
+        const organizationSnapshot = await transaction.get(organizationRef);
+        if (!organizationSnapshot.exists || organizationSnapshot.data()?.status !== 'active') {
+          throw new Error('The organization is not available.');
+        }
+
+        const existingProfile = await transaction.get(existingProfileRef);
+        const existingOrganizationId = String(existingProfile.data()?.organizationId || '').trim();
+        if (existingOrganizationId && existingOrganizationId !== organizationId) {
+          throw new Error('This account is already assigned to another organization. An account cannot accept an invitation from a second tenant.');
+        }
+
         transaction.set(
           bootstrapDb.doc(`organizations/${organizationId}/members/${ctx.auth.uid}`),
-          {uid:ctx.auth.uid,organizationId,role,active:true,joinedAt:now,invitedBy:String(data.invitedBy || ''),updatedAt:now},
+          {uid:ctx.auth.uid,organizationId,role,active:true,joinedAt:now,invitedBy,updatedAt:now},
           {merge:true},
         );
         transaction.set(
-          bootstrapDb.doc(`users/${ctx.auth.uid}`),
+          existingProfileRef,
           {organizationId,organizationRole:role,updatedAt:FieldValue.serverTimestamp()},
           {merge:true},
         );
-        transaction.set(
-          bootstrapDb.doc(`organizationInvites/${token}`),
-          {status:'accepted',acceptedBy:ctx.auth.uid,acceptedAt:now},
-          {merge:true},
-        );
+        transaction.update(inviteRef, {
+          status:'accepted',
+          acceptedBy:ctx.auth.uid,
+          acceptedAt:now,
+          updatedAt:FieldValue.serverTimestamp(),
+        });
       });
       const authService = getAuth(bootstrapDb.app);
       const currentRole = String(ctx.profile.role || '').trim();
