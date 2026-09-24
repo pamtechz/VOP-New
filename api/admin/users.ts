@@ -247,7 +247,7 @@ export default async function handler(request: Request, response: Response) {
       const incoming = body.settings && typeof body.settings === 'object'
         ? body.settings as Record<string, unknown>
         : {};
-      const allowed = ['theme','language','notifications','accessibility','privacy','studyPreferences'];
+      const allowed = ['theme','language','uiLocale','studyLanguage','notifications','accessibility','privacy','studyPreferences'];
       const invalid = Object.keys(incoming).filter(key => !allowed.includes(key));
       if (invalid.length) return response.status(400).json({ error:'Unsupported personal setting.' });
       await ref.set({ ...incoming, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
