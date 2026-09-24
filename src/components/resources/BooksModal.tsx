@@ -14,6 +14,7 @@ export const BooksModal: React.FC<BooksModalProps> = ({
   books
 }) => {
   if (!isOpen) return null;
+  const publishedBooks = books.filter(book => book.published !== false);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -62,7 +63,7 @@ export const BooksModal: React.FC<BooksModalProps> = ({
 
         {/* Books Grid */}
         <div style={{ padding: '1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {books.map((book) => (
+          {publishedBooks.map((book) => (
             <div
               key={book.id}
               style={{
@@ -108,22 +109,28 @@ export const BooksModal: React.FC<BooksModalProps> = ({
                 </p>
 
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    onClick={() => alert(`Starting e-reader for "${book.name}"`)}
+                  <a
+                    href={book.downloadUrl || undefined}
+                    target={book.downloadUrl ? '_blank' : undefined}
+                    rel={book.downloadUrl ? 'noopener noreferrer' : undefined}
+                    aria-disabled={!book.downloadUrl}
                     className="btn btn-outline"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
+                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem', pointerEvents: book.downloadUrl ? 'auto' : 'none', opacity: book.downloadUrl ? 1 : 0.5 }}
                   >
                     <BookOpen size={14} />
                     Read Online
-                  </button>
-                  <button
-                    onClick={() => alert(`Preparing PDF download for "${book.name}"`)}
+                  </a>
+                  {book.downloadUrl && <a
+                    href={book.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn btn-ghost"
                     style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
                   >
                     <Download size={14} />
-                    Download PDF
-                  </button>
+                    Open / Download
+                    <ExternalLink size={13} />
+                  </a>}
                 </div>
               </div>
             </div>
