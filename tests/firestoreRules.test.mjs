@@ -146,6 +146,39 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
       });
       await adminDb.doc('tenantSettings/union_admin:union-1/settings/settings').set({ organizationName: 'Scoped Organization Admin' });
       await adminDb.doc('system/settings').set({ appName: 'Platform VOP' });
+      await adminDb.doc('unions/union-1').set({
+        id:'union-1', name:'Union One', code:'U1',
+      });
+      await adminDb.doc('unions/union-2').set({
+        id:'union-2', name:'Union Two', code:'U2',
+      });
+      await adminDb.doc('conferences/conf-1').set({
+        id:'conf-1', unionId:'union-1', name:'Conference One',
+      });
+      await adminDb.doc('conferences/conf-2').set({
+        id:'conf-2', unionId:'union-2', name:'Conference Two',
+      });
+      await adminDb.doc('districts/dist-1').set({
+        id:'dist-1', unionId:'union-1', conferenceId:'conf-1', name:'District One',
+      });
+      await adminDb.doc('districts/dist-2').set({
+        id:'dist-2', unionId:'union-2', conferenceId:'conf-2', name:'District Two',
+      });
+      await adminDb.doc('churches/church-1').set({
+        id:'church-1', unionId:'union-1', conferenceId:'conf-1', districtId:'dist-1', name:'Church One',
+      });
+      await adminDb.doc('churches/church-2').set({
+        id:'church-2', unionId:'union-2', conferenceId:'conf-2', districtId:'dist-2', name:'Church Two',
+      });
+      await adminDb.doc('users/conference-admin').set({
+        uid:'conference-admin', role:'conference_admin', adminNodeId:'conf-1', adminNodeType:'conference', organizationId:'',
+      });
+      await adminDb.doc('users/district-admin').set({
+        uid:'district-admin', role:'district_admin', adminNodeId:'dist-1', adminNodeType:'district', organizationId:'',
+      });
+      await adminDb.doc('users/church-admin').set({
+        uid:'church-admin', role:'church_admin', adminNodeId:'church-1', adminNodeType:'church', organizationId:'',
+      });
     });
 
     const superAdmin = environment.authenticatedContext('super-admin').firestore();
@@ -164,6 +197,36 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').set({ organizationName: 'Foreign' }));
     await assertFails(unionAdmin.doc('system/settings').get());
     await assertFails(unionAdmin.doc('system/permissions').get());
+
+    // Each hierarchy administrator can update its own hierarchy profile and
+    // descendants, while cross-scope records remain inaccessible.
+    await assertSucceeds(unionAdmin.doc('unions/union-1').update({ name:'Updated Union One' }));
+    await assertFails(unionAdmin.doc('unions/union-2').get());
+    await assertSucceeds(unionAdmin.doc('conferences/conf-1').update({ name:'Updated Conference One' }));
+    await assertFails(unionAdmin.doc('conferences/conf-2').update({ name:'Blocked' }));
+    await assertSucceeds(unionAdmin.doc('districts/dist-1').update({ name:'Updated District One' }));
+    await assertFails(unionAdmin.doc('districts/dist-2').update({ name:'Blocked' }));
+    await assertSucceeds(unionAdmin.doc('churches/church-1').update({ name:'Updated Church One' }));
+    await assertFails(unionAdmin.doc('churches/church-2').update({ name:'Blocked' }));
+
+    const conferenceAdmin = environment.authenticatedContext('conference-admin').firestore();
+    await assertSucceeds(conferenceAdmin.doc('conferences/conf-1').update({ name:'Conference Owner Edit' }));
+    await assertFails(conferenceAdmin.doc('conferences/conf-2').get());
+    await assertSucceeds(conferenceAdmin.doc('districts/dist-1').update({ name:'Conference District Edit' }));
+    await assertFails(conferenceAdmin.doc('districts/dist-2').update({ name:'Blocked' }));
+    await assertSucceeds(conferenceAdmin.doc('churches/church-1').update({ name:'Conference Church Edit' }));
+    await assertFails(conferenceAdmin.doc('churches/church-2').update({ name:'Blocked' }));
+
+    const districtAdmin = environment.authenticatedContext('district-admin').firestore();
+    await assertSucceeds(districtAdmin.doc('districts/dist-1').update({ name:'District Owner Edit' }));
+    await assertFails(districtAdmin.doc('districts/dist-2').get());
+    await assertSucceeds(districtAdmin.doc('churches/church-1').update({ name:'District Church Edit' }));
+    await assertFails(districtAdmin.doc('churches/church-2').update({ name:'Blocked' }));
+
+    const churchAdmin = environment.authenticatedContext('church-admin').firestore();
+    await assertSucceeds(churchAdmin.doc('churches/church-1').update({ name:'Church Owner Edit' }));
+    await assertFails(churchAdmin.doc('churches/church-2').get());
+
     await assertSucceeds(superAdmin.doc('system/permissions').get());
   } finally {
     await environment.cleanup();
