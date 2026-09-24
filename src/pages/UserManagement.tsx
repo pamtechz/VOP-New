@@ -4,6 +4,7 @@ import {
   Plus, Search, Shield, ShieldCheck, Trash2, Upload, UserCheck, UserPlus, Users, X
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { getTranslation } from '../services/i18n';
 import './userManagement.css';
 
 type ManagedUser = {
@@ -333,9 +334,9 @@ export default function UserManagement({ onBack }: Props) {
       <div className="vop-user-page-head">
         <div className="vop-user-heading">
           <div className="vop-user-heading-icon"><Users size={30}/></div>
-          <div><h1>User Management</h1><p>Manage system users, roles, permissions and access.</p></div>
+          <div><h1>{t('admin.user_management','User Management')}</h1><p>{t('admin.user_management_desc','Manage system users, roles, permissions and access.')}</p></div>
         </div>
-        <button className="vop-primary" type="button" onClick={openCreate}><Plus size={18}/>Add User</button>
+        <button className="vop-primary" type="button" onClick={openCreate}><Plus size={18}/>{t('admin.add_user','Add User')}</button>
       </div>
 
       <div className="vop-user-layout">
@@ -351,15 +352,15 @@ export default function UserManagement({ onBack }: Props) {
 
           <div className="vop-user-toolbar">
             <div className="vop-user-search"><Search size={18}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email or role..."/></div>
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="all">All Roles</option>{roles.map(role => <option key={role}>{role}</option>)}</select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">All Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
-            <select value={conferenceFilter} onChange={e => setConferenceFilter(e.target.value)}><option value="all">All Conferences</option>{conferences.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}><option value="all">All Districts</option>{districts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <button className="vop-primary vop-user-filter" type="button"><Filter size={17}/>Filter</button>
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="all">{t('common.all_roles','All Roles')}</option>{roles.map(role => <option key={role}>{role}</option>)}</select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{t('common.all_statuses','All Statuses')}</option><option value="active">{t('common.active','Active')}</option><option value="inactive">{t('common.inactive','Inactive')}</option></select>
+            <select value={conferenceFilter} onChange={e => setConferenceFilter(e.target.value)}><option value="all">{t('common.all_conferences','All Conferences')}</option>{conferences.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+            <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}><option value="all">{t('common.all_districts','All Districts')}</option>{districts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+            <button className="vop-primary vop-user-filter" type="button"><Filter size={17}/>{t('common.filter','Filter')}</button>
           </div>
 
           <div className="vop-user-table-wrap">
-            {loading ? <div className="vop-user-empty">Loading users…</div> : pageRows.length === 0 ? <div className="vop-user-empty">No users match the current filters.</div> : (
+            {loading ? <div className="vop-user-empty">{t('admin.loading_users','Loading users…')}</div> : pageRows.length === 0 ? <div className="vop-user-empty">{t('admin.no_users_match','No users match the current filters.')}</div> : (
               <table className="vop-user-table">
                 <thead><tr>
                   <th><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(user => selectedRows.has(user.uid))} onChange={toggleAll}/></th>
@@ -382,10 +383,10 @@ export default function UserManagement({ onBack }: Props) {
                           <button type="button" title="Edit" onClick={() => openEdit(user)}><Edit3 size={16}/></button>
                           <button type="button" title="More" onClick={() => setMenuUid(current => current === user.uid ? null : user.uid)}><MoreVertical size={16}/></button>
                           {menuUid === user.uid && <div className="vop-user-menu">
-                            <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>Edit User</button>
+                            <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>{t('admin.edit_user','Edit User')}</button>
                             <button type="button" onClick={() => void setStatus(user, !user.disabled)}><Activity size={15}/>{user.disabled ? 'Activate User' : 'Disable User'}</button>
-                            <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>Reset Password</button>
-                            <button type="button" className="danger" onClick={() => void deleteUser(user)}><Trash2 size={15}/>Delete User</button>
+                            <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+                            <button type="button" className="danger" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
                           </div>}
                         </div>
                       </td>
@@ -404,20 +405,20 @@ export default function UserManagement({ onBack }: Props) {
 
         <aside className="vop-user-side">
           <section className="vop-user-side-card">
-            <h3><Shield size={16}/>Quick Actions</h3>
-            <button type="button" onClick={openCreate}><Plus size={15}/>Add New User</button>
-            <button type="button" onClick={() => { setBulkInput(true); setEditor(null); }}><Upload size={15}/>Bulk Import (CSV)</button>
-            <button type="button" onClick={exportUsers}><Download size={15}/>Export Users</button>
-            <button type="button" onClick={() => flash('Role options are derived from current account data and permissions.')}><ShieldCheck size={15}/>Manage Roles</button>
-            <button type="button" onClick={() => flash('Select a user and use Reset Password from the action menu.')}><KeyRound size={15}/>Reset Password</button>
-            <button type="button" onClick={() => flash('Invitation is generated from the Add User workflow.')}><UserPlus size={15}/>Send Invitation</button>
+            <h3><Shield size={16}/>{t('admin.quick_actions','Quick Actions')}</h3>
+            <button type="button" onClick={openCreate}><Plus size={15}/>{t('admin.add_new_user','Add New User')}</button>
+            <button type="button" onClick={() => { setBulkInput(true); setEditor(null); }}><Upload size={15}/>{t('admin.bulk_import_csv','Bulk Import (CSV)')}</button>
+            <button type="button" onClick={exportUsers}><Download size={15}/>{t('admin.export_users','Export Users')}</button>
+            <button type="button" onClick={() => flash('Role options are derived from current account data and permissions.')}><ShieldCheck size={15}/>{t('admin.manage_roles','Manage Roles')}</button>
+            <button type="button" onClick={() => flash('Select a user and use Reset Password from the action menu.')}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+            <button type="button" onClick={() => flash('Invitation is generated from the Add User workflow.')}><UserPlus size={15}/>{t('admin.send_invitation','Send Invitation')}</button>
           </section>
           <section className="vop-user-side-card">
-            <h3><ShieldCheck size={16}/>User Roles</h3>
+            <h3><ShieldCheck size={16}/>{t('admin.user_roles','User Roles')}</h3>
             {roles.map(role => <div className="vop-role-info" key={role}><span className="vop-role-dot"/><div><strong>{role}</strong><small>{users.filter(user => user.roleLabel === role).length} account{users.filter(user => user.roleLabel === role).length === 1 ? '' : 's'}</small></div></div>)}
           </section>
           <section className="vop-user-side-card">
-            <h3><Shield size={16}/>Security & Access</h3>
+            <h3><Shield size={16}/>{t('admin.security_access','Security & Access')}</h3>
             <p>Account access is managed through the secured administrator workflow.</p>
             <div className="vop-setting-help"><ShieldCheck size={15}/>Audit history is available in the organization administration panel.</div>
           </section>
@@ -429,7 +430,7 @@ export default function UserManagement({ onBack }: Props) {
 
       {selected && <div className="vop-user-modal-backdrop" onMouseDown={() => setSelected(null)}>
         <div className="vop-user-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
-          <div className="vop-user-modal-head"><div><h2>User Details</h2><p>{selected.displayName}</p></div><button type="button" onClick={() => setSelected(null)}><X size={19}/></button></div>
+          <div className="vop-user-modal-head"><div><h2>{t('admin.user_details','User Details')}</h2><p>{selected.displayName}</p></div><button type="button" onClick={() => setSelected(null)}><X size={19}/></button></div>
           <div className="vop-user-profile-summary"><Avatar user={selected} large/><div><h3>{selected.displayName}</h3><span>{selected.email}</span><div className="vop-user-modal-pills"><span className={'vop-user-role-pill ' + selected.roleColor}>{selected.roleLabel}</span><span className={'vop-user-status ' + (selected.disabled ? 'inactive' : 'active')}>{selected.disabled ? 'Inactive' : 'Active'}</span></div></div></div>
           <div className="vop-user-detail-grid">
             <div><small>User ID</small><strong>{selected.userCode}</strong></div><div><small>Last Login</small><strong>{formatLastLogin(selected.lastLogin)}</strong></div>
@@ -437,7 +438,7 @@ export default function UserManagement({ onBack }: Props) {
             <div><small>Union</small><strong>{selected.unionName || 'Not assigned'}</strong></div><div><small>Email Verified</small><strong>{selected.emailVerified ? 'Verified' : 'Not verified'}</strong></div>
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
-          <div className="vop-user-modal-actions"><button className="vop-secondary" type="button" onClick={() => setSelected(null)}>Close</button><button className="vop-primary" type="button" onClick={() => openEdit(selected)}><Edit3 size={16}/>Edit User</button></div>
+          <div className="vop-user-modal-actions"><button className="vop-secondary" type="button" onClick={() => setSelected(null)}>{t('common.close','Close')}</button><button className="vop-primary" type="button" onClick={() => openEdit(selected)}><Edit3 size={16}/>{t('admin.edit_user','Edit User')}</button></div>
         </div>
       </div>}
 
@@ -453,14 +454,14 @@ export default function UserManagement({ onBack }: Props) {
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
-          <div className="vop-user-modal-actions"><button className="vop-secondary" type="button" onClick={() => setEditor(null)} disabled={saving}>Cancel</button><button className="vop-primary" type="button" onClick={() => void saveUser()} disabled={saving}>{saving ? 'Saving…' : 'Save User'}</button></div>
+          <div className="vop-user-modal-actions"><button className="vop-secondary" type="button" onClick={() => setEditor(null)} disabled={saving}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="button" onClick={() => void saveUser()} disabled={saving}>{saving ? 'Saving…' : 'Save User'}</button></div>
         </div>
       </div>}
 
       {bulkInput && <div className="vop-user-modal-backdrop" onMouseDown={() => setBulkInput(false)}>
         <div className="vop-user-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
-          <div className="vop-user-modal-head"><div><h2>Bulk Import Users</h2><p>Import account records from a CSV file.</p></div><button type="button" onClick={() => setBulkInput(false)}><X size={19}/></button></div>
-          <div className="vop-bulk-drop"><Upload size={28}/><strong>Select a CSV file</strong><span>Bulk import is available for operational migration; normal user assignment should use the visual organization and member controls.</span><button className="vop-secondary" type="button" onClick={() => fileRef.current?.click()}>Choose CSV</button><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={async event => { const file = event.target.files?.[0]; if (!file) return; try { await importCsv(file); setBulkInput(false); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import CSV.'); } finally { event.target.value = ''; } }}/><button type="button" className="vop-link-button" onClick={downloadTemplate}>Download template</button></div>
+          <div className="vop-user-modal-head"><div><h2>{t('admin.bulk_import_users','Bulk Import Users')}</h2><p>Import account records from a CSV file.</p></div><button type="button" onClick={() => setBulkInput(false)}><X size={19}/></button></div>
+          <div className="vop-bulk-drop"><Upload size={28}/><strong>Select a CSV file</strong><span>Bulk import is available for operational migration; normal user assignment should use the visual organization and member controls.</span><button className="vop-secondary" type="button" onClick={() => fileRef.current?.click()}>{t('admin.choose_csv','Choose CSV')}</button><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={async event => { const file = event.target.files?.[0]; if (!file) return; try { await importCsv(file); setBulkInput(false); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import CSV.'); } finally { event.target.value = ''; } }}/><button type="button" className="vop-link-button" onClick={downloadTemplate}>{t('admin.download_template','Download template')}</button></div>
         </div>
       </div>}
     </div>
