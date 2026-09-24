@@ -2,6 +2,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { authenticateTenant, enforceQuota } from '../../server/tenant.js';
+import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -317,6 +318,8 @@ export default async function handler(request: Request, response: Response) {
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;
     const tenant = await authenticateTenant(request, requestedOrganizationId);
     const db = tenant.db;
+    const permissionAction = action === 'listOrganizations' ? 'view' : action === 'list' ? 'view' : action === 'create' ? 'create' : action === 'assignOrganization' ? 'assign' : ['update','setStatus','resetPassword'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
+    if (permissionAction) await requirePermission(tenant, action === 'listOrganizations' ? 'organizations' : 'users', permissionAction);
     const tenantRole = String(tenant.profile.role || '').trim();
     const hierarchyTenant = hierarchyRole(tenantRole);
     const canManageTenantUsers = tenant.isSuperAdmin || ['owner','admin'].includes(String(tenant.membership.role || '')) || Boolean(hierarchyTenant);
