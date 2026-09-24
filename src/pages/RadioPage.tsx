@@ -320,6 +320,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
 
   return (
     <div className="vop-audience-radio">
+      <div className="vop-radio-page-back-wrap"><button type="button" className="vop-radio-page-back" onClick={onBack}><ArrowLeft size={17}/>{t('common.back','Back')}</button></div>
       <section className="vop-radio-hero" style={selectedPoster ? { backgroundImage: 'linear-gradient(90deg, rgba(2,20,45,.96) 0%, rgba(2,20,45,.75) 42%, rgba(2,20,45,.35) 100%), url("' + selectedPoster + '")' } : undefined}>
         <div className="vop-radio-hero-inner">
           <div className="vop-radio-hero-copy">
