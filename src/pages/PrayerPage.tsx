@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, HeartHandshake, Plus, Check, Clock3, ShieldCheck, Trash2, Send, Lock, Users, Sparkles } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { PrayerRequest, User } from '../types';
-import { getTranslation } from '../services/i18n';
-import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 interface PrayerPageProps {
   currentUser: User;
@@ -17,7 +15,7 @@ const categories: PrayerRequest['category'][] = ['Spiritual','Health','Family','
 
 async function prayerApi(action: string, payload: Record<string, unknown> = {}) {
   const user = auth?.currentUser;
-  if (!user) throw new Error('Please sign in to use {t('prayer_ministry','Prayer Ministry')}.');
+  if (!user) throw new Error('Please sign in to use Prayer Ministry.');
   const token = await user.getIdToken();
   const response = await fetch('/api/prayer', {
     method: 'POST',
@@ -42,9 +40,6 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const settings = getStoredSettings();
-  const language = getActiveLanguage();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'PrayerPage');
 
   const role = String(currentUser.role || '');
   const isAdmin = Boolean(currentUser.privileges?.admin) || ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role);
@@ -102,7 +97,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('{t('delete','Delete')} this prayer request?')) return;
+    if (!window.confirm('Delete this prayer request?')) return;
     try {
       await prayerApi('delete', { id });
       setRequests(current => current.filter(item => item.id !== id));
@@ -114,12 +109,12 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
     <div className="vop-prayer-page">
       <header className="vop-prayer-hero">
         <div className="vop-prayer-hero-inner">
-          <button type="button" className="vop-prayer-back" onClick={onBack}><ArrowLeft size={18}/> {t('prayer_ministry','Prayer Ministry')}</button>
+          <button type="button" className="vop-prayer-back" onClick={onBack}><ArrowLeft size={18}/> Prayer Ministry</button>
           <div className="vop-prayer-hero-grid">
             <div>
               <span className="vop-prayer-kicker"><HeartHandshake size={15}/> Ministry care</span>
               <h1>A place to pray, share and be supported.</h1>
-              <p>Bring what is on your heart. {t('your_request','Your request')} can remain private or be shared with your VOP community for prayer.</p>
+              <p>Bring what is on your heart. Your request can remain private or be shared with your VOP community for prayer.</p>
               <button type="button" className="vop-prayer-primary" onClick={() => setShowComposer(true)}><Plus size={18}/> Submit a prayer request</button>
             </div>
             <div className="vop-prayer-scripture"><Sparkles size={18}/><p>“Cast all your anxiety on Him because He cares for you.”</p><strong>1 Peter 5:7</strong></div>
@@ -138,33 +133,33 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
         <div className="vop-prayer-toolbar">
           <div className="vop-prayer-tabs" role="tablist">
             <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}><Lock size={15}/> My requests</button>
-            <button className={tab === 'community' ? 'active' : ''} onClick={() => setTab('community')}><Users size={15}/> {t('community_prayer','Community prayer')}</button>
+            <button className={tab === 'community' ? 'active' : ''} onClick={() => setTab('community')}><Users size={15}/> Community prayer</button>
             {isAdmin && <button className={tab === 'ministry' ? 'active' : ''} onClick={() => setTab('ministry')}><HeartHandshake size={15}/> Ministry inbox</button>}
           </div>
           <div className="vop-prayer-filters">
-            <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="All">{t('all_topics','All topics')}</option>{categories.map(item => <option key={item}>{item}</option>)}</select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}><option value="All">{t('all_statuses','All statuses')}</option><option>Received</option><option>Praying</option><option>Answered</option></select>
+            <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="All">All topics</option>{categories.map(item => <option key={item}>{item}</option>)}</select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}><option value="All">All statuses</option><option>Received</option><option>Praying</option><option>Answered</option></select>
           </div>
         </div>
 
         {notice && <div className="vop-prayer-notice success"><Check size={16}/>{notice}</div>}
         {error && <div className="vop-prayer-notice error">{error}</div>}
 
-        {loading ? <div className="vop-prayer-loading"><div className="vop-spinner"/>{t('loading','Loading prayer ministry…')}</div> :
-          visible.length === 0 ? <div className="vop-prayer-empty"><HeartHandshake size={42}/><h2>{tab === 'mine' ? '{t('journal_ready','Your prayer journal is ready.')}' : '{t('no_requests','No requests to show.')}'}</h2><p>{tab === 'mine' ? 'Start by sharing a prayer request with the ministry.' : 'There are no requests matching the selected filters.'}</p>{tab === 'mine' && <button onClick={() => setShowComposer(true)}><Plus size={16}/> {t('share_request','Share a request')}</button>}</div> :
+        {loading ? <div className="vop-prayer-loading"><div className="vop-spinner"/>Loading prayer ministry…</div> :
+          visible.length === 0 ? <div className="vop-prayer-empty"><HeartHandshake size={42}/><h2>{tab === 'mine' ? 'Your prayer journal is ready.' : 'No requests to show.'}</h2><p>{tab === 'mine' ? 'Start by sharing a prayer request with the ministry.' : 'There are no requests matching the selected filters.'}</p>{tab === 'mine' && <button onClick={() => setShowComposer(true)}><Plus size={16}/> Share a request</button>}</div> :
           <section className="vop-prayer-list">
             {visible.map(request => (
               <article className="vop-prayer-card" key={request.id}>
                 <div className="vop-prayer-card-head">
                   <div className="vop-prayer-avatar">{request.candidateName?.charAt(0).toUpperCase() || 'P'}</div>
-                  <div className="vop-prayer-card-person"><strong>{tab === 'mine' ? '{t('my_request','My prayer request')}' : request.candidateName}</strong><span>{new Date(request.createdAt).toLocaleDateString(undefined,{dateStyle:'medium'})} · {request.category}</span></div>
+                  <div className="vop-prayer-card-person"><strong>{tab === 'mine' ? 'My prayer request' : request.candidateName}</strong><span>{new Date(request.createdAt).toLocaleDateString(undefined,{dateStyle:'medium'})} · {request.category}</span></div>
                   <span className={'vop-prayer-status ' + request.status.toLowerCase()}>{request.status === 'Answered' ? <Check size={13}/> : <Clock3 size={13}/>} {request.status}</span>
                 </div>
                 <p className="vop-prayer-text">{request.requestText}</p>
                 <div className="vop-prayer-card-foot">
-                  <span>{request.isPrivate ? <><Lock size={13}/> {t('private_to_ministry','Private to ministry')}</> : <><Users size={13}/> {t('shared_for_prayer','Shared for prayer')}</>}</span>
-                  {tab === 'mine' && <button className="vop-prayer-delete" onClick={() => void remove(request.id)}><Trash2 size={14}/> {t('delete','Delete')}</button>}
-                  {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'Praying')}>{t('mark_praying','Mark praying')}</button><button onClick={() => void updateStatus(request.id,'Answered')}>{t('mark_answered','Mark answered')}</button></div>}
+                  <span>{request.isPrivate ? <><Lock size={13}/> Private to ministry</> : <><Users size={13}/> Shared for prayer</>}</span>
+                  {tab === 'mine' && <button className="vop-prayer-delete" onClick={() => void remove(request.id)}><Trash2 size={14}/> Delete</button>}
+                  {isAdmin && tab !== 'mine' && <div className="vop-prayer-actions"><button onClick={() => void updateStatus(request.id,'Praying')}>Mark praying</button><button onClick={() => void updateStatus(request.id,'Answered')}>Mark answered</button></div>}
                 </div>
               </article>
             ))}
@@ -173,13 +168,13 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
 
       {showComposer && <div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowComposer(false); }}>
         <form className="vop-prayer-composer" onSubmit={submit}>
-          <div className="vop-prayer-composer-head"><div><span>{t('prayer_ministry','Prayer Ministry')}</span><h2>{t('what_to_pray','What would you like us to pray about?')}</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
+          <div className="vop-prayer-composer-head"><div><span>Prayer Ministry</span><h2>What would you like us to pray about?</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
           <div className="vop-prayer-composer-body">
-            <label>{t('topic','Topic')}<select value={category} onChange={e => setCategory(e.target.value as PrayerRequest['category'])}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
-            <label>{t('your_request','Your request')}<textarea value={requestText} onChange={e => setRequestText(e.target.value)} maxLength={3000} rows={7} placeholder="{t('prayer_placeholder','Share only what you are comfortable sharing with the ministry…')}"/></label>
-            <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? '{t('private_prayer','Private prayer')}' : '{t('community_prayer','Community prayer')}'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? '{t('make_community','Make community')}' : '{t('keep_private','Keep private')}'}</button></div>
+            <label>Topic<select value={category} onChange={e => setCategory(e.target.value as PrayerRequest['category'])}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
+            <label>Your request<textarea value={requestText} onChange={e => setRequestText(e.target.value)} maxLength={3000} rows={7} placeholder="Share only what you are comfortable sharing with the ministry…"/></label>
+            <div className="vop-prayer-privacy-choice"><div><strong>{isPrivate ? 'Private prayer' : 'Community prayer'}</strong><span>{isPrivate ? 'Visible to you and authorized ministry administrators.' : 'Visible to signed-in members of your organization.'}</span></div><button type="button" onClick={() => setIsPrivate(value => !value)}>{isPrivate ? 'Make community' : 'Keep private'}</button></div>
           </div>
-          <footer><button type="button" onClick={() => setShowComposer(false)}>{t('cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? 'Sending…' : '{t('send_request','Send request')}'}</button></footer>
+          <footer><button type="button" onClick={() => setShowComposer(false)}>Cancel</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? 'Sending…' : 'Send request'}</button></footer>
         </form>
       </div>}
     </div>
