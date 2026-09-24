@@ -356,6 +356,7 @@ export const App: React.FC = () => {
         <QuizModal
           lesson={activeLesson}
           guide={activeGuide}
+          passThreshold={settings.quizPassThreshold}
           onClose={() => setActiveLesson(null)}
           hasNextLesson={Boolean(nextLesson)}
           onContinue={() => {
