@@ -578,6 +578,9 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
         const candidate = { ...incoming };
+        if (collection === 'unions' && !ctx.isSuperAdmin && !existing.exists) {
+          throw new Error('Union administrators may update their assigned union profile but cannot create a new union.');
+        }
         if (existing.exists) {
           if (!hierarchyScopeMatches(ctx, collection, existing.data() as Record<string, unknown>)) {
             throw new Error('You cannot edit a hierarchy record outside your assigned scope.');
