@@ -138,6 +138,61 @@ export function requireOrgRole(ctx: TenantContext, roles: string[]) {
   if (!roles.includes(role)) throw new Error('You do not have permission to perform this action.');
 }
 
+export function hierarchyRole(role: unknown) {
+  const value = String(role || '');
+  return ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(value) ? value : '';
+}
+
+export async function organizationInHierarchyScope(ctx: TenantContext, organizationId: string) {
+  if (ctx.isSuperAdmin) return true;
+  if (ctx.tenantType === 'organization') return ctx.organizationId === organizationId;
+  if (ctx.tenantType !== 'hierarchy') return false;
+  const role = hierarchyRole(ctx.profile.role);
+  const nodeId = String(ctx.profile.adminNodeId || '').trim();
+  if (!role || !nodeId || !organizationId) return false;
+  const organization = await ctx.db.doc(`organizations/${organizationId}`).get();
+  if (!organization.exists || organization.data()?.status !== 'active') return false;
+  const data = organization.data() || {};
+  const directField = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+  if (String(data[directField] || '').trim() === nodeId) return true;
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+  if (String(hierarchy[directField] || '').trim() === nodeId) return true;
+  if (String(data.hierarchyType || '').trim() === directField.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId) return true;
+  if (String(data.adminNodeType || '').trim() === directField.replace('Id','') && String(data.adminNodeId || '').trim() === nodeId) return true;
+  const users = await ctx.db.collection('users').where(directField, '==', nodeId).limit(100).get();
+  return users.docs.some(doc => String(doc.data()?.organizationId || '').trim() === organizationId);
+}
+
+export async function accessibleOrganizationIds(ctx: TenantContext) {
+  if (ctx.isSuperAdmin) {
+    const snapshot = await ctx.db.collection('organizations').where('status', '==', 'active').get();
+    return snapshot.docs.map(doc => doc.id);
+  }
+  if (ctx.tenantType === 'organization') return ctx.organizationId ? [ctx.organizationId] : [];
+  if (ctx.tenantType !== 'hierarchy') return [];
+  const role = hierarchyRole(ctx.profile.role);
+  const nodeId = String(ctx.profile.adminNodeId || '').trim();
+  if (!role || !nodeId) return [];
+  const directField = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+  const snapshot = await ctx.db.collection('organizations').where('status', '==', 'active').get();
+  const ids = new Set<string>();
+  for (const doc of snapshot.docs) {
+    const data = doc.data() || {};
+    const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+    const direct = String(data[directField] || '').trim() === nodeId
+      || String(hierarchy[directField] || '').trim() === nodeId
+      || (String(data.hierarchyType || '').trim() === directField.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId)
+      || (String(data.adminNodeType || '').trim() === directField.replace('Id','') && String(data.adminNodeId || '').trim() === nodeId);
+    if (direct) ids.add(doc.id);
+  }
+  const users = await ctx.db.collection('users').where(directField, '==', nodeId).limit(500).get();
+  users.docs.forEach(doc => {
+    const id = String(doc.data()?.organizationId || '').trim();
+    if (id) ids.add(id);
+  });
+  return [...ids];
+}
+
 export function tenantOwnerKey(ctx: TenantContext) {
   return ctx.tenantType === 'organization'
     ? ctx.organizationId
