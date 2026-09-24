@@ -80,6 +80,7 @@ interface Props {
     data?: Record<string, unknown>
   ) => Promise<{ items?: unknown[]; item?: unknown }>;
   showMessage: (message: string) => void;
+  isSuperAdmin?: boolean;
 }
 
 function toDate(value: unknown): Date | null {
@@ -121,7 +122,7 @@ const EmptyAvatar = () => (
 );
 
 export const CertificationManager: React.FC<Props> = ({
-  settings, adminContent, showMessage,
+  settings, adminContent, showMessage, isSuperAdmin = false,
 }) => {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [view, setView] = useState<'list' | 'preview' | 'config'>('list');
@@ -383,8 +384,8 @@ export const CertificationManager: React.FC<Props> = ({
       <div className="vop-cert-list-head">
         <div><div className="vop-cert-kicker">{t('admin.certification','Certification')}</div><h1>{t('admin.certified_candidates','Certified Candidates')}</h1><p>View and manage candidates who have successfully completed VOP courses.</p></div>
         <div className="vop-cert-head-actions">
-          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />{t('admin.certificate_settings','Certificate Settings')}</button>
-          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />{t('admin.issue_certificate','Issue Certificate')}</button>
+          {isSuperAdmin && <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />{t('admin.certificate_settings','Certificate Settings')}</button>}
+          {isSuperAdmin && <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />{t('admin.issue_certificate','Issue Certificate')}</button>}
           <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />{t('admin.export_pdf','Export List (PDF)')}</button>
         </div>
       </div>
