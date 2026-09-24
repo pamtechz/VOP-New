@@ -54,7 +54,7 @@ const checks = [
   ['src/pages/RadioPage.tsx', ['RadioPageProps','onBack','vop-radio-page-back','vop-radio-hero-back','ArrowLeft']],
   ['src/pages/CertificationManager.tsx', ['template: nextConfig.template','Persist the authoritative template itself','certificate_bg.png']],
   ['api/quizzes.ts', ['tenantOwnerKey','ownerTenantId','canManageQuizTenant']],
-  ['api/certificates.ts', ['hierarchyScopeField','unionId:String(candidate.unionId','const organizationId=String(profileData.organizationId','template']],
+  ['api/certificates.ts', ['hierarchyScopeField','candidateId','unionId:String(candidate.unionId','const organizationId=String(profileData.organizationId','certificateQuery=db.collection(\'certificates\').where(\'candidateId\',\'==\',decoded.uid)','template']],
   ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
   ['src/components/home/HomeDashboard.tsx', ['evangelism.title','evangelism.prayer','evangelism.radio']],
   ['src/pages/PrayerPage.tsx', ['prayer.hero_title','prayer.submit']],
