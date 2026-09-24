@@ -107,6 +107,10 @@ const checks = [
   ['firestore.rules', ['match /announcements/{id}','canEditOwnedContent(resource.data)','ownerUid','ownerOrganizationId','match /playlists/{id}','canReadGlobal(resource.data, \'published\')']],
 ];
 const errors = [];
+const studyProgressSource = read('api/study/progress.ts');
+if (!studyProgressSource.includes("candidateId: decoded.uid")) errors.push('api/study/progress.ts: assessment attempts must bind candidateId to the authenticated learner');
+if (!studyProgressSource.includes("userId: decoded.uid")) errors.push('api/study/progress.ts: assessment attempts must bind userId to the authenticated learner');
+
 const legacyCertificateModal = path.join(root, 'src/components/certificate/CertificateModal.tsx');
 if (fs.existsSync(legacyCertificateModal)) {
   errors.push('Legacy CertificateModal renderer must remain removed; use CertificateArtwork + CertificationConfigStudio.');
