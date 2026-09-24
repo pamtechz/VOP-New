@@ -1,0 +1,47 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const root = process.cwd();
+const read = file => fs.readFileSync(path.join(root,file),'utf8');
+const checks = [
+  ['server/tenant.ts', [
+    "role() === 'super_admin'",
+    "organizationId = isSuperAdmin",
+    "requestedId !== profileOrganizationId",
+    "canEditCanonicalContent",
+    "ownerUid",
+  ]],
+  ['firestore.rules', [
+    "'union_admin'",
+    "'conference_admin'",
+    "'district_admin'",
+    "'church_admin'",
+    'organizationIdForUser()',
+    'canEditOwnedContent',
+    "request.resource.data.get('ownerUid'",
+  ]],
+  ['src/services/i18n.ts', ['getUiLocale','loadUiLocaleRegistry','dictionaryCache','localeFallbacks']],
+  ['api/localization.ts', ['authenticateTenant','isSuperAdmin','published','bulkSave']],
+  ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
+  ['src/components/home/HomeDashboard.tsx', ['evangelism.title','evangelism.prayer','evangelism.radio']],
+  ['src/pages/PrayerPage.tsx', ['prayer.title','prayer.submit']],
+  ['src/pages/ResourcesPage.tsx', ['vop-materials-page']],
+  ['src/pages/RadioPage.tsx', ['vop-radio-page']],
+  ['src/components/reader/LessonReaderModal.tsx', ['lesson.next_page','lesson.complete']],
+];
+const errors = [];
+for (const [file, needles] of checks) {
+  if (!fs.existsSync(path.join(root,file))) { errors.push(file + ': missing'); continue; }
+  const source = read(file);
+  for (const needle of needles) if (!source.includes(needle)) errors.push(file + ': missing invariant "' + needle + '"');
+}
+const routes = read('src/types/index.ts');
+for (const route of ['home','guide','lesson','resources','prayer','radio','certificates','admin']) {
+  if (!routes.includes("'"+route+"'")) errors.push('src/types/index.ts: missing route "'+route+'"');
+}
+if (errors.length) {
+  console.error('VOP architecture regression gate FAILED');
+  errors.forEach(error => console.error(' - ' + error));
+  process.exit(1);
+}
+console.log('VOP architecture regression gate passed: tenant isolation, hierarchy roles, localization boundary, learner mission surfaces and ministry routes are present.');
