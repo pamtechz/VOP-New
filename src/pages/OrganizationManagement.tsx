@@ -34,6 +34,7 @@ function quotaPayload(value:Quotas):Record<string,number> {
 }
 
 export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:boolean}) {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [items,setItems]=useState<Organization[]>([]);
   const [selected,setSelected]=useState<Organization|null>(null);
   const [members,setMembers]=useState<Member[]>([]);
