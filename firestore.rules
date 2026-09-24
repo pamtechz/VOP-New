@@ -738,13 +738,19 @@ service cloud.firestore {
     }
 
     // Prayer requests remain private to their candidate and administrators.
+    // Prayer requests are private to their author and visible to authorized
+    // organisation/hierarchy ministry administrators within their scope.
     match /prayerRequests/{id} {
       allow get: if signedIn()
         && (
           resource.data.candidateId == request.auth.uid
           || (
             isAdmin()
-            && resource.data.get('organizationId','') == organizationIdForUser()
+            && (
+              isSuperAdmin()
+              || resource.data.get('organizationId','') == organizationIdForUser()
+              || hierarchyOrganizationScope(resource.data.get('organizationId',''))
+            )
           )
         );
 
@@ -752,7 +758,11 @@ service cloud.firestore {
         resource.data.candidateId == request.auth.uid
         || (
           isAdmin()
-          && resource.data.get('organizationId','') == organizationIdForUser()
+          && (
+            isSuperAdmin()
+            || resource.data.get('organizationId','') == organizationIdForUser()
+            || hierarchyOrganizationScope(resource.data.get('organizationId',''))
+          )
         )
         || (
           isOrgMember(organizationIdForUser())
@@ -775,7 +785,11 @@ service cloud.firestore {
           )
           || (
             isAdmin()
-            && resource.data.get('organizationId','') == organizationIdForUser()
+            && (
+              isSuperAdmin()
+              || hierarchyOrganizationScope(resource.data.get('organizationId',''))
+              || resource.data.get('organizationId','') == organizationIdForUser()
+            )
             && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
             && request.resource.data.candidateId == resource.data.candidateId
           )
@@ -784,7 +798,14 @@ service cloud.firestore {
       allow delete: if signedIn()
         && (
           resource.data.candidateId == request.auth.uid
-          || isSuperAdmin()
+          || (
+            isAdmin()
+            && (
+              isSuperAdmin()
+              || hierarchyOrganizationScope(resource.data.get('organizationId',''))
+              || resource.data.get('organizationId','') == organizationIdForUser()
+            )
+          )
         );
     }
 
