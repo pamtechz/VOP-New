@@ -57,6 +57,8 @@ interface Props {
   verification?: boolean;
 }
 
+const DEFAULT_CERTIFICATE_BACKGROUND = '/assets/certificate_bg.png';
+
 function dateText(value?: string | null) {
   if (!value) return '';
   const date = new Date(value);
@@ -94,7 +96,7 @@ function renderTemplate(certificate: CertificateArtworkRecord, config: Certifica
   if (!template?.elements?.length) return null;
   const width = Number(template.width) || 1513;
   const height = Number(template.height) || 1040;
-  const backgroundUrl = template.backgroundUrl || config?.backgroundUrl || '';
+  const backgroundUrl = template.backgroundUrl || config?.backgroundUrl || DEFAULT_CERTIFICATE_BACKGROUND;
   const verifyUrl = verification ? verificationUrl(certificate, config) : '';
   return (
     <div className="vop-certificate-template-canvas" style={{ aspectRatio: `${width} / ${height}` }} data-template-width={width} data-template-height={height}>
@@ -135,7 +137,7 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
 
   return (
     <div className="vop-certificate-artwork">
-      {config?.backgroundUrl && <img className="vop-certificate-background-image" src={config.backgroundUrl} alt="" />}
+      <img className="vop-certificate-background-image" src={config?.backgroundUrl || DEFAULT_CERTIFICATE_BACKGROUND} alt="" />
       <div className="vop-certificate-honeycomb" aria-hidden="true" />
       <div className="vop-certificate-blue-corner vop-certificate-blue-corner-a" aria-hidden="true" />
       <div className="vop-certificate-blue-corner vop-certificate-blue-corner-b" aria-hidden="true" />
