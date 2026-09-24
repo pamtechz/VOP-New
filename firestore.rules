@@ -115,22 +115,22 @@ service cloud.firestore {
         && (
           (role() == 'union_admin'
             && (
-              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('unionId', '') == userDoc().data.get('adminNodeId', '')
+              get(/databases/$(database)/documents/organizations/$(organizationId)).hierarchyField(data, 'unionId') == userDoc().data.get('adminNodeId', '')
               || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('unionId', '') == userDoc().data.get('adminNodeId', '')
             ))
           || (role() == 'conference_admin'
             && (
-              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('conferenceId', '') == userDoc().data.get('adminNodeId', '')
+              get(/databases/$(database)/documents/organizations/$(organizationId)).hierarchyField(data, 'conferenceId') == userDoc().data.get('adminNodeId', '')
               || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('conferenceId', '') == userDoc().data.get('adminNodeId', '')
             ))
           || (role() == 'district_admin'
             && (
-              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('districtId', '') == userDoc().data.get('adminNodeId', '')
+              get(/databases/$(database)/documents/organizations/$(organizationId)).hierarchyField(data, 'districtId') == userDoc().data.get('adminNodeId', '')
               || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('districtId', '') == userDoc().data.get('adminNodeId', '')
             ))
           || (role() == 'church_admin'
             && (
-              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('churchId', '') == userDoc().data.get('adminNodeId', '')
+              get(/databases/$(database)/documents/organizations/$(organizationId)).hierarchyField(data, 'churchId') == userDoc().data.get('adminNodeId', '')
               || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('churchId', '') == userDoc().data.get('adminNodeId', '')
             ))
         );
@@ -258,8 +258,8 @@ service cloud.firestore {
           (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName in ['conferences','districts','churches']
               && (
-                request.resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', '')
-                || (request.method == 'update' && resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+                hierarchyField(request.resource.data, 'unionId') == userDoc().data.get('adminNodeId', '')
+                || (request.method == 'update' && hierarchyField(resource.data, 'unionId') == userDoc().data.get('adminNodeId', ''))
               ))
         );
     }
@@ -269,7 +269,7 @@ service cloud.firestore {
         && (
           (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName in ['conferences','districts','churches']
-              && resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+              && hierarchyField(resource.data, 'unionId') == userDoc().data.get('adminNodeId', ''))
         );
     }
 
@@ -279,8 +279,8 @@ service cloud.firestore {
           (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName in ['districts','churches']
               && (
-                request.resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', '')
-                || (request.method == 'update' && resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+                hierarchyField(request.resource.data, 'conferenceId') == userDoc().data.get('adminNodeId', '')
+                || (request.method == 'update' && hierarchyField(resource.data, 'conferenceId') == userDoc().data.get('adminNodeId', ''))
               ))
         );
     }
@@ -290,7 +290,7 @@ service cloud.firestore {
         && (
           (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName in ['districts','churches']
-              && resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+              && hierarchyField(resource.data, 'conferenceId') == userDoc().data.get('adminNodeId', ''))
         );
     }
 
@@ -300,8 +300,8 @@ service cloud.firestore {
           (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName == 'churches'
               && (
-                request.resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', '')
-                || (request.method == 'update' && resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+                hierarchyField(request.resource.data, 'districtId') == userDoc().data.get('adminNodeId', '')
+                || (request.method == 'update' && hierarchyField(resource.data, 'districtId') == userDoc().data.get('adminNodeId', ''))
               ))
         );
     }
@@ -311,7 +311,7 @@ service cloud.firestore {
         && (
           (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName == 'churches'
-              && resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+              && hierarchyField(resource.data, 'districtId') == userDoc().data.get('adminNodeId', ''))
         );
     }
 
@@ -327,6 +327,10 @@ service cloud.firestore {
         && recordId == userDoc().data.get('adminNodeId', '');
     }
 
+    function hierarchyField(data, fieldName) {
+      return data.get(fieldName, data.get('hierarchy', {}).get(fieldName, ''));
+    }
+
     function hierarchyTenantForField(data, fieldName) {
       return signedIn()
         && role() in ['union_admin','conference_admin','district_admin','church_admin']
@@ -337,29 +341,29 @@ service cloud.firestore {
       return signedIn()
         && (
           (collectionName == 'unions' && (
-            recordId == userDoc().data.get('unionId', '')
-            || data.get('id', '') == userDoc().data.get('unionId', '')
+            recordId == userDoc().hierarchyField(data, 'unionId')
+            || data.get('id', '') == userDoc().hierarchyField(data, 'unionId')
           ))
           || (collectionName == 'conferences' && (
-            recordId == userDoc().data.get('conferenceId', '')
-            || data.get('id', '') == userDoc().data.get('conferenceId', '')
+            recordId == userDoc().hierarchyField(data, 'conferenceId')
+            || data.get('id', '') == userDoc().hierarchyField(data, 'conferenceId')
           ))
           || (collectionName == 'districts' && (
-            recordId == userDoc().data.get('districtId', '')
-            || data.get('id', '') == userDoc().data.get('districtId', '')
+            recordId == userDoc().hierarchyField(data, 'districtId')
+            || data.get('id', '') == userDoc().hierarchyField(data, 'districtId')
           ))
           || (collectionName == 'churches' && (
-            recordId == userDoc().data.get('churchId', '')
-            || data.get('id', '') == userDoc().data.get('churchId', '')
+            recordId == userDoc().hierarchyField(data, 'churchId')
+            || data.get('id', '') == userDoc().hierarchyField(data, 'churchId')
           ))
           || (
             isOrgMember(organizationIdForUser())
             && exists(/databases/$(database)/documents/organizations/$(organizationIdForUser()))
             && (
-              (collectionName == 'unions' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('unionId', ''))
-              || (collectionName == 'conferences' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('conferenceId', ''))
-              || (collectionName == 'districts' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('districtId', ''))
-              || (collectionName == 'churches' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).data.get('churchId', ''))
+              (collectionName == 'unions' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).hierarchyField(data, 'unionId'))
+              || (collectionName == 'conferences' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).hierarchyField(data, 'conferenceId'))
+              || (collectionName == 'districts' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).hierarchyField(data, 'districtId'))
+              || (collectionName == 'churches' && data.get('id', '') == get(/databases/$(database)/documents/organizations/$(organizationIdForUser())).hierarchyField(data, 'churchId'))
             )
           )
         );
@@ -373,15 +377,15 @@ service cloud.firestore {
           && (
             (role() == 'union_admin' && (
               (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
-              || (collectionName in ['conferences','districts','churches'] && data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+              || (collectionName in ['conferences','districts','churches'] && hierarchyField(data, 'unionId') == userDoc().data.get('adminNodeId', ''))
             ))
             || (role() == 'conference_admin' && (
               (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
-              || (collectionName in ['districts','churches'] && data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+              || (collectionName in ['districts','churches'] && hierarchyField(data, 'conferenceId') == userDoc().data.get('adminNodeId', ''))
             ))
             || (role() == 'district_admin' && (
               (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
-              || (collectionName == 'churches' && data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+              || (collectionName == 'churches' && hierarchyField(data, 'districtId') == userDoc().data.get('adminNodeId', ''))
             ))
             || (role() == 'church_admin' && collectionName == 'churches' && recordId == userDoc().data.get('adminNodeId', ''))
           )
