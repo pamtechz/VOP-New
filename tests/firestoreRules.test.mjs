@@ -158,6 +158,12 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
         sharingScope: 'private',
         published: false,
       });
+      await adminDb.doc('certificates/cert-org-1').set({
+        candidateId:'candidate-1', organizationId:'org-1', unionId:'union-1', certificateNumber:'CERT-ORG-1',
+      });
+      await adminDb.doc('certificates/cert-org-2').set({
+        candidateId:'candidate-2', organizationId:'org-2', unionId:'union-2', certificateNumber:'CERT-ORG-2',
+      });
       await adminDb.doc('tenantSettings/union_admin:union-1/settings/settings').set({ organizationName: 'Scoped Organization Admin' });
       await adminDb.doc('system/settings').set({ appName: 'Platform VOP' });
       await adminDb.doc('unions/union-1').set({
@@ -209,6 +215,13 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertSucceeds(orgAdmin.doc('announcements/org-owned').update({ title:'Updated Owned' }));
     await assertFails(orgAdmin.doc('announcements/org-foreign').update({ title:'Blocked Foreign' }));
     await assertFails(orgAdmin.doc('announcements/org-foreign').delete());
+    await assertSucceeds(orgAdmin.doc('certificates/cert-org-1').get());
+    await assertFails(orgAdmin.doc('certificates/cert-org-2').get());
+    await assertSucceeds(unionAdmin.doc('certificates/cert-org-1').get());
+    await assertFails(unionAdmin.doc('certificates/cert-org-2').get());
+    await assertSucceeds(environment.authenticatedContext('candidate-1').firestore().doc('certificates/cert-org-1').get());
+    await assertFails(environment.authenticatedContext('candidate-1').firestore().doc('certificates/cert-org-2').get());
+    await assertSucceeds(superAdmin.doc('certificates/cert-org-2').get());
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').get());
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').update({ organizationName: 'Updated Scoped Tenant' }));
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').get());
