@@ -256,9 +256,9 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         {lessonStats.percent === 100 && (
           <div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-center shadow-lg">
             <Award size={40} className="mx-auto mb-2 text-amber-300" />
-            <h3 className="text-lg font-black mb-1"{t('guide.completed','Guide Completed!')}h3>
+            <h3 className="text-lg font-black mb-1">{t('guide.completed','Guide Completed!')}</h3>
             <p className="text-sm text-emerald-100 mb-4">
-              You have completed all {lessonStats.totalCount} modules in this guide.
+              {t('guide.completed_desc',`You have completed all ${lessonStats.totalCount} modules in this guide.`)}
             </p>
             {certificateEligible && (
               <button
@@ -266,7 +266,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-colors cursor-pointer"
               >
                 <Award size={16} />
-                View Your Certificate
+                {t('certificates.view_your','View Your Certificate')}
               </button>
             )}
           </div>
