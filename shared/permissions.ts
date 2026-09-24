@@ -115,9 +115,14 @@ export function normalizePermissionMatrix(value: unknown): PermissionMatrix {
 }
 
 export function roleForPermission(profile: { role?: unknown; organizationRole?: unknown; privileges?: Record<string, unknown> }): PermissionRole {
+  const role = String(profile.role || '');
+  // Platform and hierarchy roles are authoritative. An organization membership
+  // role must never downgrade a hierarchy administrator or Super Admin.
+  if (role === 'super_admin' || role === 'union_admin' || role === 'conference_admin' || role === 'district_admin' || role === 'church_admin') {
+    return role;
+  }
   const organizationRole = String(profile.organizationRole || '');
   if (organizationRole === 'owner' || organizationRole === 'admin' || organizationRole === 'editor' || organizationRole === 'teacher' || organizationRole === 'mentor') return organizationRole;
-  const role = String(profile.role || '');
   if (role === 'learner') return 'student';
   if (PERMISSION_ROLES.includes(role as PermissionRole)) return role as PermissionRole;
   if (profile.privileges?.manager === true) return 'staff';
