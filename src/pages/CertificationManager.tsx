@@ -222,7 +222,6 @@ export const CertificationManager: React.FC<Props> = ({
       issuerSubtitle: nextConfig.issuerSubtitle || '',
       directorName: nextConfig.directorName || '',
       directorTitle: nextConfig.directorTitle || '',
-      backgroundUrl: nextConfig.backgroundUrl || '',
       sealUrl: nextConfig.sealUrl || '',
       signatureUrl: nextConfig.signatureUrl || '',
       logoUrl: nextConfig.logoUrl || '',
