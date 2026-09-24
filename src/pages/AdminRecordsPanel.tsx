@@ -266,14 +266,27 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       const id = editingId || makeId();
       if (!isRecordKind(kind)) return;
       const payload = { ...form };
+      if (kind === 'materials') {
+        if (!String(payload.name || '').trim()) throw new Error('Material title is required.');
+        if (!String(payload.category || '').trim()) throw new Error('Choose a material category.');
+        if (!String(payload.description || '').trim()) throw new Error('Add a short description for learners.');
+        const downloadUrl = String(payload.downloadUrl || '').trim();
+        if (!downloadUrl) throw new Error('Add the material URL learners will open or download.');
+        try { const parsed = new URL(downloadUrl); if (!['http:','https:'].includes(parsed.protocol)) throw new Error(); }
+        catch { throw new Error('Material URL must be a valid HTTP(S) URL.'); }
+      }
       if (kind === 'radio') {
         const mediaType = String(payload.mediaType || '');
         const urls = ['audioUrl', 'videoUrl', 'streamUrl'].map(key => String(payload[key] ?? '').trim()).filter(Boolean);
         if (!urls.length) throw new Error('Add an Audio, Video, YouTube, AudioVerse or live stream URL.');
-        if (mediaType === 'youtube' && !urls.some(value => /(^|\.)youtu\.be$|(^|\.)youtube\.com$/i.test(new URL(value).hostname))) {
+        for (const value of urls) {
+          try { const parsed = new URL(value); if (!['http:','https:'].includes(parsed.protocol)) throw new Error(); }
+          catch { throw new Error('Radio media URLs must be valid HTTP(S) URLs.'); }
+        }
+        if (mediaType === 'youtube' && !urls.some(value => { try { const host = new URL(value).hostname.toLowerCase(); return host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com'); } catch { return false; } })) {
           throw new Error('For YouTube media, enter a valid YouTube URL.');
         }
-        if (mediaType === 'audioverse' && !urls.some(value => /(^|\.)audioverse\.org$/i.test(new URL(value).hostname))) {
+        if (mediaType === 'audioverse' && !urls.some(value => { try { const host = new URL(value).hostname.toLowerCase(); return host === 'audioverse.org' || host.endsWith('.audioverse.org'); } catch { return false; } })) {
           throw new Error('For AudioVerse media, enter a valid AudioVerse URL.');
         }
       }
