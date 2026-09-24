@@ -18,8 +18,9 @@ const checks = [
     'requestedMembership',
     "collectionGroup('members')",
     'organizationInHierarchyScope',
-    'accessibleOrganizationIds'
+    'accessibleOrganizationIds', 'canManageOrganizationContent'
   ]],
+  ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2']],
   ['firestore.rules', [
     "'union_admin'",
     "'conference_admin'",
