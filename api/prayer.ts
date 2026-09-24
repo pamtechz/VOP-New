@@ -26,14 +26,16 @@ export default async function handler(req: Request, res: Response) {
       if (ministry && !admin) throw new Error('Only authorized ministry administrators can open the ministry inbox.');
       const snapshot = own
         ? await collection.where('candidateId','==',ctx.auth.uid).limit(100).get()
-        : await collection.where('organizationId','==',ctx.organizationId).limit(100).get();
+        : ctx.isSuperAdmin && ministry
+          ? await collection.limit(100).get()
+          : await collection.where('organizationId','==',ctx.organizationId).limit(100).get();
 
       const items = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
           if (item.candidateId === ctx.auth.uid) return true;
-          if (item.organizationId !== ctx.organizationId) return false;
+          if (!ctx.isSuperAdmin && item.organizationId !== ctx.organizationId) return false;
           return ministry ? true : item.isPrivate !== true;
         });
 
