@@ -425,6 +425,9 @@ export default async function handler(req: Request, res: Response) {
           const data = d.data() || {};
           const ownerUid = String(data.ownerUid || '');
           if (ownerUid === ctx.auth.uid) return true;
+          // Hierarchy administrators can inspect the platform-wide global library,
+          // but ownership is still enforced for every mutation.
+          if (ctx.tenantType === 'hierarchy') return true;
           if (collection === 'translations') return true;
           if (String(data.sharingScope || '') !== 'shared') return false;
           if (collection === 'languages') return data.enabled === true;
