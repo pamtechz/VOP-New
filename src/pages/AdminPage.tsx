@@ -361,7 +361,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   }, [candidates, announcements, languages, churches]);
 
   const visibleNav = useMemo(() => {
-    const role = currentUser.role;
+    const role = String(currentUser.role || '');
     const isSuper = role === 'super_admin';
     const organizationAdmin = ['owner','admin'].includes(String(currentUser.organizationRole || ''));
     const canEdit = isSuper || currentUser.privileges?.editor === true;
