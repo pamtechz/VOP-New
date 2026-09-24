@@ -468,7 +468,7 @@ export default async function handler(request: Request, response: Response) {
         // The sole member may be deleted. An owner with other members must
         // transfer ownership in the same operation; the replacement must already
         // belong to the organization.
-        if (['owner','admin'].includes(targetRole) && activeMembers.length > 0) {
+        if (['owner','admin'].includes(targetRole) && activeMembers.length > 0 && !tenant.isSuperAdmin) {
           const replacementUid = String(body.replacementUid || '').trim();
           if (targetRole === 'owner') {
             if (!replacementUid || replacementUid === uid) {
@@ -522,7 +522,16 @@ export default async function handler(request: Request, response: Response) {
 
       await authService.deleteUser(uid);
       await targetProfile.ref.delete();
-      if (targetOrganizationId) await db.doc(`organizations/${targetOrganizationId}/members/${uid}`).delete().catch(() => undefined);
+      if (targetOrganizationId) {
+        await db.doc(`organizations/${targetOrganizationId}/members/${uid}`).delete().catch(() => undefined);
+        if (tenant.isSuperAdmin && ['owner','admin'].includes(String(targetData.organizationRole || '').trim())) {
+          const organizationRef = db.doc(`organizations/${targetOrganizationId}`);
+          const organizationSnap = await organizationRef.get();
+          if (String(organizationSnap.data()?.ownerUid || '') === uid) {
+            await organizationRef.set({ ownerUid:'', updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+          }
+        }
+      }
       return response.status(200).json({ ok: true, uid });
     }
 
