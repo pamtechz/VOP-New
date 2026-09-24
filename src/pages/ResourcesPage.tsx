@@ -9,6 +9,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
   const [query, setQuery] = useState('');
   const categories = ['All', ...Array.from(new Set(books.map(book => book.category).filter(Boolean)))];
   const filtered = useMemo(() => books.filter(book => {
+    if (book.published === false) return false;
     const matchesCategory = category === 'All' || book.category === category;
     const q = query.trim().toLowerCase();
     return matchesCategory && (!q || [book.name, book.author, book.description, book.category].join(' ').toLowerCase().includes(q));
