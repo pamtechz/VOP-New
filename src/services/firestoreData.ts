@@ -214,6 +214,7 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
     districtId: data.districtId,
     churchId: data.churchId,
     role: data.role,
+    preferences: { uiLocale: String(data.preferences?.uiLocale ?? '').trim() || undefined, studyLanguage: String(data.preferences?.studyLanguage ?? '').trim() || undefined },
     organizationId: data.organizationId,
     organizationRole: data.organizationRole,
     adminNodeType: data.adminNodeType,
