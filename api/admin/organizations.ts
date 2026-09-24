@@ -6,7 +6,7 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 function id(value: unknown) { const v = String(value || '').trim(); if (!/^[a-zA-Z0-9_-]{2,80}$/.test(v)) throw new Error('A valid organization identifier is required.'); return v; }
-const QUOTA_KEYS = ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxMaterials'] as const;
+const QUOTA_KEYS = ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials'] as const;
 function normalizeQuotas(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid usage limits.');
   const input = value as Record<string, unknown>;
@@ -206,7 +206,7 @@ export default async function handler(req: Request, res: Response) {
       if (allowed.quotas !== undefined) {
         const raw = allowed.quotas as Record<string, unknown>;
         const normalized: Record<string, number> = {};
-        for (const key of ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxMaterials']) {
+        for (const key of ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials']) {
           if (raw[key] === undefined || raw[key] === null || raw[key] === '') continue;
           const value = Number(raw[key]);
           if (!Number.isInteger(value) || value < -1) throw new Error('Organization limits must be whole numbers of -1 or greater.');
