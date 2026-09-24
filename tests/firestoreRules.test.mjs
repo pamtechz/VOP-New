@@ -392,3 +392,35 @@ test('nested hierarchy fields remain authorized by Firestore rules', async () =>
     await environment.cleanup();
   }
 });
+
+
+test('personal settings allow UI locale and study language but remain user-private', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const db = adminContext.firestore();
+      await db.doc('users/student-settings').set({ uid:'student-settings', role:'student', organizationId:'org-1' });
+      await db.doc('users/other-settings').set({ uid:'other-settings', role:'student', organizationId:'org-1' });
+    });
+
+    const student = environment.authenticatedContext('student-settings').firestore();
+    const other = environment.authenticatedContext('other-settings').firestore();
+
+    await assertSucceeds(student.doc('users/student-settings/settings/personal').set({
+      uiLocale:'en',
+      studyLanguage:'bem',
+      theme:'light',
+      updatedAt: new Date(),
+    }));
+    await assertSucceeds(student.doc('users/student-settings/settings/personal').update({ studyLanguage:'nya' }));
+    await assertFails(other.doc('users/student-settings/settings/personal').get());
+    await assertFails(other.doc('users/student-settings/settings/personal').set({ uiLocale:'fr' }));
+    await assertFails(student.doc('users/student-settings/settings/personal').update({ role:'super_admin' }));
+  } finally {
+    await environment.cleanup();
+  }
+});
