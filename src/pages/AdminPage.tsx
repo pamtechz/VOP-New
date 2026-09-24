@@ -272,6 +272,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         body: JSON.stringify({
           action: 'updateBaptism',
           candidateId: candidate.uid,
+          organizationId: candidate.organizationId || undefined,
           baptismCandidate: status === 'candidate',
           baptized: status === 'baptized',
           baptismDate: status === 'baptized' ? baptismDate.trim() : '',
