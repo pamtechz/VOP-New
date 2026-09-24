@@ -404,8 +404,19 @@ export default async function handler(req: Request, res: Response) {
         throw error;
       }
       const now = new Date().toISOString();
+      const hierarchyPlatformRole = hierarchyRole(String(ctx.profile.role || ''));
       await ctx.db.runTransaction(async transaction => {
-        transaction.set(ctx.db.doc('users/' + created.uid), { uid:created.uid, email, displayName, userType:role === 'learner' || role === 'viewer' ? 'learner' : role, role: role === 'mentor' ? 'mentor' : 'student', organizationId:managedOrganizationId, organizationRole:role, privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'}, information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]}, createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp() }, {merge:true});
+        transaction.set(ctx.db.doc('users/' + created.uid), {
+          uid:created.uid, email, displayName,
+          userType:role === 'learner' || role === 'viewer' ? 'learner' : role,
+          role: hierarchyPlatformRole || (role === 'mentor' ? 'mentor' : 'student'),
+          ...(hierarchyPlatformRole ? { adminNodeType:ctx.profile.adminNodeType, adminNodeId:ctx.profile.adminNodeId } : {}),
+          organizationId:managedOrganizationId, organizationRole:role,
+          privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'},
+          information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false},
+          progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]},
+          createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()
+        }, {merge:true});
         transaction.set(ctx.db.doc('organizations/' + managedOrganizationId + '/members/' + created.uid), {uid:created.uid,organizationId:managedOrganizationId,role,active:true,invitedBy:ctx.auth.uid,joinedAt:now,updatedAt:now},{merge:true});
       });
       await authService.setCustomUserClaims(created.uid, { role: hierarchyRole(String(ctx.profile.role || '')) || 'student', ...(hierarchyRole(String(ctx.profile.role || '')) ? { adminNodeType:ctx.profile.adminNodeType, adminNodeId:ctx.profile.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:role });
