@@ -52,7 +52,10 @@ export default async function handler(req: Request, res: Response) {
       const snap = await ctx.db.doc(`quizzes/${id}`).get();
       if (!snap.exists) throw new Error('Quiz was not found.');
       const data = snap.data() || {};
-      const visible = ctx.isSuperAdmin || String(data.organizationId || '') === ctx.organizationId || (data.sharingScope === 'shared' && data.published === true);
+      const ownTenant = ctx.tenantType === 'hierarchy'
+        ? String(data.ownerTenantId || '') === tenantOwnerKey(ctx)
+        : String(data.organizationId || '') === ctx.organizationId;
+      const visible = ctx.isSuperAdmin || ownTenant || (data.sharingScope === 'shared' && data.published === true);
       if (!visible) throw new Error('This quiz is not available to your organization.');
       return res.status(200).json({ ok: true, item: { id, ...data } });
     }
