@@ -101,6 +101,10 @@ const checks = [
   ['firestore.rules', ['match /announcements/{id}','canEditOwnedContent(resource.data)','ownerUid','ownerOrganizationId','match /playlists/{id}','canReadGlobal(resource.data, \'published\')']],
 ];
 const errors = [];
+const legacyCertificateModal = path.join(root, 'src/components/certificate/CertificateModal.tsx');
+if (fs.existsSync(legacyCertificateModal)) {
+  errors.push('Legacy CertificateModal renderer must remain removed; use CertificateArtwork + CertificationConfigStudio.');
+}
 const localizationGuardSource = read('src/components/admin/ContentStudio.tsx');
 if (localizationGuardSource.includes('<{t(') || localizationGuardSource.includes("'{t(") || localizationGuardSource.includes('"{t(')) {
   errors.push('src/components/admin/ContentStudio.tsx: malformed localization expression detected');
