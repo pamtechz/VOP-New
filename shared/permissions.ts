@@ -1,6 +1,6 @@
 export const PERMISSION_ROLES = [
   'super_admin','union_admin','conference_admin','district_admin','church_admin',
-  'owner','admin','editor','teacher','mentor','staff','student','learner',
+  'owner','admin','editor','teacher','mentor','staff','student',
 ] as const;
 
 export const PERMISSION_RESOURCES = [
