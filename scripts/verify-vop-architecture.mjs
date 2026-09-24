@@ -24,6 +24,7 @@ const checks = [
     'organizationIdForUser()',
     'canEditOwnedContent',
     'canViewHierarchyCertificate',
+    'canManageHierarchyUser',
     'isHierarchyTenant',
     'hierarchyTenantId',
     "request.resource.data.get('ownerUid'",
