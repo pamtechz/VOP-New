@@ -667,7 +667,8 @@ service cloud.firestore {
     // Organization reference data remains platform-managed.
     match /unions/{id} {
       allow get, list: if canReadHierarchyRecord('unions', id, resource.data);
-      allow create, update, delete: if isSuperAdmin();
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || unionAdminForCreateUpdate('unions', id);
     }
     match /conferences/{id} {
       allow get, list: if canReadHierarchyRecord('conferences', id, resource.data);
