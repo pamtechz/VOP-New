@@ -123,6 +123,7 @@ const EmptyAvatar = () => (
 export const CertificationManager: React.FC<Props> = ({
   settings, adminContent, showMessage,
 }) => {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [view, setView] = useState<'list' | 'preview' | 'config'>('list');
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [config, setConfig] = useState<CertificationConfig | null>(null);
