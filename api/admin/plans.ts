@@ -4,7 +4,6 @@ import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
-
 function text(value: unknown, fallback = '') { return String(value ?? fallback).trim(); }
 function object(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
@@ -50,6 +49,7 @@ export default async function handler(req: Request, res: Response) {
         price: Number.isFinite(Number(body.price)) ? Number(body.price) : 0,
         currency: text(body.currency, 'USD').toUpperCase(),
         interval: ['month','year','one_time'].includes(text(body.interval)) ? text(body.interval) : 'month',
+        sortOrder: Number.isInteger(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
         quotas: object(body.quotas),
         features: object(body.features),
         externalPriceId: text(body.externalPriceId) || null,
@@ -88,7 +88,19 @@ export default async function handler(req: Request, res: Response) {
       await organizationRef.set({ plan: planId, quotas: planData.quotas || {}, featureEntitlements: planData.features || {}, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       await organizationRef.collection('subscription').doc('current').set({ organizationId, planId, status: 'active', billingProvider: text(body.billingProvider) || 'manual', externalCustomerId: text(body.externalCustomerId) || null, externalSubscriptionId: text(body.externalSubscriptionId) || null, startedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       await writeTenantAudit(ctx, 'subscription.assign', organizationRef.path, before, { plan: planId, quotas: planData.quotas || {}, featureEntitlements: planData.features || {} });
-      return res.status(200).json({ ok: true, organizationId, planId });
+      return res.status(200).json({ ok: true, organizationId, planId, status: 'active' });
+    }
+
+    if (action === 'activateSubscription' || action === 'reactivateSubscription') {
+      const organizationId = text(body.organizationId);
+      if (!organizationId) throw new Error('Organization is required.');
+      const subscriptionRef = ctx.db.doc(`organizations/${organizationId}/subscription/current`);
+      const snapshot = await subscriptionRef.get();
+      if (!snapshot.exists) throw new Error('The organization has no subscription record.');
+      const before = snapshot.data();
+      await subscriptionRef.set({ status: 'active', activatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await writeTenantAudit(ctx, `subscription.${action === 'activateSubscription' ? 'activate' : 'reactivate'}`, subscriptionRef.path, before, { status: 'active' });
+      return res.status(200).json({ ok: true, organizationId, status: 'active' });
     }
 
     if (action === 'cancelSubscription') {
