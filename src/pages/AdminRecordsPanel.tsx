@@ -628,10 +628,10 @@ export default AdminRecordsPanel;
 function AnnouncementAdminDashboard({
   records, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError
 }: {
-  records: AdminRecord[]; playlists: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  records: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editingId: string | null; saving: boolean; error: string; message: string;
   openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
-  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void; setMessage: (value: string) => void;
+  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void;
 }) {
   const [filter, setFilter] = useState<'all'|'published'|'scheduled'|'draft'|'archived'>('all');
   const [search, setSearch] = useState('');
