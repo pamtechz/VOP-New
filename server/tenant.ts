@@ -44,67 +44,37 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const profileOrganizationId = String(profile.organizationId || '').trim();
   const requestedId = String(requestedOrganizationId || '').trim();
 
-  // Hierarchy roles are authoritative even when the same person is also
-  // attached to an organization. Organization membership must never silently
-  // downgrade a Union/Conference/District/Church administrator into an
-  // organization tenant. Organization targets are validated separately by
-  // organizationInHierarchyScope() in the operation that needs one.
   if (hierarchyAdmin) {
     const nodeId = String(profile.adminNodeId || '').trim();
     if (!nodeId) throw new Error('This administrator account is not linked to a hierarchy tenant.');
     const role = String(profile.role || '');
-    const collection = role === 'union_admin' ? 'unions'
-      : role === 'conference_admin' ? 'conferences'
-      : role === 'district_admin' ? 'districts'
-      : 'churches';
+    const collection = role === 'union_admin' ? 'unions' : role === 'conference_admin' ? 'conferences' : role === 'district_admin' ? 'districts' : 'churches';
     const node = await db.doc(collection + '/' + nodeId).get();
     if (!node.exists) throw new Error('The assigned hierarchy tenant does not exist.');
-    return {
-      db, auth, profile, organizationId: '',
-      membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId },
-      isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId,
-    };
+    return { db, auth, profile, organizationId: '', membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId }, isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId };
   }
 
-  // Tenant identity is derived from the authenticated profile. A client-supplied
-  // organizationId may select a tenant only for Super Admin; ordinary and
-  // hierarchy-admin accounts must never switch tenant context by request payload.
   if (!isSuperAdmin && requestedId && requestedId !== profileOrganizationId) {
     const requestedMembership = await db.doc(`organizations/${requestedId}/members/${auth.uid}`).get();
     if (!requestedMembership.exists || requestedMembership.data()?.active !== true) {
-      // A hierarchy administrator may still use its hierarchy tenant context;
-      // it must not impersonate an unrelated organization.
       if (!hierarchyAdmin) throw new Error('You cannot access another organization.');
     }
   }
 
-  // Explicit organization membership takes precedence over a platform/hierarchy
-  // role. This is important for accounts that serve at a hierarchy level while
-  // also being assigned to an organization as owner/member.
   let organizationId = isSuperAdmin ? requestedId : profileOrganizationId;
   if (!isSuperAdmin && requestedId) {
     const requestedOrganization = await db.doc(`organizations/${requestedId}`).get();
-    if (!requestedOrganization.exists || requestedOrganization.data()?.status !== 'active') {
-      throw new Error('The organization is not available.');
-    }
+    if (!requestedOrganization.exists || requestedOrganization.data()?.status !== 'active') throw new Error('The organization is not available.');
     const requestedMembership = await db.doc(`organizations/${requestedId}/members/${auth.uid}`).get();
-    if (requestedMembership.exists && requestedMembership.data()?.active === true) {
-      organizationId = requestedId;
-    }
+    if (requestedMembership.exists && requestedMembership.data()?.active === true) organizationId = requestedId;
   }
   if (!isSuperAdmin && organizationId) {
     const profileMembership = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
-    if (!profileMembership.exists || profileMembership.data()?.active !== true) {
-      organizationId = '';
-    }
+    if (!profileMembership.exists || profileMembership.data()?.active !== true) organizationId = '';
   }
 
   if (!organizationId && !isSuperAdmin) {
-    const memberships = await db.collectionGroup('members')
-      .where('uid', '==', auth.uid)
-      .where('active', '==', true)
-      .limit(20)
-      .get();
+    const memberships = await db.collectionGroup('members').where('uid', '==', auth.uid).where('active', '==', true).limit(20).get();
     const organizationMembership = memberships.docs.find(doc => doc.ref.path.startsWith('organizations/'));
     if (organizationMembership) {
       const parts = organizationMembership.ref.path.split('/');
@@ -120,11 +90,7 @@ export async function authenticateTenant(request: Request, requestedOrganization
       const collection = role === 'union_admin' ? 'unions' : role === 'conference_admin' ? 'conferences' : role === 'district_admin' ? 'districts' : 'churches';
       const node = await db.doc(collection + '/' + nodeId).get();
       if (!node.exists) throw new Error('The assigned hierarchy tenant does not exist.');
-      return {
-        db, auth, profile, organizationId: '',
-        membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId },
-        isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId,
-      };
+      return { db, auth, profile, organizationId: '', membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId }, isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId };
     }
     if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin, tenantType: 'platform', tenantId: '' };
     if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin, tenantType: 'platform', tenantId: '' };
@@ -135,26 +101,13 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
   if (!isSuperAdmin && (!membershipSnap.exists || membershipSnap.data()?.active !== true)) throw new Error('You are not a member of this organization.');
 
-  // Organization authorization has historically been represented in both the
-  // user profile and the tenant membership document. Older assignment flows
-  // could leave those two records temporarily inconsistent (for example,
-  // profile.organizationRole === 'admin' while membership.role is stale).
-  // Never grant access from a client-supplied role: only reconcile a role that
-  // is already present in the server-side authenticated profile and only when
-  // the tenant membership itself is active.
   let membership = membershipSnap.data() || { role: 'platform' };
   if (!isSuperAdmin && membershipSnap.exists) {
     const profileRole = String(profile.organizationRole || '').trim();
     const membershipRole = String(membership.role || '').trim();
     if (['owner', 'admin'].includes(profileRole) && membershipRole !== profileRole) {
       membership = { ...membership, role: profileRole };
-      await db.doc(`organizations/${organizationId}/members/${auth.uid}`).set({
-        uid: auth.uid,
-        organizationId,
-        role: profileRole,
-        active: true,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      await db.doc(`organizations/${organizationId}/members/${auth.uid}`).set({ uid: auth.uid, organizationId, role: profileRole, active: true, updatedAt: new Date().toISOString() }, { merge: true });
     }
   }
 
@@ -193,10 +146,7 @@ export async function organizationInHierarchyScope(ctx: TenantContext, organizat
 }
 
 export async function accessibleOrganizationIds(ctx: TenantContext) {
-  if (ctx.isSuperAdmin) {
-    const snapshot = await ctx.db.collection('organizations').where('status', '==', 'active').get();
-    return snapshot.docs.map(doc => doc.id);
-  }
+  if (ctx.isSuperAdmin) return (await ctx.db.collection('organizations').where('status', '==', 'active').get()).docs.map(doc => doc.id);
   if (ctx.tenantType === 'organization') return ctx.organizationId ? [ctx.organizationId] : [];
   if (ctx.tenantType !== 'hierarchy') return [];
   const role = hierarchyRole(ctx.profile.role);
@@ -208,26 +158,15 @@ export async function accessibleOrganizationIds(ctx: TenantContext) {
   for (const doc of snapshot.docs) {
     const data = doc.data() || {};
     const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
-    const direct = String(data[directField] || '').trim() === nodeId
-      || String(hierarchy[directField] || '').trim() === nodeId
-      || (String(data.hierarchyType || '').trim() === directField.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId)
-      || (String(data.adminNodeType || '').trim() === directField.replace('Id','') && String(data.adminNodeId || '').trim() === nodeId);
-    if (direct) ids.add(doc.id);
+    if (String(data[directField] || '').trim() === nodeId || String(hierarchy[directField] || '').trim() === nodeId || (String(data.hierarchyType || '').trim() === directField.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId) || (String(data.adminNodeType || '').trim() === directField.replace('Id','') && String(data.adminNodeId || '').trim() === nodeId)) ids.add(doc.id);
   }
   const users = await ctx.db.collection('users').where(directField, '==', nodeId).limit(500).get();
-  users.docs.forEach(doc => {
-    const id = String(doc.data()?.organizationId || '').trim();
-    if (id) ids.add(id);
-  });
+  users.docs.forEach(doc => { const id = String(doc.data()?.organizationId || '').trim(); if (id) ids.add(id); });
   return [...ids];
 }
 
 export function tenantOwnerKey(ctx: TenantContext) {
-  return ctx.tenantType === 'organization'
-    ? ctx.organizationId
-    : ctx.tenantType === 'hierarchy'
-      ? ctx.tenantId
-      : '';
+  return ctx.tenantType === 'organization' ? ctx.organizationId : ctx.tenantType === 'hierarchy' ? ctx.tenantId : '';
 }
 
 export function contentOwnedByOrg(data: DocumentData | undefined, organizationId: string) {
@@ -238,40 +177,18 @@ export async function canManageOrganizationContent(ctx: TenantContext, data: Doc
   if (ctx.isSuperAdmin) return true;
   const organizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
   if (!organizationId) return false;
-
-  // Hierarchy administrators manage canonical content belonging to organizations
-  // inside their assigned hierarchy. Organization membership administrators do
-  // not inherit ownership of another contributor's content: even an organization
-  // owner/admin may only mutate content they personally created, unless they are
-  // the platform Super Admin.
-  if (ctx.tenantType === 'hierarchy') {
-    return organizationInHierarchyScope(ctx, organizationId);
-  }
-
-  return organizationId === ctx.organizationId
-    && ['owner', 'admin'].includes(String(ctx.membership.role || ''))
-    && String(data?.ownerUid || '') === ctx.auth.uid;
+  if (ctx.tenantType === 'hierarchy') return organizationInHierarchyScope(ctx, organizationId);
+  return organizationId === ctx.organizationId && ['owner', 'admin'].includes(String(ctx.membership.role || '')) && String(data?.ownerUid || '') === ctx.auth.uid;
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
-  // Organization membership grants access to the organization, not ownership of
-  // another contributor's canonical content. Only the recorded creator/owner or
-  // the platform Super Admin may mutate canonical content.
   const ownerKey = String(data?.ownerTenantId || data?.ownerOrganizationId || data?.organizationId || '');
   const currentTenant = tenantOwnerKey(ctx);
   const role = String(ctx.profile.role || '');
   const membershipRole = String(ctx.membership.role || '');
-  const canContribute = ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin'].includes(role)
-    || ['owner','admin','editor'].includes(membershipRole);
-  return ctx.isSuperAdmin
-    || (
-      !!currentTenant
-      && ownerKey === currentTenant
-      && String(data?.ownerUid || '') === ctx.auth.uid
-      && canContribute
-    );
+  const canContribute = ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin'].includes(role) || ['owner','admin','editor'].includes(membershipRole);
+  return ctx.isSuperAdmin || (!!currentTenant && ownerKey === currentTenant && String(data?.ownerUid || '') === ctx.auth.uid && canContribute);
 }
-
 
 export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
   if (ctx.isSuperAdmin || !ctx.organizationId) return;
@@ -289,42 +206,29 @@ export async function enforceQuota(ctx: TenantContext, collectionName: string, q
   if (ids.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
 }
 
-
-export async function writeTenantAudit(
-  ctx: TenantContext,
-  action: string,
-  target: string,
-  before?: DocumentData,
-  after?: DocumentData,
-) {
+export async function writeTenantAudit(ctx: TenantContext, action: string, target: string, before?: DocumentData, after?: DocumentData) {
   const tenantKey = tenantOwnerKey(ctx);
-  if (!tenantKey) return;
-  if (ctx.tenantType === 'organization') {
-    await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).add({
-      actorUid: ctx.auth.uid,
-      actorEmail: ctx.auth.email || '',
-      action,
-      target,
-      organizationId: ctx.organizationId,
-      tenantType: ctx.tenantType,
-      tenantId: tenantKey,
-      before: before || null,
-      after: after || null,
-      timestamp: FieldValue.serverTimestamp(),
-    });
+  const entry = {
+    actorUid: ctx.auth.uid,
+    actorEmail: ctx.auth.email || '',
+    action,
+    target,
+    organizationId: ctx.organizationId || String(after?.organizationId || before?.organizationId || ''),
+    tenantType: ctx.tenantType,
+    tenantId: tenantKey,
+    before: before || null,
+    after: after || null,
+    timestamp: FieldValue.serverTimestamp(),
+  };
+  if (ctx.isSuperAdmin) {
+    await ctx.db.collection('platformAudit').add({ ...entry, tenantType: 'platform', tenantId: '', targetedOrganizationId: entry.organizationId || null });
     return;
   }
-  if (ctx.tenantType === 'hierarchy') {
-    await ctx.db.collection('tenantAudit').doc(tenantKey).collection('entries').add({
-      actorUid: ctx.auth.uid,
-      actorEmail: ctx.auth.email || '',
-      action,
-      target,
-      tenantType: ctx.tenantType,
-      tenantId: tenantKey,
-      before: before || null,
-      after: after || null,
-      timestamp: FieldValue.serverTimestamp(),
-    });
+  if (ctx.tenantType === 'organization' && ctx.organizationId) {
+    await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).add(entry);
+    return;
+  }
+  if (ctx.tenantType === 'hierarchy' && tenantKey) {
+    await ctx.db.collection('tenantAudit').doc(tenantKey).collection('entries').add(entry);
   }
 }
