@@ -464,7 +464,7 @@ export default async function handler(req: Request, res: Response) {
         const items = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
-          canEdit: ctx.tenantType === 'hierarchy' ? true : String(d.data().ownerUid || '') === ctx.auth.uid,
+          canEdit: ctx.tenantType === 'hierarchy' ? String(d.data().ownerUid || '') === ctx.auth.uid : String(d.data().ownerUid || '') === ctx.auth.uid,
           scope: 'organization',
         })));
         return res.status(200).json({ ok: true, items });
@@ -707,6 +707,7 @@ export default async function handler(req: Request, res: Response) {
           organizationId: effectiveOrganizationId,
           ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
+          scope: ctx.tenantType === 'hierarchy' ? 'hierarchy' : 'platform',
           canonical: true,
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
