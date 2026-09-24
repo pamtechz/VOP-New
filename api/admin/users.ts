@@ -388,6 +388,14 @@ export default async function handler(request: Request, response: Response) {
         disabled: false,
       });
       const profile = profileForType(type, body, managedOrganizationId);
+      const hierarchyMembershipFields = hierarchyTenant
+        ? {
+            unionId: hierarchyTenant === 'union_admin' ? hierarchyNodeId : String(profile.unionId || body.unionId || '').trim(),
+            conferenceId: hierarchyTenant === 'conference_admin' ? hierarchyNodeId : String(profile.conferenceId || body.conferenceId || '').trim(),
+            districtId: hierarchyTenant === 'district_admin' ? hierarchyNodeId : String(profile.districtId || body.districtId || '').trim(),
+            churchId: hierarchyTenant === 'church_admin' ? hierarchyNodeId : String(profile.churchId || body.churchId || '').trim(),
+          }
+        : {};
       await db.doc(`users/${created.uid}`).set({
         uid: created.uid,
         email,
@@ -395,6 +403,7 @@ export default async function handler(request: Request, response: Response) {
         ...(phoneNumber ? { phoneNumber } : {}),
         userType: type,
         ...profile,
+        ...hierarchyMembershipFields,
         information: { enrollmentDate: new Date().toISOString(), graduating: false, graduated: false, baptismCandidate: false, baptized: false },
         progress: { discoverProgress: 0, completedGuidesCount: 0, totalGuidesCount: 0, guideScores: {}, completedLessons: [] },
         createdAt: FieldValue.serverTimestamp(),
@@ -426,7 +435,17 @@ export default async function handler(request: Request, response: Response) {
           transaction.set(db.doc('organizations/' + previousOrganizationId + '/members/' + uid), { active:false, updatedAt:now }, { merge:true });
         }
         transaction.set(db.doc('organizations/' + targetOrganizationId + '/members/' + uid), { uid, organizationId:targetOrganizationId, role:memberRole, active:true, joinedAt:previousOrganizationId === targetOrganizationId ? String(existingData.joinedAt || now) : now, updatedAt:now, assignedBy:decoded.uid }, { merge:true });
-        transaction.set(db.doc('users/' + uid), { organizationId:targetOrganizationId, organizationRole:memberRole, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+        transaction.set(db.doc('users/' + uid), {
+          organizationId:targetOrganizationId,
+          organizationRole:memberRole,
+          ...(hierarchyTenant ? {
+            unionId: hierarchyTenant === 'union_admin' ? hierarchyNodeId : String(existingData.unionId || ''),
+            conferenceId: hierarchyTenant === 'conference_admin' ? hierarchyNodeId : String(existingData.conferenceId || ''),
+            districtId: hierarchyTenant === 'district_admin' ? hierarchyNodeId : String(existingData.districtId || ''),
+            churchId: hierarchyTenant === 'church_admin' ? hierarchyNodeId : String(existingData.churchId || ''),
+          } : {}),
+          updatedAt:FieldValue.serverTimestamp()
+        }, { merge:true });
       });
       const preservedPlatformRole = hierarchyRole(String(existingData.role || '')) || 'student';
       await authService.setCustomUserClaims(uid, { role:preservedPlatformRole, ...(hierarchyRole(preservedPlatformRole) ? { adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId } : {}), organizationId:targetOrganizationId, organizationRole:memberRole });
