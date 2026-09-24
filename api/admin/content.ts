@@ -383,6 +383,22 @@ export default async function handler(req: Request, res: Response) {
           if (collection === 'playlists') return data.published === true;
           return data.published === true;
         });
+        if (collection === 'translations') {
+          const items = await Promise.all(visible.map(async d => {
+            const proposals = await d.ref.collection('proposals')
+              .where('proposerUid','==',ctx.auth.uid)
+              .orderBy('createdAt','desc')
+              .limit(20)
+              .get();
+            return {
+              id:d.id,
+              ...d.data(),
+              canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
+              proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() })),
+            };
+          }));
+          return res.status(200).json({ ok:true, items });
+        }
         return res.status(200).json({
           ok: true,
           items: visible.map(d => ({
@@ -418,7 +434,15 @@ export default async function handler(req: Request, res: Response) {
       const existingValues = sourceData.values && typeof sourceData.values === 'object' ? sourceData.values as Record<string, unknown> : {};
       if (!(key in existingValues)) throw new Error('The selected translation key does not exist.');
       if (String(existingValues[key] || '') === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
-      const proposalRef = ctx.db.collection('translations/' + languageId + '/proposals').doc();
+      const proposalCollection = ctx.db.collection('translations/' + languageId + '/proposals');
+      const duplicate = await proposalCollection
+        .where('proposerUid','==',ctx.auth.uid)
+        .where('key','==',key)
+        .where('status','==','pending')
+        .limit(1)
+        .get();
+      if (!duplicate.empty) throw new Error('You already have a pending proposal for this translation key.');
+      const proposalRef = proposalCollection.doc();
       const now = new Date().toISOString();
       await proposalRef.set({
         id: proposalRef.id,
