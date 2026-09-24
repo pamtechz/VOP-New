@@ -196,7 +196,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
 
   const removeMember=async(member:Member)=>{
-    if(!selected||member.role==='owner')return;
+    if(!selected||(!isSuperAdmin&&member.role==='owner'))return;
     if(!window.confirm(`Remove ${member.displayName||member.email||'this user'} from ${selected.name}? Their VOP account will remain active, but they will no longer belong to this organization.`))return;
     setSaving(true);setError('');
     try{await api('removeMember',{organizationId:selected.id,uid:member.uid});setMessage('Member removed from the organization.');await loadDetails(selected.id);await load();}
@@ -321,7 +321,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
                       </select>}
                     </td>
                     <td><span className="vop-chip">{item.active?'Active':'Removed'}</span></td>
-                    <td style={{textAlign:'right'}}>{isOwner?<span style={{fontSize:12,color:'#7183a4'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={saving||!item.active} onClick={()=>void removeMember(item)}>{t('common.remove','Remove')}</button>}</td>
+                    <td style={{textAlign:'right'}}>{isOwner&&!isSuperAdmin?<span style={{fontSize:12,color:'#7183a4'}}>Protected</span>:<button className="vop-secondary" type="button" disabled={saving||!item.active} onClick={()=>void removeMember(item)}>{t('common.remove','Remove')}</button>}</td>
                   </tr>;
                 })}
               </tbody></table>
