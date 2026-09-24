@@ -31,7 +31,7 @@ export default async function handler(req: Request, res: Response) {
     const bootstrapDb = getAdminDb();
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, requestedOrg, action === 'acceptInvite');
+    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, action === 'acceptInvite');
     if (action === 'create') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
       const name = String(body.name || '').trim();
@@ -88,6 +88,56 @@ export default async function handler(req: Request, res: Response) {
         organizationRole: role,
       });
       return res.status(200).json({ok:true,organizationId,role});
+    }
+
+    if (action === 'delete') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can delete organizations.');
+      const organizationId = String(requestedOrg || ctx.organizationId || '').trim();
+      if (!organizationId) throw new Error('An organization is required.');
+      const organizationRef = bootstrapDb.doc(`organizations/${organizationId}`);
+      const organizationSnap = await organizationRef.get();
+      if (!organizationSnap.exists) throw new Error('The organization does not exist.');
+
+      const memberSnap = await organizationRef.collection('members').get();
+      const memberProfiles = await Promise.all(memberSnap.docs.map(async member => ({
+        uid: member.id,
+        profile: await bootstrapDb.doc(`users/${member.id}`).get(),
+      })));
+      const inviteSnap = await bootstrapDb.collection('organizationInvites')
+        .where('organizationId','==',organizationId).get();
+
+      await bootstrapDb.runTransaction(async transaction => {
+        for (const entry of memberProfiles) {
+          if (!entry.profile.exists) continue;
+          const profile = entry.profile.data() || {};
+          if (String(profile.organizationId || '').trim() !== organizationId) continue;
+          transaction.set(entry.profile.ref, {
+            organizationId:'',
+            organizationRole:'learner',
+            updatedAt:FieldValue.serverTimestamp(),
+          }, { merge:true });
+        }
+        for (const invite of inviteSnap.docs) transaction.delete(invite.ref);
+      });
+
+      const authService = getAuth(bootstrapDb.app);
+      await Promise.all(memberProfiles.map(async entry => {
+        try {
+          const profile = entry.profile.data() || {};
+          if (String(profile.organizationId || '').trim() === organizationId) {
+            await authService.setCustomUserClaims(entry.uid, {
+              role:'student',
+              organizationId:'',
+              organizationRole:'learner',
+            });
+          }
+        } catch {
+          // A stale/deleted Auth account must not prevent organization cleanup.
+        }
+      }));
+
+      await bootstrapDb.recursiveDelete(organizationRef);
+      return res.status(200).json({ ok:true, organizationId, deleted:true });
     }
 
     if (action === 'list') {
@@ -260,12 +310,24 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'searchUsers') {
       const query = String(body.query || '').trim().toLowerCase();
+      const searchOrganizationId = String(requestedOrg || ctx.organizationId || '').trim();
+      if (!searchOrganizationId) throw new Error('Select an organization before searching accounts.');
       if (query.length < 2) return res.status(200).json({ ok:true, items:[] });
       const users = await ctx.db.collection('users').limit(1000).get();
       const items = users.docs.map(doc => ({ uid:doc.id, ...(doc.data() || {}) }))
         .filter(user => {
           const orgId = String(user.organizationId || '').trim();
-          if (!ctx.isSuperAdmin && orgId && orgId !== ctx.organizationId) return false;
+          const platformRole = String(user.role || '').trim();
+          const organizationRole = String(user.organizationRole || '').trim();
+          // Super Admin and hierarchy administrators are platform/tenant
+          // administrators, not organization members. Never expose them through
+          // organization member search.
+          if (platformRole === 'super_admin' || ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole)) return false;
+          // An organization member search may only return accounts already in
+          // the selected organization or unassigned accounts that can safely be
+          // added to it. Never expose another organization's users.
+          if (orgId && orgId !== searchOrganizationId) return false;
+          if (organizationRole === 'owner' && orgId !== searchOrganizationId) return false;
           const haystack = [user.displayName, user.email, user.phoneNumber].map(value => String(value || '').toLowerCase()).join(' ');
           return haystack.includes(query);
         }).slice(0, 20)
@@ -274,7 +336,9 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listMembers') {
-      const snap = await ctx.db.collection(`organizations/${ctx.organizationId}/members`).get();
+      const memberOrganizationId = String(requestedOrg || ctx.organizationId || '').trim();
+      if (!memberOrganizationId) throw new Error('Select an organization before loading members.');
+      const snap = await ctx.db.collection(`organizations/${memberOrganizationId}/members`).where('active','==',true).get();
       const items = await Promise.all(snap.docs.map(async d => {
         const member = d.data() || {};
         const profile = await ctx.db.doc('users/' + d.id).get();
@@ -326,15 +390,12 @@ export default async function handler(req: Request, res: Response) {
       if (String(existingMember.data()?.role || '') === 'owner' || String(existingData.organizationRole || '') === 'owner') {
         throw new Error('The organization owner cannot be changed from the member manager.');
       }
-      if (!ctx.isSuperAdmin && existingOrganizationId && existingOrganizationId !== ctx.organizationId) {
-        throw new Error('This user belongs to another organization.');
+      if (existingOrganizationId && existingOrganizationId !== ctx.organizationId) {
+        throw new Error('This user belongs to another organization and cannot be managed from this organization.');
       }
       const now = new Date().toISOString();
-      const previousMemberRef = ctx.isSuperAdmin && existingOrganizationId && existingOrganizationId !== ctx.organizationId
-        ? ctx.db.doc(`organizations/${existingOrganizationId}/members/${uid}`)
-        : null;
+      const previousMemberRef = null;
       await ctx.db.runTransaction(async transaction => {
-        if (previousMemberRef) transaction.delete(previousMemberRef);
         transaction.set(targetMemberRef, {
           uid, organizationId: ctx.organizationId, role: memberRole, active: body.active !== false,
           invitedBy: ctx.auth.uid, joinedAt: String(existingData.organizationId || '') === ctx.organizationId ? String(existingData.joinedAt || now) : now, updatedAt: now
