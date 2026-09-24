@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { organizationInHierarchyScope } from '../server/tenant.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -49,24 +50,46 @@ function isMentor(data: Record<string, unknown>) {
 function sameTenant(actor: Record<string, unknown>, target: Record<string, unknown>, requestedOrganizationId = '') {
   const actorOrg = String(actor.organizationId || '').trim();
   const targetOrg = String(target.organizationId || '').trim();
-  if (String(actor.role || '') === 'super_admin') return !requestedOrganizationId || targetOrg === requestedOrganizationId;
-  if (!actorOrg && ['union_admin','conference_admin','district_admin','church_admin'].includes(String(actor.role || ''))) return false;
+  const role = String(actor.role || '');
+  if (role === 'super_admin') return !requestedOrganizationId || targetOrg === requestedOrganizationId;
+  if (['union_admin','conference_admin','district_admin','church_admin'].includes(role)) {
+    return Boolean(requestedOrganizationId && targetOrg && targetOrg === requestedOrganizationId);
+  }
   return Boolean(actorOrg && targetOrg && actorOrg === targetOrg);
 }
 
 function sameScope(actor: Record<string, unknown>, student: Record<string, unknown>) {
   const role = String(actor.role || '');
   if (role === 'super_admin') return true;
+  if (['union_admin','conference_admin','district_admin','church_admin'].includes(role)) {
+    return Boolean(String(student.organizationId || '').trim());
+  }
   const node = String(actor.adminNodeId || '');
   if (!node) return true;
   const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
   return Boolean(node && String(student[field] || '') === node);
 }
 
-function assertOrganizationScope(actor: Record<string, unknown>, requestedOrganizationId: string) {
+async function assertOrganizationScope(db: FirebaseFirestore.Firestore, actor: Record<string, unknown>, requestedOrganizationId: string) {
   const actorRole = String(actor.role || '');
   const actorOrganizationId = String(actor.organizationId || '').trim();
   if (actorRole === 'super_admin') return requestedOrganizationId;
+  if (['union_admin','conference_admin','district_admin','church_admin'].includes(actorRole)) {
+    if (!requestedOrganizationId) throw new Error('Select an organization within your hierarchy scope.');
+    const node = await db.doc('users/' + String((actor.uid as string) || '')).get();
+    const context = {
+      db,
+      auth: { uid: String(node.id) } as never,
+      profile: actor,
+      organizationId: '',
+      membership: { role: actorRole, active: true },
+      isSuperAdmin: false,
+      tenantType: 'hierarchy' as const,
+      tenantId: actorRole + ':' + String(actor.adminNodeId || ''),
+    };
+    if (!(await organizationInHierarchyScope(context, requestedOrganizationId))) throw new Error('The requested organization is outside your hierarchy scope.');
+    return requestedOrganizationId;
+  }
   if (!actorOrganizationId) throw new Error('Your administrator account is not linked to a tenant organization.');
   if (requestedOrganizationId && requestedOrganizationId !== actorOrganizationId) throw new Error('The requested organization is outside your tenant.');
   return actorOrganizationId;
@@ -195,7 +218,7 @@ export default async function handler(req: Request, res: Response) {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
-    if (isAdmin(actor)) organizationId = assertOrganizationScope(actor, organizationId);
+    if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
