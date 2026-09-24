@@ -252,40 +252,58 @@ service cloud.firestore {
           ]);
     }
 
-    function unionAdminForCreateUpdate() {
+    function unionAdminForCreateUpdate(collectionName, recordId) {
       return role() == 'union_admin'
-        && request.resource.data.get('unionId', '')
-            == userDoc().data.get('adminNodeId', '');
+        && (
+          (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
+          || (collectionName in ['conferences','districts','churches']
+              && request.resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+        );
     }
 
-    function unionAdminForDelete() {
+    function unionAdminForDelete(collectionName, recordId) {
       return role() == 'union_admin'
-        && resource.data.get('unionId', '')
-            == userDoc().data.get('adminNodeId', '');
+        && (
+          (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
+          || (collectionName in ['conferences','districts','churches']
+              && resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+        );
     }
 
-    function conferenceAdminForCreateUpdate() {
+    function conferenceAdminForCreateUpdate(collectionName, recordId) {
       return role() == 'conference_admin'
-        && request.resource.data.get('conferenceId', '')
-            == userDoc().data.get('adminNodeId', '');
+        && (
+          (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
+          || (collectionName in ['districts','churches']
+              && request.resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+        );
     }
 
-    function conferenceAdminForDelete() {
+    function conferenceAdminForDelete(collectionName, recordId) {
       return role() == 'conference_admin'
-        && resource.data.get('conferenceId', '')
-            == userDoc().data.get('adminNodeId', '');
+        && (
+          (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
+          || (collectionName in ['districts','churches']
+              && resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+        );
     }
 
-    function districtAdminForCreateUpdate() {
+    function districtAdminForCreateUpdate(collectionName, recordId) {
       return role() == 'district_admin'
-        && request.resource.data.get('districtId', '')
-            == userDoc().data.get('adminNodeId', '');
+        && (
+          (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
+          || (collectionName == 'churches'
+              && request.resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+        );
     }
 
-    function districtAdminForDelete() {
+    function districtAdminForDelete(collectionName, recordId) {
       return role() == 'district_admin'
-        && resource.data.get('districtId', '')
-            == userDoc().data.get('adminNodeId', '');
+        && (
+          (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
+          || (collectionName == 'churches'
+              && resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+        );
     }
 
     function hierarchyTenantForField(data, fieldName) {
@@ -653,18 +671,18 @@ service cloud.firestore {
     }
     match /conferences/{id} {
       allow get, list: if canReadHierarchyRecord('conferences', id, resource.data);
-      allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate();
-      allow delete: if isSuperAdmin() || unionAdminForDelete();
+      allow create, update: if isSuperAdmin() || unionAdminForCreateUpdate('conferences', id);
+      allow delete: if isSuperAdmin() || unionAdminForDelete('conferences', id);
     }
     match /districts/{id} {
       allow get, list: if canReadHierarchyRecord('districts', id, resource.data);
-      allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate();
-      allow delete: if isSuperAdmin() || conferenceAdminForDelete();
+      allow create, update: if isSuperAdmin() || conferenceAdminForCreateUpdate('districts', id);
+      allow delete: if isSuperAdmin() || conferenceAdminForDelete('districts', id);
     }
     match /churches/{id} {
       allow get, list: if canReadHierarchyRecord('churches', id, resource.data);
-      allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate();
-      allow delete: if isSuperAdmin() || districtAdminForDelete();
+      allow create, update: if isSuperAdmin() || districtAdminForCreateUpdate('churches', id);
+      allow delete: if isSuperAdmin() || districtAdminForDelete('churches', id);
     }
 
     // Legacy platform curriculum remains available only when explicitly published.
