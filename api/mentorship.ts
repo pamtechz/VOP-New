@@ -217,6 +217,11 @@ export default async function handler(req: Request, res: Response) {
     const actor = await profile(db, decoded.uid);
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
+    const permissionAction =
+      ['listStudents','listMentors','listAssignments','getAutomationSettings'].includes(action) ? 'view' :
+      ['assign','saveAutomationSettings','sendMessage','createDraft','sendDraft'].includes(action) ? 'manage' :
+      ['performance','questionFailures','listConversations','listMyConversations','messages'].includes(action) ? 'read' : '';
+    if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
 
