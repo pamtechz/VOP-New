@@ -16,7 +16,7 @@ interface QuizModalProps {
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
-  lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false,
+  lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false, passThreshold,
 }) => {
   const questions = lesson.questions ?? [];
   const threshold = passThreshold;
