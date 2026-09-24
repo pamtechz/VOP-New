@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
 import { ArrowLeft, Award, Trophy, BookOpen, CheckCircle2, Clock, Lock, ChevronRight, Sparkles } from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
+import { getTranslation } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 
 interface DiscoverGuideViewProps {
@@ -20,6 +21,10 @@ interface DiscoverGuideViewProps {
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   guide, currentUser, onBack, onSelectLesson, onOpenCertificate,
 }) => {
+  const language = getStoredSettings().defaultLanguage || guide.language || 'en';
+  const settings = getStoredSettings();
+  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'DiscoverGuideView');
+
   const { certificateEligible } = calculateCurriculumProgress(
     getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,
   );
@@ -71,7 +76,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
               className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1"
             >
               <ArrowLeft size={22} />
-              <span className="font-bold text-base sm:text-lg">Back</span>
+              <span className="font-bold text-base sm:text-lg">{t('common.back','Back')}</span>
             </button>
             <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
               Discover Guide {guide.discoverNumber}
@@ -132,8 +137,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         {orderedLessons.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
             <BookOpen size={36} className="text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 text-sm font-medium">No lessons have been published for this guide yet.</p>
-            <p className="text-slate-400 text-xs mt-1">Check back after an administrator publishes the content.</p>
+            <p className="text-slate-500 text-sm font-medium">{t('guide.no_lessons','No lessons have been published for this guide yet.')}</p>
+            <p className="text-slate-400 text-xs mt-1">{t('guide.no_lessons_desc','Check back after an administrator publishes the content.')}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -251,7 +256,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         {lessonStats.percent === 100 && (
           <div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-center shadow-lg">
             <Award size={40} className="mx-auto mb-2 text-amber-300" />
-            <h3 className="text-lg font-black mb-1">Guide Completed!</h3>
+            <h3 className="text-lg font-black mb-1"{t('guide.completed','Guide Completed!')}h3>
             <p className="text-sm text-emerald-100 mb-4">
               You have completed all {lessonStats.totalCount} modules in this guide.
             </p>
