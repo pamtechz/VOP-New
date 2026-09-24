@@ -34,18 +34,18 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const primaryCompleted = primaryGuide ? primaryGuide.lessons.filter(lesson => currentUser.progress.completedLessons.includes(lesson.id)).length : 0;
   const primaryPercent = primaryGuide?.lessons.length ? Math.round((primaryCompleted / primaryGuide.lessons.length) * 100) : 0;
   const announcement = announcements[announcementIndex % Math.max(announcements.length, 1)];
-  const firstName = currentUser.displayName?.split(' ')[0] || t('learner','Learner');
+  const firstName = currentUser.displayName?.split(' ')[0] || t('common.learner','Learner');
 
   return (
     <main className="vop-home">
       <section className="vop-home-welcome">
         <div>
-          <span className="vop-home-kicker"><Sparkles size={14}/> {t('welcome_back','Welcome back')}</span>
-          <h1>{t('greeting_prefix','Hello')}, {firstName}.</h1>
-          <p>{t('home_subtitle','Continue your Bible study journey and discover your next lesson.')}</p>
+          <span className="vop-home-kicker"><Sparkles size={14}/> {t('home.welcome_back','Welcome back')}</span>
+          <h1>{t('home.greeting_prefix','Hello')}, {firstName}.</h1>
+          <p>{t('home.subtitle','Continue your Bible study journey and discover your next lesson.')}</p>
         </div>
         <div className="vop-home-actions">
-          {currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> Certificates</button>}
+          {currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> {t('certificates.title','Certificates')}</button>}
           <button type="button" className="secondary" onClick={onOpenBooks}><BookOpen size={16}/> Library</button>
         </div>
       </section>
@@ -62,7 +62,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <span><Sparkles size={14}/> {announcement.tag || 'From VOP'}</span>
           <h2>{announcement.title}</h2>
           <p>{announcement.description}</p>
-          <button type="button" onClick={() => primaryGuide && onSelectGuide(primaryGuide)} disabled={!primaryGuide}>{announcement.actionText || t('explore_now','Explore now')} <ArrowRight size={16}/></button>
+          <button type="button" onClick={() => primaryGuide && onSelectGuide(primaryGuide)} disabled={!primaryGuide}>{announcement.actionText || t('home.explore_now','Explore now')} <ArrowRight size={16}/></button>
         </div>
         {announcement.imageUrl && <img src={announcement.imageUrl} alt="" />}
         {announcements.length > 1 && <div className="vop-home-dots">{announcements.map((item,index)=><button key={item.id || index} aria-label={'Announcement '+(index+1)} className={index===announcementIndex?'active':''} onClick={()=>setAnnouncementIndex(index)}/>)}</div>}
