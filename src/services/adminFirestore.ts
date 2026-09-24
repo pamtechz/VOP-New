@@ -10,16 +10,17 @@ import type {
 
 
 export interface ExtendedAppSettings extends AppSettings {
+  appTagline?: string;
   timezone?: string;
   website?: string;
   welcomeMessage?: string;
   systemOptions?: {
-    allowRegistrations: boolean;
-    requireApproval: boolean;
-    enableEmailNotifications: boolean;
-    showChurchInfo: boolean;
-    enablePwa: boolean;
-    maintenanceMode: boolean;
+    allowRegistrations?: boolean;
+    requireApproval?: boolean;
+    enableEmailNotifications?: boolean;
+    showChurchInfo?: boolean;
+    enablePwa?: boolean;
+    maintenanceMode?: boolean;
   };
   features?: {
     candidatesModule: boolean;
@@ -30,15 +31,15 @@ export interface ExtendedAppSettings extends AppSettings {
     certification: boolean;
   };
   security?: {
-    sessionTimeoutMinutes: number;
-    allowMultipleSessions: boolean;
-    enforceSecureConnections: boolean;
+    sessionTimeoutMinutes?: number;
+    allowMultipleSessions?: boolean;
+    enforceSecureConnections?: boolean;
   };
   notifications?: {
-    emailEnabled: boolean;
-    enrollmentNotifications: boolean;
-    announcementNotifications: boolean;
-    certificateNotifications: boolean;
+    emailEnabled?: boolean;
+    enrollmentNotifications?: boolean;
+    announcementNotifications?: boolean;
+    certificateNotifications?: boolean;
   };
 }
 
