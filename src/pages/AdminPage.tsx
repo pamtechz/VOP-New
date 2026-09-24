@@ -923,6 +923,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     </div>
   </div>;
 
+  const currentPermissionRole = roleForPermission({
+    role: currentUser.role,
+    organizationRole: currentUser.organizationRole,
+    privileges: currentUser.privileges as Record<string, unknown> | undefined,
+  });
+  const adminResourceForCollection: Record<ManagedAdminCollection, PermissionResource> = {
+    translations:'translations', announcements:'announcements', materials:'materials', radio:'radio',
+    unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
+  };
+  const canAdminResource = (kind: ManagedAdminCollection, action: PermissionAction) =>
+    permissionAllowed(permissionMatrix, currentPermissionRole, adminResourceForCollection[kind], action);
+
   const managedTabs: ManagedAdminCollection[] = [
     'translations',
     'announcements',
@@ -1032,6 +1044,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             kind={activeTab as ManagedAdminCollection}
             languages={languages}
             preferredLanguage={activeLanguage}
+            canCreate={canAdminResource(activeTab as ManagedAdminCollection, 'create')}
+            canUpdate={canAdminResource(activeTab as ManagedAdminCollection, 'update')}
+            canDelete={canAdminResource(activeTab as ManagedAdminCollection, 'delete')}
           />
         )}
       </main>
