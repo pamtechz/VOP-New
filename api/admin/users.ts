@@ -214,6 +214,29 @@ export default async function handler(request: Request, response: Response) {
       const profile = await syncOwnProfile(decoded, getFirestore(getFirebaseAdmin()));
       return response.status(200).json({ ok:true, profile });
     }
+    if (action === 'updateOwnProfile') {
+      const db = getFirestore(getFirebaseAdmin());
+      const incoming = body.profile && typeof body.profile === 'object'
+        ? body.profile as Record<string, unknown>
+        : {};
+      const phoneNumber = typeof incoming.phoneNumber === 'string' ? incoming.phoneNumber.trim() : '';
+      const address = typeof incoming.address === 'string' ? incoming.address.trim() : '';
+      const displayName = typeof incoming.displayName === 'string' ? incoming.displayName.trim() : '';
+      if (displayName.length > 120 || phoneNumber.length > 40 || address.length > 500) {
+        return response.status(400).json({ error:'Profile details exceed the allowed length.' });
+      }
+      const ref = db.doc('users/' + decoded.uid);
+      const existing = await ref.get();
+      if (!existing.exists) return response.status(404).json({ error:'VOP account profile was not found.' });
+      await ref.set({
+        ...(displayName ? { displayName } : {}),
+        phoneNumber,
+        address,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge:true });
+      const latest = await ref.get();
+      return response.status(200).json({ ok:true, profile:latest.data() || {} });
+    }
     if (action === 'personalSettings') {
       const db = getFirestore(getFirebaseAdmin());
       const ref = db.doc('users/' + decoded.uid + '/settings/personal');
