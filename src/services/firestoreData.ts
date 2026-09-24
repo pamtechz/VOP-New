@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, where, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
 import { db, auth } from '../lib/firebase';
 
@@ -256,39 +256,31 @@ export async function createFirestoreStudentProfile(
   displayName: string,
   photoURL?: string | null,
 ): Promise<User> {
-  const firestore = requireDb();
-  const ref = doc(firestore, 'users', uid);
-  const existing = await getDoc(ref);
-  if (existing.exists()) return (await loadFirestoreUser(uid)) as User;
-  const now = new Date().toISOString();
-  const profile: User = {
-    uid,
-    displayName: displayName.trim(),
-    email: email.trim(),
-    photoURL: photoURL ?? undefined,
-    role: 'student',
-    information: {
-      enrollmentDate: now.slice(0, 10),
-      graduating: false,
-      graduated: false,
-      baptismCandidate: false,
-      baptized: false,
+  // Profile creation is server-authoritative. The browser must never create or
+  // mutate an operational user profile directly in Firestore. This endpoint
+  // derives identity from the Firebase ID token and preserves any tenant role
+  // or invitation state already assigned by the server.
+  const currentUser = auth?.currentUser;
+  if (!currentUser || currentUser.uid !== uid) throw new Error('Sign in first.');
+  const token = await currentUser.getIdToken();
+  const response = await fetch('/api/admin/users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + token,
     },
-    privileges: {
-      admin: false,
-      guardian: false,
-      editor: false,
-      manager: false,
-      developer: false,
-    },
-    progress: {
-      discoverProgress: 0,
-      completedGuidesCount: 0,
-      totalGuidesCount: 0,
-      guideScores: {},
-      completedLessons: [],
-    },
-  };
-  await setDoc(ref, { ...profile, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
-  return profile;
+    body: JSON.stringify({
+      action: 'profile',
+      profile: {
+        email: email.trim(),
+        displayName: displayName.trim(),
+        photoURL: photoURL ?? null,
+      },
+    }),
+  });
+  const body = await response.json().catch(() => ({})) as { profile?: Record<string, unknown>; error?: string };
+  if (!response.ok || !body.profile) {
+    throw new Error(body.error || 'Unable to create your profile.');
+  }
+  return normalizeUserProfile(uid, body.profile);
 }
