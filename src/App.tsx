@@ -9,6 +9,7 @@ import {
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
+import { initializeLocalization, setUiLocale } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth } from './lib/firebase';
@@ -58,6 +59,10 @@ export const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileShell, setIsMobileShell] = useState(false);
+
+  useEffect(() => {
+    void initializeLocalization(settings);
+  }, [settings.defaultLanguage]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -114,6 +119,7 @@ export const App: React.FC = () => {
           return;
         }
         setCurrentUser(profile);
+        if (profile.preferences?.uiLocale) setUiLocale(profile.preferences.uiLocale);
         setAllUsers([profile]);
         if (shareCode && firebaseAuth.currentUser) {
           try {
