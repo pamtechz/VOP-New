@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
+import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, RefreshCw, {t('common.save','Save')}, {t('common.search','Search')}, Trash2 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
+import { getTranslation } from '../../services/i18n';
 
 type CollectionName =
   | 'languages' | 'translations' | 'announcements' | 'books' | 'radioBroadcasts'
@@ -97,6 +98,7 @@ async function adminContent(action: 'list' | 'upsert' | 'delete' | 'proposeTrans
 }
 
 export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
+  const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [active, setActive] = useState<CollectionName>('languages');
   const [state, setState] = useState<ContentState>(emptyState);
   const [draft, setDraft] = useState<ContentItem>(newRecord('languages', emptyState));
@@ -221,7 +223,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const remove = async (id: string) => {
     const item = state[active].find(candidate => identity(active, candidate) === id);
     if (item?.canEdit === false) { setError('This record is read-only. Only its contributor or the VOP Super Admin can delete it.'); return; }
-    if (!id || !window.confirm('Delete this record permanently?')) return;
+    if (!id || !window.confirm('{t('common.delete','Delete')} this record permanently?')) return;
     setPending(true); setError(''); setMessage('');
     try {
       await adminContent('delete', active, id);
@@ -256,7 +258,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
       <span>{label}</span>
       <select value={text(draft[key])} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={event => setField(key, event.target.value)}
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal">
-        <option value="">Not configured</option>
+        <option value="">{t('common.not_configured','Not configured')}</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>
@@ -265,7 +267,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const publicationToggle = () => (
     <label className="flex items-center gap-2 text-xs font-bold">
       <input type="checkbox" checked={draft.published === true} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={event => setField('published', event.target.checked)} />
-      Published
+      {t('common.published','Published')}
     </label>
   );
 
@@ -312,8 +314,8 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
     if (active === 'languages') return (
       <div className="grid gap-3">
         {field('Language code', 'code')}{field('Display name', 'name')}{field('Native name', 'nativeName')}{field('Sort order', 'sortOrder', 'number')}
-        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('enabled', e.target.checked)} />Enabled for learners</label>
-        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.rtl === true} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('rtl', e.target.checked)} />Right-to-left</label>
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.enabled !== false} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('enabled', e.target.checked)} />{t('language.enabled_for_learners','{t('common.enabled','Enabled')} for learners')}</label>
+        <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={draft.rtl === true} disabled={pending || (editingId !== '' && !editingCanEdit)} onChange={e => setField('rtl', e.target.checked)} />{t('language.rtl','Right-to-left')}</label>
       </div>
     );
     if (active === 'announcements') return <div className="grid gap-3">{field('Title','title')}{field('Tag','tag')}{area('Description','description')}{field('Image URL','imageUrl')}{field('Action text','actionText')}{field('Action URL','actionUrl')}{publicationToggle()}</div>;
@@ -322,7 +324,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
       {field('Broadcast title','title')}{field('Speaker','speaker')}{field('Series','series')}
       {select('Primary media type','mediaType',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
       {field('Audio / YouTube / AudioVerse URL','audioUrl')}{field('Video URL','videoUrl')}{field('Live stream URL','streamUrl')}{field('Poster image URL','posterUrl')}
-      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-[11px] leading-5 text-blue-900"><strong>Automatic timing:</strong> do not enter duration or broadcast time. The player detects media duration and playback time automatically, while the system records the creation timestamp.</div>
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-[11px] leading-5 text-blue-900"><strong>{t('common.automatic_timing','Automatic timing:')}</strong> do not enter duration or broadcast time. The player detects media duration and playback time automatically, while the system records the creation timestamp.</div>
       {area('Description','description')}{publicationToggle()}
     </div>;
     if (active === 'unions') return <div className="grid gap-3">{field('Name','name')}{field('Code','code')}{field('Division name','divisionName')}{field('Director name','directorName')}{field('Contact email','contactEmail')}{field('Contact phone','contactPhone')}{field('Headquarters','headquarters')}</div>;
@@ -334,7 +336,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   return (
     <section className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div><h2 className="text-xl font-black">Content Studio</h2><p className="mt-1 text-xs text-slate-500">Managed languages, translations, public content and organizational records.</p></div>
+        <div><h2 className="text-xl font-black">{t('admin.content_studio','Content Studio')}</h2><p className="mt-1 text-xs text-slate-500">{t('admin.content_studio_desc','Managed languages, translations, public content and organizational records.')}</p></div>
         <div className="flex gap-2"><button type="button" onClick={() => void reload()} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"><RefreshCw size={14} className={pending ? 'animate-spin' : ''} /></button><button type="button" onClick={() => startNew()} disabled={pending} className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus size={14} />New</button></div>
       </div>
 
@@ -343,22 +345,22 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative min-w-0 flex-1"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${TABS.find(t => t.id === active)?.label.toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
-        <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3"><Filter size={14} className="text-slate-500" /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-transparent py-2.5 text-xs font-bold outline-none"><option value="all">All records</option><option value="published">Published</option><option value="draft">Draft</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></div>
+        <div className="relative min-w-0 flex-1"><{t('common.search','Search')} size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`{t('common.search','Search')} ${TABS.find(t => t.id === active)?.label.toLowerCase()}`} className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm" /></div>
+        <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3"><Filter size={14} className="text-slate-500" /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-transparent py-2.5 text-xs font-bold outline-none"><option value="all">{t('common.all','All records')}</option><option value="published">{t('common.published','Published')}</option><option value="draft">{t('common.draft','Draft')}</option><option value="enabled">{t('common.enabled','Enabled')}</option><option value="disabled">{t('common.disabled','Disabled')}</option></select></div>
       </div>
 
       {(message || error) && <div role={error ? 'alert' : undefined} className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || <><Check size={16} />{message}</>}</div>}
 
       {active === 'translations' && <div className="grid gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
-        <div><h3 className="font-black">Translation improvement workflow</h3><p className="mt-1 text-xs text-blue-900">Canonical translations owned by another contributor are read-only. Submit an improvement for Super Admin review instead of overwriting it.</p></div>
+        <div><h3 className="font-black">{t('translation.improvement_workflow','Translation improvement workflow')}</h3><p className="mt-1 text-xs text-blue-900">Canonical translations owned by another contributor are read-only. Submit an improvement for Super Admin review instead of overwriting it.</p></div>
         <div className="grid gap-3 md:grid-cols-2">
-          <select value={proposalLanguage} onChange={e => { setProposalLanguage(e.target.value); setProposalKey(''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select language</option>{languages.map(lang => <option key={text(lang.code)} value={text(lang.code)}>{text(lang.name)} ({text(lang.code).toUpperCase()})</option>)}</select>
-          <select value={proposalKey} onChange={e => { setProposalKey(e.target.value); setProposalValue(selectedProposalTranslation?.values && typeof selectedProposalTranslation.values === 'object' ? text((selectedProposalTranslation.values as Record<string, unknown>)[e.target.value]) : ''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">Select UI key</option>{proposalKeys.map(key => <option key={key} value={key}>{key}</option>)}</select>
+          <select value={proposalLanguage} onChange={e => { setProposalLanguage(e.target.value); setProposalKey(''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">{t('common.select_language','Select language')}</option>{languages.map(lang => <option key={text(lang.code)} value={text(lang.code)}>{text(lang.name)} ({text(lang.code).toUpperCase()})</option>)}</select>
+          <select value={proposalKey} onChange={e => { setProposalKey(e.target.value); setProposalValue(selectedProposalTranslation?.values && typeof selectedProposalTranslation.values === 'object' ? text((selectedProposalTranslation.values as Record<string, unknown>)[e.target.value]) : ''); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm"><option value="">{t('translation.select_ui_key','Select UI key')}</option>{proposalKeys.map(key => <option key={key} value={key}>{key}</option>)}</select>
           <input value={proposalValue} onChange={e => setProposalValue(e.target.value)} placeholder="Proposed translation" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
           <input value={proposalReason} onChange={e => setProposalReason(e.target.value)} placeholder="Reason (optional)" className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
         </div>
         <button type="button" onClick={() => void submitTranslationProposal()} disabled={proposalBusy} className="w-fit rounded-lg bg-blue-900 px-4 py-2.5 text-xs font-bold text-white">{proposalBusy ? 'Submitting…' : 'Submit proposal'}</button>
-        {isSuperAdmin && <div className="rounded-lg border border-amber-200 bg-white p-3"><div className="mb-2 text-xs font-black">Pending proposals</div><div className="grid gap-2">{state.translations.flatMap(t => Array.isArray(t.proposals) ? (t.proposals as ContentItem[]).map(p => ({...p, languageId:text(t.id)})) : []).filter(p => text(p.status) === 'pending').map(p => <div key={text(p.id)} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"><div><strong>{text(p.languageId)} · {text(p.key)}</strong><div className="text-slate-500">{text(p.currentValue)} → {text(p.proposedValue)}</div></div><div className="flex gap-2"><button type="button" onClick={() => void reviewProposal(p,'approve')} className="rounded-md bg-emerald-700 px-3 py-1.5 font-bold text-white">Approve</button><button type="button" onClick={() => void reviewProposal(p,'reject')} className="rounded-md bg-rose-700 px-3 py-1.5 font-bold text-white">Reject</button></div></div>)}</div></div>}
+        {isSuperAdmin && <div className="rounded-lg border border-amber-200 bg-white p-3"><div className="mb-2 text-xs font-black">{t('translation.pending_proposals','Pending proposals')}</div><div className="grid gap-2">{state.translations.flatMap(t => Array.isArray(t.proposals) ? (t.proposals as ContentItem[]).map(p => ({...p, languageId:text(t.id)})) : []).filter(p => text(p.status) === 'pending').map(p => <div key={text(p.id)} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"><div><strong>{text(p.languageId)} · {text(p.key)}</strong><div className="text-slate-500">{text(p.currentValue)} → {text(p.proposedValue)}</div></div><div className="flex gap-2"><button type="button" onClick={() => void reviewProposal(p,'approve')} className="rounded-md bg-emerald-700 px-3 py-1.5 font-bold text-white">{t('common.approve','Approve')}</button><button type="button" onClick={() => void reviewProposal(p,'reject')} className="rounded-md bg-rose-700 px-3 py-1.5 font-bold text-white">{t('common.reject','Reject')}</button></div></div>)}</div></div>}
       </div>}
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,.82fr)]">
@@ -366,17 +368,17 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
           {activeItems.map(item => {
             const id = identity(active, item);
             return <div key={id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.canEdit === false ? 'Read only' : 'Your contribution'}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? 'Disabled' : 'Enabled'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? 'Published' : 'Draft') : text(item.id))}</div></button>
-              <button type="button" onClick={() => void remove(id)} disabled={pending || item.canEdit === false} title={item.canEdit === false ? "Read-only: only the contributor or VOP Super Admin can delete this record." : "Delete record"} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Delete ${title(active,item)}`}><Trash2 size={14} /></button>
+              <button type="button" onClick={() => edit(item)} className="min-w-0 flex-1 text-left"><div className="truncate text-sm font-bold">{title(active,item)}</div><div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.canEdit === false ? 'Read only' : 'Your contribution'}</div><div className="mt-1 truncate text-xs text-slate-500">{active === 'languages' ? `${text(item.code).toUpperCase()} · ${item.enabled === false ? '{t('common.disabled','Disabled')}' : '{t('common.enabled','Enabled')}'}` : active === 'translations' ? text(item.id) : ('published' in item ? (item.published === true ? '{t('common.published','Published')}' : '{t('common.draft','Draft')}') : text(item.id))}</div></button>
+              <button type="button" onClick={() => void remove(id)} disabled={pending || item.canEdit === false} title={item.canEdit === false ? "Read-only: only the contributor or VOP Super Admin can delete this record." : "{t('common.delete','Delete')} record"} className="rounded-lg border border-rose-200 p-2 text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`{t('common.delete','Delete')} ${title(active,item)}`}><Trash2 size={14} /></button>
             </div>;
           })}
-          {!pending && activeItems.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">{search || statusFilter !== 'all' ? 'No records match the current filter.' : 'No records configured. Create the first record with New.'}</div>}
+          {!pending && activeItems.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">{search || statusFilter !== 'all' ? 'No records match the current filter.' : 'No records configured. {t('common.create','Create')} the first record with New.'}</div>}
         </div>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? 'Edit record' : 'Create record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? '{t('common.edit','Edit')} record' : '{t('common.create','Create')} record'}</h3><p className="text-xs text-slate-500">{TABS.find(tab => tab.id === active)?.label} · admin data is securely persisted</p></div></div>
           {renderEditor()}
-          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? 'Saving…' : editingId ? 'Save changes' : 'Create record'}</button>
+          <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><{t('common.save','Save')} size={15} />{pending ? 'Saving…' : editingId ? '{t('common.save','Save')} changes' : '{t('common.create','Create')} record'}</button>
         </div>
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-500"><Globe size={13} />Admin language: {activeLanguage || 'not configured'} · {languages.length} configured languages</div>
