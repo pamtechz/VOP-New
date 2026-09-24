@@ -33,8 +33,8 @@ function gradeServerQuiz(questions: QuestionRecord[], answers: Record<string, un
 
   for (let index = 0; index < questions.length; index += 1) {
     const question = questions[index];
-    const key = typeof question?.key === 'string' ? question.key.trim() : '';
-    const text = typeof question?.question === 'string' ? question.question.trim() : '';
+    const key = typeof question?.key === 'string' ? question.key.trim() : typeof question?.id === 'string' ? question.id.trim() : '';
+    const text = typeof question?.question === 'string' ? question.question.trim() : typeof question?.prompt === 'string' ? question.prompt.trim() : '';
     if (!key || !text || keys.has(key)) return null;
     keys.add(key);
 
@@ -81,7 +81,7 @@ export default async function handler(
     const guideId = String(body.guideId ?? '').trim();
     const lessonId = String(body.lessonId ?? '').trim();
 
-    if (!language || !guideId || !lessonId || !['completeLesson', 'submitQuiz', 'saveLessonResume'].includes(action)) {
+    if (!language || !lessonId || !['completeLesson', 'submitQuiz', 'saveLessonResume'].includes(action) || (action !== 'submitQuiz' && !guideId)) {
       return res.status(400).json({ error: 'A valid study progress request is required.' });
     }
 
@@ -120,7 +120,8 @@ export default async function handler(
     }
 
     const lessonData = lessonSnapshot.data() ?? {};
-    if (String(lessonData.guideId ?? '') !== guideId) {
+    const legacyStudyGuide = !useTenantGuide && guideId === 'discover';
+    if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
 
@@ -232,7 +233,8 @@ export default async function handler(
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
 
-    const scoreKey = `${organizationId || 'platform'}:${language}:${guideId}:${lessonId}`;
+    const effectiveGuideId = legacyStudyGuide ? 'discover' : guideId;
+    const scoreKey = `${organizationId || 'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
     const passed = score >= threshold;
     const attemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
@@ -244,7 +246,7 @@ export default async function handler(
       const questionKey = typeof question.key === 'string' ? question.key : String(index);
       return {
         key: questionKey,
-        question: String(question.question ?? ''),
+        question: String(question.question ?? question.prompt ?? ''),
         correct,
         answer: answer ?? null,
         lessonId,
@@ -287,7 +289,7 @@ export default async function handler(
         threshold,
         organizationId,
         language,
-        guideId,
+        guideId: effectiveGuideId,
         lessonId,
         questionResults,
         failedQuestionKeys: failedQuestions.map(item => item.key),
