@@ -601,7 +601,6 @@ service cloud.firestore {
       );
 
       allow create: if signedIn()
-        && resource == null
         && request.resource.data.candidateId == request.auth.uid
         && request.resource.data.get('organizationId','') == organizationIdForUser()
         && isOrgMember(organizationIdForUser());
