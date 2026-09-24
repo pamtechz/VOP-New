@@ -10,6 +10,7 @@ import {
   type PermissionRole,
 } from '../shared/permissions.js';
 import type { TenantContext } from './tenant.js';
+import { decidePermission } from '../shared/authorization.js';
 
 export async function loadPermissionMatrix(ctx: TenantContext): Promise<PermissionMatrix> {
   const snapshot = await ctx.db.doc('system/permissions').get();
@@ -28,7 +29,13 @@ export async function canPermission(
     organizationRole: ctx.tenantType === 'organization' ? ctx.membership.role : undefined,
     privileges: ctx.profile.privileges,
   });
-  return permissionAllowed(matrix, role, resource, action);
+  return decidePermission(matrix, {
+    uid: ctx.auth.uid,
+    role,
+    organizationId: ctx.organizationId || undefined,
+    tenantType: ctx.tenantType,
+    tenantId: ctx.tenantId || undefined,
+  }, resource, action).allowed;
 }
 
 export async function requirePermission(
