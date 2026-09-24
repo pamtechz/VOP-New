@@ -32,6 +32,7 @@ const checks = [
     "organizationId = isSuperAdmin",
     "requestedId !== profileOrganizationId",
     "canEditCanonicalContent",
+    "String(data?.ownerUid || '') === ctx.auth.uid",
     "tenantType: 'platform' | 'organization' | 'hierarchy'",
     "tenantType: 'hierarchy'",
     "tenantOwnerKey",
