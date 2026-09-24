@@ -5,7 +5,7 @@ const root = process.cwd();
 const read = file => fs.readFileSync(path.join(root,file),'utf8');
 const checks = [
   ['server/tenant.ts', [
-    "role() === 'super_admin'",
+    "String(profile.role || '') === 'super_admin'",
     "organizationId = isSuperAdmin",
     "requestedId !== profileOrganizationId",
     "canEditCanonicalContent",
