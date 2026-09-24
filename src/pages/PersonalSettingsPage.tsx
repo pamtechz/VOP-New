@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, {t('settings.accessibility','Accessibility')}, ShieldCheck, BookOpen } from 'lucide-react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
@@ -15,7 +15,7 @@ type PersonalSettings = {
   studyPreferences?: { reminders?: boolean; preferredStudyTime?: string };
 };
 
-interface Props { currentUser: User; on{t('common.back','Back')}: () => void; }
+interface Props { currentUser: User; onBack: () => void; }
 
 async function callPersonalSettings(operation: 'get' | 'save', settings?: PersonalSettings) {
   const user = auth?.currentUser;
@@ -31,7 +31,7 @@ async function callPersonalSettings(operation: 'get' | 'save', settings?: Person
   return payload.settings as PersonalSettings;
 }
 
-export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, on{t('common.back','Back')} }) => {
+export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) => {
   const [settings, setSettings] = useState<PersonalSettings>({
     theme: 'system', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
     accessibility: { reducedMotion: false, largeText: false, highContrast: false },
@@ -75,39 +75,39 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, on{t('commo
 
   return <div className="vop-page-shell" style={{ maxWidth: 980, margin: '0 auto', padding: '1rem' }}>
     <div className="vop-page-head">
-      <div><p className="vop-kicker">{t('account.my_account','My {t('account.account','Account')}')}</p><h1>{t('settings.personal_title','Personal Settings')}</h1><p>{t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
-      <button className="vop-secondary" type="button" onClick={on{t('common.back','Back')}}>{t('common.back','Back')}</button>
+      <div><p className="vop-kicker">{t('account.my_account','My Account')}</p><h1>{t('settings.personal_title','Personal Settings')}</h1><p>{t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
+      <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
     </div>
     {message && <div className="vop-card" role="status" style={{ marginBottom: 16 }}>{message}</div>}
     {busy ? <div className="vop-card">Loading your settings…</div> : <div style={{ display:'grid', gap:16 }}>
       <section className="vop-card">
-        <h2><UserRound size={19}/> {t('account.account','Account')}</h2>
+        <h2><UserRound size={19}/> Account</h2>
         <p>{currentUser.displayName} · {currentUser.email}</p>
         <small>Your role, organization, permissions and learning records are managed separately and cannot be changed here.</small>
       </section>
       <section className="vop-card">
-        <h2><Globe2 size={19}/> {t('settings.interface','Interface')}</h2>
-        <label>{t('settings.theme','Theme')}<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">{t('settings.system_default','System default')}</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label>{t('settings.preferred_language','Preferred language')}<select value={settings.language || ''} onChange={e => patch('language', e.target.value)}><option value="">System / default</option>{languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}</select></label>
+        <h2><Globe2 size={19}/> Interface</h2>
+        <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label>Preferred language<select value={settings.language || ''} onChange={e => patch('language', e.target.value)}><option value="">System / default</option>{languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}</select></label>
       </section>
       <section className="vop-card">
-        <h2><Bell size={19}/> {t('settings.notifications','Notifications')}</h2>
+        <h2><Bell size={19}/> Notifications</h2>
         {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key}><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
       </section>
       <section className="vop-card">
-        <h2><{t('settings.accessibility','Accessibility')} size={19}/> {t('settings.accessibility','Accessibility')}</h2>
+        <h2><Accessibility size={19}/> Accessibility</h2>
         {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => patch('accessibility', { ...settings.accessibility, [key]: e.target.checked })}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
       </section>
       <section className="vop-card">
-        <h2><BookOpen size={19}/> {t('settings.study_preferences','Study preferences')}</h2>
+        <h2><BookOpen size={19}/> Study preferences</h2>
         <label><input type="checkbox" checked={settings.studyPreferences?.reminders !== false} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, reminders: e.target.checked })}/> Study reminders</label>
         <label>Preferred study time<input type="time" value={settings.studyPreferences?.preferredStudyTime || ''} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, preferredStudyTime: e.target.value })}/></label>
       </section>
       <section className="vop-card">
-        <h2><ShieldCheck size={19}/> {t('settings.privacy','Privacy')}</h2>
+        <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>
-      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? '{t('common.saving','Saving…')}' : '{t('settings.save','Save personal settings')}'}</button>
+      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
     </div>}
   </div>;
 };
