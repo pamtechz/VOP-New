@@ -48,7 +48,7 @@ type EditorState = {
   password: string;
 };
 
-type Props = { onBack: () => void };
+type Props = { onBack: () => void; scope?: { isSuperAdmin: boolean; organizationId?: string; role?: string } };
 
 async function userApi<T = ManagedUser>(action: string, payload: Record<string, unknown> = {}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -82,7 +82,7 @@ function emptyEditor(): EditorState {
   return { displayName: '', email: '', phoneNumber: '', userType: 'learner', organizationId: '', password: '' };
 }
 
-export default function UserManagement({ onBack }: Props) {
+export default function UserManagement({ onBack, scope }: Props) {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tenantOrganizations, setTenantOrganizations] = useState<TenantOrganization[]>([]);
@@ -136,6 +136,11 @@ export default function UserManagement({ onBack }: Props) {
   };
 
   useEffect(() => { void Promise.all([load(), loadOrganizations()]); }, []);
+  useEffect(() => {
+    if (scope?.organizationId && !scope.isSuperAdmin) {
+      setEditor(current => current ? { ...current, organizationId: scope.organizationId || current.organizationId } : current);
+    }
+  }, [scope?.organizationId, scope?.isSuperAdmin]);
   useEffect(() => { setPage(1); }, [search, roleFilter, statusFilter, conferenceFilter, districtFilter]);
 
   const roles = useMemo(() => Array.from(new Set(users.map(user => user.roleLabel).filter(Boolean))).sort(), [users]);
@@ -461,7 +466,7 @@ export default function UserManagement({ onBack }: Props) {
             <label><span>{t('common.email','Email')} *</span><input type="email" value={editor.email} onChange={e => setEditor({...editor,email:e.target.value})}/></label>
             <label><span>{t('common.phone','Phone')}</span><input value={editor.phoneNumber} onChange={e => setEditor({...editor,phoneNumber:e.target.value})}/></label>
             <label><span>{t('common.role','Role')}</span><select value={editor.userType} onChange={e => setEditor({...editor,userType:e.target.value as EditorState['userType']})}><option value="super_admin">Super Admin</option><option value="admin">Admin</option><option value="teacher">Teacher</option><option value="mentor">Mentor</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
-            <label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})} disabled={tenantOrganizationsLoading}><option value="">{tenantOrganizationsLoading ? 'Loading organizations…' : 'Platform / no organization'}</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{tenantOrganizations.length === 0 && !tenantOrganizationsLoading && <small>No organization tenants are available to this administrator. Hierarchy administrators only see organizations assigned to their hierarchy scope.</small>}{editor.userType === 'admin' && <small>Choose the organization this administrator will manage.</small>}</label>
+            <label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})} disabled={tenantOrganizationsLoading || (!scope?.isSuperAdmin && !!scope?.organizationId)}><option value="">{tenantOrganizationsLoading ? 'Loading organizations…' : 'Platform / no organization'}</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{!scope?.isSuperAdmin && scope?.organizationId && <small>Locked to your current organisation. Your organisation membership takes precedence over other role assignments.</small>}{tenantOrganizations.length === 0 && !tenantOrganizationsLoading && <small>No organization tenants are available to this administrator. Hierarchy administrators only see organizations assigned to their hierarchy scope.</small>}{editor.userType === 'admin' && <small>Choose the organization this administrator will manage.</small>}</label>
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
