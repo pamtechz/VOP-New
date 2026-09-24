@@ -18,7 +18,7 @@ import {
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import { getTranslation } from '../services/i18n';
-import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
+import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, permissionAllowed, roleForPermission, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
 import CurriculumSettings from './CurriculumSettings';
@@ -383,46 +383,29 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   }, [candidates, announcements, languages, churches]);
 
   const visibleNav = useMemo(() => {
-    const role = String(currentUser.role || '');
-    const isSuper = role === 'super_admin';
-    const organizationAdmin = ['owner','admin'].includes(String(currentUser.organizationRole || ''));
-    const canEdit = isSuper || currentUser.privileges?.editor === true;
-    const allowed = new Set<AdminTab>([
-      'dashboard',
-      'candidates',
-      'languages',
-      'translations',
-      'announcements',
-      'materials',
-      'radio',
-      'prayer',
-    ]);
-    if (isSuper) {
-      NAV.forEach(item => allowed.add(item.id));
-      allowed.add('userManagement');
-    } else if (organizationAdmin) {
-      allowed.add('userManagement');
-      allowed.add('settings');
-      allowed.add('curriculum');
-      allowed.add('languages');
-      allowed.add('translations');
-      allowed.add('announcements');
-      allowed.add('materials');
-      allowed.add('radio');
-      allowed.add('certification');
-      allowed.add('mentorship');
-      allowed.add('organizations');
-    } else if (['union_admin','conference_admin','district_admin','church_admin'].includes(role)) {
-      // Hierarchy administrators are first-class tenants. Their operational
-      // navigation is tenant-scoped, never platform-wide.
-      ['settings','mentorship','organizations','userManagement','candidates','materials','radio','prayer','translations','languages','announcements','certification'].forEach(id => allowed.add(id as AdminTab));
-      if (role === 'union_admin') allowed.add('conferences');
-      if (role === 'conference_admin') allowed.add('districts');
-      if (role === 'district_admin') allowed.add('churches');
-      if (canEdit) allowed.add('curriculum');
-    }
-    return NAV.filter(item => allowed.has(item.id)).map(item => ({ ...item, label: adminT(item.id, item.label) }));
-  }, [currentUser]);
+    const permissionRole = roleForPermission({
+      role: currentUser.role,
+      organizationRole: currentUser.organizationRole,
+      privileges: currentUser.privileges as Record<string, unknown> | undefined,
+    });
+    const resourceForNav: Record<AdminTab, PermissionResource> = {
+      dashboard:'dashboard', userManagement:'users', settings:'settings', candidates:'users',
+      curriculum:'curriculum', languages:'languages', translations:'translations',
+      announcements:'announcements', materials:'materials', radio:'radio', prayer:'prayer',
+      unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
+      certification:'certificates', mentorship:'mentoring', organizations:'organizations',
+    };
+    const canSee = (id: AdminTab) => permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
+    return NAV.filter(item => {
+      if (!canSee(item.id)) return false;
+      const role = String(currentUser.role || '');
+      if (item.id === 'conferences' && role !== 'super_admin' && !['union_admin'].includes(role)) return false;
+      if (item.id === 'districts' && role !== 'super_admin' && !['conference_admin'].includes(role)) return false;
+      if (item.id === 'churches' && role !== 'super_admin' && !['district_admin'].includes(role)) return false;
+      if (item.id === 'unions' && role !== 'super_admin') return false;
+      return true;
+    }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
