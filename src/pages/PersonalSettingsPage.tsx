@@ -111,7 +111,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
         <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>
-      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
+      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
     </div>}
   </div>;
 };
