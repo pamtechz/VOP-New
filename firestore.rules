@@ -257,7 +257,10 @@ service cloud.firestore {
         && (
           (collectionName == 'unions' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName in ['conferences','districts','churches']
-              && request.resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+              && (
+                request.resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', '')
+                || (request.method == 'update' && resource.data.get('unionId', '') == userDoc().data.get('adminNodeId', ''))
+              ))
         );
     }
 
@@ -275,7 +278,10 @@ service cloud.firestore {
         && (
           (collectionName == 'conferences' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName in ['districts','churches']
-              && request.resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+              && (
+                request.resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', '')
+                || (request.method == 'update' && resource.data.get('conferenceId', '') == userDoc().data.get('adminNodeId', ''))
+              ))
         );
     }
 
@@ -293,7 +299,10 @@ service cloud.firestore {
         && (
           (collectionName == 'districts' && recordId == userDoc().data.get('adminNodeId', ''))
           || (collectionName == 'churches'
-              && request.resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+              && (
+                request.resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', '')
+                || (request.method == 'update' && resource.data.get('districtId', '') == userDoc().data.get('adminNodeId', ''))
+              ))
         );
     }
 
