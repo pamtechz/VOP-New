@@ -29,17 +29,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSuperAdmin()
         || isOrganizationAdmin(organizationIdForUser())
-        || (
-          signedIn()
-          && role() in [
-            'union_admin',
-            'conference_admin',
-            'district_admin',
-            'church_admin'
-          ]
-          && organizationIdForUser() != ''
-          && isOrgMember(organizationIdForUser())
-        );
+        || isHierarchyTenant();
     }
 
     function organizationIdForUser() {
@@ -62,7 +52,7 @@ service cloud.firestore {
       return isSuperAdmin() || (
         isOrgMember(orgId)
         && orgRole(orgId) in ['owner', 'admin']
-      );
+      ) || hierarchyOrganizationScope(orgId);
     }
 
     function validOrganizationMemberData(data, organizationId) {
@@ -84,7 +74,7 @@ service cloud.firestore {
       return isSuperAdmin() || (
         isOrgMember(orgId)
         && orgRole(orgId) in ['owner', 'admin', 'editor']
-      );
+      ) || hierarchyOrganizationScope(orgId);
     }
 
     function orgDataMatches(orgId, data) {
@@ -99,6 +89,13 @@ service cloud.firestore {
           && data.get('organizationId', data.get('ownerOrganizationId', '')) == organizationIdForUser()
           && data.get('ownerUid', '') == request.auth.uid
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
+        )
+        || (
+          isHierarchyTenant()
+          && data.get('organizationId', data.get('ownerOrganizationId', '')) != ''
+          && hierarchyOrganizationScope(data.get('organizationId', data.get('ownerOrganizationId', '')))
+          && data.get('ownerTenantId', '') == hierarchyTenantId()
+          && data.get('ownerUid', '') == request.auth.uid
         );
     }
 
@@ -109,6 +106,34 @@ service cloud.firestore {
 
     function hierarchyTenantId() {
       return role() + ':' + userDoc().data.get('adminNodeId', '');
+    }
+
+    function hierarchyOrganizationScope(organizationId) {
+      return isHierarchyTenant()
+        && organizationId != ''
+        && exists(/databases/$(database)/documents/organizations/$(organizationId))
+        && (
+          (role() == 'union_admin'
+            && (
+              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('unionId', '') == userDoc().data.get('adminNodeId', '')
+              || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('unionId', '') == userDoc().data.get('adminNodeId', '')
+            ))
+          || (role() == 'conference_admin'
+            && (
+              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('conferenceId', '') == userDoc().data.get('adminNodeId', '')
+              || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('conferenceId', '') == userDoc().data.get('adminNodeId', '')
+            ))
+          || (role() == 'district_admin'
+            && (
+              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('districtId', '') == userDoc().data.get('adminNodeId', '')
+              || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('districtId', '') == userDoc().data.get('adminNodeId', '')
+            ))
+          || (role() == 'church_admin'
+            && (
+              get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('churchId', '') == userDoc().data.get('adminNodeId', '')
+              || get(/databases/$(database)/documents/organizations/$(organizationId)).data.get('hierarchy', {}).get('churchId', '') == userDoc().data.get('adminNodeId', '')
+            ))
+        );
     }
 
     function canEditOwnedGlobal(data) {
@@ -280,7 +305,8 @@ service cloud.firestore {
       return hierarchyTenantForField(data, 'unionId')
         || hierarchyTenantForField(data, 'conferenceId')
         || hierarchyTenantForField(data, 'districtId')
-        || hierarchyTenantForField(data, 'churchId');
+        || hierarchyTenantForField(data, 'churchId')
+        || hierarchyOrganizationScope(data.get('organizationId', ''));
     }
 
     // Platform configuration remains controlled by the VOP Super Admin.
