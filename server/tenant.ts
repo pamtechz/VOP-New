@@ -70,6 +70,13 @@ export async function authenticateTenant(request: Request, requestedOrganization
       organizationId = requestedId;
     }
   }
+  if (!isSuperAdmin && organizationId) {
+    const profileMembership = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
+    if (!profileMembership.exists || profileMembership.data()?.active !== true) {
+      organizationId = '';
+    }
+  }
+
   if (!organizationId && !isSuperAdmin) {
     const memberships = await db.collectionGroup('members')
       .where('uid', '==', auth.uid)
