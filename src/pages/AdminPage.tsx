@@ -388,26 +388,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       allowed.add('certification');
       allowed.add('mentorship');
       allowed.add('organizations');
-    } else if (role === 'union_admin') {
-      // Hierarchy administrators are first-class tenants. Their settings,
-      // curriculum and content access is scoped to their reconciled tenant.
-      allowed.add('settings');
-      allowed.add('mentorship');
-      allowed.add('conferences');
-      if (canEdit) allowed.add('curriculum');
-    } else if (role === 'conference_admin') {
-      allowed.add('settings');
-      allowed.add('mentorship');
-      allowed.add('districts');
-      if (canEdit) allowed.add('curriculum');
-    } else if (role === 'district_admin') {
-      allowed.add('settings');
-      allowed.add('mentorship');
-      allowed.add('churches');
-      if (canEdit) allowed.add('curriculum');
-    } else if (role === 'church_admin') {
-      allowed.add('settings');
-      allowed.add('mentorship');
+    } else if (['union_admin','conference_admin','district_admin','church_admin'].includes(role)) {
+      // Hierarchy administrators are first-class tenants. Their operational
+      // navigation is tenant-scoped, never platform-wide.
+      ['settings','mentorship','organizations','userManagement','candidates','materials','radio','translations','languages','announcements','certification'].forEach(id => allowed.add(id as AdminTab));
+      if (role === 'union_admin') allowed.add('conferences');
+      if (role === 'conference_admin') allowed.add('districts');
+      if (role === 'district_admin') allowed.add('churches');
       if (canEdit) allowed.add('curriculum');
     }
     return NAV.filter(item => allowed.has(item.id)).map(item => ({ ...item, label: adminT(item.id, item.label) }));
