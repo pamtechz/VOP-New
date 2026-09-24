@@ -715,7 +715,34 @@ export default async function handler(req: Request, res: Response) {
 
     if (collection === 'settings' || collection === 'curriculumSettings') {
       await requirePermission(ctx, 'settings', action === 'delete' ? 'delete' : 'update');
-      const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
+
+      const targetOrganizationId = ctx.organizationId || (
+        ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId)
+          ? requestedOrganizationId
+          : ''
+      );
+
+      if (!targetOrganizationId && ctx.tenantType === 'hierarchy' && collection === 'settings') {
+        const ref = ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings/settings`);
+        if (action === 'delete') {
+          const existing = await ref.get();
+          if (!existing.exists) return res.status(200).json({ok:true,id});
+          await ref.delete();
+          await writeTenantAudit(ctx, 'tenantSettings.delete', ref.path, existing.data(), undefined);
+          return res.status(200).json({ok:true,id});
+        }
+        const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
+        await ref.set({
+          ...incoming,
+          tenantId: ctx.tenantId,
+          tenantType: 'hierarchy',
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: ctx.auth.uid,
+        }, {merge:true});
+        const saved = await ref.get();
+        return res.status(200).json({ok:true,item:{id:'settings',...saved.data()}});
+      }
+
       if (!targetOrganizationId) throw new Error('Select an organization within your authorized scope before changing settings.');
       if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
         throw new Error('Only the organization owner or administrator can change organization settings.');
