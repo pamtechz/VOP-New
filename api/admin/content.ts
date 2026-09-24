@@ -185,7 +185,7 @@ export default async function handler(req: Request, res: Response) {
         const ref = target.collection('lessons').doc(lesson.id);
         batch.set(ref, {
           ...data, id:lesson.id, lessonId:lesson.id, organizationId:ctx.organizationId,
-          ownerOrganizationId:ctx.organizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
+          ownerOrganizationId:effectiveOrganizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
           copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
           createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid, copyOrder:index
         }, { merge:true });
@@ -196,7 +196,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'forkLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson copying requires the curriculum collection.');
-      requireOrgRole(ctx, ['owner','admin','editor']);
+      if (ctx.tenantType !== 'hierarchy') requireOrgRole(ctx, ['owner','admin','editor']);
       if (!effectiveOrganizationId) throw new Error('Select an organization within your authorized scope before copying a lesson.');
       const sourceGuideId = safeId(body.sourceGuideId);
       const sourceLessonId = safeId(body.sourceLessonId || body.id);
@@ -260,20 +260,24 @@ export default async function handler(req: Request, res: Response) {
       const guide = await ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`).get();
       if (!guide.exists || guide.data()?.archived === true) throw new Error('A valid organization guide is required.');
       const ref = guide.ref.collection('lessons').doc(lessonId);
+      const current = await ref.get();
       if (action === 'unpublishLesson') {
-        const current = await ref.get();
         if (!current.exists) throw new Error('The lesson was not found.');
         if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can unpublish this lesson.');
         await ref.set({ published:false, unpublishedAt:FieldValue.serverTimestamp(), unpublishedBy:ctx.auth.uid, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
         return res.status(200).json({ ok: true, item: { id: lessonId, published: false } });
       }
+      if (current.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) {
+        throw new Error('Only an authorized tenant administrator or VOP Super Admin can publish this lesson.');
+      }
+      if (!current.exists) throw new Error('The lesson was not found. Create the lesson before publishing it.');
       await ref.set({
         ...data,
         id: lessonId,
         lessonId,
         organizationId: effectiveOrganizationId,
-        ownerOrganizationId: effectiveOrganizationId,
-        ownerUid: ctx.auth.uid,
+        ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId,
+        ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
         published: true,
