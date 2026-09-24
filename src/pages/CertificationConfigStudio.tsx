@@ -42,15 +42,20 @@ const EMPTY_PREVIEW_CERTIFICATE: CertificateArtworkRecord = {
 const DEFAULT_TEMPLATE: CertificateTemplateConfig = {
   width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundUrl: DEFAULT_BACKGROUND,
   elements: [
-    { id: 'title', type: 'text', x: 24, y: 2.2, width: 52, height: 5, text: 'COURSE CERTIFICATE', fontSize: 31, fontWeight: 800, color: '#111111', textAlign: 'center' },
-    { id: 'certify', type: 'text', x: 32, y: 31.4, width: 36, height: 4, text: 'This is to certify that', fontSize: 15, fontWeight: 600, color: '#111111', textAlign: 'center' },
-    { id: 'candidateName', type: 'candidateName', x: 22, y: 36.8, width: 56, height: 7, fontSize: 43, fontWeight: 800, color: '#111111', textAlign: 'center' },
-    { id: 'completed', type: 'text', x: 29, y: 45.8, width: 42, height: 4, text: 'has successfully completed the', fontSize: 15, fontWeight: 600, color: '#111111', textAlign: 'center' },
-    { id: 'courseName', type: 'courseName', x: 19, y: 49.2, width: 62, height: 5, fontSize: 24, fontWeight: 800, color: '#111111', textAlign: 'center' },
-    { id: 'courseSubtitle', type: 'text', x: 25, y: 54.5, width: 50, height: 6, text: 'as outlined by the Seventh-day Adventist Church', fontSize: 14, fontWeight: 600, color: '#111111', textAlign: 'center' },
-    { id: 'brandName', type: 'text', x: 42, y: 87.3, width: 18, height: 3.5, text: 'vop app', fontSize: 20, fontWeight: 800, color: '#111111', textAlign: 'center' },
-    { id: 'brandSubtitle', type: 'text', x: 38, y: 91, width: 26, height: 3.2, text: 'BIBLE CORRESPONDENCE SCHOOL', fontSize: 10, fontWeight: 700, color: '#111111', textAlign: 'center' },
-    { id: 'issuedAt', type: 'date', x: 38, y: 95.6, width: 26, height: 3, fontSize: 9, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'title', type: 'text', x: 35.5, y: 1.7, width: 29, height: 4.4, text: 'COURSE CERTIFICATE', fontSize: 27, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'certify', type: 'text', x: 38.0, y: 30.8, width: 24, height: 3.3, text: 'This is to certify that', fontSize: 14.5, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'candidateName', type: 'candidateName', x: 25.5, y: 36.2, width: 49, height: 6.8, fontSize: 39, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'completed', type: 'text', x: 36.0, y: 44.6, width: 28, height: 3.2, text: 'has successfully completed the', fontSize: 14.5, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'courseName', type: 'courseName', x: 22.0, y: 49.0, width: 56, height: 4.8, fontSize: 22, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'courseSubtitle', type: 'text', x: 28.0, y: 53.9, width: 44, height: 5.0, text: 'as outlined by the Seventh-day Adventist Church', fontSize: 13.2, fontWeight: 600, color: '#111111', textAlign: 'center' },
+    { id: 'seal', type: 'image', x: 4.6, y: 66.7, width: 20.0, height: 22.5, src: '/assets/vop_logo.png', visible: true },
+    { id: 'signature', type: 'image', x: 83.8, y: 65.0, width: 13.5, height: 12.0, src: '/assets/pm_logo.png', visible: true },
+    { id: 'directorName', type: 'text', x: 83.4, y: 77.0, width: 16.2, height: 4.2, text: 'Pr. Ernest', fontSize: 10.8, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'directorTitle', type: 'text', x: 82.1, y: 81.0, width: 18.3, height: 3.7, text: 'BIBLE PHIL DIRECTOR', fontSize: 7.2, fontWeight: 700, color: '#111111', textAlign: 'center' },
+    { id: 'appLogo', type: 'image', x: 45.2, y: 86.4, width: 2.0, height: 3.3, src: '/assets/vop_logo_2.png', visible: true },
+    { id: 'brandName', type: 'text', x: 47.2, y: 86.2, width: 11.4, height: 3.8, text: 'vop app', fontSize: 15.5, fontWeight: 800, color: '#111111', textAlign: 'center' },
+    { id: 'brandSubtitle', type: 'text', x: 40.0, y: 90.0, width: 21.5, height: 3.0, text: 'BIBLE CORRESPONDENCE SCHOOL', fontSize: 7.2, fontWeight: 700, color: '#111111', textAlign: 'center' },
+    { id: 'issuedAt', type: 'date', x: 42.0, y: 93.2, width: 17.0, height: 2.8, fontSize: 8.2, fontWeight: 600, color: '#111111', textAlign: 'center' },
   ],
 };
 
@@ -78,7 +83,20 @@ function normalizeTemplate(template?: CertificateTemplateConfig, backgroundUrl?:
   const source = template?.elements?.length ? template : DEFAULT_TEMPLATE;
   return {
     width: CANVAS_WIDTH, height: CANVAS_HEIGHT, backgroundUrl: source.backgroundUrl || backgroundUrl || DEFAULT_BACKGROUND,
-    elements: (source.elements || []).map(element => ({ ...element, x: clamp(Number(element.x) || 0, 0, 100), y: clamp(Number(element.y) || 0, 0, 100), width: clamp(Number(element.width) || 1, 1, 100), height: clamp(Number(element.height) || 1, 1, 100) })),
+    elements: (source.elements || []).map(element => {
+      const isImage = element.type === 'image';
+      const normalized: CertificateTemplateElement = {
+        ...element,
+        x: clamp(Number(element.x) || 0, 0, 100),
+        y: clamp(Number(element.y) || 0, 0, 100),
+        width: clamp(Number(element.width) || 1, 1, 100),
+        height: clamp(Number(element.height) || 1, 1, 100),
+      };
+      if (isImage && normalized.id === 'seal' && !normalized.src) normalized.src = '/assets/vop_logo.png';
+      if (isImage && normalized.id === 'signature' && !normalized.src) normalized.src = '/assets/pm_logo.png';
+      if (isImage && normalized.id === 'appLogo' && !normalized.src) normalized.src = '/assets/vop_logo_2.png';
+      return normalized;
+    }),
   };
 }
 function normalizeBaseUrl(value: string) {
@@ -195,7 +213,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
               if (element.type === 'courseCode') content = previewCertificate.courseCode || '';
               if (element.type === 'date') content = '12 June 2023';
               if (element.type === 'certificateNumber') content = previewCertificate.certificateNumber;
-              if (element.type === 'image') { const src = element.id === 'seal' ? draft.sealUrl : element.id === 'signature' ? draft.signatureUrl : element.id === 'logo' ? draft.logoUrl : element.src; return src ? <img key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={{ ...style, objectFit: 'contain' }} src={src} alt=""/> : <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>Image</div>; }
+              if (element.type === 'image') {
+                const src = element.id === 'seal' ? (draft.sealUrl || element.src) : element.id === 'signature' ? (draft.signatureUrl || element.src) : element.id === 'logo' ? (draft.logoUrl || element.src) : element.src;
+                return src
+                  ? <img key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={{ ...style, objectFit: 'contain' }} src={src} alt=""/>
+                  : <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>Image</div>;
+              }
               return <div key={element.id} onPointerDown={event => startDrag(event, element)} className={'vop-cert-template-editor-element' + (selected?.id === element.id ? ' selected' : '')} style={style}>{content}</div>;
             })}
           </div></div>

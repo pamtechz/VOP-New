@@ -62,7 +62,7 @@ function dateText(value?: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? ''
-    : date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+    : date.toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 function verificationUrl(certificate: CertificateArtworkRecord, config: CertificateArtworkConfig | null) {
@@ -114,7 +114,7 @@ function renderTemplate(certificate: CertificateArtworkRecord, config: Certifica
         };
         const className = `vop-certificate-template-element vop-certificate-template-${element.type}`;
         if (element.type === 'image') return src ? <img key={element.id} className={className} style={{ ...style, objectFit: 'contain' }} src={src} alt="" /> : null;
-        if (element.type === 'line') return <div key={element.id} className={className} style={{ ...style, height: 1, background: element.color || '#111' }} />;
+        if (element.type === 'line') return <div key={element.id} className={className} style={{ ...style, height: Math.max(1, Number(element.height) || 1), background: element.color || '#111' }} />;
         return <div key={element.id} className={className} style={style}>{templateText(element, certificate, config)}</div>;
       })}
     </div>
