@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { User, DiscoverGuide, Announcement, AppSettings, LanguageCode } from '../../types';
 import { getTranslation, getAvailableLanguages } from '../../services/i18n';
-import { Award, ArrowRight, BookOpen, CheckCircle2, Clock3, Languages, Play, Sparkles, Target, TrendingUp } from 'lucide-react';
+import { Award, ArrowRight, BookOpen, CheckCircle2, Clock3, Languages, Play, Sparkles, Target, TrendingUp, HeartHandshake, Radio } from 'lucide-react';
 
 interface HomeDashboardProps {
   currentUser: User;
@@ -12,10 +12,13 @@ interface HomeDashboardProps {
   onSelectGuide: (guide: DiscoverGuide) => void;
   onOpenCertificate: () => void;
   onOpenBooks: () => void;
+  onOpenPrayer?: () => void;
+  onOpenRadio?: () => void;
+  onOpenSupport?: () => void;
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
-  currentUser, guides, announcements, settings, activeLanguage, onSelectGuide, onOpenCertificate, onOpenBooks
+  currentUser, guides, announcements, settings, activeLanguage, onSelectGuide, onOpenCertificate, onOpenBooks, onOpenPrayer, onOpenRadio, onOpenSupport
 }) => {
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const [languageFilter, setLanguageFilter] = useState<string>('all');
@@ -82,6 +85,20 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <div className="vop-home-resume-play"><Play size={20} fill="currentColor"/></div>
         </button> : <div className="vop-home-empty"><BookOpen size={30}/><h3>No study guide available yet</h3><p>Choose another language or check back when new lessons are published.</p></div>}
+      </section>
+
+      <section style={{margin:'18px 0 6px',padding:'20px',borderRadius:'20px',background:'linear-gradient(135deg,#062b61,#0d4c97)',color:'#fff',boxShadow:'0 14px 35px rgba(6,43,97,.16)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'flex-end',flexWrap:'wrap'}}>
+          <div><span style={{fontSize:10,fontWeight:900,letterSpacing:'.12em',textTransform:'uppercase',opacity:.75}}>{t('evangelism.kicker','Live the mission')}</span>
+          <h2 style={{margin:'6px 0 5px',fontSize:'clamp(21px,3vw,28px)',color:'#fff'}}>{t('evangelism.title','Your personal evangelism hub')}</h2>
+          <p style={{margin:0,maxWidth:680,fontSize:13,lineHeight:1.6,color:'rgba(255,255,255,.78)'}}>{t('evangelism.description','Study the Word, pray for people, listen to hope-filled broadcasts, and share a Bible study with someone you care about.')}</p></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10,marginTop:16}}>
+          <button type="button" onClick={onOpenBooks} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><BookOpen size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.library','Study resources')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.library_desc','Books, guides and materials for deeper study.')}</span></button>
+          <button type="button" onClick={onOpenPrayer} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><HeartHandshake size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.prayer','Prayer ministry')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.prayer_desc','Keep people and your outreach covered in prayer.')}</span></button>
+          <button type="button" onClick={onOpenRadio} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><Radio size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.radio','Radio & broadcasts')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.radio_desc','Listen, watch and discover messages of hope.')}</span></button>
+          <button type="button" onClick={onOpenSupport} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><Sparkles size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.mentor','Get help sharing')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.mentor_desc','Connect with a mentor when you need guidance.')}</span></button>
+        </div>
       </section>
 
       <section className="vop-home-guides">
