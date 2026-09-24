@@ -328,9 +328,9 @@ export default async function handler(req: Request, res: Response) {
           const data = d.data() || {};
           const ownerUid = String(data.ownerUid || '');
           if (ownerUid === ctx.auth.uid) return true;
+          if (collection === 'translations') return true;
           if (String(data.sharingScope || '') !== 'shared') return false;
           if (collection === 'languages') return data.enabled === true;
-          if (collection === 'translations') return true;
           if (collection === 'playlists') return data.published === true;
           return data.published === true;
         });
