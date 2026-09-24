@@ -928,7 +928,7 @@ function RadioAdminDashboard({
                  </article>
                ))}
              {filtered.length === 0 && <div className="vop-radio-admin-empty">No records configured.</div>}
-           </div>
+           </div>}
         </div>
       )}
 
