@@ -409,7 +409,11 @@ export default async function handler(request: Request, response: Response) {
       // Tenant reassignment is a separate, explicit organization operation.
       const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
       const profile = hierarchyRole && type === 'admin' && effectiveOrganizationId
-        ? profileForType(type, { ...body, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }, '')
+        ? {
+            ...profileForType(type, { ...body, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }, ''),
+            organizationId: effectiveOrganizationId,
+            organizationRole: 'owner',
+          }
         : profileForType(type, body, effectiveOrganizationId);
       await profileRef.set({
         uid,
@@ -422,7 +426,7 @@ export default async function handler(request: Request, response: Response) {
       }, { merge: true });
       const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
-      if (membershipOrganizationId && profile.organizationRole) {
+      if (membershipOrganizationId && (profile.organizationRole || (hierarchyRole && type === 'admin'))) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
           uid, organizationId:membershipOrganizationId,
           role: hierarchyRole && type === 'admin'
