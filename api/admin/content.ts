@@ -387,14 +387,13 @@ export default async function handler(req: Request, res: Response) {
           const items = await Promise.all(visible.map(async d => {
             const proposals = await d.ref.collection('proposals')
               .where('proposerUid','==',ctx.auth.uid)
-              .orderBy('createdAt','desc')
               .limit(20)
               .get();
             return {
               id:d.id,
               ...d.data(),
               canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
-              proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() })),
+              proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() })).sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
             };
           }));
           return res.status(200).json({ ok:true, items });
