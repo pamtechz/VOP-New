@@ -43,6 +43,10 @@ const checks = [
   ['src/components/reader/LessonReaderModal.tsx', ['lesson.next_page','lesson.complete']],
 ];
 const errors = [];
+const localizationGuardSource = read('src/components/admin/ContentStudio.tsx');
+if (/<\\{t\\(|'\\{t\\(|"\\{t\\(/.test(localizationGuardSource)) {
+  errors.push('src/components/admin/ContentStudio.tsx: malformed localization expression detected');
+}
 for (const [file, needles] of checks) {
   if (!fs.existsSync(path.join(root,file))) { errors.push(file + ': missing'); continue; }
   const source = read(file);
