@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
+import { requirePermission, resourceForCollection } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -67,6 +68,9 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    const permissionResource = resourceForCollection(collection);
+    const permissionAction = action === 'list' || action === 'listGuides' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
+    if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
     const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
@@ -588,6 +592,8 @@ export default async function handler(req: Request, res: Response) {
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (existing.exists) await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'update');
+        else await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'create');
         if (!existing.exists) {
           const quotaKey =
             collection === 'books' ? 'maxMaterials' :
@@ -671,6 +677,8 @@ export default async function handler(req: Request, res: Response) {
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (existing.exists) await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'update');
+        else await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'create');
         if (!existing.exists) {
           const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'playlists' ? 'maxRadioPlaylists' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
