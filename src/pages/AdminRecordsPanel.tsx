@@ -15,6 +15,8 @@ import {
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
 import { getTranslation } from '../services/i18n';
 
+const t = (key: string, fallback: string) => getTranslation(key, fallback);
+
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
   | 'unions' | 'conferences' | 'districts' | 'churches';
