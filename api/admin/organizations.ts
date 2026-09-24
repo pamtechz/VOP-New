@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceQuota } from '../../server/tenant.js';
+import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -57,6 +58,8 @@ export default async function handler(req: Request, res: Response) {
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
     const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, action === 'acceptInvite');
+    const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
+    if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
     if (action === 'create') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
       const name = String(body.name || '').trim();
