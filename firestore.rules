@@ -339,6 +339,12 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    match /system/permissions {
+      allow get: if isSuperAdmin();
+      allow list: if false;
+      allow create, update, delete: if isSuperAdmin();
+    }
+
     match /tenantSettings/{tenantId}/settings/{settingId} {
       allow get: if isHierarchyTenant() && tenantId == hierarchyTenantId();
       allow list: if false;
