@@ -39,6 +39,9 @@ interface Props {
   kind: ManagedAdminCollection;
   languages: CustomLanguage[];
   preferredLanguage?: string;
+  canCreate?: boolean;
+  canUpdate?: boolean;
+  canDelete?: boolean;
 }
 
 type FormState = Record<string, string | number | boolean>;
