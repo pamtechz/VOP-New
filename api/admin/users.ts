@@ -388,7 +388,15 @@ export default async function handler(request: Request, response: Response) {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
+      const claims = type === 'super_admin'
+        ? { role: 'super_admin' }
+        : hierarchyRole(String(profile.role || ''))
+          ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId }
+          : type === 'admin'
+            ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId }
+            : type === 'mentor'
+              ? { role: 'mentor' }
+              : { role: 'student' };
       if (managedOrganizationId) await db.doc(`organizations/${managedOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:tenantOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
       await authService.setCustomUserClaims(created.uid, managedOrganizationId ? { role: hierarchyTenant || 'student', adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId, organizationId:managedOrganizationId, organizationRole:profile.organizationRole } : claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
@@ -467,7 +475,11 @@ export default async function handler(request: Request, response: Response) {
       // display role must not silently detach that user from an existing tenant.
       // Tenant reassignment is a separate, explicit organization operation.
       const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
-      const profile = profileForType(type, body, effectiveOrganizationId);
+      const baseProfile = profileForType(type, body, effectiveOrganizationId);
+      const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
+      const profile = existingPlatformRole
+        ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
+        : baseProfile;
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
