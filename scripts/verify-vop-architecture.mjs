@@ -46,7 +46,7 @@ const checks = [
   ['api/mentorship.ts', ['organizationInHierarchyScope','requested organization is outside your hierarchy scope']],
   ['src/pages/AdminPage.tsx', ['tenant-scoped, never platform-wide','organizations','userManagement','certification']],
   ['src/pages/CertificationManager.tsx', ['isSuperAdmin','Certificate Settings','Issue Certificate','CertificateTemplateConfig']],
-  ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','certificate_bg.png','fixed artboard','Arrow keys nudge','template','Aubrey Matende','/assets/vop_logo.png','/assets/pm_logo.png','/assets/vop_logo_2.png']],
+  ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','certificate_bg.png','fixed artboard','default view 40%','setZoom(0.4)','template','Aubrey Matende','/assets/vop_logo.png','/assets/pm_logo.png','/assets/vop_logo_2.png']],
   ['api/quizzes.ts', ['tenantOwnerKey','ownerTenantId','canManageQuizTenant']],
   ['api/certificates.ts', ['hierarchyScopeField','unionId:String(candidate.unionId','const organizationId=String(profileData.organizationId','template']],
   ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
@@ -54,6 +54,14 @@ const checks = [
   ['src/pages/PrayerPage.tsx', ['prayer.hero_title','prayer.submit']],
   ['src/pages/ResourcesPage.tsx', ['vop-materials-page']],
   ['src/pages/RadioPage.tsx', ['vop-audience-radio']],
+  ['src/pages/PrayerManagementPanel.tsx', ['Prayer Requests','/api/prayer?ministry=true','Mark praying','Mark answered']],
+  ['src/pages/AdminPage.tsx', ['permissions','Permission Matrix','Prayer Requests']],
+  ['shared/permissions.ts', ['DEFAULT_PERMISSION_MATRIX','PERMISSION_ROLES','PERMISSION_RESOURCES','PERMISSION_ACTIONS','normalizePermissionMatrix']],
+  ['server/permissions.ts', ['loadPermissionMatrix','requirePermission','resourceForCollection']],
+  ['api/admin/permissions.ts', ['system/permissions','DEFAULT_PERMISSION_MATRIX','Only the VOP Super Admin']],
+  ['src/pages/CurriculumManager.tsx', ['Publishing scope','System-wide','scopeOrganizationId','organizationOptions']],
+  ['src/pages/GuideManager.tsx', ['organizationId?: string','organizationId: organizationId || undefined']],
+  ['api/prayer.ts', ['accessibleOrganizationIds','organizationInHierarchyScope','requirePermission']],
   ['src/components/reader/LessonReaderModal.tsx', ['lesson.next_page','lesson.complete']],
 ];
 const errors = [];
