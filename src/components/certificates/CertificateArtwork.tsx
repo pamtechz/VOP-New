@@ -99,8 +99,8 @@ function renderTemplate(certificate: CertificateArtworkRecord, config: Certifica
   const backgroundUrl = template.backgroundUrl || config?.backgroundUrl || DEFAULT_CERTIFICATE_BACKGROUND;
   const verifyUrl = verification ? verificationUrl(certificate, config) : '';
   return (
-    <div className="vop-certificate-template-canvas" style={{ aspectRatio: `${width} / ${height}` }} data-template-width={width} data-template-height={height}>
-      {backgroundUrl && <img className="vop-certificate-template-background" src={backgroundUrl} alt="" />}
+    <div className="vop-certificate-template-canvas" style={{ aspectRatio: `${width} / ${height}` }} data-template-width={width} data-template-height={height} data-certificate-background={backgroundUrl === DEFAULT_CERTIFICATE_BACKGROUND ? 'supplied' : 'custom'}>
+      {backgroundUrl && <img className="vop-certificate-template-background" src={backgroundUrl} alt="" draggable={false} />}
       {template.elements.filter(element => element.visible !== false).map(element => {
         let src = element.src || '';
         if (element.type === 'image' && element.id === 'seal') src = src || config?.sealUrl || '';
@@ -126,6 +126,7 @@ function renderTemplate(certificate: CertificateArtworkRecord, config: Certifica
 export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verification = true }) => {
   const templateMarkup = renderTemplate(certificate, config, verification);
   if (templateMarkup) return templateMarkup;
+  const suppliedBackground = (config?.template?.backgroundUrl || config?.backgroundUrl || DEFAULT_CERTIFICATE_BACKGROUND) === DEFAULT_CERTIFICATE_BACKGROUND;
   const title = config?.certificateTitle?.trim() || '';
   const body = config?.certificateBodyText?.trim() || '';
   const issuer = config?.issuerName?.trim() || '';
@@ -148,7 +149,7 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
         {certificate.courseCode && <div className="vop-certificate-outlined-copy">{certificate.courseCode}</div>}
       </div>
 
-      {config?.sealUrl && (
+      {!suppliedBackground && config?.sealUrl && (
         <div className="vop-certificate-seal">
           <img src={config.sealUrl} alt="" />
         </div>
@@ -163,7 +164,7 @@ export const CertificateArtwork: React.FC<Props> = ({ certificate, config, verif
         </div>
       )}
 
-      {(config?.logoUrl || issuer || subtitle) && (
+      {!suppliedBackground && (config?.logoUrl || issuer || subtitle) && (
         <div className="vop-certificate-brand">
           {config?.logoUrl && <img src={config.logoUrl} alt="" />}
           <div>
