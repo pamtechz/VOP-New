@@ -276,6 +276,13 @@ service cloud.firestore {
         || hierarchyTenantForField(data, 'churchId');
     }
 
+    function canManageHierarchyUser(data) {
+      return hierarchyTenantForField(data, 'unionId')
+        || hierarchyTenantForField(data, 'conferenceId')
+        || hierarchyTenantForField(data, 'districtId')
+        || hierarchyTenantForField(data, 'churchId');
+    }
+
     // Platform configuration remains controlled by the VOP Super Admin.
     match /system/settings {
       allow get: if true;
@@ -648,12 +655,14 @@ service cloud.firestore {
           canManageOrg(organizationIdForUser())
           && resource.data.get('organizationId','') == organizationIdForUser()
         )
+        || canManageHierarchyUser(resource.data)
       );
       allow list: if isSuperAdmin()
         || (
           canManageOrg(organizationIdForUser())
           && resource.data.get('organizationId','') == organizationIdForUser()
-        );
+        )
+        || canManageHierarchyUser(resource.data);
 
       allow create: if canCreateOwnProfile();
       allow update: if isSuperAdmin() || canUpdateOwnProfile();
@@ -668,6 +677,7 @@ service cloud.firestore {
               && userDoc().data.get('organizationId','') != ''
               && userDoc().data.get('organizationId','') == get(/databases/$(database)/documents/users/$(uid)).data.get('organizationId','')
             )
+            || canManageHierarchyUser(get(/databases/$(database)/documents/users/$(uid)).data)
           );
 
         allow create: if isOwner(uid)
