@@ -141,6 +141,8 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
         sharingScope: 'private',
         published: false,
       });
+      await adminDb.doc('tenantSettings/union_admin:union-1/settings').set({ organizationName: 'Scoped Organization Admin' });
+      await adminDb.doc('system/settings').set({ appName: 'Platform VOP' });
     });
 
     const unionAdmin = environment.authenticatedContext('union-admin').firestore();
@@ -152,6 +154,9 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertFails(unionAdmin.doc('candidates/candidate-2').get());
     await assertSucceeds(unionAdmin.doc('radioBroadcasts/radio-owned').update({ published: true }));
     await assertFails(unionAdmin.doc('radioBroadcasts/radio-foreign').update({ published: true }));
+    await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings').get());
+    await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings').get());
+    await assertFails(unionAdmin.doc('system/settings').get());
   } finally {
     await environment.cleanup();
   }
