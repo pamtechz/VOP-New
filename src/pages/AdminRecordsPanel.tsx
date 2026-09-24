@@ -801,6 +801,9 @@ function RadioAdminDashboard({
   const [playlistPublished, setPlaylistPublished] = useState(false);
   const [playlistItems, setPlaylistItems] = useState<string[]>([]);
   const [playlistSaving, setPlaylistSaving] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const startNewEditor = () => { openNew(); setEditorOpen(true); };
+  const startEditEditor = (item: AdminRecord) => { edit(item); setEditorOpen(true); };
 
   const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
   const nowPlaying = live[0] || records[0] || null;
@@ -846,7 +849,7 @@ function RadioAdminDashboard({
           <div className="vop-radio-admin-icon"><Radio size={28}/></div>
           <div><span>Radio</span><h1>Audio / Video Streaming</h1></div>
         </div>
-        <div className="vop-radio-admin-actions"><button className="vop-radio-admin-public" type="button" onClick={() => window.open('/?radio=1','_blank')}><ExternalLink size={16}/> View Public Radio</button><button className="vop-radio-admin-add" type="button" onClick={openNew}><Plus size={17}/> Add Content <span>⌄</span></button></div>
+        <div className="vop-radio-admin-actions"><button className="vop-radio-admin-public" type="button" onClick={() => window.open('/?radio=1','_blank')}><ExternalLink size={16}/> View Public Radio</button><button className="vop-radio-admin-add" type="button" onClick={startNewEditor}><Plus size={17}/> Add Content <span>⌄</span></button></div>
       </div>
 
       <div className="vop-radio-admin-intro">
@@ -878,7 +881,7 @@ function RadioAdminDashboard({
 
           <div className="vop-radio-admin-schedule">
             <div className="vop-radio-admin-card-title"><span><CalendarDays size={17}/> Schedule</span><button type="button" onClick={()=>setTab('schedule')}>View Schedule <ChevronRight size={14}/></button></div>
-            <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><button key={item.id} type="button" onClick={()=>edit(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time><MoreVertical size={17}/></button>)}{records.length===0&&<div className="vop-radio-admin-empty">No radio content configured.</div>}</div>
+            <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><button key={item.id} type="button" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time><MoreVertical size={17}/></button>)}{records.length===0&&<div className="vop-radio-admin-empty">No radio content configured.</div>}</div>
           </div>
 
           <div className="vop-radio-admin-add-card">
@@ -899,7 +902,7 @@ function RadioAdminDashboard({
               <label>Title<input value={String(form.title || '')} onChange={e=>change('title',e.target.value)} placeholder="Programme title"/></label>
               <button className="vop-radio-admin-start" type="submit" disabled={saving}>{saving?'Saving…':'Save / Start Stream'}</button>
             </form>
-            <div className="vop-radio-admin-quick-links"><button type="button" onClick={()=>setTab('playlists')}><ListVideo size={15}/> Manage Playlists</button><button type="button" onClick={openNew}><Link2 size={15}/> Add Media URL</button><button type="button" onClick={()=>setTab('settings')}><Settings size={15}/> Radio Settings</button></div>
+            <div className="vop-radio-admin-quick-links"><button type="button" onClick={()=>setTab('playlists')}><ListVideo size={15}/> Manage Playlists</button><button type="button" onClick={startNewEditor}><Link2 size={15}/> Add Media URL</button><button type="button" onClick={()=>setTab('settings')}><Settings size={15}/> Radio Settings</button></div>
           </div>
         </div>
       ) : (
@@ -948,7 +951,13 @@ function RadioAdminDashboard({
 
       {error && <div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
       {message && <div className="vop-radio-admin-alert success">{message}</div>}
-      {editingId && <div className="vop-radio-admin-edit-note">Editing configured record <strong>{editingId}</strong>. Use the Add Content form in the existing editor to complete all fields.</div>}
+      {editorOpen && <div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
+        <form className="vop-radio-editor-modal" onSubmit={async event => { await submit(event); if (!error) setEditorOpen(false); }}>
+          <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
+          <div className="vop-radio-editor-body"><Fields kind="radio" form={form} setForm={setForm} records={records} /></div>
+          <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>Cancel</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
+        </form>
+      </div>}
     </div>
   );
 }
