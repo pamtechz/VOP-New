@@ -140,12 +140,18 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     }));
   };
 
-  const settingsSnap = organizationId
-    ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
-    : await getDoc(doc(firestore, 'system', 'settings'));
-
   const hierarchyRole = String(profileData.role || '');
   const hierarchyNodeId = String(profileData.adminNodeId || '').trim();
+  const hierarchyTenantId = hierarchyRole && hierarchyNodeId
+    ? hierarchyRole + ':' + hierarchyNodeId
+    : '';
+
+  const settingsSnap = organizationId
+    ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
+    : hierarchyTenantId
+      ? await getDoc(doc(firestore, 'tenantSettings', hierarchyTenantId, 'settings', 'settings'))
+      : await getDoc(doc(firestore, 'system', 'settings'));
+
   const ownHierarchyIds = {
     unionId: String(profileData.unionId || '').trim(),
     conferenceId: String(profileData.conferenceId || '').trim(),
