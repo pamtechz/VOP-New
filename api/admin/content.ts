@@ -469,6 +469,13 @@ export default async function handler(req: Request, res: Response) {
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (!existing.exists) {
+          const quotaKey =
+            collection === 'books' ? 'maxMaterials' :
+            collection === 'radioBroadcasts' ? 'maxRadioItems' :
+            collection === 'playlists' ? 'maxRadioPlaylists' : '';
+          if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
+        }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
         await ref.set({
           ...incoming,
