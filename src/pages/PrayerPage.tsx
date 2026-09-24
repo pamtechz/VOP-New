@@ -50,7 +50,8 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
       const user = auth?.currentUser;
       if (!user) { setRequests([]); return; }
       const token = await user.getIdToken();
-      const response = await fetch('/api/prayer?mine=' + String(mine), { headers: { Authorization: 'Bearer ' + token } });
+      const query = mine ? '?mine=true' : tab === 'ministry' ? '?ministry=true' : '?mine=false';
+      const response = await fetch('/api/prayer' + query, { headers: { Authorization: 'Bearer ' + token } });
       const body = await response.json().catch(() => ({})) as { error?: string; items?: PrayerRequest[] };
       if (!response.ok) throw new Error(body.error || 'Could not load prayer requests.');
       setRequests(Array.isArray(body.items) ? body.items : []);
