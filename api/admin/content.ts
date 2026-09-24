@@ -131,7 +131,7 @@ export default async function handler(req: Request, res: Response) {
         ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: current.ownerUid || ctx.auth.uid,
         canonical: true,
-        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
+        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : (effectiveOrganizationId ? 'organization' : 'shared'),
         curriculumId: 'discover',
         discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
         title,
