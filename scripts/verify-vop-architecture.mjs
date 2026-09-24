@@ -44,7 +44,7 @@ const checks = [
   ['api/admin/candidates.ts', ['organizationInHierarchyScope','candidate belongs outside your authorized organization scope']],
   ['api/admin/graduations.ts', ['organizationInHierarchyScope','graduation request belongs outside your hierarchy scope']],
   ['api/mentorship.ts', ['organizationInHierarchyScope','requested organization is outside your hierarchy scope']],
-  ['src/pages/AdminPage.tsx', ['tenant-scoped, never platform-wide','organizations','userManagement','certification']],
+  ['src/pages/AdminPage.tsx', ['Permission Matrix','organizations','userManagement','certification','Prayer Requests']],
   ['src/pages/CertificationManager.tsx', ['isSuperAdmin','Certificate Settings','Issue Certificate','CertificateTemplateConfig']],
   ['src/pages/CertificationConfigStudio.tsx', ['DEFAULT_BACKGROUND','certificate_bg.png','fixed artboard','default view 40%','setZoom(0.4)','template','Aubrey Matende','/assets/vop_logo.png','/assets/pm_logo.png','/assets/vop_logo_2.png']],
   ['api/quizzes.ts', ['tenantOwnerKey','ownerTenantId','canManageQuizTenant']],
