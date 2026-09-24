@@ -67,12 +67,14 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
   };
 
   const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!auth?.currentUser) return;
     setSavingProfile(true);
     setSaved(false);
+    setProfileError('');
     try {
       const token = await auth.currentUser.getIdToken();
       const response = await fetch('/api/admin/users', {
@@ -90,9 +92,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
       window.dispatchEvent(new Event('vop_profile_updated'));
     } catch (error) {
       setSaved(false);
-      window.dispatchEvent(new CustomEvent('vop_profile_error', {
-        detail: error instanceof Error ? error.message : 'Could not save your contact details.',
-      }));
+      setProfileError(error instanceof Error ? error.message : 'Could not save your contact details.');
     } finally {
       setSavingProfile(false);
     }
@@ -143,6 +143,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
 
       {/* Main Body */}
       <main className="vop-reference-main">
+        {profileError && <p role="alert" className="vop-reference-error">{profileError}</p>}
         {saved && (
           <p role="status" className="vop-reference-success">
             <Check size={16} /> {t('contact_saved_local', 'Contact details saved to your VOP account.')}
