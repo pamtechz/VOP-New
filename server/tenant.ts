@@ -212,6 +212,15 @@ export function contentOwnedByOrg(data: DocumentData | undefined, organizationId
   return String(data?.ownerOrganizationId || data?.organizationId || '') === organizationId;
 }
 
+export async function canManageOrganizationContent(ctx: TenantContext, data: DocumentData | undefined) {
+  if (ctx.isSuperAdmin) return true;
+  const organizationId = String(data?.organizationId || data?.ownerOrganizationId || '').trim();
+  if (!organizationId) return false;
+  if (ctx.tenantType === 'hierarchy') return organizationInHierarchyScope(ctx, organizationId);
+  return organizationId === ctx.organizationId
+    && ['owner', 'admin'].includes(String(ctx.membership.role || ''));
+}
+
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
   // Organization membership grants access to the organization, not ownership of
   // another contributor's canonical content. Only the recorded creator/owner or
