@@ -435,13 +435,15 @@ export default async function handler(req: Request, res: Response) {
       if (!(key in existingValues)) throw new Error('The selected translation key does not exist.');
       if (String(existingValues[key] || '') === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
       const proposalCollection = ctx.db.collection('translations/' + languageId + '/proposals');
-      const duplicate = await proposalCollection
+      const existingProposals = await proposalCollection
         .where('proposerUid','==',ctx.auth.uid)
-        .where('key','==',key)
-        .where('status','==','pending')
-        .limit(1)
+        .limit(50)
         .get();
-      if (!duplicate.empty) throw new Error('You already have a pending proposal for this translation key.');
+      const duplicate = existingProposals.docs.some(doc => {
+        const proposal = doc.data() || {};
+        return String(proposal.key || '') === key && String(proposal.status || '') === 'pending';
+      });
+      if (duplicate) throw new Error('You already have a pending proposal for this translation key.');
       const proposalRef = proposalCollection.doc();
       const now = new Date().toISOString();
       await proposalRef.set({
