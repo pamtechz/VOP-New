@@ -404,11 +404,19 @@ export default async function handler(req: Request, res: Response) {
         throw error;
       }
       const now = new Date().toISOString();
+      const actorHierarchyRole = hierarchyRole(String(ctx.profile.role || ''));
+      const actorHierarchyNodeId = String(ctx.profile.adminNodeId || '').trim();
       await ctx.db.runTransaction(async transaction => {
         transaction.set(ctx.db.doc('users/' + created.uid), {
           uid:created.uid, email, displayName,
           userType:role === 'learner' || role === 'viewer' ? 'learner' : role,
           role: role === 'mentor' ? 'mentor' : 'student',
+          ...(actorHierarchyRole ? {
+            unionId: actorHierarchyRole === 'union_admin' ? actorHierarchyNodeId : '',
+            conferenceId: actorHierarchyRole === 'conference_admin' ? actorHierarchyNodeId : '',
+            districtId: actorHierarchyRole === 'district_admin' ? actorHierarchyNodeId : '',
+            churchId: actorHierarchyRole === 'church_admin' ? actorHierarchyNodeId : '',
+          } : {}),
           organizationId:managedOrganizationId, organizationRole:role,
           privileges:{admin:role==='admin',guardian:role==='admin',editor:role==='admin'||role==='editor'||role==='mentor',manager:role==='admin',developer:false,coordinator:role==='admin'},
           information:{enrollmentDate:now,graduating:false,graduated:false,baptismCandidate:false,baptized:false},
