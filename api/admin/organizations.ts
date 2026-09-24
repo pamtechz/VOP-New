@@ -29,13 +29,21 @@ function organizationInHierarchy(data: Record<string, unknown>, role: string, no
   if (field && String(hierarchy[field] || '').trim() === nodeId) return true;
   return String(data.hierarchyType || '').trim() === field.replace('Id','') && String(data.hierarchyId || '').trim() === nodeId;
 }
+async function organizationAllowedForHierarchy(ctx: Awaited<ReturnType<typeof authenticateTenant>>, organizationId: string, role: string, nodeId: string) {
+  const organization = await ctx.db.doc('organizations/' + organizationId).get();
+  if (!organization.exists || organization.data()?.status !== 'active') return false;
+  if (organizationInHierarchy(organization.data() || {}, role, nodeId)) return true;
+  const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : 'churchId';
+  const users = await ctx.db.collection('users').where(field, '==', nodeId).where('organizationId', '==', organizationId).limit(1).get();
+  return !users.empty;
+}
 async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authenticateTenant>>, requestedOrg: string) {
   if (ctx.isSuperAdmin) return requestedOrg || ctx.organizationId;
   if (ctx.organizationId) return ctx.organizationId;
   const role = hierarchyRole(String(ctx.profile.role || ''));
   if (!role || !requestedOrg) throw new Error('Select an organization within your hierarchy.');
   const organization = await ctx.db.doc('organizations/' + requestedOrg).get();
-  if (!organization.exists || organization.data()?.status !== 'active' || !organizationInHierarchy(organization.data() || {}, role, String(ctx.profile.adminNodeId || '').trim())) throw new Error('The selected organization is outside your assigned hierarchy scope.');
+  if (!(await organizationAllowedForHierarchy(ctx, requestedOrg, role, String(ctx.profile.adminNodeId || '').trim()))) throw new Error('The selected organization is outside your assigned hierarchy scope.');
   return requestedOrg;
 }
 
