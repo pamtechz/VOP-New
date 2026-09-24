@@ -95,8 +95,14 @@ export async function enforceQuota(ctx: TenantContext, collectionName: string, q
   const quotas = organization.data()?.quotas;
   const limit = Number(quotas && typeof quotas === 'object' ? (quotas as Record<string, unknown>)[quotaKey] : NaN);
   if (!Number.isFinite(limit) || limit < 0) return;
-  const current = await ctx.db.collection(collectionName).where('organizationId','==',ctx.organizationId).get();
-  if (current.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
+  const [organizationScoped, ownerScoped] = await Promise.all([
+    ctx.db.collection(collectionName).where('organizationId','==',ctx.organizationId).get(),
+    ctx.db.collection(collectionName).where('ownerOrganizationId','==',ctx.organizationId).get(),
+  ]);
+  const ids = new Set<string>();
+  organizationScoped.docs.forEach(doc => ids.add(doc.id));
+  ownerScoped.docs.forEach(doc => ids.add(doc.id));
+  if (ids.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
 }
 
 
