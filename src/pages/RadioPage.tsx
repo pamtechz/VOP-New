@@ -128,6 +128,9 @@ function sourceLabel(source: MediaSource) {
 }
 
 export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = [], onBack }) => {
+  const language = getActiveLanguage();
+  const settings = getStoredSettings();
+  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'RadioPage');
   const [selected, setSelected] = useState<RadioBroadcast | null>(broadcasts[0] || null);
   const [playing, setPlaying] = useState(false), [muted, setMuted] = useState(false), [volume, setVolume] = useState(1);
   const [current, setCurrent] = useState(0), [duration, setDuration] = useState(0), [rate, setRate] = useState(1);
