@@ -206,7 +206,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     .filter(item => item.published === true && item.title.trim());
 
   const radioPlaylists = playlistDocs
-    .map(item => ({ id:item.id, ...item.data(), itemIds:Array.isArray(item.data().itemIds) ? item.data().itemIds.map(String) : [] } as RadioPlaylist))
+    .map(item => { const data = item.data() as Record<string, unknown>; return ({ id:item.id, ...data, itemIds:Array.isArray(data.itemIds) ? data.itemIds.map(String) : [] } as RadioPlaylist); })
     .filter(item => item.published === true && item.name.trim());
 
   const guides = await loadFirestoreGuides();
