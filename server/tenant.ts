@@ -227,12 +227,16 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
   // the platform Super Admin may mutate canonical content.
   const ownerKey = String(data?.ownerTenantId || data?.ownerOrganizationId || data?.organizationId || '');
   const currentTenant = tenantOwnerKey(ctx);
+  const role = String(ctx.profile.role || '');
+  const membershipRole = String(ctx.membership.role || '');
+  const canContribute = ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin'].includes(role)
+    || ['owner','admin','editor'].includes(membershipRole);
   return ctx.isSuperAdmin
     || (
       !!currentTenant
       && ownerKey === currentTenant
       && String(data?.ownerUid || '') === ctx.auth.uid
-      && ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin'].includes(String(ctx.membership.role || ''))
+      && canContribute
     );
 }
 
