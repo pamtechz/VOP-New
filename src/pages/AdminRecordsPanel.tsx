@@ -905,7 +905,30 @@ function RadioAdminDashboard({
              </div>
              <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false}>Edit</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false}>Delete</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">No playlists configured.</div>}</div>
            </div> :
-           <div className="vop-radio-admin-library-grid">{filtered.filter(item => tab==='audio' ? audio.includes(item) : tab==='video' ? videos.includes(item) : true).map(item=><article key={item.id}><div className="media" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><span>{radioProvider(item)}</span><button type="button" onClick={()=>edit(item)}><Play size={16} fill="currentColor"/></button></div><h3>{String(item.title || 'Untitled')}</h3><p>{String(item.speaker || item.series || '')}</p><div><small>{radioTime(item)}</small><button type="button" onClick={()=>edit(item)}>Edit</button><button type="button" onClick={()=>void remove(item.id)}>Delete</button></div></article>)}{filtered.length===0&&<div className="vop-radio-admin-empty">No records configured.</div></div>}
+           <div className="vop-radio-admin-library-grid">
+             {filtered
+               .filter(item => {
+                 if (tab === 'audio') return audio.includes(item);
+                 if (tab === 'video') return videos.includes(item);
+                 return true;
+               })
+               .map(item => (
+                 <article key={item.id}>
+                   <div className="media" style={item.posterUrl ? { backgroundImage: 'url("' + String(item.posterUrl) + '")' } : undefined}>
+                     <span>{radioProvider(item)}</span>
+                     <button type="button" onClick={() => edit(item)}><Play size={16} fill="currentColor"/></button>
+                   </div>
+                   <h3>{String(item.title || 'Untitled')}</h3>
+                   <p>{String(item.speaker || item.series || '')}</p>
+                   <div>
+                     <small>{radioTime(item)}</small>
+                     <button type="button" onClick={() => edit(item)}>Edit</button>
+                     <button type="button" onClick={() => void remove(item.id)}>Delete</button>
+                   </div>
+                 </article>
+               ))}
+             {filtered.length === 0 && <div className="vop-radio-admin-empty">No records configured.</div>}
+           </div>
         </div>
       )}
 
