@@ -316,7 +316,15 @@ export default async function handler(request: Request, response: Response) {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      const claims = type === 'super_admin' ? { role: 'super_admin' } : type === 'admin' ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId } : type === 'mentor' ? { role: 'mentor' } : { role: 'student' };
+      const claims = type === 'super_admin'
+        ? { role: 'super_admin' }
+        : hierarchyRole && type === 'admin'
+          ? { role: hierarchyRole, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId, organizationId: effectiveOrganizationId, organizationRole: 'owner' }
+          : type === 'admin'
+            ? { role: profile.role, adminNodeType: profile.adminNodeType, adminNodeId: profile.adminNodeId }
+            : type === 'mentor'
+              ? { role: 'mentor' }
+              : { role: 'student' };
       if (tenantOrganizationId) await db.doc(`organizations/${tenantOrganizationId}/members/${created.uid}`).set({ uid:created.uid, organizationId:tenantOrganizationId, role: type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner', active:true, invitedBy:decoded.uid, joinedAt:new Date().toISOString(), updatedAt:new Date().toISOString() }, {merge:true});
       await authService.setCustomUserClaims(created.uid, tenantOrganizationId ? { role:'student', organizationId:tenantOrganizationId, organizationRole:profile.organizationRole } : claims);
       const resetLink = await authService.generatePasswordResetLink(email).catch(() => null);
@@ -374,8 +382,22 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.photoURL === 'string') update.photoURL = body.photoURL.trim() || null;
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
       const updated = await authService.updateUser(uid, update);
-      const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
+      const existingPlatformRole = String(existingData.role || '').trim();
+      const hierarchyRole = ['union_admin','conference_admin','district_admin','church_admin'].includes(existingPlatformRole) ? existingPlatformRole : '';
+      const type = hierarchyRole && body.userType === 'admin'
+        ? 'admin' as ProfileType
+        : (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner')
+          ? body.userType as ProfileType
+          : profileType(existingData, existing);
       if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (hierarchyRole && type === 'admin' && tenantOrganizationId) {
+        const tenant = await db.doc(`organizations/${tenantOrganizationId}`).get();
+        const tenantData = tenant.data() || {};
+        if (String(tenantData.tenantType || '') !== String(existingData.adminNodeType || '')
+          || String(tenantData.adminNodeId || '') !== String(existingData.adminNodeId || '')) {
+          throw new Error('The hierarchy administrator tenant scope does not match the account scope.');
+        }
+      }
       if (type === 'super_admin' && !tenant.isSuperAdmin) {
         throw new Error('Only the VOP Super Admin can assign the platform super administrator role.');
       }
@@ -386,7 +408,9 @@ export default async function handler(request: Request, response: Response) {
       // display role must not silently detach that user from an existing tenant.
       // Tenant reassignment is a separate, explicit organization operation.
       const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
-      const profile = profileForType(type, body, effectiveOrganizationId);
+      const profile = hierarchyRole && type === 'admin' && effectiveOrganizationId
+        ? profileForType(type, { ...body, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }, '')
+        : profileForType(type, body, effectiveOrganizationId);
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
@@ -401,13 +425,15 @@ export default async function handler(request: Request, response: Response) {
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
           uid, organizationId:membershipOrganizationId,
-          role:type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner',
+          role: hierarchyRole && type === 'admin'
+            ? 'owner'
+            : type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner',
           active:true, updatedAt:new Date().toISOString(),
         }, {merge:true});
       }
       await authService.setCustomUserClaims(
         uid,
-        membershipOrganizationId && profile.organizationRole
+        membershipOrganizationId && profile.organizationRole && !(hierarchyRole && type === 'admin')
           ? { role:'student', organizationId:membershipOrganizationId, organizationRole:profile.organizationRole }
           : claims,
       );
