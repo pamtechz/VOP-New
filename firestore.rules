@@ -634,10 +634,7 @@ service cloud.firestore {
     }
 
     match /playlists/{id} {
-      allow get, list: if isSuperAdmin()
-        || (resource.data.get('ownerUid','') == request.auth.uid && isOrgMember(organizationIdForUser()))
-        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
-        || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true);
+      allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
         isOrgMember(organizationIdForUser())
         && request.resource.data.get('ownerUid','') == request.auth.uid
