@@ -38,10 +38,23 @@ async function mine(req:Request,res:Response){
  if (!organizationId && profileRole !== 'super_admin' && !hierarchyField) return res.status(403).json({error:'Your account is not linked to an organization or hierarchy tenant.'});
  const certificateQuery=db.collection('certificates').where('candidateId','==',decoded.uid);
  let certificateSnapshot;
- if (organizationId) certificateSnapshot=await certificateQuery.where('organizationId','==',organizationId).limit(20).get();
- else if (profileRole === 'super_admin') certificateSnapshot=await certificateQuery.limit(20).get();
- else if (hierarchyField) certificateSnapshot=await certificateQuery.where(hierarchyField,'==',adminNodeId).limit(20).get();
- else certificateSnapshot=await certificateQuery.limit(20).get();
+ if (organizationId) {
+   certificateSnapshot=await certificateQuery.where('organizationId','==',organizationId).limit(20).get();
+ } else if (profileRole === 'super_admin') {
+   certificateSnapshot=await certificateQuery.limit(20).get();
+ } else if (hierarchyField) {
+   // Hierarchy records may use either the legacy flat field or the canonical
+   // nested hierarchy object. Read both forms and deduplicate by certificate ID.
+   const [flat,nested]=await Promise.all([
+     certificateQuery.where(hierarchyField,'==',adminNodeId).limit(20).get(),
+     certificateQuery.where('hierarchy.'+hierarchyField,'==',adminNodeId).limit(20).get(),
+   ]);
+   const byId=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
+   [...flat.docs,...nested.docs].forEach(doc=>byId.set(doc.id,doc));
+   certificateSnapshot={docs:[...byId.values()]};
+ } else {
+   certificateSnapshot=await certificateQuery.limit(20).get();
+ }
  const [snapshot,configSnapshot]=await Promise.all([Promise.resolve(certificateSnapshot),db.doc('system/certification').get()]);
  const certificates=snapshot.docs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified');const config=configSnapshot.exists?configSnapshot.data()??{}:{};
  return res.status(200).json({certificates,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??''),verificationEnabled:config.verificationEnabled===true,verificationBaseUrl:String(config.verificationBaseUrl??''),template:config.template&&typeof config.template==='object'?config.template:null}});
