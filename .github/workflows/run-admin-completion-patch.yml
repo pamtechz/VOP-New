@@ -1,0 +1,24 @@
+name: Apply admin completion patch
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python3 scripts/complete-admin-ui-and-enrollment.py
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/AdminRecordsPanel.tsx src/pages/AdminPage.tsx src/pages/CandidateEnrollment.tsx src/pages/OrganizationManagement.tsx src/pages/admin.css api/admin/content.ts api/admin/candidates.ts scripts/complete-admin-ui-and-enrollment.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'feat: complete admin modal editors and candidate enrollment'
+          git push origin main
