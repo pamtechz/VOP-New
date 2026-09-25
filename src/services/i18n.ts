@@ -82,6 +82,7 @@ export const setUiLocale = (locale: LanguageCode) => {
 export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promise<void> {
   const requested = normalizeLocale(locale) || fallback;
   if (dictionaryCache[requested]) {
+    localeState.value = requested;
     localeState.version += 1;
     notify();
     return;
@@ -94,6 +95,7 @@ export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promi
     localeFallbacks[requested] = normalizeLocale(payload?.fallback) || 'en';
     document.documentElement.dir = payload?.direction === 'rtl' ? 'rtl' : 'ltr';
     document.documentElement.lang = requested;
+    localeState.value = requested;
     localeState.version += 1;
     notify();
     const configuredFallback = localeFallbacks[requested] && localeFallbacks[requested] !== requested ? localeFallbacks[requested] : fallback;
@@ -118,15 +120,16 @@ export function useLocalization(settings?: AppSettings) {
   };
 }
 
-export const getTranslation = (key: string, _legacyLang: LanguageCode = 'en', customTranslations?: Record<string, Record<string, string>>, defaultFallback?: string, componentName?: string, vars?: Record<string,string|number>): string => {
+export const getTranslation = (key: string, requestedLocale: LanguageCode = 'en', customTranslations?: Record<string, Record<string, string>>, defaultFallback?: string, componentName?: string, vars?: Record<string,string|number>): string => {
   const registryKey = String(key || '').trim();
-  const legacySecondArg = String(_legacyLang || '').trim();
-  const legacyFallback = !isLocale(legacySecondArg) && !defaultFallback ? legacySecondArg : '';
+  const explicitLocale = normalizeLocale(requestedLocale);
+  const legacyFallback = !isLocale(explicitLocale) && !defaultFallback ? explicitLocale : '';
   const fallback = String(defaultFallback || legacyFallback || '').trim() || humanizeTranslationKey(registryKey);
   try { registerLocalizationString(registryKey, fallback, componentName); } catch { /* discovery is non-blocking */ }
-  const locale = getUiLocale();
+  const locale = explicitLocale || getUiLocale();
   const stored = (() => { try { return getStoredAutoLocalization().find(item => item.key === registryKey)?.translations?.[locale]; } catch { return undefined; } })();
-  const candidates = [dictionaryCache[locale]?.[registryKey], customTranslations?.[locale]?.[registryKey], stored, localeFallbacks[locale] && localeFallbacks[locale] !== locale ? dictionaryCache[localeFallbacks[locale]]?.[registryKey] : undefined, localeFallbacks[locale] && localeFallbacks[locale] !== locale ? customTranslations?.[localeFallbacks[locale]]?.[registryKey] : undefined, locale !== 'en' ? dictionaryCache.en?.[registryKey] : undefined, locale !== 'en' ? customTranslations?.en?.[registryKey] : undefined];
+  const fallbackLocale = localeFallbacks[locale] && localeFallbacks[locale] !== locale ? localeFallbacks[locale] : '';
+  const candidates = [dictionaryCache[locale]?.[registryKey], customTranslations?.[locale]?.[registryKey], stored, fallbackLocale ? dictionaryCache[fallbackLocale]?.[registryKey] : undefined, fallbackLocale ? customTranslations?.[fallbackLocale]?.[registryKey] : undefined, locale !== 'en' ? dictionaryCache.en?.[registryKey] : undefined, locale !== 'en' ? customTranslations?.en?.[registryKey] : undefined];
   let value = candidates.map(candidate => usableTranslation(candidate, registryKey)).find(Boolean) || fallback;
   if (!usableTranslation(value, registryKey)) value = humanizeTranslationKey(registryKey);
   if (vars) value = value.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match);
