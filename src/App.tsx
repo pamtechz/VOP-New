@@ -297,7 +297,7 @@ export const App: React.FC = () => {
         {isMobileShell && <div className="device-notch" />}
         {showDashboardShell && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={activeLanguage}
-            onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setStudyError(''); }}
+            onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setUiLocale(language); setStudyError(''); }}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
         )}

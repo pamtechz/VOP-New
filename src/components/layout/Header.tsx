@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
-import { getAvailableLanguages, getTranslation } from '../../services/i18n';
+import { getAvailableLanguages, getTranslation, useLocalization } from '../../services/i18n';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
 
 interface HeaderProps {
@@ -31,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigate
 }) => {
   const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings?.customTranslations, fallback);
+  useLocalization(settings);
   const availableLanguages = getAvailableLanguages(settings);
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
 

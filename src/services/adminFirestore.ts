@@ -282,29 +282,18 @@ export const subscribeLanguages = (
 };
 
 export const saveLanguageToFirestore = async (language: CustomLanguage): Promise<void> => {
-  const user = auth?.currentUser;
+  const user=auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
-  const token = await user.getIdToken();
-  const id = language.code.toLowerCase().trim();
-  if (!id) throw new Error('A language code is required.');
-  const response = await fetch('/api/admin/content', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({
-      action: 'upsert',
-      collection: 'languages',
-      id,
-      data: {
-        ...language,
-        code: language.code.toUpperCase(),
-        languageCode: id,
-        enabled: language.enabled !== false,
-        sharingScope: 'shared',
-      },
-    }),
-  });
-  const payload = await response.json().catch(() => ({})) as { error?: string };
-  if (!response.ok) throw new Error(payload.error || 'Could not save the language.');
+  const token=await user.getIdToken();
+  const code=String(language.code||'').trim().toLowerCase();
+  const name=String(language.name||'').trim();
+  const nativeName=String(language.nativeName||name).trim();
+  if(!code) throw new Error('A language code is required.');
+  if(!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(code)) throw new Error('Use a valid language code such as bem or en.');
+  if(!name) throw new Error('A language name is required.');
+  const response=await fetch('/api/admin/languages',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'upsert',id:code,code,name,nativeName,enabled:language.enabled!==false,rtl:language.rtl===true,sortOrder:Number(language.sortOrder||0)})});
+  const payload=await response.json().catch(()=>({})) as {error?:string};
+  if(!response.ok) throw new Error(payload.error||'Could not save the language.');
 };
 
 export const updateLanguageStatusInFirestore = async (code: string, enabled: boolean): Promise<void> => {
@@ -313,15 +302,10 @@ export const updateLanguageStatusInFirestore = async (code: string, enabled: boo
   const token = await user.getIdToken();
   const id = code.toLowerCase().trim();
   if (!id) throw new Error('A language code is required.');
-  const response = await fetch('/api/admin/content', {
+  const response = await fetch('/api/admin/languages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({
-      action: 'upsert',
-      collection: 'languages',
-      id,
-      data: { code: code.toUpperCase(), languageCode: id, enabled, sharingScope: 'shared' },
-    }),
+    body: JSON.stringify({ action: 'status', id, code: id, enabled }),
   });
   const payload = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(payload.error || 'Could not update the language.');
@@ -333,10 +317,10 @@ export const deleteLanguageFromFirestore = async (code: string): Promise<void> =
   const token = await user.getIdToken();
   const id = code.toLowerCase().trim();
   if (!id) throw new Error('A language code is required.');
-  const response = await fetch('/api/admin/content', {
+  const response = await fetch('/api/admin/languages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ action: 'delete', collection: 'languages', id }),
+    body: JSON.stringify({ action: 'delete', id, code: id }),
   });
   const payload = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(payload.error || 'Could not delete the language.');
