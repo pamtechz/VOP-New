@@ -3,6 +3,7 @@ import { Check, GraduationCap, Mail, Phone, Plus, UserPlus } from 'lucide-react'
 import { auth } from '../lib/firebase';
 import type { User } from '../types';
 
+// One-page candidate account creation + course enrollment workflow.
 type Course={id:string;title?:string;language?:string;published?:boolean;archived?:boolean};
 type Organization={id:string;name:string};
 
