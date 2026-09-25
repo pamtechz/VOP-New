@@ -409,6 +409,23 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data() })) });
       }
       if (GLOBAL_COLLECTIONS.has(collection)) {
+        if (collection === 'translations') {
+          const languageSnap = await ctx.db.collection('languages').get();
+          const languageDocs = languageSnap.docs.filter(d => d.data()?.enabled !== false);
+          const items = await Promise.all(languageDocs.map(async languageDoc => {
+            const language = languageDoc.data() || {};
+            const code = String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();
+            const localeSnap = await ctx.db.doc(`locales/${code}`).get();
+            const values: Record<string,string> = {};
+            const translationSnap = await ctx.db.collection(`locales/${code}/translations`).get();
+            translationSnap.docs.forEach(doc => { const value = String(doc.data()?.value ?? ''); if (value.trim()) values[doc.id] = value; });
+            const legacySnap = await ctx.db.doc(`translations/${code}`).get();
+            const legacyValues = legacySnap.data()?.values;
+            if (legacyValues && typeof legacyValues === 'object') Object.entries(legacyValues as Record<string,unknown>).forEach(([key,value]) => { if (!values[key] && typeof value === 'string' && value.trim()) values[key] = value; });
+            return { id: code, code, languageCode: code, name: String(language.name || language.nativeName || code), nativeName: String(language.nativeName || language.name || code), values, enabled: language.enabled !== false, canEdit: ctx.isSuperAdmin, localeExists: localeSnap.exists };
+          }));
+          return res.status(200).json({ ok:true, items });
+        }
         if (ctx.isSuperAdmin) {
           const snap = await ctx.db.collection(collection).get();
           if (collection === 'translations') {
@@ -616,6 +633,22 @@ export default async function handler(req: Request, res: Response) {
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+        if (collection === 'translations') {
+          if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');
+          const requestedCode = String(incoming.code || incoming.languageCode || id).trim().toLowerCase();
+          const languageSnap = await ctx.db.collection('languages').get();
+          const languageDoc = languageSnap.docs.find(d => { const data = d.data() || {}; return [d.id, data.code, data.languageCode, data.name, data.nativeName].map(v => String(v || '').trim().toLowerCase()).includes(requestedCode); });
+          if (!languageDoc) throw new Error('Select a language from the configured Languages list.');
+          const language = languageDoc.data() || {};
+          const code = String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();
+          const values = incoming.values && typeof incoming.values === 'object' ? incoming.values as Record<string,unknown> : {};
+          await ctx.db.doc(`locales/${code}`).set({ id:code, code, name:String(language.name || language.nativeName || code), nativeName:String(language.nativeName || language.name || code), enabled:language.enabled !== false, direction:language.rtl === true ? 'rtl' : 'ltr', fallback:String(language.fallback || 'en'), updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, {merge:true});
+          const batch = ctx.db.batch();
+          Object.entries(values).forEach(([key,value]) => { const translationValue = String(value ?? ''); batch.set(ctx.db.doc(`locales/${code}/translations/${safeId(key)}`), { key, locale:code, namespace:key.split('.')[0], value:translationValue, status:translationValue.trim() ? 'published' : 'draft', source:'', version:FieldValue.increment(1), updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, {merge:true}); });
+          await batch.commit();
+          await ctx.db.doc(`translations/${code}`).set({id:code, languageCode:code, code, name:String(language.name || code), nativeName:String(language.nativeName || language.name || code), values, enabled:language.enabled !== false, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid}, {merge:true});
+          return res.status(200).json({ok:true,item:{id:code,code,languageCode:code,name:String(language.name || code),nativeName:String(language.nativeName || language.name || code),values}});
+        }
         if (existing.exists) await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'update');
         else await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'create');
         if (!existing.exists) {

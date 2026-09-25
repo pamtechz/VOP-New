@@ -188,8 +188,10 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         if (!id || !text(draft.name).trim()) throw new Error('Language code and name are required.');
         data = { ...draft, id, code: id, name: text(draft.name).trim(), nativeName: text(draft.nativeName).trim() || text(draft.name).trim() };
       } else if (active === 'translations') {
-        id = text(draft.id).trim().toLowerCase();
-        if (!id) throw new Error('Translation language code is required.');
+        const requestedLanguage = text(draft.id).trim();
+        const selectedLanguage = languages.find(language => [language.code, language.name, language.nativeName].map(value => text(value).trim().toLowerCase()).includes(requestedLanguage.toLowerCase()));
+        id = text(selectedLanguage?.code || requestedLanguage).trim().toLowerCase();
+        if (!selectedLanguage) throw new Error('Select a language from the configured Languages list.');
         let values: unknown;
         try { values = JSON.parse(translationText || '{}'); } catch { throw new Error('Translation values must be valid JSON.'); }
         if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Translation values must be a JSON object.');

@@ -586,7 +586,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
   const openLesson = (row: LessonRow) => {
-    const source = row.raw || {};
+    const source: RecordItem = row.raw || { id: row.key };
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     setEditor(editorFromLesson(row));
