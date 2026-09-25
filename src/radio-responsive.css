@@ -1,0 +1,92 @@
+/* VOP Radio responsive overrides
+   Keeps the desktop reference layout while preventing fixed-width overflow on tablets/mobile. */
+.vop-radio-page,
+.vop-audience-radio,
+.vop-radio-admin-dashboard{width:100%;min-width:0;box-sizing:border-box;overflow-x:hidden}
+.vop-radio-page *,
+.vop-audience-radio *,
+.vop-radio-admin-dashboard *{box-sizing:border-box}
+
+@media (max-width:1100px){
+  .vop-radio-hero-inner{grid-template-columns:minmax(0,1fr) 390px;gap:22px;padding-inline:24px}
+  .vop-radio-feature-strip{grid-template-columns:repeat(3,1fr);padding-inline:20px}
+  .vop-radio-audience-main{padding-inline:20px}
+  .vop-radio-section-grid{grid-template-columns:minmax(300px,360px) minmax(0,1fr)}
+  .vop-radio-featured-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .vop-radio-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .vop-radio-latest-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .vop-radio-docked-player{grid-template-columns:minmax(170px,1fr) auto minmax(180px,1.2fr) auto;gap:12px;padding-inline:16px}
+}
+
+@media (max-width:820px){
+  .vop-radio-hero{min-height:auto}
+  .vop-radio-hero-inner{grid-template-columns:1fr;min-height:auto;padding:22px 18px 24px;gap:18px}
+  .vop-radio-hero h1{font-size:clamp(30px,7vw,42px)}
+  .vop-radio-tagline{font-size:17px}
+  .vop-radio-live-card{width:100%;max-width:none}
+  .vop-radio-feature-strip{grid-template-columns:repeat(2,minmax(0,1fr));padding:14px 16px}
+  .vop-radio-audience-main{padding:16px 14px 120px}
+  .vop-radio-section-grid{grid-template-columns:1fr}
+  .vop-radio-schedule-list button{grid-template-columns:56px minmax(0,1fr) auto}
+  .vop-radio-schedule-list button span{display:none}
+  .vop-radio-featured-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .vop-radio-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .vop-radio-docked-player{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"meta actions" "progress progress";gap:8px 12px;padding:8px 12px;min-height:96px}
+  .vop-radio-docked-meta{grid-area:meta;min-width:0}
+  .vop-radio-docked-center{display:none}
+  .vop-radio-docked-progress{grid-area:progress}
+  .vop-radio-docked-actions{grid-area:actions}
+  .vop-radio-docked-actions>input{display:none}
+
+  .vop-radio-admin-dashboard{padding-inline:0}
+  .vop-radio-admin-topbar{align-items:flex-start;flex-direction:column}
+  .vop-radio-admin-actions{width:100%;flex-wrap:wrap}
+  .vop-radio-admin-actions button{flex:1;min-width:150px;justify-content:center}
+  .vop-radio-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media (max-width:560px){
+  .vop-radio-hero-inner{padding:18px 14px 20px}
+  .vop-radio-hero-actions{display:grid;grid-template-columns:1fr;gap:8px}
+  .vop-radio-listen,.vop-radio-watch{width:100%}
+  .vop-radio-live-card{padding:13px}
+  .vop-radio-provider-stage{min-height:170px}
+  .vop-radio-feature-strip{grid-template-columns:1fr;padding:12px 14px}
+  .vop-radio-feature-strip>div{padding:5px 0}
+  .vop-radio-audience-main{padding:12px 10px 124px}
+  .vop-radio-section-head{padding:12px 12px 10px}
+  .vop-radio-featured-grid{grid-template-columns:1fr;gap:10px;padding-inline:10px}
+  .vop-radio-category-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding-inline:10px}
+  .vop-radio-latest-list{grid-template-columns:1fr;padding-inline:10px}
+  .vop-radio-schedule-tabs{grid-template-columns:1fr 1fr 1fr;padding-inline:8px}
+  .vop-radio-schedule-tabs button{min-height:40px}
+  .vop-radio-schedule-list{padding-inline:8px}
+  .vop-radio-schedule-list button{grid-template-columns:48px minmax(0,1fr) auto;padding-block:10px}
+  .vop-radio-docked-player{min-height:104px}
+  .vop-radio-docked-meta strong{font-size:11px}
+  .vop-radio-docked-meta small{font-size:8px}
+  .vop-radio-docked-cover{width:40px;height:40px}
+
+  .vop-radio-admin-title{align-items:flex-start}
+  .vop-radio-admin-title h1{font-size:19px}
+  .vop-radio-admin-actions{display:grid;grid-template-columns:1fr}
+  .vop-radio-admin-actions button{width:100%;min-width:0}
+  .vop-radio-admin-stats{grid-template-columns:1fr 1fr;gap:7px}
+  .vop-radio-admin-stat{padding:9px;gap:7px;min-width:0}
+  .vop-radio-admin-stat strong{font-size:18px}
+  .vop-radio-admin-preview video,
+  .vop-radio-admin-preview audio{width:100%;max-width:100%}
+  .vop-radio-editor-backdrop{padding:8px}
+  .vop-radio-editor-modal{max-height:96vh;border-radius:14px}
+  .vop-radio-editor-head{padding:14px}
+}
+
+/* Prevent long URLs/provider labels from forcing horizontal scrolling. */
+.vop-radio-page button,
+.vop-radio-page a,
+.vop-audience-radio button,
+.vop-audience-radio a,
+.vop-radio-admin-dashboard button,
+.vop-radio-admin-dashboard input,
+.vop-radio-admin-dashboard select,
+.vop-radio-admin-dashboard textarea{max-width:100%;overflow-wrap:anywhere}
