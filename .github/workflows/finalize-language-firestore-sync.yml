@@ -1,0 +1,169 @@
+name: Finalize language and translation Firestore sync
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Repair language registry and translation persistence
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('api/localization.ts')
+          s = p.read_text()
+
+          # Build the UI locale registry from the language registry as the source of truth.
+          old = """        const map = new Map<string, Record<string, unknown>>();
+        localesSnap.docs.forEach(doc => {
+          map.set(doc.id.toLowerCase(), { id: doc.id, ...doc.data() });
+        });
+        languagesSnap.docs.forEach(doc => {
+          const id = doc.id.toLowerCase();
+          const data = doc.data() || {};
+          if (!map.has(id) || (data.name && !map.get(id)?.name)) {
+            map.set(id, {
+              id,
+              code: String(data.code || id).trim().toLowerCase(),
+              name: String(data.name || id).trim(),
+              nativeName: String(data.nativeName || data.name || id).trim(),
+              enabled: data.enabled !== false,
+              sortOrder: Number(data.sortOrder || 0),
+              direction: data.rtl ? 'rtl' : 'ltr',
+            });
+          }
+        });"""
+          new = """        const map = new Map<string, Record<string, unknown>>();
+        localesSnap.docs.forEach(doc => {
+          const data = doc.data() || {};
+          const code = String(data.code || doc.id).trim().toLowerCase();
+          map.set(code, { id: doc.id, ...data, code });
+        });
+        languagesSnap.docs.forEach(doc => {
+          const data = doc.data() || {};
+          const code = String(data.code || data.languageCode || doc.id).trim().toLowerCase();
+          const existing = map.get(code) || {};
+          map.set(code, {
+            ...existing,
+            id: doc.id,
+            code,
+            name: String(data.name || existing.name || code).trim(),
+            nativeName: String(data.nativeName || data.name || existing.nativeName || code).trim(),
+            enabled: data.enabled !== false,
+            sortOrder: Number(data.sortOrder ?? existing.sortOrder ?? 0),
+            direction: data.direction === 'rtl' || data.rtl === true ? 'rtl' : String(existing.direction || 'ltr'),
+          });
+        });"""
+          if old not in s:
+            raise SystemExit('locale registry block not found')
+          s = s.replace(old, new, 1)
+
+          # Bootstrap always keeps the canonical language registry metadata aligned.
+          old = """      await ref.set({
+        code:locale, name, nativeName, enabled:body.enabled !== false,
+        direction:String(body.direction || 'ltr') === 'rtl' ? 'rtl' : 'ltr',
+        fallback:cleanLocale(body.fallback || 'en'),
+        version:Number(current.data()?.version || 1),
+        updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
+      }, { merge:true });
+      return res.status(200).json({ok:true, locale});"""
+          new = """      const canonical = {
+        code:locale, name, nativeName, enabled:body.enabled !== false,
+        direction:String(body.direction || 'ltr') === 'rtl' ? 'rtl' : 'ltr',
+        fallback:cleanLocale(body.fallback || 'en'),
+        version:Number(current.data()?.version || 1),
+        updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
+      };
+      await ref.set(canonical, { merge:true });
+      await db.doc(`languages/${locale}`).set({
+        code:locale, name, nativeName, enabled:body.enabled !== false,
+        rtl:canonical.direction === 'rtl', updatedAt:FieldValue.serverTimestamp(),
+      }, { merge:true });
+      return res.status(200).json({ok:true, locale, language:canonical});"""
+          if old not in s:
+            raise SystemExit('bootstrap block not found')
+          s = s.replace(old, new, 1)
+
+          # Keep the legacy document synchronized while all consumers move to canonical locale subcollections.
+          old = """      await batch.commit();
+      await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await writeTenantAudit(ctx,'translation.bulkSave',`locales/${locale}`,undefined,{count:Object.keys(values).length});"""
+          new = """      await batch.commit();
+      const legacyRef = db.doc(`translations/${locale}`);
+      const legacySnap = await legacyRef.get();
+      const legacyValues = legacySnap.exists && legacySnap.data()?.values && typeof legacySnap.data()?.values === 'object'
+        ? { ...(legacySnap.data()?.values as Record<string,string>) } : {};
+      Object.entries(values).forEach(([key, value]) => { legacyValues[key] = String(value ?? ''); });
+      await legacyRef.set({ locale, values:legacyValues, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
+      await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await writeTenantAudit(ctx,'translation.bulkSave',`locales/${locale}`,undefined,{count:Object.keys(values).length});"""
+          if old not in s:
+            raise SystemExit('bulk save block not found')
+          s = s.replace(old, new, 1)
+
+          old = """      await ref.set({
+        key, locale, namespace:namespaceOf(key), source:String(body.source ?? existing.data()?.source ?? ''),
+        value, status, context:String(body.context || existing.data()?.context || ''),
+        translatorNotes:String(body.translatorNotes || existing.data()?.translatorNotes || ''),
+        version:Number(existing.data()?.version || 0) + 1,
+        updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
+      }, {merge:true});
+      await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});"""
+          new = """      await ref.set({
+        key, locale, namespace:namespaceOf(key), source:String(body.source ?? existing.data()?.source ?? ''),
+        value, status, context:String(body.context || existing.data()?.context || ''),
+        translatorNotes:String(body.translatorNotes || existing.data()?.translatorNotes || ''),
+        version:Number(existing.data()?.version || 0) + 1,
+        updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
+      }, {merge:true});
+      const legacyRef = db.doc(`translations/${locale}`);
+      const legacySnap = await legacyRef.get();
+      const legacyValues = legacySnap.exists && legacySnap.data()?.values && typeof legacySnap.data()?.values === 'object'
+        ? { ...(legacySnap.data()?.values as Record<string,string>) } : {};
+      legacyValues[key] = value;
+      await legacyRef.set({ locale, values:legacyValues, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
+      await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});"""
+          if old not in s:
+            raise SystemExit('single save block not found')
+          s = s.replace(old, new, 1)
+
+          old = """      await ref.delete();
+      await writeTenantAudit(ctx,'translation.delete',`locales/${locale}/translations/${key}`,existing.data(),undefined);"""
+          new = """      await ref.delete();
+      const legacyRef = db.doc(`translations/${locale}`);
+      const legacySnap = await legacyRef.get();
+      if (legacySnap.exists) {
+        const legacyValues = legacySnap.data()?.values && typeof legacySnap.data()?.values === 'object'
+          ? { ...(legacySnap.data()?.values as Record<string,string>) } : {};
+        delete legacyValues[key];
+        await legacyRef.set({ values:legacyValues, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, { merge:true });
+      }
+      await writeTenantAudit(ctx,'translation.delete',`locales/${locale}/translations/${key}`,existing.data(),undefined);"""
+          if old not in s:
+            raise SystemExit('delete block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+      - name: Verify build
+        run: npm ci && npm run build
+      - name: Commit repair and remove workflow
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add api/localization.ts .github/workflows/finalize-language-firestore-sync.yml
+          git commit -m "fix: unify language registry and translation persistence"
+          git push
+          git rm .github/workflows/finalize-language-firestore-sync.yml
+          git commit -m "chore: remove one-time language sync repair"
+          git push
