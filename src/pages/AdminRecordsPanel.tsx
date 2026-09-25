@@ -13,6 +13,7 @@ import {
   saveTranslation
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
+import { saveRadioAdminRecord, deleteRadioAdminRecord } from '../services/radioAdmin';
 import { getTranslation } from '../services/i18n';
 
 const t = (key: string, fallback: string) => getTranslation(key, fallback);
@@ -306,7 +307,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       if (kind === 'radio' && !String(payload.broadcastTime || '').trim()) {
         payload.broadcastTime = new Date().toISOString();
       }
-      await saveAdminRecord(COLLECTIONS[kind], id, payload);
+      await (kind === 'radio' ? saveRadioAdminRecord(id, payload) : saveAdminRecord(COLLECTIONS[kind], id, payload));
       setMessage(editingId ? 'Record updated.' : 'Record created.');
       setEditingId(null);
       setForm(blankForm(kind));
@@ -328,7 +329,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     if (!window.confirm('Delete this record?')) return;
     try {
       if (!isRecordKind(kind)) return;
-      await deleteAdminRecord(COLLECTIONS[kind], id);
+      await (kind === 'radio' ? deleteRadioAdminRecord(id) : deleteAdminRecord(COLLECTIONS[kind], id));
       setRecords(current => current.filter(record => record.id !== id));
       if (editingId === id) openNew();
       setMessage('Record deleted successfully.');
