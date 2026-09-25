@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// Idempotent compatibility repair for the admin editor state while the source migration is consolidated.
 const path = 'src/pages/AdminRecordsPanel.tsx';
 const source = fs.readFileSync(path, 'utf8');
 const marker = "  const [saving, setSaving] = useState(false);\n\n  const loadError";
