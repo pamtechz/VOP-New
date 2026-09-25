@@ -26,6 +26,7 @@ import CertificationManager from './CertificationManager';
 import UserManagement from './UserManagement';
 import MentorshipInsights from './MentorshipInsights';
 import OrganizationManagement from './OrganizationManagement';
+import CandidateEnrollment from './CandidateEnrollment';
 import PrayerManagementPanel from './PrayerManagementPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 
@@ -132,6 +133,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [langFilter, setLangFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [languageDraft, setLanguageDraft] = useState({ code: '', name: '', nativeName: '', enabled: true });
   const [editingLanguage, setEditingLanguage] = useState<string | null>(null);
+  const [languageEditorOpen, setLanguageEditorOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [permissionMatrix, setPermissionMatrix] = useState<PermissionMatrix>(DEFAULT_PERMISSION_MATRIX);
   const [permissionSaving, setPermissionSaving] = useState(false);
@@ -431,9 +433,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const openLanguageEditor = (language?: CustomLanguage) => {
     if (language) {
       setEditingLanguage(language.code);
+      setLanguageEditorOpen(true);
       setLanguageDraft({ code: language.code, name: language.name, nativeName: language.nativeName, enabled: language.enabled !== false });
     } else {
       setEditingLanguage(null);
+      setLanguageEditorOpen(true);
       setLanguageDraft({ code: '', name: '', nativeName: '', enabled: true });
     }
   };
@@ -449,6 +453,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         enabled: languageDraft.enabled,
       });
       showMessage('Language saved.');
+      setLanguageEditorOpen(false);
       openLanguageEditor();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save language.');
@@ -1004,57 +1009,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&renderLanguages()}
         {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={languages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={languages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
-        {activeTab==='candidates'&&<div>
-          {renderHeader(Users,'Candidates','Manage registered candidates and learner progress.')}
-          <div className="vop-toolbar">
-            <div className="vop-search"><Search size={18}/><input value={candidateSearch} onChange={e=>setCandidateSearch(e.target.value)} placeholder="Search by name, email, phone or organization…"/>{candidateSearch&&<button type="button" onClick={()=>setCandidateSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div>
-            <select className="vop-filter" value={candidateStatus} onChange={e=>setCandidateStatus(e.target.value as typeof candidateStatus)}>
-              <option value="all">All Candidates</option><option value="active">Active</option><option value="graduating">Graduating</option><option value="graduated">Graduated</option>
-            </select>
-            <select className="vop-filter" value={candidateBaptism} onChange={e=>setCandidateBaptism(e.target.value as typeof candidateBaptism)}>
-              <option value="all">All Baptism Statuses</option><option value="not_marked">Not Marked</option><option value="candidate">Baptism Candidate</option><option value="baptized">Baptized</option>
-            </select>
-          </div>
-          <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Candidate</th><th>Contact</th><th>Progress</th><th>Status</th><th>Baptism</th><th>Enrollment</th><th>Action</th></tr></thead><tbody>
-            {filteredCandidates.map((candidate,index)=><tr key={candidate.uid}>
-              <td>{index+1}</td><td><strong>{candidate.displayName || 'Unnamed'}</strong><div className="vop-row-desc">{candidate.role || 'student'}</div></td>
-              <td>{candidate.email || 'Not recorded'}<div className="vop-row-desc">{candidate.phoneNumber || 'No phone recorded'}</div></td>
-              <td>{candidate.progress?.discoverProgress || 0}%<div className="vop-row-desc">{candidate.progress?.completedGuidesCount || 0} / {candidate.progress?.totalGuidesCount || 0} guides</div></td>
-              <td><span className={'vop-status '+(candidate.information?.graduated?'enabled':candidate.information?.graduating?'review':'disabled')}>{candidate.information?.graduated?'Graduated':candidate.information?.graduating?'Graduating':'Active'}</span></td>
-              <td><span className={'vop-status '+(candidate.information?.baptized?'enabled':candidate.information?.baptismCandidate?'review':'disabled')}>{candidate.information?.baptized?'Baptized':candidate.information?.baptismCandidate?'Baptism Candidate':'Not Marked'}</span>{candidate.information?.baptismDate&&<div className="vop-row-desc">{formatDate(candidate.information.baptismDate)}</div>}</td>
-              <td>{formatDate(candidate.information?.enrollmentDate)}</td>
-              <td><button className="vop-actions" type="button" onClick={()=>setSelectedCandidate(candidate)}><Eye size={16}/></button></td>
-            </tr>)}
-          </tbody></table>{filteredCandidates.length===0&&<div className="vop-empty">No candidates match the current filters.</div>}</div>
-          {selectedCandidate&&<div className="vop-card vop-form-card" style={{marginTop:16}}>
-            <div className="vop-section-title"><div><h2>{selectedCandidate.displayName || 'Candidate'}</h2><p>{selectedCandidate.email || 'No email recorded'}</p></div><button className="vop-actions" type="button" onClick={()=>setSelectedCandidate(null)}><X size={16}/></button></div>
-            <div className="vop-grid-3">
-              <div className="vop-card vop-mini-stat"><div><div className="vop-mini-value">{selectedCandidate.progress?.discoverProgress || 0}%</div><div className="vop-mini-label">Discover Progress</div></div></div>
-              <div className="vop-card vop-mini-stat"><div><div className="vop-mini-value">{selectedCandidate.progress?.completedGuidesCount || 0}</div><div className="vop-mini-label">Completed Guides</div></div></div>
-              <div className="vop-card vop-mini-stat"><div><div className="vop-mini-value">{selectedCandidate.progress?.completedLessons?.length || 0}</div><div className="vop-mini-label">Completed Lessons</div></div></div>
-            </div>
-            <div className="vop-form-grid" style={{marginTop:14}}>
-              <div><strong>Church</strong><p>{selectedCandidate.churchId || 'Not assigned'}</p></div>
-              <div><strong>District</strong><p>{selectedCandidate.districtId || 'Not assigned'}</p></div>
-              <div><strong>Conference</strong><p>{selectedCandidate.conferenceId || 'Not assigned'}</p></div>
-              <div><strong>Union</strong><p>{selectedCandidate.unionId || 'Not assigned'}</p></div>
-              <div><strong>Enrollment</strong><p>{formatDate(selectedCandidate.information?.enrollmentDate)}</p></div>
-              <div><strong>Completion</strong><p>{formatDate(selectedCandidate.information?.completionDate)}</p></div>
-              <div className="vop-field"><label>Baptism Status</label><select value={selectedCandidate.information?.baptized ? 'baptized' : selectedCandidate.information?.baptismCandidate ? 'candidate' : 'not_marked'} onChange={e => {
-                const value = e.target.value as 'not_marked' | 'candidate' | 'baptized';
-                const next: User = { ...selectedCandidate, information: { ...selectedCandidate.information, baptismCandidate: value === 'candidate', baptized: value === 'baptized' } };
-                setSelectedCandidate(next);
-              }}><option value="not_marked">Not Marked</option><option value="candidate">Baptism Candidate</option><option value="baptized">Baptized</option></select></div>
-              <div className="vop-field"><label>Baptism Date</label><input type="date" value={selectedCandidate.information?.baptismDate || ''} disabled={!selectedCandidate.information?.baptized} onChange={e => setSelectedCandidate({ ...selectedCandidate, information: { ...selectedCandidate.information, baptismDate: e.target.value } })}/></div>
-            </div>
-            <div style={{display:'flex',justifyContent:'flex-end',marginTop:14}}>
-              <button className="vop-primary" type="button" disabled={baptismSaving} onClick={() => {
-                const status = selectedCandidate.information?.baptized ? 'baptized' : selectedCandidate.information?.baptismCandidate ? 'candidate' : 'not_marked';
-                void saveBaptismMark(selectedCandidate, status, selectedCandidate.information?.baptismDate || '');
-              }}>{baptismSaving ? 'Saving…' : 'Save Baptism Status'}</button>
-            </div>
-          </div>}
-        </div>}
+        {activeTab==='candidates'&&<CandidateEnrollment currentUser={currentUser}/>}
         {activeTab==='certification'&&(
           <CertificationManager
             settings={settings}

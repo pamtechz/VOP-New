@@ -249,6 +249,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     if (!canCreate) { setError('You do not have permission to create this resource.'); return; }
     setEditingId(null);
     setForm(blankForm(kind));
+    setEditorOpen(true);
   };
 
   const edit = (record: AdminRecord) => {
@@ -265,6 +266,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       }
     });
     setForm({ ...blankForm(kind), ...next });
+    setEditorOpen(true);
   };
 
   const save = async (event: React.FormEvent) => {
@@ -305,7 +307,9 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       }
       await saveAdminRecord(COLLECTIONS[kind], id, payload);
       setMessage(editingId ? 'Record updated.' : 'Record created.');
-      openNew();
+      setEditingId(null);
+      setForm(blankForm(kind));
+      setEditorOpen(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save record.');
     } finally {
@@ -516,7 +520,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={'Search '+primaryTitle.toLowerCase()+'…'}/>{search&&<button type="button" onClick={()=>setSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div>
         <button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>
       </div>
-      <div className="vop-admin-record-layout">
+      <div className="vop-admin-record-layout vop-admin-record-list-only">
         <div className="vop-table-wrap">
           <table className="vop-table">
             <thead><tr>{tableHeaders(kind).map(header=><th key={header}>{header}</th>)}<th>Actions</th></tr></thead>
@@ -530,12 +534,14 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           </table>
           {visibleRecords.length===0 && <div className="vop-empty">No {primaryTitle.toLowerCase()} records are configured.</div>}
         </div>
-        <form className="vop-card vop-form-card" onSubmit={save}>
-          <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={22}/></div></div>
-          <Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/>
-          <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={openNew}>{t('common.clear','Clear')}</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
-        </form>
       </div>
+      {editorOpen && <div className="vop-admin-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setEditorOpen(false)}}>
+        <form className="vop-admin-editor-modal" onSubmit={save}>
+          <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><button type="button" className="vop-icon-button" onClick={()=>setEditorOpen(false)} aria-label="Close"><X size={18}/></button></div>
+          <div className="vop-admin-editor-scroll"><Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/></div>
+          <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={()=>{setEditorOpen(false);setEditingId(null);setForm(blankForm(kind))}}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
+        </form>
+      </div>}
     </div>
   );
 };
@@ -659,11 +665,15 @@ function AnnouncementAdminDashboard({
   canCreate: boolean; canUpdate: boolean; canDelete: boolean;
 }) {
   const [filter, setFilter] = useState<'all'|'published'|'scheduled'|'draft'|'archived'>('all');
+  const [announcementEditorOpen, setAnnouncementEditorOpen] = useState(false);
   const [search, setSearch] = useState('');
   const published = records.filter(item => item.published === true && item.archived !== true);
   const scheduled = records.filter(item => item.scheduledAt && item.published !== true && item.archived !== true);
   const archived = records.filter(item => item.archived === true);
   const drafts = records.filter(item => item.published !== true && !item.scheduledAt && item.archived !== true);
+  const openAnnouncementEdit = (item: AdminRecord) => { edit(item); setAnnouncementEditorOpen(true); };
+  useEffect(()=>{ if(message) setAnnouncementEditorOpen(false); }, [message]);
+
   const visible = records.filter(item => {
     const q = search.trim().toLowerCase();
     const textMatch = !q || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(q));
@@ -679,7 +689,7 @@ function AnnouncementAdminDashboard({
   const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
 
   return <div className="vop-ann-admin">
-    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>{t('admin.announcements','Announcements')}</span><h1>{t('admin.manage_announcements','Manage Announcements')}</h1><p>{t('admin.manage_announcements_hint','Create, manage and publish announcements for learners and users.')}</p></section></div><button className="vop-primary" type="button" onClick={openNew} disabled={!canCreate}><Plus size={17}/> New Announcement</button></div>
+    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>{t('admin.announcements','Announcements')}</span><h1>{t('admin.manage_announcements','Manage Announcements')}</h1><p>{t('admin.manage_announcements_hint','Create, manage and publish announcements for learners and users.')}</p></section></div><button className="vop-primary" type="button" onClick={()=>{openNew();setAnnouncementEditorOpen(true)}} disabled={!canCreate}><Plus size={17}/> New Announcement</button></div>
     <div className="vop-ann-admin-stats">
       <div><Megaphone/><span>{t('admin.total_announcements','Total Announcements')}<strong>{records.length}</strong><small>{t('admin.all_time','All time')}</small></span></div>
       <div><Check/><span>{t('admin.published','Published')}<strong>{published.length}</strong><small>{records.length ? Math.round(published.length*100/records.length) : 0}%</small></span></div>
@@ -691,9 +701,14 @@ function AnnouncementAdminDashboard({
     <div className="vop-ann-admin-body">
       <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Announcement</th><th>Category</th><th>Target Audience</th><th>Status</th><th>Publish Date</th><th>Actions</th></tr></thead><tbody>{visible.map((item,index)=>{
         const status=item.archived?'Archived':item.scheduledAt&&item.published!==true?'Scheduled':item.published?'Published':'Draft';
-        return <tr key={item.id}><td>{index+1}</td><td><strong>{valueOf(item,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></td><td><span className="vop-ann-tag">{valueOf(item,'tag')||'Uncategorized'}</span></td><td>{valueOf(item,'targetAudience')||'All Users'}</td><td><span className={'vop-status '+(status==='Published'?'enabled':status==='Scheduled'?'review':'disabled')}>{status}</span></td><td>{valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—'}</td><td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" disabled={!canUpdate || item.canEdit === false} onClick={()=>edit(item)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={!canDelete || item.canEdit === false} onClick={()=>void remove(item.id)}><Trash2 size={15}/></button></div></td></tr>;
+        return <tr key={item.id}><td>{index+1}</td><td><strong>{valueOf(item,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></td><td><span className="vop-ann-tag">{valueOf(item,'tag')||'Uncategorized'}</span></td><td>{valueOf(item,'targetAudience')||'All Users'}</td><td><span className={'vop-status '+(status==='Published'?'enabled':status==='Scheduled'?'review':'disabled')}>{status}</span></td><td>{valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—'}</td><td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" disabled={!canUpdate || item.canEdit === false} onClick={()=>openAnnouncementEdit(item)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={!canDelete || item.canEdit === false} onClick={()=>void remove(item.id)}><Trash2 size={15}/></button></div></td></tr>;
       })}</tbody></table>{!visible.length&&<div className="vop-empty">No announcements match the current filters.</div>}</div>
-      <form className="vop-card vop-form-card" onSubmit={save}><div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div></div>{field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={openNew}>{t('common.clear','Clear')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div></form>
+      {announcementEditorOpen && <div className="vop-ann-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAnnouncementEditorOpen(false)}}>
+        <form className="vop-ann-editor-modal vop-card vop-form-card" onSubmit={save}>
+          <div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div><button type="button" className="vop-icon-button" onClick={()=>setAnnouncementEditorOpen(false)}><X size={18}/></button></div>
+          {field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={()=>setAnnouncementEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div>
+        </form>
+      </div>}
     </div>
     {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}{message&&<div className="vop-radio-admin-alert success">{message}</div>}
   </div>;
@@ -898,25 +913,6 @@ function RadioAdminDashboard({
             <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><div key={item.id} className="vop-radio-schedule-row"><button type="button" className="vop-radio-schedule-info" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time></button><div className="vop-radio-schedule-btns"><button type="button" className="vop-actions" title="Edit" disabled={item.canEdit === false || !canUpdate} onClick={()=>startEditEditor(item)}><Edit3 size={13}/></button><button type="button" className="vop-actions" title="Delete" disabled={item.canEdit === false || !canDelete} onClick={()=>void remove(item.id)}><Trash2 size={13}/></button></div></div>)}{records.length===0&&<div className="vop-radio-admin-empty">{t('admin.no_radio_content','No radio content configured.')}</div>}</div>
           </div>
 
-          <div className="vop-radio-admin-add-card">
-            <div className="vop-radio-admin-card-title"><span><Radio size={17}/> Add Live Stream</span></div>
-            <div className="vop-radio-source-picker">
-              {([['stream','Stream URL',Link2],['youtube','YouTube',Video],['audioverse','AudioVerse',Headphones]] as const).map(([value,label,Icon])=><button key={value} className={sourceMode===value?'active':''} type="button" onClick={()=>setSourceMode(value)}><Icon size={22}/><span>{label}</span></button>)}
-            </div>
-            <form onSubmit={submit} className="vop-radio-admin-quick-form">
-              <label>{t('admin.stream_media_url','Stream / Media URL')}<input value={String(form.streamUrl || form.videoUrl || form.audioUrl || '')} onChange={e=>{
-                const value = e.target.value;
-                const key = sourceMode === 'youtube' ? 'videoUrl' : sourceMode === 'audioverse' ? 'audioUrl' : 'streamUrl';
-                setForm(current => ({
-                  ...current,
-                  [key]: value,
-                  mediaType: sourceMode === 'youtube' ? 'youtube' : sourceMode === 'audioverse' ? 'audioverse' : 'audio',
-                }));
-              }} placeholder={sourceMode==='youtube'?'https://youtube.com/watch?v=…':sourceMode==='audioverse'?'https://www.audioverse.org/en/media/…':'https://your-stream.example/live'}/></label>
-              <label>Title<input value={String(form.title || '')} onChange={e=>change('title',e.target.value)} placeholder="Programme title"/></label>
-              <button className="vop-radio-admin-start" type="submit" disabled={saving}>{saving?'Saving…':'Save / Start Stream'}</button>
-            </form>
-            <div className="vop-radio-admin-quick-links"><button type="button" onClick={()=>setTab('playlists')}><ListVideo size={15}/> Manage Playlists</button><button type="button" onClick={startNewEditor}><Link2 size={15}/> Add Media URL</button><button type="button" onClick={()=>setTab('settings')}><Settings size={15}/> Radio Settings</button></div>
           </div>
         </div>
       ) : (

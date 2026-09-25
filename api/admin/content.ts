@@ -630,6 +630,7 @@ export default async function handler(req: Request, res: Response) {
         await ref.set({
           ...incoming,
           id,
+          ...(Object.prototype.hasOwnProperty.call(incoming, 'published') ? { published: incoming.published === true } : {}),
           organizationId: '',
           ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
           ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
@@ -730,6 +731,7 @@ export default async function handler(req: Request, res: Response) {
         await ref.set({
           ...incoming,
           id,
+          ...(Object.prototype.hasOwnProperty.call(incoming, 'published') ? { published: incoming.published === true } : {}),
           organizationId: effectiveOrganizationId,
           ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,

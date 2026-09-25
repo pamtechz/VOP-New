@@ -239,7 +239,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
         </div>
       </div>
 
-      <div className="vop-card vop-form-card">
+      <div className={"vop-card vop-form-card vop-org-details-card" + (selected ? " is-open" : "")}>
         {!selected?<div className="vop-empty"><Building2 size={34}/><h3>Select an organization</h3><p>{t('admin.organization_select_desc','Organization settings, membership and usage appear here.')}</p></div>:
         <>
           <div className="vop-section-title"><div><h2>{selected.name}</h2><p>{t('admin.organization_settings_members','Organization settings and members')}</p></div><Edit3 size={20}/></div>
