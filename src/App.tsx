@@ -10,7 +10,7 @@ import {
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
-import { initializeLocalization, setUiLocale } from './services/i18n';
+import { initializeLocalization, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
 import { auth, db } from './lib/firebase';
@@ -39,6 +39,7 @@ const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enroll
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
+  useLocalization(settings);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
   const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
   const [allUsers, setAllUsers] = useState<User[]>([]);
