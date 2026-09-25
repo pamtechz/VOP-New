@@ -1,0 +1,26 @@
+name: Fix radio syntax
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Repair
+        run: python3 scripts/fix-radio-syntax.py
+      - name: Commit and remove tooling
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/fix-radio-syntax.yml scripts/fix-radio-syntax.py
+          git add src/pages/AdminRecordsPanel.tsx
+          git add -u .github/workflows/fix-radio-syntax.yml scripts/fix-radio-syntax.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix: repair radio admin JSX structure'
+          git push origin main
