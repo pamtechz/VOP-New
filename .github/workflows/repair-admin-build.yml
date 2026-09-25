@@ -1,4 +1,4 @@
-name: Repair Admin Build
+name: Repair Admin Build v2
 
 on:
   push:
@@ -16,12 +16,10 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Repair AdminRecordsPanel state
         run: |
           python3 - <<'PY'
@@ -37,13 +35,10 @@ jobs:
               p.write_text(s)
           print('AdminRecordsPanel editor state verified.')
           PY
-
       - name: Install
         run: npm install
-
       - name: Build
         run: npm run build
-
       - name: Commit repair and remove one-shot workflow
         run: |
           git config user.name "github-actions[bot]"
