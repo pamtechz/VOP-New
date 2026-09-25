@@ -16,10 +16,11 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false); const [message,setMessage]=useState(''); const [error,setError]=useState('');
 
   useEffect(()=>{void (async()=>{
-    if(!auth.currentUser)return;
+    const firebaseUser=auth?.currentUser;
+    if(!firebaseUser){setLoading(false);setError('Your session has expired. Sign in again.');return;}
     try{
       if(!organizationId){
-        const token=await auth.currentUser.getIdToken();
+        const token=await firebaseUser.getIdToken();
         const r=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listOrganizations'})});
         const b=await r.json().catch(()=>({})) as {items?:Organization[];error?:string};
         if(!r.ok)throw new Error(b.error||'Could not load organizations.');
@@ -29,9 +30,9 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     finally{setLoading(false);}
   })()},[organizationId]);
 
-  useEffect(()=>{if(!organizationId||!auth.currentUser)return;void (async()=>{
+  useEffect(()=>{const firebaseUser=auth?.currentUser;if(!organizationId||!firebaseUser)return;void (async()=>{
     try{
-      const token=await auth.currentUser!.getIdToken();
+      const token=await firebaseUser.getIdToken();
       const r=await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listGuides',collection:'guides',organizationId})});
       const b=await r.json().catch(()=>({})) as {items?:Course[];error?:string};
       if(!r.ok)throw new Error(b.error||'Could not load courses.');
@@ -43,7 +44,9 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
     try{
       if(!organizationId||!courseId||!name.trim()||!email.trim())throw new Error('Organization, course, full name and email are required.');
       if(password&&password.length<6)throw new Error('Password must contain at least 6 characters.');
-      const token=await auth.currentUser!.getIdToken();
+      const firebaseUser=auth?.currentUser;
+      if(!firebaseUser)throw new Error('Your session has expired. Sign in again.');
+      const token=await firebaseUser.getIdToken();
       const r=await fetch('/api/admin/enrollCandidate',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({organizationId,guideId:courseId,displayName:name.trim(),email:email.trim(),phoneNumber:phone.trim(),password})});
       const b=await r.json().catch(()=>({})) as {error?:string;created?:boolean};
       if(!r.ok)throw new Error(b.error||'Candidate enrollment failed.');
