@@ -586,13 +586,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
   const openLesson = (row: LessonRow) => {
+    const source = row.raw || {};
+    const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
+    if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     setEditor(editorFromLesson(row));
     setEditorTab('content');
     setPreviewOpen(false);
   };
 
   const openNewLesson = (quizMode = false) => {
-    const language = enabledLanguages[0]?.code || '';
+    const language = enabledLanguages[0]?.code || 'en';
     const guide = guides.find(item => item.language === language) || guides[0];
     const next = blankEditor(language, guide?.id || '');
     next.guideTitle = guide?.title || '';
@@ -614,10 +617,17 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (!editor) return;
     if (!editor.title.trim()) return setError(tx('curriculum.lessonTitleRequired', 'Lesson title is required.'));
     if (!editor.lessonNumber.trim()) return setError(tx('curriculum.lessonNumberRequiredMessage', 'Lesson number is required.'));
-    if (!editor.language.trim()) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a language before saving.'));
+    const normalizedLanguage = editor.language.trim().toLowerCase();
+    if (!/^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i.test(normalizedLanguage)) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a valid configured language before saving.'));
     if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));
+    if (isSuperAdmin && !scopeOrganizationId) {
+      const existingGuide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);
+      const source = existingGuide ? guideRecords.find(item => String(item.id || '') === String(existingGuide.id || '')) : undefined;
+      const existingOrganization = valueText(source?.organizationId || source?.ownerOrganizationId);
+      if (existingOrganization) setScopeOrganizationId(existingOrganization);
+    }
 
-    const guide = guides.find(item => item.id === editor.guideId && item.language === editor.language);
+    const guide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);
     if (!guide && publish) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
 
     const duplicate = lessonRows.some(row =>
@@ -638,7 +648,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         lessonNumber: editor.lessonNumber.trim(),
         title: editor.title.trim(),
         description: editor.description.trim(),
-        language: editor.language.trim(),
+        language: normalizedLanguage,
         guideId: editor.guideId,
         guideTitle: guide?.title || editor.guideTitle,
         season: editor.season.trim(),

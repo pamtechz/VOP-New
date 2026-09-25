@@ -112,7 +112,10 @@ export const App: React.FC = () => {
           return;
         }
         setCurrentUser(profile);
-        if (profile.preferences?.uiLocale) setUiLocale(profile.preferences.uiLocale);
+        if (profile.preferences?.uiLocale) {
+          setActiveLang(profile.preferences.uiLocale);
+          setUiLocale(profile.preferences.uiLocale);
+        }
         setAllUsers([profile]);
         if (shareCode && firebaseAuth.currentUser) {
           try {
