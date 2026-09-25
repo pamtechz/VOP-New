@@ -13,6 +13,23 @@ const listeners = new Set<() => void>();
 function notify() { listeners.forEach(listener => listener()); }
 function normalizeLocale(value: unknown) { return String(value || '').trim().toLowerCase(); }
 
+/**
+ * Never expose an internal localization identifier as visible UI text.
+ * When a caller has not supplied an explicit fallback, derive a readable
+ * label from the final key segment instead of rendering values such as
+ * "admin.certified_candidates" directly to the user.
+ */
+function humanizeTranslationKey(key: string): string {
+  const segment = String(key || '').split('.').pop() || String(key || '');
+  const readable = segment
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!readable) return 'Text unavailable';
+  return readable.charAt(0).toUpperCase() + readable.slice(1);
+}
+
 export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] => {
   const fromSettings = settings?.customLanguages ?? [];
   const fromRegistry = getAvailableUiLocales();
@@ -140,22 +157,23 @@ export const getTranslation = (
   componentName?: string,
   vars?: Record<string,string|number>
 ): string => {
-  const fallback = String(defaultFallback || key).trim() || key;
-  const locale = getUiLocale();
-  try { registerLocalizationString(key, fallback, componentName); } catch { /* discovery is non-blocking */ }
+  const fallback = String(defaultFallback || '').trim() || humanizeTranslationKey(key);
+  const registryKey = String(key || '').trim();
+  try { registerLocalizationString(registryKey, fallback, componentName); } catch { /* discovery is non-blocking */ }
 
   const stored = (() => {
-    try { return getStoredAutoLocalization().find(item => item.key === key)?.translations?.[locale]; } catch { return undefined; }
+    try { return getStoredAutoLocalization().find(item => item.key === registryKey)?.translations?.[getUiLocale()]; } catch { return undefined; }
   })();
 
+  const locale = getUiLocale();
   let value = [
-    dictionaryCache[locale]?.[key],
-    customTranslations?.[locale]?.[key],
+    dictionaryCache[locale]?.[registryKey],
+    customTranslations?.[locale]?.[registryKey],
     stored,
-    localeFallbacks[locale] && localeFallbacks[locale] !== locale ? dictionaryCache[localeFallbacks[locale]]?.[key] : undefined,
-    localeFallbacks[locale] && localeFallbacks[locale] !== locale ? customTranslations?.[localeFallbacks[locale]]?.[key] : undefined,
-    locale !== 'en' ? dictionaryCache.en?.[key] : undefined,
-    locale !== 'en' ? customTranslations?.en?.[key] : undefined,
+    localeFallbacks[locale] && localeFallbacks[locale] !== locale ? dictionaryCache[localeFallbacks[locale]]?.[registryKey] : undefined,
+    localeFallbacks[locale] && localeFallbacks[locale] !== locale ? customTranslations?.[localeFallbacks[locale]]?.[registryKey] : undefined,
+    locale !== 'en' ? dictionaryCache.en?.[registryKey] : undefined,
+    locale !== 'en' ? customTranslations?.en?.[registryKey] : undefined,
     fallback
   ].find(item => typeof item === 'string' && item.trim()) || fallback;
 
