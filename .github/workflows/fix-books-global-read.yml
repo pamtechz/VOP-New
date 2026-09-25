@@ -1,0 +1,30 @@
+name: Fix Books Global Read
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Align books with global-read authorization
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('firestore.rules')
+          s = p.read_text()
+          old = """    match /books/{id} {\n      allow get, list: if isSuperAdmin()\n        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))\n        || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)\n            || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));"""
+          new = """    match /books/{id} {\n      allow get, list: if canReadGlobal(resource.data, 'published');"""
+          if old not in s:
+              raise SystemExit('Expected books rule block was not found; refusing to modify the file.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit rule fix and remove temporary workflow
+        run: |
+          rm -f .github/workflows/fix-books-global-read.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.rules .github/workflows/fix-books-global-read.yml
+          git commit -m "fix firestore global books read authorization"
+          git push
