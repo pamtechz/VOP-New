@@ -14,10 +14,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Patch language resolution
+      - name: Patch language system
         run: |
           python3 <<'PY'
           from pathlib import Path
+
+          # UI locale must follow the language selected in the student header.
+          p=Path('src/App.tsx')
+          s=p.read_text()
+          old="onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setStudyError(''); }}"
+          new="onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setUiLocale(language); setStudyError(''); }}"
+          if old not in s:
+            raise SystemExit('Student language handler not found')
+          p.write_text(s.replace(old,new,1))
+
+          # Curriculum/Guide APIs accept the configured language name or code,
+          # but always persist the canonical configured code.
           p=Path('api/admin/content.ts')
           s=p.read_text()
           old="""      const lang = String(data.language || '').trim();
@@ -42,15 +54,14 @@ jobs:
             raise SystemExit('Guide language validation block not found')
           p.write_text(s.replace(old,new,1))
 
+          # Curriculum Studio shows language names while keeping the code internal.
           p=Path('src/pages/CurriculumManager.tsx')
           s=p.read_text()
           s=s.replace("{guides.map(guide => <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}</option>)}", "{guides.map(guide => { const lang = enabledLanguages.find(item => item.code === guide.language); return <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {lang?.name || lang?.nativeName || guide.language}</option>; })}", 1)
-          # Ensure every language shown in the editor is a configured language name; the value remains the internal code.
           old="<select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value,guideId:''})}>"
           new="<select value={editor.language} onChange={e => { const selected = enabledLanguages.find(item => item.code === e.target.value); setEditor({...editor,language:selected?.code || '',guideId:''}); }}>"
           if old in s:
             s=s.replace(old,new,1)
-          # Replace any raw-code language option rendering in the lesson editor.
           s=s.replace("{enabledLanguages.map(language => <option key={language.code} value={language.code}>{language.code.toUpperCase()}</option>)}", "{enabledLanguages.map(language => <option key={language.code} value={language.code}>{language.name || language.nativeName}</option>)}", 1)
           p.write_text(s)
           PY
@@ -60,7 +71,7 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add api/admin/content.ts src/pages/CurriculumManager.tsx
+          git add src/App.tsx api/admin/content.ts src/pages/CurriculumManager.tsx
           git diff --cached --quiet && exit 0
-          git commit -m "fix: resolve curriculum languages from configured registry"
+          git commit -m "fix: unify configured language resolution and UI locale selection"
           git push
