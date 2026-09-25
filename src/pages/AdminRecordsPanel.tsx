@@ -153,12 +153,14 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const loadError = (reason: Error) => setError(reason.message || 'Could not load records.');
 
   useEffect(() => {
     setForm(blankForm(kind));
     setEditingId(null);
+    setEditorOpen(false);
     setSearch('');
     setTranslationSearch('');
     setTranslationFilter('all');
@@ -513,479 +515,73 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
 
   return (
     <div>
-      <PageHead icon={Icon} title={primaryTitle} subtitle={subtitleFor(kind)} action={canCreate ? <button className="vop-primary" type="button" onClick={openNew}><Plus size={18}/>Add {singular(kind)}</button> : undefined} />
-      {error && <ErrorBox message={error} clear={()=>setError('')} />}
+      <PageHead icon={Icon} title={primaryTitle} subtitle={t('admin.' + kind + '_subtitle', 'Manage ' + primaryTitle.toLowerCase() + ' records.')} action={<button className="vop-primary" type="button" onClick={openNew} disabled={!canCreate}><Plus size={17}/>{t('common.create', actionLabel)}</button>} />
+      {error && <ErrorBox message={error} clear={() => setError('')} />}
       {message && <Toast message={message}/>}
-      <div className="vop-toolbar">
-        <div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={'Search '+primaryTitle.toLowerCase()+'…'}/>{search&&<button type="button" onClick={()=>setSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div>
-        <button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>
-      </div>
+      <div className="vop-admin-toolbar"><div className="vop-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={'Search '+primaryTitle.toLowerCase()+'…'}/>{search&&<button type="button" onClick={()=>setSearch('')} style={{border:0,background:'transparent'}}><X size={16}/></button>}</div><button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button></div>
       <div className="vop-admin-record-layout vop-admin-record-list-only">
         <div className="vop-table-wrap">
           <table className="vop-table">
             <thead><tr>{tableHeaders(kind).map(header=><th key={header}>{header}</th>)}<th>Actions</th></tr></thead>
-            <tbody>
-              {visibleRecords.map((record,index)=><tr key={record.id}>
-                <td>{index+1}</td>
-                {tableCells(kind, record)}
-                <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" disabled={record.canEdit === false || !canUpdate} title={record.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'} onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false || !canDelete} title={record.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'} onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
-              </tr>)}
-            </tbody>
+            <tbody>{visibleRecords.map((item,index)=><tr key={item.id}>{tableCells(kind,item,index)}<td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" onClick={()=>edit(item)} disabled={!canUpdate || item.canEdit === false}><Edit3 size={15}/></button><button className="vop-actions" type="button" onClick={()=>void remove(item.id)} disabled={!canDelete || item.canEdit === false}><Trash2 size={15}/></button></div></td></tr>)}</tbody>
           </table>
-          {visibleRecords.length===0 && <div className="vop-empty">No {primaryTitle.toLowerCase()} records are configured.</div>}
+          {!visibleRecords.length && <div className="vop-empty">No {primaryTitle.toLowerCase()} records found.</div>}
         </div>
       </div>
       {editorOpen && <div className="vop-admin-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setEditorOpen(false)}}>
         <form className="vop-admin-editor-modal" onSubmit={save}>
-          <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><button type="button" className="vop-icon-button" onClick={()=>setEditorOpen(false)} aria-label="Close"><X size={18}/></button></div>
-          <div className="vop-admin-editor-scroll"><Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/></div>
-          <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={()=>{setEditorOpen(false);setEditingId(null);setForm(blankForm(kind))}}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
+          <div className="vop-section-title"><div><h2>{editingId ? 'Edit ' + primaryTitle.slice(0,-1) : 'Add ' + primaryTitle.slice(0,-1)}</h2><p>Changes are saved securely to the configured organization scope.</p></div><button type="button" className="vop-icon-button" onClick={()=>setEditorOpen(false)}><X size={18}/></button></div>
+          {renderForm(kind, form, setForm, relatedRecords)}
+          <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}}><button className="vop-secondary" type="button" onClick={()=>setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create ' + primaryTitle.slice(0,-1)}</button></div>
         </form>
       </div>}
     </div>
   );
 };
 
-function PageHead({icon: Icon,title,subtitle,action}:{icon:React.ComponentType<{size?:number}>;title:string;subtitle:string;action?:React.ReactNode}) {
-  return <div className="vop-page-head"><div className="vop-heading"><div className="vop-heading-icon"><Icon size={31}/></div><div><h1>{title}</h1><p>{subtitle}</p></div></div>{action}</div>;
-}
+interface PageHeadProps { icon: React.ComponentType<{size?:number}>; title: string; subtitle: string; action?: React.ReactNode; }
+function PageHead({icon:Icon,title,subtitle,action}:PageHeadProps){ return <div className="vop-page-head"><div className="vop-page-head-icon"><Icon size={27}/></div><div className="vop-page-head-copy"><h1>{title}</h1><p>{subtitle}</p></div>{action&&<div className="vop-page-head-actions">{action}</div>}</div>; }
 
-function ErrorBox({message,clear}:{message:string;clear:()=>void}) {
-  return <div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{message}<button type="button" onClick={clear} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>;
-}
+function ErrorBox({message,clear}:{message:string;clear:()=>void}){ return <div className="vop-error"><AlertTriangle size={17}/><span>{message}</span><button type="button" onClick={clear}><X size={16}/></button></div>; }
+function Toast({message}:{message:string}){ return <div className="vop-toast"><Check size={16}/>{message}</div>; }
 
-function Toast({message}:{message:string}) {
-  return <div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>;
-}
-
-function subtitleFor(kind: ManagedAdminCollection) {
-  switch (kind) {
-    case 'announcements': return 'Create, edit, publish and remove public announcements.';
-    case 'materials': return 'Manage learning materials and downloadable resources.';
-    case 'radio': return 'Manage radio audio/video broadcasts with automatic timing and media detection.';
-    case 'unions': return 'Manage the configurable church administrative hierarchy.';
-    case 'conferences': return 'Manage conferences and their union relationships.';
-    case 'districts': return 'Manage districts and their conference relationships.';
-    case 'churches': return 'Manage churches and their district relationships.';
-    default: return '';
+function tableHeaders(kind: RecordManagedCollection): string[] {
+  switch(kind){
+    case 'announcements': return ['Announcement','Category','Audience','Status','Date'];
+    case 'materials': return ['Material','Category','Author','Status'];
+    case 'radio': return ['Title','Provider','Media','Status'];
+    case 'unions': return ['Union','Code','Director','Headquarters'];
+    case 'conferences': return ['Conference','Code','Union','Director'];
+    case 'districts': return ['District','Conference','Pastor','Contact'];
+    case 'churches': return ['Church','District','Type','Leader'];
   }
 }
 
-function singular(kind: ManagedAdminCollection) {
-  return LABELS[kind].replace(/s$/, '');
+function tableCells(kind: RecordManagedCollection, item: AdminRecord, index: number): React.ReactNode[] {
+  switch(kind){ case 'announcements': return [<><strong>{valueOf(item,'title')}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></>,valueOf(item,'tag')||'—',valueOf(item,'targetAudience')||'All Users',<span className={'vop-status '+(item.published?'enabled':'disabled')}>{item.published?'Published':'Draft'}</span>,valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—']; case 'materials': return [<><strong>{valueOf(item,'name')}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></>,valueOf(item,'category')||'—',valueOf(item,'author')||'—',<span className={'vop-status '+(item.published?'enabled':'disabled')}>{item.published?'Published':'Draft'}</span>]; case 'radio': return [<><strong>{valueOf(item,'title')}</strong><div className="vop-row-desc">{valueOf(item,'speaker')||valueOf(item,'series')}</div></>,radioProvider(item),String(item.mediaType||'—'),<span className={'vop-status '+(item.published?'enabled':'disabled')}>{item.published?'Published':'Draft'}</span>]; case 'unions': return [valueOf(item,'name'),valueOf(item,'code'),valueOf(item,'directorName')||'—',valueOf(item,'headquarters')||'—']; case 'conferences': return [valueOf(item,'name'),valueOf(item,'code'),valueOf(item,'unionId')||'—',valueOf(item,'directorName')||'—']; case 'districts': return [valueOf(item,'name'),valueOf(item,'conferenceId')||'—',valueOf(item,'pastorName')||'—',valueOf(item,'contactPhone')||'—']; case 'churches': return [valueOf(item,'name'),valueOf(item,'districtId')||'—',valueOf(item,'type')||'—',valueOf(item,'leaderName')||'—']; }
 }
 
-function tableHeaders(kind: ManagedAdminCollection) {
-  switch (kind) {
-    case 'announcements': return ['#','Title','Tag','Published'];
-    case 'materials': return ['#','Name','Category','Author','Published'];
-    case 'radio': return ['#','Title','Speaker','Series','Published'];
-    case 'unions': return ['#','Name','Code','Division'];
-    case 'conferences': return ['#','Name','Code','Region','Union'];
-    case 'districts': return ['#','Name','Conference','Pastor'];
-    case 'churches': return ['#','Name','Type','Leader','Location'];
-    default: return ['#','Name'];
+function renderForm(kind: RecordManagedCollection, form: FormState, setForm: React.Dispatch<React.SetStateAction<FormState>>, relatedRecords: AdminRecord[]) {
+  const field = (key:string,label:string,type='text') => <div className="vop-field"><label>{label}</label><input type={type} value={String(form[key]??'')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
+  const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key]??'')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
+  const select = (key:string,label:string,options:{value:string;label:string}[]) => <div className="vop-field"><label>{label}</label><select value={String(form[key]??'')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}><option value="">Select…</option>{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></div>;
+  switch(kind){
+    case 'unions': return <>{field('name','Name *')}{field('code','Code')}{field('divisionName','Division')}{field('directorName','Director')}{field('contactEmail','Contact Email','email')}{field('contactPhone','Contact Phone')}{field('headquarters','Headquarters')}</>;
+    case 'conferences': return <>{field('name','Name *')}{field('code','Code')}{select('unionId','Union',relatedRecords.filter(item=>item.__collection==='unions').map(item=>({value:item.id,label:valueOf(item,'name')})))}{field('region','Region')}{field('directorName','Director')}{field('contactEmail','Contact Email','email')}</>;
+    case 'districts': return <>{field('name','Name *')}{select('unionId','Union',relatedRecords.filter(item=>item.__collection==='unions').map(item=>({value:item.id,label:valueOf(item,'name')})))}{select('conferenceId','Conference',relatedRecords.filter(item=>item.__collection==='conferences').map(item=>({value:item.id,label:valueOf(item,'name')})))}{field('pastorName','Pastor')}{field('contactPhone','Contact Phone')}</>;
+    case 'churches': return <>{field('name','Name *')}{select('unionId','Union',relatedRecords.filter(item=>item.__collection==='unions').map(item=>({value:item.id,label:valueOf(item,'name')})))}{select('conferenceId','Conference',relatedRecords.filter(item=>item.__collection==='conferences').map(item=>({value:item.id,label:valueOf(item,'name')})))}{select('districtId','District',relatedRecords.filter(item=>item.__collection==='districts').map(item=>({value:item.id,label:valueOf(item,'name')})))}{field('type','Type')}{field('leaderName','Leader')}{field('leaderPhone','Leader Phone')}{field('location','Location')}</>;
+    case 'announcements': return <>{field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<label className="vop-setting-row"><span>Published</span><input type="checkbox" checked={Boolean(form.published)} onChange={e=>setForm(current=>({...current,published:e.target.checked}))}/></label></>;
+    case 'materials': return <>{field('name','Title *')}{field('category','Category *')}{field('author','Author')}{area('description','Description *')}{field('imageUrl','Cover Image URL','url')}{field('downloadUrl','Material URL *','url')}<label className="vop-setting-row"><span>Published</span><input type="checkbox" checked={Boolean(form.published)} onChange={e=>setForm(current=>({...current,published:e.target.checked}))}/></label></>;
+    case 'radio': return <>{field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}{field('audioUrl','Audio URL','url')}{field('videoUrl','Video / YouTube URL','url')}{field('streamUrl','Live Stream URL','url')}{select('mediaType','Media Type',[{value:'audio',label:'Audio'},{value:'video',label:'Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}{field('posterUrl','Poster URL','url')}{field('broadcastTime','Broadcast Time','datetime-local')}{area('description','Description')}<label className="vop-setting-row"><span>Published</span><input type="checkbox" checked={Boolean(form.published)} onChange={e=>setForm(current=>({...current,published:e.target.checked}))}/></label>;
+    default: return null;
   }
 }
 
-function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
-  const cell = (value: unknown, key: string) => <td key={key}>{String(value ?? 'Not configured')}</td>;
-  switch (kind) {
-    case 'announcements':
-      return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.tag, 'tag'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
-    case 'materials':
-      return [<td key="name"><strong>{valueOf(record,'name')||'Unnamed'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.category, 'category'),cell(record.author, 'author'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
-    case 'radio': {
-      const media = String(record.mediaType || (record.videoUrl ? 'video' : 'audio'));
-      const source = media === 'video' ? valueOf(record, 'videoUrl') : valueOf(record, 'audioUrl');
-      return [
-        <td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,
-        cell(record.speaker, 'speaker'),
-        <td key="series">{valueOf(record,'series')}<div className="vop-radio-admin-type">{media.toUpperCase()}</div></td>,
-        <td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span>{source && <div className="vop-radio-admin-preview">{media === 'video' ? <video src={source} controls preload="metadata" poster={valueOf(record,'posterUrl') || undefined}/> : <audio src={source} controls preload="metadata"/>}</div>}</td>
-      ];
-    }
-    case 'unions': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.divisionName, 'division')];
-    case 'conferences': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.region, 'region'),cell(record.unionId, 'union')];
-    case 'districts': return [cell(record.name, 'name'),cell(record.conferenceId, 'conference'),cell(record.pastorName, 'pastor')];
-    case 'churches': return [cell(record.name, 'name'),cell(record.type, 'type'),cell(record.leaderName, 'leader'),cell(record.location, 'location')];
-    default: return [cell(record.name, 'name')];
-  }
-}
-
-function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection,'translations'>;form:FormState;setForm:React.Dispatch<React.SetStateAction<FormState>>;records:AdminRecord[]}) {
-  const field = (key:string,label:string,type='text',placeholder='') => (
-    <div className="vop-field"><label>{label}</label><input type={type} value={String(form[key] ?? '')} placeholder={placeholder} onChange={e=>setForm(current=>({...current,[key]:type==='number'?Number(e.target.value):e.target.value}))}/></div>
-  );
-  const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
-  const select = (key:string,label:string,options:Array<{value:string;label:string}>) => <div className="vop-field"><label>{label}</label><select value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}><option value="">Not configured</option>{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></div>;
-  const published = <div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published records can be consumed by the public application.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} role="switch" aria-checked={Boolean(form.published)} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div>;
-  const unions = records.filter(item=>item.__collection==='unions').map(item=>({value:item.id,label:valueOf(item,'name')||item.id}));
-  const conferences = records.filter(item=>item.__collection==='conferences').map(item=>({value:item.id,label:valueOf(item,'name')||item.id}));
-  const districts = records.filter(item=>item.__collection==='districts').map(item=>({value:item.id,label:valueOf(item,'name')||item.id}));
-
-  switch(kind) {
-    case 'announcements':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('title','Title *')}{field('tag','Tag')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{published}</div>;
-    case 'materials':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('category','Category')}{field('author','Author')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('downloadUrl','Download URL','url')}{published}</div>;
-    case 'radio':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
-        {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
-        {select('mediaType','Primary Media Type',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
-        {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}
-        {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}
-        {field('streamUrl','Live Stream URL','url','Direct stream/HLS URL where supported')}
-        {field('posterUrl','Video Poster URL','url','Optional poster image for video')}
-        <div className="vop-radio-admin-note"><strong>Automatic media intelligence:</strong> playback time, duration, buffering state and local clock display are detected from the media/browser. You do not enter a broadcast time or duration manually. The system records the creation timestamp automatically.</div>
-        {area('description','Description')}{published}
-        <div className="vop-radio-admin-note">Use browser-playable media URLs. The public player provides play/pause, seek, skip, volume, speed, fullscreen and picture-in-picture where the browser supports them.</div>
-      </div>;
-    case 'unions':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('code','Code *')}{field('divisionName','Division')}{field('directorName','Director')}{field('contactEmail','Email','email')}{field('contactPhone','Phone')}{field('headquarters','Headquarters')}</div>;
-    case 'conferences':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('code','Code *')}{select('unionId','Union',unions)}{field('region','Region *')}{field('directorName','Director')}{field('contactEmail','Email','email')}</div>;
-    case 'districts':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{select('unionId','Union',unions)}{select('conferenceId','Conference',conferences)}{field('pastorName','Pastor')}{field('contactPhone','Phone')}</div>;
-    case 'churches':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{select('unionId','Union',unions)}{select('conferenceId','Conference',conferences)}{select('districtId','District',districts)}{field('type','Organization Type *')}{field('leaderName','Leader *')}{field('leaderPhone','Leader Phone')}{field('location','Location *')}</div>;
-  }
-}
-
-export default AdminRecordsPanel;
-
-
-function AnnouncementAdminDashboard({
-  records, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError, canCreate, canUpdate, canDelete
-}: {
-  records: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  editingId: string | null; saving: boolean; error: string; message: string;
-  openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
-  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void;
-  canCreate: boolean; canUpdate: boolean; canDelete: boolean;
-}) {
-  const [filter, setFilter] = useState<'all'|'published'|'scheduled'|'draft'|'archived'>('all');
-  const [announcementEditorOpen, setAnnouncementEditorOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const published = records.filter(item => item.published === true && item.archived !== true);
-  const scheduled = records.filter(item => item.scheduledAt && item.published !== true && item.archived !== true);
-  const archived = records.filter(item => item.archived === true);
-  const drafts = records.filter(item => item.published !== true && !item.scheduledAt && item.archived !== true);
-  const openAnnouncementEdit = (item: AdminRecord) => { edit(item); setAnnouncementEditorOpen(true); };
-  useEffect(()=>{ if(message) setAnnouncementEditorOpen(false); }, [message]);
-
-  const visible = records.filter(item => {
-    const q = search.trim().toLowerCase();
-    const textMatch = !q || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(q));
-    const statusMatch = filter === 'all'
-      || (filter === 'published' && published.includes(item))
-      || (filter === 'scheduled' && scheduled.includes(item))
-      || (filter === 'draft' && drafts.includes(item))
-      || (filter === 'archived' && archived.includes(item));
-    return textMatch && statusMatch;
-  });
-
-  const field = (key:string,label:string,type='text') => <div className="vop-field"><label>{label}</label><input type={type} value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
-  const area = (key:string,label:string) => <div className="vop-field"><label>{label}</label><textarea value={String(form[key] ?? '')} onChange={e=>setForm(current=>({...current,[key]:e.target.value}))}/></div>;
-
-  return <div className="vop-ann-admin">
-    <div className="vop-ann-admin-head"><div className="vop-ann-admin-title"><div><Megaphone size={27}/></div><section><span>{t('admin.announcements','Announcements')}</span><h1>{t('admin.manage_announcements','Manage Announcements')}</h1><p>{t('admin.manage_announcements_hint','Create, manage and publish announcements for learners and users.')}</p></section></div><button className="vop-primary" type="button" onClick={()=>{openNew();setAnnouncementEditorOpen(true)}} disabled={!canCreate}><Plus size={17}/> New Announcement</button></div>
-    <div className="vop-ann-admin-stats">
-      <div><Megaphone/><span>{t('admin.total_announcements','Total Announcements')}<strong>{records.length}</strong><small>{t('admin.all_time','All time')}</small></span></div>
-      <div><Check/><span>{t('admin.published','Published')}<strong>{published.length}</strong><small>{records.length ? Math.round(published.length*100/records.length) : 0}%</small></span></div>
-      <div><CalendarDays/><span>Scheduled<strong>{scheduled.length}</strong><small>Awaiting publication</small></span></div>
-      <div><Trash2/><span>Archived<strong>{archived.length}</strong><small>Stored records</small></span></div>
-    </div>
-    <div className="vop-ann-admin-tabs">{([['all','All'],['published','Published'],['scheduled','Scheduled'],['draft','Drafts'],['archived','Archived']] as const).map(([key,label])=><button type="button" key={key} className={filter===key?'active':''} onClick={()=>setFilter(key)}>{label} ({key==='all'?records.length:key==='published'?published.length:key==='scheduled'?scheduled.length:key==='draft'?drafts.length:archived.length})</button>)}</div>
-    <div className="vop-ann-admin-toolbar"><div className="vop-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search announcements…"/></div><button className="vop-secondary" type="button" onClick={()=>setSearch('')}><RefreshCw size={16}/> Refresh</button></div>
-    <div className="vop-ann-admin-body">
-      <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Announcement</th><th>Category</th><th>Target Audience</th><th>Status</th><th>Publish Date</th><th>Actions</th></tr></thead><tbody>{visible.map((item,index)=>{
-        const status=item.archived?'Archived':item.scheduledAt&&item.published!==true?'Scheduled':item.published?'Published':'Draft';
-        return <tr key={item.id}><td>{index+1}</td><td><strong>{valueOf(item,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></td><td><span className="vop-ann-tag">{valueOf(item,'tag')||'Uncategorized'}</span></td><td>{valueOf(item,'targetAudience')||'All Users'}</td><td><span className={'vop-status '+(status==='Published'?'enabled':status==='Scheduled'?'review':'disabled')}>{status}</span></td><td>{valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—'}</td><td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" disabled={!canUpdate || item.canEdit === false} onClick={()=>openAnnouncementEdit(item)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={!canDelete || item.canEdit === false} onClick={()=>void remove(item.id)}><Trash2 size={15}/></button></div></td></tr>;
-      })}</tbody></table>{!visible.length&&<div className="vop-empty">No announcements match the current filters.</div>}</div>
-      {announcementEditorOpen && <div className="vop-ann-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAnnouncementEditorOpen(false)}}>
-        <form className="vop-ann-editor-modal vop-card vop-form-card" onSubmit={save}>
-          <div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div><button type="button" className="vop-icon-button" onClick={()=>setAnnouncementEditorOpen(false)}><X size={18}/></button></div>
-          {field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={()=>setAnnouncementEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div>
-        </form>
-      </div>}
-    </div>
-    {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}{message&&<div className="vop-radio-admin-alert success">{message}</div>}
-  </div>;
-}
-
-function radioProvider(record: AdminRecord) {
-  const values = [record.videoUrl, record.audioUrl, record.streamUrl].map(value => String(value ?? '').trim()).filter(Boolean);
-  for (const value of values) {
-    try {
-      const url = new URL(value);
-      const host = url.hostname.toLowerCase();
-      if (host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')) return 'YouTube';
-      if (host === 'audioverse.org' || host.endsWith('.audioverse.org')) return 'AudioVerse';
-    } catch {}
-  }
-  if (String(record.mediaType || '') === 'video' || record.videoUrl) return 'Video';
-  if (record.streamUrl) return 'Stream';
-  if (record.audioUrl) return 'Audio';
-  return '—';
-}
-
-function radioNumeric(record: AdminRecord, keys: string[]) {
-  for (const key of keys) {
-    const value = Number(record[key]);
-    if (Number.isFinite(value) && value >= 0) return value;
-  }
-  return null;
-}
-
-function radioTime(record: AdminRecord) {
-  const value = String(record.broadcastTime || record.updatedAt || record.createdAt || '');
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
-}
-
-function radioSourceUrl(record: AdminRecord) {
-  return [record.videoUrl, record.audioUrl, record.streamUrl]
-    .map(value => String(value ?? '').trim())
-    .find(Boolean) || '';
-}
-
-function youtubeEmbedUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-    let id = '';
-    if (host === 'youtu.be') id = url.pathname.split('/').filter(Boolean)[0] || '';
-    else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
-      if (url.pathname === '/watch') id = url.searchParams.get('v') || '';
-      else if (url.pathname.startsWith('/live/')) id = url.pathname.slice('/live/'.length).split('/')[0] || '';
-      else if (url.pathname.startsWith('/shorts/')) id = url.pathname.slice('/shorts/'.length).split('/')[0] || '';
-      else if (url.pathname.startsWith('/embed/')) id = url.pathname.slice('/embed/'.length).split('/')[0] || '';
-    }
-    return id ? 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=0&controls=1&rel=0&playsinline=1' : '';
-  } catch {
-    return '';
-  }
-}
-
-function audioVerseEmbedUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-    if (host !== 'audioverse.org' && !host.endsWith('.audioverse.org')) return '';
-    if (/\/embed\/media\/\d+(?:\/|$)/i.test(url.pathname)) return url.toString();
-    const media = url.pathname.match(/\/media\/(\d+)(?:\/|$)/i);
-    if (media?.[1]) return 'https://www.audioverse.org/en/embed/media/' + media[1];
-    const teaching = url.pathname.match(/\/teachings\/(\d+)(?:\/|$)/i);
-    return teaching?.[1] ? 'https://www.audioverse.org/en/embed/media/' + teaching[1] : '';
-  } catch {
-    return '';
-  }
-}
-
-function RadioAdminMediaPreview({record}: {record: AdminRecord}) {
-  const source = radioSourceUrl(record);
-  const provider = radioProvider(record);
-  if (!source) return <div className="vop-radio-admin-preview-empty"><Radio size={28}/><span>No playable source configured.</span></div>;
-
-  if (provider === 'YouTube') {
-    const embed = youtubeEmbedUrl(source);
-    return embed
-      ? <iframe className="vop-radio-admin-preview-frame" src={embed} title={String(record.title || 'YouTube radio content')} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
-      : <div className="vop-radio-admin-preview-empty"><Video size={28}/><span>Invalid YouTube source.</span></div>;
-  }
-
-  if (provider === 'AudioVerse') {
-    const embed = audioVerseEmbedUrl(source);
-    return embed
-      ? <iframe className="vop-radio-admin-preview-frame" src={embed} title={String(record.title || 'AudioVerse radio content')} allow="autoplay; encrypted-media; picture-in-picture" />
-      : <div className="vop-radio-admin-preview-empty"><Headphones size={28}/><span>Invalid AudioVerse source.</span></div>;
-  }
-
-  if (provider === 'Video') {
-    return <video className="vop-radio-admin-preview-media" src={source} poster={String(record.posterUrl || '').trim() || undefined} controls preload="metadata" playsInline />;
-  }
-
-  return <audio className="vop-radio-admin-preview-audio" src={source} controls preload="metadata" />;
-}
-
-function RadioAdminDashboard({
-  records, playlists, form, setForm, editingId, saving, error, message, openNew, edit, remove, save, setError, setMessage, canCreate, canUpdate, canDelete
-}: {
-  records: AdminRecord[]; playlists: AdminRecord[]; form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  editingId: string | null; saving: boolean; error: string; message: string;
-  openNew: () => void; edit: (record: AdminRecord) => void; remove: (id: string) => Promise<void>;
-  save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void; setMessage: (value: string) => void;
-  canCreate: boolean; canUpdate: boolean; canDelete: boolean;
-}) {
-  const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
-  const [search, setSearch] = useState('');
-  const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'>('stream');
-  const [playlistEditingId, setPlaylistEditingId] = useState<string | null>(null);
-  const [playlistName, setPlaylistName] = useState('');
-  const [playlistDescription, setPlaylistDescription] = useState('');
-  const [playlistCoverUrl, setPlaylistCoverUrl] = useState('');
-  const [playlistPublished, setPlaylistPublished] = useState(false);
-  const [playlistItems, setPlaylistItems] = useState<string[]>([]);
-  const [playlistSaving, setPlaylistSaving] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const startNewEditor = () => { if (!canCreate) { setError('You do not have permission to create radio content.'); return; } setMessage(''); setError(''); openNew(); setEditorOpen(true); };
-  const startEditEditor = (item: AdminRecord) => { setMessage(''); setError(''); edit(item); setEditorOpen(true); };
-  useEffect(() => { if (editorOpen && message) setEditorOpen(false); }, [editorOpen, message]);
-
-  const live = records.filter(item => Boolean(item.streamUrl) || radioProvider(item) === 'Stream');
-  const nowPlaying = live[0] || records[0] || null;
-  const videos = records.filter(item => ['Video','YouTube'].includes(radioProvider(item)));
-  const audio = records.filter(item => radioProvider(item) === 'Audio' || radioProvider(item) === 'AudioVerse');
-  const filtered = records.filter(item => !search.trim() || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(search.trim().toLowerCase())));
-  const totalPlays = records.reduce((sum, item) => sum + (radioNumeric(item, ['plays','playCount','views']) || 0), 0);
-  const listeners = records.reduce((max, item) => Math.max(max, radioNumeric(item, ['listeners','listenerCount','currentListeners']) || 0), 0);
-  const hasPlayMetrics = records.some(item => radioNumeric(item, ['plays','playCount','views']) !== null);
-  const hasListenerMetrics = records.some(item => radioNumeric(item, ['listeners','listenerCount','currentListeners']) !== null);
-  const activePlaylists = playlists.filter(item => item.published === true);
-  const visiblePlaylists = playlists.filter(item => !search.trim() || Object.values(item).some(value => String(value ?? '').toLowerCase().includes(search.trim().toLowerCase())));
-  const startPlaylist = (item?: AdminRecord) => {
-    setPlaylistEditingId(item?.id || null); setPlaylistName(String(item?.name || '')); setPlaylistDescription(String(item?.description || ''));
-    setPlaylistCoverUrl(String(item?.coverUrl || '')); setPlaylistPublished(item?.published === true);
-    setPlaylistItems(Array.isArray(item?.itemIds) ? item.itemIds.map(String) : []);
-  };
-  const savePlaylist = async () => {
-    if (!playlistName.trim()) { setError('Playlist name is required.'); return; }
-    setPlaylistSaving(true); setError('');
-    try { const id = playlistEditingId || makeId(); await saveAdminRecord('playlists', id, { name:playlistName.trim(), description:playlistDescription.trim(), coverUrl:playlistCoverUrl.trim(), itemIds:playlistItems, published:playlistPublished }); setMessage(playlistEditingId ? 'Playlist updated.' : 'Playlist created.'); startPlaylist(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save playlist.'); }
-    finally { setPlaylistSaving(false); }
-  };
-  const removePlaylist = async (id: string) => {
-    const item = playlists.find(record => record.id === id);
-    if (item?.canEdit === false) { setError('This playlist belongs to another contributor and cannot be deleted.'); return; }
-    if (!window.confirm('Delete this playlist?')) return;
-    try { await deleteAdminRecord('playlists', id); if (playlistEditingId === id) startPlaylist(); setMessage('Playlist deleted.'); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete playlist.'); }
-  };
-
-  const change = (key: string, value: string | boolean) => setForm(current => ({ ...current, [key]: value }));
-
-  const submit = async (event: React.FormEvent) => {
-    await save(event);
-  };
-
+function AnnouncementAdminDashboard({records,form,setForm,editingId,saving,error,message,openNew,edit,remove,save,setError,canCreate,canUpdate,canDelete}:{records:AdminRecord[];form:FormState;setForm:React.Dispatch<React.SetStateAction<FormState>>;editingId:string|null;saving:boolean;error:string;message:string;openNew:()=>void;edit:(record:AdminRecord)=>void;remove:(id:string)=>Promise<void>;save:(event:React.FormEvent)=>Promise<void>;setError:(value:string)=>void;canCreate:boolean;canUpdate:boolean;canDelete:boolean}) {
+  const [announcementEditorOpen,setAnnouncementEditorOpen]=useState(false);
+  const openAnnouncementNew=()=>{openNew();setAnnouncementEditorOpen(true)};
+  const openAnnouncementEdit=(item:AdminRecord)=>{edit(item);setAnnouncementEditorOpen(true)};
+  useEffect(()=>{if(message)setAnnouncementEditorOpen(false)},[message]);
+  const visible=records.filter(item=>!item.archived);
   return (
-    <div className="vop-radio-admin-dashboard">
-      <div className="vop-radio-admin-topbar">
-        <div className="vop-radio-admin-title">
-          <div className="vop-radio-admin-icon"><Radio size={28}/></div>
-          <div><span>{t('admin.radio','Radio')}</span><h1>{t('admin.audio_video_streaming','Audio / Video Streaming')}</h1></div>
-        </div>
-        <div className="vop-radio-admin-actions"><button className="vop-radio-admin-public" type="button" onClick={() => window.open('/?radio=1','_blank')}><ExternalLink size={16}/> View Public Radio</button><button className="vop-radio-admin-add" type="button" onClick={startNewEditor}><Plus size={17}/> Add Content <span>⌄</span></button></div>
-      </div>
-
-      <div className="vop-radio-admin-intro">
-        <div><div className="vop-radio-admin-intro-icon"><Radio size={30}/></div><div><h2>{t('admin.radio_audio_video','Radio (Audio & Video)')}</h2><p>{t('admin.radio_manage_hint','Manage live streams, playlists and on-demand content. Provider controls are detected automatically.')}</p></div></div>
-      </div>
-
-      <div className="vop-radio-admin-stats">
-        <AdminStat icon={<Radio/>} tone="red" label="Live Streams" value={String(live.length)} note="Currently live"/>
-        <AdminStat icon={<Video/>} tone="purple" label="Total Content" value={String(records.length)} note="Audio & Video"/>
-        <AdminStat icon={<BarChart3/>} tone="green" label="Total Plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'} note={hasPlayMetrics ? 'All time' : 'Not configured'}/>
-        <AdminStat icon={<ListVideo/>} tone="blue" label="Active Playlists" value={String(activePlaylists.length)} note={playlists.length ? String(playlists.length) + " configured" : "No playlist records"}/>
-        <AdminStat icon={<Users/>} tone="orange" label="Listeners Now" value={hasListenerMetrics ? listeners.toLocaleString() : '—'} note={hasListenerMetrics ? 'Across streams' : 'Not configured'}/>
-      </div>
-
-      <div className="vop-radio-admin-tabs">
-        {([['live','Live Radio'],['audio','Audio Library'],['video','Video Library'],['playlists','Playlists'],['schedule','Schedule'],['analytics','Analytics'],['settings','Settings']] as const).map(([value,label]) => <button key={value} className={tab===value?'active':''} type="button" onClick={()=>setTab(value)}>{label}</button>)}
-      </div>
-
-      {tab === 'live' ? (
-        <div className="vop-radio-admin-workspace">
-          <div className="vop-radio-admin-now">
-            <div className="vop-radio-admin-card-title"><span><Radio size={17}/> Now Playing</span>{live.length > 0 && <b>● LIVE</b>}</div>
-            <div className="vop-radio-admin-player">
-              {nowPlaying ? <RadioAdminMediaPreview record={nowPlaying} /> : <div className="vop-radio-admin-preview-empty"><Radio size={38}/><span>{t('admin.no_radio_content','No radio content configured.')}</span></div>}
-            </div>
-            <div className="vop-radio-admin-now-meta"><strong>{String(nowPlaying?.title || 'No radio content configured')}</strong><span>{String(nowPlaying?.speaker || nowPlaying?.series || 'Add content to populate the player.')}</span></div>
-            <div className="vop-radio-admin-player-controls"><span>{nowPlaying ? radioProvider(nowPlaying) : '—'}</span><span>{nowPlaying ? radioTime(nowPlaying) : '—'}</span><span>{nowPlaying?.durationMinutes ? Math.round(Number(nowPlaying.durationMinutes)) + ' min' : 'Duration detected by player'}</span></div>
-          </div>
-
-          <div className="vop-radio-admin-schedule">
-            <div className="vop-radio-admin-card-title"><span><CalendarDays size={17}/> Schedule</span><button type="button" onClick={()=>setTab('schedule')}>{t('admin.view_schedule','View Schedule')} <ChevronRight size={14}/></button></div>
-            <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><div key={item.id} className="vop-radio-schedule-row"><button type="button" className="vop-radio-schedule-info" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time></button><div className="vop-radio-schedule-btns"><button type="button" className="vop-actions" title="Edit" disabled={item.canEdit === false || !canUpdate} onClick={()=>startEditEditor(item)}><Edit3 size={13}/></button><button type="button" className="vop-actions" title="Delete" disabled={item.canEdit === false || !canDelete} onClick={()=>void remove(item.id)}><Trash2 size={13}/></button></div></div>)}{records.length===0&&<div className="vop-radio-admin-empty">{t('admin.no_radio_content','No radio content configured.')}</div>}</div>
-          </div>
-        </div>
-      ) : (
-        <div className="vop-radio-admin-library">
-          <div className="vop-radio-admin-library-head"><div><h2>{tab === 'audio' ? 'Audio Library' : tab === 'video' ? 'Video Library' : tab === 'playlists' ? 'Playlists' : tab === 'schedule' ? 'Schedule' : tab === 'analytics' ? 'Analytics' : 'Radio Settings'}</h2><p>{tab === 'analytics' ? 'Only metrics actually stored on published records are shown.' : 'Manage configured radio records without demo or placeholder entries.'}</p></div><div className="vop-radio-admin-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search content…"/></div></div>
-          {tab === 'settings' ? <div className="vop-radio-admin-settings-note"><Settings size={28}/><strong>{t('admin.provider_aware_settings','Provider-aware player settings')}</strong><p>YouTube content is controlled through the YouTube IFrame Player API. AudioVerse content keeps the embedded AudioVerse controls. Direct audio/video uses the VOP custom player.</p></div> :
-           tab === 'analytics' ? <div className="vop-radio-admin-analytics"><AdminMetric label="Tracked plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'}/><AdminMetric label="Tracked listeners" value={hasListenerMetrics ? listeners.toLocaleString() : '—'}/><AdminMetric label="Configured content" value={String(records.length)}/></div> :
-           tab === 'playlists' ? <div className="vop-radio-playlists">
-             <div className="vop-radio-playlist-editor">
-               <div className="vop-radio-admin-card-title"><span><ListVideo size={17}/> {playlistEditingId ? 'Edit Playlist' : 'New Playlist'}</span><button type="button" onClick={()=>startPlaylist()}><X size={15}/> Clear</button></div>
-               <label>{t('common.name','Name')}<input value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="Playlist name"/></label>
-               <label>{t('common.description','Description')}<textarea value={playlistDescription} onChange={e=>setPlaylistDescription(e.target.value)} placeholder="Describe this playlist"/></label>
-               <label>{t('admin.cover_image_url','Cover image URL')}<input value={playlistCoverUrl} onChange={e=>setPlaylistCoverUrl(e.target.value)} placeholder="https://…"/></label>
-               <div className="vop-radio-playlist-items"><strong>{t('admin.programme_selection','Programme selection')}</strong>{records.map(item=><label key={item.id}><input type="checkbox" checked={playlistItems.includes(item.id)} onChange={e=>setPlaylistItems(current=>e.target.checked ? [...current,item.id] : current.filter(id=>id!==item.id))}/><span>{String(item.title || 'Untitled')}</span><small>{radioProvider(item)}</small></label>)}{!records.length&&<p>No radio content is available yet.</p>}</div>
-               <label className="vop-setting-row"><span>{t('admin.published','Published')}</span><input type="checkbox" checked={playlistPublished} onChange={e=>setPlaylistPublished(e.target.checked)}/></label>
-               <button className="vop-primary" type="button" disabled={playlistSaving} onClick={()=>void savePlaylist()}><Save size={16}/>{playlistSaving ? 'Saving…' : playlistEditingId ? 'Save Playlist' : 'Create Playlist'}</button>
-             </div>
-             <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false || !canUpdate}>{t('common.edit','Edit')}</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false || !canDelete}>{t('common.delete','Delete')}</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">{t('admin.no_playlists','No playlists configured.')}</div>}</div>
-           </div> :
-           <div className="vop-radio-admin-library-grid">
-             {filtered
-               .filter(item => {
-                 if (tab === 'audio') return audio.includes(item);
-                 if (tab === 'video') return videos.includes(item);
-                 return true;
-               })
-               .map(item => (
-                 <article key={item.id}>
-                   <div className="media" style={item.posterUrl ? { backgroundImage: 'url("' + String(item.posterUrl) + '")' } : undefined}>
-                     <span className={item.published ? 'vop-status enabled' : 'vop-status disabled'}>{item.published ? 'Published' : 'Draft'}</span>
-                     <span className="vop-radio-provider-badge">{radioProvider(item)}</span>
-                     <button type="button" className="vop-radio-play-btn" onClick={() => startEditEditor(item)} title="Edit"><Play size={16} fill="currentColor"/></button>
-                   </div>
-                   <h3>{String(item.title || 'Untitled')}</h3>
-                   <p>{String(item.speaker || item.series || '')}</p>
-                   <small className="vop-radio-card-time">{radioTime(item)}</small>
-                   <div className="vop-radio-card-actions">
-                     <button
-                       type="button"
-                       className="vop-actions"
-                       disabled={item.canEdit === false || !canUpdate}
-                       title={item.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'}
-                       onClick={() => startEditEditor(item)}
-                     >{t('common.edit','Edit')}</button>
-                     <button
-                       type="button"
-                       className="vop-actions vop-actions-delete"
-                       disabled={item.canEdit === false || !canDelete}
-                       title={item.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'}
-                       onClick={() => void remove(item.id)}
-                     ><Trash2 size={14}/> {t('common.delete','Delete')}</button>
-                   </div>
-                 </article>
-               ))}
-             {filtered.length === 0 && <div className="vop-radio-admin-empty">{t('admin.no_records','No records configured.')}</div>}
-           </div>}
-        </div>
-      )}
-
-      {error && <div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
-      {message && <div className="vop-radio-admin-alert success">{message}</div>}
-      {editorOpen && <div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
-        <form className="vop-radio-editor-modal" onSubmit={submit}>
-          <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
-          <div className="vop-radio-editor-body"><Fields kind="radio" form={form} setForm={setForm} records={records} /></div>
-          <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
-        </form>
-      </div>}
-    </div>
-  );
-}
-
-function AdminStat({icon,tone,label,value,note}:{icon:React.ReactNode;tone:string;label:string;value:string;note:string}) {
-  return <div className="vop-radio-admin-stat"><span className={'tone '+tone}>{icon}</span><div><small>{label}</small><strong>{value}</strong><em>{note}</em></div></div>;
-}
-function AdminMetric({label,value}:{label:string;value:string}) {
-  return <div className="vop-radio-admin-metric"><span>{label}</span><strong>{value}</strong></div>;
-}
+    <div className="vop-ann-admin-dashboard">...
