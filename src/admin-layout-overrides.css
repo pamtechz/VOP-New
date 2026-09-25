@@ -1,0 +1,12 @@
+/* Final admin workspace layout polish. */
+.vop-translation-page-layout,.vop-grid-2:has(> .vop-translation-target){display:grid!important;grid-template-columns:1fr!important;gap:18px!important;width:100%!important}
+.vop-translation-page-layout .vop-translation-target,.vop-grid-2:has(> .vop-translation-target) .vop-translation-target{grid-column:1!important;order:1!important;width:100%!important}
+.vop-translation-page-layout .vop-translation-entries,.vop-grid-2:has(> .vop-translation-target) .vop-translation-entries{grid-column:1!important;order:2!important;width:100%!important}
+.vop-ann-admin-body{display:block!important;width:100%!important;grid-template-columns:1fr!important}
+.vop-ann-admin-body>.vop-table-wrap{width:100%!important;max-width:none!important}
+.vop-grid-2:has(.vop-org-list-card),.vop-org-workspace{display:grid!important;grid-template-columns:1fr!important;width:100%!important}
+.vop-grid-2:has(.vop-org-list-card)>.vop-card,.vop-org-workspace>.vop-card{width:100%!important;min-width:0!important}
+.vop-radio-admin-add-card{display:none!important}
+.vop-radio-admin-workspace{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)!important;width:100%!important}
+.vop-radio-admin-now,.vop-radio-admin-schedule{width:100%!important;min-width:0!important}
+@media(max-width:720px){.vop-radio-admin-workspace{grid-template-columns:1fr!important}}
