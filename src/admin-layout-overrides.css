@@ -6,7 +6,21 @@
 .vop-ann-admin-body>.vop-table-wrap{width:100%!important;max-width:none!important}
 .vop-grid-2:has(.vop-org-list-card),.vop-org-workspace{display:grid!important;grid-template-columns:1fr!important;width:100%!important}
 .vop-grid-2:has(.vop-org-list-card)>.vop-card,.vop-org-workspace>.vop-card{width:100%!important;min-width:0!important}
+.vop-org-list-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;border:1px solid #e6ebf3;background:#fff;border-radius:12px;padding:10px 12px;transition:.18s ease}
+.vop-org-list-card.selected{background:#f4f8ff;border-color:#bfd3f4}
+.vop-org-list-card:hover{border-color:#c8d8ec;box-shadow:0 5px 16px rgba(20,55,100,.06)}
+.vop-org-list-main{min-width:0;width:100%;border:0!important;background:transparent!important;padding:3px!important;text-align:left!important;color:inherit!important;cursor:pointer!important;box-shadow:none!important}
+.vop-org-list-actions{display:flex;gap:7px;align-items:center}
+.vop-org-list-actions .vop-actions{width:38px;height:38px}
+.vop-org-list-actions .vop-actions-delete{color:#b42318}
+.vop-org-suggestions{position:absolute;z-index:30;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #dbe3ef;border-radius:10px;box-shadow:0 12px 30px rgba(20,40,80,.12);overflow:hidden}
+.vop-org-suggestions button{display:block;width:100%;text-align:left;padding:10px 12px;border:0;border-bottom:1px solid #eef2f7;background:#fff;cursor:pointer}
+.vop-org-suggestions button:last-child{border-bottom:0}
+.vop-org-suggestions strong,.vop-org-suggestions span,.vop-org-suggestions small{display:block}
+.vop-org-suggestions span{font-size:12px;color:#7183a4;margin-top:2px}
+.vop-org-suggestions small{font-size:11px;color:#9a6700;margin-top:3px}
 .vop-radio-admin-add-card{display:none!important}
 .vop-radio-admin-workspace{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)!important;width:100%!important}
 .vop-radio-admin-now,.vop-radio-admin-schedule{width:100%!important;min-width:0!important}
 @media(max-width:720px){.vop-radio-admin-workspace{grid-template-columns:1fr!important}}
+@media(max-width:640px){.vop-org-list-card{grid-template-columns:1fr}.vop-org-list-actions{justify-content:flex-end}.vop-org-list-actions .vop-actions{width:40px;height:40px}}
