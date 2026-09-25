@@ -610,7 +610,9 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'delete') {
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can delete it.');
         await ref.delete();
-        return res.status(200).json({ ok:true, id });
+        const deleted = await ref.get();
+        if (deleted.exists) throw new Error('The record could not be deleted from Firestore.');
+        return res.status(200).json({ ok:true, id, deleted:true });
       }
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
