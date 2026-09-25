@@ -32,7 +32,7 @@ const checks = [
   ['api/mentorship.ts', ['organizationInHierarchyScope','requested organization is outside your hierarchy scope','mentorAssignments']],
   ['src/pages/AdminPage.tsx', ['Permission Matrix','Prayer Requests']],
   ['src/pages/CertificationConfigStudio.tsx', ['certificate_bg.png','fixed artboard','default view 40%','setZoom(0.4)']],
-  ['src/pages/RadioPage.tsx', ['onBack','vop-radio-page-back','ArrowLeft']],
+  ['src/pages/RadioPage.tsx', ['onBack','ArrowLeft']],
   ['api/quizzes.ts', ['tenantOwnerKey','ownerTenantId','canManageQuizTenant']],
   ['api/certificates.ts', ['candidateId','template']],
   ['src/pages/PersonalSettingsPage.tsx', ['uiLocale','studyLanguage','setUiLocale']],
