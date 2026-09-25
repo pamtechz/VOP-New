@@ -1,0 +1,66 @@
+name: Repair Admin Records UI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, 'ci: repair broken admin records pages and editor layout') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Restore AdminRecordsPanel from known-good modal migration
+        run: |
+          git fetch origin c6eb2cdfef4b6414db782b46335a4b9092f11b14 --depth=1
+          git checkout c6eb2cdfef4b6414db782b46335a4b9092f11b14 -- src/pages/AdminRecordsPanel.tsx
+
+      - name: Restore shared editor state and remove legacy column layout
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/pages/AdminRecordsPanel.tsx')
+          s = p.read_text()
+          marker = "  const [saving, setSaving] = useState(false);\n"
+          state = marker + "  const [editorOpen, setEditorOpen] = useState(false);\n"
+          if "const [editorOpen, setEditorOpen] = useState(false);" not in s:
+              if marker not in s:
+                  raise SystemExit('AdminRecordsPanel state marker not found')
+              s = s.replace(marker, state, 1)
+          p.write_text(s)
+
+          p = Path('src/pages/admin.css')
+          s = p.read_text()
+          old = ".vop-admin-record-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(330px,.75fr);gap:18px;align-items:start}"
+          s = s.replace(old, ".vop-admin-record-layout{display:block;min-width:0}", 1)
+          if '.vop-admin-record-list-only{display:block!important}' not in s:
+              s += "\n.vop-admin-record-list-only{display:block!important;grid-template-columns:1fr!important;min-width:0}\n"
+          p.write_text(s)
+          PY
+
+      - name: Typecheck and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Commit repaired source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/AdminRecordsPanel.tsx src/pages/admin.css
+          if git diff --cached --quiet; then
+            echo 'No repair changes required.'
+            exit 0
+          fi
+          git commit -m 'ci: repair broken admin records pages and editor layout'
+          git push origin main
