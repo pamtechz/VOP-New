@@ -37,6 +37,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [items,setItems]=useState<Organization[]>([]);
   const [selected,setSelected]=useState<Organization|null>(null);
+  const [detailsOpen,setDetailsOpen]=useState(false);
   const [members,setMembers]=useState<Member[]>([]);
   const [usage,setUsage]=useState<Usage|null>(null);
   const [name,setName]=useState('');
@@ -133,7 +134,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   };
 
   const selectOrganization=(item:Organization)=>{
-    setSelected(item);setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(quotaState(item.quotas||{}));
+    setSelected(item);setDetailsOpen(true);setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(quotaState(item.quotas||{}));
     setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteUrl('');void loadDetails(item.id);
   };
 
@@ -213,7 +214,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   return <div>
     <div className="vop-page-header">
       <div><div className="vop-breadcrumb"><Building2 size={15}/> {isSuperAdmin ? 'Platform / Organizations' : 'My Organization'}</div><h1>{isSuperAdmin ? t('admin.organizations','Organizations') : t('admin.my_organization','My Organization')}</h1><p>{isSuperAdmin ? 'Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.' : 'Manage your organization profile, members and invitations.'}</p></div>
-      <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>
+      <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>{selected&&<button className="vop-primary" type="button" onClick={()=>setDetailsOpen(true)}><Edit3 size={16}/>{isSuperAdmin?'Manage Organization':'Edit My Organization'}</button>}
     </div>
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}
     {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}
@@ -239,7 +240,10 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
         </div>
       </div>
 
-      <div className={"vop-card vop-form-card vop-org-details-card" + (selected ? " is-open" : "")}>
+      {detailsOpen && selected && <div className="vop-org-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setDetailsOpen(false)}}>
+        <div className="vop-org-editor-modal vop-card">
+          <div className="vop-org-editor-head"><div><div className="vop-breadcrumb"><Building2 size={15}/> {isSuperAdmin?'Organization Management':'My Organization'}</div><h2>{selected.name}</h2><p>Manage permitted organization settings, members and invitations.</p></div><button className="vop-icon-button" type="button" onClick={()=>setDetailsOpen(false)} aria-label="Close"><span aria-hidden="true">×</span></button></div>
+          
         {!selected?<div className="vop-empty"><Building2 size={34}/><h3>Select an organization</h3><p>{t('admin.organization_select_desc','Organization settings, membership and usage appear here.')}</p></div>:
         <>
           <div className="vop-section-title"><div><h2>{selected.name}</h2><p>{t('admin.organization_settings_members','Organization settings and members')}</p></div><Edit3 size={20}/></div>
@@ -348,7 +352,9 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
             <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
           </div>
         </>}
-      </div>
+      
+        </div>
+      </div>}
     </div>
   </div>;
 }
