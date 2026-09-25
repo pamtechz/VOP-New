@@ -40,7 +40,7 @@ export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] 
   const map = new Map<string, CustomLanguage>();
   source.forEach(language => {
     if (!language || language.enabled === false) return;
-    const code = resolveRegisteredLocale(language.code);
+    const code = String(language.code || '').trim().toLowerCase();
     if (!code) return;
     const name = String(language.name || code).trim();
     const nativeName = String(language.nativeName || name).trim();
