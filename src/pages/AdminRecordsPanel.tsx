@@ -912,8 +912,6 @@ function RadioAdminDashboard({
             <div className="vop-radio-admin-card-title"><span><CalendarDays size={17}/> Schedule</span><button type="button" onClick={()=>setTab('schedule')}>{t('admin.view_schedule','View Schedule')} <ChevronRight size={14}/></button></div>
             <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><div key={item.id} className="vop-radio-schedule-row"><button type="button" className="vop-radio-schedule-info" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time></button><div className="vop-radio-schedule-btns"><button type="button" className="vop-actions" title="Edit" disabled={item.canEdit === false || !canUpdate} onClick={()=>startEditEditor(item)}><Edit3 size={13}/></button><button type="button" className="vop-actions" title="Delete" disabled={item.canEdit === false || !canDelete} onClick={()=>void remove(item.id)}><Trash2 size={13}/></button></div></div>)}{records.length===0&&<div className="vop-radio-admin-empty">{t('admin.no_radio_content','No radio content configured.')}</div>}</div>
           </div>
-
-          </div>
         </div>
       ) : (
         <div className="vop-radio-admin-library">
