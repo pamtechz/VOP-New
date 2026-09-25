@@ -19,44 +19,18 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Patch translation runtime and canonical writes
+      - name: Patch canonical translation writes
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('src/services/i18n.ts')
-          s=p.read_text()
-          s=s.replace("export const setUiLocale = (locale: LanguageCode) => {\n  const normalized = resolveRegisteredLocale(locale) || 'en';\n  localStorage.setItem(UI_LOCALE_KEY, normalized);\n  localeState.value = normalized;\n  localeState.version += 1;\n  notify();\n  void loadUiLocale(normalized);\n};", "export const setUiLocale = (locale: LanguageCode) => {\n  const normalized = resolveRegisteredLocale(locale) || 'en';\n  localStorage.setItem(UI_LOCALE_KEY, normalized);\n  localeState.value = normalized;\n  localeState.version += 1;\n  notify();\n  void loadUiLocale(normalized, 'en', true);\n};")
-          old="export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promise<void> {\n  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);\n  if (dictionaryCache[requested]) {"
-          new="export async function loadUiLocale(locale: LanguageCode, fallback = 'en', force = false): Promise<void> {\n  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);\n  if (force) delete dictionaryCache[requested];\n  if (dictionaryCache[requested]) {"
-          if old not in s: raise SystemExit('loadUiLocale signature not found')
-          s=s.replace(old,new,1)
-          marker="export const initializeLocalization = async (settings?: AppSettings) => {"
-          insert="""export const refreshUiLocale = async (locale?: LanguageCode): Promise<void> => {\n  const requested = resolveRegisteredLocale(locale || localeState.value || getUiLocale());\n  await loadUiLocale(requested, 'en', true);\n};\n\nif (typeof window !== 'undefined') {\n  window.addEventListener('vop_ui_translation_updated', event => {\n    const detail = (event as CustomEvent<{locale?: string}>).detail;\n    const current = resolveRegisteredLocale(localeState.value || getUiLocale());\n    const changed = resolveRegisteredLocale(detail?.locale || '');\n    if (!changed || changed === current) void refreshUiLocale(current);\n  });\n}\n\n"""
-          if marker not in s: raise SystemExit('initialization marker not found')
-          s=s.replace(marker,insert+marker,1)
-          p.write_text(s)
-
-          p=Path('src/services/adminFirestore.ts')
-          s=p.read_text()
-          old="""  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');\n};"""
-          new="""  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');\n  if (typeof window !== 'undefined') {\n    window.dispatchEvent(new CustomEvent('vop_ui_translation_updated', { detail: { locale: id } }));\n  }\n};"""
-          if old not in s: raise SystemExit('saveTranslation completion not found')
-          s=s.replace(old,new,1)
-          p.write_text(s)
-
-          p=Path('src/pages/AdminRecordsPanel.tsx')
-          s=p.read_text()
-          old="""                    <span className=\"vop-translation-input-lang\">{selectedTranslation || '—'}</span>"""
-          new="""                    <span className=\"vop-translation-input-lang\">{languages.find(language => language.code === selectedTranslation)?.name || selectedTranslation || '—'}</span>"""
-          if old in s: s=s.replace(old,new,1)
-          p.write_text(s)
-
           p=Path('api/admin/content.ts')
           s=p.read_text()
           old="""        if (collection === 'translations') {\n          if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');\n          const requestedCode = String(incoming.code || incoming.languageCode || id).trim().toLowerCase();\n          const languageSnap = await ctx.db.collection('languages').get();\n          const languageDoc = languageSnap.docs.find(d => { const data = d.data() || {}; return [d.id, data.code, data.languageCode, data.name, data.nativeName].map(v => String(v || '').trim().toLowerCase()).includes(requestedCode); });\n          if (!languageDoc) throw new Error('Select a language from the configured Languages list.');\n          const language = languageDoc.data() || {};\n          const code = String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();"""
           new="""        if (collection === 'translations') {\n          const languageSnap = await ctx.db.collection('languages').get();\n          const requestedCode = String(incoming.code || incoming.languageCode || id).trim().toLowerCase();\n          const languageDoc = languageSnap.docs.find(d => {\n            const data = d.data() || {};\n            return [d.id, data.code, data.languageCode, data.name, data.nativeName].map(v => String(v || '').trim().toLowerCase()).includes(requestedCode);\n          });\n          if (!languageDoc) throw new Error('Select a language from the configured Languages list.');\n          await requirePermission(ctx, 'translations', 'update');\n          const language = languageDoc.data() || {};\n          const localesSnap = await ctx.db.collection('locales').get();\n          const same = (a: unknown, b: unknown) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();\n          const relatedLocale = localesSnap.docs.find(d => {\n            const data = d.data() || {};\n            return d.id.toLowerCase() !== requestedCode && (same(data.name, language.name) || same(data.nativeName, language.nativeName) || same(data.nativeName, language.name));\n          });\n          const relatedCode = String(relatedLocale?.id || '').trim().toLowerCase();\n          const code = relatedCode && /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(relatedCode) ? relatedCode : String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();"""
-          if old not in s: raise SystemExit('translation canonical write block not found')
-          s=s.replace(old,new,1)
+          if old in s:
+            s=s.replace(old,new,1)
+          elif "await requirePermission(ctx, 'translations', 'update');" not in s:
+            raise SystemExit('translation canonical write block not found')
           p.write_text(s)
           PY
       - name: Install dependencies
@@ -67,9 +41,12 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/services/i18n.ts src/services/adminFirestore.ts src/pages/AdminRecordsPanel.tsx api/admin/content.ts
-          git diff --cached --quiet && exit 0
-          git commit -m 'fix: write UI translations to canonical locale'
+          git add api/admin/content.ts
+          if git diff --cached --quiet; then
+            echo 'No canonical translation source changes required.'
+            exit 0
+          fi
+          git commit -m 'fix: allow authorized UI translation writes'
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
