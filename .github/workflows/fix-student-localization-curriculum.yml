@@ -1,0 +1,61 @@
+name: Fix student localization and curriculum scope
+on:
+  push:
+    branches: [main]
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch localization and curriculum
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('src/App.tsx')
+          s = app.read_text()
+          old = """        setCurrentUser(profile);\n        if (profile.preferences?.uiLocale) setUiLocale(profile.preferences.uiLocale);\n        setAllUsers([profile]);"""
+          new = """        setCurrentUser(profile);\n        if (profile.preferences?.uiLocale) {\n          setActiveLang(profile.preferences.uiLocale);\n          setUiLocale(profile.preferences.uiLocale);\n        }\n        setAllUsers([profile]);"""
+          if old not in s:
+              raise SystemExit('App.tsx localization anchor not found')
+          app.write_text(s.replace(old, new, 1))
+
+          cm = Path('src/pages/CurriculumManager.tsx')
+          s = cm.read_text()
+          old = """  const openLesson = (row: LessonRow) => {\n    setEditor(editorFromLesson(row));\n    setEditorTab('content');\n    setPreviewOpen(false);\n  };\n\n  const openNewLesson = (quizMode = false) => {\n    const language = enabledLanguages[0]?.code || '';\n    const guide = guides.find(item => item.language === language) || guides[0];\n    const next = blankEditor(language, guide?.id || '');"""
+          new = """  const openLesson = (row: LessonRow) => {\n    const source = row.raw || {};\n    const organizationId = valueText(source.organizationId || source.ownerOrganizationId);\n    if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);\n    setEditor(editorFromLesson(row));\n    setEditorTab('content');\n    setPreviewOpen(false);\n  };\n\n  const openNewLesson = (quizMode = false) => {\n    const language = enabledLanguages[0]?.code || 'en';\n    const guide = guides.find(item => item.language === language) || guides[0];\n    const next = blankEditor(language, guide?.id || '');"""
+          if old not in s:
+              raise SystemExit('CurriculumManager openLesson anchor not found')
+          s = s.replace(old, new, 1)
+
+          old = """    if (!editor.language.trim()) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a language before saving.'));\n    if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));\n\n    const guide = guides.find(item => item.id === editor.guideId && item.language === editor.language);"""
+          new = """    const normalizedLanguage = editor.language.trim().toLowerCase();\n    if (!/^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i.test(normalizedLanguage)) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a valid configured language before saving.'));\n    if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));\n    if (isSuperAdmin && !scopeOrganizationId) {\n      const existingGuide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);\n      const source = existingGuide ? guideRecords.find(item => String(item.id || '') === String(existingGuide.id || '')) : undefined;\n      const existingOrganization = valueText(source?.organizationId || source?.ownerOrganizationId);\n      if (existingOrganization) setScopeOrganizationId(existingOrganization);\n    }\n\n    const guide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);"""
+          if old not in s:
+              raise SystemExit('CurriculumManager save validation anchor not found')
+          s = s.replace(old, new, 1)
+
+          old = """        language: editor.language.trim(),\n        guideId: editor.guideId,"""
+          new = """        language: normalizedLanguage,\n        guideId: editor.guideId,"""
+          if old not in s:
+              raise SystemExit('CurriculumManager payload anchor not found')
+          s = s.replace(old, new, 1)
+
+          cm.write_text(s)
+          PY
+      - name: Commit patched source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/pages/CurriculumManager.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: restore student UI locale and curriculum language scope'
+          git push
+      - name: Remove one-time workflow
+        if: success()
+        run: |
+          git rm .github/workflows/fix-student-localization-curriculum.yml
+          git commit -m 'chore: remove temporary curriculum fix workflow'
+          git push
