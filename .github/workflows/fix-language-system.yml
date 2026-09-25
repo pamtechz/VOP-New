@@ -1,0 +1,66 @@
+name: One-time language system repair
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch language resolution
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('api/admin/content.ts')
+          s=p.read_text()
+          old="""      const lang = String(data.language || '').trim();
+      if (!language(lang)) throw new Error('A valid language code is required for a guide.');"""
+          new="""      const requestedLanguage = String(data.language || '').trim();
+      let lang = requestedLanguage.toLowerCase();
+      if (!language(lang)) {
+        const languageSnapshot = await ctx.db.collection('languages').get();
+        const normalized = requestedLanguage.toLowerCase();
+        const match = languageSnapshot.docs.find(doc => {
+          const item = doc.data() || {};
+          return [doc.id, item.code, item.languageCode, item.name, item.nativeName]
+            .map(value => String(value || '').trim().toLowerCase())
+            .includes(normalized);
+        });
+        if (!match) throw new Error('Select a language from the configured Languages list.');
+        const item = match.data() || {};
+        lang = String(item.code || item.languageCode || match.id).trim().toLowerCase();
+      }
+      if (!language(lang)) throw new Error('The selected configured language has an invalid system code.');"""
+          if old not in s:
+            raise SystemExit('Guide language validation block not found')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('src/pages/CurriculumManager.tsx')
+          s=p.read_text()
+          s=s.replace("{guides.map(guide => <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}</option>)}", "{guides.map(guide => { const lang = enabledLanguages.find(item => item.code === guide.language); return <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {lang?.name || lang?.nativeName || guide.language}</option>; })}", 1)
+          # Ensure every language shown in the editor is a configured language name; the value remains the internal code.
+          old="<select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value,guideId:''})}>"
+          new="<select value={editor.language} onChange={e => { const selected = enabledLanguages.find(item => item.code === e.target.value); setEditor({...editor,language:selected?.code || '',guideId:''}); }}>"
+          if old in s:
+            s=s.replace(old,new,1)
+          # Replace any raw-code language option rendering in the lesson editor.
+          s=s.replace("{enabledLanguages.map(language => <option key={language.code} value={language.code}>{language.code.toUpperCase()}</option>)}", "{enabledLanguages.map(language => <option key={language.code} value={language.code}>{language.name || language.nativeName}</option>)}", 1)
+          p.write_text(s)
+          PY
+      - name: Build
+        run: npm ci && npm run build
+      - name: Commit repair
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add api/admin/content.ts src/pages/CurriculumManager.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: resolve curriculum languages from configured registry"
+          git push
