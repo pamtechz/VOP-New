@@ -1,0 +1,154 @@
+name: Apply Radio and Organization UI Fixes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-radio-org-ui-fixes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply targeted fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # 1) Radio: make a successful server delete immediately remove the item
+          # from the live admin state. The API remains authoritative; this only
+          # prevents stale UI cards while the Firestore subscription catches up.
+          p = Path('src/pages/AdminRecordsPanel.tsx')
+          s = p.read_text()
+          old = """      await deleteAdminRecord(COLLECTIONS[kind], id);\n      if (editingId === id) openNew();\n      setMessage('Record deleted.');"""
+          new = """      await deleteAdminRecord(COLLECTIONS[kind], id);\n      setRecords(current => current.filter(record => record.id !== id));\n      if (editingId === id) openNew();\n      setMessage('Record deleted successfully.');"""
+          if old not in s:
+              raise SystemExit('Expected radio delete block was not found; refusing an unsafe patch.')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # 2) Radio: make the live dashboard source selector a real responsive
+          # three-option control and improve the workspace collapse behavior.
+          p = Path('src/radio-responsive.css')
+          s = p.read_text()
+          marker = "/* Prevent long URLs/provider labels from forcing horizontal scrolling. */"
+          css = r'''/* Final Radio admin responsive polish */
+          .vop-radio-admin-workspace{grid-template-columns:minmax(0,1.15fr) minmax(300px,.82fr) minmax(320px,.95fr);align-items:stretch}
+          .vop-radio-source-picker{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;padding:12px!important}
+          .vop-radio-source-picker button{width:100%!important;min-width:0!important;min-height:68px!important;padding:9px 6px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px!important}
+          .vop-radio-source-picker button span{display:block!important;white-space:normal!important;text-align:center!important;line-height:1.15!important}
+          .vop-radio-admin-add-card{min-width:0}
+          .vop-radio-admin-quick-form{min-width:0}
+          .vop-radio-admin-quick-form input{box-sizing:border-box;min-width:0}
+          .vop-radio-admin-schedule-list{min-width:0}
+          .vop-radio-schedule-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:2px 0}
+          .vop-radio-schedule-row>.vop-radio-schedule-info{min-width:0;width:100%}
+          .vop-radio-schedule-btns{display:flex;gap:6px;flex:0 0 auto}
+          .vop-radio-schedule-btns .vop-actions{width:36px!important;height:36px!important;display:grid!important;place-items:center!important;border:1px solid #d9e3ef!important;border-radius:9px!important;background:#fff!important}
+          .vop-radio-schedule-btns .vop-actions-delete{color:#b42318!important}
+          @media (max-width:1100px){
+            .vop-radio-admin-workspace{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+            .vop-radio-admin-add-card{grid-column:1/-1}
+          }
+          @media (max-width:720px){
+            .vop-radio-admin-workspace{grid-template-columns:1fr}
+            .vop-radio-admin-add-card{grid-column:auto}
+            .vop-radio-source-picker{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+            .vop-radio-admin-library{padding:12px}
+            .vop-radio-admin-library-head{align-items:stretch;flex-direction:column}
+            .vop-radio-admin-search{width:100%}
+            .vop-radio-admin-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+          }
+          @media (max-width:460px){
+            .vop-radio-source-picker{grid-template-columns:1fr!important}
+            .vop-radio-source-picker button{min-height:54px!important;flex-direction:row!important;justify-content:flex-start!important;padding-inline:14px!important}
+            .vop-radio-admin-library-grid{grid-template-columns:1fr}
+            .vop-radio-schedule-row{grid-template-columns:1fr}
+            .vop-radio-schedule-btns{justify-content:flex-end;padding-bottom:5px}
+          }
+
+          '''
+          if '/* Final Radio admin responsive polish */' not in s:
+              s = s.replace(marker, css + marker, 1)
+          p.write_text(s)
+
+          # 3) Organization admin: explicitly present a single "My Organization"
+          # experience for ordinary organization owners/admins. Super Admin keeps
+          # the multi-tenant management console.
+          p = Path('src/pages/OrganizationManagement.tsx')
+          s = p.read_text()
+          s = s.replace(
+              "<div><div className=\"vop-breadcrumb\"><Building2 size={15}/> Platform / Organizations</div><h1>{t('admin.organizations','Organizations')}</h1><p>Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.</p></div>",
+              "<div><div className=\"vop-breadcrumb\"><Building2 size={15}/> {isSuperAdmin ? 'Platform / Organizations' : 'My Organization'}</div><h1>{isSuperAdmin ? t('admin.organizations','Organizations') : t('admin.my_organization','My Organization')}</h1><p>{isSuperAdmin ? 'Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.' : 'Manage your organization profile, members and invitations.'}</p></div>",
+              1,
+          )
+          s = s.replace(
+              "<div className=\"vop-section-title\"><div><h2>{t('admin.tenant_workspaces','Tenant workspaces')}</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>",
+              "<div className=\"vop-section-title\"><div><h2>{isSuperAdmin ? t('admin.tenant_workspaces','Tenant workspaces') : t('admin.my_organization','My Organization')}</h2><p>{isSuperAdmin ? `${items.length} configured organization${items.length===1?'':'s'}.` : 'Your organization account and its members.'}</p></div><Building2 size={22}/></div>",
+              1,
+          )
+          s = s.replace(
+              "<div className=\"vop-form-grid\">\n            <div className=\"vop-field\"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div>\n            <div className=\"vop-field\"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value=\"standard\">Standard</option><option value=\"growth\">Growth</option><option value=\"enterprise\">Enterprise</option></select></div>\n            <div className=\"vop-field\"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value=\"active\">Active</option><option value=\"suspended\">Suspended</option><option value=\"archived\">Archived</option></select></div>\n          </div>",
+              "<div className=\"vop-form-grid\">\n            <div className=\"vop-field\"><label>{t('common.name','Organization name')}</label><input value={name} onChange={e=>setName(e.target.value)}/></div>\n            {isSuperAdmin&&<><div className=\"vop-field\"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)}><option value=\"standard\">Standard</option><option value=\"growth\">Growth</option><option value=\"enterprise\">Enterprise</option></select></div>\n            <div className=\"vop-field\"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)}><option value=\"active\">Active</option><option value=\"suspended\">Suspended</option><option value=\"archived\">Archived</option></select></div></>}\n          </div>",
+              1,
+          )
+          s = s.replace(
+              "{usage&&<div className=\"vop-grid-3\"",
+              "{isSuperAdmin&&usage&&<div className=\"vop-grid-3\"",
+              1,
+          )
+          # Auto-open the sole organization for ordinary organization admins.
+          marker = "  const deleteOrganization=async()=>{"
+          if "if(!isSuperAdmin && next.length===1 && !selected)" not in s:
+              inject = """  useEffect(()=>{\n    if(!isSuperAdmin && items.length===1 && !selected) selectOrganization(items[0]);\n  },[isSuperAdmin,items,selected]);\n\n"""
+              s = s.replace(marker, inject + marker, 1)
+          p.write_text(s)
+
+          # Ensure the organization admin UI never renders the platform-only
+          # owner assignment, quotas, or delete controls; these were already
+          # conditional, so this is an invariant check rather than a new bypass.
+          if "{isSuperAdmin&&<div style={{marginTop:16}}>" not in s:
+              raise SystemExit('Organization Super Admin guards were not found; refusing an unsafe patch.')
+
+          print('Targeted fixes applied.')
+
+      - name: Verify changed files
+        run: |
+          git diff --check
+          grep -n "setRecords(current => current.filter(record => record.id !== id))" src/pages/AdminRecordsPanel.tsx
+          grep -n "Final Radio admin responsive polish" src/radio-responsive.css
+          grep -n "My Organization" src/pages/OrganizationManagement.tsx
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/AdminRecordsPanel.tsx src/radio-responsive.css src/pages/OrganizationManagement.tsx
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "fix: finish radio deletion and organization admin UX"
+          git push origin main
+
+      - name: Remove patch workflow
+        if: always()
+        shell: bash
+        run: |
+          git rm -f .github/workflows/apply-radio-org-ui-fixes.yml || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: remove one-time UI patch workflow"
+            git push origin main
+          fi
