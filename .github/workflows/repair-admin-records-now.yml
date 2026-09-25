@@ -24,7 +24,6 @@ jobs:
           git checkout c6eb2cdfef4b6414db782b46335a4b9092f11b14 -- src/pages/AdminRecordsPanel.tsx
 
       - name: Restore shared editor state and remove legacy column layout
-        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -48,11 +47,6 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Validate repaired source
-        run: |
-          npm ci
-          npm run build
-
       - name: Commit repaired source
         run: |
           git config user.name 'github-actions[bot]'
@@ -60,7 +54,12 @@ jobs:
           git add src/pages/AdminRecordsPanel.tsx src/pages/admin.css
           if git diff --cached --quiet; then
             echo 'No repair changes required.'
-            exit 0
+          else
+            git commit -m 'fix: restore admin records pages and modal editor'
+            git push origin main
           fi
-          git commit -m 'ci: repair broken admin records pages and editor layout'
-          git push origin main
+
+      - name: Validate repaired source
+        run: |
+          npm ci
+          npm run build
