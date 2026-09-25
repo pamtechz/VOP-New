@@ -137,6 +137,10 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
     setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteUrl('');void loadDetails(item.id);
   };
 
+  useEffect(()=>{
+    if(!isSuperAdmin && items.length===1 && !selected) selectOrganization(items[0]);
+  },[isSuperAdmin,items,selected]);
+
   const deleteOrganization=async()=>{
     if(!selected||!isSuperAdmin)return;
     const confirmed=window.confirm('Permanently delete the organization "'+selected.name+'"? This removes its tenant membership, invitations, settings and organization-scoped records. This action cannot be undone.');
@@ -208,7 +212,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
 
   return <div>
     <div className="vop-page-header">
-      <div><div className="vop-breadcrumb"><Building2 size={15}/> Platform / Organizations</div><h1>{t('admin.organizations','Organizations')}</h1><p>Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.</p></div>
+      <div><div className="vop-breadcrumb"><Building2 size={15}/> {isSuperAdmin ? 'Platform / Organizations' : 'My Organization'}</div><h1>{isSuperAdmin ? t('admin.organizations','Organizations') : t('admin.my_organization','My Organization')}</h1><p>{isSuperAdmin ? 'Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.' : 'Manage your organization profile, members and invitations.'}</p></div>
       <button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>
     </div>
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}
@@ -225,7 +229,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
 
     <div className="vop-grid-2">
       <div className="vop-card vop-form-card">
-        <div className="vop-section-title"><div><h2>{t('admin.tenant_workspaces','Tenant workspaces')}</h2><p>{items.length} configured organization{items.length===1?'':'s'}.</p></div><Building2 size={22}/></div>
+        <div className="vop-section-title"><div><h2>{isSuperAdmin ? t('admin.tenant_workspaces','Tenant workspaces') : t('admin.my_organization','My Organization')}</h2><p>{isSuperAdmin ? `${items.length} configured organization${items.length===1?'':'s'}.` : 'Your organization account and its members.'}</p></div><Building2 size={22}/></div>
         <div style={{display:'grid',gap:9}}>
           {items.map(item=><button key={item.id} type="button" onClick={()=>selectOrganization(item)} style={{textAlign:'left',border:'1px solid #e6ebf3',background:selected?.id===item.id?'#f4f8ff':'#fff',borderRadius:12,padding:'12px 14px',cursor:'pointer'}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div>
@@ -241,9 +245,9 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
           <div className="vop-section-title"><div><h2>{selected.name}</h2><p>{t('admin.organization_settings_members','Organization settings and members')}</p></div><Edit3 size={20}/></div>
 
           <div className="vop-form-grid">
-            <div className="vop-field"><label>Name</label><input value={name} onChange={e=>setName(e.target.value)}/></div>
-            <div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)} disabled={!isSuperAdmin}><option value="standard">Standard</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></div>
-            <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)} disabled={!isSuperAdmin}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div>
+            <div className="vop-field"><label>{t('common.name','Organization name')}</label><input value={name} onChange={e=>setName(e.target.value)}/></div>
+            {isSuperAdmin&&<><div className="vop-field"><label>Plan</label><select value={plan} onChange={e=>setPlan(e.target.value)}><option value="standard">Standard</option><option value="growth">Growth</option><option value="enterprise">Enterprise</option></select></div>
+            <div className="vop-field"><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)}><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></div></>}
           </div>
 
           {isSuperAdmin&&<div style={{marginTop:16}}>
@@ -274,7 +278,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
             <button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>{t('common.save_settings','Save Settings')}</button>
           </div>
 
-          {usage&&<div className="vop-grid-3" style={{marginTop:16}}>
+          {isSuperAdmin&&usage&&<div className="vop-grid-3" style={{marginTop:16}}>
             <div className="vop-card vop-mini-stat"><Users size={20}/><div><strong>{usage.members}</strong><span>{t('common.members','Members')}</span></div></div>
             <div className="vop-card vop-mini-stat"><BarChart3 size={20}/><div><strong>{usage.guides}</strong><span>{t('common.guides','Guides')}</span></div></div>
             <div className="vop-card vop-mini-stat"><Shield size={20}/><div><strong>{usage.quizzes}</strong><span>{t('common.quizzes','Quizzes')}</span></div></div>

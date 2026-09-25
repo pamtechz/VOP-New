@@ -324,8 +324,9 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     try {
       if (!isRecordKind(kind)) return;
       await deleteAdminRecord(COLLECTIONS[kind], id);
+      setRecords(current => current.filter(record => record.id !== id));
       if (editingId === id) openNew();
-      setMessage('Record deleted.');
+      setMessage('Record deleted successfully.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not delete record.');
     }
