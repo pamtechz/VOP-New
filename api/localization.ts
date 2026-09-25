@@ -6,9 +6,10 @@ type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
 
 const LOCALE_RE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i;
 const KEY_RE = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/;
+const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
 
 function cleanLocale(value: unknown) {
-  const locale = String(value || '').trim().toLowerCase();
+  const locale = normalize(value);
   if (!LOCALE_RE.test(locale)) throw new Error('A valid locale code is required.');
   return locale;
 }
@@ -23,6 +24,32 @@ function queryValue(req: Request, name: string) {
   return Array.isArray(value) ? value[0] || '' : value || '';
 }
 
+async function resolveLocale(db: FirebaseFirestore.Firestore, requested: string) {
+  const code = normalize(requested);
+  const [languageSnap, localeSnap] = await Promise.all([
+    db.collection('languages').get(),
+    db.collection('locales').get(),
+  ]);
+  const languages = languageSnap.docs.map(doc => ({ id:doc.id.toLowerCase(), data:doc.data() || {} }));
+  const locales = localeSnap.docs.map(doc => ({ id:doc.id.toLowerCase(), data:doc.data() || {} }));
+  const exactLanguage = languages.find(item => normalize(item.data.code || item.data.languageCode || item.id) === code || item.id === code);
+  if (exactLanguage) return { code:normalize(exactLanguage.data.code || exactLanguage.data.languageCode || exactLanguage.id), language:exactLanguage.data, aliases:[code] };
+  const exactLocale = locales.find(item => item.id === code || normalize(item.data.code) === code);
+  if (exactLocale) {
+    const matchingLanguage = languages.find(item =>
+      normalize(item.data.name) === normalize(exactLocale.data.name) ||
+      normalize(item.data.nativeName) === normalize(exactLocale.data.nativeName) ||
+      normalize(item.data.nativeName) === normalize(exactLocale.data.name)
+    );
+    if (matchingLanguage) {
+      const canonical = normalize(matchingLanguage.data.code || matchingLanguage.data.languageCode || matchingLanguage.id);
+      return { code:canonical, language:matchingLanguage.data, aliases:[code, exactLocale.id] };
+    }
+    return { code:exactLocale.id, language:exactLocale.data, aliases:[code] };
+  }
+  return { code, language:null, aliases:[code] };
+}
+
 export default async function handler(req: Request, res: Response) {
   try {
     const db = getAdminDb();
@@ -30,64 +57,65 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const requestedLocale = queryValue(req, 'locale').trim();
       if (!requestedLocale) {
-        const [localesSnap, languagesSnap] = await Promise.all([
-          db.collection('locales').get(),
-          db.collection('languages').get(),
-        ]);
-        const map = new Map<string, Record<string, unknown>>();
-        localesSnap.docs.forEach(doc => {
-          map.set(doc.id.toLowerCase(), { id: doc.id, ...doc.data() });
-        });
-        languagesSnap.docs.forEach(doc => {
-          const id = doc.id.toLowerCase();
-          const data = doc.data() || {};
-          if (!map.has(id) || (data.name && !map.get(id)?.name)) {
-            map.set(id, {
-              id,
-              code: String(data.code || id).trim().toLowerCase(),
-              name: String(data.name || id).trim(),
-              nativeName: String(data.nativeName || data.name || id).trim(),
-              enabled: data.enabled !== false,
-              sortOrder: Number(data.sortOrder || 0),
-              direction: data.rtl ? 'rtl' : 'ltr',
-            });
-          }
-        });
-        const items = [...map.values()]
-          .filter(item => item.enabled !== false && LOCALE_RE.test(String(item.code || item.id)))
-          .sort((a,b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
-        if (!items.some(item => String(item.code || item.id).toLowerCase() === 'en')) {
-          items.unshift({ id:'en', code:'en', name:'English', nativeName:'English', enabled:true, direction:'ltr', fallback:'en', sortOrder:0 });
+        const languagesSnap = await db.collection('languages').get();
+        const items = languagesSnap.docs
+          .map(doc => {
+            const data = doc.data() || {};
+            const code = normalize(data.code || data.languageCode || doc.id);
+            return {
+              id:code,
+              code,
+              name:String(data.name || code).trim(),
+              nativeName:String(data.nativeName || data.name || code).trim(),
+              enabled:data.enabled !== false,
+              sortOrder:Number(data.sortOrder || 0),
+              direction:data.rtl === true ? 'rtl' : 'ltr',
+              fallback:normalize(data.fallback || 'en'),
+            };
+          })
+          .filter(item => item.enabled !== false && LOCALE_RE.test(item.code))
+          .sort((a,b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+        if (!items.length) {
+          const legacy = await db.collection('locales').get();
+          legacy.docs.forEach(doc => {
+            const data = doc.data() || {};
+            const code = normalize(data.code || doc.id);
+            if (data.enabled !== false && LOCALE_RE.test(code)) items.push({id:code,code,name:String(data.name || code),nativeName:String(data.nativeName || data.name || code),enabled:true,sortOrder:Number(data.sortOrder || 0),direction:data.direction === 'rtl' ? 'rtl' : 'ltr',fallback:normalize(data.fallback || 'en')});
+          });
+          items.sort((a,b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
         }
         return res.status(200).json({ok:true, items});
       }
 
-      const locale = cleanLocale(requestedLocale);
-      const [localeSnap, legacyLanguageSnap, legacyTranslationSnap] = await Promise.all([
+      const requested = cleanLocale(requestedLocale);
+      const resolved = await resolveLocale(db, requested);
+      const locale = resolved.code;
+      const [localeSnap, legacyTranslationSnap] = await Promise.all([
         db.doc(`locales/${locale}`).get(),
-        db.doc(`languages/${locale}`).get(),
         db.doc(`translations/${locale}`).get(),
       ]);
-      const metadata = localeSnap.exists ? localeSnap.data() || {}
-        : legacyLanguageSnap.exists ? legacyLanguageSnap.data() || {}
+      const metadata = resolved.language && Object.keys(resolved.language).length
+        ? resolved.language
+        : localeSnap.exists ? localeSnap.data() || {}
         : locale === 'en' ? {code:'en',name:'English',nativeName:'English',enabled:true,direction:'ltr',fallback:'en'}
         : null;
       if (!metadata || metadata.enabled === false) return res.status(404).json({ error:'Locale is not available.' });
 
       const translations: Record<string,string> = {};
-      const snap = await db.collection(`locales/${locale}/translations`).where('status','==','published').get();
-      snap.docs.forEach(doc => {
-        const value = String(doc.data()?.value ?? '');
-        if (value.trim()) translations[doc.id] = value;
-      });
-      const legacyValues = legacyTranslationSnap.exists && legacyTranslationSnap.data()?.values && typeof legacyTranslationSnap.data()?.values === 'object'
-        ? legacyTranslationSnap.data()?.values as Record<string,string> : {};
-      Object.entries(legacyValues).forEach(([key,value]) => {
-        if (!translations[key] && typeof value === 'string' && value.trim()) translations[key] = value;
-      });
+      const candidateLocales = [...new Set([locale, ...resolved.aliases])];
+      for (const candidate of candidateLocales) {
+        const canonicalSnap = await db.collection(`locales/${candidate}/translations`).where('status','==','published').get();
+        canonicalSnap.docs.forEach(doc => {
+          const value = String(doc.data()?.value ?? '');
+          if (value.trim() && !translations[doc.id]) translations[doc.id] = value;
+        });
+        const legacySnap = candidate === locale ? legacyTranslationSnap : await db.doc(`translations/${candidate}`).get();
+        const values = legacySnap.exists && legacySnap.data()?.values && typeof legacySnap.data()?.values === 'object' ? legacySnap.data()?.values as Record<string,string> : {};
+        Object.entries(values).forEach(([key,value]) => { if (!translations[key] && typeof value === 'string' && value.trim()) translations[key] = value; });
+      }
 
       return res.status(200).json({
-        ok:true, locale, fallback:String(metadata.fallback || 'en'),
+        ok:true, locale, requestedLocale:requested, fallback:normalize(metadata.fallback || 'en'),
         direction:String(metadata.direction || (metadata.rtl === true ? 'rtl' : 'ltr')) === 'rtl' ? 'rtl' : 'ltr',
         version:Number(metadata.version || 1), translations
       });
@@ -106,13 +134,7 @@ export default async function handler(req: Request, res: Response) {
       if (!name) throw new Error('Language name is required.');
       const ref = db.doc(`locales/${locale}`);
       const current = await ref.get();
-      await ref.set({
-        code:locale, name, nativeName, enabled:body.enabled !== false,
-        direction:String(body.direction || 'ltr') === 'rtl' ? 'rtl' : 'ltr',
-        fallback:cleanLocale(body.fallback || 'en'),
-        version:Number(current.data()?.version || 1),
-        updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
-      }, { merge:true });
+      await ref.set({code:locale,name,nativeName,enabled:body.enabled !== false,direction:String(body.direction || 'ltr') === 'rtl' ? 'rtl' : 'ltr',fallback:cleanLocale(body.fallback || 'en'),version:Number(current.data()?.version || 1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
       return res.status(200).json({ok:true, locale});
     }
 
@@ -122,8 +144,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'list') {
       const requestedNamespace = String(body.namespace || '').trim();
       const snap = await db.collection(`locales/${locale}/translations`).get();
-      const items = snap.docs.map(doc => ({ id:doc.id, ...doc.data() }))
-        .filter(item => !requestedNamespace || String(item.namespace || '') === requestedNamespace);
+      const items = snap.docs.map(doc => ({ id:doc.id, ...doc.data() })).filter(item => !requestedNamespace || String(item.namespace || '') === requestedNamespace);
       return res.status(200).json({ok:true, items});
     }
 
@@ -135,11 +156,7 @@ export default async function handler(req: Request, res: Response) {
       Object.entries(values).forEach(([rawKey, rawValue]) => {
         const key = cleanKey(rawKey);
         const value = String(rawValue ?? '');
-        batch.set(db.doc(`locales/${locale}/translations/${key}`), {
-          key, locale, namespace:namespaceOf(key), source:String(sources[key] || ''), value,
-          status:value.trim() ? status : 'draft', version:FieldValue.increment(1),
-          updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
-        }, {merge:true});
+        batch.set(db.doc(`locales/${locale}/translations/${key}`), {key,locale,namespace:namespaceOf(key),source:String(sources[key] || ''),value,status:value.trim() ? status : 'draft',version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
       });
       await batch.commit();
       await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});
@@ -150,31 +167,22 @@ export default async function handler(req: Request, res: Response) {
     const key = cleanKey(body.key);
     const ref = db.doc(`locales/${locale}/translations/${key}`);
     const existing = await ref.get();
-
     if (['save','publish','unpublish'].includes(action)) {
       const value = String(body.value ?? '');
       if ((action === 'save' || action === 'publish') && !value.trim()) throw new Error('Translation value cannot be empty.');
       const status = action === 'publish' ? 'published' : action === 'unpublish' ? 'draft' : String(body.status || 'draft');
       if (!['draft','review','published'].includes(status)) throw new Error('Invalid translation status.');
-      await ref.set({
-        key, locale, namespace:namespaceOf(key), source:String(body.source ?? existing.data()?.source ?? ''),
-        value, status, context:String(body.context || existing.data()?.context || ''),
-        translatorNotes:String(body.translatorNotes || existing.data()?.translatorNotes || ''),
-        version:Number(existing.data()?.version || 0) + 1,
-        updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
-      }, {merge:true});
+      await ref.set({key,locale,namespace:namespaceOf(key),source:String(body.source ?? existing.data()?.source ?? ''),value,status,context:String(body.context || existing.data()?.context || ''),translatorNotes:String(body.translatorNotes || existing.data()?.translatorNotes || ''),version:Number(existing.data()?.version || 0) + 1,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
       await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});
       await writeTenantAudit(ctx,`translation.${action}`,`locales/${locale}/translations/${key}`,existing.exists ? existing.data() : undefined,{key,locale,status});
       return res.status(200).json({ok:true,item:{id:key,key,locale,namespace:namespaceOf(key),source:String(body.source ?? existing.data()?.source ?? ''),value,status}});
     }
-
     if (action === 'delete') {
       if (!existing.exists) return res.status(404).json({error:'Translation key not found.'});
       await ref.delete();
       await writeTenantAudit(ctx,'translation.delete',`locales/${locale}/translations/${key}`,existing.data(),undefined);
       return res.status(200).json({ok:true,key,locale});
     }
-
     return res.status(400).json({error:'Unsupported localization action.'});
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Localization operation failed.';
