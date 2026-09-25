@@ -12,12 +12,12 @@ const listeners = new Set<() => void>();
 
 function notify() { listeners.forEach(listener => listener()); }
 function normalizeLocale(value: unknown) { return String(value || '').trim().toLowerCase(); }
+function isLocale(value: unknown) { return /^[a-z]{2,3}(?:[-_][a-z]{2,4})?$/i.test(String(value || '').trim()); }
 
 /**
  * Never expose an internal localization identifier as visible UI text.
- * When a caller has not supplied an explicit fallback, derive a readable
- * label from the final key segment instead of rendering values such as
- * "admin.certified_candidates" directly to the user.
+ * Missing translations are rendered as a readable fallback derived from the
+ * key, and accidentally persisted raw keys are rejected as translations.
  */
 function humanizeTranslationKey(key: string): string {
   const segment = String(key || '').split('.').pop() || String(key || '');
@@ -28,6 +28,15 @@ function humanizeTranslationKey(key: string): string {
     .trim();
   if (!readable) return 'Text unavailable';
   return readable.charAt(0).toUpperCase() + readable.slice(1);
+}
+
+function usableTranslation(value: unknown, key: string): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  if (!text || text === key) return undefined;
+  // Guard against a persisted namespace key being used as its own translation.
+  if (/^[a-z][a-z0-9_-]*\.[a-z0-9_.-]+$/i.test(text) && text.toLowerCase() === key.toLowerCase()) return undefined;
+  return text;
 }
 
 export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] => {
@@ -148,6 +157,7 @@ export function useLocalization(settings?: AppSettings) {
 /**
  * The explicit language parameter remains for backwards compatibility.
  * UI strings resolve from the independent UI locale, never from study-language state.
+ * Older call sites that used getTranslation(key, fallback) are also supported.
  */
 export const getTranslation = (
   key: string,
@@ -157,16 +167,18 @@ export const getTranslation = (
   componentName?: string,
   vars?: Record<string,string|number>
 ): string => {
-  const fallback = String(defaultFallback || '').trim() || humanizeTranslationKey(key);
   const registryKey = String(key || '').trim();
+  const legacySecondArg = String(_legacyLang || '').trim();
+  const legacyFallback = !isLocale(legacySecondArg) && !defaultFallback ? legacySecondArg : '';
+  const fallback = String(defaultFallback || legacyFallback || '').trim() || humanizeTranslationKey(registryKey);
   try { registerLocalizationString(registryKey, fallback, componentName); } catch { /* discovery is non-blocking */ }
 
+  const locale = getUiLocale();
   const stored = (() => {
-    try { return getStoredAutoLocalization().find(item => item.key === registryKey)?.translations?.[getUiLocale()]; } catch { return undefined; }
+    try { return getStoredAutoLocalization().find(item => item.key === registryKey)?.translations?.[locale]; } catch { return undefined; }
   })();
 
-  const locale = getUiLocale();
-  let value = [
+  const candidates = [
     dictionaryCache[locale]?.[registryKey],
     customTranslations?.[locale]?.[registryKey],
     stored,
@@ -174,8 +186,10 @@ export const getTranslation = (
     localeFallbacks[locale] && localeFallbacks[locale] !== locale ? customTranslations?.[localeFallbacks[locale]]?.[registryKey] : undefined,
     locale !== 'en' ? dictionaryCache.en?.[registryKey] : undefined,
     locale !== 'en' ? customTranslations?.en?.[registryKey] : undefined,
-    fallback
-  ].find(item => typeof item === 'string' && item.trim()) || fallback;
+  ];
+  let value = candidates.map(candidate => usableTranslation(candidate, registryKey)).find(Boolean) || fallback;
+  // A malformed persisted fallback must never leak the key either.
+  if (!usableTranslation(value, registryKey)) value = humanizeTranslationKey(registryKey);
 
   if (vars) {
     value = value.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) =>
