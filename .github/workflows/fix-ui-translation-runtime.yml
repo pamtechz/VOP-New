@@ -1,0 +1,69 @@
+name: Fix UI translation runtime
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor == 'pamtechz'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Patch translation runtime
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/services/i18n.ts')
+          s=p.read_text()
+          s=s.replace("export const setUiLocale = (locale: LanguageCode) => {\n  const normalized = resolveRegisteredLocale(locale) || 'en';\n  localStorage.setItem(UI_LOCALE_KEY, normalized);\n  localeState.value = normalized;\n  localeState.version += 1;\n  notify();\n  void loadUiLocale(normalized);\n};", "export const setUiLocale = (locale: LanguageCode) => {\n  const normalized = resolveRegisteredLocale(locale) || 'en';\n  localStorage.setItem(UI_LOCALE_KEY, normalized);\n  localeState.value = normalized;\n  localeState.version += 1;\n  notify();\n  void loadUiLocale(normalized, 'en', true);\n};")
+          old="export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promise<void> {\n  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);\n  if (dictionaryCache[requested]) {"
+          new="export async function loadUiLocale(locale: LanguageCode, fallback = 'en', force = false): Promise<void> {\n  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);\n  if (force) delete dictionaryCache[requested];\n  if (dictionaryCache[requested]) {"
+          if old not in s: raise SystemExit('loadUiLocale signature not found')
+          s=s.replace(old,new,1)
+          marker="export const initializeLocalization = async (settings?: AppSettings) => {"
+          insert="""export const refreshUiLocale = async (locale?: LanguageCode): Promise<void> => {\n  const requested = resolveRegisteredLocale(locale || localeState.value || getUiLocale());\n  await loadUiLocale(requested, 'en', true);\n};\n\nif (typeof window !== 'undefined') {\n  window.addEventListener('vop_ui_translation_updated', event => {\n    const detail = (event as CustomEvent<{locale?: string}>).detail;\n    const current = resolveRegisteredLocale(localeState.value || getUiLocale());\n    const changed = resolveRegisteredLocale(detail?.locale || '');\n    if (!changed || changed === current) void refreshUiLocale(current);\n  });\n}\n\n"""
+          if marker not in s: raise SystemExit('initialization marker not found')
+          s=s.replace(marker,insert+marker,1)
+          p.write_text(s)
+
+          p=Path('src/services/adminFirestore.ts')
+          s=p.read_text()
+          old="""  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');\n};"""
+          new="""  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');\n  if (typeof window !== 'undefined') {\n    window.dispatchEvent(new CustomEvent('vop_ui_translation_updated', { detail: { locale: id } }));\n  }\n};"""
+          if old not in s: raise SystemExit('saveTranslation completion not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          p=Path('src/pages/AdminRecordsPanel.tsx')
+          s=p.read_text()
+          old="""                    <span className=\"vop-translation-input-lang\">{selectedTranslation || '—'}</span>"""
+          new="""                    <span className=\"vop-translation-input-lang\">{languages.find(language => language.code === selectedTranslation)?.name || selectedTranslation || '—'}</span>"""
+          if old in s: s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/services/i18n.ts src/services/adminFirestore.ts src/pages/AdminRecordsPanel.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: refresh UI translations after save'
+          git push
+      - name: Remove repair workflow
+        if: success()
+        run: |
+          git rm .github/workflows/fix-ui-translation-runtime.yml
+          git commit -m 'chore: remove completed UI translation repair workflow'
+          git push
