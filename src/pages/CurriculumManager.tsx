@@ -392,8 +392,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isHierarchyAdmin = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser?.role || ''));
   const organizationLabel = scopeOrganizationId ? (organizationOptions.find(item => item.id === scopeOrganizationId)?.name || scopeOrganizationId) : 'System-wide';
-  const adminContent = (action: Parameters<typeof adminContentRequest>[0], collection: string, id?: string, data?: Record<string, unknown>) =>
-    adminContentRequest(action, collection, id, data, scopeOrganizationId);
+  const adminContent = (action: Parameters<typeof adminContentRequest>[0], collection: string, id?: string, data?: Record<string, unknown>, organizationOverride?: string) =>
+    adminContentRequest(action, collection, id, data, organizationOverride ?? scopeOrganizationId);
 
   useEffect(() => {
     if (!currentUser || (!isSuperAdmin && !isHierarchyAdmin)) return;
@@ -620,12 +620,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const normalizedLanguage = editor.language.trim().toLowerCase();
     if (!/^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i.test(normalizedLanguage)) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a valid configured language before saving.'));
     if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));
-    if (isSuperAdmin && !scopeOrganizationId) {
-      const existingGuide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);
-      const source = existingGuide ? guideRecords.find(item => String(item.id || '') === String(existingGuide.id || '')) : undefined;
-      const existingOrganization = valueText(source?.organizationId || source?.ownerOrganizationId);
-      if (existingOrganization) setScopeOrganizationId(existingOrganization);
-    }
+    const existingGuideRecord = guideRecords.find(item => String(item.id || '') === String(editor.guideId));
+    const guideOrganizationId = valueText(existingGuideRecord?.organizationId || existingGuideRecord?.ownerOrganizationId);
+    const targetOrganizationId = scopeOrganizationId || guideOrganizationId;
+    if (isSuperAdmin && guideOrganizationId && guideOrganizationId !== scopeOrganizationId) setScopeOrganizationId(guideOrganizationId);
 
     const guide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);
     if (!guide && publish) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
@@ -698,8 +696,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         sharingScope: editor.sharingScope,
       };
 
-      await adminContent('upsertLesson', 'curriculum', id, payload);
-      if (publish) await adminContent('publishLesson', 'curriculum', id, payload);
+      await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
+      if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
       setEditor({ ...editor, id, guideTitle: guide?.title || editor.guideTitle, published: publish });
       notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
