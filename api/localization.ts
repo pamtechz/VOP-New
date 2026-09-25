@@ -30,9 +30,30 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       const requestedLocale = queryValue(req, 'locale').trim();
       if (!requestedLocale) {
-        const snap = await db.collection('locales').get();
-        const items = snap.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
+        const [localesSnap, languagesSnap] = await Promise.all([
+          db.collection('locales').get(),
+          db.collection('languages').get(),
+        ]);
+        const map = new Map<string, Record<string, unknown>>();
+        localesSnap.docs.forEach(doc => {
+          map.set(doc.id.toLowerCase(), { id: doc.id, ...doc.data() });
+        });
+        languagesSnap.docs.forEach(doc => {
+          const id = doc.id.toLowerCase();
+          const data = doc.data() || {};
+          if (!map.has(id) || (data.name && !map.get(id)?.name)) {
+            map.set(id, {
+              id,
+              code: String(data.code || id).trim().toLowerCase(),
+              name: String(data.name || id).trim(),
+              nativeName: String(data.nativeName || data.name || id).trim(),
+              enabled: data.enabled !== false,
+              sortOrder: Number(data.sortOrder || 0),
+              direction: data.rtl ? 'rtl' : 'ltr',
+            });
+          }
+        });
+        const items = [...map.values()]
           .filter(item => item.enabled !== false && LOCALE_RE.test(String(item.code || item.id)))
           .sort((a,b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
         if (!items.some(item => String(item.code || item.id).toLowerCase() === 'en')) {

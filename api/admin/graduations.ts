@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
-import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };

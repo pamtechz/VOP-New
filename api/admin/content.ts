@@ -429,6 +429,7 @@ export default async function handler(req: Request, res: Response) {
           // but ownership is still enforced for every mutation.
           if (ctx.tenantType === 'hierarchy') return true;
           if (collection === 'translations') return true;
+          if (ctx.orgId && String(data.organizationId || '') === ctx.orgId) return true;
           if (String(data.sharingScope || '') !== 'shared') return false;
           if (collection === 'languages') return data.enabled === true;
           if (collection === 'playlists') return data.published === true;
@@ -454,7 +455,7 @@ export default async function handler(req: Request, res: Response) {
           items: visible.map(d => ({
             id:d.id,
             ...d.data(),
-            canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
+            canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
           })),
         });
       }
@@ -474,7 +475,7 @@ export default async function handler(req: Request, res: Response) {
         const items = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
-          canEdit: ctx.tenantType === 'hierarchy' ? String(d.data().ownerUid || '') === ctx.auth.uid : String(d.data().ownerUid || '') === ctx.auth.uid,
+          canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
           scope: 'organization',
         })));
         return res.status(200).json({ ok: true, items });
@@ -638,6 +639,17 @@ export default async function handler(req: Request, res: Response) {
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: ctx.auth.uid,
         }, { merge:true });
+        if (collection === 'languages') {
+          await ctx.db.doc('locales/' + id).set({
+            id,
+            code: String(incoming.code || id).trim().toLowerCase(),
+            name: String(incoming.name || id).trim(),
+            nativeName: String(incoming.nativeName || incoming.name || id).trim(),
+            enabled: incoming.enabled !== false,
+            direction: incoming.rtl ? 'rtl' : 'ltr',
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
         const saved = await ref.get();
         return res.status(200).json({ ok:true, item:{id,...saved.data()} });
       }

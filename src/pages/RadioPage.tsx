@@ -316,11 +316,30 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   const live = broadcasts.filter(item => detectMedia(item)?.live);
   useEffect(() => { playlistIndexRef.current = playlistIndex; playlistItemsRef.current = playlistItems; }, [playlistIndex, playlistItems]);
 
-  if (!broadcasts.length) return <div className="vop-audience-radio"><header className="vop-public-radio-top"><button type="button" onClick={onBack}><ArrowLeft size={19}/> Back</button></header><main className="vop-public-radio-empty"><Radio size={48}/><h1>{t('navigation.radio','Radio')}</h1><p>{t('radio.empty','No published radio programmes are currently available.')}</p></main></div>;
+  if (!broadcasts.length) {
+    return (
+      <div className="vop-audience-radio">
+        <header className="vop-public-radio-top">
+          <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.12)', color: '#ffffff', borderRadius: '10px', padding: '8px 16px', fontWeight: 800, fontSize: '14px', cursor: 'pointer' }}>
+            <ArrowLeft size={18}/> {t('common.back','Back')}
+          </button>
+        </header>
+        <main className="vop-public-radio-empty">
+          <Radio size={48}/>
+          <h1>{t('navigation.radio','Radio')}</h1>
+          <p>{t('radio.empty','No published radio programmes are currently available.')}</p>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="vop-audience-radio">
-      <div className="vop-radio-page-back-wrap"><button type="button" className="vop-radio-page-back" onClick={onBack}><ArrowLeft size={17}/>{t('common.back','Back')}</button></div>
+      <header className="vop-public-radio-top">
+        <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.12)', color: '#ffffff', borderRadius: '10px', padding: '8px 16px', fontWeight: 800, fontSize: '14px', cursor: 'pointer' }}>
+          <ArrowLeft size={18}/> {t('common.back','Back')}
+        </button>
+      </header>
       <section className="vop-radio-hero" style={selectedPoster ? { backgroundImage: 'linear-gradient(90deg, rgba(2,20,45,.96) 0%, rgba(2,20,45,.75) 42%, rgba(2,20,45,.35) 100%), url("' + selectedPoster + '")' } : undefined}>
         <div className="vop-radio-hero-inner">
           <div className="vop-radio-hero-copy">

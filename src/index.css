@@ -1063,7 +1063,7 @@ h1, h2, h3, h4, h5, h6 {
    VOP RADIO — reference-aligned audience + admin surfaces
    ========================================================================== */
 .vop-audience-radio{min-height:100vh;background:#f5f8fc;color:#09295f;padding-bottom:92px}
-.vop-public-radio-top{display:none}
+.vop-public-radio-top{padding:14px 24px;background:#051934;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center}
 .vop-radio-hero{min-height:278px;background:#071d3b center/cover no-repeat;color:#fff}
 .vop-radio-hero-inner{max-width:1500px;margin:auto;min-height:278px;padding:28px 44px;display:grid;grid-template-columns:minmax(0,1fr) 465px;gap:38px;align-items:center}
 .vop-radio-hero-copy{max-width:760px}
@@ -1203,6 +1203,23 @@ h1, h2, h3, h4, h5, h6 {
 .vop-radio-admin-workspace{grid-template-columns:minmax(0,1.25fr) minmax(240px,.8fr) minmax(260px,.9fr);gap:14px}.vop-radio-admin-now,.vop-radio-admin-schedule,.vop-radio-admin-add-card{border-radius:15px;border-color:#dfe7f0;box-shadow:0 5px 18px rgba(8,36,74,.04)}.vop-radio-admin-card-title{padding:13px 15px;font-size:11px;background:#fbfcfe}.vop-radio-admin-player{padding:12px;background:#071c38}.vop-radio-admin-player-art{height:190px;border-radius:10px}.vop-radio-admin-player-controls{padding:9px 14px 14px}
 .vop-radio-admin-library{background:#fff;border:1px solid #dfe7f0;border-radius:15px;padding:17px;box-shadow:0 5px 18px rgba(8,36,74,.04)}.vop-radio-admin-library-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:15px}.vop-radio-admin-library-head h2{font-size:16px;color:#163c6d}.vop-radio-admin-library-head p{font-size:10px;color:#75879c;margin-top:3px}.vop-radio-admin-search{border:1px solid #d9e3ed;border-radius:9px;padding:0 9px;height:35px;display:flex;align-items:center;gap:6px;min-width:230px}.vop-radio-admin-search input{border:0;outline:0;font-size:11px;width:100%}
 .vop-radio-admin-note{font-size:10px}.vop-radio-playlist-editor{border:1px solid #e1e8f0;border-radius:14px;padding:14px;background:#fbfcfe}.vop-radio-playlist-editor label{font-size:10px;font-weight:800;color:#45627f;display:grid;gap:5px;margin:10px 0}.vop-radio-playlist-editor input,.vop-radio-playlist-editor textarea{border:1px solid #d9e2ec;border-radius:8px;padding:9px;font-size:11px;background:#fff;outline:none}.vop-radio-playlist-list article{border:1px solid #e1e8f0;border-radius:12px;background:#fff;padding:10px;margin-bottom:8px}
+/* Radio admin library card enhancements */
+.vop-radio-provider-badge{background:rgba(7,29,65,.7);color:#a9c9f5;border-radius:5px;padding:3px 6px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+.vop-radio-play-btn{width:32px!important;height:32px!important;border:0!important;border-radius:50%!important;background:#fff!important;color:#073d91!important;display:grid!important;place-items:center!important;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2)}
+.vop-radio-card-time{font-size:8px;color:#7c8da4;padding:3px 9px;display:block}
+.vop-radio-card-actions{display:flex;align-items:center;gap:5px;padding:5px 9px 9px}
+.vop-radio-card-actions .vop-actions{flex:1;border:1px solid #d5e0ec;background:#f7f9fc;border-radius:6px;color:#234f8a;font-size:8px;font-weight:800;padding:6px 5px;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}
+.vop-radio-card-actions .vop-actions:disabled{opacity:.45;cursor:not-allowed}
+.vop-radio-card-actions .vop-actions-delete{border-color:#ffd6d6;background:#fff8f8;color:#b42318}
+.vop-radio-card-actions .vop-actions-delete:not(:disabled):hover{background:#ffeaea}
+/* Schedule row with inline edit/delete */
+.vop-radio-schedule-row{display:flex;align-items:center;gap:6px;border-bottom:1px solid #edf1f6;padding:5px 0}
+.vop-radio-schedule-info{flex:1;border:0;background:transparent;display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:7px;text-align:left;cursor:pointer;min-width:0;padding:3px 0}
+.vop-radio-schedule-btns{display:flex;gap:3px;flex-shrink:0}
+.vop-radio-schedule-btns .vop-actions{width:28px;height:28px;border:1px solid #e0e8f1;background:#f7f9fc;border-radius:6px;color:#234f8a;display:grid;place-items:center;cursor:pointer;padding:0}
+.vop-radio-schedule-btns .vop-actions:disabled{opacity:.4;cursor:not-allowed}
+.vop-radio-admin-library-grid article>.media{position:relative}
+.vop-radio-admin-library-grid .media .vop-status{position:absolute;top:6px;left:6px;font-size:7px;padding:2px 5px}
 .vop-audience-radio{background:#f3f7fc;color:#112b4e}.vop-radio-hero{min-height:330px}.vop-radio-hero-inner{max-width:1200px;margin:auto;padding:28px 28px 36px}.vop-radio-hero-copy{max-width:690px}.vop-radio-kicker{font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:900;color:#fbbf24}.vop-radio-hero h1{font-size:clamp(28px,4vw,48px);line-height:1.02;margin:9px 0;color:#fff}.vop-radio-hero p{font-size:13px;line-height:1.7;color:#d8e5f5;max-width:650px}.vop-radio-listen{border:0;border-radius:11px;background:#f5b026;color:#071c38;padding:11px 15px;font-weight:900;display:inline-flex;gap:7px;align-items:center}.vop-radio-watch{border:1px solid rgba(255,255,255,.25);border-radius:11px;padding:10px 14px;color:#fff;display:inline-flex;gap:7px;align-items:center;text-decoration:none;font-weight:800;font-size:11px}
 .vop-radio-main{max-width:1200px;margin:auto;padding:22px 28px}.vop-radio-player-shell{background:#fff;border:1px solid #dfe7f0;border-radius:17px;box-shadow:0 8px 25px rgba(6,34,72,.07)}.vop-radio-content-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:15px}.vop-radio-section-title{font-size:14px;font-weight:900;color:#173c6b}.vop-radio-program-card{border:1px solid #e0e8f1;border-radius:13px;background:#fff}.vop-radio-playlist-card{border:1px solid #dce6f0;border-radius:14px;background:#fff;transition:.2s}.vop-radio-playlist-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(7,39,78,.08)}
 @media(max-width:950px){.vop-radio-admin-stats{grid-template-columns:repeat(3,1fr)}.vop-radio-admin-workspace{grid-template-columns:1fr 1fr}.vop-radio-admin-add-card{grid-column:1/-1}.vop-radio-content-grid{grid-template-columns:1fr}}

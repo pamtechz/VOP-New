@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, firebaseConfigured } from '../lib/firebase';
 import { firebaseSignOut } from '../services/firebaseAuth';
-import { AdminSetupPage } from './AdminSetupPage';
 import { readOfflineManifest, type OfflineManifest } from '../services/offlineManifest';
 
 const LessonViewer = lazy(async () => ({ default: (await import('./LessonViewer')).LessonViewer }));
@@ -20,7 +19,6 @@ export function FirebaseStudyApp() {
   const [authError, setAuthError] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
   const [signOutError, setSignOutError] = useState('');
-  const setupMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('setup') === '1';
 
   useEffect(() => {
     if (!auth) {

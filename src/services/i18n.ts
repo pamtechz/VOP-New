@@ -14,10 +14,31 @@ function notify() { listeners.forEach(listener => listener()); }
 function normalizeLocale(value: unknown) { return String(value || '').trim().toLowerCase(); }
 
 export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] => {
-  return (settings?.customLanguages ?? [])
-    .filter(language => language.enabled !== false && language.code.trim() && language.name.trim())
-    .map(language => ({ ...language, code: language.code.trim().toLowerCase() }))
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  const fromSettings = settings?.customLanguages ?? [];
+  const fromRegistry = getAvailableUiLocales();
+  const map = new Map<string, CustomLanguage>();
+
+  [...fromSettings, ...fromRegistry].forEach(language => {
+    if (language && language.enabled !== false && language.code && language.code.trim()) {
+      const code = language.code.trim().toLowerCase();
+      if (!map.has(code) || (language.nativeName && language.nativeName !== code)) {
+        map.set(code, {
+          code,
+          name: String(language.name || code).trim(),
+          nativeName: String(language.nativeName || language.name || code).trim(),
+          enabled: language.enabled === true,
+          sortOrder: Number(language.sortOrder ?? 0),
+          rtl: language.rtl === true,
+        });
+      }
+    }
+  });
+
+  if (map.size === 0) {
+    map.set('en', { code: 'en', name: 'English', nativeName: 'English', enabled: true, sortOrder: 0, rtl: false });
+  }
+
+  return [...map.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 };
 
 export const getAvailableUiLocales = (): CustomLanguage[] => [...localeRegistry];

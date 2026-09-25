@@ -50,6 +50,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div className="vop-home-actions">
           {currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> {t('certificates.title','Certificates')}</button>}
           <button type="button" className="secondary" onClick={onOpenBooks}><BookOpen size={16}/> Library</button>
+          <button type="button" className="secondary" onClick={onOpenRadio}><Radio size={16}/> Radio</button>
         </div>
       </section>
 

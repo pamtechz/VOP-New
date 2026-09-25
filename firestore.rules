@@ -38,13 +38,23 @@ service cloud.firestore {
 
     function isOrgMember(orgId) {
       return signedIn()
-        && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
-        && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('active', false) == true;
+        && orgId != ''
+        && (
+          (hasUserProfile() && userDoc().data.get('organizationId', '') == orgId)
+          || (
+            exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('active', false) == true
+          )
+        );
     }
 
     function orgRole(orgId) {
       return isOrgMember(orgId)
-        ? get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', 'viewer')
+        ? (
+            exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
+              ? get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', hasUserProfile() ? userDoc().data.get('organizationRole', 'viewer') : 'viewer')
+              : (hasUserProfile() ? userDoc().data.get('organizationRole', 'admin') : 'viewer')
+          )
         : '';
     }
 
@@ -156,7 +166,8 @@ service cloud.firestore {
         || (isOrgMember(organizationIdForUser()) && data.get('organizationId', '') == organizationIdForUser())
         || (isHierarchyTenant())
         || (data.get('sharingScope', 'private') == 'shared' && data.get(publishedField, false) == true)
-        || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true);
+        || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true)
+        || (signedIn() && data.get('ownerUid', '') == request.auth.uid);
     }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
@@ -616,10 +627,7 @@ service cloud.firestore {
     }
 
     match /radioBroadcasts/{id} {
-      allow get, list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || ((resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true)
-            || (resource.data.get('organizationId','') == '' && resource.data.get('published',false) == true));
+      allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
         (
           isOrgMember(organizationIdForUser())

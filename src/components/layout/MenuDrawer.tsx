@@ -66,6 +66,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
           <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/>{t('navigation.logout','Logout')}</button>
         </div>
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('certificates.my_certificate', 'My Certificate')}</button>
+        <button type="button" style={itemStyle} onClick={() => navigate('radio')}><Radio size={24}/>{t('navigation.radio_broadcasts','Radio & Broadcasts')}</button>
         <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>{t('navigation.announcements','Announcements')}</button>
         {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/>{t('navigation.mentor','Talk to my mentor')}</button>}
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>{t('common.whats_new',"What's New")}</button>

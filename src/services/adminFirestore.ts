@@ -126,11 +126,18 @@ function globalCollectionSubscription(
       ...(organizationId ? [query(ref, where('organizationId', '==', organizationId))] : []),
       query(ref, where('ownerUid', '==', uid)),
     ];
+    let errorCount = 0;
     sources.forEach((source, index) => {
       stops.push(onSnapshot(source, snapshot => {
         buckets.set(String(index), snapshot);
         emit();
-      }, err => onError?.(err)));
+      }, err => {
+        console.warn(`Global content query [${collectionName} #${index}] error:`, err);
+        errorCount++;
+        if (errorCount === sources.length && onError) {
+          onError(err);
+        }
+      }));
     });
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Global content could not be loaded.')));
 

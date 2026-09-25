@@ -182,12 +182,17 @@ export async function canManageOrganizationContent(ctx: TenantContext, data: Doc
 }
 
 export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData | undefined) {
+  if (ctx.isSuperAdmin) return true;
   const ownerKey = String(data?.ownerTenantId || data?.ownerOrganizationId || data?.organizationId || '');
   const currentTenant = tenantOwnerKey(ctx);
   const role = String(ctx.profile.role || '');
   const membershipRole = String(ctx.membership.role || '');
-  const canContribute = ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin'].includes(role) || ['owner','admin','editor'].includes(membershipRole);
-  return ctx.isSuperAdmin || (!!currentTenant && ownerKey === currentTenant && String(data?.ownerUid || '') === ctx.auth.uid && canContribute);
+  const isOrgAdminOrOwner = ['owner', 'admin'].includes(membershipRole);
+  const isHierarchyAdmin = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(role);
+  const canContribute = isHierarchyAdmin || isOrgAdminOrOwner || membershipRole === 'editor' || role === 'editor';
+  if (!canContribute) return false;
+  if (!ownerKey || !currentTenant || ownerKey === currentTenant) return true;
+  return String(data?.ownerUid || '') === ctx.auth.uid;
 }
 
 export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {

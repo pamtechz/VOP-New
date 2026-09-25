@@ -894,7 +894,7 @@ function RadioAdminDashboard({
 
           <div className="vop-radio-admin-schedule">
             <div className="vop-radio-admin-card-title"><span><CalendarDays size={17}/> Schedule</span><button type="button" onClick={()=>setTab('schedule')}>{t('admin.view_schedule','View Schedule')} <ChevronRight size={14}/></button></div>
-            <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><button key={item.id} type="button" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time><MoreVertical size={17}/></button>)}{records.length===0&&<div className="vop-radio-admin-empty">{t('admin.no_radio_content','No radio content configured.')}</div>}</div>
+            <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><div key={item.id} className="vop-radio-schedule-row"><button type="button" className="vop-radio-schedule-info" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time></button><div className="vop-radio-schedule-btns"><button type="button" className="vop-actions" title="Edit" disabled={item.canEdit === false || !canUpdate} onClick={()=>startEditEditor(item)}><Edit3 size={13}/></button><button type="button" className="vop-actions" title="Delete" disabled={item.canEdit === false || !canDelete} onClick={()=>void remove(item.id)}><Trash2 size={13}/></button></div></div>)}{records.length===0&&<div className="vop-radio-admin-empty">{t('admin.no_radio_content','No radio content configured.')}</div>}</div>
           </div>
 
           <div className="vop-radio-admin-add-card">
@@ -945,15 +945,28 @@ function RadioAdminDashboard({
                .map(item => (
                  <article key={item.id}>
                    <div className="media" style={item.posterUrl ? { backgroundImage: 'url("' + String(item.posterUrl) + '")' } : undefined}>
-                     <span>{radioProvider(item)}</span>
-                     <button type="button" onClick={() => edit(item)}><Play size={16} fill="currentColor"/></button>
+                     <span className={item.published ? 'vop-status enabled' : 'vop-status disabled'}>{item.published ? 'Published' : 'Draft'}</span>
+                     <span className="vop-radio-provider-badge">{radioProvider(item)}</span>
+                     <button type="button" className="vop-radio-play-btn" onClick={() => startEditEditor(item)} title="Edit"><Play size={16} fill="currentColor"/></button>
                    </div>
                    <h3>{String(item.title || 'Untitled')}</h3>
                    <p>{String(item.speaker || item.series || '')}</p>
-                   <div>
-                     <small>{radioTime(item)}</small>
-                     <button type="button" onClick={() => edit(item)}>{t('common.edit','Edit')}</button>
-                     <button type="button" onClick={() => void remove(item.id)}>{t('common.delete','Delete')}</button>
+                   <small className="vop-radio-card-time">{radioTime(item)}</small>
+                   <div className="vop-radio-card-actions">
+                     <button
+                       type="button"
+                       className="vop-actions"
+                       disabled={item.canEdit === false || !canUpdate}
+                       title={item.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'}
+                       onClick={() => startEditEditor(item)}
+                     >{t('common.edit','Edit')}</button>
+                     <button
+                       type="button"
+                       className="vop-actions vop-actions-delete"
+                       disabled={item.canEdit === false || !canDelete}
+                       title={item.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'}
+                       onClick={() => void remove(item.id)}
+                     ><Trash2 size={14}/> {t('common.delete','Delete')}</button>
                    </div>
                  </article>
                ))}

@@ -72,12 +72,25 @@ async function verify(req:Request,res:Response){
 async function issue(req:Request,res:Response){
  const firebaseAdmin=admin();const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
  const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(firebaseAdmin);const actor=await db.doc('users/'+decoded.uid).get();
- if(!actor.exists||actor.data()?.role!=='super_admin')return res.status(403).json({error:'Only a super administrator can issue official certificates.'});
+ if(!actor.exists)return res.status(403).json({error:'VOP account profile was not found.'});
+ const actorData=actor.data()||{};
+ const { canPermissionForProfile }=await import('../server/permissions.js');
+ const hasCertPermission=await canPermissionForProfile(db,actorData,'certificates','manage')||await canPermissionForProfile(db,actorData,'certificates','create');
+ if(!hasCertPermission)return res.status(403).json({error:'You do not have permission to issue official certificates.'});
  const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
  if(!candidateId||candidateId.length>128||candidateId.includes('/'))return res.status(400).json({error:'A valid candidate ID is required.'});
  const [candidateSnapshot,configSnapshot,requestsSnapshot,settingsSnapshot]=await Promise.all([db.doc('users/'+candidateId).get(),db.doc('system/certification').get(),db.collection('graduationRequests').where('candidateId','==',candidateId).limit(50).get(),db.doc('system/settings').get()]);
  if(!candidateSnapshot.exists)return res.status(404).json({error:'Candidate account was not found.'});
- const candidate=candidateSnapshot.data()??{},config=configSnapshot.data()??{};const organizationId=String(candidate.organizationId||'').trim();if(!organizationId)return res.status(409).json({error:'The candidate is not linked to a tenant organization.'});if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
+ const candidate=candidateSnapshot.data()??{},config=configSnapshot.data()??{};const organizationId=String(candidate.organizationId||'').trim();if(!organizationId)return res.status(409).json({error:'The candidate is not linked to a tenant organization.'});
+ const actorRole=String(actorData.role||'');
+ if(actorRole!=='super_admin'){
+  const actorOrg=String(actorData.organizationId||'').trim();
+  const hField=hierarchyScopeField(actorRole);
+  const actorNodeId=String(actorData.adminNodeId||'').trim();
+  const inScope=actorOrg===organizationId||(Boolean(hField)&&Boolean(actorNodeId)&&(String(candidate[hField]||'')===actorNodeId||String((candidate.hierarchy as Record<string,unknown>||{})[hField]||'')===actorNodeId));
+  if(!inScope)return res.status(403).json({error:'The candidate is outside your authorized tenant scope.'});
+ }
+ if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
  const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>{const approvedAt=dateValue(x.approvedAt);return String(x.organizationId||'')===organizationId&&x.status==='approved'&&Boolean(approvedAt)&&Date.parse(approvedAt)<=Date.now();}).sort((a,b)=>Date.parse(String(dateValue(b.approvedAt)||''))-Date.parse(String(dateValue(a.approvedAt)||'')))[0];
  if(!approved)return res.status(409).json({error:'The candidate does not have an approved graduation record.'});
  if(candidate.information?.graduated!==true)return res.status(409).json({error:'The candidate is not marked as graduated.'});

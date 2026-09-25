@@ -1,0 +1,1 @@
+# VOP UI Localization Inventory\n\nLikely user-visible literals requiring stable namespaced UI translation keys. Human-authored lesson/curriculum content is intentionally excluded.\n

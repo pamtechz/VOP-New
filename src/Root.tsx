@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, authPersistenceReady, firebaseConfigured } from './lib/firebase';
+import { auth, firebaseConfigured } from './lib/firebase';
 import { SignInPage } from './pages/SignInPage';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -25,8 +25,6 @@ export function Root() {
       setDataReady(true);
       return;
     }
-
-    let cancelled = false;
 
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -117,7 +115,6 @@ export function Root() {
     );
 
     return () => {
-      cancelled = true;
       unsubscribe();
     };
   }, []);
