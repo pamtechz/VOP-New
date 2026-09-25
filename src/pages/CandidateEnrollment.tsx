@@ -1,22 +1,71 @@
-import React, { useEffect, useState } from 'react';
+import React,{useEffect,useState} from 'react';
 import { Check, GraduationCap, Mail, Phone, Plus, UserPlus } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User } from '../types';
 
-type Course = { id:string; title?:string; language?:string; published?:boolean; archived?:boolean };
+type Course={id:string;title?:string;language?:string;published?:boolean;archived?:boolean};
+type Organization={id:string;name:string};
 
-export default function CandidateEnrollment({ currentUser }: { currentUser: User }) {
-  const [courses,setCourses]=useState<Course[]>([]); const [courseId,setCourseId]=useState('');
-  const [organizationId,setOrganizationId]=useState(String(currentUser.organizationId || ''));
-  const [organizations,setOrganizations]=useState<Array<{id:string;name:string}>>([]);
+export default function CandidateEnrollment({currentUser}:{currentUser:User}){
+  const [organizationId,setOrganizationId]=useState(String(currentUser.organizationId||''));
+  const [organizations,setOrganizations]=useState<Organization[]>([]);
+  const [courses,setCourses]=useState<Course[]>([]);
+  const [courseId,setCourseId]=useState('');
   const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [phone,setPhone]=useState(''); const [password,setPassword]=useState('');
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false); const [message,setMessage]=useState(''); const [error,setError]=useState('');
 
-  useEffect(()=>{ void (async()=>{ try { if(!organizationId && auth.currentUser){ const token=await auth.currentUser.getIdToken(); const r=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listOrganizations'})}); const b=await r.json().catch(()=>({})) as {items?:Array<{id:string;name:string}>;error?:string}; if(!r.ok) throw new Error(b.error||'Could not load organizations.'); const list=b.items||[]; setOrganizations(list); if(list[0]) setOrganizationId(list[0].id); } } catch(e){setError(e instanceof Error?e.message:'Could not load organizations.');} finally{setLoading(false);} })(); },[]);
+  useEffect(()=>{void (async()=>{
+    if(!auth.currentUser)return;
+    try{
+      if(!organizationId){
+        const token=await auth.currentUser.getIdToken();
+        const r=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listOrganizations'})});
+        const b=await r.json().catch(()=>({})) as {items?:Organization[];error?:string};
+        if(!r.ok)throw new Error(b.error||'Could not load organizations.');
+        const list=b.items||[];setOrganizations(list);if(list[0])setOrganizationId(list[0].id);
+      }
+    }catch(e){setError(e instanceof Error?e.message:'Could not load organizations.');}
+    finally{setLoading(false);}
+  })()},[organizationId]);
 
-  useEffect(()=>{ if(!organizationId || !auth.currentUser)return; void (async()=>{ try { const token=await auth.currentUser!.getIdToken(); const r=await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listGuides',collection:'guides',organizationId})}); const b=await r.json().catch(()=>({})) as {items?:Course[];error?:string}; if(!r.ok) throw new Error(b.error||'Could not load courses.'); setCourses((b.items||[]).filter(item=>item.published===true&&item.archived!==true)); } catch(e){setError(e instanceof Error?e.message:'Could not load courses.');} },)(); },[organizationId]);
+  useEffect(()=>{if(!organizationId||!auth.currentUser)return;void (async()=>{
+    try{
+      const token=await auth.currentUser!.getIdToken();
+      const r=await fetch('/api/admin/content',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'listGuides',collection:'guides',organizationId})});
+      const b=await r.json().catch(()=>({})) as {items?:Course[];error?:string};
+      if(!r.ok)throw new Error(b.error||'Could not load courses.');
+      setCourses((b.items||[]).filter(item=>item.published===true&&item.archived!==true));
+    }catch(e){setError(e instanceof Error?e.message:'Could not load courses.');}
+  })()},[organizationId]);
 
-  const submit=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);setError('');setMessage(''); try { if(!organizationId||!courseId||!name.trim()||!email.trim()) throw new Error('Organization, course, full name and email are required.'); if(password&&password.length<6) throw new Error('Password must contain at least 6 characters.'); const token=await auth.currentUser!.getIdToken(); const r=await fetch('/api/admin/candidates',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'enroll',organizationId,displayName:name.trim(),email:email.trim(),phoneNumber:phone.trim(),password,guideId:courseId})}); const b=await r.json().catch(()=>({})) as {error?:string;created?:boolean;candidate?:{displayName?:string}}; if(!r.ok) throw new Error(b.error||'Candidate enrollment failed.'); setMessage(b.created?'Account created and candidate enrolled successfully.':'Existing account enrolled successfully.'); setName('');setEmail('');setPhone('');setPassword('');setCourseId(''); } catch(e){setError(e instanceof Error?e.message:'Candidate enrollment failed.');} finally{setSaving(false);} };
+  const submit=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);setError('');setMessage('');
+    try{
+      if(!organizationId||!courseId||!name.trim()||!email.trim())throw new Error('Organization, course, full name and email are required.');
+      if(password&&password.length<6)throw new Error('Password must contain at least 6 characters.');
+      const token=await auth.currentUser!.getIdToken();
+      const r=await fetch('/api/admin/enrollCandidate',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({organizationId,guideId:courseId,displayName:name.trim(),email:email.trim(),phoneNumber:phone.trim(),password})});
+      const b=await r.json().catch(()=>({})) as {error?:string;created?:boolean};
+      if(!r.ok)throw new Error(b.error||'Candidate enrollment failed.');
+      setMessage(b.created?'Account created and candidate enrolled successfully.':'Existing account enrolled successfully.');
+      setName('');setEmail('');setPhone('');setPassword('');setCourseId('');
+    }catch(e){setError(e instanceof Error?e.message:'Candidate enrollment failed.');}
+    finally{setSaving(false);}
+  };
 
-  return <div><div className="vop-page-header"><div><div className="vop-breadcrumb"><UserPlus size={15}/> Administration / Candidates</div><h1>Add Candidate</h1><p>Create the learner account and enroll the learner into a published course on one page.</p></div></div>{message&&<div className="vop-toast"><Check size={16}/>{message}</div>}{error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}<form className="vop-card vop-form-card" onSubmit={submit}><div className="vop-section-title"><div><h2>Candidate account & course enrollment</h2><p>Creates the account, organization membership and course enrollment together.</p></div><div className="vop-heading-icon"><GraduationCap size={28}/></div></div><div className="vop-form-grid">{organizations.length>0&&<div className="vop-field"><label>Organization *</label><select value={organizationId} onChange={e=>{setOrganizationId(e.target.value);setCourseId('')}}><option value="">Select organization</option>{organizations.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>}<div className="vop-field"><label>Course *</label><select value={courseId} onChange={e=>setCourseId(e.target.value)} disabled={loading||!organizationId}><option value="">Select a published course</option>{courses.map(course=><option key={course.id} value={course.id}>{course.title||course.id}{course.language?' · '+course.language.toUpperCase():''}</option>)}</select></div><div className="vop-field"><label>Full name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Candidate full name" required/></div><div className="vop-field"><label>Email *</label><div style={{display:'flex',gap:8,alignItems:'center'}}><Mail size={16}/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="candidate@example.org" required/></div></div><div className="vop-field"><label>Phone</label><div style={{display:'flex',gap:8,alignItems:'center'}}><Phone size={16}/><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Optional phone number"/></div></div><div className="vop-field"><label>Temporary password <small>(optional)</small></label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Leave empty to send a reset link"/></div></div><div className="vop-setting-row" style={{marginTop:18}}><div><div className="vop-setting-name">Enrollment</div><div className="vop-setting-help">The candidate receives learner membership and an active course enrollment.</div></div><button className="vop-primary" type="submit" disabled={saving||loading||!courseId||!name.trim()||!email.trim()}><Plus size={17}/>{saving?'Creating & enrolling…':'Create account & enroll'}</button></div></form></div>;
+  return <div>
+    <div className="vop-page-header"><div><div className="vop-breadcrumb"><UserPlus size={15}/> Administration / Candidates</div><h1>Add Candidate</h1><p>Create the learner account and enroll the learner into a published course on one page.</p></div></div>
+    {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}{error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}
+    <form className="vop-card vop-form-card" onSubmit={submit}>
+      <div className="vop-section-title"><div><h2>Candidate account & course enrollment</h2><p>Creates the account, organization membership and active course enrollment together.</p></div><div className="vop-heading-icon"><GraduationCap size={28}/></div></div>
+      <div className="vop-form-grid">
+        {organizations.length>0&&<div className="vop-field"><label>Organization *</label><select value={organizationId} onChange={e=>{setOrganizationId(e.target.value);setCourseId('')}}><option value="">Select organization</option>{organizations.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>}
+        <div className="vop-field"><label>Course *</label><select value={courseId} onChange={e=>setCourseId(e.target.value)} disabled={loading||!organizationId}><option value="">Select a published course</option>{courses.map(course=><option key={course.id} value={course.id}>{course.title||course.id}{course.language?' · '+course.language.toUpperCase():''}</option>)}</select></div>
+        <div className="vop-field"><label>Full name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Candidate full name" required/></div>
+        <div className="vop-field"><label>Email *</label><div style={{display:'flex',gap:8,alignItems:'center'}}><Mail size={16}/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="candidate@example.org" required/></div></div>
+        <div className="vop-field"><label>Phone</label><div style={{display:'flex',gap:8,alignItems:'center'}}><Phone size={16}/><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Optional phone number"/></div></div>
+        <div className="vop-field"><label>Temporary password <small>(optional)</small></label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Leave empty to send a reset link"/></div>
+      </div>
+      <div className="vop-setting-row" style={{marginTop:18}}><div><div className="vop-setting-name">Enrollment</div><div className="vop-setting-help">The candidate receives learner membership and an active course enrollment. No second manual step is required.</div></div><button className="vop-primary" type="submit" disabled={saving||loading||!courseId||!name.trim()||!email.trim()}><Plus size={17}/>{saving?'Creating & enrolling…':'Create account & enroll'}</button></div>
+    </form>
+  </div>;
 }
