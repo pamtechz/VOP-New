@@ -1,0 +1,26 @@
+name: Apply final admin finish
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply final admin finish
+        run: python3 scripts/final-admin-finish.py
+      - name: Commit and remove one-shot tooling
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/apply-final-admin-finish.yml scripts/final-admin-finish.py
+          git add api/admin/content.ts src/pages/OrganizationManagement.tsx src/pages/admin.css
+          git add -u .github/workflows/apply-final-admin-finish.yml scripts/final-admin-finish.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'feat: finalize admin modal editors and publication state'
+          git push origin main
