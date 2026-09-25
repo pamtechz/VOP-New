@@ -153,6 +153,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const loadError = (reason: Error) => setError(reason.message || 'Could not load records.');
 
