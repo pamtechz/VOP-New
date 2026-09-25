@@ -7,12 +7,17 @@ const dictionaryCache: Record<string, Record<string,string>> = {};
 const localeFallbacks: Record<string, string> = {};
 const localeState = { value: '', version: 0 };
 const localeRegistry: CustomLanguage[] = [];
+const localeAliases: Record<string,string> = {};
 let localeRegistryLoaded = false;
 const listeners = new Set<() => void>();
 
 function notify() { listeners.forEach(listener => listener()); }
 function normalizeLocale(value: unknown) { return String(value || '').trim().toLowerCase(); }
 function isLocale(value: unknown) { return /^[a-z]{2,3}(?:[-_][a-z]{2,4})?$/i.test(String(value || '').trim()); }
+function resolveRegisteredLocale(value: unknown) {
+  const requested = normalizeLocale(value);
+  return localeAliases[requested] || requested;
+}
 
 function humanizeTranslationKey(key: string): string {
   const segment = String(key || '').split('.').pop() || String(key || '');
@@ -35,7 +40,7 @@ export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] 
   const map = new Map<string, CustomLanguage>();
   source.forEach(language => {
     if (!language || language.enabled === false) return;
-    const code = String(language.code || '').trim().toLowerCase();
+    const code = resolveRegisteredLocale(language.code);
     if (!code) return;
     const name = String(language.name || code).trim();
     const nativeName = String(language.nativeName || name).trim();
@@ -47,13 +52,24 @@ export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] 
 export const getAvailableUiLocales = (): CustomLanguage[] => [...localeRegistry];
 
 export async function loadUiLocaleRegistry(): Promise<CustomLanguage[]> {
-  if (localeRegistryLoaded) return [...localeRegistry];
   try {
     const response = await fetch('/api/localization', { headers:{Accept:'application/json'} });
     if (!response.ok) throw new Error('Locale registry unavailable.');
     const payload = await response.json();
     const items = Array.isArray(payload?.items) ? payload.items : [];
-    localeRegistry.splice(0, localeRegistry.length, ...items.filter((item: any) => item && item.enabled !== false && typeof item.code === 'string').map((item: any) => ({ code:String(item.code).trim().toLowerCase(), name:String(item.name || item.code).trim(), nativeName:String(item.nativeName || item.name || item.code).trim(), enabled:true, sortOrder:Number(item.sortOrder || 0), rtl:item.direction === 'rtl' || item.rtl === true })).sort((a:CustomLanguage,b:CustomLanguage) => (a.sortOrder ?? 0)-(b.sortOrder ?? 0) || a.name.localeCompare(b.name)));
+    localeRegistry.splice(0, localeRegistry.length);
+    Object.keys(localeAliases).forEach(key => delete localeAliases[key]);
+    items.filter((item: any) => item && item.enabled !== false && typeof item.code === 'string').forEach((item: any) => {
+      const code = String(item.code).trim().toLowerCase();
+      const language = { code, name:String(item.name || code).trim(), nativeName:String(item.nativeName || item.name || code).trim(), enabled:true, sortOrder:Number(item.sortOrder || 0), rtl:item.direction === 'rtl' || item.rtl === true } as CustomLanguage;
+      localeRegistry.push(language);
+      const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+      aliases.forEach((alias: unknown) => {
+        const normalized = normalizeLocale(alias);
+        if (normalized && normalized !== code) localeAliases[normalized] = code;
+      });
+    });
+    localeRegistry.sort((a:CustomLanguage,b:CustomLanguage) => (a.sortOrder ?? 0)-(b.sortOrder ?? 0) || a.name.localeCompare(b.name));
     localeRegistryLoaded = true;
   } catch {
     if (!localeRegistry.some(item => item.code === 'en')) localeRegistry.push({code:'en',name:'English',nativeName:'English',enabled:true,sortOrder:0,rtl:false});
@@ -63,14 +79,14 @@ export async function loadUiLocaleRegistry(): Promise<CustomLanguage[]> {
 }
 
 export const getUiLocale = (settings?: AppSettings): LanguageCode => {
-  const stored = normalizeLocale(localStorage.getItem(UI_LOCALE_KEY));
+  const stored = resolveRegisteredLocale(localStorage.getItem(UI_LOCALE_KEY));
   if (stored) return stored;
-  const configured = normalizeLocale(settings?.defaultLanguage);
+  const configured = resolveRegisteredLocale(settings?.defaultLanguage);
   return configured || 'en';
 };
 
 export const setUiLocale = (locale: LanguageCode) => {
-  const normalized = normalizeLocale(locale) || 'en';
+  const normalized = resolveRegisteredLocale(locale) || 'en';
   localStorage.setItem(UI_LOCALE_KEY, normalized);
   localeState.value = normalized;
   localeState.version += 1;
@@ -79,7 +95,7 @@ export const setUiLocale = (locale: LanguageCode) => {
 };
 
 export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promise<void> {
-  const requested = normalizeLocale(locale) || fallback;
+  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);
   if (dictionaryCache[requested]) {
     localeState.value = requested;
     localeState.version += 1;
@@ -91,7 +107,7 @@ export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promi
     if (!response.ok) throw new Error(`Locale ${requested} is unavailable.`);
     const payload = await response.json();
     dictionaryCache[requested] = payload?.translations && typeof payload.translations === 'object' ? payload.translations as Record<string,string> : {};
-    localeFallbacks[requested] = normalizeLocale(payload?.fallback) || 'en';
+    localeFallbacks[requested] = normalizeLocale(payload?.fallback) || resolveRegisteredLocale(fallback) || 'en';
     document.documentElement.dir = payload?.direction === 'rtl' ? 'rtl' : 'ltr';
     document.documentElement.lang = requested;
     localeState.value = requested;
@@ -121,7 +137,7 @@ export function useLocalization(settings?: AppSettings) {
 
 export const getTranslation = (key: string, requestedLocale: LanguageCode = 'en', customTranslations?: Record<string, Record<string, string>>, defaultFallback?: string, componentName?: string, vars?: Record<string,string|number>): string => {
   const registryKey = String(key || '').trim();
-  const explicitLocale = normalizeLocale(requestedLocale);
+  const explicitLocale = resolveRegisteredLocale(requestedLocale);
   const legacyFallback = !isLocale(explicitLocale) && !defaultFallback ? explicitLocale : '';
   const fallback = String(defaultFallback || legacyFallback || '').trim() || humanizeTranslationKey(registryKey);
   try { registerLocalizationString(registryKey, fallback, componentName); } catch { /* discovery is non-blocking */ }
