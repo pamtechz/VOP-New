@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, RadioPlaylist, Announcement, BookResource,
@@ -12,7 +13,7 @@ import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { initializeLocalization, setUiLocale } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
-import { auth } from './lib/firebase';
+import { auth, db } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
@@ -84,11 +85,6 @@ export const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const inviteToken = params.get('invite');
       const shareCode = params.get('ref');
-
-      // An invited account may be a newly created Firebase account with no
-      // Firestore profile yet. Accept the invitation first so the server can
-      // provision the tenant membership/profile before the normal profile
-      // bootstrap check runs.
       if (inviteToken && firebaseAuth.currentUser) {
         try {
           const token = await firebaseAuth.currentUser.getIdToken();
@@ -102,15 +98,12 @@ export const App: React.FC = () => {
             await firebaseAuth.currentUser.getIdToken(true);
             window.history.replaceState({}, '', window.location.pathname);
             setStudyError('');
-          } else if (result?.error) {
-            setStudyError(String(result.error));
-          }
+          } else if (result?.error) setStudyError(String(result.error));
         } catch (inviteError) {
           console.error('Organization invitation acceptance failed', inviteError);
           setStudyError(inviteError instanceof Error ? inviteError.message : 'The organization invitation could not be accepted.');
         }
       }
-
       void loadFirestoreUser(firebaseUser.uid).then(async (profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
@@ -136,9 +129,7 @@ export const App: React.FC = () => {
               const refreshed = await loadFirestoreUser(firebaseUser.uid);
               if (refreshed) setCurrentUser(refreshed);
               setStudyError('');
-            } else if (result?.error) {
-              setStudyError(String(result.error));
-            }
+            } else if (result?.error) setStudyError(String(result.error));
           } catch (shareError) {
             console.error('Shared course enrollment failed', shareError);
           }
@@ -156,7 +147,6 @@ export const App: React.FC = () => {
     let cancelled = false;
     void loadPublicContent().then(snapshot => {
       if (cancelled) return;
-
       const customTranslations: Record<string, Record<string, string>> = {};
       Object.entries(snapshot.translations).forEach(([key, values]) => {
         Object.entries(values).forEach(([language, value]) => {
@@ -164,13 +154,7 @@ export const App: React.FC = () => {
           customTranslations[language][key] = value;
         });
       });
-
-      const nextSettings: AppSettings = {
-        ...snapshot.settings,
-        customLanguages: snapshot.languages,
-        customTranslations,
-      };
-
+      const nextSettings: AppSettings = { ...snapshot.settings, customLanguages: snapshot.languages, customTranslations };
       setSettings(nextSettings);
       setGuides(snapshot.guides);
       setAnnouncements(snapshot.announcements);
@@ -181,7 +165,6 @@ export const App: React.FC = () => {
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
       setRadioPlaylists(snapshot.radioPlaylists);
-
       const deepLinkParams = new URLSearchParams(window.location.search);
       const guideParam = deepLinkParams.get('guide');
       const lessonParam = deepLinkParams.get('lesson');
@@ -202,9 +185,6 @@ export const App: React.FC = () => {
       }
       const shareRef = deepLinkParams.get('ref');
       if (shareRef) sessionStorage.setItem('vop_share_ref', shareRef);
-
-      // The server is the source of truth; localStorage is only a local cache for
-      // components that still need synchronous access during the current session.
       saveSettings(nextSettings);
       saveGuides(snapshot.guides);
       saveAnnouncements(snapshot.announcements);
@@ -220,9 +200,46 @@ export const App: React.FC = () => {
         setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded.');
       }
     });
-
     return () => { cancelled = true; };
   }, [currentUser.uid, currentUser.organizationId]);
+
+  // Radio is live Firestore content. Keep the public/admin application state
+  // synchronized after an administrator publishes, edits, or deletes a record;
+  // do not wait for a full page reload or a stale localStorage snapshot.
+  useEffect(() => {
+    if (!db) return;
+    let cancelled = false;
+    const ref = collection(db, 'radioBroadcasts');
+    const queries = [
+      query(ref, where('sharingScope', '==', 'shared'), where('published', '==', true)),
+      query(ref, where('organizationId', '==', ''), where('published', '==', true)),
+    ];
+    const organizationId = String(currentUser.organizationId || '').trim();
+    if (organizationId) queries.push(query(ref, where('organizationId', '==', organizationId), where('published', '==', true)));
+    const buckets = new Map<string, { id: string; data: () => Record<string, unknown>; ref: { path: string } }[]>();
+    const emit = () => {
+      if (cancelled) return;
+      const merged = new Map<string, { id: string; data: () => Record<string, unknown>; ref: { path: string } }>();
+      buckets.forEach(items => items.forEach(item => merged.set(item.ref.path, item)));
+      const next = [...merged.values()].map(item => {
+        const data = item.data();
+        return {
+          id: item.id,
+          ...data,
+          published: data.published === true,
+        } as RadioBroadcast;
+      }).filter(item => item.published === true && (item.title?.trim() || item.audioUrl || item.videoUrl || item.streamUrl));
+      setRadioBroadcasts(next);
+      saveRadioBroadcasts(next);
+    };
+    const stops = queries.map((source, index) => onSnapshot(source, snapshot => {
+      buckets.set(String(index), snapshot.docs.map(item => ({ id:item.id, data:() => item.data() as Record<string, unknown>, ref:{path:item.ref.path} })));
+      emit();
+    }, error => {
+      if (!cancelled) console.warn('Public radio realtime subscription failed:', error);
+    }));
+    return () => { cancelled = true; stops.forEach(stop => stop()); };
+  }, [currentUser.organizationId]);
 
   useEffect(() => {
     const refreshOwnProfile = () => {
@@ -232,9 +249,7 @@ export const App: React.FC = () => {
           setCurrentUser(profile);
           setAllUsers([profile]);
         }
-      }).catch(error => {
-        console.warn('VOP profile refresh failed', error);
-      });
+      }).catch(error => console.warn('VOP profile refresh failed', error));
     };
     window.addEventListener('vop_profile_updated', refreshOwnProfile);
     return () => window.removeEventListener('vop_profile_updated', refreshOwnProfile);
@@ -244,7 +259,6 @@ export const App: React.FC = () => {
     if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
   }, [isDarkMode]);
-
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
@@ -258,21 +272,15 @@ export const App: React.FC = () => {
       return a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [activeGuide]);
-
-  const activeLessonIndex = activeLesson
-    ? orderedActiveLessons.findIndex(lesson => lesson.id === activeLesson.id)
-    : -1;
+  const activeLessonIndex = activeLesson ? orderedActiveLessons.findIndex(lesson => lesson.id === activeLesson.id) : -1;
   const previousLesson = activeLessonIndex > 0 ? orderedActiveLessons[activeLessonIndex - 1] : undefined;
-  const nextLesson = activeLessonIndex >= 0 && activeLessonIndex < orderedActiveLessons.length - 1
-    ? orderedActiveLessons[activeLessonIndex + 1]
-    : undefined;
+  const nextLesson = activeLessonIndex >= 0 && activeLessonIndex < orderedActiveLessons.length - 1 ? orderedActiveLessons[activeLessonIndex + 1] : undefined;
 
   const navigate = (route: AppRoute) => {
     setActiveGuide(null);
     setActiveLesson(null);
     setStudyError('');
     setIsMenuOpen(false);
-    // Display checks are not security. Server APIs must authorize roles and scopes.
     if (route === 'admin' && !(['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || '')))) return;
     setCurrentRoute(route);
   };
@@ -285,29 +293,16 @@ export const App: React.FC = () => {
       <div className={isMobileShell ? 'mobile-device-frame' : ''} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {isMobileShell && <div className="device-notch" />}
         {showDashboardShell && (
-          <Header
-            currentUser={currentUser}
-            settings={settings}
-            activeLanguage={activeLanguage}
+          <Header currentUser={currentUser} settings={settings} activeLanguage={activeLanguage}
             onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setStudyError(''); }}
-            isDarkMode={isDarkMode}
-            onToggleDarkMode={() => setIsDarkMode(value => !value)}
-            isMobileShell={isMobileShell}
-            onToggleMobileShell={() => setIsMobileShell(value => !value)}
-            onOpenMenu={() => setIsMenuOpen(true)}
-            currentRoute={currentRoute}
-            onNavigate={navigate}
-          />
+            isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
+            onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage currentUser={currentUser} onBack={() => setCurrentRoute('profile')} />}
-          {currentRoute === 'profile' && (
-            <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences}
-              districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage}
-              onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />
-          )}
+          {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={returnHome} />}
@@ -316,99 +311,32 @@ export const App: React.FC = () => {
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}
           {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
-          {showCourse && activeGuide && (
-            <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
-              onBack={() => setActiveGuide(null)} onSelectLesson={lesson => {
-                setStudyError('');
-                const resumeKey = `${activeLanguage}:${activeGuide.id}:${lesson.id}`;
-                setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
-                setActiveLesson(lesson);
-              }}
-              onOpenCertificate={() => navigate('certificates')} />
-          )}
-          {showDashboardShell && (
-            <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements}
-              settings={settings} activeLanguage={activeLanguage} onSelectGuide={setActiveGuide}
-              onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />
-          )}
+          {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
+            onBack={() => setActiveGuide(null)} onSelectLesson={lesson => {
+              setStudyError('');
+              const resumeKey = `${activeLanguage}:${activeGuide.id}:${lesson.id}`;
+              setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
+              setActiveLesson(lesson);
+            }} onOpenCertificate={() => navigate('certificates')} />}
+          {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={setActiveGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
         </main>
         {showDashboardShell && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
-      <MenuDrawer
-        isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser}
-        allUsers={[]} onSelectUser={() => { /* No unauthenticated account impersonation. */ }}
-        onNavigate={navigate}
-        onLogout={() => void firebaseSignOut()}
-      />
-      {activeLesson?.type === 'Lesson' && activeGuide && (
-        <LessonReaderModal
-          lesson={activeLesson}
-          guide={activeGuide}
-          initialPageIndex={deepLinkPageIndex}
-          onClose={() => setActiveLesson(null)}
-          hasPreviousLesson={Boolean(previousLesson)}
-          hasNextLesson={Boolean(nextLesson)}
-          onPreviousLesson={() => {
-            if (previousLesson) {
-              const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`;
-              setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
-              setActiveLesson(previousLesson);
-            }
-          }}
-          onNextLesson={() => {
-            if (nextLesson) {
-              const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`;
-              setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
-              setActiveLesson(nextLesson);
-            }
-          }}
-          onComplete={async () => {
-            const accepted = await completeLesson(activeGuide.id, activeLesson.id);
-            if (!accepted) {
-              setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.');
-              return false;
-            }
-            if (auth?.currentUser) {
-              const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
-              if (refreshedUser) {
-                setCurrentUser(refreshedUser);
-                setAllUsers([refreshedUser]);
-              }
-            }
-            if (!nextLesson) setActiveLesson(null);
-            return true;
-          }}
-        />
-      )}
-      {activeLesson?.type === 'Test' && activeGuide && (
-        <QuizModal
-          lesson={activeLesson}
-          guide={activeGuide}
-          passThreshold={settings.quizPassThreshold}
-          onClose={() => setActiveLesson(null)}
-          hasNextLesson={Boolean(nextLesson)}
-          onContinue={() => {
-            if (nextLesson) setActiveLesson(nextLesson);
-          }}
-          onSubmitScore={async answers => {
-            const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers);
-            if (score === null) {
-              setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.');
-              return null;
-            }
-            setStudyError('');
-            if (auth?.currentUser) {
-              const refreshedUser = await loadFirestoreUser(auth.currentUser.uid);
-              if (refreshedUser) {
-                setCurrentUser(refreshedUser);
-                setAllUsers([refreshedUser]);
-              }
-            }
-            return score;
-          }}
-          onOpenCertificate={() => navigate('certificates')}
-        />
-      )}
+      <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser} allUsers={[]} onSelectUser={() => {}} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />
+      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
+        const accepted = await completeLesson(activeGuide.id, activeLesson.id);
+        if (!accepted) { setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.'); return false; }
+        if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
+        if (!nextLesson) setActiveLesson(null);
+        return true;
+      }} />}
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
+        const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers);
+        if (score === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
+        setStudyError('');
+        if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
+        return score;
+      }} onOpenCertificate={() => navigate('certificates')} />}
     </div>
   );
 };
