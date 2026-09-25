@@ -615,7 +615,7 @@ export const deleteAdminRecord = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/content', {
+  const response = await fetch('/api/admin/languages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action: 'delete', collection: collectionName, id }),
@@ -693,7 +693,7 @@ export const saveTranslation = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/content', {
+  const response = await fetch('/api/admin/languages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({
