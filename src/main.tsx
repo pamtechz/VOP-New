@@ -4,6 +4,7 @@ import { Root } from './Root';
 import './index.css';
 import './reference.css';
 import './radio-responsive.css';
+import './admin-layout-overrides.css';
 
 // Only the Firebase-backed study app can be mounted; no legacy demo fallback.
 const container = document.getElementById('root');
