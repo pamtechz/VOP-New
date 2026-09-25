@@ -482,7 +482,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
                     <small>{row.key}{row.component ? ' · ' + row.component : ''}</small>
                   </div>
                   <div className={`vop-translation-input-wrap${row.value.trim() ? ' has-value' : ''}`}>
-                    <span className="vop-translation-input-lang">{selectedTranslation || '—'}</span>
+                    <span className="vop-translation-input-lang">{languages.find(language => language.code === selectedTranslation)?.name || selectedTranslation || '—'}</span>
                     <input
                       value={row.value}
                       disabled={translations.find(item => item.id === selectedTranslation)?.canEdit === false}

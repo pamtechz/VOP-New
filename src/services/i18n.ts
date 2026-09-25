@@ -91,11 +91,12 @@ export const setUiLocale = (locale: LanguageCode) => {
   localeState.value = normalized;
   localeState.version += 1;
   notify();
-  void loadUiLocale(normalized);
+  void loadUiLocale(normalized, 'en', true);
 };
 
-export async function loadUiLocale(locale: LanguageCode, fallback = 'en'): Promise<void> {
+export async function loadUiLocale(locale: LanguageCode, fallback = 'en', force = false): Promise<void> {
   const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);
+  if (force) delete dictionaryCache[requested];
   if (dictionaryCache[requested]) {
     localeState.value = requested;
     localeState.version += 1;
@@ -150,6 +151,20 @@ export const getTranslation = (key: string, requestedLocale: LanguageCode = 'en'
   if (vars) value = value.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match);
   return value;
 };
+
+export const refreshUiLocale = async (locale?: LanguageCode): Promise<void> => {
+  const requested = resolveRegisteredLocale(locale || localeState.value || getUiLocale());
+  await loadUiLocale(requested, 'en', true);
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('vop_ui_translation_updated', event => {
+    const detail = (event as CustomEvent<{locale?: string}>).detail;
+    const current = resolveRegisteredLocale(localeState.value || getUiLocale());
+    const changed = resolveRegisteredLocale(detail?.locale || '');
+    if (!changed || changed === current) void refreshUiLocale(current);
+  });
+}
 
 export const initializeLocalization = async (settings?: AppSettings) => {
   const locale = getUiLocale(settings);

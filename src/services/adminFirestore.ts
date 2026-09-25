@@ -705,4 +705,7 @@ export const saveTranslation = async (
   });
   const payload = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('vop_ui_translation_updated', { detail: { locale: id } }));
+  }
 };

@@ -634,13 +634,23 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'upsert') {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
         if (collection === 'translations') {
-          if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');
-          const requestedCode = String(incoming.code || incoming.languageCode || id).trim().toLowerCase();
           const languageSnap = await ctx.db.collection('languages').get();
-          const languageDoc = languageSnap.docs.find(d => { const data = d.data() || {}; return [d.id, data.code, data.languageCode, data.name, data.nativeName].map(v => String(v || '').trim().toLowerCase()).includes(requestedCode); });
+          const requestedCode = String(incoming.code || incoming.languageCode || id).trim().toLowerCase();
+          const languageDoc = languageSnap.docs.find(d => {
+            const data = d.data() || {};
+            return [d.id, data.code, data.languageCode, data.name, data.nativeName].map(v => String(v || '').trim().toLowerCase()).includes(requestedCode);
+          });
           if (!languageDoc) throw new Error('Select a language from the configured Languages list.');
+          await requirePermission(ctx, 'translations', 'update');
           const language = languageDoc.data() || {};
-          const code = String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();
+          const localesSnap = await ctx.db.collection('locales').get();
+          const same = (a: unknown, b: unknown) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+          const relatedLocale = localesSnap.docs.find(d => {
+            const data = d.data() || {};
+            return d.id.toLowerCase() !== requestedCode && (same(data.name, language.name) || same(data.nativeName, language.nativeName) || same(data.nativeName, language.name));
+          });
+          const relatedCode = String(relatedLocale?.id || '').trim().toLowerCase();
+          const code = relatedCode && language(relatedCode) ? relatedCode : String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();
           const values = incoming.values && typeof incoming.values === 'object' ? incoming.values as Record<string,unknown> : {};
           await ctx.db.doc(`locales/${code}`).set({ id:code, code, name:String(language.name || language.nativeName || code), nativeName:String(language.nativeName || language.name || code), enabled:language.enabled !== false, direction:language.rtl === true ? 'rtl' : 'ltr', fallback:String(language.fallback || 'en'), updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, {merge:true});
           const batch = ctx.db.batch();
