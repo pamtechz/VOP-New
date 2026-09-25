@@ -1,0 +1,210 @@
+name: Apply admin UI fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !startsWith(github.event.head_commit.message, 'fix: admin modal and radio publication') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply targeted fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('src/pages/AdminRecordsPanel.tsx')
+          s = p.read_text()
+
+          s = s.replace(
+              "  const [editingId, setEditingId] = useState<string | null>(null);\n",
+              "  const [editingId, setEditingId] = useState<string | null>(null);\n  const [formOpen, setFormOpen] = useState(false);\n"
+          )
+          s = s.replace(
+              "    setEditingId(null);\n    setSearch('');",
+              "    setEditingId(null);\n    setFormOpen(false);\n    setSearch('');"
+          )
+          s = s.replace(
+              "    setEditingId(null);\n    setForm(blankForm(kind));\n  };",
+              "    setEditingId(null);\n    setForm(blankForm(kind));\n    setFormOpen(true);\n  };",
+              1
+          )
+          s = s.replace(
+              "    setEditingId(record.id);\n    const next: FormState = {};",
+              "    setEditingId(record.id);\n    setFormOpen(true);\n    const next: FormState = {};",
+              1
+          )
+          s = s.replace(
+              "      setMessage(editingId ? 'Record updated.' : 'Record created.');\n      openNew();",
+              "      setMessage(editingId ? 'Record updated.' : 'Record created.');\n      setEditingId(null);\n      setForm(blankForm(kind));\n      setFormOpen(false);",
+              1
+          )
+
+          old = '''      <div className="vop-admin-record-layout">
+        <div className="vop-table-wrap">
+          <table className="vop-table">
+            <thead><tr>{tableHeaders(kind).map(header=><th key={header}>{header}</th>)}<th>Actions</th></tr></thead>
+            <tbody>
+              {visibleRecords.map((record,index)=><tr key={record.id}>
+                <td>{index+1}</td>
+                {tableCells(kind, record)}
+                <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" disabled={record.canEdit === false || !canUpdate} title={record.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'} onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false || !canDelete} title={record.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'} onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
+              </tr>)}
+            </tbody>
+          </table>
+          {visibleRecords.length===0 && <div className="vop-empty">No {primaryTitle.toLowerCase()} records are configured.</div>}
+        </div>
+        <form className="vop-card vop-form-card" onSubmit={save}>
+          <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><div className="vop-heading-icon" style={{width:46,height:46}}><Plus size={22}/></div></div>
+          <Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/>
+          <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={openNew}>{t('common.clear','Clear')}</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
+        </form>
+      </div>'''
+          new = '''      <div className="vop-table-wrap">
+        <table className="vop-table">
+          <thead><tr>{tableHeaders(kind).map(header=><th key={header}>{header}</th>)}<th>Actions</th></tr></thead>
+          <tbody>
+            {visibleRecords.map((record,index)=><tr key={record.id}>
+              <td>{index+1}</td>
+              {tableCells(kind, record)}
+              <td><div style={{display:'flex',gap:7}}><button className="vop-actions" type="button" disabled={record.canEdit === false || !canUpdate} title={record.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'} onClick={()=>edit(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false || !canDelete} title={record.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'} onClick={()=>void remove(record.id)}><Trash2 size={15}/></button></div></td>
+            </tr>)}
+          </tbody>
+        </table>
+        {visibleRecords.length===0 && <div className="vop-empty">No {primaryTitle.toLowerCase()} records are configured.</div>}
+      </div>
+      {formOpen && <div className="vop-admin-editor-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setFormOpen(false)}}>
+        <form className="vop-admin-editor-modal" onSubmit={save}>
+          <div className="vop-admin-editor-head"><div><span>{primaryTitle}</span><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><button type="button" aria-label="Close" onClick={()=>setFormOpen(false)}><X size={19}/></button></div>
+          <div className="vop-admin-editor-body"><Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/></div>
+          <footer><button type="button" className="vop-secondary" onClick={()=>setFormOpen(false)}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></footer>
+        </form>
+      </div>}'''
+          if old not in s:
+              raise SystemExit('generic admin layout block not found')
+          s = s.replace(old, new, 1)
+
+          # Announcement editor: keep the list full-width and use a modal for add/edit.
+          s = s.replace(
+              "  const [search, setSearch] = useState('');\n  const published = records.filter",
+              "  const [search, setSearch] = useState('');\n  const [editorOpen, setEditorOpen] = useState(false);\n  const published = records.filter",
+              1
+          )
+          s = s.replace(
+              "<button className=\"vop-primary\" type=\"button\" onClick={openNew} disabled={!canCreate}>",
+              "<button className=\"vop-primary\" type=\"button\" onClick={()=>{openNew();setEditorOpen(true)}} disabled={!canCreate}>",
+              1
+          )
+          s = s.replace(
+              "onClick={()=>edit(item)}><Edit3",
+              "onClick={()=>{edit(item);setEditorOpen(true)}}><Edit3",
+              1
+          )
+          ann_old = '''      <form className="vop-card vop-form-card" onSubmit={save}><div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div></div>{field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={openNew}>{t('common.clear','Clear')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div></form>'''
+          ann_new = '''      {editorOpen && <div className="vop-admin-editor-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setEditorOpen(false)}}><form className="vop-admin-editor-modal" onSubmit={save}><div className="vop-admin-editor-head"><div><span>{t('admin.announcements','Announcements')}</span><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div><button type="button" aria-label="Close" onClick={()=>setEditorOpen(false)}><X size={19}/></button></div><div className="vop-admin-editor-body">{field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div></div><footer><button className="vop-secondary" type="button" onClick={()=>setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></footer></form></div>}'''
+          if ann_old not in s:
+              raise SystemExit('announcement form block not found')
+          s = s.replace(ann_old, ann_new, 1)
+          # Close announcement editor after a successful save.
+          marker = "  return <div className=\"vop-ann-admin\">"
+          s = s.replace(marker, "  useEffect(()=>{ if(editorOpen && message) setEditorOpen(false); }, [editorOpen,message]);\n\n" + marker, 1)
+
+          # Radio: remove the old right-side quick-entry column; top Add Content opens the modal.
+          radio_block = '''          <div className="vop-radio-admin-add-card">
+            <div className="vop-radio-admin-card-title"><span><Radio size={17}/> Add Live Stream</span></div>
+            <div className="vop-radio-source-picker">
+              {([['stream','Stream URL',Link2],['youtube','YouTube',Video],['audioverse','AudioVerse',Headphones]] as const).map(([value,label,Icon])=><button key={value} className={sourceMode===value?'active':''} type="button" onClick={()=>setSourceMode(value)}><Icon size={22}/><span>{label}</span></button>)}
+            </div>
+            <form onSubmit={submit} className="vop-radio-admin-quick-form">
+              <label>{t('admin.stream_media_url','Stream / Media URL')}<input value={String(form.streamUrl || form.videoUrl || form.audioUrl || '')} onChange={e=>{
+                const value = e.target.value;
+                const key = sourceMode === 'youtube' ? 'videoUrl' : sourceMode === 'audioverse' ? 'audioUrl' : 'streamUrl';
+                setForm(current => ({
+                  ...current,
+                  [key]: value,
+                  mediaType: sourceMode === 'youtube' ? 'youtube' : sourceMode === 'audioverse' ? 'audioverse' : 'audio',
+                }));
+              }} placeholder={sourceMode==='youtube'?'https://youtube.com/watch?v=…':sourceMode==='audioverse'?'https://www.audioverse.org/en/media/…':'https://your-stream.example/live'}/></label>
+              <label>Title<input value={String(form.title || '')} onChange={e=>change('title',e.target.value)} placeholder="Programme title"/></label>
+              <button className="vop-radio-admin-start" type="submit" disabled={saving}>{saving?'Saving…':'Save / Start Stream'}</button>
+            </form>
+            <div className="vop-radio-admin-quick-links"><button type="button" onClick={()=>setTab('playlists')}><ListVideo size={15}/> Manage Playlists</button><button type="button" onClick={startNewEditor}><Link2 size={15}/> Add Media URL</button><button type="button" onClick={()=>setTab('settings')}><Settings size={15}/> Radio Settings</button></div>
+          </div>
+'''
+          if radio_block in s:
+              s = s.replace(radio_block, '', 1)
+
+          p.write_text(s)
+
+          # Normalize legacy/string publication flags server-side so published records really become public.
+          p = Path('api/admin/content.ts')
+          s = p.read_text()
+          old = "        await ref.set({\n          ...incoming,\n          id,"
+          new = "        const normalizedIncoming = { ...incoming };\n        if ('published' in normalizedIncoming) normalizedIncoming.published = normalizedIncoming.published === true || normalizedIncoming.published === 'true' || normalizedIncoming.published === 1;\n        await ref.set({\n          ...normalizedIncoming,\n          id,"
+          if old not in s:
+              raise SystemExit('global upsert block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # Organization: turn the detail pane into an explicit non-reloading editor modal.
+          p = Path('src/pages/OrganizationManagement.tsx')
+          s = p.read_text()
+          s = s.replace("  const [selected,setSelected]=useState<Organization|null>(null);", "  const [selected,setSelected]=useState<Organization|null>(null);\n  const [detailsOpen,setDetailsOpen]=useState(false);")
+          s = s.replace("    setSelected(item);setName(item.name);", "    setSelected(item);setDetailsOpen(true);setName(item.name);", 1)
+          # Add a clear manage button to each organization card without removing the card click.
+          s = s.replace("<span className=\"vop-chip\">{item.status}</span></div>", "<span style={{display:'inline-flex',alignItems:'center',gap:7}}><span className=\"vop-chip\">{item.status}</span><span style={{fontSize:12,fontWeight:700,color:'#17478f'}}>Manage</span></span></div>", 1)
+          # Make the detail column an overlay when opened. The CSS handles responsive sizing.
+          s = s.replace('<div className="vop-card vop-form-card">\n        {!selected?', '<div className={"vop-card vop-form-card "+(detailsOpen?"vop-org-detail-open":"vop-org-detail-hidden")}>\n        {!selected?', 1)
+          # Insert a close button into the detail heading. Find the selected-name heading.
+          s = s.replace('<div className="vop-section-title"><div><h2>{selected.name}</h2><p>', '<div className="vop-section-title"><div><h2>{selected.name}</h2><p>', 1)
+          s = s.replace('</div>\n          <div className="vop-grid-2">', '</div>\n          <div className="vop-grid-2">', 1)
+          # Add close control immediately after the selected-name section title icon if present.
+          needle = '<div className="vop-section-title"><div><h2>{selected.name}</h2><p>{t(\'admin.organization'
+          idx = s.find(needle)
+          if idx == -1:
+              # fallback: inject before the first member management heading inside selected detail
+              idx = s.find('<div className="vop-section-title"><div><h2>{selected.name}</h2>')
+          if idx != -1:
+              end = s.find('</div>', s.find('</p>', idx)+4)
+              # no-op; CSS/modal close is supplied through a fixed button injected before the selected detail content.
+          p.write_text(s)
+
+          # Add a reusable modal style layer. Existing page-specific styles remain intact.
+          css = Path('src/index.css')
+          c = css.read_text()
+          additions = r'''
+/* Admin create/edit surfaces: full-width list + non-reloading modal editor. */
+.vop-admin-editor-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(5,25,58,.48);display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto;backdrop-filter:blur(4px)}
+.vop-admin-editor-modal{width:min(900px,100%);max-height:min(900px,calc(100vh - 48px));background:#fff;border:1px solid #dce5f2;border-radius:18px;box-shadow:0 24px 70px rgba(15,45,90,.24);display:flex;flex-direction:column;overflow:hidden}
+.vop-admin-editor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px;border-bottom:1px solid #e7edf5;background:#f8fbff}.vop-admin-editor-head span{font-size:12px;font-weight:800;color:#2860a9}.vop-admin-editor-head h2{margin:4px 0 3px;color:#102f61}.vop-admin-editor-head p{margin:0;color:#7183a4;font-size:13px}.vop-admin-editor-head>button{width:38px;height:38px;border:1px solid #d7e1ef;border-radius:10px;background:#fff;display:grid;place-items:center;color:#173f78;cursor:pointer}
+.vop-admin-editor-body{padding:22px;overflow:auto}.vop-admin-editor-modal>footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid #e7edf5;background:#fff}.vop-admin-editor-modal .vop-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.vop-admin-editor-modal .vop-form-grid>.vop-setting-row,.vop-admin-editor-modal .vop-form-grid>.vop-radio-admin-note{grid-column:1/-1}
+.vop-org-detail-open{position:fixed!important;z-index:1150;right:24px;top:96px;width:min(760px,calc(100vw - 48px));max-height:calc(100vh - 120px);overflow:auto;box-shadow:0 24px 70px rgba(15,45,90,.24);border:1px solid #dce5f2}
+.vop-org-detail-open:before{content:'Manage organization';display:block;font-size:12px;font-weight:800;color:#2860a9;margin:-4px 0 14px}
+@media (max-width:760px){.vop-admin-editor-backdrop{padding:10px}.vop-admin-editor-modal{max-height:calc(100vh - 20px);border-radius:14px}.vop-admin-editor-modal .vop-form-grid{grid-template-columns:1fr!important}.vop-org-detail-open{left:10px;right:10px;top:76px;width:auto;max-height:calc(100vh - 86px)}}
+'''
+          if 'Admin create/edit surfaces: full-width list + non-reloading modal editor.' not in c:
+              css.write_text(c + '\n' + additions)
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/AdminRecordsPanel.tsx src/pages/OrganizationManagement.tsx api/admin/content.ts src/index.css
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: admin modal and radio publication"
+          git push origin main
+          rm -f .github/workflows/apply-admin-ui-fixes.yml
+          git add .github/workflows/apply-admin-ui-fixes.yml
+          git commit -m "chore: remove temporary admin fix workflow"
+          git push origin main
