@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/repair-admin-records-panel.mjs && vite",
+    "prebuild": "node scripts/repair-admin-records-panel.mjs",
     "build": "node scripts/verify-server-esm-imports.mjs && tsc -b && vite build",
     "verify:content": "node scripts/generate-snapshots.js && node --test tests/ingestion.test.mjs tests/snapshots.test.mjs",
     "build:android": "node scripts/generate-snapshots.js && node scripts/validate-android-release.mjs && npm run build && cap sync android",
