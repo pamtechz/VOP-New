@@ -102,7 +102,7 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
     ...fallback,
     ...data,
     id: String(data.id ?? id),
-    published: data.published !== false,
+    published: data.published === true,
   } as T;
 }
 
@@ -117,8 +117,10 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     organizationId = String(profileData.organizationId || '').trim();
   }
 
-  // Split queries by visibility. Firestore rules are not filters, so each query
-  // must guarantee that every possible result is readable by this caller.
+  // Public content must be loaded only through visibility-safe queries.
+  // Firestore rules are not filters, so every query here explicitly constrains
+  // the visibility field. The admin UI uses adminFirestore subscriptions for
+  // drafts and other private records; this loader must never broaden those reads.
   const loadScoped = async <T extends Record<string, unknown>>(
     collectionName: string,
     visibilityField: 'published' | 'enabled',
@@ -127,12 +129,9 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     const queries: Promise<import('firebase/firestore').QuerySnapshot<T>>[] = [
       getDocs(query(ref, where('sharingScope', '==', 'shared'), where(visibilityField, '==', true))).catch(() => ({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot<T>)),
       getDocs(query(ref, where('organizationId', '==', ''), where(visibilityField, '==', true))).catch(() => ({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot<T>)),
-      getDocs(query(ref, where('sharingScope', '==', 'shared'))).catch(() => ({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot<T>)),
-      getDocs(query(ref, where('organizationId', '==', ''))).catch(() => ({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot<T>)),
     ];
     if (organizationId) {
       queries.push(getDocs(query(ref, where('organizationId', '==', organizationId), where(visibilityField, '==', true))).catch(() => ({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot<T>)));
-      queries.push(getDocs(query(ref, where('organizationId', '==', organizationId))).catch(() => ({ docs: [] } as unknown as import('firebase/firestore').QuerySnapshot<T>)));
     }
     const snapshots = await Promise.all(queries);
     const seen = new Set<string>();
@@ -221,13 +220,13 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     .map(item => published<Announcement>(item.data(), item.id, {
       id: item.id, title: '', tag: '', description: '',
     }))
-    .filter(item => item.published !== false && item.title.trim());
+    .filter(item => item.published === true && item.title.trim());
 
   const books = bookDocs
     .map(item => published<BookResource>(item.data(), item.id, {
       id: item.id, name: '', category: '', author: '', imageUrl: '', description: '',
     }))
-    .filter(item => item.published !== false && item.name.trim());
+    .filter(item => item.published === true && item.name.trim());
 
   const radioBroadcasts = radioDocs
     .map(item => published<RadioBroadcast>(item.data(), item.id, {
@@ -235,11 +234,11 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
       audioUrl: '', videoUrl: '', streamUrl: '', mediaType: 'audio', posterUrl: '',
       broadcastTime: '', description: '',
     }))
-    .filter(item => item.published !== false && (item.title.trim() || item.audioUrl || item.videoUrl || item.streamUrl));
+    .filter(item => item.published === true && (item.title.trim() || item.audioUrl || item.videoUrl || item.streamUrl));
 
   const radioPlaylists = playlistDocs
     .map(item => { const data = item.data() as Record<string, unknown>; return ({ id:item.id, ...data, itemIds:Array.isArray(data.itemIds) ? data.itemIds.map(String) : [] } as RadioPlaylist); })
-    .filter(item => item.published !== false && item.name.trim());
+    .filter(item => item.published === true && item.name.trim());
 
   const guides = await loadFirestoreGuides();
 
