@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, getAdminDb, writeTenantAudit } from '../server/tenant.js';
+import { requirePermission } from '../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -70,22 +71,22 @@ export default async function handler(req:Request,res:Response){
       await ref.set({code:locale,name,nativeName,enabled:body.enabled!==false,direction:String(body.direction||'ltr')==='rtl'?'rtl':'ltr',fallback:cleanLocale(body.fallback||'en'),version:Number(current.data()?.version||1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
       return res.status(200).json({ok:true,locale});
     }
-    const ctx=await authenticateTenant(req); if(!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');
-    if(action==='list'){
+    const ctx=await authenticateTenant(req);
+    if(action==='list'){ await requirePermission(ctx, 'translations', 'view');
       const requestedNamespace=String(body.namespace||'').trim(); const snap=await db.collection(`locales/${locale}/translations`).get();
       const items=snap.docs.map(doc=>({id:doc.id,...doc.data()})).filter(item=>!requestedNamespace||String(item.namespace||'')===requestedNamespace); return res.status(200).json({ok:true,items});
     }
-    if(action==='bulkSave'){
+    if(action==='bulkSave'){ await requirePermission(ctx, 'translations', 'update');
       const values=body.values&&typeof body.values==='object'?body.values as Record<string,unknown>:{}; const status=['draft','review','published'].includes(String(body.status||'draft'))?String(body.status||'draft'):'draft'; const sources=body.sources&&typeof body.sources==='object'?body.sources as Record<string,unknown>:{}; const batch=db.batch();
       Object.entries(values).forEach(([rawKey,rawValue])=>{const key=cleanKey(rawKey);const value=String(rawValue??'');batch.set(db.doc(`locales/${locale}/translations/${key}`),{key,locale,namespace:namespaceOf(key),source:String(sources[key]||''),value,status:value.trim()?status:'draft',version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});});
       await batch.commit(); await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true}); await writeTenantAudit(ctx,'translation.bulkSave',`locales/${locale}`,undefined,{count:Object.keys(values).length}); return res.status(200).json({ok:true,count:Object.keys(values).length});
     }
     const key=cleanKey(body.key); const ref=db.doc(`locales/${locale}/translations/${key}`); const existing=await ref.get();
-    if(['save','publish','unpublish'].includes(action)){
+    if(['save','publish','unpublish'].includes(action)){ await requirePermission(ctx, 'translations', 'update');
       const value=String(body.value??''); if((action==='save'||action==='publish')&&!value.trim()) throw new Error('Translation value cannot be empty.'); const status=action==='publish'?'published':action==='unpublish'?'draft':String(body.status||'draft'); if(!['draft','review','published'].includes(status)) throw new Error('Invalid translation status.');
       await ref.set({key,locale,namespace:namespaceOf(key),source:String(body.source??existing.data()?.source??''),value,status,context:String(body.context||existing.data()?.context||''),translatorNotes:String(body.translatorNotes||existing.data()?.translatorNotes||''),version:Number(existing.data()?.version||0)+1,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true}); await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true}); await writeTenantAudit(ctx,`translation.${action}`,`locales/${locale}/translations/${key}`,existing.exists?existing.data():undefined,{key,locale,status}); return res.status(200).json({ok:true,item:{id:key,key,locale,namespace:namespaceOf(key),source:String(body.source??existing.data()?.source??''),value,status}});
     }
-    if(action==='delete'){if(!existing.exists)return res.status(404).json({error:'Translation key not found.'});await ref.delete();await writeTenantAudit(ctx,'translation.delete',`locales/${locale}/translations/${key}`,existing.data(),undefined);return res.status(200).json({ok:true,key,locale});}
+    if(action==='delete'){await requirePermission(ctx, 'translations', 'delete');if(!existing.exists)return res.status(404).json({error:'Translation key not found.'});await ref.delete();await writeTenantAudit(ctx,'translation.delete',`locales/${locale}/translations/${key}`,existing.data(),undefined);return res.status(200).json({ok:true,key,locale});}
     return res.status(400).json({error:'Unsupported localization action.'});
   }catch(error){const message=error instanceof Error?error.message:'Localization operation failed.';const status=/Sign in/i.test(message)?401:/permission|Only|membership|available|required/i.test(message)?403:400;return res.status(status).json({error:message});}
 }
