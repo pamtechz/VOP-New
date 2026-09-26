@@ -19,10 +19,12 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Patch canonical translation writes
+      - name: Patch canonical translation writes and API permissions
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
+          # Legacy admin-content translation path: resolve configured language to the canonical locale.
           p=Path('api/admin/content.ts')
           s=p.read_text()
           old="""        if (collection === 'translations') {\n          if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');\n          const requestedCode = String(incoming.code || incoming.languageCode || id).trim().toLowerCase();\n          const languageSnap = await ctx.db.collection('languages').get();\n          const languageDoc = languageSnap.docs.find(d => { const data = d.data() || {}; return [d.id, data.code, data.languageCode, data.name, data.nativeName].map(v => String(v || '').trim().toLowerCase()).includes(requestedCode); });\n          if (!languageDoc) throw new Error('Select a language from the configured Languages list.');\n          const language = languageDoc.data() || {};\n          const code = String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();"""
@@ -31,6 +33,25 @@ jobs:
             s=s.replace(old,new,1)
           elif "await requirePermission(ctx, 'translations', 'update');" not in s:
             raise SystemExit('translation canonical write block not found')
+          p.write_text(s)
+
+          # Primary localization API: use the executable permission matrix instead of a Super Admin-only gate.
+          p=Path('api/localization.ts')
+          s=p.read_text()
+          if "from '../server/permissions.js'" not in s:
+            s=s.replace("import { authenticateTenant, getAdminDb, writeTenantAudit } from '../server/tenant.js';", "import { authenticateTenant, getAdminDb, writeTenantAudit } from '../server/tenant.js';\nimport { requirePermission } from '../server/permissions.js';", 1)
+          blanket="    const ctx=await authenticateTenant(req); if(!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage global UI translations.');\n"
+          if blanket in s:
+            s=s.replace(blanket, "    const ctx=await authenticateTenant(req);\n", 1)
+          if "if(action==='list'){" in s and "await requirePermission(ctx, 'translations', 'view');" not in s:
+            s=s.replace("    if(action==='list'){", "    if(action==='list'){ await requirePermission(ctx, 'translations', 'view');", 1)
+          if "if(action==='bulkSave'){" in s and "if(action==='bulkSave'){ await requirePermission(ctx, 'translations', 'update');" not in s:
+            s=s.replace("    if(action==='bulkSave'){", "    if(action==='bulkSave'){ await requirePermission(ctx, 'translations', 'update');", 1)
+          save_marker="    if(['save','publish','unpublish'].includes(action)){"
+          if save_marker in s and "await requirePermission(ctx, 'translations', 'update');" not in s[s.index(save_marker):s.index(save_marker)+180]:
+            s=s.replace(save_marker, "    if(['save','publish','unpublish'].includes(action)){ await requirePermission(ctx, 'translations', 'update');", 1)
+          if "if(action==='delete')" in s and "if(action==='delete'){await requirePermission(ctx, 'translations', 'delete');" not in s:
+            s=s.replace("    if(action==='delete'){", "    if(action==='delete'){await requirePermission(ctx, 'translations', 'delete');", 1)
           p.write_text(s)
           PY
       - name: Install dependencies
@@ -41,12 +62,12 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add api/admin/content.ts
+          git add api/admin/content.ts api/localization.ts
           if git diff --cached --quiet; then
-            echo 'No canonical translation source changes required.'
+            echo 'No translation permission/source changes required.'
             exit 0
           fi
-          git commit -m 'fix: allow authorized UI translation writes'
+          git commit -m 'fix: enforce translation matrix permissions in localization api'
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
