@@ -1,0 +1,53 @@
+name: Repair Translation Save
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor == 'pamtechz'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Patch translation save path
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/services/adminFirestore.ts')
+          s=p.read_text()
+          start=s.index("export const saveTranslation = async (")
+          end=s.index("\n};", start)+3
+          replacement="""export const saveTranslation = async (\n  language: string,\n  values: Record<string, string>\n): Promise<void> => {\n  const id = language.trim().toLowerCase();\n  if (!id) throw new Error('A language code is required.');\n  const user = auth?.currentUser;\n  if (!user) throw new Error('Sign in first.');\n  const token = await user.getIdToken();\n  const response = await fetch('/api/localization', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },\n    body: JSON.stringify({ action: 'bulkSave', locale: id, values, status: 'published' }),\n  });\n  const payload = await response.json().catch(() => ({})) as { error?: string };\n  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');\n  if (typeof window !== 'undefined') {\n    window.dispatchEvent(new CustomEvent('vop_ui_translation_updated', { detail: { locale: id } }));\n  }\n};"""
+          p.write_text(s[:start]+replacement+s[end:])
+
+          p=Path('api/localization.ts')
+          s=p.read_text()
+          old="""const batch=db.batch(); Object.entries(values).forEach(([rawKey,rawValue])=>{const key=cleanKey(rawKey);const value=String(rawValue??'');batch.set(db.doc(`locales/${locale}/translations/${key}`),{key,locale,namespace:namespaceOf(key),source:String(sources[key]||''),value,status:value.trim()?status:'draft',version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});}); await batch.commit(); await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});"""
+          new="""const batch=db.batch(); const aggregate:Record<string,string>={}; Object.entries(values).forEach(([rawKey,rawValue])=>{const key=cleanKey(rawKey);const value=String(rawValue??''); aggregate[key]=value; batch.set(db.doc(`locales/${locale}/translations/${key}`),{key,locale,namespace:namespaceOf(key),source:String(sources[key]||''),value,status:value.trim()?status:'draft',version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});}); batch.set(db.doc(`translations/${locale}`),{id:locale,languageCode:locale,values:aggregate,sharingScope:'shared',organizationId:'',ownerUid:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true}); await batch.commit(); await db.doc(`locales/${locale}`).set({version:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()},{merge:true});"""
+          if old not in s: raise SystemExit('bulkSave block not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit repaired source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/services/adminFirestore.ts api/localization.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: save translations through canonical localization api'
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
