@@ -17,15 +17,12 @@ export default async function handler(req: Request, res: Response) {
     const requestedCode = lower(body.code || body.id);
     const db = getAdminDb();
 
-    // Languages are platform configuration. Authorization is controlled by the
-    // same central permission matrix used by the rest of the admin APIs.
-    if (action === 'upsert') await requirePermission(ctx, 'translations', 'update');
-    else if (action === 'status') await requirePermission(ctx, 'translations', 'update');
-    else if (action === 'delete') await requirePermission(ctx, 'translations', 'delete');
+    if (action === 'upsert' || action === 'status') await requirePermission(ctx, 'languages', 'update');
+    else if (action === 'delete') await requirePermission(ctx, 'languages', 'delete');
     else throw new Error('Unsupported language action.');
 
     if (!requestedCode || !CODE_RE.test(requestedCode)) {
-      throw new Error('A valid language code is required. Use the code configured for this language.');
+      throw new Error('A valid language code is required. Use the configured language code, for example bem or en.');
     }
 
     const languageRef = db.doc(`languages/${requestedCode}`);
@@ -35,7 +32,6 @@ export default async function handler(req: Request, res: Response) {
       const name = normalize(body.name);
       const nativeName = normalize(body.nativeName) || name;
       if (!name) throw new Error('Language name is required.');
-
       const existing = await languageRef.get();
       const now = FieldValue.serverTimestamp();
       const data = {
@@ -53,9 +49,6 @@ export default async function handler(req: Request, res: Response) {
         updatedBy: ctx.auth.uid,
         ...(existing.exists ? {} : {createdAt: now}),
       };
-
-      // The language registry is authoritative. The locale document uses the
-      // exact same code; it never silently replaces it with a legacy alias.
       await languageRef.set(data, {merge:true});
       await localeRef.set({
         code: requestedCode,
@@ -64,13 +57,12 @@ export default async function handler(req: Request, res: Response) {
         enabled: data.enabled,
         rtl: data.rtl,
         direction: data.rtl ? 'rtl' : 'ltr',
-        fallback: requestedCode === 'en' ? null : 'en',
+        fallback: body.fallback ? lower(body.fallback) : '',
         updatedAt: now,
         updatedBy: ctx.auth.uid,
       }, {merge:true});
-
-      await writeTenantAudit(ctx, 'language.upsert', `languages/${requestedCode}`, existing.exists ? existing.data() : undefined, {code: requestedCode,name,nativeName});
-      return res.status(200).json({ok:true,item:{id:requestedCode, ...data}});
+      await writeTenantAudit(ctx, 'language.upsert', `languages/${requestedCode}`, existing.exists ? existing.data() : undefined, {code:requestedCode,name,nativeName});
+      return res.status(200).json({ok:true,item:{id:requestedCode,...data}});
     }
 
     if (action === 'status') {
@@ -90,7 +82,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(200).json({ok:true,code:requestedCode});
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Language operation failed.';
-    const status = /sign in/i.test(message) ? 401 : /Only|permission|membership|forbidden/i.test(message) ? 403 : 400;
+    const status = /sign in/i.test(message) ? 401 : /permission|Only|membership|forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 400;
     return res.status(status).json({error:message});
   }
 }
