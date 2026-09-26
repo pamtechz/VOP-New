@@ -693,15 +693,10 @@ export const saveTranslation = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/localization', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({
-      action: 'upsert',
-      collection: 'translations',
-      id,
-      data: { id, languageCode: id, values },
-    }),
+    body: JSON.stringify({ action: 'bulkSave', locale: id, values, status: 'published' }),
   });
   const payload = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');
