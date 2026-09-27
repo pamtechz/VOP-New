@@ -18,6 +18,7 @@ function header(req:Request,name:string){const value=req.headers?.[name]??req.he
 function value(req:Request,name:string){const query=req.query&&typeof req.query==='object'?req.query as Record<string,unknown>:{};const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};return String((query[name]??body[name])??'').trim();}
 async function auth(req:Request){const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))throw new Error('Sign in first.');return getAuth(admin()).verifyIdToken(authorization.slice(7).trim());}
 function orgAllowed(ctx:Awaited<ReturnType<typeof authenticateTenant>>, organizationId:string){return ctx.isSuperAdmin || (ctx.organizationId&&ctx.organizationId===organizationId) || ctx.tenantType==='hierarchy';}
+function timestampValue(value:unknown){if(value&&typeof value==='object'&&'toMillis' in value&&typeof (value as {toMillis?:unknown}).toMillis==='function')return Number((value as {toMillis:()=>number}).toMillis());const parsed=Date.parse(String(value||''));return Number.isNaN(parsed)?0:parsed;}
 export default async function handler(req:Request,res:Response){
   try{
     const decoded=await auth(req);
@@ -26,27 +27,23 @@ export default async function handler(req:Request,res:Response){
     const db=getFirestore(admin());
     const action=value(req,'action')||'list';
     if(action==='list'){
-      const snapshot=await db.collection('notifications').where('recipientId','==',decoded.uid).orderBy('createdAt','desc').limit(100).get();
-      const items=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+      const snapshot=await db.collection('notifications').where('recipientId','==',decoded.uid).limit(200).get();
+      const items=snapshot.docs.map(doc=>({id:doc.id,...doc.data()})).sort((a,b)=>timestampValue(b.createdAt)-timestampValue(a.createdAt)).slice(0,100);
       return res.status(200).json({ok:true,items,unread:items.filter(item=>item.read!==true).length});
     }
     if(action==='markRead'||action==='markUnread'){
       const notificationId=value(req,'notificationId');
       if(!notificationId)throw new Error('Notification ID is required.');
-      const ref=db.doc('notifications/'+notificationId);
-      const snapshot=await ref.get();
-      if(!snapshot.exists||String(snapshot.data()?.recipientId||'')!==decoded.uid)throw new Error('Notification not found.');
-      const data=snapshot.data()||{};
-      if(!orgAllowed(ctx,String(data.organizationId||'')))throw new Error('This notification is outside your organization scope.');
-      await ref.set({read:action==='markRead',readAt:action==='markRead'?FieldValue.serverTimestamp():null},{merge:true});
-      return res.status(200).json({ok:true});
-    }
-    if(action==='delete'){
-      const notificationId=value(req,'notificationId');
       const ref=db.doc('notifications/'+notificationId);const snapshot=await ref.get();
       if(!snapshot.exists||String(snapshot.data()?.recipientId||'')!==decoded.uid)throw new Error('Notification not found.');
-      const data=snapshot.data()||{};
-      if(!orgAllowed(ctx,String(data.organizationId||'')))throw new Error('This notification is outside your organization scope.');
+      const data=snapshot.data()||{};if(!orgAllowed(ctx,String(data.organizationId||'')))throw new Error('This notification is outside your organization scope.');
+      await ref.set({read:action==='markRead',readAt:action==='markRead'?FieldValue.serverTimestamp():null},{merge:true});return res.status(200).json({ok:true});
+    }
+    if(action==='delete'){
+      const notificationId=value(req,'notificationId');if(!notificationId)throw new Error('Notification ID is required.');
+      const ref=db.doc('notifications/'+notificationId);const snapshot=await ref.get();
+      if(!snapshot.exists||String(snapshot.data()?.recipientId||'')!==decoded.uid)throw new Error('Notification not found.');
+      const data=snapshot.data()||{};if(!orgAllowed(ctx,String(data.organizationId||'')))throw new Error('This notification is outside your organization scope.');
       await ref.delete();return res.status(200).json({ok:true});
     }
     return res.status(400).json({error:'Unsupported notification action.'});
