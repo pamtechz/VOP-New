@@ -15,16 +15,13 @@ export function FirebaseStudyApp() {
   const [language, setLanguage] = useState('');
   const [lessonId, setLessonId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [authReady, setAuthReady] = useState(() => !auth);
   const [authError, setAuthError] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
   const [signOutError, setSignOutError] = useState('');
 
   useEffect(() => {
-    if (!auth) {
-      setAuthReady(true);
-      return;
-    }
+    if (!auth) return;
     return onAuthStateChanged(auth, account => {
       setUser(account);
       setAuthReady(true);

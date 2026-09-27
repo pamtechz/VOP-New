@@ -11,8 +11,8 @@ import type { User } from './types';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [dataReady, setDataReady] = useState(false);
+  const [authReady, setAuthReady] = useState(() => !auth || !firebaseConfigured);
+  const [dataReady, setDataReady] = useState(() => !auth || !firebaseConfigured);
   const [dataError, setDataError] = useState('');
   const syncingUid = useRef<string | null>(null);
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
@@ -20,11 +20,7 @@ export function Root() {
   const isKnownRoute = pathname === '/' || isBootstrapRoute;
 
   useEffect(() => {
-    if (!auth || !firebaseConfigured) {
-      setAuthReady(true);
-      setDataReady(true);
-      return;
-    }
+    if (!auth || !firebaseConfigured) return;
 
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -62,9 +58,7 @@ export function Root() {
               });
               if (response.ok) {
                 const body = await response.json().catch(() => ({})) as { error?: string; profile?: User };
-                if (body.profile) {
-                  profile = body.profile;
-                }
+                if (body.profile) profile = body.profile;
               }
             } catch (apiErr) {
               console.warn('API profile sync unavailable, using client fallback:', apiErr);
@@ -79,10 +73,6 @@ export function Root() {
             }
 
             if (!profile) {
-              // New Firebase Authentication accounts may legitimately have no
-              // account profile yet. The account data policy permits a signed-in
-              // account to create only its own student profile. This keeps
-              // local clones usable even when the Admin SDK API is unavailable.
               profile = await createFirestoreStudentProfile(
                 firebaseUser.uid,
                 firebaseUser.email ?? '',
@@ -114,10 +104,8 @@ export function Root() {
       },
     );
 
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+    return unsubscribe;
+  }, [isBootstrapRoute, isKnownRoute]);
 
   if (!authReady) {
     return (
@@ -128,7 +116,6 @@ export function Root() {
   }
 
   if (!isKnownRoute) return <NotFoundPage />;
-
   if (isBootstrapRoute) return <BootstrapPage account={account} />;
 
   if (!dataReady) {
@@ -139,17 +126,8 @@ export function Root() {
     );
   }
 
-  if (!firebaseConfigured || !auth) {
-    return <SignInPage configurationMissing />;
-  }
-
-  if (!account) {
-    return <SignInPage />;
-  }
-
-  if (dataError) {
-    return <ErrorPage message={dataError} title="We could not load your VOP data" />;
-  }
-
+  if (!firebaseConfigured || !auth) return <SignInPage configurationMissing />;
+  if (!account) return <SignInPage />;
+  if (dataError) return <ErrorPage message={dataError} title="We could not load your VOP data" />;
   return <App />;
 }
