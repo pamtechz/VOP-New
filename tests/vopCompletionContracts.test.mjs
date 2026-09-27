@@ -20,6 +20,17 @@ test('unified search is server-side, permission-aware and scope-aware', () => {
   assert.match(source, /accessibleOrganizationIds/);
 });
 
+test('notification service is centralized and validates recipients', () => {
+  const service = read('server/notifications.ts');
+  assert.match(service, /export async function createNotification/);
+  assert.match(service, /recipientId/);
+  assert.match(service, /createdAt:FieldValue\.serverTimestamp/);
+  const api = read('api/admin/notifications.ts');
+  assert.match(api, /createNotification/);
+  assert.match(api, /action==='send'/);
+  assert.match(api, /canPermission/);
+});
+
 test('notification inbox binds every operation to the authenticated recipient and tenant', () => {
   const source = read('api/admin/notifications.ts');
   assert.match(source, /verifyIdToken/);
