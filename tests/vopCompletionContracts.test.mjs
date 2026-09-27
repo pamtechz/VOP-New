@@ -11,23 +11,33 @@ test('canonical resource scope is limited to platform, hierarchy and organizatio
   assert.match(source, /relationship\?: AccessRelationship/);
 });
 
-test('unified search is server-side and permission-aware', () => {
+test('unified search is server-side, permission-aware and scope-aware', () => {
   const source = read('api/admin/search.ts');
   assert.match(source, /authenticateTenant/);
-  assert.match(source, /requirePermission/);
   assert.match(source, /canPermission/);
-  assert.match(source, /organizationId/);
-  assert.match(source, /isSuperAdmin/);
+  assert.match(source, /organizationInHierarchyScope/);
+  assert.match(source, /scopeOf/);
+  assert.match(source, /accessibleOrganizationIds/);
 });
 
-test('notification inbox binds every operation to the authenticated recipient', () => {
+test('notification inbox binds every operation to the authenticated recipient and tenant', () => {
   const source = read('api/admin/notifications.ts');
   assert.match(source, /verifyIdToken/);
   assert.match(source, /recipientId/);
   assert.match(source, /Notification not found/);
-  assert.match(source, /orgAllowed/);
+  assert.match(source, /notificationAllowed/);
+  assert.match(source, /organizationInHierarchyScope/);
   assert.match(source, /markRead/);
   assert.match(source, /delete/);
+});
+
+test('global search and notifications are wired into the application header', () => {
+  const source = read('src/components/layout/Header.tsx');
+  assert.match(source, /\/api\/admin\/search\?q=/);
+  assert.match(source, /\/api\/admin\/notifications\?action=list/);
+  assert.match(source, /action:'markRead'/);
+  assert.match(source, /Search/);
+  assert.match(source, /Bell/);
 });
 
 test('user management quick actions call real account workflows', () => {
