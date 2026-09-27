@@ -1,7 +1,7 @@
 import type { PermissionAction, PermissionMatrix, PermissionResource, PermissionRole } from './permissions.js';
 import { permissionAllowed } from './permissions.js';
 
-export type ResourceScope = 'platform' | 'hierarchy' | 'organization';
+export type PermissionScope = 'platform' | 'hierarchy' | 'organization';
 export type AccessRelationship = 'owned' | 'assigned' | 'personal' | 'public';
 
 export interface AuthorizationSubject {
@@ -13,7 +13,7 @@ export interface AuthorizationSubject {
 }
 
 export interface AuthorizationTarget {
-  scope?: ResourceScope;
+  scope?: PermissionScope;
   relationship?: AccessRelationship;
   uid?: string;
   organizationId?: string;
