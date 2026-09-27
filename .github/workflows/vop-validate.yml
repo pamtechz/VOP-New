@@ -23,7 +23,8 @@ jobs:
       - run: npm run lint
       - run: npm run verify:architecture
       - run: npm run inventory:ui-localization
-      - run: node --test tests/vopCompletionContracts.test.mjs
+      - run: npm run verify:content
+      - run: npm run test:contracts
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
