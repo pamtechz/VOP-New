@@ -70,7 +70,7 @@ type LocalApiMiddleware = (
   next: (error?: unknown) => void,
 ) => void | Promise<void>;
 
-function createLocalApiMiddleware(server: {
+export function createLocalApiMiddleware(server: {
   ssrLoadModule: (url: string) => Promise<Record<string, unknown>>;
 }): LocalApiMiddleware {
   return async (req, res, next) => {
@@ -80,7 +80,13 @@ function createLocalApiMiddleware(server: {
       return;
     }
 
-    const route = new URL(requestUrl, 'http://localhost').pathname
+    const parsedUrl = new URL(requestUrl, 'http://localhost');
+    const query: Record<string, string | string[]> = Object.create(null);
+    for (const key of new Set(parsedUrl.searchParams.keys())) {
+      const values = parsedUrl.searchParams.getAll(key);
+      query[key] = values.length === 1 ? values[0] : values;
+    }
+    const route = parsedUrl.pathname
       ?.slice(LOCAL_API_PREFIX.length)
       .replace(/^\/+|\/+$/g, '');
 
@@ -111,6 +117,7 @@ function createLocalApiMiddleware(server: {
           headers: req.headers,
           body,
           url: req.url,
+          query,
         },
         response,
       );

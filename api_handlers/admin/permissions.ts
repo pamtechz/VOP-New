@@ -52,6 +52,8 @@ export default async function handler(req: Request, res: Response) {
     await writeTenantAudit(ctx,'permissions.update','system/permissions',undefined,{ matrix });
     return res.status(200).json({ ok:true, matrix, source:'custom' });
   } catch (error) {
-    return res.status(400).json({ error:error instanceof Error ? error.message : 'Permission matrix operation failed.' });
+    const message = error instanceof Error ? error.message : 'Permission matrix operation failed.';
+    const status = /sign in/i.test(message) ? 401 : /permission|membership|another organization/i.test(message) ? 403 : 400;
+    return res.status(status).json({ error: message });
   }
 }
