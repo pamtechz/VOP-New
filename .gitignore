@@ -22,6 +22,12 @@ dist-ssr
 # registered as com.sda.vop. Supply it in release CI through an approved secret.
 android/app/google-services.json
 
+# Signing secrets: provide them through secure release infrastructure, never Git.
+*.jks
+*.keystore
+*.p12
+*.pfx
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
