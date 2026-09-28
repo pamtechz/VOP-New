@@ -74,14 +74,34 @@ async function evaluatorScope(db: FirebaseFirestore.Firestore, actor: Profile, l
   return String(data[field] || '') === nodeId || String(hierarchy[field] || '') === nodeId;
 }
 
-function contentVisibleToLearner(actor: Profile, data: Record<string, unknown>) {
+async function actorOrganization(db:FirebaseFirestore.Firestore, actor:Profile) {
+  const organizationId=orgOf(actor);
+  if (!organizationId) return {};
+  const snapshot=await db.doc('organizations/'+cleanId(organizationId,'organization')).get();
+  return snapshot.data() || {};
+}
+
+function contentVisibleToLearner(
+  actor: Profile, data: Record<string, unknown>, organization: Record<string,unknown> = {},
+) {
   const ownerOrg = String(data.organizationId || data.ownerOrganizationId || '').trim();
-  // A public/published status cannot override private ministry content.
   if (data.sharingScope === 'private') {
     return String(data.ownerUid || '') === String(actor.uid || '') || actor.role === 'super_admin';
   }
   const scope = String(data.scope || '').toLowerCase();
-  if (scope === 'platform' || (!ownerOrg && scope !== 'hierarchy')) return true;
+  if (scope === 'hierarchy') {
+    if (data.sharingScope === 'shared') return true;
+    const match=String(data.ownerTenantId || '').match(/^(union_admin|conference_admin|district_admin|church_admin):([A-Za-z0-9_-]{1,120})$/);
+    if (!match || !orgOf(actor)) return false;
+    const field=({union_admin:'unionId',conference_admin:'conferenceId',
+      district_admin:'districtId',church_admin:'churchId'} as Record<string,string>)[match[1]];
+    const hierarchy=organization.hierarchy && typeof organization.hierarchy==='object'
+      ? organization.hierarchy as Record<string,unknown> : {};
+    return String(organization[field] || '')===match[2] || String(hierarchy[field] || '')===match[2]
+      || (String(organization.hierarchyType || '')===field.replace('Id','')
+        && String(organization.hierarchyId || '')===match[2]);
+  }
+  if (scope === 'platform' || (!ownerOrg && !scope)) return true;
   if (ownerOrg && ownerOrg === orgOf(actor)) return true;
   return data.visibility === 'public' || data.sharingScope === 'shared';
 }
@@ -141,8 +161,9 @@ async function publishedRequirement(db: FirebaseFirestore.Firestore, learner: Pr
   const requirement = await db.doc('masterGuideRequirements/' + requirementId).get();
   const data = requirement.data() || {};
   const ownerOrganizationId = String(data.organizationId || '');
+  const org = data.scope === 'hierarchy' ? await actorOrganization(db,learner) : {};
   if (!requirement.exists || data.status !== 'published'
-      || !contentVisibleToLearner(learner, data)
+      || !contentVisibleToLearner(learner, data,org)
       || (ownerOrganizationId && ownerOrganizationId !== orgOf(learner) && data.sharingScope !== 'shared')) {
     throw new Error('The selected Master Guide requirement is unavailable for this learner.');
   }
@@ -191,14 +212,15 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   }
 
   if (action === 'portfolioGet') {
-    const [portfolioSnap, requirementsSnap] = await Promise.all([
+    const [portfolioSnap, requirementsSnap, organization] = await Promise.all([
       db.doc(`masterGuidePortfolios/${learnerId}`).get(),
       db.collection('masterGuideRequirements').where('organizationId', 'in', [orgOf(learner), '']).limit(200).get(),
+      actorOrganization(db,learner),
     ]);
     return {
       portfolio: portfolioSnap.exists ? { id: portfolioSnap.id, ...portfolioSnap.data() } : { id: learnerId, learnerId, organizationId: orgOf(learner), status: 'active', activities: [], evidence: [], signoffs: [] },
       requirements: requirementsSnap.docs
-        .filter(doc => doc.data().status === 'published' && contentVisibleToLearner(learner, doc.data()))
+        .filter(doc => doc.data().status === 'published' && contentVisibleToLearner(learner, doc.data(), organization))
         .map(doc => ({ id:doc.id, ...doc.data() })),
     };
   }
@@ -284,16 +306,17 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
 
 async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
   const action = String(b.action || '');
+  const organization=await actorOrganization(db,actor);
   if (action === 'memoryDecks') {
     const snapshot = await db.collection('scriptureMemoryDecks').where('status', '==', 'published').limit(100).get();
-    return { decks: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {})).map(doc => ({ id: doc.id, ...doc.data() })) };
+    return { decks: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() })) };
   }
   const deckId = cleanId(b.deckId, 'deck');
   if (action === 'memoryDue') {
     const stateSnapshot = await db.collection(`users/${actor.uid}/scriptureMemoryState`).where('deckId', '==', deckId).limit(500).get();
     const stateByVerse = new Map(stateSnapshot.docs.map(doc => [String(doc.data().verseId || doc.id), doc.data()]));
     const deck = await db.doc(`scriptureMemoryDecks/${deckId}`).get();
-    if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {})) throw new Error('This Scripture memory deck is not available.');
+    if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {},organization)) throw new Error('This Scripture memory deck is not available.');
     const verses = Array.isArray(deck.data()?.verses) ? deck.data()?.verses as Array<Record<string, unknown>> : [];
     const due = verses.filter(verse => {
       const state = stateByVerse.get(String(verse.id || ''));
@@ -306,7 +329,7 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     const rating = Number(b.rating);
     if (!Number.isFinite(rating) || rating < 0 || rating > 5) throw new Error('Memory rating must be between 0 and 5.');
     const deck = await db.doc(`scriptureMemoryDecks/${deckId}`).get();
-    if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {})) throw new Error('This Scripture memory deck is not available.');
+    if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {},organization)) throw new Error('This Scripture memory deck is not available.');
     const verses = Array.isArray(deck.data()?.verses) ? deck.data()?.verses as Array<Record<string, unknown>> : [];
     if (!verses.some(item => String(item.id || '') === verseId)) throw new Error('Verse is not part of this deck.');
     // A verse may occur in multiple decks: state is keyed by BOTH deck and verse.
@@ -330,6 +353,7 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
 
 async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
   const action = String(b.action || '');
+  const organization=await actorOrganization(db,actor);
   if (action === 'duelAvailability') {
     const optIn = b.enabled === true;
     await db.doc('users/' + cleanId(actor.uid, 'user')).set({ scriptureDuelOptIn: optIn }, { merge: true });
@@ -366,7 +390,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   }
   if (action === 'duelQuestions') {
     const snapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(100).get();
-    return { questions: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {}))
+    return { questions: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization))
       .map(doc => ({ id: doc.id, question: doc.data().question, options: doc.data().options, scriptureRef: doc.data().scriptureRef })) };
   }
   if (action === 'duelCreate') {
@@ -381,7 +405,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if (!sameOrg(actor, opponent)) throw new Error('You can only challenge a learner in your organization.');
     if (opponent.scriptureDuelOptIn !== true || opponent.disabled === true || !['student', 'learner'].includes(String(opponent.role || 'student'))) throw new Error('This learner is not accepting challenges.');
     const questionSnapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(20).get();
-    const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {})).map(doc => ({ id: doc.id, ...doc.data() }));
+    const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() }));
     if (questions.length < 3) throw new Error('At least three published Scripture Duel questions are required.');
     const selected = questions.sort(() => Math.random() - 0.5).slice(0, Math.min(10, questions.length));
     const matchId = randomUUID();
