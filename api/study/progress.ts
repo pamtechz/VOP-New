@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -81,7 +82,7 @@ export default async function handler(
     const guideId = String(body.guideId ?? '').trim();
     const lessonId = String(body.lessonId ?? '').trim();
 
-    if (!language || !lessonId || !['completeLesson', 'submitQuiz', 'saveLessonResume'].includes(action) || (action !== 'submitQuiz' && !guideId)) {
+    if (!validStudyLanguage(language) || !validStudyId(guideId) || !validStudyId(lessonId) || !['completeLesson', 'submitQuiz', 'saveLessonResume'].includes(action)) {
       return res.status(400).json({ error: 'A valid study progress request is required.' });
     }
 
@@ -117,7 +118,7 @@ export default async function handler(
     if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
       return res.status(409).json({ error: 'The selected guide language does not match the study request.' });
     }
-    if (!lessonSnapshot.exists || lessonSnapshot.data()?.published !== true) {
+    if (!lessonSnapshot.exists || lessonSnapshot.data()?.published !== true || lessonSnapshot.data()?.archived === true) {
       return res.status(404).json({ error: 'The selected lesson is not published.' });
     }
 
@@ -253,8 +254,8 @@ export default async function handler(
 
     const settingsRef = organizationId ? db.doc(`organizations/${organizationId}/settings/settings`) : db.doc('system/settings');
     const settingsSnapshot = await settingsRef.get();
-    const threshold = Number(settingsSnapshot.data()?.quizPassThreshold ?? 0);
-    if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+    const threshold = configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
+    if (threshold === null) {
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
 
