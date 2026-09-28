@@ -50,7 +50,7 @@ function getDb(): Firestore {
 
 const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts','playlists']);
 const TENANT_COLLECTIONS = new Set<string>([
-  'announcements','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
+  'announcements','events','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
 ]);
 
 async function currentOrganizationId(): Promise<string> {
@@ -555,6 +555,7 @@ export const subscribeAnnouncements = (
 
 export type AdminRecordCollection =
   | 'announcements'
+  | 'events'
   | 'books'
   | 'radioBroadcasts'
   | 'playlists'
