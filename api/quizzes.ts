@@ -71,12 +71,15 @@ export default async function handler(req: Request, res: Response) {
         const snap = await ctx.db.collection('quizzes').get();
         return res.status(200).json({ ok:true, items:snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit:true })) });
       }
+      const scopedOrganizations = ctx.tenantType === 'hierarchy' ? await accessibleOrganizationIds(ctx) : [];
+      const scopedSnapshots = await Promise.all(scopedOrganizations.map(orgId =>
+        ctx.db.collection('quizzes').where('organizationId','==',orgId).get()));
       const owned = ctx.tenantType === 'hierarchy'
         ? await ctx.db.collection('quizzes').where('ownerTenantId','==',tenantOwnerKey(ctx)).get()
         : await ctx.db.collection('quizzes').where('organizationId','==',ctx.organizationId).get();
       const shared = await ctx.db.collection('quizzes').where('sharingScope','==','shared').where('published','==',true).get();
-      const unique = new Map([...owned.docs, ...shared.docs].map(d => [d.id, d]));
-      const items = [...unique.values()].filter(d => quizVisible(ctx, d.data())).map(d => ({
+      const unique = new Map([...owned.docs, ...scopedSnapshots.flatMap(snap => snap.docs), ...shared.docs].map(d => [d.id, d]));
+      const items = [...unique.values()].filter(d => scopedOrganizations.includes(String(d.data().organizationId || '')) || quizVisible(ctx, d.data())).map(d => ({
         id:d.id, ...d.data(),
         canEdit:ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid,
       }));
