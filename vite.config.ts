@@ -48,14 +48,15 @@ function createLocalApiMiddleware(server: { ssrLoadModule: (url: string) => Prom
   return async (req, res, next) => {
     const requestUrl = req.url ?? '';
     if (!requestUrl.startsWith(LOCAL_API_PREFIX)) { next(); return; }
-    const route = new URL(requestUrl, 'http://localhost').pathname.slice(LOCAL_API_PREFIX.length).replace(/^\/+|\/+$/g, '');
+    const parsedUrl = new URL(requestUrl, 'http://localhost');
+    const route = parsedUrl.pathname.slice(LOCAL_API_PREFIX.length).split('/').filter(Boolean).join('/');
     if (!route || !/^[A-Za-z0-9_/-]+$/.test(route)) { next(); return; }
     try {
       const module = await server.ssrLoadModule('/api/' + route + '.ts');
       const handler = module.default;
       if (typeof handler !== 'function') { res.statusCode = 500; res.end(JSON.stringify({ error: 'The local API route has no default handler.' })); return; }
       const body = await readBody(req);
-      await (handler as (request: unknown, response: unknown) => Promise<unknown>)({ method: req.method, headers: req.headers, body, url: req.url }, createApiResponse(res));
+      await (handler as (request: unknown, response: unknown) => Promise<unknown>)({ method: req.method, headers: req.headers, body, query: Object.fromEntries(parsedUrl.searchParams.entries()), url: req.url }, createApiResponse(res));
       if (!res.writableEnded) { res.statusCode = 204; res.end(); }
     } catch (error) {
       console.error('[local-api] ' + (req.method ?? 'GET') + ' ' + requestUrl, error);
