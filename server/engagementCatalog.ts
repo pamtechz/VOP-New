@@ -72,6 +72,13 @@ export async function engagementCatalog(req:Request, body:Record<string,unknown>
   const requestedOrg=bounded(body.organizationId,120);
   if (requestedOrg && !/^[A-Za-z0-9_-]{1,120}$/.test(requestedOrg)) throw new Error('Invalid organization selection.');
   const ctx=await authenticateTenant(req,requestedOrg || undefined);
+  // Viewing ordinary learning material does not authorize browsing private,
+  // unpublished assessment banks or other contributors' draft content.
+  const role=String(ctx.membership.role || '');
+  if (!ctx.isSuperAdmin && ctx.tenantType!=='hierarchy'
+    && !['owner','admin','editor','teacher','mentor'].includes(role)) {
+    throw new Error('Engagement content administration requires a contributor role.');
+  }
   const tenant=tenantOwnerKey(ctx);
   let organizationId='';
   if (ctx.isSuperAdmin) organizationId=requestedOrg;
@@ -87,7 +94,7 @@ export async function engagementCatalog(req:Request, body:Record<string,unknown>
     if (!org.exists || org.data()?.status!=='active') throw new Error('Choose an active organization.');
   }
   if (action==='catalogList') {
-    await requirePermission(ctx,permission,'view');
+    await requirePermission(ctx,permission,'create');
     const base=ctx.db.collection(collection);
     const items=ctx.isSuperAdmin && !organizationId
       ? await base.limit(300).get()
@@ -111,6 +118,7 @@ export async function engagementCatalog(req:Request, body:Record<string,unknown>
   if (action==='catalogArchive') {
     if (!snapshot.exists) throw new Error('This content no longer exists.');
     await requirePermission(ctx,permission,'delete');
+    if (String(previous.organizationId || '') !== organizationId) throw new Error('The content is outside your selected organization.');
     if (!ctx.isSuperAdmin && (String(previous.ownerUid || '')!==ctx.auth.uid
       || String(previous.ownerTenantId || '')!==tenant)) {
       throw new Error('Only the contributor or Super Admin may archive this content.');
