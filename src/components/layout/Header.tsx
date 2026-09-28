@@ -2,6 +2,7 @@ import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
+import { CommunicationTools } from './CommunicationTools';
 
 interface HeaderProps {
   currentUser: User;
@@ -41,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
           <button onClick={()=>nav('about')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='about'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Info size={14}/><span>{t('navigation.about','About')}</span></button>
         </nav>
         <div style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
+          <CommunicationTools onNavigate={onNavigate} t={(key,fallback)=>t(key,fallback) || fallback} />
           <div style={{position:'relative',display:'flex',alignItems:'center'}}>
             <div style={{display:'flex',alignItems:'center',gap:'.25rem',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'var(--radius-full)',padding:'.25rem .5rem',fontSize:'.75rem',color:'#fff'}}>
               <Globe size={13} color="var(--vop-gold-400)"/>
