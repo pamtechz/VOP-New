@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 
 type AttachmentType = 'lesson' | 'guide';
 type Quiz = {
@@ -39,7 +39,7 @@ function normalize(value: Array<Record<string, unknown>>): Question[] {
   }));
 }
 export default function QuizLibrary({ organizationId = '' }: Props) {
-  const t = (key: string, fallback: string) => getTranslation(key, fallback);
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
   const [items, setItems] = useState<Quiz[]>([]);
   const [guides, setGuides] = useState<Guide[]>([]);
   const [selected, setSelected] = useState<Quiz | null>(null);
