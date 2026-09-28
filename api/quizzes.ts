@@ -13,7 +13,7 @@ function safeId(value: unknown) {
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) throw new Error('A valid quiz or content ID is required.');
   return id;
 }
-function canManage(ctx: Context) {
+function canManageQuizTenant(ctx: Context) {
   return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor'].includes(String(ctx.membership.role || ''));
 }
 function quizVisible(ctx: Context, data: Record<string, unknown>) {
@@ -108,7 +108,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'upsert') {
-      if (!canManage(ctx)) throw new Error('You do not have permission to manage quizzes for this tenant.');
+      if (!canManageQuizTenant(ctx)) throw new Error('You do not have permission to manage quizzes for this tenant.');
       const id = safeId(body.id || randomUUID().replace(/-/g, '').slice(0,20));
       const ref = ctx.db.doc(`quizzes/${id}`);
       const existing = await ref.get();
