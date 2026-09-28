@@ -80,6 +80,8 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     lessonNumber: String(item.lessonNumber ?? id),
     description: String(item.description ?? ''),
     type: item.type === 'Test' ? 'Test' : 'Lesson',
+    sourceQuizId: typeof item.sourceQuizId === 'string' ? item.sourceQuizId : undefined,
+    answerVisibility: item.answerVisibility === 'public_redacted' ? 'public_redacted' : undefined,
     contentPages: rawPages,
     questions,
     media: item.media && typeof item.media === 'object' && !Array.isArray(item.media)

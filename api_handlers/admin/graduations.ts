@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { configuredPassThreshold } from '../../shared/studyValidation.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -85,12 +86,9 @@ async function submit(req: Request, res: Response) {
   const certificationConfigSnapshot = await ctx.db.doc('system/certification').get();
   const certificationConfig = certificationConfigSnapshot.exists ? certificationConfigSnapshot.data() || {} : {};
   const organizationSettingsSnapshot = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/settings`).get();
-  const configuredMinimum = Number(certificationConfig.minimumScore);
-  const organizationThreshold = Number(organizationSettingsSnapshot.data()?.quizPassThreshold ?? 0);
-  const threshold = Number.isFinite(configuredMinimum) && configuredMinimum >= 0 && configuredMinimum <= 100
-    ? configuredMinimum
-    : organizationThreshold;
-  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+  const threshold = configuredPassThreshold(certificationConfig.minimumScore)
+    ?? configuredPassThreshold(organizationSettingsSnapshot.data()?.quizPassThreshold);
+  if (threshold === null) {
     return res.status(409).json({ error: 'The certification pass mark is not configured for this organization.' });
   }
   const progress = ctx.profile.progress && typeof ctx.profile.progress === 'object'

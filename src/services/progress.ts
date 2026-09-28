@@ -1,5 +1,5 @@
 import type { DiscoverGuide, User, LanguageCode, Lesson } from '../types';
-import { isQuizConfigured } from './quiz.ts';
+import { isQuizConfigured, isPlayableQuizConfigured } from './quiz.ts';
 import { isLessonConfigured } from './lesson.ts';
 
 export interface GuideProgress {
@@ -24,7 +24,10 @@ export interface CurriculumProgress {
 }
 
 /** Only a single-test guide can reuse a historical aggregate score. */
-function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string, number>, language: LanguageCode): number | undefined {
+function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string, number>, language: LanguageCode, organizationId?: string): number | undefined {
+  // The authoritative study API scopes scores by the learner's organization.
+  const serverKey = `${organizationId || 'platform'}:${language}:${guide.id}:${test.id}`;
+  if (Object.hasOwn(scores, serverKey)) return scores[serverKey];
   const languageKey = `${language}:${guide.id}:${test.id}`;
   if (Object.hasOwn(scores, languageKey)) return scores[languageKey];
   const key = `${guide.id}:${test.id}`;
@@ -84,11 +87,21 @@ function validateRequiredLessons(guides: DiscoverGuide[]): string | undefined {
   return undefined;
 }
 
-/** All required test questions and answer keys must remain valid after edits. */
+/** The server retains answer keys for canonical tests; legacy local keys need validating. */
+function isRequiredQuizConfigured(test: Lesson): boolean {
+  const questions = test.questions ?? [];
+  if (!test.sourceQuizId) return isQuizConfigured(questions);
+  return test.answerVisibility === 'public_redacted'
+    && isPlayableQuizConfigured(questions)
+    && !questions.some(question => Object.hasOwn(question, 'answer')
+      || Object.hasOwn(question, 'correctOptionIndex')
+      || Object.hasOwn(question, 'explanation'));
+}
+
+/** Display-only readiness must not demand that answer keys reach the learner. */
 function validateRequiredQuizzes(guides: DiscoverGuide[]): string | undefined {
   for (const guide of guides) {
-    const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
-    if (tests.some(test => !isQuizConfigured(test.questions ?? []))) {
+    if (guide.lessons.some(lesson => lesson.type === 'Test' && !isRequiredQuizConfigured(lesson))) {
       return 'A required assessment has missing or invalid questions or answer keys.';
     }
   }
@@ -103,19 +116,20 @@ export function calculateCurriculumProgress(
   guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  const configurationError = validateRequiredIds(required) ?? validateRequiredLessons(required) ?? validateRequiredQuizzes(required);
+  const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 1 && passThreshold <= 100;
+  const configurationError = validateRequiredIds(required) ?? validateRequiredLessons(required)
+    ?? validateRequiredQuizzes(required)
+    ?? (!validThreshold ? 'A pass mark between 1 and 100 percent must be configured.' : undefined);
   const completed = new Set(user.progress.completedLessons ?? []);
   const scores = user.progress.guideScores ?? {};
-  const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100;
-
   const guideProgress = required.map(guide => {
     const items = Array.isArray(guide.lessons) ? guide.lessons : [];
     const lessons = items.filter(lesson => lesson.type === 'Lesson');
     const tests = items.filter(lesson => lesson.type === 'Test');
     const finishedLessons = lessons.filter(lesson => isLessonConfigured(lesson) && (completed.has(lesson.id) || completed.has(`${language}:${guide.id}:${lesson.id}`))).length;
     const passedTests = tests.filter(test => {
-      if (!validThreshold || !isQuizConfigured(test.questions ?? [])) return false;
-      const score = getTestScore(guide, test, scores, language);
+      if (!validThreshold || !isRequiredQuizConfigured(test)) return false;
+      const score = getTestScore(guide, test, scores, language, user.organizationId);
       return validScore(score) && score >= passThreshold;
     }).length;
     const done = finishedLessons + passedTests;
@@ -157,7 +171,7 @@ export function calculateCurriculumAverageScore(
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
     .filter(lesson => lesson.type === 'Test')
-    .map(test => getTestScore(guide, test, scores, language)));
+    .map(test => getTestScore(guide, test, scores, language, user.organizationId)));
   if (!marks.length || !marks.every(validScore)) return null;
   return Math.round(marks.reduce((sum, mark) => sum + mark!, 0) / marks.length);
 }
