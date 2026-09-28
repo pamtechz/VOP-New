@@ -89,7 +89,10 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'get') {
       const id = safeId(body.id);
       const snap = await ctx.db.doc(`quizzes/${id}`).get();
-      if (!snap.exists || !quizVisible(ctx, snap.data() || {})) throw new Error('This quiz is not available to your organization.');
+      const data = snap.data() || {};
+      const hierarchyAccess = ctx.tenantType === 'hierarchy'
+        && await organizationInHierarchyScope(ctx, String(data.organizationId || ''));
+      if (!snap.exists || (!hierarchyAccess && !quizVisible(ctx, data))) throw new Error('This quiz is not available to your organization.');
       return res.status(200).json({ ok:true, item:{ id, ...snap.data() } });
     }
 
