@@ -56,7 +56,7 @@ export function resourceForCollection(collection: string): PermissionResource | 
     bibleTopics: 'curriculum', seasons: 'curriculum',
     books: 'materials', radioBroadcasts: 'radio', playlists: 'radio',
     languages: 'languages', translations: 'translations',
-    announcements: 'announcements', prayerRequests: 'prayer',
+    announcements: 'announcements', events: 'announcements', prayerRequests: 'prayer',
     certificates: 'certificates', graduationRequests: 'certificates',
     certificationConfig: 'certificates', settings: 'settings', curriculumSettings: 'settings',
   };
