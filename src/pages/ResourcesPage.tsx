@@ -31,6 +31,9 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
   const [decks, setDecks] = useState<Array<Record<string, unknown>>>([]);
   const [due, setDue] = useState<Array<Record<string, unknown>>>([]);
   const [opponentId, setOpponentId] = useState('');
+  const [opponents, setOpponents] = useState<Array<{ uid: string; displayName: string }>>([]);
+  const [activeMatches, setActiveMatches] = useState<Array<{ id: string; opponentName: string }>>([]);
+  const [answeredQuestionIds, setAnsweredQuestionIds] = useState<string[]>([]);
   const [matchId, setMatchId] = useState('');
   const [duelQuestions, setDuelQuestions] = useState<Array<Record<string, unknown>>>([]);
   const [shareUrl, setShareUrl] = useState('');
@@ -51,7 +54,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
   useEffect(() => {
     if (tab === 'master-guide') void run(async () => { const result = await engagement({ action: 'portfolioGet' }); setPortfolio(result.portfolio as Record<string, unknown>); setRequirements((result.requirements as Array<Record<string, unknown>>) || []); });
     if (tab === 'memory') void run(async () => { const result = await engagement({ action: 'memoryDecks' }); const next = (result.decks as Array<Record<string, unknown>>) || []; setDecks(next); if (!deckId && next[0]) setDeckId(String(next[0].id)); });
-    if (tab === 'duels') void run(async () => { const result = await engagement({ action: 'duelQuestions' }); setDuelQuestions((result.questions as Array<Record<string, unknown>>) || []); });
+    if (tab === 'duels') void run(async () => { const result = await engagement({ action: 'duelOverview' }); setOpponents((result.opponents as Array<{ uid: string; displayName: string }>) || []); setActiveMatches((result.matches as Array<{ id: string; opponentName: string }>) || []); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -95,10 +98,11 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
         </section>}
 
         {tab === 'duels' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><h2>Iron Duels</h2><p>Start a secure 1v1 Scripture challenge. Scoring happens on the server and completed matches update the players' ratings.</p><input value={opponentId} onChange={event => setOpponentId(event.target.value)} placeholder="Opponent user ID" aria-label="Opponent user ID"/><button type="button" disabled={busy || !opponentId} onClick={() => void run(async () => { const result=await engagement({action:'duelCreate',opponentId}); setMatchId(String(result.matchId)); setDuelQuestions((result.questions as Array<Record<string,unknown>>) || []); setMessage('Duel created. Answer each question, then finish the match.'); })}><Swords size={15}/> Start duel</button></div></article>
-          {matchId && duelQuestions.map(question => <article className="vop-material-card" key={String(question.id)}><div className="vop-material-body"><h3>{String(question.question || '')}</h3><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{(Array.isArray(question.options)?question.options:[]).map(option => <button key={String(option)} type="button" disabled={busy} onClick={() => void run(async () => { await engagement({action:'duelAnswer',matchId,questionId:String(question.id),answer:String(option)}); setMessage('Answer recorded.'); })}>{String(option)}</button>)}</div></div></article>)}
+          <article className="vop-material-card"><div className="vop-material-body"><h2>Iron Duels</h2><p>Start a secure 1v1 Scripture challenge. Scoring happens on the server and completed matches update the players' ratings.</p><select value={opponentId} onChange={event => setOpponentId(event.target.value)} aria-label="Choose a Scripture Duel opponent"><option value="">Choose a learner in your organization</option>{opponents.map(person => <option key={person.uid} value={person.uid}>{person.displayName}</option>)}</select><button type="button" disabled={busy || !opponentId} onClick={() => void run(async () => { const result=await engagement({action:'duelCreate',opponentId}); setMatchId(String(result.matchId)); setDuelQuestions((result.questions as Array<Record<string,unknown>>) || []); setAnsweredQuestionIds([]); setMessage('Duel created. Both participants must answer before the match can finish, or wait until it expires.'); })}><Swords size={15}/> Start duel</button></div></article>
+          {activeMatches.length > 0 && <article className="vop-material-card"><div className="vop-material-body"><h3>Your active challenges</h3>{activeMatches.map(match => <button type="button" key={match.id} disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'duelJoin', matchId:match.id }); setMatchId(String(result.matchId)); setDuelQuestions((result.questions as Array<Record<string,unknown>>) || []); setAnsweredQuestionIds((result.answeredQuestionIds as string[]) || []); setMessage('Challenge opened.'); })}>Open challenge with {match.opponentName}</button>)}</div></article>}
+          {matchId && duelQuestions.map(question => <article className="vop-material-card" key={String(question.id)}><div className="vop-material-body"><h3>{String(question.question || '')}</h3><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{(Array.isArray(question.options)?question.options:[]).map(option => <button key={String(option)} type="button" disabled={busy || answeredQuestionIds.includes(String(question.id))} onClick={() => void run(async () => { await engagement({action:'duelAnswer',matchId,questionId:String(question.id),answer:String(option)}); setAnsweredQuestionIds(current => [...new Set([...current, String(question.id)])]); setMessage('Answer recorded.'); })}>{String(option)}</button>)}</div></div></article>)}
           {matchId && <button type="button" disabled={busy} onClick={() => void run(async () => { const result=await engagement({action:'duelFinish',matchId}); setMessage(`Duel completed. Result: ${String(result.winner || 'draw')}.`); setMatchId(''); })}>Finish duel</button>}
-          {!duelQuestions.length && <div className="vop-materials-empty"><Swords size={40}/><h2>No published duel questions</h2><p>An administrator must publish Scripture Duel questions before a match can start.</p></div>}
+          {!matchId && !activeMatches.length && <div className="vop-materials-empty"><Swords size={40}/><h2>No active challenges</h2><p>Choose a learner to start a Scripture Duel.</p></div>}
         </section>}
       </div>
     </main>
