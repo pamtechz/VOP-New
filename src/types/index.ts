@@ -235,6 +235,7 @@ export interface Lesson {
   sharingScope?: 'private' | 'organization' | 'shared';
   canonical?: boolean;
   quizId?: string;
+  media?: { audioUrl?: string; videoUrl?: string; imageUrl?: string };
   id: string;
   title: string;
   lessonNumber: string; // e.g., "1.0", "1.1", "1.5"
