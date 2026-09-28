@@ -982,7 +982,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         })}
       </div>
 
-      {tab === 'quizzes' ? <QuizLibrary /> : tab === 'guides' ? (
+      {tab === 'quizzes' ? <QuizLibrary organizationId={scopeOrganizationId} /> : tab === 'guides' ? (
         <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
       ) : (
         <>
