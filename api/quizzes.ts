@@ -126,6 +126,7 @@ export default async function handler(req: Request, res: Response) {
       if (!language) throw new Error('Quiz language is required.');
       const published = data.published === true;
       const target = await resolveAttachment(ctx, { ...data, language, published });
+      if (existing.exists && String(current.organizationId || '') !== target.organizationId) throw new Error('Moving a quiz between organizations is not allowed. Copy the quiz into the destination tenant instead.');
       const questions = normalizeQuizQuestions(data.questions, id);
       if (published && questions.length === 0) throw new Error('Add at least one valid question before publishing.');
       const sourceContentId = String(current.sourceContentId || data.sourceContentId || '').trim();
