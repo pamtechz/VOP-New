@@ -172,12 +172,16 @@ test('redacted Quiz Library assessments count only after a server-issued passing
     answerVisibility: 'public_redacted',
     questions: [{ key: 'quiz-secured-q1', question: 'Which option is true?', options: ['First', 'Second'] } as unknown as NonNullable<typeof course.lessons[1]['questions']>[number]],
   };
-  const passing = calculateCurriculumProgress([course], learner(['secured-lesson'], {
-    'secured:secured-test-0': 85,
-  }), 80, 'en');
+  const candidate = { ...learner(['secured-lesson'], {
+    'church-1:en:secured:secured-test-0': 85,
+  }), organizationId: 'church-1' };
+  const passing = calculateCurriculumProgress([course], candidate, 80, 'en');
   assert.equal(passing.configurationError, undefined);
   assert.equal(passing.completedGuides, 1);
   assert.equal(passing.certificateEligible, true);
+  assert.equal(calculateCurriculumAverageScore([course], candidate, 'en'), 85);
+  // A score recorded for another organization cannot satisfy this learner.
+  assert.equal(calculateCurriculumProgress([course], { ...candidate, organizationId: 'church-2' }, 80, 'en').certificateEligible, false);
 
   // A learner-visible answer key is not a legitimate redacted assessment.
   course.lessons[1].questions = [{ key: 'quiz-secured-q1', question: 'Which option is true?',
