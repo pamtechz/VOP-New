@@ -31,7 +31,9 @@ test('Iron Duels score and rating changes are server authoritative', () => {
   assert.match(source, /scriptureDuelQuestions/);
   assert.match(source, /scriptureDuels/);
   assert.match(source, /scriptureDuelResults/);
-  assert.match(source, /FieldValue\.increment/);
+  assert.match(source, /transaction\.get\(matchRef\)/);
+  assert.match(source, /transaction\.update\(matchRef/);
+  assert.match(source, /Object\.prototype\.hasOwnProperty\.call\(previous, key\)/);
   assert.match(source, /runTransaction/);
   assert.match(source, /function elo/);
   assert.match(source, /expiresAt/);
