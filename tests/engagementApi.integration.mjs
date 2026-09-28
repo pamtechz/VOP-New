@@ -65,10 +65,20 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
         action: 'portfolioSaveActivity', requirementId: 'req-1', status: 'verified',
       });
       assert.notEqual(forbidden.status, 200);
+      assert.notEqual((await api(learner, {
+        action: 'portfolioSaveActivity', requirementId: 'invented-requirement', status: 'submitted',
+      })).status, 200, 'Unpublished/invented requirements must not receive credit.');
+      assert.notEqual((await api(mentor, {
+        action: 'portfolioSignoff', learnerId: learner.uid, requirementId: 'req-1',
+      })).status, 200, 'An evaluator cannot sign off without an activity submission.');
       const activity = await api(learner, {
         action: 'portfolioSaveActivity', requirementId: 'req-1', status: 'submitted',
       });
       assert.equal(activity.status, 200);
+      assert.notEqual((await api(learner, {
+        action: 'portfolioEvidence', requirementId: 'nonexistent',
+        title: 'Fake', url: 'https://example.org/evidence',
+      })).status, 200, 'Unknown requirements cannot collect portfolio evidence.');
       const evidence = await api(learner, {
         action: 'portfolioEvidence', requirementId: 'req-1',
         title: 'Devotional work', url: 'https://example.org/evidence', note: 'Private learner note.',
