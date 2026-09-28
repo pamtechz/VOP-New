@@ -55,7 +55,9 @@ test('PWA has manifest, service worker, offline fallback and update lifecycle', 
   const sw = read('public/sw.js');
   const manifest = read('public/manifest.webmanifest');
   assert.match(index, /manifest\.webmanifest/);
-  assert.match(index, /serviceWorker\.register\('\/sw\.js'/);
+  const main = read('src/main.tsx');
+  assert.match(main, /serviceWorker\.register\('\/sw\.js'/);
+  assert.match(main, /import\.meta\.env\.PROD/);
   assert.match(sw, /skipWaiting/);
   assert.match(sw, /clients\.claim/);
   assert.match(sw, /offline\.html/);
