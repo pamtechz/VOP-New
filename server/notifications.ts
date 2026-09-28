@@ -38,3 +38,5 @@ export async function createNotification(db: Firestore,input:CreateNotificationI
   });
   return ref.id;
 }
+
+// Canonical notification persistence remains server-authoritative and scope-aware.
