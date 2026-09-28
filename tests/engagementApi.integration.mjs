@@ -244,6 +244,36 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal(memory.status,200);
       assert.equal(memory.due.length,1);
     });
+
+    await t.test('hierarchy-owned ministry content reaches descendants without leaking to foreign tenants', async () => {
+      await db.doc('organizations/org-A').set({unionId:'union-A'},{merge:true});
+      await db.doc('organizations/org-B').set({unionId:'union-B'},{merge:true});
+      const base = {status:'published',scope:'hierarchy',organizationId:'',
+        ownerTenantId:'union_admin:union-A',sharingScope:'organization',ownerUid:'union-author'};
+      await db.doc('masterGuideRequirements/hierarchy-req').set({...base,title:'Union leadership service'});
+      await db.doc('scriptureMemoryDecks/hierarchy-deck').set({...base,title:'Union memory',
+        verses:[{id:'verse-a',reference:'Psalm 119:11',text:'Thy word have I hid in mine heart.'}]});
+      await db.doc('scriptureDuelQuestions/hierarchy-question').set({...base,title:'Scripture recall',
+        question:'Where is Psalm 119?',options:['Psalms','Daniel'],answer:'Psalms'});
+
+      const own = await api(learner,{action:'portfolioGet'});
+      const foreign = await api(outsider,{action:'portfolioGet'});
+      assert.ok(own.requirements.some(req=>req.id==='hierarchy-req'));
+      assert.ok(!foreign.requirements.some(req=>req.id==='hierarchy-req'));
+      assert.equal((await api(learner,{action:'portfolioSaveActivity',requirementId:'hierarchy-req',
+        status:'submitted'})).status,200);
+      assert.equal((await api(outsider,{action:'portfolioSaveActivity',requirementId:'hierarchy-req',
+        status:'submitted'})).status,400);
+
+      const ownDecks = await api(learner,{action:'memoryDecks'});
+      const foreignDecks = await api(outsider,{action:'memoryDecks'});
+      assert.ok(ownDecks.decks.some(deck=>deck.id==='hierarchy-deck'));
+      assert.ok(!foreignDecks.decks.some(deck=>deck.id==='hierarchy-deck'));
+      assert.equal((await api(learner,{action:'memoryDue',deckId:'hierarchy-deck'})).status,200);
+      assert.notEqual((await api(outsider,{action:'memoryDue',deckId:'hierarchy-deck'})).status,200);
+      assert.ok((await api(learner,{action:'duelQuestions'})).questions.some(question=>question.id==='hierarchy-question'));
+      assert.ok(!(await api(outsider,{action:'duelQuestions'})).questions.some(question=>question.id==='hierarchy-question'));
+    });
   } finally {
     await vite.close();
     await deleteApp(app);
