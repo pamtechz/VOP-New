@@ -273,28 +273,39 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   }
 
   if (action === 'duelFinish') {
-    const answers = match.answers && typeof match.answers === 'object' ? match.answers as Record<string, unknown> : {};
-    const scores = match.scores && typeof match.scores === 'object' ? match.scores as Record<string, unknown> : {};
-    const a = String(match.playerA || ''), c = String(match.playerB || '');
-    const aScore = Number(scores[a] || 0), bScore = Number(scores[c] || 0);
-    const winner = aScore === bScore ? 'draw' : aScore > bScore ? a : c;
-    const playerA = await profile(db, a);
-    const playerB = await profile(db, c);
-    const ratingA = Number(playerA.scriptureDuelRating || 1200);
-    const ratingB = Number(playerB.scriptureDuelRating || 1200);
-    const nextA = winner === 'draw' ? Math.round((ratingA + ratingB) / 2) : elo(ratingA, ratingB, winner === a ? 1 : 0);
-    const nextB = winner === 'draw' ? Math.round((ratingA + ratingB) / 2) : elo(ratingB, ratingA, winner === c ? 1 : 0);
-    await db.runTransaction(async transaction => {
+    return db.runTransaction(async transaction => {
+      const latest = await transaction.get(matchRef);
+      const current = latest.data() || {};
+      if (!latest.exists || current.status !== 'active') throw new Error('This duel has already finished or is unavailable.');
+      const a = String(current.playerA || '');
+      const c = String(current.playerB || '');
+      if (String(actor.uid) !== a && String(actor.uid) !== c) throw new Error('You are not a participant in this duel.');
+      const questionIds = Array.isArray(current.questionIds) ? current.questionIds : [];
+      const answers = current.answers && typeof current.answers === 'object' ? current.answers as Record<string, unknown> : {};
+      const expired = new Date(String(current.expiresAt || 0)).getTime() < Date.now();
+      const answered = questionIds.every(id => Object.prototype.hasOwnProperty.call(answers, `${a}:${id}`) &&
+        Object.prototype.hasOwnProperty.call(answers, `${c}:${id}`));
+      if (!expired && !answered) throw new Error('Both players must answer every question before finishing the duel.');
+      const refA = db.doc(`users/${a}`);
+      const refB = db.doc(`users/${c}`);
+      const [snapA, snapB] = await Promise.all([transaction.get(refA), transaction.get(refB)]);
+      if (!snapA.exists || !snapB.exists) throw new Error('A duel participant was not found.');
+      const scores = current.scores && typeof current.scores === 'object' ? current.scores as Record<string, unknown> : {};
+      const aScore = Number(scores[a] || 0);
+      const bScore = Number(scores[c] || 0);
+      const winner = aScore === bScore ? 'draw' : aScore > bScore ? a : c;
+      const ratingA = Number(snapA.data()?.scriptureDuelRating || 1200);
+      const ratingB = Number(snapB.data()?.scriptureDuelRating || 1200);
+      const nextA = elo(ratingA, ratingB, winner === 'draw' ? 0.5 : winner === a ? 1 : 0);
+      const nextB = elo(ratingB, ratingA, winner === 'draw' ? 0.5 : winner === c ? 1 : 0);
       transaction.update(matchRef, { status: 'completed', winner, finishedAt: FieldValue.serverTimestamp(), finalScores: { [a]: aScore, [c]: bScore } });
-      transaction.set(db.doc(`users/${a}`), { scriptureDuelRating: nextA }, { merge: true });
-      transaction.set(db.doc(`users/${c}`), { scriptureDuelRating: nextB }, { merge: true });
-      transaction.set(db.doc(`scriptureDuelResults/${matchId}`), { matchId, organizationId: String(match.organizationId || ''), playerA: a, playerB: c, scores: { [a]: aScore, [c]: bScore }, winner, ratings: { [a]: nextA, [c]: nextB }, answerCount: Object.keys(answers).length, completedAt: FieldValue.serverTimestamp() });
+      transaction.set(refA, { scriptureDuelRating: nextA }, { merge: true });
+      transaction.set(refB, { scriptureDuelRating: nextB }, { merge: true });
+      transaction.set(db.doc(`scriptureDuelResults/${matchId}`), { matchId, organizationId: String(current.organizationId || ''), playerA: a, playerB: c,
+        scores: { [a]: aScore, [c]: bScore }, winner, ratings: { [a]: nextA, [c]: nextB }, answerCount: Object.keys(answers).length,
+        completedAt: FieldValue.serverTimestamp() });
+      return { winner, scores: { [a]: aScore, [c]: bScore }, ratings: { [a]: nextA, [c]: nextB } };
     });
-    return { winner, scores: { [a]: aScore, [c]: bScore }, ratings: { [a]: nextA, [c]: nextB } };
-  }
-  if (action === 'duelHistory') {
-    const snapshot = await db.collection('scriptureDuelResults').where('organizationId', '==', orgOf(actor)).limit(100).get();
-    return { results: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => item.playerA === String(actor.uid) || item.playerB === String(actor.uid)) };
   }
   throw new Error('Unsupported Scripture Duel action.');
 }
