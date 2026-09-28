@@ -9,13 +9,15 @@
     "build": "node scripts/verify-server-esm-imports.mjs && tsc -b && vite build",
     "verify:content": "node scripts/generate-snapshots.js && node --test tests/ingestion.test.mjs tests/snapshots.test.mjs",
     "test:unit": "node --test tests/*.test.ts tests/androidRelease.test.mjs tests/productionAssets.test.mjs tests/pwa.test.mjs tests/serverlessRouting.test.mjs",
+    "test:contracts": "node --test tests/androidRelease.test.mjs tests/ingestion.test.mjs tests/productionAssets.test.mjs tests/snapshots.test.mjs tests/vopCompletionContracts.test.mjs tests/engagementFeatureContracts.test.mjs tests/serverlessRouting.test.mjs",
     "build:android": "node scripts/generate-snapshots.js && node scripts/validate-android-release.mjs && npm run build && cap sync android",
     "lint": "oxlint src/main.tsx src/Root.tsx src/config src/lib src/pages/FirebaseStudyApp.tsx src/pages/LessonViewer.tsx src/pages/SignInPage.tsx src/services/firebaseAuth.ts src/services/offlineManifest.ts",
     "lint:legacy": "oxlint src",
     "preview": "vite preview",
     "verify:architecture": "node scripts/verify-vop-architecture.mjs",
     "inventory:ui-localization": "node scripts/inventory-ui-localization.mjs",
-    "verify:rules": "firebase emulators:exec --only firestore --project demo-vop-security-rules \"node --test tests/firestoreRules.test.mjs\""
+    "verify:rules": "firebase emulators:exec --only firestore --project demo-vop-security-rules \"node --test tests/firestoreRules.test.mjs\"",
+    "test:integration": "firebase emulators:exec --only auth,firestore --project demo-vop-security-rules \"node --test tests/engagementApi.integration.mjs\""
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "8.5.2",
@@ -37,9 +39,10 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
-    "firebase-tools": "15.30.2",
     "oxlint": "^1.81.0",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "firebase-tools": "15.30.2"
   },
   "overrides": {
     "xcode": {

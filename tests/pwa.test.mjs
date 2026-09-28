@@ -15,12 +15,12 @@ test('PWA manifest is installable and scoped to VOP', () => {
 
 test('service worker has versioned cache lifecycle and excludes API authority', () => {
   const source = read('public/sw.js');
-  assert.match(source, /const CACHE_NAME = 'vop-shell-v1'/);
+  assert.match(source, /const CACHE_NAME = CACHE_PREFIX \+ 'v2'/);
   assert.match(source, /skipWaiting\(\)/);
   assert.match(source, /clients\.claim\(\)/);
   assert.match(source, /url\.pathname\.startsWith\('\/api\/'\)/);
   assert.match(source, /caches\.keys\(\)/);
-  assert.match(source, /caches\.match\(request\)/);
+  assert.match(source, /caches\.match\(event\.request\)/);
 });
 
 test('production entry registers the service worker only for production', () => {

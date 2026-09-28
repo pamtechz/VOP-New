@@ -424,3 +424,45 @@ test('personal settings allow UI locale and study language but remain user-priva
     await environment.cleanup();
   }
 });
+
+test('notification recipient rules allow own reads and reject cross-tenant/admin snooping', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.clearFirestore();
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const db = adminContext.firestore();
+      await db.doc('users/recipient-one').set({ uid: 'recipient-one', role: 'student', organizationId: 'org-1' });
+      await db.doc('users/recipient-two').set({ uid: 'recipient-two', role: 'student', organizationId: 'org-2' });
+      await db.doc('users/org-admin').set({ uid: 'org-admin', role: 'student', organizationId: 'org-1', organizationRole: 'admin' });
+      await db.doc('organizations/org-1').set({ id: 'org-1', status: 'active' });
+      await db.doc('organizations/org-2').set({ id: 'org-2', status: 'active' });
+      await db.doc('organizations/org-1/members/org-admin').set({ uid: 'org-admin', organizationId: 'org-1', role: 'admin', active: true });
+      await db.doc('notifications/private-one').set({
+        recipientId: 'recipient-one', organizationId: 'org-1', title: 'Private progress notice', read: false,
+      });
+      await db.doc('notifications/legacy-one').set({
+        userId: 'recipient-one', organizationId: 'org-1', title: 'Legacy personal notice', read: false,
+      });
+    });
+    const recipient = environment.authenticatedContext('recipient-one').firestore();
+    const outsider = environment.authenticatedContext('recipient-two').firestore();
+    const orgAdmin = environment.authenticatedContext('org-admin').firestore();
+    const anonymous = environment.unauthenticatedContext().firestore();
+
+    await assertSucceeds(recipient.doc('notifications/private-one').get());
+    await assertSucceeds(recipient.doc('notifications/legacy-one').get());
+    await assertFails(outsider.doc('notifications/private-one').get());
+    await assertFails(orgAdmin.doc('notifications/private-one').get());
+    await assertFails(anonymous.doc('notifications/private-one').get());
+    await assertFails(recipient.doc('notifications/private-one').update({ read: true }));
+    await assertFails(orgAdmin.doc('notifications/private-one').delete());
+    await assertFails(outsider.collection('notifications').where('recipientId', '==', 'recipient-one').get());
+    await assertSucceeds(recipient.collection('notifications').where('recipientId', '==', 'recipient-one').get());
+  } finally {
+    await environment.cleanup();
+  }
+});

@@ -964,13 +964,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Notifications are private to the recipient, with administrator oversight
-    // only within the recipient's organization.
+    // Recipient-owned records. Administrator operations use audited server APIs.
+    // Legacy userId/uid remain readable only by their own recipient.
     match /notifications/{id} {
-      allow get, list: if signedIn() && (
-        resource.data.get('userId', resource.data.get('uid', '')) == request.auth.uid
-        || (isAdmin() && resource.data.get('organizationId', '') == organizationIdForUser())
-      );
+      allow get, list: if signedIn() &&
+        resource.data.get('recipientId', resource.data.get('userId', resource.data.get('uid', ''))) == request.auth.uid;
       allow create, update, delete: if false;
     }
 

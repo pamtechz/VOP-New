@@ -1,41 +1,56 @@
-/* One Vercel function; individual handlers continue to enforce authorization. */
-import h0 from '../api_handlers/admin/analytics.js';
-import h1 from '../api_handlers/admin/audit.js';
-import h2 from '../api_handlers/admin/bootstrap.js';
-import h3 from '../api_handlers/admin/candidates.js';
-import h4 from '../api_handlers/admin/content.js';
-import h5 from '../api_handlers/admin/enrollCandidate.js';
-import h6 from '../api_handlers/admin/graduations.js';
-import h7 from '../api_handlers/admin/languages.js';
-import h8 from '../api_handlers/admin/onboarding.js';
-import h9 from '../api_handlers/admin/organizations.js';
-import h10 from '../api_handlers/admin/permissions.js';
-import h11 from '../api_handlers/admin/plans.js';
-import h12 from '../api_handlers/admin/radio.js';
-import h13 from '../api_handlers/admin/users.js';
+/* Shared Vercel function: dispatch to the existing tenant-authorized handlers. */
+import route0 from '../api_handlers/admin/analytics.js';
+import route1 from '../api_handlers/admin/audit.js';
+import route2 from '../api_handlers/admin/bootstrap.js';
+import route3 from '../api_handlers/admin/candidates.js';
+import route4 from '../api_handlers/admin/content.js';
+import route5 from '../api_handlers/admin/enrollCandidate.js';
+import route6 from '../api_handlers/admin/graduations.js';
+import route7 from '../api_handlers/admin/languages.js';
+import route8 from '../api_handlers/admin/notifications.js';
+import route9 from '../api_handlers/admin/onboarding.js';
+import route10 from '../api_handlers/admin/organizations.js';
+import route11 from '../api_handlers/admin/permissions.js';
+import route12 from '../api_handlers/admin/plans.js';
+import route13 from '../api_handlers/admin/radio.js';
+import route14 from '../api_handlers/admin/search.js';
+import route15 from '../api_handlers/admin/users.js';
 
-type Req={url?:string;query?:Record<string,string|string[]|undefined>};
-type Res={status:(code:number)=>Res;json:(body:unknown)=>void};
-const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
-  'analytics': h0,
-  'audit': h1,
-  'bootstrap': h2,
-  'candidates': h3,
-  'content': h4,
-  'enrollCandidate': h5,
-  'graduations': h6,
-  'languages': h7,
-  'onboarding': h8,
-  'organizations': h9,
-  'permissions': h10,
-  'plans': h11,
-  'radio': h12,
-  'users': h13,
+type Request = { url?: string; query?: Record<string, string | string[] | undefined> };
+type Response = { status: (code: number) => Response; json: (body: unknown) => void };
+type RouteHandler = (request: never, response: never) => unknown;
+const routes: Record<string, RouteHandler> = Object.freeze({
+  'analytics': route0,
+  'audit': route1,
+  'bootstrap': route2,
+  'candidates': route3,
+  'content': route4,
+  'enrollCandidate': route5,
+  'graduations': route6,
+  'languages': route7,
+  'notifications': route8,
+  'onboarding': route9,
+  'organizations': route10,
+  'permissions': route11,
+  'plans': route12,
+  'radio': route13,
+  'search': route14,
+  'users': route15,
 });
-export default async function handler(req:Req,res:Res){
-  const value=req.query?.__vopRoute;
-  const candidate=Array.isArray(value)?value[0]:value;
-  const name=typeof candidate==='string'&&candidate?candidate:new URL(req.url||'/', 'http://localhost').pathname.replace(/^\/api\/admin\/?/,'');
-  if(!Object.prototype.hasOwnProperty.call(handlers,name))return res.status(404).json({error:'Unknown administrative endpoint.'});
-  return handlers[name](req as never,res as never);
+
+function resolveRoute(req: Request): string {
+  const candidate = req.query?.__vopRoute;
+  const rewritten = Array.isArray(candidate) ? candidate[0] : candidate;
+  if (typeof rewritten === 'string' && rewritten) return rewritten;
+  const path = new URL(req.url || '/', 'http://localhost').pathname;
+  return path.startsWith('/api/admin/') ? path.slice('/api/admin/'.length) : '';
+}
+
+export default async function handler(req: Request, res: Response) {
+  const route = resolveRoute(req);
+  if (!Object.prototype.hasOwnProperty.call(routes, route)) {
+    return res.status(404).json({ error: 'Unknown administrative endpoint.' });
+  }
+  // Authentication, permissions, ownership and tenant isolation stay in each handler.
+  return routes[route](req as never, res as never);
 }
