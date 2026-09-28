@@ -1,5 +1,3 @@
-import { auth } from '../lib/firebase';
-
 /** Pending lesson acknowledgments are NOT grades or official progress.
  * They contain no tokens, scores, answer keys, or personal profile fields.
  * Server-authoritative validation is mandatory on replay.
@@ -54,6 +52,8 @@ export function dropCompletion(item: PendingCompletion) {
     && row.guideId === item.guideId && row.lessonId === item.lessonId && row.language === item.language)));
 }
 export async function syncPendingLessonCompletions() {
+  if (typeof window === 'undefined') return {synced:0,remaining:0,rejected:0};
+  const { auth } = await import('../lib/firebase');
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const firebaseUser = auth?.currentUser;
