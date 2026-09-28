@@ -78,7 +78,7 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
   // Shared guides may be read, but quizzes must be attached to a guide that
   // the currently selected tenant can administer.
   const editableGuides = useMemo(() => guides.filter(guide =>
-    guide.archived !== true && guide.canEdit !== false
+    guide.archived !== true
     && String(guide.organizationId || '') === organizationId
   ), [guides, organizationId]);
   const currentGuide = editableGuides.find(guide => guide.id === guideId);
