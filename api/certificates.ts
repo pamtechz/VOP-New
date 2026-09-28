@@ -129,7 +129,7 @@ async function issue(req:Request,res:Response){
 
 export default async function handler(req:Request,res:Response){
  try {
-   const action=String((req.body&&typeof req.body==='object'?(req.body as Record<string,unknown>).action:'')||'');
+   const action=req.method==='GET' ? queryValue(req,'action') : String((req.body&&typeof req.body==='object'?(req.body as Record<string,unknown>).action:'')||'');
    if(req.method==='GET' && action==='mine') return await mine(req,res);
    if(req.method==='GET' && action!=='issue') return await verify(req,res);
    if(req.method==='POST' && action==='issue') return await issue(req,res);

@@ -151,7 +151,7 @@ export const CertificationManager: React.FC<Props> = ({
     try {
       const [certificateResponse, configResponse, requestResponse] = await Promise.all([
         adminContent('list', 'certificates'),
-        adminContent('list', 'certificationConfig'),
+        isSuperAdmin ? adminContent('list', 'certificationConfig') : Promise.resolve({ items: [] }),
         adminContent('list', 'graduationRequests'),
       ]);
       setCertificates(((certificateResponse.items || []) as CertificateRecord[])

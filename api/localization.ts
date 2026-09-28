@@ -1,3 +1,4 @@
+import { localeAliases } from '../shared/locales.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, getAdminDb, writeTenantAudit } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
@@ -20,7 +21,7 @@ async function buildLanguageRegistry(db: FirebaseFirestore.Firestore) {
     return {
       id:code,
       code,
-      aliases:[code],
+      aliases:localeAliases(code, data.aliases),
       name:String(data.name||code).trim(),
       nativeName:String(data.nativeName||data.name||code).trim(),
       enabled:data.enabled!==false,
@@ -33,8 +34,8 @@ async function buildLanguageRegistry(db: FirebaseFirestore.Firestore) {
 
 async function resolveLocale(db: FirebaseFirestore.Firestore, requested:string){
   const code=cleanLocale(requested); const registry=await buildLanguageRegistry(db);
-  const configured=registry.find(item=>item.code===code);
-  if(configured) return {code:configured.code,language:configured,aliases:[configured.code]};
+  const configured=registry.find(item=>item.code===code) || registry.find(item=>item.aliases.includes(code));
+  if(configured) return {code:configured.code,language:configured,aliases:configured.aliases};
   return {code,language:null,aliases:[code]};
 }
 

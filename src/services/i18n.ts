@@ -69,6 +69,7 @@ export async function loadUiLocaleRegistry(): Promise<CustomLanguage[]> {
         if (normalized && normalized !== code) localeAliases[normalized] = code;
       });
     });
+    localeRegistry.forEach(language => { localeAliases[language.code] = language.code; });
     localeRegistry.sort((a:CustomLanguage,b:CustomLanguage) => (a.sortOrder ?? 0)-(b.sortOrder ?? 0) || a.name.localeCompare(b.name));
     localeRegistryLoaded = true;
   } catch {
@@ -94,33 +95,39 @@ export const setUiLocale = (locale: LanguageCode) => {
   void loadUiLocale(normalized, 'en', true);
 };
 
-export async function loadUiLocale(locale: LanguageCode, fallback = 'en', force = false): Promise<void> {
-  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);
-  if (force) delete dictionaryCache[requested];
-  if (dictionaryCache[requested]) {
-    localeState.value = requested;
-    localeState.version += 1;
-    notify();
-    return;
-  }
-  try {
+async function loadDictionary(locale: string, fallback: string, visited = new Set<string>()): Promise<void> {
+  const requested = resolveRegisteredLocale(locale);
+  if (!requested || visited.has(requested)) return;
+  visited.add(requested);
+  if (!dictionaryCache[requested]) {
     const response = await fetch(`/api/localization?locale=${encodeURIComponent(requested)}`, { headers:{Accept:'application/json'} });
     if (!response.ok) throw new Error(`Locale ${requested} is unavailable.`);
     const payload = await response.json();
-    dictionaryCache[requested] = payload?.translations && typeof payload.translations === 'object' ? payload.translations as Record<string,string> : {};
-    localeFallbacks[requested] = normalizeLocale(payload?.fallback) || resolveRegisteredLocale(fallback) || 'en';
-    document.documentElement.dir = payload?.direction === 'rtl' ? 'rtl' : 'ltr';
+    dictionaryCache[requested] = payload?.translations && typeof payload.translations === 'object' ? payload.translations : {};
+    localeFallbacks[requested] = resolveRegisteredLocale(payload?.fallback || fallback);
+    localeDirections[requested] = payload?.direction === 'rtl' ? 'rtl' : 'ltr';
+  }
+  const next = localeFallbacks[requested];
+  if (next && !visited.has(next)) {
+    try { await loadDictionary(next, fallback, visited); } catch { /* Keep the selected dictionary when fallback is unavailable. */ }
+  }
+}
+
+const localeDirections: Record<string, 'rtl' | 'ltr'> = {};
+export async function loadUiLocale(locale: LanguageCode, fallback = 'en', force = false): Promise<void> {
+  if (!localeRegistryLoaded) await loadUiLocaleRegistry();
+  const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);
+  if (force) delete dictionaryCache[requested];
+  try {
+    await loadDictionary(requested, fallback);
+    document.documentElement.dir = localeDirections[requested] || 'ltr';
     document.documentElement.lang = requested;
     localeState.value = requested;
     localeState.version += 1;
     notify();
-    const configuredFallback = localeFallbacks[requested] && localeFallbacks[requested] !== requested ? localeFallbacks[requested] : fallback;
-    if (configuredFallback !== requested && !dictionaryCache[configuredFallback]) await loadUiLocale(configuredFallback, 'en');
-    if (configuredFallback !== 'en' && !dictionaryCache.en) await loadUiLocale('en', 'en');
   } catch {
-    if (requested !== fallback && !dictionaryCache[fallback]) {
-      try { await loadUiLocale(fallback, fallback); } catch { /* developer fallback remains available */ }
-    }
+    // Populate a fallback without changing the user's selected UI language.
+    try { await loadDictionary(fallback, fallback); } catch { /* Developer labels remain available. */ }
   }
 }
 
@@ -170,7 +177,8 @@ export const initializeLocalization = async (settings?: AppSettings) => {
   const locale = getUiLocale(settings);
   localeState.value = locale;
   localeState.version += 1;
-  await Promise.all([loadUiLocaleRegistry(), loadUiLocale(locale, 'en')]);
+  await loadUiLocaleRegistry();
+  await loadUiLocale(locale, 'en');
 };
 
 export { getActiveLanguage, setActiveLanguage } from './storage';
