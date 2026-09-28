@@ -7,7 +7,10 @@ import { createServer } from 'vite';
 test('engagement API: authenticated learner, mentor, memory and duel workflows', async t => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator is required; never run against production.');
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST, 'Auth emulator is required; never run against production.');
-  assert.equal(process.env.FIREBASE_ADMIN_PROJECT_ID, 'demo-vop-security-rules');
+  if (process.env.FIREBASE_ADMIN_PROJECT_ID && process.env.FIREBASE_ADMIN_PROJECT_ID !== 'demo-vop-security-rules') {
+    throw new Error('Refusing to run against a non-demo Firebase project.');
+  }
+  process.env.FIREBASE_ADMIN_PROJECT_ID = 'demo-vop-security-rules';
 
   const app = getApps()[0] || initializeApp({ projectId: 'demo-vop-security-rules' });
   const db = getFirestore(app);
