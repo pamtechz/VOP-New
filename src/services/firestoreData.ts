@@ -82,6 +82,9 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     type: item.type === 'Test' ? 'Test' : 'Lesson',
     contentPages: rawPages,
     questions,
+    media: item.media && typeof item.media === 'object' && !Array.isArray(item.media)
+      ? { audioUrl: String((item.media as Record<string, unknown>).audioUrl || ''), videoUrl: String((item.media as Record<string, unknown>).videoUrl || ''), imageUrl: String((item.media as Record<string, unknown>).imageUrl || '') }
+      : undefined,
     estimatedMinutes: Math.max(1, Number(item.estimatedMinutes ?? 15) || 15),
   };
 }
