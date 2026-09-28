@@ -33,7 +33,13 @@ async function resolveAttachment(ctx: Context, data: Record<string, unknown>) {
   const guide = guideSnap.data() || {};
   const organizationId = String(guide.organizationId || '').trim();
   // The request's authenticated tenant context, not a form field, grants authority.
-  if (organizationId !== ctx.organizationId) throw new Error('Choose a guide owned by your selected organization.');
+  if (ctx.tenantType === 'hierarchy') {
+    if (!organizationId || !(await organizationInHierarchyScope(ctx, organizationId))) {
+      throw new Error('Choose a guide inside your authorized hierarchy scope.');
+    }
+  } else if (organizationId !== ctx.organizationId) {
+    throw new Error('Choose a guide owned by your selected organization.');
+  }
   if (String(data.language || '').trim().toLowerCase() !== String(guide.language || '').trim().toLowerCase()) throw new Error('The quiz language must match the guide.');
   let parentLesson: Record<string, unknown> | undefined;
   let lessonId = '';
