@@ -150,8 +150,10 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
 
     if (!legacy) {
       const ownerOrg = String(data.organizationId ?? data.ownerOrganizationId ?? '').trim();
-      if (organizationId && ownerOrg && ownerOrg !== organizationId && data.sharingScope !== 'shared') continue;
-      if (!organizationId && data.sharingScope !== 'shared') continue;
+      const withinScope = profileRole === 'super_admin'
+        || Boolean(ownerOrg && ownerOrg === organizationId)
+        || scopedOrganizationIds.includes(ownerOrg);
+      if (!withinScope && data.sharingScope !== 'shared') continue;
     }
 
     const id = String(data.id ?? item.id).trim();
@@ -172,7 +174,9 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     };
     if (!guide.title) continue;
 
-    const key = legacy ? `legacy:${language}` : `org:${String(data.organizationId || data.ownerOrganizationId || '')}:${language}`;
+    // Multiple guides can share an organization and language (e.g. forked guides).
+    // Using tenant+language here silently overwrote earlier entries.
+    const key = item.ref.path;
     guides.set(key, { guide, lessonsRef: collection(firestore, `${item.ref.path}/lessons`) });
   }
 
