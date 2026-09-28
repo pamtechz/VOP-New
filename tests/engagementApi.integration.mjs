@@ -226,6 +226,73 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal(other.certificates.length, 0);
     });
 
+
+    await t.test('unified search excludes foreign, unpublished and private resources', async () => {
+      const { default: searchHandler } = await vite.ssrLoadModule('/api_handlers/admin/search.ts');
+      for (const [orgId, person] of [['org-A', learner], ['org-A', peer], ['org-A', mentor], ['org-B', outsider]]) {
+        await db.doc('organizations/' + orgId + '/members/' + person.uid).set({
+          uid: person.uid, organizationId: orgId, role: person.uid === mentor.uid ? 'mentor' : 'learner', active: true,
+        });
+      }
+      const docs = [
+        ['g-shared', { title: 'Compassion shared guide', scope: 'organization', sharingScope: 'organization', organizationId: 'org-A', published: true }],
+        ['g-private', { title: 'Confidential devotional notes', scope: 'organization', sharingScope: 'private', organizationId: 'org-A', ownerUid: peer.uid, published: true }],
+        ['g-foreign', { title: 'Foreign prophecy guide', scope: 'organization', organizationId: 'org-B', published: true }],
+        ['g-global', { title: 'Universal Adventist study', scope: 'platform', published: true }],
+        ['g-draft', { title: 'Universal unpublished study', scope: 'platform', published: false }],
+      ];
+      for (const [id, data] of docs) await db.doc('guides/' + id).set(data);
+      async function search(user, q) {
+        let status = 200;
+        let output;
+        const res = { status(code) { status = code; return this; }, json(data) { output = data; return this; } };
+        await searchHandler({ method: 'GET', headers: { authorization: 'Bearer ' + user.token },
+          query: { q, types: 'guide' } }, res);
+        return { status, ...output };
+      }
+      const same = await search(learner, 'Compassion');
+      assert.equal(same.status, 200, JSON.stringify(same));
+      assert.ok(same.items.some(item => item.id === 'g-shared'));
+      assert.equal((await search(learner, 'Foreign')).items.length, 0);
+      assert.equal((await search(learner, 'Confidential')).items.length, 0);
+      assert.ok((await search(learner, 'Universal Adventist')).items.some(item => item.id === 'g-global'));
+      assert.equal((await search(learner, 'Universal unpublished')).items.length, 0);
+    });
+
+    await t.test('notification event: scoped sender, recipient inbox and read-state authorization', async () => {
+      const { default: notificationHandler } = await vite.ssrLoadModule('/api_handlers/admin/notifications.ts');
+      const manager = await identity('notificationAdmin', 'org-A', { organizationRole: 'admin' });
+      await db.doc('organizations/org-A/members/' + manager.uid).set({
+        uid: manager.uid, organizationId: 'org-A', role: 'admin', active: true,
+      });
+      async function notif(user, method, action, extra = {}) {
+        let status = 200;
+        let output;
+        const res = { status(code) { status = code; return this; }, json(data) { output = data; return this; } };
+        await notificationHandler({
+          method, headers: { authorization: 'Bearer ' + user.token },
+          query: method === 'GET' ? { action } : {},
+          body: method === 'POST' ? { action, ...extra } : {},
+        }, res);
+        return { status, ...output };
+      }
+      const foreign = await notif(manager, 'POST', 'send', {
+        recipientId: outsider.uid, organizationId: 'org-A', title: 'Private', body: 'Do not send',
+      });
+      assert.equal(foreign.status, 403, JSON.stringify(foreign));
+      const sent = await notif(manager, 'POST', 'send', {
+        recipientId: learner.uid, organizationId: 'org-A', type: 'announcement',
+        title: 'Organization announcement', body: 'Bible study this evening',
+      });
+      assert.equal(sent.status, 201, JSON.stringify(sent));
+      const inbox = await notif(learner, 'GET', 'list');
+      assert.equal(inbox.status, 200);
+      assert.ok(inbox.items.some(item => item.id === sent.id));
+      assert.equal((await notif(outsider, 'POST', 'markRead', { notificationId: sent.id })).status, 403);
+      assert.equal((await notif(learner, 'POST', 'markRead', { notificationId: sent.id })).status, 200);
+      assert.equal((await notif(learner, 'GET', 'list')).items.find(item => item.id === sent.id).read, true);
+    });
+
   } finally {
     await vite.close();
     await deleteApp(app);
