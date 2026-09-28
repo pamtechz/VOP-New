@@ -82,10 +82,12 @@ test('translation owner is enforced while Super Admin can update without taking 
   assert.equal(records.get('translations/bem').ownerUid, 'translator');
 });
 
-test('English alias saves to the canonical dictionary; invalid keys and excessive writes are rejected atomically', async () => {
+test('English destinations, invalid keys and excessive writes are rejected atomically', async () => {
   reset();
-  assert.equal((await request('POST', { action: 'bulkSave', locale: 'en', values: { 'common.save': 'Save' } })).code, 200);
-  assert.equal(records.get('translations/eng').values['common.save'], 'Save');
+  for (const locale of ['en', 'ENG', 'en-US', 'eng-GB']) {
+    assert.equal((await request('POST', { action: 'bulkSave', locale, values: { 'common.save': 'Save' } })).code, 400);
+  }
+  assert.equal(records.has('translations/eng'), false);
   assert.equal((await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Valid', 'bad/path': 'Invalid' } })).code, 400);
   assert.equal(records.has('translations/bem'), false);
   const values = Object.fromEntries(Array.from({length:351}, (_, i) => ['key_' + i, 'value']));
@@ -101,7 +103,7 @@ test('legacy fallback labels use selected locale, exact keys win and missing lab
   globalThis.document = { documentElement: {} };
   globalThis.fetch = async url => ({ ok: true, json: async () => url === '/api/localization'
     ? { items: [{code:'bem'}, {code:'eng',aliases:['en']}] }
-    : { translations: String(url).endsWith('bem') ? { 'common.save': 'Sunga', app_title: 'Ishiwi', 'common.all': 'Yonse' } : {} } });
+    : { translations: String(url).endsWith('bem') ? { 'common.save': 'Sunga', app_title: 'Ishiwi', 'common.all': 'Yonse', 'admin.translations_title': 'admin.detected_translation_entries' } : {} } });
   try {
     const i18n = await server.ssrLoadModule('/src/services/i18n.ts');
     const study = await server.ssrLoadModule('/src/services/storage.ts');
@@ -111,6 +113,10 @@ test('legacy fallback labels use selected locale, exact keys win and missing lab
     assert.equal(i18n.getTranslation('common.all', 'All'), 'Yonse');
     assert.equal(i18n.getTranslation('common.app_title', 'App title'), 'Ishiwi');
     assert.equal(i18n.getTranslation('common.missing', 'Original text'), 'Original text');
+    for (const [key, label] of [['admin.translations_title', 'Translations'], ['admin.select_language', 'Select language'], ['admin.view_schedule', 'View Schedule'], ['admin.detected_translation_entries', 'Detected Translation Entries']]) {
+      assert.equal(i18n.getTranslation(key, label), label);
+      assert.ok(!i18n.translationSourceLabel(key, key).includes('admin.'));
+    }
     assert.equal(study.getActiveLanguage(), 'eng');
     assert.equal(document.documentElement.lang, 'bem');
     const { Header } = await server.ssrLoadModule('/src/components/layout/Header.tsx');

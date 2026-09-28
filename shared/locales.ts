@@ -11,3 +11,9 @@ export function localeAliases(code: string, configured: unknown = []): string[] 
   }
   return [...aliases];
 }
+
+/** English is the authored source, never a translation destination. */
+export function isEnglishLocale(value: unknown): boolean {
+  const code = String(value ?? '').trim().toLowerCase().replace(/_/g, '-');
+  return localeAliases(code).some(alias => /^(?:en|eng)(?:-|$)/.test(alias));
+}

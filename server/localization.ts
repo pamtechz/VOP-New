@@ -1,3 +1,4 @@
+import { isEnglishLocale } from '../shared/locales.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { TenantContext } from './tenant.js';
 
@@ -12,6 +13,7 @@ export async function saveLocaleTranslations(
   ctx: TenantContext, locale: string, values: Record<string, unknown>,
   sources: Record<string, unknown>, status: string,
 ) {
+  if (isEnglishLocale(locale)) throw new Error('English is the source language. Select another language to translate into.');
   if (!['draft', 'review', 'published', 'deleted'].includes(status)) throw new Error('Invalid translation status.');
   const entries = Object.entries(values).map(([key, value]) => [translationKey(key), String(value ?? '')] as const);
   if (entries.length > 350) throw new Error('Save at most 350 translations at a time.');

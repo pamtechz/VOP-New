@@ -20,7 +20,7 @@ function resolveRegisteredLocale(value: unknown) {
   return localeAliases[requested] || requested;
 }
 
-function humanizeTranslationKey(key: string): string {
+export function humanizeTranslationKey(key: string): string {
   const segment = String(key || '').split('.').pop() || String(key || '');
   const readable = segment.replace(/[_-]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
   if (!readable) return 'Text unavailable';
@@ -31,7 +31,7 @@ function usableTranslation(value: unknown, key: string): string | undefined {
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
   if (!text || text === key) return undefined;
-  if (/^[a-z][a-z0-9_-]*\.[a-z0-9_.-]+$/i.test(text) && text.toLowerCase() === key.toLowerCase()) return undefined;
+  if (/^(?:common|navigation|home|discover|guides|lessons|lesson|quiz|curriculum|progress|certificates|profile|account|radio|materials|admin|organizations|users|translations|validation|errors)\.[a-z0-9_.-]+$/i.test(text)) return undefined;
   return text;
 }
 
@@ -158,7 +158,7 @@ export const getTranslation = (key: string, requestedLocale: LanguageCode = '', 
   const registryKey = String(key || '').trim();
   const explicitLocale = resolveRegisteredLocale(requestedLocale);
   const legacyFallback = requestedLocale && !customTranslations && defaultFallback === undefined && (!isLocale(requestedLocale) || requestedLocale !== requestedLocale.toLowerCase()) ? requestedLocale : '';
-  const fallback = String(defaultFallback || legacyFallback || '').trim() || humanizeTranslationKey(registryKey);
+  const fallback = usableTranslation(defaultFallback || legacyFallback, registryKey) || humanizeTranslationKey(registryKey);
   try { registerLocalizationString(registryKey, fallback, componentName); } catch { /* discovery is non-blocking */ }
   const locale = legacyFallback ? getUiLocale() : explicitLocale || getUiLocale();
   const custom = dictionaryCache[locale] ? undefined : customTranslations?.[locale];
@@ -193,3 +193,8 @@ export const initializeLocalization = async (settings?: AppSettings) => {
 };
 
 export { getActiveLanguage, setActiveLanguage } from './storage';
+
+/** Source labels must stay English even while the interface is translated. */
+export function translationSourceLabel(key: string, source?: string): string {
+  return usableTranslation(source, key) || humanizeTranslationKey(key);
+}

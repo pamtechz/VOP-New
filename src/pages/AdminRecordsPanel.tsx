@@ -14,9 +14,10 @@ import {
 } from '../services/adminFirestore';
 import { getStoredAutoLocalization, saveAutoLocalization } from '../services/storage';
 import { saveRadioAdminRecord, deleteRadioAdminRecord } from '../services/radioAdmin';
-import { getTranslation } from '../services/i18n';
+import { isEnglishLocale } from '../../shared/locales';
+import { getUiLocale, translationSourceLabel, getTranslation } from '../services/i18n';
 
-const t = (key: string, fallback: string) => getTranslation(key, fallback);
+const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
 
 export type ManagedAdminCollection =
   | 'translations' | 'announcements' | 'materials' | 'radio'
@@ -134,7 +135,7 @@ function validateRadioMedia(form: FormState) {
 }
 
 export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage, canCreate = true, canUpdate = true, canDelete = true }) => {
-  const t = (key: string, fallback: string) => getTranslation(key, fallback);
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [playlists, setPlaylists] = useState<AdminRecord[]>([]);
   const [relatedRecords, setRelatedRecords] = useState<AdminRecord[]>([]);
@@ -176,7 +177,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           if (!entry.key.trim()) return;
           detected.set(entry.key, {
             ...entry,
-            english: entry.english || entry.key,
+            english: translationSourceLabel(entry.key, entry.english),
             translations: { ...entry.translations }
           });
         });
@@ -200,10 +201,10 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   }, [kind]);
 
   useEffect(() => {
-    const enabledLanguages = languages.filter(language => language.enabled !== false);
+    const enabledLanguages = languages.filter(language => language.enabled !== false && !isEnglishLocale(language.code));
     const preferred = enabledLanguages.find(language => language.code === preferredLanguage)?.code || '';
     const first = preferred || enabledLanguages[0]?.code || '';
-    if (!selectedTranslation || !languages.some(language => language.code === selectedTranslation && language.enabled !== false)) {
+    if (!selectedTranslation || !enabledLanguages.some(language => language.code === selectedTranslation)) {
       setSelectedTranslation(first);
     }
   }, [languages, preferredLanguage, selectedTranslation]);
@@ -339,8 +340,8 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   };
 
   const saveTranslations = async () => {
-    if (!selectedTranslation) {
-      setError('Select a configured language first.');
+    if (!selectedTranslation || isEnglishLocale(selectedTranslation)) {
+      setError('Select a language other than English. English is the source language.');
       return;
     }
     const cleaned = Object.fromEntries(
@@ -386,7 +387,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     const rows = translationKeys
       .map(key => {
         const detected = detectedTranslations.find(entry => entry.key === key);
-        const english = detected?.english || key.replace(/[._-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        const english = translationSourceLabel(key, detected?.english);
         const value = translationValues[key] || '';
         return {
           key,
@@ -423,10 +424,10 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           <div className="vop-card vop-form-card vop-translation-target">
             <div className="vop-section-title"><div><h2>{t('admin.translation_target','Translation Target')}</h2><p>{t('admin.translation_target_hint','Keys are detected by the application; administrators do not create them manually.')}</p></div></div>
             <div className="vop-field">
-              <label>{t('admin.preferred_language','Preferred Language')}</label>
+              <label>{t('admin.preferred_language','Preferred Language')}</label><p>English is the source language. Select another language to translate into.</p>
               <select value={selectedTranslation} onChange={e=>setSelectedTranslation(e.target.value)}>
                 <option value="">{t('admin.select_language','Select language')}</option>
-                {languages.filter(item=>item.enabled!==false).map(language=><option key={language.code} value={language.code}>{language.name} · {language.code}</option>)}
+                {languages.filter(item=>item.enabled!==false && !isEnglishLocale(item.code)).map(language=><option key={language.code} value={language.code}>{language.name} · {language.code}</option>)}
               </select>
             </div>
             <div className="vop-translation-summary" style={{marginTop:16}}>
@@ -443,7 +444,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
                 <div style={{display:'grid',gap:10,gridTemplateColumns:'minmax(180px,1fr) minmax(180px,1fr)'}}>
                   <select value={proposalKey} onChange={e=>{const key=e.target.value;setProposalKey(key);setProposalValue(translationValues[key] || '');}}>
                     <option value="">Select UI key</option>
-                    {translationKeys.map(key=><option key={key} value={key}>{key}</option>)}
+                    {translationKeys.map(key=><option key={key} value={key}>{translationSourceLabel(key, detectedTranslations.find(entry => entry.key === key)?.english)}</option>)}
                   </select>
                   <input value={proposalValue} onChange={e=>setProposalValue(e.target.value)} placeholder="Proposed translation" />
                 </div>
@@ -479,13 +480,13 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
                 <div className="vop-translation-row vop-translation-auto-row" key={row.key}>
                   <div className="vop-translation-source">
                     <strong>{row.english}</strong>
-                    <small>{row.key}{row.component ? ' · ' + row.component : ''}</small>
+                    <small>{row.component}</small>
                   </div>
                   <div className={`vop-translation-input-wrap${row.value.trim() ? ' has-value' : ''}`}>
                     <span className="vop-translation-input-lang">{languages.find(language => language.code === selectedTranslation)?.name || selectedTranslation || '—'}</span>
                     <input
                       value={row.value}
-                      disabled={translations.find(item => item.id === selectedTranslation)?.canEdit === false}
+                      disabled={!selectedTranslation || isEnglishLocale(selectedTranslation) || translations.find(item => item.id === selectedTranslation)?.canEdit === false}
                       onChange={e=>setTranslationValues(current=>({...current,[row.key]:e.target.value}))}
                       placeholder={selectedTranslation === 'en' ? row.english : 'Type the translation…'}
                       aria-label={'Translation for ' + row.english}

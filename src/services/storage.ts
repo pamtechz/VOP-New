@@ -409,6 +409,12 @@ export const registerLocalizationString = (
     try {
       const entries = getStoredAutoLocalization();
       const existing = entries.find(e => e.key === key);
+      if (existing && existing.english !== english && english !== key) {
+        existing.english = english;
+        existing.translations = { ...existing.translations, en: english };
+        saveAutoLocalization(entries, false);
+        window.dispatchEvent(new Event('vop_localization_discovered'));
+      }
       if (!existing) {
         const newEntry: AutoLocalizationEntry = {
           key,
