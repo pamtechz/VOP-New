@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises';
+import { request as httpsRequest } from 'node:https';
 import { authenticateTenant } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../shared/mediaSources.js';
@@ -31,38 +32,54 @@ function publicAddress(ip: string) {
     || lower.startsWith('::ffff:192.168.') || lower.startsWith('::ffff:172.'));
 }
 async function readHeadPage(page: URL) {
-  const entries = await lookup(page.hostname, { all:true });
-  if (!entries.length || entries.some(entry => !publicAddress(entry.address))) {
+  const addresses = await lookup(page.hostname, { all:true });
+  // Only public addresses are eligible. The request is pinned to the checked
+  // address, avoiding a DNS-rebinding window between validation and connect.
+  if (!addresses.length || addresses.some(entry => !publicAddress(entry.address))) {
     throw new Error('This source does not resolve to a public media website.');
   }
-  const response = await fetch(page, {
-    method:'GET', redirect:'manual', signal:AbortSignal.timeout(5000),
-    headers:{ Accept:'text/html' },
+  const pinned = addresses[0];
+  return new Promise<string>((resolve, reject) => {
+    let finished = false;
+    const done = (error: Error | null, html?: string) => {
+      if (finished) return;
+      finished = true;
+      if (error) reject(error);
+      else resolve(html || '');
+    };
+    const req = httpsRequest(page, {
+      method:'GET', timeout:5000, headers:{Accept:'text/html'},
+      lookup: (_host, _options, callback) => callback(null, pinned.address, pinned.family),
+    }, response => {
+      const status = response.statusCode || 0;
+      if (status >= 300 && status < 400) {
+        done(new Error('Source redirected. Paste its final public URL instead.')); response.destroy(); return;
+      }
+      if (status < 200 || status >= 300) {
+        done(new Error('The public source page could not be loaded.')); response.destroy(); return;
+      }
+      if (!/text\\/html/i.test(String(response.headers['content-type'] || ''))) {
+        done(new Error('The source is not an HTML page with public media metadata.')); response.destroy(); return;
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      response.on('data', (piece: Buffer) => {
+        if (finished) return;
+        const chunk = Buffer.isBuffer(piece) ? piece : Buffer.from(piece);
+        const remaining = 65536 - total;
+        if (remaining > 0) { chunks.push(chunk.subarray(0, remaining)); total += Math.min(chunk.length, remaining); }
+        if (total >= 65536) {
+          done(null, Buffer.concat(chunks).toString('utf8'));
+          response.destroy();
+        }
+      });
+      response.on('end', () => done(null, Buffer.concat(chunks).toString('utf8')));
+      response.on('error', error => done(error));
+    });
+    req.on('timeout', () => req.destroy(new Error('The media source did not respond in time.')));
+    req.on('error', error => done(error));
+    req.end();
   });
-  if (response.status >= 300 && response.status < 400) throw new Error('Source redirected. Paste its final public URL instead.');
-  if (!response.ok) throw new Error('The public source page could not be loaded.');
-  const type = response.headers.get('content-type') || '';
-  if (!/text\/html/i.test(type)) throw new Error('The source is not an HTML page with public media metadata.');
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('The media page did not provide content.');
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (length < 65536) {
-      const result = await reader.read();
-      if (result.done) break;
-      chunks.push(result.value);
-      length += result.value.byteLength;
-    }
-  } finally { await reader.cancel().catch(() => undefined); }
-  const combined = new Uint8Array(Math.min(length, 65536));
-  let offset = 0;
-  for (const chunk of chunks) {
-    const part = chunk.subarray(0, combined.length - offset);
-    combined.set(part, offset);
-    offset += part.length;
-  }
-  return new TextDecoder().decode(combined);
 }
 function extractPublicMedia(html: string, source: URL) {
   const metas = html.match(/<meta\b[^>]{0,1800}>/gi) || [];
