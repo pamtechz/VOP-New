@@ -38,6 +38,10 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
   const [matchId, setMatchId] = useState('');
   const [duelQuestions, setDuelQuestions] = useState<Array<Record<string, unknown>>>([]);
   const [shareUrl, setShareUrl] = useState('');
+  const [evidenceRequirement, setEvidenceRequirement] = useState('');
+  const [evidenceTitle, setEvidenceTitle] = useState('');
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [evidenceNote, setEvidenceNote] = useState('');
   const settings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'ResourcesPage');
   const categories = ['All', ...Array.from(new Set(books.map(book => book.category).filter(Boolean)))];
@@ -62,6 +66,18 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
 
   const activities = Array.isArray(portfolio?.activities) ? portfolio?.activities as Array<Record<string, unknown>> : [];
   const signoffs = Array.isArray(portfolio?.signoffs) ? portfolio?.signoffs as Array<Record<string, unknown>> : [];
+  const evidence = Array.isArray(portfolio?.evidence) ? portfolio?.evidence as Array<Record<string,unknown>> : [];
+  const submitEvidence = async (event:React.FormEvent) => {
+    event.preventDefault();
+    await run(async () => {
+      await engagement({ action:'portfolioEvidence',requirementId:evidenceRequirement,
+        title:evidenceTitle.trim(),url:evidenceUrl.trim(),note:evidenceNote.trim() });
+      const updated=await engagement({action:'portfolioGet'});
+      setPortfolio(updated.portfolio as Record<string,unknown>);
+      setEvidenceTitle('');setEvidenceUrl('');setEvidenceNote('');
+      setMessage('Evidence submitted for evaluator review.');
+    });
+  };
 
   return (
     <main className="vop-materials-page">
@@ -87,8 +103,22 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
         </>}
 
         {tab === 'master-guide' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track requirements, activities, evidence and authorized sign-offs in one learner-owned portfolio.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
-          <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => <div key={String(req.id)} style={{ padding:'.8rem', border:'1px solid var(--border-color,#ddd)', borderRadius:10 }}><strong>{String(req.title || req.name || req.id)}</strong><p>{String(req.description || '')}</p><button type="button" disabled={busy} onClick={() => void run(async () => { await engagement({ action:'portfolioSaveActivity', requirementId:String(req.id), title:String(req.title || req.name || 'Activity'), status:'submitted' }); const refreshed=await engagement({action:'portfolioGet'}); setPortfolio(refreshed.portfolio as Record<string, unknown>); setMessage('Activity submitted.'); })}>Submit activity</button></div>)}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track requirements, activities, evidence and authorized sign-offs in one learner-owned portfolio.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => <div key={String(req.id)} style={{ padding:'.8rem', border:'1px solid var(--border-color,#ddd)', borderRadius:10 }}><strong>{String(req.title || req.name || req.id)}</strong><p>{String(req.description || '')}</p><button type="button" disabled={busy} onClick={() => void run(async () => { await engagement({ action:'portfolioSaveActivity', requirementId:String(req.id), title:String(req.title || req.name || 'Activity'), status:'submitted' }); const refreshed=await engagement({action:'portfolioGet'}); setPortfolio(refreshed.portfolio as Record<string, unknown>); setMessage('Activity submitted.'); })}>Submit activity</button><span>{signoffs.some(item=>item.requirementId===req.id && item.decision==='approved')?'Approved':activities.some(item=>item.requirementId===req.id && item.status==='submitted')?'Awaiting review':'Not submitted'}</span></div>)}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body">
+            <h2>Submit supporting evidence</h2><p>Choose the requirement, then attach a public HTTPS link to your work. A mentor or evaluator reviews it; submitting evidence does not award sign-off automatically.</p>
+            {requirements.length ? <form onSubmit={event=>void submitEvidence(event)} style={{display:'grid',gap:'.75rem'}}>
+              <label>Requirement<select required value={evidenceRequirement} onChange={event=>setEvidenceRequirement(event.target.value)}><option value="">Choose the requirement</option>
+                {requirements.map(item=><option key={String(item.id)} value={String(item.id)}>{String(item.title || item.name || 'Requirement')}</option>)}</select></label>
+              <label>Evidence title<input required maxLength={200} value={evidenceTitle} onChange={event=>setEvidenceTitle(event.target.value)} placeholder="My completed activity"/></label>
+              <label>Evidence link<input required type="url" maxLength={2048} value={evidenceUrl} onChange={event=>setEvidenceUrl(event.target.value)} placeholder="https://example.org/my-work" pattern="https://.*"/></label>
+              <label>Notes for the evaluator<textarea value={evidenceNote} onChange={event=>setEvidenceNote(event.target.value)} maxLength={2000}/></label>
+              <button type="submit" disabled={busy||!evidenceRequirement}>{busy?'Submitting…':'Submit evidence'}</button>
+            </form>:<p>Requirements will appear here when your ministry publishes them.</p>}
+            {evidence.length>0 && <div style={{marginTop:'1rem'}}><h3>Submitted evidence</h3>
+              {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a></p>)}
+            </div>}
+          </div></article>
         </section>}
 
         {tab === 'memory' && <section style={{ display:'grid', gap:'1rem' }}>
