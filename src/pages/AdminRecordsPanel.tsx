@@ -22,7 +22,7 @@ import { MediaPlayer } from '../components/media/MediaPlayer';
 const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
 
 export type ManagedAdminCollection =
-  | 'translations' | 'announcements' | 'materials' | 'radio'
+  | 'translations' | 'announcements' | 'events' | 'materials' | 'radio'
   | 'unions' | 'conferences' | 'districts' | 'churches';
 
 interface AdminRecord {
@@ -53,6 +53,7 @@ type FormState = Record<string, string | number | boolean>;
 const LABELS: Record<ManagedAdminCollection, string> = {
   translations: 'Translations',
   announcements: 'Announcements',
+  events: 'Events & Programmes',
   materials: 'Materials',
   radio: 'Radio',
   unions: 'Unions',
@@ -63,6 +64,7 @@ const LABELS: Record<ManagedAdminCollection, string> = {
 
 const COLLECTIONS: Record<RecordManagedCollection, import('../services/adminFirestore').AdminRecordCollection> = {
   announcements: 'announcements',
+  events: 'events',
   materials: 'books',
   radio: 'radioBroadcasts',
   unions: 'unions',
@@ -74,6 +76,7 @@ const COLLECTIONS: Record<RecordManagedCollection, import('../services/adminFire
 const ICONS: Record<ManagedAdminCollection, React.ComponentType<{size?: number}>> = {
   translations: Globe,
   announcements: Megaphone,
+  events: CalendarDays,
   materials: Book,
   radio: Radio,
   unions: Layers,
@@ -99,6 +102,8 @@ function blankForm(kind: ManagedAdminCollection): FormState {
   switch (kind) {
     case 'announcements':
       return { title: '', tag: '', targetAudience: '', description: '', imageUrl: '', actionText: '', actionUrl: '', scheduledAt: '', published: false };
+    case 'events':
+      return { title:'', category:'', description:'', startAt:'', endAt:'', location:'', targetAudience:'', imageUrl:'', registrationUrl:'', capacity:0, sharingScope:'organization', published:false };
     case 'materials':
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
@@ -569,6 +574,7 @@ function Toast({message}:{message:string}) {
 function subtitleFor(kind: ManagedAdminCollection) {
   switch (kind) {
     case 'announcements': return 'Create, edit, publish and remove public announcements.';
+    case 'events': return 'Schedule organization programmes, services, rallies, training and ministry events.';
     case 'materials': return 'Manage learning materials and downloadable resources.';
     case 'radio': return 'Manage radio audio/video broadcasts with automatic timing and media detection.';
     case 'unions': return 'Manage the configurable church administrative hierarchy.';
@@ -586,6 +592,7 @@ function singular(kind: ManagedAdminCollection) {
 function tableHeaders(kind: ManagedAdminCollection) {
   switch (kind) {
     case 'announcements': return ['#','Title','Tag','Published'];
+    case 'events': return ['#','Event','Starts','Location','Published'];
     case 'materials': return ['#','Name','Category','Author','Published'];
     case 'radio': return ['#','Title','Speaker','Series','Published'];
     case 'unions': return ['#','Name','Code','Division'];
@@ -601,6 +608,12 @@ function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
   switch (kind) {
     case 'announcements':
       return [<td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.tag, 'tag'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
+    case 'events':
+      return [
+        <td key="event"><strong>{valueOf(record,'title')||'Untitled event'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,
+        cell(record.startAt,'startAt'), cell(record.location,'location'),
+        <td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>,
+      ];
     case 'materials':
       return [<td key="name"><strong>{valueOf(record,'name')||'Unnamed'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,cell(record.category, 'category'),cell(record.author, 'author'),<td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span></td>];
     case 'radio': {
@@ -635,6 +648,14 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
   switch(kind) {
     case 'announcements':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('title','Title *')}{field('tag','Tag')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{published}</div>;
+    case 'events':
+      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
+        {field('title','Event / Programme Title *')}{field('category','Category')}{area('description','Description *')}
+        {field('startAt','Starts *','datetime-local')}{field('endAt','Ends','datetime-local')}{field('location','Venue / Location')}
+        {field('targetAudience','Target Audience')}{field('capacity','Capacity (0 = unlimited)','number')}
+        {field('imageUrl','Image URL','url')}{field('registrationUrl','Registration URL','url')}
+        {select('sharingScope','Visibility',[{value:'organization',label:'Organization only'},{value:'shared',label:'Shared / Public'},{value:'private',label:'Private draft'}])}{published}
+      </div>;
     case 'materials':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('name','Name *')}{field('category','Category')}{field('author','Author')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('downloadUrl','Download URL','url')}{published}</div>;
     case 'radio':
