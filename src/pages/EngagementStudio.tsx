@@ -8,6 +8,8 @@ type Kind = 'requirements' | 'memoryDecks' | 'duelQuestions';
 type Status = 'draft' | 'published' | 'archived';
 type Sharing = 'private' | 'organization' | 'shared';
 type Verse = { id?: string; reference: string; text: string };
+type Reviewer = {uid:string;displayName:string;organizationId:string;pendingCount:number};
+type Portfolio = {activities?:Array<Record<string,unknown>>; evidence?:Array<Record<string,unknown>>;signoffs?:Array<Record<string,unknown>>};
 type Item = {
   id: string; title: string; description?: string; status?: Status;
   sharingScope?: Sharing; canEdit?: boolean; organizationId?: string;
@@ -35,7 +37,10 @@ async function engagementRequest(payload: Record<string,unknown>) {
     headers:{'Content-Type':'application/json',Authorization:'Bearer ' + await user.getIdToken()},
     body:JSON.stringify(payload),
   });
-  const json = await response.json().catch(() => ({})) as {error?:string;items?:Item[];item?:Item};
+  const json = await response.json().catch(() => ({})) as {
+    error?:string;items?:Item[];item?:Item;learners?:Reviewer[];
+    portfolio?:Portfolio;requirements?:Array<Record<string,unknown>>;
+  };
   if (!response.ok) throw new Error(json.error || 'The ministry content could not be saved.');
   return json;
 }
@@ -54,6 +59,12 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
   const [message,setMessage] = useState('');
+  const [reviewOpen,setReviewOpen] = useState(false);
+  const [reviewers,setReviewers] = useState<Reviewer[]>([]);
+  const [reviewLearner,setReviewLearner] = useState('');
+  const [reviewPortfolio,setReviewPortfolio] = useState<Portfolio|null>(null);
+  const [reviewRequirements,setReviewRequirements] = useState<Array<Record<string,unknown>>>([]);
+  const [reviewNotes,setReviewNotes] = useState('');
 
   useEffect(() => {
     if (!platformAdmin && !hierarchyAdmin) return;
@@ -88,6 +99,47 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     void load(()=>cancelled);
     return ()=>{cancelled=true};
   },[load]);
+  const loadReviewQueue = async () => {
+    setBusy(true);setError('');
+    try {
+      const result=await engagementRequest({action:'portfolioReviewQueue'});
+      setReviewers(result.learners || []);
+    } catch(reason) {
+      setError(reason instanceof Error?reason.message:'Could not load authorized learner portfolios.');
+    } finally {setBusy(false);}
+  };
+  const loadReviewPortfolio = async (learnerId:string) => {
+    setReviewLearner(learnerId);
+    setReviewPortfolio(null);setReviewRequirements([]);
+    if (!learnerId) return;
+    setBusy(true);setError('');
+    try {
+      const result=await engagementRequest({action:'portfolioGet',learnerId});
+      setReviewPortfolio(result.portfolio || null);
+      setReviewRequirements(result.requirements || []);
+    } catch(reason) {
+      setError(reason instanceof Error?reason.message:'Could not load this learner portfolio.');
+    } finally {setBusy(false);}
+  };
+  const decideRequirement = async (requirementId:string,decision:'approved'|'rejected') => {
+    if (!reviewLearner || busy || !window.confirm('Record this '+decision+' decision for the learner?')) return;
+    setBusy(true);setError('');setMessage('');
+    try {
+      await engagementRequest({action:'portfolioSignoff',learnerId:reviewLearner,
+        requirementId,decision,notes:reviewNotes.trim()});
+      const [result,queue]=await Promise.all([
+        engagementRequest({action:'portfolioGet',learnerId:reviewLearner}),
+        engagementRequest({action:'portfolioReviewQueue'}),
+      ]);
+      setReviewPortfolio(result.portfolio || null);
+      setReviewRequirements(result.requirements || []);
+      setReviewers(queue.learners || []);
+      setReviewNotes('');
+      setMessage('The learner requirement was '+decision+'.');
+    } catch(reason) {
+      setError(reason instanceof Error?reason.message:'Could not record this decision.');
+    } finally {setBusy(false);}
+  };
   const filtered = useMemo(() => items.filter(item => {
     const query=search.trim().toLowerCase();
     return (!query || [item.title,item.description,item.question].join(' ').toLowerCase().includes(query))
@@ -151,6 +203,41 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     </div>
     {error && <div className="vop-alert error" role="alert">{error}</div>}
     {message && <div className="vop-alert success" role="status"><CheckCircle2 size={16}/>{message}</div>}
+    {kind==='requirements' && <section className="vop-card vop-form-card" style={{marginBottom:18}}>
+      <div className="vop-section-title"><div><h2>Master Guide evaluator inbox</h2><p>Review submitted activities and evidence. Only authorized evaluators may sign off requirements.</p></div>
+        <button type="button" className="vop-secondary" onClick={()=>{const open=!reviewOpen;setReviewOpen(open);if(open)void loadReviewQueue();}} disabled={busy}>
+          {reviewOpen?'Close reviews':'Review portfolios'}
+        </button></div>
+      {reviewOpen && <div style={{display:'grid',gap:16}}>
+        <div className="vop-reference-actions"><button type="button" className="vop-secondary" disabled={busy} onClick={()=>void loadReviewQueue()}><RefreshCw size={15}/> Refresh queue</button>
+          <span>{reviewers.reduce((sum,item)=>sum+item.pendingCount,0)} submissions awaiting review</span></div>
+        <div className="vop-field"><label htmlFor="portfolio-review-learner">Learner portfolio</label>
+          <select id="portfolio-review-learner" disabled={busy} value={reviewLearner} onChange={event=>void loadReviewPortfolio(event.target.value)}>
+            <option value="">Select a learner</option>{reviewers.map(person=><option key={person.uid} value={person.uid}>{person.displayName} — {person.pendingCount} pending</option>)}
+          </select>
+          {!reviewers.length && <small>No portfolios are currently available in your authorized scope.</small>}
+        </div>
+        {reviewPortfolio && <div style={{display:'grid',gap:12}}>
+          {reviewRequirements.filter(item=>(reviewPortfolio.activities||[]).some(activity=>
+            activity.requirementId===item.id && activity.status==='submitted')).map(requirement=>{
+            const decisions=reviewPortfolio.signoffs || [];
+            const approved=decisions.some(item=>item.requirementId===requirement.id && item.decision==='approved');
+            const activityCount=(reviewPortfolio.activities||[]).filter(item=>item.requirementId===requirement.id&&item.status==='submitted').length;
+            const evidence=(reviewPortfolio.evidence||[]).filter(item=>item.requirementId===requirement.id);
+            return <article key={String(requirement.id)} className="vop-card vop-form-card">
+              <h3>{String(requirement.title || 'Requirement')}</h3>
+              <p>{activityCount} submitted activities · {evidence.length} supporting evidence items · {approved?'Approved':'Awaiting evaluation'}</p>
+              {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a>{item.note ? ' — '+String(item.note) : ''}</p>)}
+              {!approved && <div className="vop-reference-actions" style={{flexWrap:'wrap'}}>
+                <button type="button" className="vop-primary" disabled={busy} onClick={()=>void decideRequirement(String(requirement.id),'approved')}><CheckCircle2 size={15}/>Approve</button>
+                <button type="button" className="vop-secondary" disabled={busy} onClick={()=>void decideRequirement(String(requirement.id),'rejected')}>Request revision</button>
+              </div>}
+            </article>;
+          })}
+          <div className="vop-field"><label>Evaluator notes</label><textarea value={reviewNotes} onChange={event=>setReviewNotes(event.target.value)} placeholder="Assessment evidence, feedback or reason for revision"/></div>
+        </div>}
+      </div>}
+    </section>}
     {editor && <form className="vop-reference-editor" onSubmit={event=>void save(event)}>
       <div className="vop-section-title"><div><h2>{editor.id?'Edit':'Create'} {labels[kind]}</h2><p>Use readable fields; the system generates identifiers and applies tenant ownership automatically.</p></div>
         <button type="button" className="vop-actions" aria-label="Close editor" onClick={()=>setEditor(null)}><X size={18}/></button></div>
