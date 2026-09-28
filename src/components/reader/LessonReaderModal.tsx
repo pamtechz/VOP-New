@@ -5,6 +5,7 @@ import { isLessonConfigured } from '../../services/lesson.ts';
 import { auth } from '../../lib/firebase';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../../services/storage';
+import { MediaPlayer } from '../media/MediaPlayer';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -276,6 +277,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                   />
                 </div>
               )}
+
+              {currentPageIndex === 0 && lesson.media?.videoUrl && <MediaPlayer src={lesson.media.videoUrl} title={lesson.title + ' video'} kind="video" />}
+              {currentPageIndex === 0 && lesson.media?.audioUrl && <MediaPlayer src={lesson.media.audioUrl} title={lesson.title + ' audio'} kind="audio" />}
 
               {/* Body text */}
               <p style={{
