@@ -1,26 +1,37 @@
 import { getActiveLanguage } from './storage';
 import { auth } from '../lib/firebase';
+import { queueCompletion, dropCompletion, type PendingCompletion } from './offlineStudyQueue';
 
 /**
- * Learner study writes are authenticated and server-authoritative.
- * localStorage is not used to award lesson or assessment credit.
+ * Offline completion is ONLY a pending request. It never awards credit before
+ * server-side permission, publication, and lesson-type checks succeed.
  */
-export async function completeLesson(guideId: string, lessonId: string): Promise<boolean> {
+export async function completeLesson(
+  guideId: string,
+  lessonId: string,
+): Promise<'synced' | 'queued' | 'failed'> {
   const firebaseUser = auth?.currentUser;
-  if (!firebaseUser) return false;
-
-  const language = getActiveLanguage();
-  const token = await firebaseUser.getIdToken();
-  const response = await fetch('/api/study/progress', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ action: 'completeLesson', language, guideId, lessonId }),
-  });
-
-  return response.ok;
+  if (!firebaseUser) return 'failed';
+  const item: PendingCompletion = {
+    uid:firebaseUser.uid, language:getActiveLanguage(), guideId, lessonId, queuedAt:Date.now(),
+  };
+  const queue = () => queueCompletion(item) ? 'queued' as const : 'failed' as const;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return queue();
+  try {
+    const token = await firebaseUser.getIdToken();
+    const response = await fetch('/api/study/progress', {
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer ' + token},
+      body:JSON.stringify({
+        action:'completeLesson',language:item.language,guideId,lessonId,
+      }),
+    });
+    if (response.ok) {
+      dropCompletion(item);
+      return 'synced';
+    }
+    return response.status >= 500 ? queue() : 'failed';
+  } catch { return queue(); }
 }
 
 export async function submitQuizAnswers(
