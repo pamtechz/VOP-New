@@ -152,6 +152,35 @@ export const App: React.FC = () => {
     });
   }, []);
 
+  // Reconcile device-only completion requests when connectivity returns.
+  // Never mark credit complete until the server acknowledges the request.
+  useEffect(() => {
+    const uid = currentUser.uid;
+    if (!uid) return;
+    let cancelled = false;
+    const replay = () => {
+      void syncPendingLessonCompletions().then(async result => {
+        if (cancelled || auth?.currentUser?.uid !== uid) return;
+        if (result.synced) {
+          const refreshed = await loadFirestoreUser(uid).catch(() => null);
+          if (cancelled || auth?.currentUser?.uid !== uid) return;
+          if (refreshed) { setCurrentUser(refreshed); setAllUsers([refreshed]); }
+        }
+        const remaining = pendingForUser(uid).length;
+        if (remaining) {
+          setStudyNotice(`${remaining} lesson completion${remaining === 1 ? '' : 's'} saved on this device, awaiting server confirmation.${result.rejected ? ' Some need administrator review.' : ''}`);
+        } else if (result.synced) {
+          setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} verified and synchronized.`);
+        }
+      }).catch(() => {
+        if (!cancelled) setStudyNotice('Offline lesson progress is saved on this device and will be retried when connectivity returns.');
+      });
+    };
+    window.addEventListener('online', replay);
+    replay();
+    return () => { cancelled = true; window.removeEventListener('online', replay); };
+  }, [currentUser.uid]);
+
   useEffect(() => {
     let cancelled = false;
     void loadPublicContent().then(snapshot => {
@@ -307,6 +336,7 @@ export const App: React.FC = () => {
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
         )}
+        {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
