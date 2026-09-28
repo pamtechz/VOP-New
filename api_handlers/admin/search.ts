@@ -40,7 +40,7 @@ async function candidateDocs(ctx:Awaited<ReturnType<typeof authenticateTenant>>,
   } else {
     for (const orgId of scoped.slice(0,30)) promises.push(source.where('organizationId','==',orgId).limit(250).get());
     promises.push(source.where('organizationId','==','').limit(250).get());
-    if (includeShared) promises.push(source.where('sharingScope','==','shared').where('published','==',true).limit(250).get());
+    if (includeShared) promises.push(source.where('sharingScope','==','shared').limit(250).get());
   }
   const snapshots=await Promise.all(promises);
   const unique=new Map<string,SearchDoc>();
