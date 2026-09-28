@@ -56,6 +56,13 @@ export async function createNotification(db: Firestore, input: CreateNotificatio
 }
 
 
+export function publicationNotificationId(type: 'announcement' | 'event', sourceId: string, recipientId: string) {
+  const safeSource = String(sourceId || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120);
+  const safeRecipient = String(recipientId || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
+  if (!safeSource || !safeRecipient) throw new Error('A valid publication source and recipient are required.');
+  return `${type}__${safeSource}__${safeRecipient}`.slice(0, 500);
+}
+
 export interface NotifyOrganizationInput {
   organizationId: string;
   sourceId: string;
@@ -82,11 +89,9 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
   let delivered = 0;
   for (let offset = 0; offset < recipients.length; offset += 400) {
     const chunk = recipients.slice(offset, offset + 400);
-    const safeSource = sourceId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120);
-    const refs = chunk.map(uid => {
-      const safeUid = uid.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
-      return db.collection('notifications').doc(`${input.type}__${safeSource}__${safeUid}`.slice(0, 500));
-    });
+    const refs = chunk.map(uid => db.collection('notifications').doc(
+      publicationNotificationId(input.type, sourceId, uid),
+    ));
     const existing = await db.getAll(...refs);
     const batch = db.batch();
     let writes = 0;
