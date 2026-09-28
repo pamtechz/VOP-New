@@ -24,7 +24,10 @@ export interface CurriculumProgress {
 }
 
 /** Only a single-test guide can reuse a historical aggregate score. */
-function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string, number>, language: LanguageCode): number | undefined {
+function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string, number>, language: LanguageCode, organizationId?: string): number | undefined {
+  // The authoritative study API scopes scores by the learner's organization.
+  const serverKey = `${organizationId || 'platform'}:${language}:${guide.id}:${test.id}`;
+  if (Object.hasOwn(scores, serverKey)) return scores[serverKey];
   const languageKey = `${language}:${guide.id}:${test.id}`;
   if (Object.hasOwn(scores, languageKey)) return scores[languageKey];
   const key = `${guide.id}:${test.id}`;
@@ -127,7 +130,7 @@ export function calculateCurriculumProgress(
     const finishedLessons = lessons.filter(lesson => isLessonConfigured(lesson) && (completed.has(lesson.id) || completed.has(`${language}:${guide.id}:${lesson.id}`))).length;
     const passedTests = tests.filter(test => {
       if (!validThreshold || !isQuizConfigured(test.questions ?? [])) return false;
-      const score = getTestScore(guide, test, scores, language);
+      const score = getTestScore(guide, test, scores, language, user.organizationId);
       return validScore(score) && score >= passThreshold;
     }).length;
     const done = finishedLessons + passedTests;
@@ -169,7 +172,7 @@ export function calculateCurriculumAverageScore(
   const scores = user.progress.guideScores ?? {};
   const marks = required.flatMap(guide => guide.lessons
     .filter(lesson => lesson.type === 'Test')
-    .map(test => getTestScore(guide, test, scores, language)));
+    .map(test => getTestScore(guide, test, scores, language, user.organizationId)));
   if (!marks.length || !marks.every(validScore)) return null;
   return Math.round(marks.reduce((sum, mark) => sum + mark!, 0) / marks.length);
 }
