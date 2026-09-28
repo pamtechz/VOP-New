@@ -3,8 +3,8 @@ import type { TenantContext } from './tenant.js';
 
 export function translationKey(value: unknown): string {
   const key = String(value ?? '').trim();
-  // Existing catalogues contain both legacy flat keys and namespaced keys.
-  if (!/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/.test(key) || key.length > 200) throw new Error('A valid translation key is required.');
+  // Existing catalogues contain legacy flat keys and case-sensitive namespaced keys.
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z][a-zA-Z0-9_-]*)*$/.test(key) || key.length > 200) throw new Error('A valid translation key is required.');
   return key;
 }
 
