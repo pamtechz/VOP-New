@@ -87,22 +87,21 @@ function validateRequiredLessons(guides: DiscoverGuide[]): string | undefined {
   return undefined;
 }
 
-/** All required test questions and answer keys must remain valid after edits. */
+/** The server retains answer keys for canonical tests; legacy local keys need validating. */
+function isRequiredQuizConfigured(test: Lesson): boolean {
+  const questions = test.questions ?? [];
+  if (!test.sourceQuizId) return isQuizConfigured(questions);
+  return test.answerVisibility === 'public_redacted'
+    && isPlayableQuizConfigured(questions)
+    && !questions.some(question => Object.hasOwn(question, 'answer')
+      || Object.hasOwn(question, 'correctOptionIndex')
+      || Object.hasOwn(question, 'explanation'));
+}
+
+/** Display-only readiness must not demand that answer keys reach the learner. */
 function validateRequiredQuizzes(guides: DiscoverGuide[]): string | undefined {
   for (const guide of guides) {
-    const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
-    if (tests.some(test => {
-      const questions = test.questions ?? [];
-      if (!test.sourceQuizId) return !isQuizConfigured(questions);
-      // The server owns correct answers for canonical Quiz Library tests.
-      // A redacted learner payload is playable without exposing the key.
-      // Historical keyed records remain outside this special-case path.
-      return test.answerVisibility !== 'public_redacted'
-        || !isPlayableQuizConfigured(questions)
-        || questions.some(question => Object.hasOwn(question, 'answer')
-          || Object.hasOwn(question, 'correctOptionIndex')
-          || Object.hasOwn(question, 'explanation'));
-    })) {
+    if (guide.lessons.some(lesson => lesson.type === 'Test' && !isRequiredQuizConfigured(lesson))) {
       return 'A required assessment has missing or invalid questions or answer keys.';
     }
   }
@@ -129,7 +128,7 @@ export function calculateCurriculumProgress(
     const tests = items.filter(lesson => lesson.type === 'Test');
     const finishedLessons = lessons.filter(lesson => isLessonConfigured(lesson) && (completed.has(lesson.id) || completed.has(`${language}:${guide.id}:${lesson.id}`))).length;
     const passedTests = tests.filter(test => {
-      if (!validThreshold || !isQuizConfigured(test.questions ?? [])) return false;
+      if (!validThreshold || !isRequiredQuizConfigured(test)) return false;
       const score = getTestScore(guide, test, scores, language, user.organizationId);
       return validScore(score) && score >= passThreshold;
     }).length;
