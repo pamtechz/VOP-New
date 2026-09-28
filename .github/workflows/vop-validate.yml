@@ -19,6 +19,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm install
+      - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run build
       - run: npm run lint
       - run: npm run verify:architecture
