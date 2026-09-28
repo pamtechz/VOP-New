@@ -162,6 +162,70 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal((await api(learner, { action: 'duelHistory' })).status, 200);
       assert.equal((await api(outsider, { action: 'duelHistory' })).results.length, 0);
     });
+
+    await t.test('approved learner progression yields tenant-scoped, verifiable immutable certificate', async () => {
+      const { default: certificateHandler } = await vite.ssrLoadModule('/api/certificates.ts');
+      async function certApi(user, method, query, body) {
+        let status = 200;
+        let output;
+        const response = { status(code) { status = code; return this; }, json(value) { output = value; return this; } };
+        await certificateHandler({
+          method, query: query || {}, body: body || {},
+          headers: user ? { authorization: 'Bearer ' + user.token } : {},
+        }, response);
+        return { status, ...output };
+      }
+      const admin = await identity('adminA', 'org-A', { organizationRole: 'admin' });
+      const otherAdmin = await identity('adminB', 'org-B', { organizationRole: 'admin' });
+      await db.doc('system/certification').set({
+        enabled: true, verificationEnabled: true, minimumScore: 60,
+        certificateTitle: 'Voice of Prophecy', courseName: 'Scripture study',
+      });
+      await db.doc('guides/guide-cert').set({
+        id: 'guide-cert', title: 'Scripture study', organizationId: 'org-A',
+        language: 'en', published: true, certificateEligible: true,
+      });
+      await db.doc('guides/guide-cert/lessons/lesson-1').set({
+        id: 'lesson-1', published: true, type: 'Lesson',
+      });
+      await db.doc('guides/guide-cert/lessons/test-1').set({
+        id: 'test-1', published: true, type: 'Test', questions: [{ question: 'Who created?' }],
+      });
+      await db.doc('users/' + learner.uid).set({
+        information: { graduated: true, completionDate: '2026-09-28' },
+        progress: {
+          completedLessons: ['en:guide-cert:lesson-1'],
+          guideScores: { 'org-A:en:guide-cert:test-1': 85 },
+        },
+      }, { merge: true });
+      await db.doc('graduationRequests/approved-one').set({
+        candidateId: learner.uid, organizationId: 'org-A',
+        guideId: 'guide-cert', status: 'approved', approvedAt: new Date().toISOString(),
+      });
+      assert.equal((await certApi(learner, 'POST', null, { action: 'issue', candidateId: learner.uid })).status, 403);
+      assert.equal((await certApi(mentor, 'POST', null, { action: 'issue', candidateId: learner.uid })).status, 403);
+      assert.equal((await certApi(otherAdmin, 'POST', null, { action: 'issue', candidateId: learner.uid })).status, 403);
+      const issued = await certApi(admin, 'POST', null, { action: 'issue', candidateId: learner.uid });
+      assert.equal(issued.status, 201, JSON.stringify(issued));
+      assert.equal(issued.created, true);
+      assert.ok(issued.certificate.certificateNumber);
+      const repeated = await certApi(admin, 'POST', null, { action: 'issue', candidateId: learner.uid });
+      assert.equal(repeated.status, 200);
+      assert.equal(repeated.created, false);
+      const certificateNumber = issued.certificate.certificateNumber;
+      const publicVerification = await certApi(null, 'GET', { certificateNumber });
+      assert.equal(publicVerification.status, 200);
+      assert.equal(publicVerification.verified, true);
+      assert.equal(publicVerification.certificate.candidateName, 'studentA');
+      assert.ok(!('candidateEmail' in publicVerification.certificate), 'Public verification must not expose email.');
+      const mine = await certApi(learner, 'GET', {}, { action: 'mine' });
+      assert.equal(mine.status, 200);
+      assert.equal(mine.certificates.length, 1);
+      const other = await certApi(outsider, 'GET', {}, { action: 'mine' });
+      assert.equal(other.status, 200);
+      assert.equal(other.certificates.length, 0);
+    });
+
   } finally {
     await vite.close();
     await deleteApp(app);
