@@ -40,4 +40,4 @@ export async function createNotification(db: Firestore,input:CreateNotificationI
 }
 
 // Canonical notification persistence remains server-authoritative and scope-aware.
-// Validation trigger marker: rerun the full matrix against the updated main baseline.
+// Full validation branch: engagement implementation against main baseline.
