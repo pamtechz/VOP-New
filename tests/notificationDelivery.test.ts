@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publicationNotificationId } from '../server/notifications.ts';
+import { audienceAllowsRole, normalizePublicationAudience, publicationNotificationId } from '../server/notifications.ts';
 
 test('publication notification IDs are deterministic and source/recipient scoped', () => {
   assert.equal(
@@ -27,4 +27,21 @@ test('publication notification IDs sanitize Firestore-unsafe external identifier
     'event__event_______1__member_example_com',
   );
   assert.throws(() => publicationNotificationId('event','','member-1'));
+});
+
+
+test('publication audiences normalize legacy labels and enforce membership roles', () => {
+  assert.equal(normalizePublicationAudience('All Users'), 'all');
+  assert.equal(normalizePublicationAudience('Students'), 'learners');
+  assert.equal(normalizePublicationAudience('Administrators'), 'leaders');
+  assert.equal(normalizePublicationAudience('Ministry Team'), 'staff');
+  assert.throws(() => normalizePublicationAudience('youth club 13-15'));
+
+  assert.equal(audienceAllowsRole('learners','learner'), true);
+  assert.equal(audienceAllowsRole('learners','admin'), false);
+  assert.equal(audienceAllowsRole('leaders','admin'), true);
+  assert.equal(audienceAllowsRole('leaders','mentor'), true);
+  assert.equal(audienceAllowsRole('mentors','teacher'), false);
+  assert.equal(audienceAllowsRole('teachers','teacher'), true);
+  assert.equal(audienceAllowsRole('staff','editor'), true);
 });
