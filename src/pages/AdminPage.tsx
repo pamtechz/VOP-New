@@ -40,7 +40,7 @@ interface AdminPageProps {
 
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
-  | 'translations' | 'announcements' | 'materials' | 'radio' | 'prayer' | 'engagement'
+  | 'translations' | 'announcements' | 'events' | 'materials' | 'radio' | 'prayer' | 'engagement'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
@@ -56,6 +56,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'languages', label: 'Languages', icon: Globe },
   { id: 'translations', label: 'Translations', icon: Globe },
   { id: 'announcements', label: 'Announcements', icon: Megaphone },
+  { id: 'events', label: 'Events & Programmes', icon: CalendarDays },
   { id: 'materials', label: 'Materials', icon: Book },
   { id: 'radio', label: 'Radio', icon: Radio },
   { id: 'prayer', label: 'Prayer Requests', icon: HeartHandshake },
@@ -396,7 +397,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const resourceForNav: Record<AdminTab, PermissionResource> = {
       dashboard:'dashboard', userManagement:'users', settings:'settings', candidates:'users',
       curriculum:'curriculum', engagement:'portfolio', languages:'languages', translations:'translations',
-      announcements:'announcements', materials:'materials', radio:'radio', prayer:'prayer',
+      announcements:'announcements', events:'announcements', materials:'materials', radio:'radio', prayer:'prayer',
       unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
       certification:'certificates', mentorship:'mentoring', organizations:'organizations',
     };
@@ -963,7 +964,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     privileges: currentUser.privileges as unknown as Record<string, unknown> | undefined,
   });
   const adminResourceForCollection: Record<ManagedAdminCollection, PermissionResource> = {
-    translations:'translations', announcements:'announcements', materials:'materials', radio:'radio',
+    translations:'translations', announcements:'announcements', events:'announcements', materials:'materials', radio:'radio',
     unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
   };
   const canAdminResource = (kind: ManagedAdminCollection, action: PermissionAction) => {
@@ -974,6 +975,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const managedTabs: ManagedAdminCollection[] = [
     'translations',
     'announcements',
+    'events',
     'materials',
     'radio',
     'unions',
