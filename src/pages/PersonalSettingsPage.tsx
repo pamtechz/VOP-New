@@ -45,6 +45,20 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
+  const [trustedDevice, setTrustedDevice] = useState(() => {
+    try { return localStorage.getItem('vop_trusted_offline_device') === 'yes'; }
+    catch { return false; }
+  });
+  const changeTrustedDevice = (enabled: boolean) => {
+    if (enabled && !window.confirm('Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.')) return;
+    try {
+      localStorage.setItem('vop_trusted_offline_device', enabled ? 'yes' : 'no');
+      setTrustedDevice(enabled);
+      setMessage(enabled
+        ? 'Offline study storage enabled. Reload the app while online to activate it and download study content. This does not download media for offline use.'
+        : 'Future persistent study caching disabled after the next reload. To remove previously cached content, clear this website’s browser storage.');
+    } catch { setMessage('This browser does not permit persistent offline storage.'); }
+  };
   const appSettings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), appSettings.customTranslations, fallback, 'PersonalSettingsPage');
 
@@ -117,6 +131,12 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         <h2><BookOpen size={19}/> Study preferences</h2>
         <label className="vop-personal-toggle"><input type="checkbox" checked={settings.studyPreferences?.reminders !== false} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, reminders: e.target.checked })}/> Study reminders</label>
         <label>Preferred study time<input type="time" value={settings.studyPreferences?.preferredStudyTime || ''} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, preferredStudyTime: e.target.value })}/></label>
+      </section>
+      <section className="vop-personal-card vop-card">
+        <h2><BookOpen size={19}/> Offline study on this device</h2>
+        <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
+        <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
+        <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
       </section>
       <section className="vop-personal-card vop-card">
         <h2><ShieldCheck size={19}/> Privacy</h2>
