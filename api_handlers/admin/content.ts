@@ -848,9 +848,12 @@ export default async function handler(req: Request, res: Response) {
         let saved=await ref.get();
         let delivery: { delivered:number; recipients:number } | undefined;
         let deliveryError = '';
+        const deliveryAudience = ['announcements','events'].includes(collection)
+          ? normalizePublicationAudience(incoming.targetAudience ?? existing.data()?.targetAudience)
+          : 'all';
         const shouldDeliver = ['announcements','events'].includes(collection)
           && incoming.published === true
-          && !saved.data()?.notificationDeliveredAt;
+          && String(saved.data()?.notificationDeliveredAudience || '') !== deliveryAudience;
         if (shouldDeliver) {
           try {
             const notificationType = collection === 'events' ? 'event' : 'announcement';
@@ -863,12 +866,13 @@ export default async function handler(req: Request, res: Response) {
               actionUrl: collection === 'events' ? '/events' : '/announcements',
               createdBy: ctx.auth.uid,
               metadata: { targetAudience:String(incoming.targetAudience || ''), category:String(incoming.category || incoming.tag || '') },
-              targetAudience: String(incoming.targetAudience || ''),
+              targetAudience: deliveryAudience,
             });
             await ref.set({
               notificationDeliveredAt: FieldValue.serverTimestamp(),
               notificationRecipientCount: delivery.recipients,
               notificationDeliveryStatus: 'delivered',
+              notificationDeliveredAudience: deliveryAudience,
             }, { merge:true });
             saved = await ref.get();
           } catch (reason) {
