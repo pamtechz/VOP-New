@@ -63,6 +63,6 @@ test('admin search and notifications await asynchronous permission decisions', (
   const search = read('api_handlers/admin/search.ts');
   const notifications = read('api_handlers/admin/notifications.ts');
   assert.match(search, /await canPermission\(ctx,def\.resource,'view'\)/);
-  assert.match(notifications, /await canPermission\(ctx,'announcements','manage'\)/);
+  assert.match(notifications, /await canPermission\(ctx,'announcements','create'\)/);
   assert.match(notifications, /organizations\/['\"]\+organizationId\+'\/members\//);
 });
