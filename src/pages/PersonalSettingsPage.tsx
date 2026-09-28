@@ -5,6 +5,7 @@ import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
+import './personalSettings.css';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -81,14 +82,14 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     finally { setSaving(false); }
   };
 
-  return <div className="vop-page-shell" style={{ maxWidth: 980, margin: '0 auto', padding: '1rem' }}>
-    <div className="vop-page-head">
+  return <div className="vop-personal-settings vop-page-shell">
+    <div className="vop-personal-header vop-page-head">
       <div><p className="vop-kicker">{t('account.my_account','My Account')}</p><h1>{t('settings.personal_title','Personal Settings')}</h1><p>{t('settings.personal_description','These settings apply only to your VOP account.')}</p></div>
       <button className="vop-secondary" type="button" onClick={onBack}>{t('common.back','Back')}</button>
     </div>
-    {message && <div className="vop-card" role="status" style={{ marginBottom: 16 }}>{message}</div>}
-    {busy ? <div className="vop-card">Loading your settings…</div> : <div style={{ display:'grid', gap:16 }}>
-      <section className="vop-card">
+    {message && <div className="vop-personal-message vop-card" role="status">{message}</div>}
+    {busy ? <div className="vop-personal-loading vop-card" role="status">Loading your settings…</div> : <div className="vop-personal-grid">
+      <section className="vop-personal-card vop-card">
         <h2><UserRound size={19}/> Account</h2>
         <p>{currentUser.displayName} · {currentUser.email}</p>
         <small>Your role, organization, permissions and learning records are managed separately and cannot be changed here.</small>
@@ -106,7 +107,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-card">
         <h2><Bell size={19}/> Notifications</h2>
-        {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key}><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
+        {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
       </section>
       <section className="vop-card">
         <h2><Accessibility size={19}/> Accessibility</h2>
@@ -114,14 +115,14 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-card">
         <h2><BookOpen size={19}/> Study preferences</h2>
-        <label><input type="checkbox" checked={settings.studyPreferences?.reminders !== false} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, reminders: e.target.checked })}/> Study reminders</label>
+        <label className="vop-personal-toggle"><input type="checkbox" checked={settings.studyPreferences?.reminders !== false} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, reminders: e.target.checked })}/> Study reminders</label>
         <label>Preferred study time<input type="time" value={settings.studyPreferences?.preferredStudyTime || ''} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, preferredStudyTime: e.target.value })}/></label>
       </section>
       <section className="vop-card">
         <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>
-      <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
+      <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
     </div>}
   </div>;
 };
