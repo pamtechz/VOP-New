@@ -178,14 +178,14 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
   const action = String(b.action || '');
   if (action === 'memoryDecks') {
     const snapshot = await db.collection('scriptureMemoryDecks').where('status', '==', 'published').limit(100).get();
-    return { decks: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+    return { decks: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {})).map(doc => ({ id: doc.id, ...doc.data() })) };
   }
   const deckId = cleanId(b.deckId, 'deck');
   if (action === 'memoryDue') {
     const stateSnapshot = await db.collection(`users/${actor.uid}/scriptureMemoryState`).where('deckId', '==', deckId).limit(500).get();
-    const stateByVerse = new Map(stateSnapshot.docs.map(doc => [doc.id, doc.data()]));
+    const stateByVerse = new Map(stateSnapshot.docs.map(doc => [String(doc.data().verseId || doc.id), doc.data()]));
     const deck = await db.doc(`scriptureMemoryDecks/${deckId}`).get();
-    if (!deck.exists || deck.data()?.status !== 'published') throw new Error('This Scripture memory deck is not available.');
+    if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {})) throw new Error('This Scripture memory deck is not available.');
     const verses = Array.isArray(deck.data()?.verses) ? deck.data()?.verses as Array<Record<string, unknown>> : [];
     const due = verses.filter(verse => {
       const state = stateByVerse.get(String(verse.id || ''));
@@ -198,7 +198,7 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     const rating = Number(b.rating);
     if (!Number.isFinite(rating) || rating < 0 || rating > 5) throw new Error('Memory rating must be between 0 and 5.');
     const deck = await db.doc(`scriptureMemoryDecks/${deckId}`).get();
-    if (!deck.exists || deck.data()?.status !== 'published') throw new Error('This Scripture memory deck is not available.');
+    if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {})) throw new Error('This Scripture memory deck is not available.');
     const verses = Array.isArray(deck.data()?.verses) ? deck.data()?.verses as Array<Record<string, unknown>> : [];
     if (!verses.some(item => String(item.id || '') === verseId)) throw new Error('Verse is not part of this deck.');
     const ref = db.doc(`users/${actor.uid}/scriptureMemoryState/${verseId}`);
