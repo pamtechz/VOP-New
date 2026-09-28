@@ -67,7 +67,7 @@ export type PublicationAudience = 'all' | 'learners' | 'leaders' | 'mentors' | '
 
 export function normalizePublicationAudience(value: unknown): PublicationAudience {
   const audience = String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
-  if (!audience || ['all','everyone','members','all members'].includes(audience)) return 'all';
+  if (!audience || ['all','everyone','members','all members','all users','users'].includes(audience)) return 'all';
   if (['learner','learners','student','students'].includes(audience)) return 'learners';
   if (['leader','leaders','admin','admins','administrators'].includes(audience)) return 'leaders';
   if (['mentor','mentors'].includes(audience)) return 'mentors';
