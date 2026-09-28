@@ -29,6 +29,8 @@ function hierarchyNodeId(ctx:Awaited<ReturnType<typeof authenticateTenant>>){ret
 async function accessible(ctx:Awaited<ReturnType<typeof authenticateTenant>>,data:Record<string,unknown>,orgIds:string[]|null){
   if(ctx.isSuperAdmin)return true;
   const scope=scopeOf(data);
+  // Explicitly published shared resources are discoverable across organizations.
+  if(data.sharingScope==='shared'&&(data.published===true||data.status==='published'))return true;
   if(scope==='platform')return data.published===true||data.public===true||data.visibility==='public'||data.status==='published';
   const organizationId=String(data.organizationId||data.ownerOrganizationId||'').trim();
   if(scope==='organization')return !!organizationId&&!!orgIds&&orgIds.includes(organizationId);
