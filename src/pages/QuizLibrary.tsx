@@ -5,7 +5,7 @@ import { getTranslation, getUiLocale } from '../services/i18n';
 
 type AttachmentType = 'lesson' | 'guide';
 type Quiz = {
-  id: string; title: string; description?: string; language: string;
+  id: string; title: string; description?: string; language: string; archived?: boolean;
   questions: Array<Record<string, unknown>>; published?: boolean;
   sharingScope?: 'private' | 'organization' | 'shared';
   guideId?: string; lessonId?: string; attachmentType?: AttachmentType;
@@ -133,6 +133,15 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
     } finally { setSaving(false); }
   };
   const addQuestion = () => setQuestions(previous => [...previous, { question: '', options: ['', '', '', ''], answer: 0, explanation: '' }]);
+  const archiveQuiz = async (quiz: Quiz) => {
+    if (!quiz.canEdit || !window.confirm('Archive this quiz? Learners will no longer see the associated assessment. Historical scores will be retained.')) return;
+    setError(''); setMessage('');
+    try {
+      await authorizedPost('/api/quizzes', {...scopePayload, action:'archive',id:quiz.id});
+      setMessage('Quiz archived; learner assessment unpublished. Previous results were preserved.');
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not archive the quiz.'); }
+  };
   return <div className="vop-reference-manager">
     <div className="vop-page-head">
       <div className="vop-heading"><div className="vop-heading-icon"><Share2 size={28}/></div>
@@ -215,9 +224,10 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
           <td>{item.attachmentType === 'guide' ? 'Entire guide: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
           <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
-          <td>{item.sharingScope || 'organization'}</td><td>{item.published ? 'Published' : 'Draft'}</td>
+          <td>{item.sharingScope || 'organization'}</td><td>{item.archived ? 'Archived' : item.published ? 'Published' : 'Draft'}</td>
           <td><div className="vop-reference-action-cell">
             <button className="vop-actions" type="button" onClick={() => open(item)} title={item.canEdit === false ? 'Owned by another contributor' : 'Edit'} disabled={item.canEdit === false}><Edit3 size={16}/></button>
+            {item.canEdit !== false && !item.archived && <button className="vop-actions" type="button" onClick={() => void archiveQuiz(item)} title="Archive quiz and unpublish assessment"><Trash2 size={16}/></button>}
             {item.sharingScope === 'shared' && item.published && <button className="vop-actions" type="button" onClick={() => open(item, true)} title="Copy shared quiz to a guide you manage"><Copy size={16}/></button>}
           </div></td>
         </tr>)}</tbody>
