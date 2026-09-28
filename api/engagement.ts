@@ -223,20 +223,25 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
 
 async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
   const action = String(b.action || '');
+  if (action === 'duelAvailability') {
+    const optIn = b.enabled === true;
+    await db.doc('users/' + cleanId(actor.uid, 'user')).set({ scriptureDuelOptIn: optIn }, { merge: true });
+    return { optIn };
+  }
   if (action === 'duelOverview') {
     const organizationId = orgOf(actor);
-    if (!organizationId) return { opponents: [], matches: [] };
+    if (!organizationId) return { opponents: [], matches: [], optIn: false };
     const [people, active] = await Promise.all([
       db.collection('users').where('organizationId', '==', organizationId).limit(200).get(),
       db.collection('scriptureDuels').where('organizationId', '==', organizationId).limit(200).get(),
     ]);
     const names = new Map(people.docs.map(doc => [doc.id, String(doc.data().displayName || 'Learner')]));
-    const opponents = people.docs.filter(doc => doc.id !== String(actor.uid) && doc.data().disabled !== true)
+    const opponents = people.docs.filter(doc => doc.id !== String(actor.uid) && doc.data().disabled !== true && doc.data().scriptureDuelOptIn === true && ['student', 'learner'].includes(String(doc.data().role || 'student')))
       .map(doc => ({ uid: doc.id, displayName: String(doc.data().displayName || 'Learner') }));
     const matches = active.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(item => item.status === 'active' && (item.playerA === String(actor.uid) || item.playerB === String(actor.uid)))
       .map(item => ({ id: item.id, opponentName: names.get(item.playerA === String(actor.uid) ? String(item.playerB) : String(item.playerA)) || 'Learner', expiresAt: item.expiresAt }));
-    return { opponents, matches };
+    return { opponents, matches, optIn: actor.scriptureDuelOptIn === true };
   }
   if (action === 'duelJoin') {
     const matchId = cleanId(b.matchId, 'match');
@@ -262,6 +267,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if (opponentId === String(actor.uid)) throw new Error('You cannot challenge yourself.');
     const opponent = await profile(db, opponentId);
     if (!sameOrg(actor, opponent)) throw new Error('You can only challenge a learner in your organization.');
+    if (opponent.scriptureDuelOptIn !== true || opponent.disabled === true || !['student', 'learner'].includes(String(opponent.role || 'student'))) throw new Error('This learner is not accepting challenges.');
     const questionSnapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(20).get();
     const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {})).map(doc => ({ id: doc.id, ...doc.data() }));
     if (questions.length < 3) throw new Error('At least three published Scripture Duel questions are required.');
