@@ -53,3 +53,41 @@ export function gradeQuiz(
   }
   return correct * 100 / questions.length;
 }
+
+/** Validate learner-visible quiz shape, which intentionally has no answer key.
+ * True/false legacy quizzes may still have an answer field; only the server
+ * may grade learner responses. */
+export function isPlayableQuizConfigured(questions: Question[]): boolean {
+  if (!Array.isArray(questions) || questions.length === 0) return false;
+  const keys = new Set<string>();
+  for (const question of questions) {
+    if (!question || typeof question.key !== 'string' || !question.key.trim()
+        || typeof question.question !== 'string' || !question.question.trim()) return false;
+    const key = question.key.trim();
+    if (keys.has(key)) return false;
+    keys.add(key);
+    if (question.options !== undefined) {
+      if (!Array.isArray(question.options) || question.options.length < 2
+          || !question.options.every(option => typeof option === 'string' && Boolean(option.trim()))) return false;
+    } else if (typeof question.answer !== 'boolean') {
+      // Optionless assessments must be explicit legacy true/false questions;
+      // never guess question type from missing keys.
+      return false;
+    }
+  }
+  return true;
+}
+
+export function areQuizResponsesComplete(
+  questions: Question[],
+  responses: Record<number, number | boolean>,
+): boolean {
+  if (!isPlayableQuizConfigured(questions)) return false;
+  return questions.every((question, index) => {
+    if (!Object.hasOwn(responses, index)) return false;
+    const answer = responses[index];
+    return Array.isArray(question.options)
+      ? typeof answer === 'number' && Number.isInteger(answer) && answer >= 0 && answer < question.options.length
+      : typeof answer === 'boolean';
+  });
+}
