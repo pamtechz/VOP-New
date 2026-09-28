@@ -81,13 +81,19 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
     .filter(uid => /^[A-Za-z0-9:_-]{1,180}$/.test(uid));
   let delivered = 0;
   for (let offset = 0; offset < recipients.length; offset += 400) {
-    const batch = db.batch();
-    for (const uid of recipients.slice(offset, offset + 400)) {
-      const safeSource = sourceId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120);
+    const chunk = recipients.slice(offset, offset + 400);
+    const safeSource = sourceId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120);
+    const refs = chunk.map(uid => {
       const safeUid = uid.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
-      const notificationId = `${input.type}__${safeSource}__${safeUid}`.slice(0, 500);
-      const ref = db.collection('notifications').doc(notificationId);
-      batch.set(ref, {
+      return db.collection('notifications').doc(`${input.type}__${safeSource}__${safeUid}`.slice(0, 500));
+    });
+    const existing = await db.getAll(...refs);
+    const batch = db.batch();
+    let writes = 0;
+    for (let index = 0; index < chunk.length; index += 1) {
+      if (existing[index]?.exists) continue;
+      const uid = chunk[index];
+      batch.create(refs[index], {
         recipientId: uid,
         userId: uid,
         organizationId,
@@ -103,10 +109,11 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
         read: false,
         readAt: null,
         deliveryKey: `${input.type}:${sourceId}`,
-      }, { merge: false });
+      });
+      writes += 1;
       delivered += 1;
     }
-    await batch.commit();
+    if (writes) await batch.commit();
   }
   return { delivered, recipients: recipients.length };
 }
