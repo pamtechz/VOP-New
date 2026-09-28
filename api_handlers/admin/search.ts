@@ -73,7 +73,7 @@ export default async function handler(req:Request,res:Response){
     const requestedTypes=new Set(types?types.split(',').map(x=>x.trim()).filter(Boolean):definitions.map(x=>x.type));
     const candidates:Array<{type:string;id:string;title:string;description:string;scope:string;organizationId?:string}>=[];
     for(const def of definitions){
-      if(!requestedTypes.has(def.type)||!canPermission(ctx,def.resource,'view'))continue;
+      if(!requestedTypes.has(def.type)||!(await canPermission(ctx,def.resource,'view')))continue;
       const docs=await candidateDocs(db,def.collection,ctx,orgIds);
       for(const doc of docs){
         const data=doc.data() as Record<string,unknown>;
