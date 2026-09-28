@@ -183,6 +183,12 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   const learner = await profile(db, learnerId);
   if (!(await evaluatorScope(db, actor, learner))) throw new Error('The learner is outside your organization scope.');
   if (learnerId !== String(actor.uid) && !canManagePortfolio(actor)) throw new Error('You cannot manage this learner portfolio.');
+  if (learnerId !== String(actor.uid) && role(actor) === 'mentor') {
+    const assignment = await db.doc(`mentorAssignments/${learnerId}`).get();
+    if (!assignment.exists || String(assignment.data()?.mentorId || '') !== String(actor.uid)) {
+      throw new Error('Only the allocated mentor may inspect this learner portfolio.');
+    }
+  }
 
   if (action === 'portfolioGet') {
     const [portfolioSnap, requirementsSnap] = await Promise.all([
