@@ -430,7 +430,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const editableGuides = useMemo(() => guideRecords.filter(record =>
     record.archived !== true
     && String(record.organizationId || '') === scopeOrganizationId
-    && record.canEdit !== false
   ), [guideRecords, scopeOrganizationId]);
   const guideLookup = useMemo(() => new Map(guides.map(guide => [guide.language + '|' + guide.id, guide])), [guides]);
 
