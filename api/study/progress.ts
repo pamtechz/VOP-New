@@ -92,14 +92,16 @@ export default async function handler(
     const userData = userSnapshot.data() || {};
     const organizationId = String(userData.organizationId || '').trim();
 
-    const tenantGuideRef = organizationId ? db.doc(`guides/${guideId}`) : null;
+    // A learner without an organization can still study an approved shared guide.
+    // Only the literal legacy "discover" ID selects the legacy curriculum.
+    const tenantGuideRef = guideId && guideId !== 'discover' ? db.doc(`guides/${guideId}`) : null;
     const legacyGuideRef = db.doc(`curricula/discover/languages/${language}`);
     const candidateGuide = tenantGuideRef ? await tenantGuideRef.get() : null;
     const candidateGuideData = candidateGuide?.exists ? candidateGuide.data() || {} : {};
     const candidateGuideOrganizationId = String(candidateGuideData.organizationId || '').trim();
     const candidateGuideShared = candidateGuideData.sharingScope === 'shared' && candidateGuideData.published === true;
     const useTenantGuide = Boolean(candidateGuide?.exists && (
-      candidateGuideOrganizationId === organizationId
+      (Boolean(organizationId) && candidateGuideOrganizationId === organizationId)
       || candidateGuideShared
     ));
     const guideRef = useTenantGuide ? tenantGuideRef! : legacyGuideRef;

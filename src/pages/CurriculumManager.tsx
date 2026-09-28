@@ -12,6 +12,8 @@ import { loadFirestoreGuides } from '../services/firestoreData';
 import GuideManager from './GuideManager';
 import QuizLibrary from './QuizLibrary';
 import { getTranslation } from '../services/i18n';
+import { MediaPlayer } from '../components/media/MediaPlayer';
+import { resolveMediaSource } from '../../shared/mediaSources';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -342,11 +344,13 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
                 if (block.type === 'heading') return <h2 key={block.id}>{renderMarkedText(block.text || '')}</h2>;
                 if (block.type === 'quote') return <blockquote key={block.id}>{renderMarkedText(block.text || '')}</blockquote>;
                 if (block.type === 'image' && block.src) return <img key={block.id} src={block.src} alt="" />;
-                if (block.type === 'video' && block.src) return <video key={block.id} controls src={block.src}/>;
-                if (block.type === 'audio' && block.src) return <audio key={block.id} controls src={block.src}/>;
+                if (block.type === 'video' && block.src) return <MediaPlayer key={block.id} src={block.src} title="Lesson video" kind="video"/>;
+                if (block.type === 'audio' && block.src) return <MediaPlayer key={block.id} src={block.src} title="Lesson audio" kind="audio"/>;
                 return <p key={block.id}>{renderMarkedText(block.text || '')}</p>;
               })}
               {!pages.length && editor.content && <p>{renderMarkedText(editor.content)}</p>}
+              {page === 0 && editor.videoUrl && <MediaPlayer src={editor.videoUrl} title="Lesson video" kind="video" />}
+              {page === 0 && editor.audioUrl && <MediaPlayer src={editor.audioUrl} title="Lesson audio" kind="audio" />}
             </div>}
             {section === 1 && editor.bibleReferences && <div className="vop-preview-list">{editor.bibleReferences.split('\n').filter(Boolean).map(item => <div key={item}>{item}</div>)}</div>}
             {section === sections.length - 1 && sections.includes('Quiz') && <div className="vop-preview-quiz">{editor.questions.map((question, index) => <div key={index}><strong>{index + 1}. {question.question}</strong>{question.options.map((option, optionIndex) => <span key={optionIndex} className={question.answer === optionIndex ? 'correct' : ''}>{String.fromCharCode(65 + optionIndex)}. {option}</span>)}</div>)}</div>}
@@ -381,6 +385,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [mediaSourceInput, setMediaSourceInput] = useState('');
+  const [mediaResolving, setMediaResolving] = useState(false);
   const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'quiz' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -426,6 +432,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
 
 
+  // Draft guides are intentionally absent from the learner catalogue.
+  const editableGuides = useMemo(() => guideRecords.filter(record =>
+    record.archived !== true
+    && String(record.organizationId || '') === scopeOrganizationId
+  ), [guideRecords, scopeOrganizationId]);
   const guideLookup = useMemo(() => new Map(guides.map(guide => [guide.language + '|' + guide.id, guide])), [guides]);
 
   const lessonRows = useMemo<LessonRow[]>(() => {
@@ -433,7 +444,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     for (const guide of guides) {
       for (const lesson of guide.lessons) {
-        const key = guide.language + '|' + lesson.id;
+        const key = guide.language + '|' + guide.id + '|' + lesson.id;
         map.set(key, {
           key,
           guide,
@@ -451,7 +462,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const lessonId = valueText(draft.lessonId) || draft.id;
       if (!language || !lessonId) continue;
       const guide = guideLookup.get(language + '|' + valueText(draft.guideId));
-      const existingKey = language + '|' + lessonId;
+      const existingKey = language + '|' + valueText(draft.guideId) + '|' + lessonId;
       const fallbackLesson: Lesson = {
         id: lessonId,
         title: valueText(draft.title),
@@ -543,7 +554,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setError('');
     try {
       const [loadedGuides, draftResponse, guideResponse] = await Promise.all([
-        loadFirestoreGuides(),
+        loadFirestoreGuides().catch(() => [] as DiscoverGuide[]),
         adminContent('list', 'curriculum'),
         adminContent('listGuides', 'guides'),
       ]);
@@ -596,9 +607,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const openNewLesson = (quizMode = false) => {
     const language = enabledLanguages[0]?.code || 'en';
-    const guide = guides.find(item => item.language === language) || guides[0];
-    const next = blankEditor(language, guide?.id || '');
-    next.guideTitle = guide?.title || '';
+    const guide = editableGuides.find(item => String(item.language).toLowerCase() === language) || editableGuides[0];
+    const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
+    next.guideTitle = String(guide?.title || '');
     setEditor(next);
     setEditorTab(quizMode ? 'quiz' : 'content');
     setPreviewOpen(false);
@@ -613,20 +624,55 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setEditor({ ...editor, blocks });
   };
 
+  const resolvePastedMedia = async () => {
+    if (!editor || !mediaSourceInput.trim()) return setError('Paste a public media link first.');
+    setMediaResolving(true); setError('');
+    try {
+      if (!auth?.currentUser) throw new Error('Sign in to resolve media.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/media', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+        body:JSON.stringify({ url:mediaSourceInput.trim(), organizationId:scopeOrganizationId || undefined }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?:string; media?:{kind:string; provider:string; url:string; originalUrl:string}
+      };
+      if (!response.ok || !payload.media) throw new Error(payload.error || 'This media cannot be embedded.');
+      const media = payload.media;
+      const audio = media.kind === 'direct-audio' || ['AudioVerse','SoundCloud'].includes(media.provider);
+      const stored = media.kind === 'embed' ? media.originalUrl : media.url;
+      setEditor(previous => previous ? {
+        ...previous, ...(audio ? {audioUrl:stored} : {videoUrl:stored}),
+      } : previous);
+      setMediaSourceInput('');
+      notify(media.provider + ' media added to this lesson.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not resolve this media URL.');
+    } finally { setMediaResolving(false); }
+  };
+
   const saveLesson = async (publish: boolean) => {
     if (!editor) return;
     if (!editor.title.trim()) return setError(tx('curriculum.lessonTitleRequired', 'Lesson title is required.'));
     if (!editor.lessonNumber.trim()) return setError(tx('curriculum.lessonNumberRequiredMessage', 'Lesson number is required.'));
+    if (editor.audioUrl.trim() && !['direct-audio','embed'].includes(resolveMediaSource(editor.audioUrl.trim())?.kind || '') ) {
+      return setError('Audio must be a valid HTTPS file or an approved public audio embed. Use Add media to resolve a provider page.');
+    }
+    if (editor.videoUrl.trim() && !['direct-video','embed'].includes(resolveMediaSource(editor.videoUrl.trim())?.kind || '')) {
+      return setError('Video must be a valid HTTPS file or approved public video embed. Use Add media to resolve a provider page.');
+    }
     const normalizedLanguage = editor.language.trim().toLowerCase();
     if (!/^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i.test(normalizedLanguage)) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a valid configured language before saving.'));
     if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));
-    const existingGuideRecord = guideRecords.find(item => String(item.id || '') === String(editor.guideId));
-    const guideOrganizationId = valueText(existingGuideRecord?.organizationId || existingGuideRecord?.ownerOrganizationId);
+    const existingGuideRecord = editableGuides.find(item => String(item.id) === editor.guideId);
+    if (!existingGuideRecord) return setError('Choose an editable guide within your selected organization. Refresh if the guide was recently created.');
+    if (String(existingGuideRecord.language).trim().toLowerCase() !== normalizedLanguage) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
+    const guideOrganizationId = valueText(existingGuideRecord.organizationId);
     const targetOrganizationId = scopeOrganizationId || guideOrganizationId;
     if (isSuperAdmin && guideOrganizationId && guideOrganizationId !== scopeOrganizationId) setScopeOrganizationId(guideOrganizationId);
 
-    const guide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);
-    if (!guide && publish) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
+    const guide = existingGuideRecord;
 
     const duplicate = lessonRows.some(row =>
       row.key !== editor.language + '|' + editor.id
@@ -648,7 +694,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         description: editor.description.trim(),
         language: normalizedLanguage,
         guideId: editor.guideId,
-        guideTitle: guide?.title || editor.guideTitle,
+        guideTitle: valueText(guide.title) || editor.guideTitle,
         season: editor.season.trim(),
         content: editor.content,
         contentPages: pageBlocks.map((blocks, index) => ({
@@ -699,7 +745,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      setEditor({ ...editor, id, guideTitle: guide?.title || editor.guideTitle, published: publish });
+      setEditor({ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish });
       notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
@@ -713,7 +759,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (!window.confirm(tx('curriculum.confirmUnpublish', 'Unpublish this lesson from the learner curriculum?'))) return;
     setSaving(true);
     try {
-      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, lessonId: editor.id });
+      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, guideId: editor.guideId, lessonId: editor.id });
       setEditor({ ...editor, published: false });
       await load();
       notify(tx('curriculum.lessonUnpublished', 'Lesson unpublished.'));
@@ -838,10 +884,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
         <div className="vop-reference-editor-fields">
           <div className="vop-field"><label>{tx('curriculum.titleRequired', 'Title *')}</label><input value={editor.title} onChange={e => setEditor({...editor,title:e.target.value})}/></div>
-          <div className="vop-field"><label>{tx('curriculum.guideRequired', 'Guide *')}</label><select value={editor.guideId} onChange={e => { const selected = guides.find(item => item.id === e.target.value && item.language === editor.language); setEditor({...editor,guideId:e.target.value,guideTitle:selected?.title || '',language:selected?.language || editor.language}); }}><option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>{guides.map(guide => <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}</option>)}</select></div>
+          <div className="vop-field"><label>{tx('curriculum.guideRequired', 'Guide *')}</label><select value={editor.guideId} onChange={e => { const selected = editableGuides.find(item => item.id === e.target.value); setEditor({...editor,guideId:e.target.value,guideTitle:valueText(selected?.title),language:valueText(selected?.language || editor.language).toLowerCase()}); }}><option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>{editableGuides.map(guide => <option key={String(guide.id)} value={String(guide.id)}>{String(guide.title)} · {String(guide.language).toUpperCase()}{guide.published === true ? '' : ' (Draft)'}</option>)}</select></div>
           <div className="vop-field"><label>{tx('curriculum.lessonNumberRequired', 'Lesson Number *')}</label><input value={editor.lessonNumber} onChange={e => setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>{tx('curriculum.seasonQuarter', 'Season / Quarter')}</label><select value={editor.season} onChange={e => setEditor({...editor,season:e.target.value})}><option value="">{tx('curriculum.selectSeason', 'Select season')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
-          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
+          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value,guideId:'',guideTitle:''})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
         </div>
 
         <div className="vop-reference-editor-layout vop-lesson-editor-grid">
@@ -876,6 +922,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </div>}
 
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column">
+              <div className="vop-field"><label>Import public media from a trusted source</label>
+                <input type="url" placeholder="Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link" value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
+                <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving?'Checking source…':'Add media'}</button>
+                <small className="vop-field-help">Public provider embeds are used where available; trusted pages may expose direct media. No login-only or DRM-protected material is extracted.</small>
+              </div>
               <div className="vop-field"><label>{tx('curriculum.featuredImageUrl', 'Featured image URL')}</label><input value={editor.imageUrl} onChange={e => setEditor({...editor,imageUrl:e.target.value})}/></div>
               <div className="vop-field"><label>{tx('curriculum.audioUrl', 'Audio URL')}</label><div className="vop-input-with-icon"><Volume2 size={18}/><input value={editor.audioUrl} onChange={e => setEditor({...editor,audioUrl:e.target.value})}/></div></div>
               <div className="vop-field"><label>{tx('curriculum.videoUrl', 'Video URL')}</label><div className="vop-input-with-icon"><Video size={18}/><input value={editor.videoUrl} onChange={e => setEditor({...editor,videoUrl:e.target.value})}/></div></div>
@@ -975,7 +1026,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         })}
       </div>
 
-      {tab === 'quizzes' ? <QuizLibrary /> : tab === 'guides' ? (
+      {tab === 'quizzes' ? <QuizLibrary organizationId={scopeOrganizationId} /> : tab === 'guides' ? (
         <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
       ) : (
         <>

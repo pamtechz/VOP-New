@@ -82,6 +82,9 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     type: item.type === 'Test' ? 'Test' : 'Lesson',
     contentPages: rawPages,
     questions,
+    media: item.media && typeof item.media === 'object' && !Array.isArray(item.media)
+      ? { audioUrl: String((item.media as Record<string, unknown>).audioUrl || ''), videoUrl: String((item.media as Record<string, unknown>).videoUrl || ''), imageUrl: String((item.media as Record<string, unknown>).imageUrl || '') }
+      : undefined,
     estimatedMinutes: Math.max(1, Number(item.estimatedMinutes ?? 15) || 15),
   };
 }
@@ -147,8 +150,10 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
 
     if (!legacy) {
       const ownerOrg = String(data.organizationId ?? data.ownerOrganizationId ?? '').trim();
-      if (organizationId && ownerOrg && ownerOrg !== organizationId && data.sharingScope !== 'shared') continue;
-      if (!organizationId && data.sharingScope !== 'shared') continue;
+      const withinScope = profileRole === 'super_admin'
+        || Boolean(ownerOrg && ownerOrg === organizationId)
+        || scopedOrganizationIds.includes(ownerOrg);
+      if (!withinScope && data.sharingScope !== 'shared') continue;
     }
 
     const id = String(data.id ?? item.id).trim();
@@ -169,12 +174,20 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     };
     if (!guide.title) continue;
 
-    const key = legacy ? `legacy:${language}` : `org:${String(data.organizationId || data.ownerOrganizationId || '')}:${language}`;
+    // Multiple guides can share an organization and language (e.g. forked guides).
+    // Using tenant+language here silently overwrote earlier entries.
+    const key = item.ref.path;
     guides.set(key, { guide, lessonsRef: collection(firestore, `${item.ref.path}/lessons`) });
   }
 
   for (const entry of guides.values()) {
-    const lessonSnapshot = entry.guide.sharingScope === 'shared'
+    const ownerOrganizationId = entry.guide.ownerOrganizationId || '';
+    const canReadTenantLessons = profileRole === 'super_admin'
+      || Boolean(ownerOrganizationId && ownerOrganizationId === organizationId)
+      || scopedOrganizationIds.includes(ownerOrganizationId);
+    // A shared guide can contain organization-only lessons. Its owning learners
+    // may see those lessons, while visitors may see only published shared lessons.
+    const lessonSnapshot = entry.guide.sharingScope === 'shared' && !canReadTenantLessons
       ? await getDocs(query(entry.lessonsRef, where('published', '==', true), where('sharingScope', '==', 'shared')))
       : await getDocs(query(entry.lessonsRef, where('published', '==', true)));
     for (const item of lessonSnapshot.docs) {

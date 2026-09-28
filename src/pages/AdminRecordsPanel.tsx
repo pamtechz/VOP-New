@@ -16,6 +16,8 @@ import { getStoredAutoLocalization, saveAutoLocalization } from '../services/sto
 import { saveRadioAdminRecord, deleteRadioAdminRecord } from '../services/radioAdmin';
 import { isEnglishLocale } from '../../shared/locales';
 import { getUiLocale, translationSourceLabel, getTranslation } from '../services/i18n';
+import { resolveMediaSource } from '../../shared/mediaSources';
+import { MediaPlayer } from '../components/media/MediaPlayer';
 
 const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
 
@@ -301,8 +303,11 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         if (mediaType === 'youtube' && !urls.some(value => { try { const host = new URL(value).hostname.toLowerCase(); return host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com'); } catch { return false; } })) {
           throw new Error('For YouTube media, enter a valid YouTube URL.');
         }
-        if (mediaType === 'audioverse' && !urls.some(value => { try { const host = new URL(value).hostname.toLowerCase(); return host === 'audioverse.org' || host.endsWith('.audioverse.org'); } catch { return false; } })) {
-          throw new Error('For AudioVerse media, enter a valid AudioVerse URL.');
+        if (mediaType === 'audioverse' && !urls.some(value => resolveMediaSource(value)?.provider === 'AudioVerse')) {
+          throw new Error('For AudioVerse media, enter an approved AudioVerse media link.');
+        }
+        if (mediaType === 'embed' && !urls.some(value => resolveMediaSource(value)?.kind === 'embed')) {
+          throw new Error('Choose an approved public provider embed URL.');
         }
       }
       if (kind === 'radio' && !String(payload.broadcastTime || '').trim()) {
@@ -605,7 +610,7 @@ function tableCells(kind: ManagedAdminCollection, record: AdminRecord) {
         <td key="title"><strong>{valueOf(record,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(record,'description')}</div></td>,
         cell(record.speaker, 'speaker'),
         <td key="series">{valueOf(record,'series')}<div className="vop-radio-admin-type">{media.toUpperCase()}</div></td>,
-        <td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span>{source && <div className="vop-radio-admin-preview">{media === 'video' ? <video src={source} controls preload="metadata" poster={valueOf(record,'posterUrl') || undefined}/> : <audio src={source} controls preload="metadata"/>}</div>}</td>
+        <td key="published"><span className={'vop-status '+(record.published?'enabled':'disabled')}>{record.published?'Published':'Draft'}</span>{source && <div className="vop-radio-admin-preview"><MediaPlayer src={source} title={valueOf(record, 'title') || 'Radio'} /></div>}</td>
       ];
     }
     case 'unions': return [cell(record.name, 'name'),cell(record.code, 'code'),cell(record.divisionName, 'division')];
@@ -635,7 +640,7 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
     case 'radio':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
         {field('title','Title *')}{field('speaker','Speaker')}{field('series','Series')}
-        {select('mediaType','Primary Media Type',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'}])}
+        {select('mediaType','Primary Media Type',[{value:'audio',label:'Direct Audio'},{value:'video',label:'Direct Video'},{value:'youtube',label:'YouTube'},{value:'audioverse',label:'AudioVerse'},{value:'embed',label:'Trusted social embed'}])}
         {field('audioUrl','Audio URL','url','Direct MP3/AAC/M4A URL')}
         {field('videoUrl','Video URL','url','Direct MP4/WebM URL')}
         {field('streamUrl','Live Stream URL','url','Direct stream/HLS URL where supported')}
@@ -720,12 +725,8 @@ function AnnouncementAdminDashboard({
 function radioProvider(record: AdminRecord) {
   const values = [record.videoUrl, record.audioUrl, record.streamUrl].map(value => String(value ?? '').trim()).filter(Boolean);
   for (const value of values) {
-    try {
-      const url = new URL(value);
-      const host = url.hostname.toLowerCase();
-      if (host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')) return 'YouTube';
-      if (host === 'audioverse.org' || host.endsWith('.audioverse.org')) return 'AudioVerse';
-    } catch {}
+    const resolved = resolveMediaSource(value);
+    if (resolved?.kind === 'embed') return resolved.provider;
   }
   if (String(record.mediaType || '') === 'video' || record.videoUrl) return 'Video';
   if (record.streamUrl) return 'Stream';
@@ -825,6 +826,31 @@ function RadioAdminDashboard({
   const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
   const [search, setSearch] = useState('');
   const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'>('stream');
+  const [importUrl, setImportUrl] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const importRadioSource = async () => {
+    if (!importUrl.trim()) return setError('Paste a public media URL.');
+    setImportBusy(true); setError('');
+    try {
+      if (!auth?.currentUser) throw new Error('Sign in to import media.');
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/media', {
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer ' + token},
+        body:JSON.stringify({url:importUrl.trim()}),
+      });
+      const data = await response.json().catch(() => ({})) as { error?:string; media?:{kind:string;provider:string;url:string;originalUrl:string} };
+      if (!response.ok || !data.media) throw new Error(data.error || 'Cannot resolve this public media link.');
+      const media = data.media;
+      const audio = media.kind === 'direct-audio' || ['AudioVerse','SoundCloud'].includes(media.provider);
+      const type = media.provider === 'YouTube' ? 'youtube' : media.provider === 'AudioVerse' ? 'audioverse' : media.kind === 'embed' ? 'embed' : audio ? 'audio' : 'video';
+      const stored = media.kind === 'embed' ? media.originalUrl : media.url;
+      setForm(previous => ({...previous, mediaType:type, audioUrl:audio ? stored : '', videoUrl:audio ? '' : stored, streamUrl:''}));
+      setImportUrl('');
+      setMessage(media.provider + ' public media linked. Preview it before publishing.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import the source.'); }
+    finally { setImportBusy(false); }
+  };
   const [playlistEditingId, setPlaylistEditingId] = useState<string | null>(null);
   const [playlistName, setPlaylistName] = useState('');
   const [playlistDescription, setPlaylistDescription] = useState('');
@@ -978,7 +1004,14 @@ function RadioAdminDashboard({
       {editorOpen && <div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
         <form className="vop-radio-editor-modal" onSubmit={submit}>
           <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
-          <div className="vop-radio-editor-body"><Fields kind="radio" form={form} setForm={setForm} records={records} /></div>
+          <div className="vop-radio-editor-body">
+             <div className="vop-field"><label>Import from a trusted public provider</label>
+               <input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="WordPress, YouTube, TikTok, Facebook, Instagram, Umtu or direct HTTPS media" />
+               <button className="vop-secondary" type="button" disabled={importBusy || !importUrl.trim()} onClick={()=>void importRadioSource()}>{importBusy ? 'Inspecting public source…' : 'Add media'}</button>
+               <small>Official player embeds and public media metadata only. Protected, private or login-only media cannot be extracted.</small>
+             </div>
+             <Fields kind="radio" form={form} setForm={setForm} records={records} />
+           </div>
           <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
         </form>
       </div>}

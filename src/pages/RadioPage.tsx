@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { RadioBroadcast, RadioPlaylist } from '../types';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
+import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources';
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
@@ -104,25 +105,30 @@ type MediaSource =
   | { provider: 'direct-audio' | 'direct-video'; url: string; live: boolean }
   | { provider: 'youtube'; url: string; videoId: string; live: boolean }
   | { provider: 'audioverse'; url: string; embedUrl: string; live: boolean }
+  | { provider: 'embed'; url: string; embedUrl: string; label: string; live: false }
   | null;
 function detectMedia(item: RadioBroadcast): MediaSource {
   const candidates = [item.videoUrl, item.audioUrl, item.streamUrl].map(v => v?.trim()).filter(Boolean) as string[];
   for (const url of candidates) {
-    const youtube = youtubeSource(url);
-    if (youtube) return { provider: 'youtube', url, videoId: youtube.id, live: youtube.live };
-    const audioVerse = audioVerseEmbedUrl(url);
-    if (audioVerse) return { provider: 'audioverse', url, embedUrl: audioVerse, live: false };
+    const resolved = resolveMediaSource(url);
+    if (!resolved || resolved.kind === 'external') continue;
+    if (resolved.provider === 'YouTube') {
+      const id = resolved.url.split('/embed/')[1]?.split('?')[0] || '';
+      if (id) return { provider:'youtube', url, videoId:id, live:url.includes('/live/') };
+    }
+    if (resolved.provider === 'AudioVerse') return { provider:'audioverse', url, embedUrl:resolved.url, live:false };
+    if (resolved.kind === 'embed') return { provider:'embed', url, embedUrl:resolved.url, label:resolved.provider, live:false };
+    return { provider:resolved.kind, url:resolved.url, live:false };
   }
-  if (item.mediaType === 'video' && item.videoUrl?.trim()) return { provider: 'direct-video', url: item.videoUrl.trim(), live: false };
-  if (item.videoUrl?.trim()) return { provider: 'direct-video', url: item.videoUrl.trim(), live: false };
-  if (item.audioUrl?.trim()) return { provider: 'direct-audio', url: item.audioUrl.trim(), live: false };
-  if (item.streamUrl?.trim()) return { provider: 'direct-audio', url: item.streamUrl.trim(), live: true };
+  // Direct browser-playable HTTPS radio streams can have an extensionless path.
+  if (item.streamUrl && isSafeHttpsMediaUrl(item.streamUrl)) return {provider:'direct-audio',url:item.streamUrl,live:true};
   return null;
 }
 function sourceLabel(source: MediaSource) {
   if (!source) return 'No media';
   if (source.provider === 'youtube') return 'YouTube';
   if (source.provider === 'audioverse') return 'AudioVerse';
+  if (source.provider === 'embed') return source.label;
   if (source.provider === 'direct-video') return 'Video';
   return source.live ? 'Live stream' : 'Audio';
 }
@@ -349,7 +355,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
             <div className="vop-radio-tagline">{heroItem?.series || 'Inspire · Equip · Transform'}</div>
             <p>{heroItem?.description || 'Bible truth, practical life teaching and messages of hope for everyone, everywhere.'}</p>
             <div className="vop-radio-hero-actions">
-              <button type="button" className="vop-radio-listen" onClick={() => void togglePlay()}><Play size={17} fill="currentColor"/> {playing ? 'Pause' : 'Listen Live'}</button>
+              <button type="button" className="vop-radio-listen" disabled={source?.provider === 'audioverse' || source?.provider === 'embed'} onClick={() => void togglePlay()}><Play size={17} fill="currentColor"/> {source?.provider === 'audioverse' || source?.provider === 'embed' ? 'Use embedded player' : playing ? 'Pause' : 'Listen Live'}</button>
               <a className="vop-radio-watch" href={source?.url || '#'} target="_blank" rel="noreferrer"><Video size={17}/> Watch / Open</a>
             </div>
           </div>
@@ -357,7 +363,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
             <div className="vop-radio-live-head"><span><i/> {source?.live ? 'LIVE ON VOP RADIO' : sourceLabel(source)}</span><small>{live.length ? live.length + ' live source' + (live.length === 1 ? '' : 's') : localTime(now)}</small></div>
             <div className="vop-radio-provider-stage">
               {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-radio-youtube-stage"/>}
-              {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} allow="autoplay; encrypted-media; picture-in-picture" />}
+              {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="autoplay; encrypted-media; picture-in-picture" />}
+              {source?.provider === 'embed' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || source.label} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" referrerPolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />}
               {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster || undefined} playsInline preload="metadata" {...mediaEvents}/>}
               {source?.provider === 'direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents} />}
               {!source && <div className="vop-radio-provider-empty"><Radio size={26}/>{t('radio.no_source','No playable source configured.')}</div>}
@@ -367,7 +374,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
               <div><strong>{heroItem?.title}</strong><span>{heroItem?.speaker || 'Voice of Prophecy'}</span><span>{heroItem?.broadcastTime ? dateTime(heroItem.broadcastTime) : localTime(now)}</span></div>
             </div>
             <div className="vop-radio-wave">{Array.from({length:24},(_,i)=><b key={i} style={{height: (12 + ((i*17)%30)) + 'px'}}/>)}</div>
-            {source?.provider === 'audioverse' ? <div className="vop-radio-provider-note">{t('radio.audioverse_controls','AudioVerse controls are provided by the embedded player.')}</div> : <div className="vop-radio-mini-controls"><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/><button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button type="button" onClick={fullscreen}><Maximize2 size={16}/></button></div>}
+            {source?.provider === 'audioverse' || source?.provider === 'embed' ? <div className="vop-radio-provider-note">{t('radio.audioverse_controls','Controls are provided by the embedded media player.')}</div> : <div className="vop-radio-mini-controls"><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/><button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button type="button" onClick={fullscreen}><Maximize2 size={16}/></button></div>}
           </div>
         </div>
       </section>
@@ -427,9 +434,9 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
 
       <section className="vop-radio-docked-player">
         <div className="vop-radio-docked-meta"><div className="vop-radio-docked-cover" style={selectedPoster?{backgroundImage:'url("' + selectedPoster + '")'}:undefined}><Radio size={18}/></div><div><strong>{selected?.title}</strong><small>{selected?.speaker||selected?.series||'Voice of Prophecy'}</small></div>{source?.live&&<em>{t('radio.live','LIVE')}</em>}</div>
-        <div className="vop-radio-docked-center"><button type="button" onClick={()=>skip(-10)} disabled={!duration}><SkipBack size={17}/></button><button className="main" type="button" onClick={()=>void togglePlay()} disabled={!source||(source.provider==='youtube'&&!ytReady)||(source.provider==='audioverse')}>{playing?<Pause size={19}/>:<Play size={19} fill="currentColor"/>}</button><button type="button" onClick={()=>skip(10)} disabled={!duration}><SkipForward size={17}/></button></div>
+        <div className="vop-radio-docked-center"><button type="button" onClick={()=>skip(-10)} disabled={!duration}><SkipBack size={17}/></button><button className="main" type="button" onClick={()=>void togglePlay()} disabled={!source||(source.provider==='youtube'&&!ytReady)||(source.provider==='audioverse'||source.provider==='embed')}>{playing?<Pause size={19}/>:<Play size={19} fill="currentColor"/>}</button><button type="button" onClick={()=>skip(10)} disabled={!duration}><SkipForward size={17}/></button></div>
         <div className="vop-radio-docked-progress"><span>{formatTime(current)}</span><input type="range" min="0" max={duration||0} step=".1" value={Math.min(current,duration||0)} onChange={e=>seek(Number(e.target.value))} disabled={!duration}/><span>{duration?formatTime(duration):source?.live?'LIVE':'—'}</span></div>
-        <div className="vop-radio-docked-actions">{source?.provider!=='audioverse'&&<><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/></>}{source?.provider !== 'audioverse' && <label><Gauge size={15}/><select value={rate} onChange={e=>changeRate(Number(e.target.value))}>{[.5,.75,1,1.25,1.5,1.75,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>}{(source?.provider==='direct-video'||source?.provider==='youtube')&&<button type="button" onClick={fullscreen}><Maximize2 size={17}/></button>}<a href={source?.url||'#'} target="_blank" rel="noreferrer"><ExternalLink size={17}/></a></div>
+        <div className="vop-radio-docked-actions">{source?.provider!=='audioverse'&&source?.provider!=='embed'&&<><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/></>}{source?.provider !== 'audioverse' && source?.provider !== 'embed' && <label><Gauge size={15}/><select value={rate} onChange={e=>changeRate(Number(e.target.value))}>{[.5,.75,1,1.25,1.5,1.75,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>}{(source?.provider==='direct-video'||source?.provider==='youtube')&&<button type="button" onClick={fullscreen}><Maximize2 size={17}/></button>}<a href={source?.url||'#'} target="_blank" rel="noreferrer"><ExternalLink size={17}/></a></div>
       </section>
       {error&&<div className="vop-radio-player-error">{error}</div>}
       {waiting&&<div className="vop-radio-player-waiting"><Clock3 size={15}/> Buffering media…</div>}

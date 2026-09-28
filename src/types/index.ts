@@ -235,6 +235,7 @@ export interface Lesson {
   sharingScope?: 'private' | 'organization' | 'shared';
   canonical?: boolean;
   quizId?: string;
+  media?: { audioUrl?: string; videoUrl?: string; imageUrl?: string };
   id: string;
   title: string;
   lessonNumber: string; // e.g., "1.0", "1.1", "1.5"
@@ -357,7 +358,7 @@ export interface RadioBroadcast {
   audioUrl?: string;
   videoUrl?: string;
   streamUrl?: string;
-  mediaType?: 'audio' | 'video' | 'youtube' | 'audioverse';
+  mediaType?: 'audio' | 'video' | 'youtube' | 'audioverse' | 'embed';
   posterUrl?: string;
   /** System-generated ISO timestamp. Admins do not enter broadcast time manually. */
   broadcastTime?: string;
