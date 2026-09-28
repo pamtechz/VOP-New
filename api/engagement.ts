@@ -406,7 +406,7 @@ export default async function handler(req: Request, res: Response) {
     throw new Error('Unsupported engagement action.');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Engagement request failed.';
-    const status = /permission|scope|outside|cannot|authorized/i.test(message) ? 403 : /sign in|authentication/i.test(message) ? 401 : 400;
+    const status = /permission|scope|outside|cannot|authorized|organization|unavailable to you|not accepting challenges|only challenge|not a participant/i.test(message) ? 403 : /sign in|authentication/i.test(message) ? 401 : 400;
     return res.status(status).json({ error: message });
   }
 }
