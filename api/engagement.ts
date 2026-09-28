@@ -4,6 +4,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { requirePermissionForProfile } from '../server/permissions.js';
 import { createNotification } from '../server/notifications.js';
+import { engagementCatalog } from '../server/engagementCatalog.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -443,6 +444,9 @@ export default async function handler(req: Request, res: Response) {
     const b = body(req);
     const action = String(b.action || '');
     const db = getFirestore(admin());
+    if (['catalogList','catalogUpsert','catalogArchive'].includes(action)) {
+      return res.status(200).json({ ok:true, ...(await engagementCatalog(req, b)) });
+    }
     if (action === 'portfolioVerify') {
       const result = await publicPortfolioVerify(db, b);
       return res.status(200).json({ ok: true, ...result });
