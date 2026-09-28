@@ -25,7 +25,7 @@ const contentManager = ['view','read','create','update','delete','publish'] as P
 const contributor = ['view','read','create','update'] as PermissionAction[];
 const billingRead = ['view','read'] as PermissionAction[];
 const portfolioSelfService = ['view','read','create','update','manage'] as PermissionAction[];
-const portfolioEvaluator = ['view','read','create','update','approve','assign','manage'] as PermissionAction[];
+const portfolioEvaluator = ['view','read','create','update','delete','publish','approve','assign','manage'] as PermissionAction[];
 const scriptureParticipation = ['view','read','create','update'] as PermissionAction[];
 
 export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
