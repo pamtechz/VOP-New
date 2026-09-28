@@ -52,7 +52,7 @@ function createLocalApiMiddleware(server: { ssrLoadModule: (url: string) => Prom
     const route = parsedUrl.pathname.slice(LOCAL_API_PREFIX.length).split('/').filter(Boolean).join('/');
     if (!route || !/^[A-Za-z0-9_/-]+$/.test(route)) { next(); return; }
     try {
-      const module = await server.ssrLoadModule('/api/' + route + '.ts');
+      const module = await server.ssrLoadModule(route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts');
       const handler = module.default;
       if (typeof handler !== 'function') { res.statusCode = 500; res.end(JSON.stringify({ error: 'The local API route has no default handler.' })); return; }
       const body = await readBody(req);

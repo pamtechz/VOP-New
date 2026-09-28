@@ -9,7 +9,7 @@
     "build": "node scripts/verify-server-esm-imports.mjs && tsc -b && vite build",
     "verify:content": "node scripts/generate-snapshots.js && node --test tests/ingestion.test.mjs tests/snapshots.test.mjs",
     "test:unit": "node --experimental-strip-types --test tests/*.test.ts",
-    "test:contracts": "node --test tests/androidRelease.test.mjs tests/ingestion.test.mjs tests/productionAssets.test.mjs tests/snapshots.test.mjs tests/vopCompletionContracts.test.mjs tests/engagementFeatureContracts.test.mjs",
+    "test:contracts": "node --test tests/androidRelease.test.mjs tests/ingestion.test.mjs tests/productionAssets.test.mjs tests/snapshots.test.mjs tests/vopCompletionContracts.test.mjs tests/engagementFeatureContracts.test.mjs tests/serverlessRouting.test.mjs",
     "build:android": "node scripts/generate-snapshots.js && node scripts/validate-android-release.mjs && npm run build && cap sync android",
     "lint": "oxlint src/main.tsx src/Root.tsx src/config src/lib src/pages/FirebaseStudyApp.tsx src/pages/LessonViewer.tsx src/pages/SignInPage.tsx src/services/firebaseAuth.ts src/services/offlineManifest.ts",
     "lint:legacy": "oxlint src",
@@ -44,9 +44,15 @@
     "firebase-tools": "15.30.2"
   },
   "overrides": {
-    "xcode": { "uuid": "11.1.1" },
+    "xcode": {
+      "uuid": "11.1.1"
+    },
     "@opentelemetry/core": "2.8.0",
-    "gaxios": { "uuid": "11.1.1" }
+    "gaxios": {
+      "uuid": "11.1.1"
+    }
   },
-  "engines": { "node": ">=22 <23" }
+  "engines": {
+    "node": ">=22 <23"
+  }
 }

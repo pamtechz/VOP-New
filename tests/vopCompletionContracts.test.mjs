@@ -12,7 +12,7 @@ test('canonical resource scope is limited to platform, hierarchy and organizatio
 });
 
 test('unified search is server-side, permission-aware and scope-aware', () => {
-  const source = read('api/admin/search.ts');
+  const source = read('api_handlers/admin/search.ts');
   assert.match(source, /authenticateTenant/);
   assert.match(source, /canPermission/);
   assert.match(source, /organizationInHierarchyScope/);
@@ -25,14 +25,14 @@ test('notification service is centralized and validates recipients', () => {
   assert.match(service, /export async function createNotification/);
   assert.match(service, /recipientId/);
   assert.match(service, /createdAt:FieldValue\.serverTimestamp/);
-  const api = read('api/admin/notifications.ts');
+  const api = read('api_handlers/admin/notifications.ts');
   assert.match(api, /createNotification/);
   assert.match(api, /action==='send'/);
   assert.match(api, /canPermission/);
 });
 
 test('notification inbox binds every operation to the authenticated recipient and tenant', () => {
-  const source = read('api/admin/notifications.ts');
+  const source = read('api_handlers/admin/notifications.ts');
   assert.match(source, /verifyIdToken/);
   assert.match(source, /recipientId/);
   assert.match(source, /Notification not found/);
