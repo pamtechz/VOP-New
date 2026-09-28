@@ -14,7 +14,7 @@ function safeId(value: unknown) {
   return id;
 }
 function canManageQuizTenant(ctx: Context) {
-  return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor'].includes(String(ctx.membership.role || ''));
+  return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor','teacher'].includes(String(ctx.membership.role || ''));
 }
 function quizVisible(ctx: Context, data: Record<string, unknown>) {
   return ctx.isSuperAdmin
@@ -63,6 +63,9 @@ export default async function handler(req: Request, res: Response) {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const action = String(body.action || 'list');
+    // The content-management API includes answer keys: never authorize it using
+    // the learner's generic quizzes:view or quizzes:create capability.
+    if (!canManageQuizTenant(ctx)) throw new Error('Quiz management is restricted to authorized content contributors.');
     if (action === 'list' || action === 'get') await requirePermission(ctx, 'quizzes', 'view');
     else if (action === 'fork') await requirePermission(ctx, 'quizzes', 'create');
 
