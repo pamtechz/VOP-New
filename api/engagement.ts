@@ -82,7 +82,11 @@ function contentVisibleToLearner(actor: Profile, data: Record<string, unknown>) 
 }
 
 function role(actor: Profile) {
-  return String(actor.organizationRole || actor.role || 'student');
+  const platformRole = String(actor.role || '');
+  // A hierarchy or platform administrator may also hold a learner membership.
+  // That membership must not erase their platform role.
+  if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(platformRole)) return platformRole;
+  return String(actor.organizationRole || platformRole || 'student');
 }
 
 function canManagePortfolio(actor: Profile) {
@@ -127,6 +131,18 @@ function elo(current: number, opponent: number, score: 0 | 0.5 | 1, k = 24) {
   return Math.round(current + k * (score - expected));
 }
 
+async function publishedRequirement(db: FirebaseFirestore.Firestore, learner: Profile, value: unknown) {
+  const requirementId = cleanId(value, 'requirement');
+  const requirement = await db.doc('masterGuideRequirements/' + requirementId).get();
+  const data = requirement.data() || {};
+  const ownerOrganizationId = String(data.organizationId || '');
+  if (!requirement.exists || data.status !== 'published' ||
+      (ownerOrganizationId && ownerOrganizationId !== orgOf(learner) && data.sharingScope !== 'shared')) {
+    throw new Error('The selected Master Guide requirement is unavailable for this learner.');
+  }
+  return requirementId;
+}
+
 async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
   const action = String(b.action || '');
   const learnerId = cleanId(b.learnerId || actor.uid, 'learner');
@@ -147,7 +163,7 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
 
   if (action === 'portfolioSaveActivity') {
     if (!canManagePortfolio(actor) && learnerId !== String(actor.uid)) throw new Error('You cannot update this portfolio.');
-    const requirementId = cleanId(b.requirementId, 'requirement');
+    const requirementId = await publishedRequirement(db, learner, b.requirementId);
     const activityId = cleanId(b.activityId || randomUUID(), 'activity');
     const status = String(b.status || 'started');
     if (!['started','submitted'].includes(status)) throw new Error('Only authorized evaluators may verify activities through the sign-off workflow.');
@@ -169,7 +185,8 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   }
 
   if (action === 'portfolioEvidence') {
-    const evidence = { id: randomUUID(), requirementId: cleanId(b.requirementId, 'requirement'), title: String(b.title || '').trim(), url: String(b.url || '').trim(), note: String(b.note || '').trim(), submittedBy: String(actor.uid), submittedAt: nowIso() };
+    const requirementId = await publishedRequirement(db, learner, b.requirementId);
+    const evidence = { id: randomUUID(), requirementId, title: String(b.title || '').trim(), url: String(b.url || '').trim(), note: String(b.note || '').trim(), submittedBy: String(actor.uid), submittedAt: nowIso() };
     if (!evidence.title || !evidence.url) throw new Error('Evidence title and URL are required.');
     try {
       const link = new URL(evidence.url);
@@ -186,7 +203,14 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
     const assignedMentor = assignment.exists ? String(assignment.data()?.mentorId || '') : '';
     const actorIsMentor = String(actor.uid) === assignedMentor || ['super_admin','union_admin','conference_admin','district_admin','church_admin','owner','admin','teacher'].includes(role(actor));
     if (!actorIsMentor) throw new Error('You are not an authorized evaluator for this learner.');
-    const signoff = { id: randomUUID(), requirementId: cleanId(b.requirementId, 'requirement'), decision: String(b.decision || 'approved') === 'approved' ? 'approved' : 'rejected', notes: String(b.notes || ''), evaluatorId: String(actor.uid), evaluatorRole: role(actor), decidedAt: nowIso() };
+    const requirementId = await publishedRequirement(db, learner, b.requirementId);
+    if (learnerId === String(actor.uid)) throw new Error('A learner cannot sign off their own requirement.');
+    const portfolioSnap = await db.doc(`masterGuidePortfolios/${learnerId}`).get();
+    const activities = Array.isArray(portfolioSnap.data()?.activities) ? portfolioSnap.data()?.activities as Array<Record<string, unknown>> : [];
+    if (!activities.some(item => String(item.requirementId || '') === requirementId && item.status === 'submitted')) {
+      throw new Error('An activity must be submitted against this requirement before approval.');
+    }
+    const signoff = { id: randomUUID(), requirementId, decision: String(b.decision || 'approved') === 'approved' ? 'approved' : 'rejected', notes: String(b.notes || ''), evaluatorId: String(actor.uid), evaluatorRole: role(actor), decidedAt: nowIso() };
     const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
     await ref.set({ learnerId, organizationId: orgOf(learner), updatedAt: FieldValue.serverTimestamp(), signoffs: FieldValue.arrayUnion(signoff) }, { merge: true });
     return { signoff };
