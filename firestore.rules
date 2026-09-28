@@ -951,13 +951,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Notifications are private to the recipient, with administrator oversight
-    // only within the recipient's organization.
+    // Notification messages are recipient-private. Membership or administrative
+    // authority does not make somebody else's direct message readable.
+    // All mutations are authenticated and authorized through the server API.
     match /notifications/{id} {
-      allow get, list: if signedIn() && (
-        resource.data.get('userId', resource.data.get('uid', '')) == request.auth.uid
-        || (isAdmin() && resource.data.get('organizationId', '') == organizationIdForUser())
-      );
+      allow get, list: if signedIn()
+        && resource.data.get('recipientId', resource.data.get('userId', resource.data.get('uid', ''))) == request.auth.uid;
       allow create, update, delete: if false;
     }
 
