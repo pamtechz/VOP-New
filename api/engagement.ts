@@ -201,11 +201,20 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {})) throw new Error('This Scripture memory deck is not available.');
     const verses = Array.isArray(deck.data()?.verses) ? deck.data()?.verses as Array<Record<string, unknown>> : [];
     if (!verses.some(item => String(item.id || '') === verseId)) throw new Error('Verse is not part of this deck.');
-    const ref = db.doc(`users/${actor.uid}/scriptureMemoryState/${verseId}`);
-    const previous = (await ref.get()).data() || {};
-    const next = nextMemoryState(previous, rating);
-    await ref.set({ deckId, verseId, ...next, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    await db.collection(`users/${actor.uid}/scriptureMemoryReviews`).add({ deckId, verseId, rating: Math.round(rating), reviewedAt: FieldValue.serverTimestamp() });
+    // A verse may occur in multiple decks: state is keyed by BOTH deck and verse.
+    const ref = db.doc(`users/${actor.uid}/scriptureMemoryState/${deckId}:${verseId}`);
+    const legacyRef = db.doc(`users/${actor.uid}/scriptureMemoryState/${verseId}`);
+    const reviewRef = db.collection(`users/${actor.uid}/scriptureMemoryReviews`).doc();
+    const next = await db.runTransaction(async transaction => {
+      const current = await transaction.get(ref);
+      const legacy = current.exists ? null : await transaction.get(legacyRef);
+      const oldState = current.data() ||
+        (legacy?.data()?.deckId === deckId ? legacy.data() : {}) || {};
+      const updated = nextMemoryState(oldState, rating);
+      transaction.set(ref, { deckId, verseId, ...updated, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      transaction.create(reviewRef, { deckId, verseId, rating: Math.round(rating), reviewedAt: FieldValue.serverTimestamp() });
+      return updated;
+    });
     return { state: next };
   }
   throw new Error('Unsupported Scripture memory action.');
