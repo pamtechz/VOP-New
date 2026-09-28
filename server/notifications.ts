@@ -40,4 +40,4 @@ export async function createNotification(db: Firestore,input:CreateNotificationI
 }
 
 // Canonical notification persistence remains server-authoritative and scope-aware.
-// Validation trigger marker: full VOP matrix must execute on every engagement change.
+// Validation trigger marker: rerun the full matrix against the updated main baseline.
