@@ -350,7 +350,9 @@ export default async function handler(
       }
     });
 
-    return res.status(200).json({ ok: true, score, passed, scoreKey, threshold, failedQuestions: failedQuestions.map(item => item.key) });
+    // Per-question correctness is retained for authorized mentor analytics only.
+    // Exposing failed keys lets clients reconstruct the answer bank by probing.
+    return res.status(200).json({ ok: true, score, passed, scoreKey, threshold });
   } catch (error) {
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
