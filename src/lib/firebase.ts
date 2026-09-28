@@ -5,6 +5,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { deploymentPolicy } from '../config/deployment';
+import { hasTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 
 // Firebase Web configuration is public. NEVER put service-account credentials in VITE_*.
 const values = {
@@ -36,11 +37,7 @@ export const app = firebaseConfigured
 export const db: Firestore | null = app ? (() => {
   // Persistent caches retain protected tenant content after sign-out. Require
   // explicit trusted-device consent; use memory cache on shared devices.
-  try {
-    if (typeof window === 'undefined' || window.localStorage.getItem('vop_trusted_offline_device') !== 'yes') {
-      return getFirestore(app);
-    }
-  } catch { return getFirestore(app); }
+  if (!hasTrustedOfflineDeviceConsent()) return getFirestore(app);
   try {
     return initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
