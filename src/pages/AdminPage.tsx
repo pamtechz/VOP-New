@@ -28,6 +28,7 @@ import MentorshipInsights from './MentorshipInsights';
 import OrganizationManagement from './OrganizationManagement';
 import CandidateEnrollment from './CandidateEnrollment';
 import PrayerManagementPanel from './PrayerManagementPanel';
+import EngagementStudio from './EngagementStudio';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 
 interface AdminPageProps {
@@ -39,7 +40,7 @@ interface AdminPageProps {
 
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
-  | 'translations' | 'announcements' | 'materials' | 'radio' | 'prayer'
+  | 'translations' | 'announcements' | 'materials' | 'radio' | 'prayer' | 'engagement'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
@@ -51,6 +52,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'candidates', label: 'Candidates', icon: Users },
   { id: 'curriculum', label: 'Curriculum Studio', icon: BookOpen },
+  { id: 'engagement', label: 'Youth & Scripture', icon: Award },
   { id: 'languages', label: 'Languages', icon: Globe },
   { id: 'translations', label: 'Translations', icon: Globe },
   { id: 'announcements', label: 'Announcements', icon: Megaphone },
@@ -393,12 +395,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     });
     const resourceForNav: Record<AdminTab, PermissionResource> = {
       dashboard:'dashboard', userManagement:'users', settings:'settings', candidates:'users',
-      curriculum:'curriculum', languages:'languages', translations:'translations',
+      curriculum:'curriculum', engagement:'portfolio', languages:'languages', translations:'translations',
       announcements:'announcements', materials:'materials', radio:'radio', prayer:'prayer',
       unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
       certification:'certificates', mentorship:'mentoring', organizations:'organizations',
     };
-    const canSee = (id: AdminTab) => permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
+    const canSee = (id: AdminTab) => id === 'engagement'
+      ? ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'))
+      : permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
     return NAV.filter(item => {
       if (!canSee(item.id)) return false;
       const role = String(currentUser.role || '');
@@ -1019,6 +1023,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           />
         )}
         {activeTab==='prayer'&&<PrayerManagementPanel />}
+        {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (
