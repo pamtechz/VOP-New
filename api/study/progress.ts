@@ -126,6 +126,10 @@ export default async function handler(
     if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
+    if (useTenantGuide && candidateGuideOrganizationId !== organizationId
+        && (lessonData.sharingScope !== 'shared' || lessonData.archived === true)) {
+      return res.status(403).json({ error: 'This lesson is not shared with your organization.' });
+    }
 
     if (action === 'saveLessonResume') {
       const pageIndex = Number(body.pageIndex);
@@ -217,10 +221,29 @@ export default async function handler(
     const answers = body.answers && typeof body.answers === 'object'
       ? body.answers as Record<string, unknown>
       : {};
-    const questions = Array.isArray(lessonData.questions)
-      ? lessonData.questions as QuestionRecord[]
-      : Array.isArray(lessonData.quiz)
-        ? lessonData.quiz as QuestionRecord[]
+    // The learner-readable assessment only contains prompts and options.
+    // Grade using the private quiz bank, never trust client-provided keys.
+    const sourceQuizId = String(lessonData.sourceQuizId || '').trim();
+    let gradeable: Record<string, unknown> = lessonData;
+    if (sourceQuizId) {
+      if (!/^[A-Za-z0-9_-]{1,120}$/.test(sourceQuizId) || !useTenantGuide) {
+        return res.status(409).json({ error: 'The assessment source is invalid.' });
+      }
+      const quizSnap = await db.doc(`quizzes/${sourceQuizId}`).get();
+      const quiz = quizSnap.data() || {};
+      if (!quizSnap.exists
+        || quiz.published !== true || quiz.archived === true
+        || String(quiz.guideId || '') !== guideId
+        || String(quiz.assessmentPath || '') !== lessonRef.path
+        || String(quiz.language || '') !== language
+        || String(quiz.organizationId || '') !== candidateGuideOrganizationId
+      ) return res.status(409).json({ error: 'This assessment is not available for grading.' });
+      gradeable = quiz;
+    }
+    const questions = Array.isArray(gradeable.questions)
+      ? gradeable.questions as QuestionRecord[]
+      : Array.isArray(gradeable.quiz)
+        ? gradeable.quiz as QuestionRecord[]
         : [];
     const score = gradeServerQuiz(questions, answers);
 
