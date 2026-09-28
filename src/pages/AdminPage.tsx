@@ -770,6 +770,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             {isSuperAdmin && <div className="vop-field"><label>App Tagline</label><input value={settings.appTagline || ''} onChange={e=>setSettings({...settings,appTagline:e.target.value})}/></div>}
             <div className="vop-field"><label>Organization Name</label><input value={settings.organizationName} onChange={e=>setSettings({...settings,organizationName:e.target.value})}/></div>
             <div className="vop-field"><label>Default Language</label><select value={settings.defaultLanguage} onChange={e=>setSettings({...settings,defaultLanguage:e.target.value})}><option value="">Not configured</option>{languages.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
+            <div className="vop-field">
+              <label htmlFor="vop-assessment-pass-mark">Assessment pass mark (%)</label>
+              <input id="vop-assessment-pass-mark" type="number" min="1" max="100" step="any"
+                value={settings.quizPassThreshold > 0 ? settings.quizPassThreshold : ''}
+                onChange={e=>setSettings({...settings,quizPassThreshold:e.target.value === '' ? 0 : Number(e.target.value)})}
+                placeholder="Not configured" aria-describedby="vop-assessment-pass-mark-help"/>
+              <small id="vop-assessment-pass-mark-help">Set a pass mark between 1% and 100%. Until configured, verified quizzes cannot be passed or used for graduation and certificates.</small>
+            </div>
             <div className="vop-field"><label>Timezone</label><input value={settings.timezone || detectedTimeZone} onChange={e=>setSettings({...settings,timezone:e.target.value})} placeholder="Detected automatically"/><small>Uses the device timezone automatically when no explicit value is configured.</small></div>
             <div className="vop-field"><label>Website</label><input value={settings.website || ''} onChange={e=>setSettings({...settings,website:e.target.value})}/></div>
             <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>

@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
+import { configuredPassThreshold } from '../../shared/studyValidation.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -342,6 +343,19 @@ export default async function handler(req: Request, res: Response) {
           : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
       const existing = await ref.get();
       const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+
+      if (collection === 'settings' && Object.hasOwn(incoming, 'quizPassThreshold')) {
+        const rawMark = incoming.quizPassThreshold;
+        // Zero represents deliberately unconfigured; an undefined, malformed,
+        // negative or out-of-range value must never masquerade as a pass mark.
+        if (rawMark === 0 || rawMark === '0' || rawMark === '' || rawMark === null) {
+          incoming.quizPassThreshold = 0;
+        } else {
+          const normalized = configuredPassThreshold(rawMark);
+          if (normalized === null) throw new Error('Assessment pass mark must be between 1 and 100 percent.');
+          incoming.quizPassThreshold = normalized;
+        }
+      }
 
       if (collection === 'curriculumSettings' && !targetOrganizationId) {
         throw new Error('Curriculum settings belong to an organization tenant.');
