@@ -163,3 +163,37 @@ test('a test score key cannot impersonate a historical guide-wide score', () => 
   assert.match(result.configurationError ?? '', /ambiguous score identifiers/i);
   assert.equal(calculateCurriculumAverageScore(courses, candidate, 'en'), null);
 });
+
+test('redacted Quiz Library assessments count only after a server-issued passing score', () => {
+  const course = guide('secured');
+  course.lessons[1] = {
+    ...course.lessons[1],
+    sourceQuizId: 'quiz-secured',
+    answerVisibility: 'public_redacted',
+    questions: [{ key: 'quiz-secured-q1', question: 'Which option is true?', options: ['First', 'Second'] } as unknown as NonNullable<typeof course.lessons[1]['questions']>[number]],
+  };
+  const passing = calculateCurriculumProgress([course], learner(['secured-lesson'], {
+    'secured:secured-test-0': 85,
+  }), 80, 'en');
+  assert.equal(passing.configurationError, undefined);
+  assert.equal(passing.completedGuides, 1);
+  assert.equal(passing.certificateEligible, true);
+
+  // A learner-visible answer key is not a legitimate redacted assessment.
+  course.lessons[1].questions = [{ key: 'quiz-secured-q1', question: 'Which option is true?',
+    options: ['First', 'Second'], correctOptionIndex: 0, answer: false, explanation: '' }];
+  const leaked = calculateCurriculumProgress([course], learner(['secured-lesson'], {
+    'secured:secured-test-0': 85,
+  }), 80, 'en');
+  assert.equal(leaked.certificateEligible, false);
+  assert.match(leaked.configurationError ?? '', /answer keys/i);
+});
+
+test('zero is an unconfigured pass mark, never an automatic assessment pass', () => {
+  const result = calculateCurriculumProgress([guide('zero')], learner(['zero-lesson'], {
+    'zero:zero-test-0': 0,
+  }), 0, 'en');
+  assert.equal(result.certificateEligible, false);
+  assert.equal(result.completedGuides, 0);
+  assert.match(result.configurationError ?? '', /pass mark/i);
+});
