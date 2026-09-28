@@ -99,6 +99,13 @@ function extractPublicMedia(html: string, source: URL) {
     const content = attr(tag,'content').replace(/&amp;/g,'&').replace(/&#38;/g,'&');
     if (content) urls.push(content);
   }
+  // WordPress and other approved public pages sometimes expose HTML5
+  // <video>/<audio> instead of OpenGraph. Read URL attributes only, never HTML.
+  const mediaTags = html.match(/<(?:video|audio|source)\b[^>]{0,1800}>/gi) || [];
+  for (const tag of mediaTags) {
+    const src = attr(tag, 'src').replace(/&amp;/g, '&').replace(/&#38;/g, '&');
+    if (src) urls.push(src);
+  }
   for (const candidate of urls) {
     try {
       const url = new URL(candidate, source);
