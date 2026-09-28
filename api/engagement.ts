@@ -373,6 +373,11 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     const opponentId = cleanId(b.opponentId, 'opponent');
     if (opponentId === String(actor.uid)) throw new Error('You cannot challenge yourself.');
     const opponent = await profile(db, opponentId);
+    const outstanding = await db.collection('scriptureDuels')
+      .where('playerA', '==', String(actor.uid)).where('status', '==', 'active').limit(20).get();
+    if (outstanding.docs.filter(doc => new Date(String(doc.data()?.expiresAt || 0)).getTime() > Date.now()).length >= 3) {
+      throw new Error('Complete or expire an existing Scripture Duel before sending more invitations.');
+    }
     if (!sameOrg(actor, opponent)) throw new Error('You can only challenge a learner in your organization.');
     if (opponent.scriptureDuelOptIn !== true || opponent.disabled === true || !['student', 'learner'].includes(String(opponent.role || 'student'))) throw new Error('This learner is not accepting challenges.');
     const questionSnapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(20).get();
@@ -445,6 +450,19 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       const answered = questionIds.every(id => Object.prototype.hasOwnProperty.call(answers, `${a}:${id}`) &&
         Object.prototype.hasOwnProperty.call(answers, `${c}:${id}`));
       if (!expired && !answered) throw new Error('Both players must answer every question before finishing the duel.');
+      if (expired && !answered) {
+        // An unanswered invitation must never inflate the challenger's rating.
+        const priorScores = current.scores && typeof current.scores === 'object' ? current.scores as Record<string, unknown> : {};
+        const unrankedScores = { [a]:Number(priorScores[a] || 0),[c]:Number(priorScores[c] || 0) };
+        transaction.update(matchRef, {status:'expired',winner:'unranked',finishedAt:FieldValue.serverTimestamp(),
+          finalScores:unrankedScores});
+        transaction.set(db.doc(`scriptureDuelResults/${matchId}`), {
+          matchId,organizationId:String(current.organizationId || ''),playerA:a,playerB:c,
+          scores:unrankedScores,winner:'unranked',ranked:false,
+          answerCount:Object.keys(answers).length,completedAt:FieldValue.serverTimestamp(),
+        });
+        return {winner:'unranked',scores:unrankedScores,ranked:false};
+      }
       const refA = db.doc(`users/${a}`);
       const refB = db.doc(`users/${c}`);
       const [snapA, snapB] = await Promise.all([transaction.get(refA), transaction.get(refB)]);
