@@ -122,6 +122,30 @@ export default async function handler(req: Request, res: Response) {
       } }, res);
     }
 
+    if (action === 'archive') {
+      const id = safeId(body.id);
+      const ref = ctx.db.doc(`quizzes/${id}`);
+      const existing = await ref.get();
+      if (!existing.exists) throw new Error('The quiz no longer exists.');
+      const current = existing.data() || {};
+      await requirePermission(ctx, 'quizzes', 'update');
+      if (!canEditCanonicalContent(ctx, current) || (!ctx.isSuperAdmin && String(current.ownerUid || '') !== ctx.auth.uid)) {
+        throw new Error('Only the contributing quiz author or VOP Super Admin can archive it.');
+      }
+      const batch = ctx.db.batch();
+      batch.update(ref, { archived:true, published:false, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid });
+      const assessmentPath = String(current.assessmentPath || '');
+      if (assessmentPath === `guides/${safeId(current.guideId)}/lessons/quiz-${id}`) {
+        const assessment = await ctx.db.doc(assessmentPath).get();
+        if (assessment.exists && String(assessment.data()?.sourceQuizId || '') === id) {
+          batch.update(assessment.ref, { archived:true, published:false, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid });
+        }
+      }
+      await batch.commit();
+      await writeTenantAudit(ctx, 'quiz.archive', ref.path, current, { ...current, archived:true, published:false });
+      return res.status(200).json({ok:true, archived:true, id});
+    }
+
     if (action === 'upsert') {
       if (!canManageQuizTenant(ctx)) throw new Error('You do not have permission to manage quizzes for this tenant.');
       const id = safeId(body.id || randomUUID().replace(/-/g, '').slice(0,20));
@@ -166,7 +190,7 @@ export default async function handler(req: Request, res: Response) {
         organizationId:current.organizationId || target.organizationId,
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
-        ownerUid, canonical:true, sharingScope, published, questions, sourceContentId,
+        ownerUid, canonical:true, sharingScope, published, archived:false, questions, sourceContentId,
         assessmentId, assessmentPath:assessmentRef.path,
         createdAt:current.createdAt || now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
       };
@@ -177,7 +201,7 @@ export default async function handler(req: Request, res: Response) {
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
         attachedLessonId:target.lessonId, questions, quiz:questions,
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,
-        ownerUid, canonical:true, sharingScope, published,
+        ownerUid, canonical:true, sharingScope, published, archived:false,
         estimatedMinutes:Math.max(1, Math.ceil(questions.length * 1.5)),
         createdAt:current.createdAt || now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
       };
