@@ -51,6 +51,14 @@ async function recipientAccess(ctx:Context, item:RecordValue) {
   const org=String(item.organizationId || '').trim();
   return inScope(ctx,org);
 }
+function notificationDate(value:unknown) {
+  if (value && typeof value==='object' && 'toDate' in value && typeof value.toDate==='function') return value.toDate().toISOString();
+  const date=Date.parse(String(value || ''));
+  return Number.isFinite(date)?new Date(date).toISOString():'';
+}
+function displayedLink(value:unknown) {
+  try { return safeInternalLink(value); } catch { return ''; }
+}
 async function verifiedRecipient(ctx:Context, recipientId:string, organizationId:string) {
   const record=await ctx.db.doc('users/'+recipientId).get();
   if (!record.exists || record.data()?.disabled===true) throw new Error('The selected recipient is not an active user.');
@@ -78,10 +86,8 @@ export default async function handler(req:Request,res:Response) {
           id:doc.id,title:String(item.title || ''),body:String(item.body || ''),
           type:String(item.type || 'system'),channel:String(item.channel || 'in_app'),
           organizationId:String(item.organizationId || ''),
-          actionUrl:safeInternalLink(item.actionUrl),
-          createdAt:item.createdAt?.toDate instanceof Function
-            ? (item.createdAt as {toDate:()=>Date}).toDate().toISOString()
-            : String(item.createdAt || ''),read:item.read===true,
+          actionUrl:displayedLink(item.actionUrl),
+          createdAt:notificationDate(item.createdAt),read:item.read===true,
         });
       }
       visible.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
@@ -110,7 +116,7 @@ export default async function handler(req:Request,res:Response) {
         if (!(await inScope(ctx,org))) throw new Error('The destination organization is outside your scope.');
         const target=await ctx.db.doc('organizations/'+org).get();
         if (!target.exists || target.data()?.status!=='active') throw new Error('Select an active organization.');
-      } else if (!ctx.isSuperAdmin && ctx.tenantType!=='hierarchy') {
+      } else if (!ctx.isSuperAdmin) {
         throw new Error('An organization is required to send a notification.');
       }
       const recipient=id(b.recipientId,'recipient');
