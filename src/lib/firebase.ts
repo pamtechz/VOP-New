@@ -34,6 +34,13 @@ export const app = firebaseConfigured
 // getFirestore() initializes the instance. Offline getDoc/getDocs can then
 // read previously downloaded documents on supported devices.
 export const db: Firestore | null = app ? (() => {
+  // Persistent caches retain protected tenant content after sign-out. Require
+  // explicit trusted-device consent; use memory cache on shared devices.
+  try {
+    if (typeof window === 'undefined' || window.localStorage.getItem('vop_trusted_offline_device') !== 'yes') {
+      return getFirestore(app);
+    }
+  } catch { return getFirestore(app); }
   try {
     return initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
