@@ -7,7 +7,8 @@ type SearchItem={type:string;id:string;title:string;description:string;actionUrl
 type NotificationItem={id:string;title?:string;body?:string;read?:boolean;actionUrl?:string;type?:string};
 
 function routeFor(path:string,type?:string):AppRoute {
-  if(path.startsWith('/announcements')||type==='announcement'||type==='event')return 'announcements';
+  if(path.startsWith('/events')||type==='event')return 'events';
+  if(path.startsWith('/announcements')||type==='announcement')return 'announcements';
   if(path.startsWith('/resources')||type==='material')return 'resources';
   if(path.startsWith('/radio')||type==='radio')return 'radio';
   if(path.startsWith('/certificates')||type==='certificate')return 'certificates';
