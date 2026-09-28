@@ -3,7 +3,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
-import { notifyOrganizationMembers } from '../../server/notifications.js';
+import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -691,6 +691,9 @@ export default async function handler(req: Request, res: Response) {
           await ctx.db.doc(`translations/${code}`).set({id:code, languageCode:code, code, name:String(language.name || code), nativeName:String(language.nativeName || language.name || code), values, enabled:language.enabled !== false, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid}, {merge:true});
           return res.status(200).json({ok:true,item:{id:code,code,languageCode:code,name:String(language.name || code),nativeName:String(language.nativeName || language.name || code),values}});
         }
+        if (collection === 'events' || collection === 'announcements') {
+          normalizePublicationAudience(incoming.targetAudience);
+        }
         if (collection === 'events') {
           const title = String(incoming.title || '').trim();
           const startAt = String(incoming.startAt || '').trim();
@@ -860,6 +863,7 @@ export default async function handler(req: Request, res: Response) {
               actionUrl: collection === 'events' ? '/events' : '/announcements',
               createdBy: ctx.auth.uid,
               metadata: { targetAudience:String(incoming.targetAudience || ''), category:String(incoming.category || incoming.tag || '') },
+              targetAudience: String(incoming.targetAudience || ''),
             });
             await ref.set({
               notificationDeliveredAt: FieldValue.serverTimestamp(),
