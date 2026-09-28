@@ -58,7 +58,7 @@ async function readHeadPage(page: URL) {
       if (status < 200 || status >= 300) {
         done(new Error('The public source page could not be loaded.')); response.destroy(); return;
       }
-      if (!/text\\/html/i.test(String(response.headers['content-type'] || ''))) {
+      if (!/text\/html/i.test(String(response.headers['content-type'] || ''))) {
         done(new Error('The source is not an HTML page with public media metadata.')); response.destroy(); return;
       }
       const chunks: Buffer[] = [];
