@@ -1,3 +1,4 @@
+import { isEnglishLocale } from '../../shared/locales.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
@@ -25,7 +26,7 @@ function safeId(value: unknown) {
   if (!id || id.length > 120 || id.includes('/')) throw new Error('A valid document ID is required.');
   return id;
 }
-function language(value: unknown) {
+function isLanguageCode(value: unknown) {
   return typeof value === 'string' && /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(value.trim());
 }
 function orgCollection(ctx: { db: FirebaseFirestore.Firestore; organizationId: string }, collection: string) {
@@ -120,7 +121,7 @@ export default async function handler(req: Request, res: Response) {
       if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before creating a guide.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim().toLowerCase();
-      if (!language(lang)) throw new Error('A valid language code is required for a guide.');
+      if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
       const id = guideId(effectiveOrganizationId, lang);
@@ -161,7 +162,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'archiveGuide') {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
       const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim().toLowerCase();
-      if (!language(lang) || (!effectiveOrganizationId && !ctx.isSuperAdmin)) throw new Error('A valid language is required; an organization is required unless you are the VOP Super Admin.');
+      if (!isLanguageCode(lang) || (!effectiveOrganizationId && !ctx.isSuperAdmin)) throw new Error('A valid language is required; an organization is required unless you are the VOP Super Admin.');
       const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
@@ -265,7 +266,7 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim().toLowerCase();
       const lessonId = safeId(data.lessonId || body.id);
-      if (!language(lang)) throw new Error('A valid language code is required.');
+      if (!isLanguageCode(lang)) throw new Error('A valid language code is required.');
       const guide = await ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`).get();
       if (!guide.exists || guide.data()?.archived === true) throw new Error('A valid organization guide is required.');
       const ref = guide.ref.collection('lessons').doc(lessonId);
@@ -501,6 +502,7 @@ export default async function handler(req: Request, res: Response) {
     if (collection === 'translations' && action === 'proposeTranslation') {
       if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
       const languageId = safeId(body.languageId);
+      if (isEnglishLocale(languageId)) throw new Error('English is the source language. Select another language to translate into.');
       const key = String(body.key || '').trim();
       const proposedValue = String(body.proposedValue || '').trim();
       const reason = String(body.reason || '').trim();
@@ -547,6 +549,7 @@ export default async function handler(req: Request, res: Response) {
     if (collection === 'translations' && action === 'reviewTranslationProposal') {
       if (!ctx.isSuperAdmin) throw new Error('Only an authorized platform reviewer can approve or reject global translation proposals.');
       const languageId = safeId(body.languageId);
+      if (isEnglishLocale(languageId)) throw new Error('English is the source language. Select another language to translate into.');
       const proposalId = safeId(body.proposalId);
       const decision = body.decision === 'approve' ? 'approved' : body.decision === 'reject' ? 'rejected' : '';
       if (!decision) throw new Error('A valid review decision is required.');
@@ -657,7 +660,8 @@ export default async function handler(req: Request, res: Response) {
             return d.id.toLowerCase() !== requestedCode && (same(data.name, language.name) || same(data.nativeName, language.nativeName) || same(data.nativeName, language.name));
           });
           const relatedCode = String(relatedLocale?.id || '').trim().toLowerCase();
-          const code = relatedCode && language(relatedCode) ? relatedCode : String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();
+          const code = relatedCode && isLanguageCode(relatedCode) ? relatedCode : String(language.code || language.languageCode || languageDoc.id).trim().toLowerCase();
+          if (isEnglishLocale(code)) throw new Error('English is the source language. Select another language to translate into.');
           const values = incoming.values && typeof incoming.values === 'object' ? incoming.values as Record<string,unknown> : {};
           await ctx.db.doc(`locales/${code}`).set({ id:code, code, name:String(language.name || language.nativeName || code), nativeName:String(language.nativeName || language.name || code), enabled:language.enabled !== false, direction:language.rtl === true ? 'rtl' : 'ltr', fallback:String(language.fallback || 'en'), updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid }, {merge:true});
           const batch = ctx.db.batch();
