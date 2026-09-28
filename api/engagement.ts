@@ -76,6 +76,10 @@ async function evaluatorScope(db: FirebaseFirestore.Firestore, actor: Profile, l
 
 function contentVisibleToLearner(actor: Profile, data: Record<string, unknown>) {
   const ownerOrg = String(data.organizationId || data.ownerOrganizationId || '').trim();
+  // A public/published status cannot override private ministry content.
+  if (data.sharingScope === 'private') {
+    return String(data.ownerUid || '') === String(actor.uid || '') || actor.role === 'super_admin';
+  }
   const scope = String(data.scope || '').toLowerCase();
   if (scope === 'platform' || (!ownerOrg && scope !== 'hierarchy')) return true;
   if (ownerOrg && ownerOrg === orgOf(actor)) return true;
@@ -137,8 +141,9 @@ async function publishedRequirement(db: FirebaseFirestore.Firestore, learner: Pr
   const requirement = await db.doc('masterGuideRequirements/' + requirementId).get();
   const data = requirement.data() || {};
   const ownerOrganizationId = String(data.organizationId || '');
-  if (!requirement.exists || data.status !== 'published' ||
-      (ownerOrganizationId && ownerOrganizationId !== orgOf(learner) && data.sharingScope !== 'shared')) {
+  if (!requirement.exists || data.status !== 'published'
+      || !contentVisibleToLearner(learner, data)
+      || (ownerOrganizationId && ownerOrganizationId !== orgOf(learner) && data.sharingScope !== 'shared')) {
     throw new Error('The selected Master Guide requirement is unavailable for this learner.');
   }
   return requirementId;
@@ -154,11 +159,13 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   if (action === 'portfolioGet') {
     const [portfolioSnap, requirementsSnap] = await Promise.all([
       db.doc(`masterGuidePortfolios/${learnerId}`).get(),
-      db.collection('masterGuideRequirements').where('organizationId', 'in', [orgOf(learner), '']).limit(200).get().catch(() => ({ docs: [] as FirebaseFirestore.QueryDocumentSnapshot[] })),
+      db.collection('masterGuideRequirements').where('organizationId', 'in', [orgOf(learner), '']).limit(200).get(),
     ]);
     return {
       portfolio: portfolioSnap.exists ? { id: portfolioSnap.id, ...portfolioSnap.data() } : { id: learnerId, learnerId, organizationId: orgOf(learner), status: 'active', activities: [], evidence: [], signoffs: [] },
-      requirements: requirementsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+      requirements: requirementsSnap.docs
+        .filter(doc => doc.data().status === 'published' && contentVisibleToLearner(learner, doc.data()))
+        .map(doc => ({ id:doc.id, ...doc.data() })),
     };
   }
 
@@ -354,6 +361,10 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if (!answer) throw new Error('An answer is required.');
     const question = await db.doc(`scriptureDuelQuestions/${questionId}`).get();
     if (!question.exists || question.data()?.status !== 'published' || !Array.isArray(match.questionIds) || !match.questionIds.includes(questionId)) throw new Error('This question is not valid for the duel.');
+    const options = Array.isArray(question.data()?.options) ? question.data()?.options as unknown[] : [];
+    if (!options.some(option => typeof option === 'string' && option.trim().toLowerCase() === answer.toLowerCase())) {
+      throw new Error('Choose one of the available answer options.');
+    }
     const expected = String(question.data()?.answer || '').trim().toLowerCase();
     const correct = expected === answer.toLowerCase();
     return db.runTransaction(async transaction => {
