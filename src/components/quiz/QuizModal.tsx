@@ -20,7 +20,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 }) => {
   const questions = lesson.questions ?? [];
   const threshold = passThreshold;
-  const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 100;
+  const validThreshold = Number.isFinite(threshold) && threshold >= 1 && threshold <= 100;
   const validQuiz = isPlayableQuizConfigured(questions);
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
@@ -212,7 +212,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 background: '#fffbeb', border: '1px solid #fde68a',
                 color: '#92400e', fontSize: '0.85rem', marginBottom: '1rem',
               }}>
-                The pass mark must be configured (0–100%) by an administrator.
+                The pass mark must be configured (1–100%) by an administrator.
               </div>
             )}
 
