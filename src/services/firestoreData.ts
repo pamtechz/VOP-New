@@ -181,7 +181,13 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
   }
 
   for (const entry of guides.values()) {
-    const lessonSnapshot = entry.guide.sharingScope === 'shared'
+    const ownerOrganizationId = entry.guide.ownerOrganizationId || '';
+    const canReadTenantLessons = profileRole === 'super_admin'
+      || Boolean(ownerOrganizationId && ownerOrganizationId === organizationId)
+      || scopedOrganizationIds.includes(ownerOrganizationId);
+    // A shared guide can contain organization-only lessons. Its owning learners
+    // may see those lessons, while visitors may see only published shared lessons.
+    const lessonSnapshot = entry.guide.sharingScope === 'shared' && !canReadTenantLessons
       ? await getDocs(query(entry.lessonsRef, where('published', '==', true), where('sharingScope', '==', 'shared')))
       : await getDocs(query(entry.lessonsRef, where('published', '==', true)));
     for (const item of lessonSnapshot.docs) {
