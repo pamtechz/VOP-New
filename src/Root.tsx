@@ -7,6 +7,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
 import { createFirestoreStudentProfile, loadFirestoreUser } from './services/firestoreData';
 import { App } from './App';
+import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
 
 export function Root() {
@@ -18,6 +19,7 @@ export function Root() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isBootstrapRoute = pathname === '/admin/bootstrap';
   const isKnownRoute = pathname === '/' || isBootstrapRoute;
+  const portfolioToken = pathname === '/' ? new URLSearchParams(window.location.search).get('portfolio') || '' : '';
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -128,6 +130,10 @@ export function Root() {
   }
 
   if (!isKnownRoute) return <NotFoundPage />;
+
+  if (portfolioToken) return /^[A-Za-z0-9_-]{1,150}$/.test(portfolioToken)
+    ? <PortfolioVerificationPage token={portfolioToken}/>
+    : <ErrorPage message="This portfolio link is invalid." title="Portfolio verification" />;
 
   if (isBootstrapRoute) return <BootstrapPage account={account} />;
 
