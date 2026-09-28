@@ -173,6 +173,55 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal((await api(outsider, { action: 'duelHistory' })).results.length, 0);
     });
 
+
+    await t.test('admin content creation respects contributor ownership and public versus private answers', async () => {
+      const publisher = await identity('publisherA', 'org-A', {organizationRole:'admin'});
+      const colleague = await identity('colleagueA', 'org-A', {organizationRole:'admin'});
+      await db.doc('organizations/org-A/members/' + publisher.uid).set({
+        uid:publisher.uid,role:'admin',organizationId:'org-A',active:true,
+      });
+      await db.doc('organizations/org-A/members/' + colleague.uid).set({
+        uid:colleague.uid,role:'admin',organizationId:'org-A',active:true,
+      });
+      await db.doc('organizations/org-A/members/' + learner.uid).set({
+        uid:learner.uid,role:'learner',organizationId:'org-A',active:true,
+      });
+
+      assert.notEqual((await api(learner, {action:'catalogList',kind:'duelQuestions',organizationId:'org-A'})).status,200,
+        'A learner must not gain access to unpublished content through the administrative catalogue.');
+      assert.notEqual((await api(publisher, {action:'catalogList',kind:'memoryDecks',organizationId:'org-B'})).status,200);
+
+      const requirement = await api(publisher, {action:'catalogUpsert',kind:'requirements',organizationId:'org-A',
+        data:{title:'Community outreach',description:'Plan an outreach',status:'published',sharingScope:'organization'}});
+      assert.equal(requirement.status,200,JSON.stringify(requirement));
+      const deck = await api(publisher, {action:'catalogUpsert',kind:'memoryDecks',organizationId:'org-A',
+        data:{title:'Genesis memory',status:'published',sharingScope:'organization',
+          verses:[{reference:'Genesis 1:2',text:'And the earth was without form, and void.'}]}});
+      assert.equal(deck.status,200,JSON.stringify(deck));
+      const duelQuestion = await api(publisher, {action:'catalogUpsert',kind:'duelQuestions',organizationId:'org-A',
+        data:{title:'Genesis question',question:'Which book comes first?',options:['Genesis','Exodus'],
+          answer:'Genesis',scriptureRef:'Genesis 1:1',status:'draft',sharingScope:'organization'}});
+      assert.equal(duelQuestion.status,200,JSON.stringify(duelQuestion));
+
+      const otherList = await api(colleague, {action:'catalogList',kind:'duelQuestions',organizationId:'org-A'});
+      assert.equal(otherList.status,200,JSON.stringify(otherList));
+      assert.equal(otherList.items.find(item=>item.id===duelQuestion.item.id)?.answer,undefined,
+        'Even another contributor must not access a private answer key.');
+      assert.notEqual((await api(colleague, {action:'catalogArchive',kind:'duelQuestions',
+        organizationId:'org-A',id:duelQuestion.item.id})).status,200,
+        'Another contributor may not archive the author\'s content.');
+      const ownList = await api(publisher, {action:'catalogList',kind:'duelQuestions',organizationId:'org-A'});
+      assert.equal(ownList.items.find(item=>item.id===duelQuestion.item.id)?.answer,'Genesis');
+      const archived = await api(publisher, {action:'catalogArchive',kind:'duelQuestions',
+        organizationId:'org-A',id:duelQuestion.item.id});
+      assert.equal(archived.status,200,JSON.stringify(archived));
+
+      const masterGuide = await api(learner, {action:'portfolioGet'});
+      assert.ok(masterGuide.requirements.some(item=>item.id===requirement.item.id));
+      const memory = await api(learner, {action:'memoryDue',deckId:deck.item.id});
+      assert.equal(memory.status,200);
+      assert.equal(memory.due.length,1);
+    });
   } finally {
     await vite.close();
     await deleteApp(app);
