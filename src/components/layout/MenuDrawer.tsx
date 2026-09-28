@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { User, AppRoute } from '../../types';
-import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck, Megaphone } from 'lucide-react';
+import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck, Megaphone, CalendarDays } from 'lucide-react';
 import { getActiveLanguage, getStoredGuides, getStoredSettings } from '../../services/storage';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -68,6 +68,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
         <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('certificates.my_certificate', 'My Certificate')}</button>
         <button type="button" style={itemStyle} onClick={() => navigate('radio')}><Radio size={24}/>{t('navigation.radio_broadcasts','Radio & Broadcasts')}</button>
         <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>{t('navigation.announcements','Announcements')}</button>
+        <button type="button" style={itemStyle} onClick={() => navigate('events')}><CalendarDays size={24}/>{t('navigation.events','Events & Programmes')}</button>
         {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/>{t('navigation.mentor','Talk to my mentor')}</button>}
         <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>{t('common.whats_new',"What's New")}</button>
         {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management, announcements and graduation progress are now connected to the VOP account and organization services.</p>}
