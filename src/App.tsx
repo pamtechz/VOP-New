@@ -10,6 +10,7 @@ import {
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
+import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
 import { initializeLocalization, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
@@ -58,6 +59,7 @@ export const App: React.FC = () => {
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [deepLinkPageIndex, setDeepLinkPageIndex] = useState(0);
   const [studyError, setStudyError] = useState('');
+  const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileShell, setIsMobileShell] = useState(false);
@@ -332,8 +334,15 @@ export const App: React.FC = () => {
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser} allUsers={[]} onSelectUser={() => {}} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id);
-        if (!accepted) { setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.'); return false; }
-        if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
+        if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
+        setStudyError('');
+        if (accepted === 'queued') {
+          setStudyNotice('Lesson completion saved on this device. Official credit will appear after server verification when you reconnect.');
+        } else if (auth?.currentUser) {
+          setStudyNotice('');
+          const refreshedUser = await loadFirestoreUser(auth.currentUser.uid).catch(() => null);
+          if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); }
+        }
         if (!nextLesson) setActiveLesson(null);
         return true;
       }} />}
