@@ -189,10 +189,15 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
   const membershipRole = String(ctx.membership.role || '');
   const isOrgAdminOrOwner = ['owner', 'admin'].includes(membershipRole);
   const isHierarchyAdmin = ['union_admin', 'conference_admin', 'district_admin', 'church_admin'].includes(role);
-  const canContribute = isHierarchyAdmin || isOrgAdminOrOwner || membershipRole === 'editor' || role === 'editor';
+  const canContribute = isHierarchyAdmin || isOrgAdminOrOwner
+    || membershipRole === 'editor' || membershipRole === 'teacher'
+    || role === 'editor' || role === 'teacher';
   if (!canContribute) return false;
-  if (!ownerKey || !currentTenant || ownerKey === currentTenant) return true;
-  return String(data?.ownerUid || '') === ctx.auth.uid;
+  // Tenant equality is necessary but never sufficient to edit somebody
+  // else's contribution. Neither a shared record nor a later organization
+  // switch transfers authorship. Only Super Admin may override the owner.
+  return Boolean(ownerKey && currentTenant && ownerKey === currentTenant)
+    && Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid;
 }
 
 export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
