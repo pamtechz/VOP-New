@@ -55,6 +55,14 @@ function sameOrg(actor: Profile, target: Profile) {
   return Boolean(a && b && a === b);
 }
 
+function contentVisibleToLearner(actor: Profile, data: Record<string, unknown>) {
+  const ownerOrg = String(data.organizationId || data.ownerOrganizationId || '').trim();
+  const scope = String(data.scope || '').toLowerCase();
+  if (scope === 'platform' || (!ownerOrg && scope !== 'hierarchy')) return true;
+  if (ownerOrg && ownerOrg === orgOf(actor)) return true;
+  return data.visibility === 'public' || data.sharingScope === 'shared';
+}
+
 function role(actor: Profile) {
   return String(actor.organizationRole || actor.role || 'student');
 }
@@ -96,7 +104,7 @@ function nextMemoryState(previous: Record<string, unknown>, rating: number) {
   };
 }
 
-function elo(current: number, opponent: number, score: 0 | 1, k = 24) {
+function elo(current: number, opponent: number, score: 0 | 0.5 | 1, k = 24) {
   const expected = 1 / (1 + Math.pow(10, (opponent - current) / 400));
   return Math.round(current + k * (score - expected));
 }
@@ -124,7 +132,7 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
     const requirementId = cleanId(b.requirementId, 'requirement');
     const activityId = cleanId(b.activityId || randomUUID(), 'activity');
     const status = String(b.status || 'started');
-    if (!['started','submitted','verified','rejected'].includes(status)) throw new Error('Invalid activity status.');
+    if (!['started','submitted'].includes(status)) throw new Error('Only authorized evaluators may verify activities through the sign-off workflow.');
     const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
     const snap = await ref.get();
     const data = snap.exists ? snap.data() || {} : {};
@@ -207,7 +215,8 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   const action = String(b.action || '');
   if (action === 'duelQuestions') {
     const snapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(100).get();
-    return { questions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), answer: undefined })) };
+    return { questions: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {}))
+      .map(doc => ({ id: doc.id, question: doc.data().question, options: doc.data().options, scriptureRef: doc.data().scriptureRef })) };
   }
   if (action === 'duelCreate') {
     const opponentId = cleanId(b.opponentId, 'opponent');
@@ -215,12 +224,16 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     const opponent = await profile(db, opponentId);
     if (!sameOrg(actor, opponent)) throw new Error('You can only challenge a learner in your organization.');
     const questionSnapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(20).get();
-    const questions = questionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {})).map(doc => ({ id: doc.id, ...doc.data() }));
     if (questions.length < 3) throw new Error('At least three published Scripture Duel questions are required.');
     const selected = questions.sort(() => Math.random() - 0.5).slice(0, Math.min(10, questions.length));
     const matchId = randomUUID();
     await db.doc(`scriptureDuels/${matchId}`).set({ matchId, organizationId: orgOf(actor), playerA: String(actor.uid), playerB: opponentId, status: 'active', questionIds: selected.map(q => q.id), answers: {}, scores: { [String(actor.uid)]: 0, [opponentId]: 0 }, createdAt: FieldValue.serverTimestamp(), expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
     return { matchId, questions: selected.map(q => ({ id: q.id, question: q.question, options: q.options, scriptureRef: q.scriptureRef })) };
+  }
+  if (action === 'duelHistory') {
+    const snapshot = await db.collection('scriptureDuelResults').where('organizationId', '==', orgOf(actor)).limit(100).get();
+    return { results: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => item.playerA === String(actor.uid) || item.playerB === String(actor.uid)) };
   }
   const matchId = cleanId(b.matchId, 'match');
   const matchRef = db.doc(`scriptureDuels/${matchId}`);
@@ -229,7 +242,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   const match = matchSnap.data() || {};
   if (![String(match.playerA || ''), String(match.playerB || '')].includes(String(actor.uid))) throw new Error('You are not a participant in this duel.');
   if (String(match.status || '') !== 'active') throw new Error('This duel is no longer active.');
-  if (new Date(String(match.expiresAt || 0)).getTime() < Date.now()) { await matchRef.update({ status: 'expired', updatedAt: FieldValue.serverTimestamp() }); throw new Error('This duel has expired.'); }
+  if (action !== 'duelFinish' && new Date(String(match.expiresAt || 0)).getTime() < Date.now()) throw new Error('This duel has expired.');
 
   if (action === 'duelAnswer') {
     const questionId = cleanId(b.questionId, 'question');
