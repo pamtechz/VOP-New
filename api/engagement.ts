@@ -3,6 +3,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { requirePermissionForProfile } from '../server/permissions.js';
+import { createNotification } from '../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -222,6 +223,35 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
 
 async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
   const action = String(b.action || '');
+  if (action === 'duelOverview') {
+    const organizationId = orgOf(actor);
+    if (!organizationId) return { opponents: [], matches: [] };
+    const [people, active] = await Promise.all([
+      db.collection('users').where('organizationId', '==', organizationId).limit(200).get(),
+      db.collection('scriptureDuels').where('organizationId', '==', organizationId).limit(200).get(),
+    ]);
+    const names = new Map(people.docs.map(doc => [doc.id, String(doc.data().displayName || 'Learner')]));
+    const opponents = people.docs.filter(doc => doc.id !== String(actor.uid) && doc.data().disabled !== true)
+      .map(doc => ({ uid: doc.id, displayName: String(doc.data().displayName || 'Learner') }));
+    const matches = active.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(item => item.status === 'active' && (item.playerA === String(actor.uid) || item.playerB === String(actor.uid)))
+      .map(item => ({ id: item.id, opponentName: names.get(item.playerA === String(actor.uid) ? String(item.playerB) : String(item.playerA)) || 'Learner', expiresAt: item.expiresAt }));
+    return { opponents, matches };
+  }
+  if (action === 'duelJoin') {
+    const matchId = cleanId(b.matchId, 'match');
+    const match = await db.doc(`scriptureDuels/${matchId}`).get();
+    const data = match.data() || {};
+    if (!match.exists || data.status !== 'active' || ![String(data.playerA || ''), String(data.playerB || '')].includes(String(actor.uid)) ||
+      (!String(data.organizationId || '') && orgOf(actor)) || String(data.organizationId || '') !== orgOf(actor))
+      throw new Error('This duel is unavailable to you.');
+    const ids = Array.isArray(data.questionIds) ? data.questionIds.map(String).slice(0, 20) : [];
+    const questionDocs = await Promise.all(ids.map(id => db.doc(`scriptureDuelQuestions/${cleanId(id, 'question')}`).get()));
+    const questions = questionDocs.filter(doc => doc.exists && doc.data()?.status === 'published')
+      .map(doc => ({ id: doc.id, question: doc.data()?.question, options: doc.data()?.options, scriptureRef: doc.data()?.scriptureRef }));
+    const answers = data.answers && typeof data.answers === 'object' ? data.answers as Record<string, unknown> : {};
+    return { matchId, questions, answeredQuestionIds: ids.filter(id => Object.prototype.hasOwnProperty.call(answers, `${String(actor.uid)}:${id}`)), expiresAt: data.expiresAt };
+  }
   if (action === 'duelQuestions') {
     const snapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(100).get();
     return { questions: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {}))
@@ -238,6 +268,9 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     const selected = questions.sort(() => Math.random() - 0.5).slice(0, Math.min(10, questions.length));
     const matchId = randomUUID();
     await db.doc(`scriptureDuels/${matchId}`).set({ matchId, organizationId: orgOf(actor), playerA: String(actor.uid), playerB: opponentId, status: 'active', questionIds: selected.map(q => q.id), answers: {}, scores: { [String(actor.uid)]: 0, [opponentId]: 0 }, createdAt: FieldValue.serverTimestamp(), expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
+    await createNotification(db, { organizationId: orgOf(actor), recipientId: opponentId, type: 'assignment',
+      title: 'Scripture Duel invitation', body: `${String(actor.displayName || 'A learner').slice(0, 80)} invited you to a Scripture challenge. Open Library → Iron Duels to participate.`,
+      metadata: { matchId, source: 'scripture-duel' } });
     return { matchId, questions: selected.map(q => ({ id: q.id, question: q.question, options: q.options, scriptureRef: q.scriptureRef })) };
   }
   if (action === 'duelHistory') {
