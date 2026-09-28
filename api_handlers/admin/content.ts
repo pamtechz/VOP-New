@@ -1,4 +1,5 @@
 import { isEnglishLocale } from '../../shared/locales.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
@@ -247,6 +248,16 @@ export default async function handler(req: Request, res: Response) {
       if (String(guide.data()?.language || '').toLowerCase() !== language.toLowerCase()) throw new Error('The lesson language must match its guide.');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
+      if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
+      const media = data.media && typeof data.media === 'object' && !Array.isArray(data.media) ? data.media as Record<string, unknown> : {};
+      for (const key of ['audioUrl','videoUrl']) {
+        const value = String(media[key] || '').trim();
+        if (!value) continue;
+        const source = resolveMediaSource(value);
+        if (!source || source.kind === 'external' || (key === 'audioUrl' && source.kind === 'direct-video') || (key === 'videoUrl' && source.kind === 'direct-audio')) {
+          throw new Error('Lesson media must be an approved public HTTPS embed or direct media file.');
+        }
+      }
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
@@ -279,6 +290,7 @@ export default async function handler(req: Request, res: Response) {
       if (!guide.exists || guide.data()?.archived === true || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || String(guide.data()?.language || '').toLowerCase() !== lang) throw new Error('A valid guide in this tenant and language is required.');
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
+      if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');
       if (action === 'unpublishLesson') {
         if (!current.exists) throw new Error('The lesson was not found.');
         if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can unpublish this lesson.');
@@ -689,6 +701,15 @@ export default async function handler(req: Request, res: Response) {
           if (quotaKey && ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
+        if (collection === 'radioBroadcasts') {
+          const urls = ['videoUrl','audioUrl','streamUrl'].map(key => ({key,url:String(incoming[key] || '').trim()})).filter(item => item.url);
+          if (!urls.length) throw new Error('Add an approved radio audio, video or stream URL.');
+          for (const {key,url} of urls) {
+            const resolved = resolveMediaSource(url);
+            if (!resolved && !(key === 'streamUrl' && isSafeHttpsMediaUrl(url))) throw new Error('Radio media must use an approved public HTTPS provider or direct stream.');
+            if (resolved?.kind === 'external') throw new Error('A social-media page cannot play directly. Use the trusted media import tool first.');
+          }
+        }
         await ref.set({
           ...incoming,
           id,
