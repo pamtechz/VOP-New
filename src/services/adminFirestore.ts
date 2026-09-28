@@ -446,7 +446,7 @@ export const saveSettingsToFirestore = async (settings: ExtendedAppSettings): Pr
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({
@@ -600,7 +600,7 @@ export const saveAdminRecord = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action: 'upsert', collection: collectionName, id, data }),
@@ -616,7 +616,7 @@ export const deleteAdminRecord = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action: 'delete', collection: collectionName, id }),
