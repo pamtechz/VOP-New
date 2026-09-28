@@ -61,6 +61,8 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
     await t.test('self-service portfolio is private and does not permit learner self-signoff', async () => {
       assert.equal((await api(learner, { action: 'portfolioGet' })).status, 200);
       assert.equal((await api(outsider, { action: 'portfolioGet', learnerId: learner.uid })).status, 403);
+      assert.equal((await api(mentor, { action: 'portfolioGet', learnerId: peer.uid })).status, 403,
+        'A mentor must not inspect an unassigned learner portfolio in the same organization.');
       const forbidden = await api(learner, {
         action: 'portfolioSaveActivity', requirementId: 'req-1', status: 'verified',
       });
