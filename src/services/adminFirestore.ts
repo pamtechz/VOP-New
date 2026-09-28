@@ -50,7 +50,7 @@ function getDb(): Firestore {
 
 const GLOBAL_CONTENT_COLLECTIONS = new Set<string>(['languages','translations','books','radioBroadcasts','playlists']);
 const TENANT_COLLECTIONS = new Set<string>([
-  'announcements','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
+  'announcements','events','churches','candidates','users','learningPaths','bibleTopics','seasons','certificates','graduationRequests','curriculum'
 ]);
 
 async function currentOrganizationId(): Promise<string> {
@@ -446,7 +446,7 @@ export const saveSettingsToFirestore = async (settings: ExtendedAppSettings): Pr
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({
@@ -555,6 +555,7 @@ export const subscribeAnnouncements = (
 
 export type AdminRecordCollection =
   | 'announcements'
+  | 'events'
   | 'books'
   | 'radioBroadcasts'
   | 'playlists'
@@ -599,7 +600,7 @@ export const saveAdminRecord = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action: 'upsert', collection: collectionName, id, data }),
@@ -615,7 +616,7 @@ export const deleteAdminRecord = async (
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/admin/languages', {
+  const response = await fetch('/api/admin/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action: 'delete', collection: collectionName, id }),

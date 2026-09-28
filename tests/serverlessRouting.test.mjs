@@ -7,3 +7,21 @@ const walk=path=>readdirSync(new URL(path,root),{withFileTypes:true}).flatMap(en
 test('Vercel functions remain below Hobby limit',()=>assert.ok(walk('api').length<=12));
 test('Every consolidated admin route remains mapped',()=>{const gateway=read('api/admin.ts');for(const file of walk('api_handlers/admin')){const name=file.split('/').pop().replace(/\.ts$/,'');assert.ok(gateway.includes('../api_handlers/admin/'+name+'.js'),name);assert.ok(gateway.includes("'"+name+"':"),name);}});
 test('The public API and scheduled cron keep their original paths',()=>{const config=JSON.parse(read('vercel.json'));assert.ok(config.rewrites.some(x=>x.source==='/api/admin/:route*'&&x.destination==='/api/admin?__vopRoute=:route*'));assert.ok(config.crons.some(x=>x.path==='/api/mentorship-cron'));assert.match(read('vite.config.ts'),/api_handlers/);});
+
+test('generic admin records and settings use the content API, not the language API',()=>{
+  const source=read('src/services/adminFirestore.ts');
+  const start=source.indexOf('export const saveSettingsToFirestore');
+  const records=source.indexOf('export const saveAdminRecord');
+  const deletion=source.indexOf('export const deleteAdminRecord');
+  assert.ok(start>=0&&records>start&&deletion>records);
+  assert.match(source.slice(start,records),/fetch\('\/api\/admin\/content'/);
+  assert.match(source.slice(records,deletion),/fetch\('\/api\/admin\/content'/);
+  assert.match(source.slice(deletion),/fetch\('\/api\/admin\/content'/);
+});
+test('ownership scope is distinct from personal and assigned access relationships',()=>{
+  const authorization=read('shared/authorization.ts');
+  const saas=read('src/types/saas.ts');
+  assert.match(authorization,/PermissionScope = 'platform' \| 'hierarchy' \| 'organization'/);
+  assert.match(authorization,/AccessRelationship = 'owned' \| 'assigned' \| 'personal' \| 'public'/);
+  assert.match(saas,/ResourceScope = 'platform' \| 'hierarchy' \| 'organization'/);
+});

@@ -3,7 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
-  Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, RadioPlaylist, Announcement, BookResource,
+  Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, RadioPlaylist, Announcement, BookResource, MinistryEvent,
 } from './types';
 import {
   getActiveLanguage, setActiveLanguage,
@@ -32,6 +32,7 @@ import { CertificatesPage } from './pages/CertificatesPage';
 import { AdminPage } from './pages/AdminPage';
 import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
 import { AnnouncementsPage } from './pages/AnnouncementsPage';
+import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
 
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [events, setEvents] = useState<MinistryEvent[]>([]);
   const [books, setBooks] = useState<BookResource[]>([]);
   const [unions, setUnions] = useState<Union[]>([]);
   const [conferences, setConferences] = useState<Conference[]>([]);
@@ -73,6 +75,7 @@ export const App: React.FC = () => {
     if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
     else if (params.get('radio') === '1') setCurrentRoute('radio');
     else if (params.get('announcements') === '1') setCurrentRoute('announcements');
+    else if (params.get('events') === '1') setCurrentRoute('events');
     else if (params.get('support') === '1') setCurrentRoute('support');
   }, []);
 
@@ -196,6 +199,7 @@ export const App: React.FC = () => {
       setSettings(nextSettings);
       setGuides(snapshot.guides);
       setAnnouncements(snapshot.announcements);
+      setEvents(snapshot.events);
       setBooks(snapshot.books);
       setUnions(snapshot.unions);
       setConferences(snapshot.conferences);
@@ -346,6 +350,7 @@ export const App: React.FC = () => {
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={returnHome} />}
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={returnHome} />}
+          {currentRoute === 'events' && <EventsPage events={events} onBack={returnHome} />}
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}

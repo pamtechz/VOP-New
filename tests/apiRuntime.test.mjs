@@ -35,7 +35,7 @@ test('consolidated admin and localization modules load with the installed SDK', 
     assert.equal(typeof (await server.ssrLoadModule(path)).default, 'function');
   }
   const { default: handler } = await server.ssrLoadModule('/api/admin.ts');
-  for (const route of ['users', 'content', 'permissions']) {
+  for (const route of ['users', 'content', 'permissions', 'search', 'notifications']) {
     const res = response();
     await handler({ method: 'POST', query: { __vopRoute: route }, body: { action: 'list', collection: 'curriculum' }, headers: {} }, res);
     assert.ok(res.code >= 400 && res.code < 500, `${route}: ${res.code}`);

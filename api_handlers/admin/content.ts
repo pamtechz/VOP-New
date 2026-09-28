@@ -8,7 +8,7 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 const COLLECTIONS = new Set([
-  'languages','translations','announcements','books','radioBroadcasts','playlists','unions','conferences','districts','churches',
+  'languages','translations','announcements','events','books','radioBroadcasts','playlists','unions','conferences','districts','churches',
   'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
@@ -16,7 +16,7 @@ const COLLECTIONS = new Set([
 const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts','playlists']);
 
 const ORG_COLLECTIONS = new Set([
-  'announcements','learningPaths','bibleTopics','seasons',
+  'announcements','events','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
 ]);
 
@@ -689,6 +689,23 @@ export default async function handler(req: Request, res: Response) {
           await batch.commit();
           await ctx.db.doc(`translations/${code}`).set({id:code, languageCode:code, code, name:String(language.name || code), nativeName:String(language.nativeName || language.name || code), values, enabled:language.enabled !== false, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid}, {merge:true});
           return res.status(200).json({ok:true,item:{id:code,code,languageCode:code,name:String(language.name || code),nativeName:String(language.nativeName || language.name || code),values}});
+        }
+        if (collection === 'events') {
+          const title = String(incoming.title || '').trim();
+          const startAt = String(incoming.startAt || '').trim();
+          const endAt = String(incoming.endAt || '').trim();
+          if (!title || title.length > 180) throw new Error('Event title is required (max 180 characters).');
+          const start = Date.parse(startAt);
+          const end = endAt ? Date.parse(endAt) : start;
+          if (!startAt || Number.isNaN(start) || Number.isNaN(end) || end < start) throw new Error('Enter a valid event start and end time.');
+          const registrationUrl = String(incoming.registrationUrl || '').trim();
+          if (registrationUrl) {
+            let parsed: URL;
+            try { parsed = new URL(registrationUrl); } catch { throw new Error('Registration URL must be a valid HTTPS link.'); }
+            if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('Registration URL must use public HTTPS.');
+          }
+          const capacity = Number(incoming.capacity || 0);
+          if (!Number.isInteger(capacity) || capacity < 0 || capacity > 100000) throw new Error('Event capacity must be a whole number between 0 and 100000.');
         }
         if (existing.exists) await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'update');
         else await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'create');

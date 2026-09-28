@@ -7,7 +7,7 @@ import type {
   Conference,
   CustomLanguage,
   District,
-  RadioBroadcast, RadioPlaylist,
+  RadioBroadcast, RadioPlaylist, MinistryEvent,
   Union,
 } from '../types';
 import { db, auth } from '../lib/firebase';
@@ -18,6 +18,7 @@ export interface PublicContentSnapshot {
   languages: CustomLanguage[];
   translations: Record<string, Record<string, string>>;
   announcements: Announcement[];
+  events: MinistryEvent[];
   books: BookResource[];
   radioBroadcasts: RadioBroadcast[];
   radioPlaylists: RadioPlaylist[];
@@ -177,6 +178,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     languageDocs,
     translationDocs,
     announcementDocs,
+    eventDocs,
     bookDocs,
     radioDocs,
     playlistDocs,
@@ -194,6 +196,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
         ]).then(snapshots => snapshots.flatMap(snapshot => snapshot.docs))
       : getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''), where('sharingScope', '==', 'shared'))).then(snapshot => snapshot.docs),
     loadScoped('announcements', 'published'),
+    loadScoped('events', 'published'),
     loadScoped('books', 'published'),
     loadScoped('radioBroadcasts', 'published'),
     loadScoped('playlists', 'published'),
@@ -222,6 +225,13 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     }))
     .filter(item => item.published === true && item.title.trim());
 
+  const events = eventDocs
+    .map(item => published<MinistryEvent>(item.data(), item.id, {
+      id:item.id, title:'', description:'', startAt:'', endAt:'', location:'',
+    }))
+    .filter(item => item.published === true && item.title.trim() && !Number.isNaN(Date.parse(item.startAt)))
+    .sort((a,b) => Date.parse(a.startAt) - Date.parse(b.startAt));
+
   const books = bookDocs
     .map(item => published<BookResource>(item.data(), item.id, {
       id: item.id, name: '', category: '', author: '', imageUrl: '', description: '',
@@ -247,6 +257,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     languages,
     translations,
     announcements,
+    events,
     books,
     radioBroadcasts,
     radioPlaylists,

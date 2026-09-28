@@ -13,6 +13,8 @@ import h10 from '../api_handlers/admin/permissions.js';
 import h11 from '../api_handlers/admin/plans.js';
 import h12 from '../api_handlers/admin/radio.js';
 import h13 from '../api_handlers/admin/users.js';
+import h14 from '../api_handlers/admin/search.js';
+import h15 from '../api_handlers/admin/notifications.js';
 
 type Req={url?:string;query?:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void};
@@ -31,6 +33,8 @@ const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'plans': h11,
   'radio': h12,
   'users': h13,
+  'search': h14,
+  'notifications': h15,
 });
 export default async function handler(req:Req,res:Res){
   const value=req.query?.__vopRoute;
