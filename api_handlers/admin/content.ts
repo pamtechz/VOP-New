@@ -3,6 +3,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
+import { notifyOrganizationMembers } from '../../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -841,9 +842,42 @@ export default async function handler(req: Request, res: Response) {
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: ctx.auth.uid,
         }, { merge:true });
-        const saved=await ref.get();
+        let saved=await ref.get();
+        let delivery: { delivered:number; recipients:number } | undefined;
+        let deliveryError = '';
+        const shouldDeliver = ['announcements','events'].includes(collection)
+          && incoming.published === true
+          && !saved.data()?.notificationDeliveredAt;
+        if (shouldDeliver) {
+          try {
+            const notificationType = collection === 'events' ? 'event' : 'announcement';
+            delivery = await notifyOrganizationMembers(ctx.db, {
+              organizationId: effectiveOrganizationId,
+              sourceId: id,
+              title: String(incoming.title || (collection === 'events' ? 'New event' : 'New announcement')),
+              body: String(incoming.description || '').trim() || (collection === 'events' ? 'A new ministry event has been published.' : 'A new announcement has been published.'),
+              type: notificationType,
+              actionUrl: collection === 'events' ? '/events' : '/announcements',
+              createdBy: ctx.auth.uid,
+              metadata: { targetAudience:String(incoming.targetAudience || ''), category:String(incoming.category || incoming.tag || '') },
+            });
+            await ref.set({
+              notificationDeliveredAt: FieldValue.serverTimestamp(),
+              notificationRecipientCount: delivery.recipients,
+              notificationDeliveryStatus: 'delivered',
+            }, { merge:true });
+            saved = await ref.get();
+          } catch (reason) {
+            deliveryError = reason instanceof Error ? reason.message : 'Notification delivery failed.';
+            await ref.set({
+              notificationDeliveryStatus: 'pending_retry',
+              notificationDeliveryError: deliveryError.slice(0,500),
+            }, { merge:true });
+            saved = await ref.get();
+          }
+        }
         await writeTenantAudit(ctx, existing.exists ? 'content.update' : 'content.create', `${collection}/${id}`, existing.exists ? existing.data() : undefined, saved.data());
-        return res.status(200).json({ ok:true, item:{id,...saved.data()} });
+        return res.status(200).json({ ok:true, item:{id,...saved.data()}, delivery, ...(deliveryError ? { warning:'Content was saved, but notification delivery is pending retry.' } : {}) });
       }
     }
 

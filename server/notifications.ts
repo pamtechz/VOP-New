@@ -54,3 +54,71 @@ export async function createNotification(db: Firestore, input: CreateNotificatio
   });
   return ref.id;
 }
+
+
+export function publicationNotificationId(type: 'announcement' | 'event', sourceId: string, recipientId: string) {
+  const safeSource = String(sourceId || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120);
+  const safeRecipient = String(recipientId || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 180);
+  if (!safeSource || !safeRecipient) throw new Error('A valid publication source and recipient are required.');
+  return `${type}__${safeSource}__${safeRecipient}`.slice(0, 500);
+}
+
+export interface NotifyOrganizationInput {
+  organizationId: string;
+  sourceId: string;
+  title: string;
+  body: string;
+  type: Extract<NotificationType, 'announcement' | 'event'>;
+  actionUrl: string;
+  createdBy: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Idempotent in-app publication fan-out. A source is delivered at most once
+ * per organization member, even if an HTTP request is retried.
+ */
+export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrganizationInput) {
+  const organizationId = String(input.organizationId || '').trim();
+  const sourceId = String(input.sourceId || '').trim();
+  if (!organizationId || !sourceId) throw new Error('Organization and source are required for publication delivery.');
+  const members = await db.collection(`organizations/${organizationId}/members`).where('active', '==', true).get();
+  const recipients = members.docs
+    .map(doc => String(doc.data()?.uid || doc.id).trim())
+    .filter(uid => /^[A-Za-z0-9:_-]{1,180}$/.test(uid));
+  let delivered = 0;
+  for (let offset = 0; offset < recipients.length; offset += 400) {
+    const chunk = recipients.slice(offset, offset + 400);
+    const refs = chunk.map(uid => db.collection('notifications').doc(
+      publicationNotificationId(input.type, sourceId, uid),
+    ));
+    const existing = await db.getAll(...refs);
+    const batch = db.batch();
+    let writes = 0;
+    for (let index = 0; index < chunk.length; index += 1) {
+      if (existing[index]?.exists) continue;
+      const uid = chunk[index];
+      batch.create(refs[index], {
+        recipientId: uid,
+        userId: uid,
+        organizationId,
+        hierarchyId: '',
+        title: String(input.title || '').trim().slice(0, 180),
+        body: String(input.body || '').trim().slice(0, 2000),
+        type: input.type,
+        channel: 'in_app',
+        actionUrl: safeActionUrl(input.actionUrl),
+        metadata: { ...(input.metadata || {}), sourceId },
+        createdBy: String(input.createdBy || '').trim(),
+        createdAt: FieldValue.serverTimestamp(),
+        read: false,
+        readAt: null,
+        deliveryKey: `${input.type}:${sourceId}`,
+      });
+      writes += 1;
+      delivered += 1;
+    }
+    if (writes) await batch.commit();
+  }
+  return { delivered, recipients: recipients.length };
+}
