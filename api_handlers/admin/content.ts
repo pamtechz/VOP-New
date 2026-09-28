@@ -564,6 +564,13 @@ export default async function handler(req: Request, res: Response) {
         if (!key) throw new Error('The proposal is missing its translation key.');
         if (decision === 'approved') {
           values[key] = String(proposal.proposedValue || '');
+          transaction.set(ctx.db.doc(`locales/${languageId}/translations/${key}`), {
+            key, locale: languageId, namespace: key.split('.')[0], value: values[key], status: 'published',
+            version: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid,
+          }, { merge:true });
+          transaction.set(ctx.db.doc(`locales/${languageId}`), {
+            version: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
+          }, { merge:true });
           transaction.set(translationRef, {
             values,
             translationRevision: Number(translation.translationRevision || 0) + 1,

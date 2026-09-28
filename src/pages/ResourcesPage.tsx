@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { BookResource } from '../types';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { ArrowLeft, BookOpen, Download, ExternalLink, Search, Sparkles } from 'lucide-react';
 
@@ -11,7 +11,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ books, onBack }) =
   const [query, setQuery] = useState('');
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'ResourcesPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'ResourcesPage');
   const categories = ['All', ...Array.from(new Set(books.map(book => book.category).filter(Boolean)))];
   const filtered = useMemo(() => books.filter(book => {
     if (book.published === false) return false;

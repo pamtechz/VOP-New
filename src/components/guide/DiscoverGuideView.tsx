@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
 import { ArrowLeft, Award, Trophy, BookOpen, CheckCircle2, Clock, Lock, ChevronRight, Sparkles } from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
-import { getTranslation } from '../../services/i18n';
+import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 
 interface DiscoverGuideViewProps {
@@ -23,7 +23,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
 }) => {
   const language = getStoredSettings().defaultLanguage || guide.language || 'en';
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'DiscoverGuideView');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'DiscoverGuideView');
 
   const { certificateEligible } = calculateCurriculumProgress(
     getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,

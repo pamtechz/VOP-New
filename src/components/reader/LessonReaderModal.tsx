@@ -3,7 +3,7 @@ import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
 import { auth } from '../../lib/firebase';
-import { getTranslation } from '../../services/i18n';
+import { getTranslation, getUiLocale } from '../../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 
 interface LessonReaderModalProps {
@@ -24,7 +24,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
 }) => {
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'LessonReaderModal');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'LessonReaderModal');
   const configured = isLessonConfigured(lesson);
   const pages = configured ? lesson.contentPages! : [];
   const [currentPageIndex, setCurrentPageIndex] = useState(() => Math.max(0, initialPageIndex));

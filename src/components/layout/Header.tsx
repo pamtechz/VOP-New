@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
-import { getAvailableLanguages, getTranslation, useLocalization } from '../../services/i18n';
+import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle } from 'lucide-react';
 
 interface HeaderProps {
@@ -18,7 +18,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLanguage, onChangeLanguage, isDarkMode, onToggleDarkMode, isMobileShell, onToggleMobileShell, onOpenMenu, currentRoute = 'home', onNavigate }) => {
-  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings?.customTranslations, fallback);
+  const t = (key: string, fallback?: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback);
   useLocalization(settings);
   const availableLanguages = getAvailableLanguages(settings);
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
           <div style={{position:'relative',display:'flex',alignItems:'center'}}>
             <div style={{display:'flex',alignItems:'center',gap:'.25rem',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'var(--radius-full)',padding:'.25rem .5rem',fontSize:'.75rem',color:'#fff'}}>
               <Globe size={13} color="var(--vop-gold-400)"/>
-              <select value={activeLanguage} onChange={e=>onChangeLanguage(e.target.value as LanguageCode)} style={{background:'transparent',border:'none',color:'#fff',outline:'none',fontWeight:600,fontSize:'.75rem',cursor:'pointer',maxWidth:'160px'}}>
+              <select aria-label={t('settings.ui_language', 'Interface language')} value={activeLanguage} onChange={e=>onChangeLanguage(e.target.value as LanguageCode)} style={{background:'transparent',border:'none',color:'#fff',outline:'none',fontWeight:600,fontSize:'.75rem',cursor:'pointer',maxWidth:'160px'}}>
                 {availableLanguages.map(lang=><option key={lang.code} value={lang.code} style={{background:'#0b2244',color:'#fff'}}>{lang.name}{lang.nativeName&&lang.nativeName.toLowerCase()!==lang.name.toLowerCase()?` (${lang.nativeName})`:''}</option>)}
               </select>
             </div>

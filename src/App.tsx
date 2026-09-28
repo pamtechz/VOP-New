@@ -39,7 +39,7 @@ const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enroll
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
-  useLocalization(settings);
+  const { locale: uiLocale } = useLocalization(settings);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
   const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -114,8 +114,11 @@ export const App: React.FC = () => {
         }
         setCurrentUser(profile);
         if (profile.preferences?.uiLocale) {
-          setActiveLang(profile.preferences.uiLocale);
           setUiLocale(profile.preferences.uiLocale);
+        }
+        if (profile.preferences?.studyLanguage) {
+          setActiveLang(profile.preferences.studyLanguage);
+          setActiveLanguage(profile.preferences.studyLanguage);
         }
         setAllUsers([profile]);
         if (shareCode && firebaseAuth.currentUser) {
@@ -297,15 +300,15 @@ export const App: React.FC = () => {
       <div className={isMobileShell ? 'mobile-device-frame' : ''} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {isMobileShell && <div className="device-notch" />}
         {showDashboardShell && (
-          <Header currentUser={currentUser} settings={settings} activeLanguage={activeLanguage}
-            onChangeLanguage={language => { setActiveLang(language); setActiveLanguage(language); setUiLocale(language); setStudyError(''); }}
+          <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
+            onChangeLanguage={language => setUiLocale(language)}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
-          {currentRoute === 'personal-settings' && <PersonalSettingsPage currentUser={currentUser} onBack={() => setCurrentRoute('profile')} />}
+          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={() => setCurrentRoute('profile')} />}
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}

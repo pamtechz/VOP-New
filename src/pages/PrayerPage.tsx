@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, HeartHandshake, Plus, Check, Clock3, ShieldCheck, Trash2, Send, Lock, Users, Sparkles } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { PrayerRequest, User } from '../types';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 interface PrayerPageProps {
@@ -45,7 +45,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
 
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'PrayerPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'PrayerPage');
   const role = String(currentUser.role || '');
   const isAdmin = Boolean(currentUser.privileges?.admin) || ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role);
 

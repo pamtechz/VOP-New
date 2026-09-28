@@ -357,7 +357,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     setError('');
     try {
       if (!canUpdate) throw new Error('You do not have permission to update translations.');
-      await saveTranslation(selectedTranslation, cleaned);
+      await saveTranslation(selectedTranslation, cleaned, Object.fromEntries(detectedTranslations.map(entry => [entry.key, entry.english])));
       const localEntries = getStoredAutoLocalization();
       if (localEntries.length) {
         saveAutoLocalization(localEntries.map(entry => ({

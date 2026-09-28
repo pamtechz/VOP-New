@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { RadioBroadcast, RadioPlaylist } from '../types';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
@@ -130,7 +130,7 @@ function sourceLabel(source: MediaSource) {
 export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = [], onBack }) => {
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'RadioPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'RadioPage');
   const [selected, setSelected] = useState<RadioBroadcast | null>(broadcasts[0] || null);
   const [playing, setPlaying] = useState(false), [muted, setMuted] = useState(false), [volume, setVolume] = useState(1);
   const [current, setCurrent] = useState(0), [duration, setDuration] = useState(0), [rate, setRate] = useState(1);

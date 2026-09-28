@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, ChevronRight, MessageCircle, Send, UserRound, X } from 'lucide-react';
 import type { DiscoverGuide, User } from '../types';
 import { auth } from '../lib/firebase';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 interface SupportPageProps {
@@ -27,7 +27,7 @@ async function supportApi(action: string, data: Record<string, unknown> = {}) {
 export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, onBack }) => {
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'SupportPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'SupportPage');
   const [conversation, setConversation] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [message, setMessage] = useState('');
