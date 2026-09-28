@@ -4,7 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 const root = process.cwd();
-const roots = ['api', 'server'];
+const roots = ['api', 'api_handlers', 'server'];
 const violations = [];
 
 async function walk(directory) {

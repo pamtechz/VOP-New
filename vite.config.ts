@@ -89,7 +89,7 @@ function createLocalApiMiddleware(server: {
       return;
     }
 
-    const modulePath = '/api/' + route + '.ts';
+    const modulePath = route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
 
     try {
       const module = await server.ssrLoadModule(modulePath);
