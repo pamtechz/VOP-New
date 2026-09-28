@@ -473,3 +473,57 @@ test('assessment bank answer keys stay private; generated assessments require se
     await environment.cleanup();
   }
 });
+
+
+test('events respect organization visibility and notifications remain recipient-private', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const db = adminContext.firestore();
+      await db.doc('organizations/org-events').set({id:'org-events',name:'Events Church',status:'active'});
+      await db.doc('organizations/org-foreign').set({id:'org-foreign',name:'Foreign Church',status:'active'});
+      await db.doc('users/event-admin').set({uid:'event-admin',role:'student',organizationId:'org-events',organizationRole:'admin'});
+      await db.doc('users/member-a').set({uid:'member-a',role:'student',organizationId:'org-events'});
+      await db.doc('users/member-b').set({uid:'member-b',role:'student',organizationId:'org-foreign'});
+      await db.doc('organizations/org-events/members/event-admin').set({uid:'event-admin',organizationId:'org-events',role:'admin',active:true});
+      await db.doc('organizations/org-events/members/member-a').set({uid:'member-a',organizationId:'org-events',role:'learner',active:true});
+      await db.doc('organizations/org-foreign/members/member-b').set({uid:'member-b',organizationId:'org-foreign',role:'learner',active:true});
+      await db.doc('events/private-event').set({
+        id:'private-event',title:'Members Programme',description:'Private',organizationId:'org-events',ownerOrganizationId:'org-events',
+        ownerUid:'event-admin',sharingScope:'organization',published:true,startAt:'2026-10-01T08:00:00.000Z',
+      });
+      await db.doc('events/public-event').set({
+        id:'public-event',title:'Public Rally',description:'Public',organizationId:'org-events',ownerOrganizationId:'org-events',
+        ownerUid:'event-admin',sharingScope:'shared',published:true,startAt:'2026-10-02T08:00:00.000Z',
+      });
+      await db.doc('notifications/note-a').set({
+        recipientId:'member-a',userId:'member-a',organizationId:'org-events',title:'Reminder',body:'Programme tomorrow',read:false,
+      });
+    });
+
+    const admin = environment.authenticatedContext('event-admin').firestore();
+    const memberA = environment.authenticatedContext('member-a').firestore();
+    const memberB = environment.authenticatedContext('member-b').firestore();
+    const anonymous = environment.unauthenticatedContext().firestore();
+
+    await assertSucceeds(memberA.doc('events/private-event').get());
+    await assertFails(memberB.doc('events/private-event').get());
+    await assertSucceeds(memberB.doc('events/public-event').get());
+    await assertSucceeds(anonymous.doc('events/public-event').get());
+    await assertFails(anonymous.doc('events/private-event').get());
+
+    await assertSucceeds(admin.doc('events/private-event').update({title:'Updated Members Programme'}));
+    await assertFails(memberA.doc('events/private-event').update({title:'Learner edit'}));
+
+    await assertSucceeds(memberA.doc('notifications/note-a').get());
+    await assertFails(memberB.doc('notifications/note-a').get());
+    await assertFails(anonymous.doc('notifications/note-a').get());
+    await assertFails(memberA.doc('notifications/note-a').update({read:true}));
+  } finally {
+    await environment.cleanup();
+  }
+});
