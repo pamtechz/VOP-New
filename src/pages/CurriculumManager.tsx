@@ -444,7 +444,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     for (const guide of guides) {
       for (const lesson of guide.lessons) {
-        const key = guide.language + '|' + lesson.id;
+        const key = guide.language + '|' + guide.id + '|' + lesson.id;
         map.set(key, {
           key,
           guide,
@@ -462,7 +462,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       const lessonId = valueText(draft.lessonId) || draft.id;
       if (!language || !lessonId) continue;
       const guide = guideLookup.get(language + '|' + valueText(draft.guideId));
-      const existingKey = language + '|' + lessonId;
+      const existingKey = language + '|' + valueText(draft.guideId) + '|' + lessonId;
       const fallbackLesson: Lesson = {
         id: lessonId,
         title: valueText(draft.title),
