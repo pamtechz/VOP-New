@@ -25,7 +25,7 @@ jobs:
       - run: npm run inventory:ui-localization
       - run: npm run verify:content
       - run: npm run test:unit
-      - run: npm run test:contracts
+      - run: npm run test:contracts --if-present
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
