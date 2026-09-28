@@ -98,7 +98,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     title: valueText(value.title),
     subtitle: valueText(value.subtitle),
     description: valueText(value.description),
-    language: valueText(value.language || value.id),
+    language: valueText(value.language || value.id).trim().toLowerCase(),
     image: valueText(value.image),
     season: valueText(value.season),
     quarter: valueText(value.quarter),
@@ -175,7 +175,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
   const pageSize = 5;
 
   const enabledLanguages = useMemo(
-    () => languages.filter(language => language.enabled !== false),
+    () => languages.filter(language => language.enabled !== false).map(language => ({ ...language, code: language.code.trim().toLowerCase() })),
     [languages],
   );
 

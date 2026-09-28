@@ -33,8 +33,8 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
     if (importer?.endsWith('/api/localization.ts') && id === '../server/permissions.js') return '\0locale-permissions';
   },
   load(id) {
-    if (id === '\0locale-tenant' || id.endsWith('/server/tenant.ts')) return 'export const getAdminDb=()=>globalThis.__vopLocaleTestContext.db; export const authenticateTenant=async()=>globalThis.__vopLocaleTestContext; export const writeTenantAudit=async()=>{};';
-    if (id === '\0locale-permissions' || id.endsWith('/server/permissions.ts')) return 'export const requirePermission=async()=>{};';
+    if (id === '\0locale-tenant' || id.endsWith('/server/tenant.ts')) return 'export const requireOrgRole=()=>{}; export const canEditCanonicalContent=()=>true; export const enforceQuota=async()=>{}; export const tenantOwnerKey=()=>"test"; export const organizationInHierarchyScope=async()=>true; export const accessibleOrganizationIds=async()=>[]; export const canManageOrganizationContent=async()=>true; export const getAdminDb=()=>globalThis.__vopLocaleTestContext.db; export const authenticateTenant=async()=>globalThis.__vopLocaleTestContext; export const writeTenantAudit=async()=>{};';
+    if (id === '\0locale-permissions' || id.endsWith('/server/permissions.ts')) return 'export const requirePermission=async()=>{}; export const resourceForCollection=()=>"curriculum";';
   },
 }] });
 after(async () => { await server.close(); delete globalThis.__vopLocaleTestContext; });
@@ -53,11 +53,11 @@ function reset() {
 
 test('bulkSave publishes flat and namespaced translations returned by selected language', async () => {
   reset();
-  const saved = await request('POST', { action: 'bulkSave', locale: 'bem', values: { app_title: 'Ishiwi', 'common.save': 'Sunga' }, status: 'published' });
+  const saved = await request('POST', { action: 'bulkSave', locale: 'bem', values: { app_title: 'Ishiwi', 'common.save': 'Sunga', 'curriculum.guideRequired': 'Guide translated' }, status: 'published' });
   assert.equal(saved.code, 200, JSON.stringify(saved.payload));
-  assert.equal(saved.payload.count, 2);
+  assert.equal(saved.payload.count, 3);
   const loaded = await request('GET', {}, { locale: 'bem' });
-  assert.deepEqual(loaded.payload.translations, { app_title: 'Ishiwi', 'common.save': 'Sunga' });
+  assert.deepEqual(loaded.payload.translations, { app_title: 'Ishiwi', 'common.save': 'Sunga', 'curriculum.guideRequired': 'Guide translated' });
 });
 
 test('drafting, clearing and deleting a translation cannot resurrect old published text', async () => {
@@ -123,4 +123,29 @@ test('legacy fallback labels use selected locale, exact keys win and missing lab
     assert.match(markup, /Ishiwi/);
     assert.equal(study.getActiveLanguage(), 'eng');
   } finally { Object.assign(globalThis, original); }
+});
+
+
+test('Curriculum Studio accepts uppercase guide language codes and updates the same canonical guide', async () => {
+  reset();
+  ctx.isSuperAdmin = true;
+  const { default: content } = await server.ssrLoadModule('/api_handlers/admin/content.ts');
+  const save = async (language, title = 'Discover') => {
+    const res = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; } };
+    await content({ method: 'POST', body: { action: 'upsertGuide', collection: 'guides', data: { language, title } } }, res);
+    return res;
+  };
+  const created = await save(' BEM ');
+  assert.equal(created.code, 200, JSON.stringify(created.payload));
+  assert.equal(created.payload.item.language, 'bem');
+  assert.equal(created.payload.item.id, 'platform__bem');
+  assert.equal((await save('bem', 'Updated')).code, 200);
+  assert.equal(records.get('guides/platform__bem').title, 'Updated');
+  assert.equal([...records.keys()].filter(key => key.startsWith('guides/')).length, 1);
+  const archived = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; } };
+  await content({ method: 'POST', body: { action: 'archiveGuide', collection: 'guides', data: { language: 'BEM' } } }, archived);
+  assert.equal(archived.code, 200, JSON.stringify(archived.payload));
+  assert.equal(records.get('guides/platform__bem').archived, true);
+  assert.notEqual((await save('bad/path')).code, 200);
+  assert.notEqual((await save('')).code, 200);
 });

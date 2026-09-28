@@ -119,7 +119,7 @@ export default async function handler(req: Request, res: Response) {
       if (collection !== 'guides') throw new Error('Guide management requires the guides collection.');
       if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before creating a guide.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
-      const lang = String(data.language || '').trim();
+      const lang = String(data.language || '').trim().toLowerCase();
       if (!language(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
@@ -160,7 +160,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'archiveGuide') {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
-      const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim();
+      const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim().toLowerCase();
       if (!language(lang) || (!effectiveOrganizationId && !ctx.isSuperAdmin)) throw new Error('A valid language is required; an organization is required unless you are the VOP Super Admin.');
       const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
@@ -263,7 +263,7 @@ export default async function handler(req: Request, res: Response) {
       if (collection !== 'curriculum') throw new Error('Lesson publishing requires the curriculum collection.');
       if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before publishing lessons.');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
-      const lang = String(data.language || '').trim();
+      const lang = String(data.language || '').trim().toLowerCase();
       const lessonId = safeId(data.lessonId || body.id);
       if (!language(lang)) throw new Error('A valid language code is required.');
       const guide = await ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`).get();
