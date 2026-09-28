@@ -1,5 +1,5 @@
 import type { DiscoverGuide, User, LanguageCode, Lesson } from '../types';
-import { isQuizConfigured } from './quiz.ts';
+import { isQuizConfigured, isPlayableQuizConfigured } from './quiz.ts';
 import { isLessonConfigured } from './lesson.ts';
 
 export interface GuideProgress {
@@ -88,7 +88,18 @@ function validateRequiredLessons(guides: DiscoverGuide[]): string | undefined {
 function validateRequiredQuizzes(guides: DiscoverGuide[]): string | undefined {
   for (const guide of guides) {
     const tests = guide.lessons.filter(lesson => lesson.type === 'Test');
-    if (tests.some(test => !isQuizConfigured(test.questions ?? []))) {
+    if (tests.some(test => {
+      const questions = test.questions ?? [];
+      if (!test.sourceQuizId) return !isQuizConfigured(questions);
+      // The server owns correct answers for canonical Quiz Library tests.
+      // A redacted learner payload is playable without exposing the key.
+      // Historical keyed records remain outside this special-case path.
+      return test.answerVisibility !== 'public_redacted'
+        || !isPlayableQuizConfigured(questions)
+        || questions.some(question => Object.hasOwn(question, 'answer')
+          || Object.hasOwn(question, 'correctOptionIndex')
+          || Object.hasOwn(question, 'explanation'));
+    })) {
       return 'A required assessment has missing or invalid questions or answer keys.';
     }
   }
@@ -103,11 +114,12 @@ export function calculateCurriculumProgress(
   guides: DiscoverGuide[], user: User, passThreshold: number, language: LanguageCode,
 ): CurriculumProgress {
   const required = guides.filter(guide => guide.certificateEligible && guide.language === language);
-  const configurationError = validateRequiredIds(required) ?? validateRequiredLessons(required) ?? validateRequiredQuizzes(required);
+  const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 1 && passThreshold <= 100;
+  const configurationError = validateRequiredIds(required) ?? validateRequiredLessons(required)
+    ?? validateRequiredQuizzes(required)
+    ?? (!validThreshold ? 'A pass mark between 1 and 100 percent must be configured.' : undefined);
   const completed = new Set(user.progress.completedLessons ?? []);
   const scores = user.progress.guideScores ?? {};
-  const validThreshold = Number.isFinite(passThreshold) && passThreshold >= 0 && passThreshold <= 100;
-
   const guideProgress = required.map(guide => {
     const items = Array.isArray(guide.lessons) ? guide.lessons : [];
     const lessons = items.filter(lesson => lesson.type === 'Lesson');
