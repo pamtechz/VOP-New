@@ -34,3 +34,9 @@ export function normalizeQuizQuestions(value: unknown, quizId: string): QuizQues
 export function quizLessonNumber(attachmentType: QuizAttachmentType, parentLessonNumber?: string): string {
   return attachmentType === 'guide' ? '999999' : `${parentLessonNumber || '0'}.quiz`;
 }
+
+/** Public payload is deliberately incapable of carrying answer keys or explanations.
+ * Full questions remain server-only in the contributor-managed quiz document. */
+export function publicQuizQuestions(questions: QuizQuestion[]) {
+  return questions.map(({ key, question, options }) => ({ key, question, options }));
+}
