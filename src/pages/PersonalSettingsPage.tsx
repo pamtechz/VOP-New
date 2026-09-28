@@ -5,6 +5,7 @@ import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
+import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import './personalSettings.css';
 
 type PersonalSettings = {
@@ -45,19 +46,17 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
-  const [trustedDevice, setTrustedDevice] = useState(() => {
-    try { return localStorage.getItem('vop_trusted_offline_device') === 'yes'; }
-    catch { return false; }
-  });
+  const [trustedDevice, setTrustedDevice] = useState(hasTrustedOfflineDeviceConsent);
   const changeTrustedDevice = (enabled: boolean) => {
     if (enabled && !window.confirm('Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.')) return;
-    try {
-      localStorage.setItem('vop_trusted_offline_device', enabled ? 'yes' : 'no');
-      setTrustedDevice(enabled);
-      setMessage(enabled
-        ? 'Offline study storage enabled. Reload the app while online to activate it and download study content. This does not download media for offline use.'
-        : 'Future persistent study caching disabled after the next reload. To remove previously cached content, clear this website’s browser storage.');
-    } catch { setMessage('This browser does not permit persistent offline storage.'); }
+    if (!setTrustedOfflineDeviceConsent(enabled)) {
+      setMessage('This browser does not permit persistent offline storage.');
+      return;
+    }
+    setTrustedDevice(enabled);
+    setMessage(enabled
+      ? 'Offline study storage enabled. Reload while online to activate and cache your study content. This does not download media.'
+      : 'Future persistent study caching disabled after reload. To remove previously cached content, clear this website’s browser storage.');
   };
   const appSettings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), appSettings.customTranslations, fallback, 'PersonalSettingsPage');
