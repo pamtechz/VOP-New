@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { gradeQuiz, isQuizConfigured } from '../../services/quiz';
+import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
 
 interface QuizModalProps {
   lesson: Lesson;
@@ -21,7 +21,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const questions = lesson.questions ?? [];
   const threshold = passThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 0 && threshold <= 100;
-  const validQuiz = isQuizConfigured(questions);
+  const validQuiz = isPlayableQuizConfigured(questions);
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
@@ -39,8 +39,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     if (submitting || !validQuiz || !validThreshold || !question || !Object.hasOwn(answers, index)) return;
     if (index < questions.length - 1) { setIndex(value => value + 1); return; }
 
-    const localValidation = gradeQuiz(questions, answers);
-    if (localValidation === null) {
+    if (!areQuizResponsesComplete(questions, answers)) {
       setError('Some assessment questions or answers are invalid. Contact your course administrator.');
       return;
     }
