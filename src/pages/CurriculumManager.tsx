@@ -426,6 +426,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
 
 
+  // Draft guides are intentionally absent from the learner catalogue.
+  const editableGuides = useMemo(() => guideRecords.filter(record =>
+    record.archived !== true
+    && String(record.organizationId || '') === scopeOrganizationId
+    && record.canEdit !== false
+  ), [guideRecords, scopeOrganizationId]);
   const guideLookup = useMemo(() => new Map(guides.map(guide => [guide.language + '|' + guide.id, guide])), [guides]);
 
   const lessonRows = useMemo<LessonRow[]>(() => {
@@ -543,7 +549,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setError('');
     try {
       const [loadedGuides, draftResponse, guideResponse] = await Promise.all([
-        loadFirestoreGuides(),
+        loadFirestoreGuides().catch(() => [] as DiscoverGuide[]),
         adminContent('list', 'curriculum'),
         adminContent('listGuides', 'guides'),
       ]);
@@ -596,9 +602,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const openNewLesson = (quizMode = false) => {
     const language = enabledLanguages[0]?.code || 'en';
-    const guide = guides.find(item => item.language === language) || guides[0];
-    const next = blankEditor(language, guide?.id || '');
-    next.guideTitle = guide?.title || '';
+    const guide = editableGuides.find(item => String(item.language).toLowerCase() === language) || editableGuides[0];
+    const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
+    next.guideTitle = String(guide?.title || '');
     setEditor(next);
     setEditorTab(quizMode ? 'quiz' : 'content');
     setPreviewOpen(false);
@@ -620,13 +626,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const normalizedLanguage = editor.language.trim().toLowerCase();
     if (!/^[a-z]{2,3}(?:[-_][a-z0-9]{2,8})?$/i.test(normalizedLanguage)) return setError(tx('curriculum.selectLanguageBeforeSaving', 'Select a valid configured language before saving.'));
     if (!editor.guideId.trim()) return setError(tx('curriculum.selectGuideBeforeSaving', 'Select a guide before saving.'));
-    const existingGuideRecord = guideRecords.find(item => String(item.id || '') === String(editor.guideId));
-    const guideOrganizationId = valueText(existingGuideRecord?.organizationId || existingGuideRecord?.ownerOrganizationId);
+    const existingGuideRecord = editableGuides.find(item => String(item.id) === editor.guideId);
+    if (!existingGuideRecord) return setError('Choose an editable guide within your selected organization. Refresh if the guide was recently created.');
+    if (String(existingGuideRecord.language).trim().toLowerCase() !== normalizedLanguage) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
+    const guideOrganizationId = valueText(existingGuideRecord.organizationId);
     const targetOrganizationId = scopeOrganizationId || guideOrganizationId;
     if (isSuperAdmin && guideOrganizationId && guideOrganizationId !== scopeOrganizationId) setScopeOrganizationId(guideOrganizationId);
 
-    const guide = guides.find(item => item.id === editor.guideId && item.language === normalizedLanguage);
-    if (!guide && publish) return setError(tx('curriculum.guideLanguageMismatch', 'The selected guide is not available for this language.'));
+    const guide = existingGuideRecord;
 
     const duplicate = lessonRows.some(row =>
       row.key !== editor.language + '|' + editor.id
@@ -648,7 +655,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         description: editor.description.trim(),
         language: normalizedLanguage,
         guideId: editor.guideId,
-        guideTitle: guide?.title || editor.guideTitle,
+        guideTitle: valueText(guide.title) || editor.guideTitle,
         season: editor.season.trim(),
         content: editor.content,
         contentPages: pageBlocks.map((blocks, index) => ({
@@ -713,7 +720,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (!window.confirm(tx('curriculum.confirmUnpublish', 'Unpublish this lesson from the learner curriculum?'))) return;
     setSaving(true);
     try {
-      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, lessonId: editor.id });
+      await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, guideId: editor.guideId, lessonId: editor.id });
       setEditor({ ...editor, published: false });
       await load();
       notify(tx('curriculum.lessonUnpublished', 'Lesson unpublished.'));
@@ -838,10 +845,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
         <div className="vop-reference-editor-fields">
           <div className="vop-field"><label>{tx('curriculum.titleRequired', 'Title *')}</label><input value={editor.title} onChange={e => setEditor({...editor,title:e.target.value})}/></div>
-          <div className="vop-field"><label>{tx('curriculum.guideRequired', 'Guide *')}</label><select value={editor.guideId} onChange={e => { const selected = guides.find(item => item.id === e.target.value && item.language === editor.language); setEditor({...editor,guideId:e.target.value,guideTitle:selected?.title || '',language:selected?.language || editor.language}); }}><option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>{guides.map(guide => <option key={guide.id + guide.language} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}</option>)}</select></div>
+          <div className="vop-field"><label>{tx('curriculum.guideRequired', 'Guide *')}</label><select value={editor.guideId} onChange={e => { const selected = editableGuides.find(item => item.id === e.target.value); setEditor({...editor,guideId:e.target.value,guideTitle:valueText(selected?.title),language:valueText(selected?.language || editor.language).toLowerCase()}); }}><option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>{editableGuides.map(guide => <option key={String(guide.id)} value={String(guide.id)}>{String(guide.title)} · {String(guide.language).toUpperCase()}{guide.published === true ? '' : ' (Draft)'}</option>)}</select></div>
           <div className="vop-field"><label>{tx('curriculum.lessonNumberRequired', 'Lesson Number *')}</label><input value={editor.lessonNumber} onChange={e => setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>{tx('curriculum.seasonQuarter', 'Season / Quarter')}</label><select value={editor.season} onChange={e => setEditor({...editor,season:e.target.value})}><option value="">{tx('curriculum.selectSeason', 'Select season')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
-          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
+          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value,guideId:'',guideTitle:''})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
         </div>
 
         <div className="vop-reference-editor-layout vop-lesson-editor-grid">
