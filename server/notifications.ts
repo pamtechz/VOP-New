@@ -63,6 +63,29 @@ export function publicationNotificationId(type: 'announcement' | 'event', source
   return `${type}__${safeSource}__${safeRecipient}`.slice(0, 500);
 }
 
+export type PublicationAudience = 'all' | 'learners' | 'leaders' | 'mentors' | 'teachers' | 'staff';
+
+export function normalizePublicationAudience(value: unknown): PublicationAudience {
+  const audience = String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  if (!audience || ['all','everyone','members','all members'].includes(audience)) return 'all';
+  if (['learner','learners','student','students'].includes(audience)) return 'learners';
+  if (['leader','leaders','admin','admins','administrators'].includes(audience)) return 'leaders';
+  if (['mentor','mentors'].includes(audience)) return 'mentors';
+  if (['teacher','teachers'].includes(audience)) return 'teachers';
+  if (['staff','ministry team','ministry teams'].includes(audience)) return 'staff';
+  throw new Error('Target audience must be All members, Learners, Leaders, Mentors, Teachers, or Staff.');
+}
+
+export function audienceAllowsRole(audience: PublicationAudience, roleValue: unknown) {
+  const role = String(roleValue || '').trim().toLowerCase();
+  if (audience === 'all') return true;
+  if (audience === 'learners') return ['learner','student','viewer','member'].includes(role);
+  if (audience === 'mentors') return role === 'mentor';
+  if (audience === 'teachers') return role === 'teacher';
+  if (audience === 'leaders') return ['owner','admin','editor','mentor','teacher'].includes(role);
+  return ['owner','admin','editor','mentor','teacher','staff'].includes(role);
+}
+
 export interface NotifyOrganizationInput {
   organizationId: string;
   sourceId: string;
@@ -72,6 +95,7 @@ export interface NotifyOrganizationInput {
   actionUrl: string;
   createdBy: string;
   metadata?: Record<string, unknown>;
+  targetAudience?: PublicationAudience | string;
 }
 
 /**
@@ -82,8 +106,10 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
   const organizationId = String(input.organizationId || '').trim();
   const sourceId = String(input.sourceId || '').trim();
   if (!organizationId || !sourceId) throw new Error('Organization and source are required for publication delivery.');
+  const audience = normalizePublicationAudience(input.targetAudience);
   const members = await db.collection(`organizations/${organizationId}/members`).where('active', '==', true).get();
   const recipients = members.docs
+    .filter(doc => audienceAllowsRole(audience, doc.data()?.role))
     .map(doc => String(doc.data()?.uid || doc.id).trim())
     .filter(uid => /^[A-Za-z0-9:_-]{1,180}$/.test(uid));
   let delivered = 0;
@@ -108,7 +134,7 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
         type: input.type,
         channel: 'in_app',
         actionUrl: safeActionUrl(input.actionUrl),
-        metadata: { ...(input.metadata || {}), sourceId },
+        metadata: { ...(input.metadata || {}), sourceId, targetAudience:audience },
         createdBy: String(input.createdBy || '').trim(),
         createdAt: FieldValue.serverTimestamp(),
         read: false,
@@ -120,5 +146,5 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
     }
     if (writes) await batch.commit();
   }
-  return { delivered, recipients: recipients.length };
+  return { delivered, recipients: recipients.length, audience };
 }
