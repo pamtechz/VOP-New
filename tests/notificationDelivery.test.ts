@@ -24,7 +24,7 @@ test('publication notification IDs are deterministic and source/recipient scoped
 test('publication notification IDs sanitize Firestore-unsafe external identifiers', () => {
   assert.equal(
     publicationNotificationId('event','event/../../1','member@example.com'),
-    'event__event______1__member_example_com',
+    'event__event_______1__member_example_com',
   );
   assert.throws(() => publicationNotificationId('event','','member-1'));
 });
