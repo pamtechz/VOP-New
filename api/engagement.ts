@@ -326,7 +326,18 @@ async function publicPortfolioVerify(db: FirebaseFirestore.Firestore, b: Record<
   const learnerId = String(share.data()?.learnerId || '');
   const learner = await profile(db, learnerId);
   const portfolio = await db.doc(`masterGuidePortfolios/${learnerId}`).get();
-  return { learner: { displayName: String(learner.displayName || 'Learner') }, portfolio: portfolio.exists ? { status: portfolio.data()?.status || 'active', signoffs: portfolio.data()?.signoffs || [], activities: portfolio.data()?.activities || [] } : { status: 'active', signoffs: [], activities: [] }, organizationId: String(share.data()?.organizationId || '') };
+  // A public verification token does not authorize reading private activity notes, evidence or evaluator metadata.
+  const raw = portfolio.data() || {};
+  const signoffs = Array.isArray(raw.signoffs) ? raw.signoffs as Array<Record<string, unknown>> : [];
+  return {
+    learner: { displayName: String(learner.displayName || 'Learner') },
+    organizationId: String(share.data()?.organizationId || ''),
+    portfolio: {
+      status: String(raw.status || 'active'),
+      approvedCount: signoffs.filter(item => item.decision === 'approved').length,
+      activityCount: Array.isArray(raw.activities) ? raw.activities.length : 0,
+    },
+  };
 }
 
 export default async function handler(req: Request, res: Response) {
