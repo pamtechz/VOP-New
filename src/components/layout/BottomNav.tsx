@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppRoute, User } from '../../types';
-import { getTranslation } from '../../services/i18n';
+import { getTranslation, getUiLocale } from '../../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 
 interface BottomNavProps {
@@ -18,7 +18,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'BottomNav');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'BottomNav');
 
   const navItems = [
     {

@@ -17,7 +17,7 @@ import {
 } from '../services/adminFirestore';
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, permissionAllowed, roleForPermission, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
@@ -112,7 +112,7 @@ async function adminContent(action: string, collection: string, id?: string, dat
 
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
-  const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, activeLanguage, settings?.customTranslations, fallback, 'AdminPage');
+  const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

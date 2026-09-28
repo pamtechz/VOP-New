@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Bell, CalendarDays, ChevronRight, Megaphone, Search } from 'lucide-react';
 import type { Announcement } from '../types';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 interface AnnouncementsPageProps { announcements: Announcement[]; onBack: () => void; }
@@ -9,7 +9,7 @@ interface AnnouncementsPageProps { announcements: Announcement[]; onBack: () => 
 export const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ announcements, onBack }) => {
   const language = getActiveLanguage();
   const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'AnnouncementsPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'AnnouncementsPage');
   const [category, setCategory] = useState('All');
   const [search, setSearch] = useState('');
   const categories = useMemo(() => ['All', ...Array.from(new Set(announcements.map(item => item.tag).filter(Boolean)))], [announcements]);

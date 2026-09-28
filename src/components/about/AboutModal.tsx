@@ -16,7 +16,7 @@ import {
   Info,
   Award
 } from 'lucide-react';
-import { getTranslation } from '../../services/i18n';
+import { getTranslation, getUiLocale } from '../../services/i18n';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -37,7 +37,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
 
   if (!isOpen) return null;
 
-  const t = (key: string) => getTranslation(key, activeLanguage, settings.customTranslations);
+  const t = (key: string) => getTranslation(key, getUiLocale(), settings.customTranslations);
   const details = settings.detailPages;
 
   return (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Printer } from 'lucide-react';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 interface Props { onBack: () => void; }
@@ -55,7 +55,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
   const [config, setConfig] = useState<PublicCertificateConfig | null>(null);
   const settings = getStoredSettings();
   const language = getActiveLanguage();
-  const t = (key: string, fallback: string) => getTranslation(key, language, settings.customTranslations, fallback, 'CertificateVerificationPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'CertificateVerificationPage');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

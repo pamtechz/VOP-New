@@ -3,7 +3,7 @@ import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } f
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
-import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale } from '../services/i18n';
+import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 
 type PersonalSettings = {
@@ -17,7 +17,7 @@ type PersonalSettings = {
   studyPreferences?: { reminders?: boolean; preferredStudyTime?: string };
 };
 
-interface Props { currentUser: User; onBack: () => void; }
+interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; }
 
 async function callPersonalSettings(operation: 'get' | 'save', settings?: PersonalSettings) {
   const user = auth?.currentUser;
@@ -33,7 +33,7 @@ async function callPersonalSettings(operation: 'get' | 'save', settings?: Person
   return payload.settings as PersonalSettings;
 }
 
-export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) => {
+export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange }) => {
   const [settings, setSettings] = useState<PersonalSettings>({
     theme: 'system', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
     accessibility: { reducedMotion: false, largeText: false, highContrast: false },
@@ -44,9 +44,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
-  const language = getActiveLanguage();
   const appSettings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, language, appSettings.customTranslations, fallback, 'PersonalSettingsPage');
+  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), appSettings.customTranslations, fallback, 'PersonalSettingsPage');
 
   useEffect(() => {
     let active = true;
@@ -72,7 +71,12 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
 
   const save = async () => {
     setSaving(true); setMessage('');
-    try { await callPersonalSettings('save', settings); setMessage('Your personal settings have been saved.'); }
+    try {
+      await callPersonalSettings('save', settings);
+      if (settings.uiLocale) setUiLocale(settings.uiLocale);
+      if (settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
+      setMessage(t('settings.saved', 'Your personal settings have been saved.'));
+    }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save settings.'); }
     finally { setSaving(false); }
   };
@@ -92,7 +96,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack }) =
       <section className="vop-card">
         <h2><Globe2 size={19}/> Interface</h2>
         <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label>Preferred language<select value={settings.language || ''} onChange={e => patch('language', e.target.value)}><option value="">System / default</option>{languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}</select></label>
+        <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
+          {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
+        </select></label>
+        <label>{t('settings.study_language', 'Study language')}<select value={settings.studyLanguage || getActiveLanguage()} onChange={e => patch('studyLanguage', e.target.value)}>
+          <option value="">{t('settings.system_default', 'System default')}</option>
+          {languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
+        </select></label>
       </section>
       <section className="vop-card">
         <h2><Bell size={19}/> Notifications</h2>

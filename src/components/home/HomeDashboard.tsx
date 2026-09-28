@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { User, DiscoverGuide, Announcement, AppSettings, LanguageCode } from '../../types';
-import { getTranslation, getAvailableLanguages } from '../../services/i18n';
+import { getTranslation, getAvailableLanguages, getUiLocale } from '../../services/i18n';
 import { Award, ArrowRight, BookOpen, CheckCircle2, Clock3, Languages, Play, Sparkles, Target, TrendingUp, HeartHandshake, Radio } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -22,7 +22,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 }) => {
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const [languageFilter, setLanguageFilter] = useState<string>('all');
-  const t = (key: string, fallback?: string) => getTranslation(key, activeLanguage, settings.customTranslations, fallback);
+  const t = (key: string, fallback?: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback);
 
   useEffect(() => {
     if (announcements.length < 2) return;

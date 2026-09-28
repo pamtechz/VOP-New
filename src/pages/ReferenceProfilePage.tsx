@@ -5,7 +5,7 @@ import type {
 } from '../types';
 import { ArrowLeft, Pencil, X, Check } from 'lucide-react';
 import { calculateCurriculumProgress } from '../services/progress';
-import { getTranslation } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { auth } from '../lib/firebase';
 
 interface ProfileProps {
@@ -52,7 +52,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
   ].filter((name): name is string => Boolean(name));
 
   const t = (key: string, english: string) => getTranslation(
-    key, activeLanguage, settings.customTranslations, english, 'ProfilePage',
+    key, getUiLocale(), settings.customTranslations, english, 'ProfilePage',
   );
 
   const getTestScore = (guide: DiscoverGuide, lesson: Lesson): number | undefined => {

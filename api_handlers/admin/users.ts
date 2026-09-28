@@ -310,19 +310,35 @@ export default async function handler(request: Request, response: Response) {
     if (action === 'personalSettings') {
       const db = getFirestore(getFirebaseAdmin());
       const ref = db.doc('users/' + decoded.uid + '/settings/personal');
+      const allowed = ['theme','language','uiLocale','studyLanguage','notifications','accessibility','privacy','studyPreferences'];
+      const publicSettings = (data: Record<string, unknown> = {}) => Object.fromEntries(Object.entries(data).filter(([key]) => allowed.includes(key)));
       if (request.body && typeof request.body === 'object' && (request.body as Record<string, unknown>).operation === 'get') {
         const snapshot = await ref.get();
-        return response.status(200).json({ ok:true, settings: snapshot.exists ? snapshot.data() : {} });
+        return response.status(200).json({ ok:true, settings: publicSettings(snapshot.data()) });
       }
       const incoming = body.settings && typeof body.settings === 'object'
         ? body.settings as Record<string, unknown>
         : {};
-      const allowed = ['theme','language','uiLocale','studyLanguage','notifications','accessibility','privacy','studyPreferences'];
       const invalid = Object.keys(incoming).filter(key => !allowed.includes(key));
       if (invalid.length) return response.status(400).json({ error:'Unsupported personal setting.' });
-      await ref.set({ ...incoming, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      const preferences: Record<string, string> = {};
+      for (const key of ['uiLocale', 'studyLanguage']) {
+        if (incoming[key] !== undefined) {
+          const locale = String(incoming[key] || '').trim().toLowerCase();
+          if (locale && !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(locale)) return response.status(400).json({ error:'Select a valid language.' });
+          if (locale) {
+            const language = await db.doc(`languages/${locale}`).get();
+            if (!language.exists || language.data()?.enabled === false) return response.status(400).json({ error:'Select an enabled language.' });
+          }
+          preferences[key] = locale;
+        }
+      }
+      const batch = db.batch();
+      batch.set(ref, { ...incoming, ...preferences, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      if (Object.keys(preferences).length) batch.set(db.doc('users/' + decoded.uid), { preferences }, { merge:true });
+      await batch.commit();
       const snapshot = await ref.get();
-      return response.status(200).json({ ok:true, settings:snapshot.data() || {} });
+      return response.status(200).json({ ok:true, settings:publicSettings(snapshot.data()) });
     }
 
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : undefined;

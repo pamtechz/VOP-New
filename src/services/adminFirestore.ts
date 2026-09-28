@@ -686,20 +686,24 @@ export const subscribeTranslations = (
 };
 export const saveTranslation = async (
   language: string,
-  values: Record<string, string>
+  values: Record<string, string>,
+  sources: Record<string, string> = {}
 ): Promise<void> => {
   const id = language.trim().toLowerCase();
   if (!id) throw new Error('A language code is required.');
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/localization', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ action: 'bulkSave', locale: id, values, status: 'published' }),
-  });
-  const payload = await response.json().catch(() => ({})) as { error?: string };
-  if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');
+  const entries = Object.entries(values);
+  for (let offset = 0; offset < entries.length; offset += 350) {
+    const response = await fetch('/api/localization', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ action: 'bulkSave', locale: id, values: Object.fromEntries(entries.slice(offset, offset + 350)), sources, status: 'published' }),
+    });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) throw new Error(payload.error || 'Could not save the translation.');
+  }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('vop_ui_translation_updated', { detail: { locale: id } }));
   }
