@@ -94,6 +94,13 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
         action: 'portfolioSignoff', learnerId: learner.uid, requirementId: 'req-1', decision: 'approved',
       });
       assert.equal(signoff.status, 200);
+      assert.notEqual((await api(mentor, {
+        action: 'portfolioSignoff', learnerId: learner.uid, requirementId: 'req-1', decision: 'approved',
+      })).status, 200, 'Approved requirements may not be approved again.');
+      const reviewQueue = await api(mentor, {action:'portfolioReviewQueue'});
+      assert.equal(reviewQueue.status,200,JSON.stringify(reviewQueue));
+      assert.ok(reviewQueue.learners.some(item=>item.uid===learner.uid));
+      assert.notEqual((await api(learner, {action:'portfolioReviewQueue'})).status,200);
       const shared = await api(learner, { action: 'portfolioShare' });
       assert.equal(shared.status, 200);
       const publicView = await api(null, { action: 'portfolioVerify', token: shared.token });
