@@ -24,7 +24,7 @@ export default async function handler(req:Request,res:Response){
       visible.sort((a,b)=>timestampValue(b.createdAt)-timestampValue(a.createdAt));const items=visible.slice(0,100);return res.status(200).json({ok:true,items,unread:items.filter(item=>item.read!==true).length});
     }
     if(action==='send'){
-      if(!(await canPermission(ctx,'announcements','manage')))throw new Error('Notification management permission is required.');
+      if(!(await canPermission(ctx,'announcements','create')))throw new Error('Notification publishing permission is required.');
       const input=body(req);const organizationId=String(input.organizationId||requestedOrg||ctx.organizationId||'').trim();
       if(!ctx.isSuperAdmin&&!organizationId)throw new Error('An organization is required.');
       if(!ctx.isSuperAdmin&&!(await notificationAllowed(ctx,{organizationId})))throw new Error('The notification organization is outside your scope.');
