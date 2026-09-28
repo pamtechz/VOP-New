@@ -359,6 +359,21 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     await db.doc('users/' + cleanId(actor.uid, 'user')).set({ scriptureDuelOptIn: optIn }, { merge: true });
     return { optIn };
   }
+  if (action === 'duelLeaderboard') {
+    const organizationId = orgOf(actor);
+    if (!organizationId) return { leaderboard:[] };
+    const people = await db.collection('users').where('organizationId','==',organizationId).limit(500).get();
+    const eligible = people.docs.filter(doc => doc.data().scriptureDuelOptIn === true
+      && doc.data().disabled !== true && ['student','learner'].includes(String(doc.data().role || 'student')))
+      .map(doc => ({
+        displayName:String(doc.data().displayName || 'Learner').slice(0,100),
+        rating:Number.isFinite(Number(doc.data().scriptureDuelRating))
+          ? Number(doc.data().scriptureDuelRating) : 1200,
+      }))
+      .sort((a,b)=>b.rating-a.rating || a.displayName.localeCompare(b.displayName))
+      .slice(0,50);
+    return { leaderboard:eligible.map((item,index)=>({rank:index+1,...item})) };
+  }
   if (action === 'duelOverview') {
     const organizationId = orgOf(actor);
     if (!organizationId) return { opponents: [], matches: [], optIn: false };
