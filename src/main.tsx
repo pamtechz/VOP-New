@@ -6,6 +6,16 @@ import './reference.css';
 import './radio-responsive.css';
 import './admin-layout-overrides.css';
 
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(registration => {
+      registration.update().catch(() => undefined);
+    }).catch(error => {
+      console.warn('[pwa] service worker registration failed', error);
+    });
+  });
+}
+
 // Only the Firebase-backed study app can be mounted; no legacy demo fallback.
 const container = document.getElementById('root');
 if (!container) throw new Error('Voice of Prophecy root element is missing.');
