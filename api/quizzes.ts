@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey } from '../server/tenant.js';
+import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
 import { normalizeQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 
