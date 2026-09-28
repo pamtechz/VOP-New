@@ -275,6 +275,23 @@ export interface Announcement {
   actionUrl?: string;
 }
 
+export interface MinistryEvent {
+  organizationId?: string;
+  id: string;
+  title: string;
+  category?: string;
+  description: string;
+  startAt: string;
+  endAt?: string;
+  location?: string;
+  imageUrl?: string;
+  targetAudience?: string;
+  registrationUrl?: string;
+  capacity?: number;
+  published?: boolean;
+  sharingScope?: 'private' | 'organization' | 'shared';
+}
+
 export interface BookResource {
   organizationId?: string;
   id: string;
@@ -393,6 +410,7 @@ export type AppRoute =
   | 'prayer' 
   | 'radio' 
   | 'announcements'
+  | 'events'
   | 'support'
   | 'admin' 
   | 'certificates' 
@@ -418,6 +436,7 @@ export interface AppDatabaseBackup {
   churches: ChurchOrganization[];
   hierarchyConfig: HierarchyConfig;
   announcements: Announcement[];
+  events?: MinistryEvent[];
   books: BookResource[];
   prayerRequests?: PrayerRequest[];
   radioBroadcasts?: RadioBroadcast[];
