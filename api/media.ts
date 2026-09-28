@@ -14,22 +14,28 @@ function hostAllowed(host: string) {
   // Custom sites are exact hostnames, never wildcard suffixes.
   return fixed.some(domain => host === domain || host.endsWith('.' + domain)) || custom.includes(host);
 }
-function publicAddress(ip: string) {
+function publicAddress(ip: string): boolean {
+  const mapped = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return publicAddress(mapped[1]);
   const a = ip.split('.').map(Number);
-  if (a.length === 4) {
-    const [x,y] = a;
-    if ([0,10,127].includes(x) || x >= 224 || x === 169 && y === 254
-      || x === 172 && y >= 16 && y <= 31 || x === 192 && y === 168
-      || x === 100 && y >= 64 && y <= 127 || x === 198 && (y === 18 || y === 19)
-      || x === 192 && y === 0 || x === 192 && y === 0
-      || x === 192 && y === 0 || x === 192 && y === 0) return false;
-    return true;
+  if (a.length === 4 && a.every(n => Number.isInteger(n) && n >= 0 && n <= 255)) {
+    const [x,y,z] = a;
+    return !(x === 0 || x === 10 || x === 127 || x >= 224
+      || x === 100 && y >= 64 && y <= 127
+      || x === 169 && y === 254
+      || x === 172 && y >= 16 && y <= 31
+      || x === 192 && y === 168
+      || x === 192 && y === 0 && (z === 0 || z === 2)
+      || x === 192 && y === 88 && z === 99
+      || x === 198 && (y === 18 || y === 19 || y === 51 && z === 100)
+      || x === 203 && y === 0 && z === 113);
   }
   const lower = ip.toLowerCase();
-  return !(lower === '::1' || lower === '::' || lower.startsWith('fc') || lower.startsWith('fd')
-    || lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')
-    || lower.startsWith('::ffff:127.') || lower.startsWith('::ffff:10.')
-    || lower.startsWith('::ffff:192.168.') || lower.startsWith('::ffff:172.'));
+  // Global unicast only; block documentation, 6to4, Teredo, ULA, multicast,
+  // link-local, loopback and IPv4-mapped IPv6 addresses.
+  return /^[23][0-9a-f]{0,3}:/.test(lower) && !lower.startsWith('2001:db8:')
+    && !lower.startsWith('2001:0:') && !lower.startsWith('2002:')
+    && !lower.includes('::ffff:');
 }
 async function readHeadPage(page: URL) {
   const addresses = await lookup(page.hostname, { all:true });
