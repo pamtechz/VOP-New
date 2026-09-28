@@ -1,64 +1,227 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 
+type AttachmentType = 'lesson' | 'guide';
 type Quiz = {
-  id:string; title:string; description?:string; language:string; questions:Array<Record<string,unknown>>;
-  published?:boolean; sharingScope?:'private'|'organization'|'shared'; organizationId?:string; ownerOrganizationId?:string; ownerUid?:string; canEdit?:boolean;
+  id: string; title: string; description?: string; language: string;
+  questions: Array<Record<string, unknown>>; published?: boolean;
+  sharingScope?: 'private' | 'organization' | 'shared';
+  guideId?: string; lessonId?: string; attachmentType?: AttachmentType;
+  ownerOrganizationId?: string; ownerUid?: string; canEdit?: boolean;
 };
-type Question = { question:string; options:string[]; answer:number; explanation?:string };
+type Guide = {
+  id: string; title: string; language: string; organizationId?: string;
+  published?: boolean; archived?: boolean; canEdit?: boolean;
+  lessons?: Array<{id: string; title: string; lessonNumber: string; type: string; published: boolean}>;
+};
+type Question = { question: string; options: string[]; answer: number; explanation?: string };
+interface Props { organizationId?: string }
 
-async function quizApi(action:string,payload:Record<string,unknown>={}) {
-  if(!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
-  const token=await auth.currentUser.getIdToken();
-  const response=await fetch('/api/quizzes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action,...payload})});
-  const body=await response.json().catch(()=>({})) as {error?:string;items?:Quiz[];item?:Quiz};
-  if(!response.ok) throw new Error(body.error||'Quiz request failed.');
+async function authorizedPost(path: string, payload: Record<string, unknown>) {
+  if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch(path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[]; item?: Quiz };
+  if (!response.ok) throw new Error(body.error || 'Quiz request failed.');
   return body;
 }
-
-function normalize(value:Array<Record<string,unknown>>):Question[]{
-  return value.map(item=>({question:String(item.question||''),options:Array.isArray(item.options)?item.options.map(String):[],answer:Number(item.correctOptionIndex??0)||0,explanation:String(item.explanation||'')}));
+function normalize(value: Array<Record<string, unknown>>): Question[] {
+  return value.map(item => ({
+    question: String(item.question || ''),
+    options: Array.isArray(item.options) ? item.options.map(String) : [],
+    answer: Number(item.correctOptionIndex ?? 0) || 0,
+    explanation: String(item.explanation || ''),
+  }));
 }
-
-export default function QuizLibrary(){
+export default function QuizLibrary({ organizationId = '' }: Props) {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
-  const [items,setItems]=useState<Quiz[]>([]);
-  const [selected,setSelected]=useState<Quiz|null>(null);
-  const [title,setTitle]=useState(''); const [description,setDescription]=useState(''); const [language,setLanguage]=useState('');
-  const [scope,setScope]=useState<'private'|'organization'|'shared'>('organization');
-  const [published,setPublished]=useState(false);
-  const [questions,setQuestions]=useState<Question[]>([]); const [editorOpen,setEditorOpen]=useState(false);
-  const [saving,setSaving]=useState(false); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [message,setMessage]=useState('');
+  const [items, setItems] = useState<Quiz[]>([]);
+  const [guides, setGuides] = useState<Guide[]>([]);
+  const [selected, setSelected] = useState<Quiz | null>(null);
+  const [sourceId, setSourceId] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [language, setLanguage] = useState('');
+  const [scope, setScope] = useState<'private' | 'organization' | 'shared'>('organization');
+  const [published, setPublished] = useState(false);
+  const [attachmentType, setAttachmentType] = useState<AttachmentType>('lesson');
+  const [guideId, setGuideId] = useState('');
+  const [lessonId, setLessonId] = useState('');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const scopePayload = organizationId ? { organizationId } : {};
 
-  const load=async()=>{setLoading(true);setError('');try{const body=await quizApi('list');setItems(body.items||[]);}catch(e){setError(e instanceof Error?e.message:'Could not load quizzes.');}finally{setLoading(false);}};
-  useEffect(()=>{void load();},[]);
-  const open=(quiz:Quiz|null)=>{
-    if (quiz && quiz.canEdit === false) {
-      setError('This quiz is owned by another contributor. Copy the shared quiz into your organization before editing it.');
+  const load = async () => {
+    setLoading(true); setError('');
+    try {
+      const [quizzes, guideResponse] = await Promise.all([
+        authorizedPost('/api/quizzes', { action: 'list', ...scopePayload }),
+        authorizedPost('/api/admin/content', { action: 'listGuides', collection: 'guides', ...scopePayload }),
+      ]);
+      setItems((quizzes.items || []) as Quiz[]);
+      setGuides((guideResponse.items || []) as Guide[]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not load quiz library and guide options.');
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { setEditorOpen(false); setSelected(null); void load(); }, [organizationId]);
+
+  // Shared guides may be read, but quizzes must be attached to a guide that
+  // the currently selected tenant can administer.
+  const editableGuides = useMemo(() => guides.filter(guide =>
+    guide.archived !== true && guide.canEdit !== false
+    && String(guide.organizationId || '') === organizationId
+  ), [guides, organizationId]);
+  const currentGuide = editableGuides.find(guide => guide.id === guideId);
+  const lessonOptions = (currentGuide?.lessons || []).filter(lesson => lesson.type !== 'Test');
+  const guideName = (id: string) => guides.find(guide => guide.id === id)?.title || id;
+  const lessonName = (guide: string, id: string) => guides.find(item => item.id === guide)?.lessons?.find(item => item.id === id)?.title || id;
+  const open = (quiz: Quiz | null, copy = false) => {
+    if (quiz && !copy && quiz.canEdit === false) {
+      setError('You cannot edit another contributor\'s quiz. Use Copy and choose one of your guides.');
       return;
     }
-    setSelected(quiz);setEditorOpen(true);setTitle(quiz?.title||'');setDescription(quiz?.description||'');setLanguage(quiz?.language||'');setScope(quiz?.sharingScope||'organization');setPublished(quiz?.published===true);setQuestions(quiz?normalize(quiz.questions||[]):[]);
+    setError(''); setMessage(''); setEditorOpen(true);
+    setSelected(copy ? null : quiz);
+    setSourceId(copy ? (quiz?.id || '') : '');
+    setTitle(quiz?.title || '');
+    setDescription(quiz?.description || '');
+    setLanguage(copy ? '' : quiz?.language || '');
+    setScope(copy ? 'organization' : quiz?.sharingScope || 'organization');
+    setPublished(copy ? false : quiz?.published === true);
+    setAttachmentType(quiz?.attachmentType || 'lesson');
+    setGuideId(copy ? '' : quiz?.guideId || '');
+    setLessonId(copy ? '' : quiz?.lessonId || '');
+    setQuestions(quiz ? normalize(quiz.questions || []) : []);
   };
-  const save=async()=>{
-    if(!title.trim()||!language.trim()) return setError('Quiz title and language are required.');
-    if(!questions.length) return setError('Add at least one question.');
-    setSaving(true);setError('');
-    try{await quizApi('upsert',{id:selected?.id,data:{title:title.trim(),description:description.trim(),language:language.trim(),sharingScope:scope,published,questions:questions.map((q,i)=>({key:(selected?.id||'quiz')+'-q'+(i+1),question:q.question,options:q.options,correctOptionIndex:q.answer,explanation:q.explanation||''}))}});setMessage('Quiz saved.');setEditorOpen(false);setSelected(null);await load();}
-    catch(e){setError(e instanceof Error?e.message:'Could not save quiz.');}finally{setSaving(false);}
+  const save = async () => {
+    if (!title.trim()) return setError('Quiz title is required.');
+    if (!guideId || !currentGuide) return setError('Choose a guide in your selected organization.');
+    if (attachmentType === 'lesson' && (!lessonId || !lessonOptions.some(item => item.id === lessonId))) {
+      return setError('Choose the lesson this quiz will assess.');
+    }
+    if (published && !questions.length) return setError('Add at least one question before publishing.');
+    setSaving(true); setError('');
+    try {
+      await authorizedPost('/api/quizzes', {
+        ...scopePayload, action: 'upsert', id: selected?.id,
+        data: {
+          title: title.trim(), description: description.trim(),
+          language: currentGuide.language, sharingScope: scope, published,
+          attachmentType, guideId, lessonId: attachmentType === 'lesson' ? lessonId : '',
+          ...(sourceId ? { sourceContentId: sourceId } : {}),
+          questions: questions.map(question => ({
+            question: question.question, options: question.options,
+            correctOptionIndex: question.answer, explanation: question.explanation || '',
+          })),
+        },
+      });
+      setMessage('Quiz saved and attached to its study guide.');
+      setEditorOpen(false); setSelected(null); setSourceId('');
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save quiz.');
+    } finally { setSaving(false); }
   };
-  const fork=async(id:string)=>{setSaving(true);setError('');try{await quizApi('fork',{sourceId:id});setMessage('Shared quiz copied into your organization.');await load();}catch(e){setError(e instanceof Error?e.message:'Could not copy quiz.');}finally{setSaving(false);}};
-  const addQuestion=()=>setQuestions(q=>[...q,{question:'',options:['','','',''],answer:0,explanation:''}]);
+  const addQuestion = () => setQuestions(previous => [...previous, { question: '', options: ['', '', '', ''], answer: 0, explanation: '' }]);
   return <div className="vop-reference-manager">
-    <div className="vop-page-head"><div className="vop-heading"><div className="vop-heading-icon"><Share2 size={28}/></div><div><h1>{t('admin.quiz_library','Quiz Library')}</h1><p>Create reusable quizzes, publish them and share approved quizzes across organizations without transferring ownership.</p></div></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button><button className="vop-primary" type="button" onClick={()=>open(null)}><Plus size={17}/>{t('admin.new_quiz','New Quiz')}</button></div></div>
-    {error&&<div className="vop-alert error">{error}</div>}{message&&<div className="vop-alert success"><Check size={16}/>{message}</div>}
-    {editorOpen ? <div className="vop-reference-editor"><div className="vop-section-title"><div><h2>{selected?'Edit Quiz':'New Quiz'}</h2><p>Only the owning organization and VOP Super Admin can edit a canonical quiz.</p></div><button className="vop-actions" type="button" onClick={()=>{setEditorOpen(false);setSelected(null)}}>×</button></div>
-      <div className="vop-form-grid"><div className="vop-field"><label>{t('common.title_required','Title *')}</label><input value={title} onChange={e=>setTitle(e.target.value)}/></div><div className="vop-field"><label>{t('common.language_required','Language *')}</label><input value={language} onChange={e=>setLanguage(e.target.value)}/></div><div className="vop-field"><label>{t('common.sharing','Sharing')}</label><select value={scope} onChange={e=>setScope(e.target.value as typeof scope)}><option value="private">{t('common.private','Private')}</option><option value="organization">{t('common.organization_only','Organization only')}</option><option value="shared">{t('common.shared','Shared')}</option></select></div><div className="vop-field"><label>{t('common.publication','Publication')}</label><select value={published?'published':'draft'} onChange={e=>setPublished(e.target.value==='published')}><option value="draft">{t('common.draft','Draft')}</option><option value="published">{t('common.published','Published')}</option></select></div></div>
-      <div className="vop-field"><label>{t('common.description','Description')}</label><textarea value={description} onChange={e=>setDescription(e.target.value)}/></div>
-      <div style={{display:'grid',gap:12,marginTop:14}}>{questions.map((q,index)=><div className="vop-card vop-form-card" key={index}><div className="vop-section-title"><div><h3>Question {index+1}</h3></div><button className="vop-actions" type="button" onClick={()=>setQuestions(v=>v.filter((_,i)=>i!==index))}><Trash2 size={16}/></button></div><div className="vop-field"><label>{t('common.question','Question')}</label><textarea value={q.question} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,question:e.target.value}:x))}/></div><div className="vop-form-grid">{q.options.map((option,oi)=><div className="vop-field" key={oi}><label>Option {oi+1}</label><input value={option} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,options:x.options.map((o,j)=>j===oi?e.target.value:o)}:x))}/></div>)}</div><div className="vop-form-grid"><div className="vop-field"><label>{t('admin.correct_option','Correct option')}</label><select value={q.answer} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,answer:Number(e.target.value)}:x))}>{q.options.map((_,oi)=><option key={oi} value={oi}>Option {oi+1}</option>)}</select></div><div className="vop-field"><label>{t('common.explanation','Explanation')}</label><input value={q.explanation||''} onChange={e=>setQuestions(v=>v.map((x,i)=>i===index?{...x,explanation:e.target.value}:x))}/></div></div></div>)}</div>
-      <div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={addQuestion}><Plus size={16}/>{t('admin.add_question','Add Question')}</button><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}><Save size={17}/>{t('admin.save_quiz','Save Quiz')}</button></div>
-    </div> : null}
-    <div className="vop-reference-table-wrap">{loading?<div className="vop-empty">{t('admin.loading_quizzes','Loading quizzes…')}</div>:<table className="vop-reference-table"><thead><tr><th>Quiz</th><th>Language</th><th>Questions</th><th>{t('common.sharing','Sharing')}</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.title}</strong><div>{item.description||'No description'}</div></td><td>{item.language.toUpperCase()}</td><td>{item.questions?.length||0}</td><td>{item.sharingScope||'organization'}</td><td>{item.published?'Published':'Draft'}</td><td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={()=>open(item)} title={item.canEdit === false ? 'Owned by another contributor' : 'Edit'} disabled={item.canEdit === false}><Edit3 size={16}/></button>{item.sharingScope==='shared'&&item.published&&<button className="vop-actions" type="button" onClick={()=>void fork(item.id)} title="Copy shared quiz"><Copy size={16}/></button>}</div></td></tr>)}</tbody></table>}</div>
+    <div className="vop-page-head">
+      <div className="vop-heading"><div className="vop-heading-icon"><Share2 size={28}/></div>
+        <div><h1>{t('admin.quiz_library','Quiz Library')}</h1><p>Attach each quiz to a particular lesson or the complete guide. Published quizzes appear as learner assessments.</p></div>
+      </div>
+      <div className="vop-reference-actions">
+        <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button>
+        <button className="vop-primary" type="button" onClick={() => open(null)}><Plus size={17}/>{t('admin.new_quiz','New Quiz')}</button>
+      </div>
+    </div>
+    {error && <div className="vop-alert error" role="alert">{error}</div>}
+    {message && <div className="vop-alert success" role="status"><Check size={16}/>{message}</div>}
+    {editorOpen && <div className="vop-reference-editor">
+      <div className="vop-section-title">
+        <div><h2>{sourceId ? 'Copy Shared Quiz' : selected ? 'Edit Quiz' : 'New Quiz'}</h2>
+          <p>Only the contributor or Super Admin can edit the canonical quiz; copies are separate.</p>
+        </div>
+        <button className="vop-actions" type="button" onClick={() => { setEditorOpen(false); setSelected(null); }}>×</button>
+      </div>
+      <div className="vop-form-grid">
+        <div className="vop-field"><label>Quiz Title *</label><input value={title} onChange={e => setTitle(e.target.value)}/></div>
+        <div className="vop-field"><label>Language</label><input value={currentGuide?.language?.toUpperCase() || language.toUpperCase()} readOnly placeholder="Choose a guide"/></div>
+        <div className="vop-field"><label>Attachment *</label>
+          <select value={attachmentType} onChange={e => { setAttachmentType(e.target.value as AttachmentType); setLessonId(''); }}>
+            <option value="lesson">Individual lesson quiz</option>
+            <option value="guide">Entire guide assessment</option>
+          </select>
+        </div>
+        <div className="vop-field"><label>Guide *</label>
+          <select value={guideId} onChange={e => { setGuideId(e.target.value); setLessonId(''); setLanguage(editableGuides.find(item => item.id === e.target.value)?.language || ''); }}>
+            <option value="">Select a guide</option>
+            {editableGuides.map(guide => <option key={guide.id} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}{guide.published ? '' : ' (Draft)'}</option>)}
+          </select>
+          {!editableGuides.length && <small>No editable guides in the selected organization. Create a guide first.</small>}
+        </div>
+        {attachmentType === 'lesson' && <div className="vop-field"><label>Lesson *</label>
+          <select value={lessonId} onChange={e => setLessonId(e.target.value)} disabled={!currentGuide}>
+            <option value="">Select a lesson</option>
+            {lessonOptions.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.lessonNumber}. {lesson.title}{lesson.published ? '' : ' (Draft)'}</option>)}
+          </select>
+          {currentGuide && !lessonOptions.length && <small>Create a lesson in this guide before attaching its quiz.</small>}
+        </div>}
+        <div className="vop-field"><label>{t('common.sharing','Sharing')}</label><select value={scope} onChange={e => setScope(e.target.value as typeof scope)}>
+          <option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared</option>
+        </select></div>
+        <div className="vop-field"><label>{t('common.publication','Publication')}</label>
+          <select value={published ? 'published' : 'draft'} onChange={e => setPublished(e.target.value === 'published')}>
+            <option value="draft">Draft</option><option value="published">Published</option>
+          </select>
+          {published && <small>Its guide and, for lesson quizzes, parent lesson must already be published.</small>}
+        </div>
+      </div>
+      <div className="vop-field"><label>{t('common.description','Description')}</label><textarea value={description} onChange={e => setDescription(e.target.value)}/></div>
+      <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+        {questions.map((question, index) => <div className="vop-card vop-form-card" key={index}>
+          <div className="vop-section-title"><div><h3>Question {index + 1}</h3></div>
+            <button className="vop-actions" type="button" aria-label={'Delete question ' + (index + 1)} onClick={() => setQuestions(value => value.filter((_, i) => i !== index))}><Trash2 size={16}/></button>
+          </div>
+          <div className="vop-field"><label>Question</label><textarea value={question.question} onChange={e => setQuestions(value => value.map((item, i) => i === index ? { ...item, question:e.target.value } : item))}/></div>
+          <div className="vop-form-grid">{question.options.map((option, optionIndex) => <div className="vop-field" key={optionIndex}>
+            <label>Option {optionIndex + 1}</label><input value={option} onChange={e => setQuestions(value => value.map((item, i) => i === index ? { ...item, options:item.options.map((text,j) => j === optionIndex ? e.target.value : text) } : item))}/>
+          </div>)}</div>
+          <div className="vop-form-grid">
+            <div className="vop-field"><label>Correct option</label><select value={question.answer} onChange={e => setQuestions(value => value.map((item,i) => i === index ? { ...item, answer:Number(e.target.value) } : item))}>
+              {question.options.map((_, optionIndex) => <option key={optionIndex} value={optionIndex}>Option {optionIndex + 1}</option>)}
+            </select></div>
+            <div className="vop-field"><label>Explanation</label><input value={question.explanation || ''} onChange={e => setQuestions(value => value.map((item,i) => i === index ? { ...item, explanation:e.target.value } : item))}/></div>
+          </div>
+        </div>)}
+      </div>
+      <div className="vop-reference-editor-actions">
+        <button className="vop-secondary" type="button" onClick={addQuestion}><Plus size={16}/>Add Question</button>
+        <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={17}/>{saving ? 'Saving…' : 'Save Quiz'}</button>
+      </div>
+    </div>}
+    <div className="vop-reference-table-wrap">
+      {loading ? <div className="vop-empty">Loading quizzes…</div> : <table className="vop-reference-table">
+        <thead><tr><th>Quiz</th><th>Attached to</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>{items.map(item => <tr key={item.id}>
+          <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
+          <td>{item.attachmentType === 'guide' ? 'Entire guide: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
+          <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
+          <td>{item.sharingScope || 'organization'}</td><td>{item.published ? 'Published' : 'Draft'}</td>
+          <td><div className="vop-reference-action-cell">
+            <button className="vop-actions" type="button" onClick={() => open(item)} title={item.canEdit === false ? 'Owned by another contributor' : 'Edit'} disabled={item.canEdit === false}><Edit3 size={16}/></button>
+            {item.sharingScope === 'shared' && item.published && <button className="vop-actions" type="button" onClick={() => open(item, true)} title="Copy shared quiz to a guide you manage"><Copy size={16}/></button>}
+          </div></td>
+        </tr>)}</tbody>
+      </table>}
+    </div>
   </div>;
 }
