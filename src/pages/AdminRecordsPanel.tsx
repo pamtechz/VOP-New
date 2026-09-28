@@ -50,6 +50,19 @@ interface Props {
 
 type FormState = Record<string, string | number | boolean>;
 
+const PUBLICATION_AUDIENCES = [
+  {value:'all',label:'All members'},
+  {value:'learners',label:'Learners / Students'},
+  {value:'leaders',label:'Leaders / Administrators'},
+  {value:'mentors',label:'Mentors'},
+  {value:'teachers',label:'Teachers'},
+  {value:'staff',label:'Staff / Ministry Team'},
+] as const;
+
+function AudienceSelect({form,setForm}:{form:FormState;setForm:React.Dispatch<React.SetStateAction<FormState>>}) {
+  return <div className="vop-field"><label>Target Audience</label><select value={String(form.targetAudience || 'all')} onChange={event=>setForm(current=>({...current,targetAudience:event.target.value}))}>{PUBLICATION_AUDIENCES.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select><small>Inbox delivery follows active organization membership roles.</small></div>;
+}
+
 const LABELS: Record<ManagedAdminCollection, string> = {
   translations: 'Translations',
   announcements: 'Announcements',
@@ -101,9 +114,9 @@ function makeId() {
 function blankForm(kind: ManagedAdminCollection): FormState {
   switch (kind) {
     case 'announcements':
-      return { title: '', tag: '', targetAudience: '', description: '', imageUrl: '', actionText: '', actionUrl: '', scheduledAt: '', published: false };
+      return { title: '', tag: '', targetAudience: 'all', description: '', imageUrl: '', actionText: '', actionUrl: '', scheduledAt: '', published: false };
     case 'events':
-      return { title:'', category:'', description:'', startAt:'', endAt:'', location:'', targetAudience:'', imageUrl:'', registrationUrl:'', capacity:0, sharingScope:'organization', published:false };
+      return { title:'', category:'', description:'', startAt:'', endAt:'', location:'', targetAudience:'all', imageUrl:'', registrationUrl:'', capacity:0, sharingScope:'organization', published:false };
     case 'materials':
       return { name: '', category: '', author: '', description: '', imageUrl: '', downloadUrl: '', published: false };
     case 'radio':
@@ -647,12 +660,12 @@ function Fields({kind,form,setForm,records}:{kind:Exclude<ManagedAdminCollection
 
   switch(kind) {
     case 'announcements':
-      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('title','Title *')}{field('tag','Tag')}{area('description','Description *')}{field('imageUrl','Image URL')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{published}</div>;
+      return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>{field('title','Title *')}{field('tag','Tag')}<AudienceSelect form={form} setForm={setForm}/>{area('description','Description *')}{field('imageUrl','Image URL')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{published}</div>;
     case 'events':
       return <div className="vop-form-grid" style={{gridTemplateColumns:'1fr'}}>
         {field('title','Event / Programme Title *')}{field('category','Category')}{area('description','Description *')}
         {field('startAt','Starts *','datetime-local')}{field('endAt','Ends','datetime-local')}{field('location','Venue / Location')}
-        {field('targetAudience','Target Audience')}{field('capacity','Capacity (0 = unlimited)','number')}
+        <AudienceSelect form={form} setForm={setForm}/>{field('capacity','Capacity (0 = unlimited)','number')}
         {field('imageUrl','Image URL','url')}{field('registrationUrl','Registration URL','url')}
         {select('sharingScope','Visibility',[{value:'organization',label:'Organization only'},{value:'shared',label:'Shared / Public'},{value:'private',label:'Private draft'}])}{published}
       </div>;
@@ -735,7 +748,7 @@ function AnnouncementAdminDashboard({
       {announcementEditorOpen && <div className="vop-ann-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAnnouncementEditorOpen(false)}}>
         <form className="vop-ann-editor-modal vop-card vop-form-card" onSubmit={save}>
           <div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div><button type="button" className="vop-icon-button" onClick={()=>setAnnouncementEditorOpen(false)}><X size={18}/></button></div>
-          {field('title','Title *')}{field('tag','Category / Tag')}{field('targetAudience','Target Audience')}{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={()=>setAnnouncementEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div>
+          {field('title','Title *')}{field('tag','Category / Tag')}<AudienceSelect form={form} setForm={setForm}/>{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={()=>setAnnouncementEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div>
         </form>
       </div>}
     </div>
