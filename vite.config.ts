@@ -48,7 +48,7 @@ function createLocalApiMiddleware(server: { ssrLoadModule: (url: string) => Prom
   return async (req, res, next) => {
     const requestUrl = req.url ?? '';
     if (!requestUrl.startsWith(LOCAL_API_PREFIX)) { next(); return; }
-    const route = new URL(requestUrl, 'http://localhost').pathname.slice(LOCAL_API_PREFIX.length).replace(/^\\/+|\\/+$/g, '');
+    const route = new URL(requestUrl, 'http://localhost').pathname.slice(LOCAL_API_PREFIX.length).replace(/^\/+|\/+$/g, '');
     if (!route || !/^[A-Za-z0-9_/-]+$/.test(route)) { next(); return; }
     try {
       const module = await server.ssrLoadModule('/api/' + route + '.ts');
