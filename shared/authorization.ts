@@ -1,7 +1,8 @@
 import type { PermissionAction, PermissionMatrix, PermissionResource, PermissionRole } from './permissions.js';
 import { permissionAllowed } from './permissions.js';
 
-export type PermissionScope = 'platform' | 'hierarchy' | 'organization' | 'owned' | 'assigned' | 'personal' | 'public';
+export type PermissionScope = 'platform' | 'hierarchy' | 'organization';
+export type AccessRelationship = 'owned' | 'assigned' | 'personal' | 'public';
 
 export interface AuthorizationSubject {
   uid: string;
@@ -13,6 +14,7 @@ export interface AuthorizationSubject {
 
 export interface AuthorizationTarget {
   scope?: PermissionScope;
+  relationship?: AccessRelationship;
   uid?: string;
   organizationId?: string;
   tenantId?: string;
@@ -34,10 +36,10 @@ export function decidePermission(
   if (!permissionAllowed(matrix, subject.role, resource, action)) return { allowed: false, reason: 'permission_denied' };
   if (target.scopeAllowed === false) return { allowed: false, reason: 'tenant_scope_denied' };
   if (target.scope === 'platform' && subject.role !== 'super_admin') return { allowed: false, reason: 'platform_scope_required' };
-  if (target.scope === 'personal' && target.uid && target.uid !== subject.uid) return { allowed: false, reason: 'personal_scope_denied' };
+  if (target.relationship === 'personal' && target.uid && target.uid !== subject.uid) return { allowed: false, reason: 'personal_scope_denied' };
   if (target.scope === 'organization' && target.organizationId && subject.role !== 'super_admin' && subject.organizationId !== target.organizationId) return { allowed: false, reason: 'tenant_scope_denied' };
   if (target.scope === 'hierarchy' && target.tenantId && subject.role !== 'super_admin' && subject.tenantId !== target.tenantId) return { allowed: false, reason: 'tenant_scope_denied' };
-  if (target.scope === 'assigned' && target.assignedUid && target.assignedUid !== subject.uid && subject.role !== 'super_admin') return { allowed: false, reason: 'assignment_denied' };
+  if (target.relationship === 'assigned' && target.assignedUid && target.assignedUid !== subject.uid && subject.role !== 'super_admin') return { allowed: false, reason: 'assignment_denied' };
   if (target.ownershipRequired && subject.role !== 'super_admin') {
     const ownsByUid = !!target.ownerUid && target.ownerUid === subject.uid;
     const ownsByTenant = !!target.ownerTenantId && !!subject.tenantId && target.ownerTenantId === subject.tenantId;
