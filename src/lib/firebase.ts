@@ -1,6 +1,9 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, setPersistence, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import {
+  getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore';
 import { deploymentPolicy } from '../config/deployment';
 
 // Firebase Web configuration is public. NEVER put service-account credentials in VITE_*.
@@ -27,7 +30,19 @@ export const app = firebaseConfigured
   ? (getApps().length ? getApp() : initializeApp(firebaseConfig))
   : null;
 
-export const db: Firestore | null = app ? getFirestore(app) : null;
+// Firestore persistence must be configured on FIRST access, before
+// getFirestore() initializes the instance. Offline getDoc/getDocs can then
+// read previously downloaded documents on supported devices.
+export const db: Firestore | null = app ? (() => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    // IndexedDB can be disabled in private browsing; retain online access.
+    return getFirestore(app);
+  }
+})() : null;
 
 export const auth: Auth | null = app ? getAuth(app) : null;
 
@@ -35,22 +50,7 @@ export const authPersistenceReady: Promise<void> = auth
   ? setPersistence(auth, indexedDBLocalPersistence).catch(() => setPersistence(auth, browserLocalPersistence)).then(() => undefined)
   : Promise.resolve();
 
-let firestorePromise: Promise<Firestore> | undefined;
-
+/** Reuse the configured Firestore instance; never try to reinitialize later. */
 export function getProgressFirestore(): Promise<Firestore> {
-  if (!app) return Promise.reject(new Error('Firebase is not configured for this deployment.'));
-  const firebaseApp = app;
-  if (!firestorePromise) {
-    firestorePromise = import('firebase/firestore').then(module => {
-      try {
-        return module.initializeFirestore(firebaseApp, {
-          localCache: module.persistentLocalCache({ tabManager: module.persistentMultipleTabManager() }),
-        });
-      } catch (error) {
-        if ((error as { code?: string }).code === 'failed-precondition') return module.getFirestore(firebaseApp);
-        throw error;
-      }
-    });
-  }
-  return firestorePromise;
+  return db ? Promise.resolve(db) : Promise.reject(new Error('Firebase is not configured for this deployment.'));
 }
