@@ -5,6 +5,7 @@ import type { User, CustomLanguage } from '../types';
 import { loadPublicContent } from '../services/publicFirestore';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
+import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import './personalSettings.css';
 
 type PersonalSettings = {
@@ -45,6 +46,18 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
+  const [trustedDevice, setTrustedDevice] = useState(hasTrustedOfflineDeviceConsent);
+  const changeTrustedDevice = (enabled: boolean) => {
+    if (enabled && !window.confirm('Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.')) return;
+    if (!setTrustedOfflineDeviceConsent(enabled)) {
+      setMessage('This browser does not permit persistent offline storage.');
+      return;
+    }
+    setTrustedDevice(enabled);
+    setMessage(enabled
+      ? 'Offline study storage enabled. Reload while online to activate and cache your study content. This does not download media.'
+      : 'Future persistent study caching disabled after reload. To remove previously cached content, clear this website’s browser storage.');
+  };
   const appSettings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), appSettings.customTranslations, fallback, 'PersonalSettingsPage');
 
@@ -94,7 +107,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         <p>{currentUser.displayName} · {currentUser.email}</p>
         <small>Your role, organization, permissions and learning records are managed separately and cannot be changed here.</small>
       </section>
-      <section className="vop-card">
+      <section className="vop-personal-card vop-card">
         <h2><Globe2 size={19}/> Interface</h2>
         <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
@@ -105,20 +118,26 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           {languages.filter(language => language.enabled !== false).map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
         </select></label>
       </section>
-      <section className="vop-card">
+      <section className="vop-personal-card vop-card">
         <h2><Bell size={19}/> Notifications</h2>
         {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
       </section>
-      <section className="vop-card">
+      <section className="vop-personal-card vop-card">
         <h2><Accessibility size={19}/> Accessibility</h2>
         {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => patch('accessibility', { ...settings.accessibility, [key]: e.target.checked })}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
       </section>
-      <section className="vop-card">
+      <section className="vop-personal-card vop-card">
         <h2><BookOpen size={19}/> Study preferences</h2>
         <label className="vop-personal-toggle"><input type="checkbox" checked={settings.studyPreferences?.reminders !== false} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, reminders: e.target.checked })}/> Study reminders</label>
         <label>Preferred study time<input type="time" value={settings.studyPreferences?.preferredStudyTime || ''} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, preferredStudyTime: e.target.value })}/></label>
       </section>
-      <section className="vop-card">
+      <section className="vop-personal-card vop-card">
+        <h2><BookOpen size={19}/> Offline study on this device</h2>
+        <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
+        <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
+        <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
+      </section>
+      <section className="vop-personal-card vop-card">
         <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>

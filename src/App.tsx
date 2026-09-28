@@ -10,6 +10,7 @@ import {
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
+import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
 import { initializeLocalization, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser } from './services/firestoreData';
@@ -58,6 +59,7 @@ export const App: React.FC = () => {
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [deepLinkPageIndex, setDeepLinkPageIndex] = useState(0);
   const [studyError, setStudyError] = useState('');
+  const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileShell, setIsMobileShell] = useState(false);
@@ -149,6 +151,35 @@ export const App: React.FC = () => {
       });
     });
   }, []);
+
+  // Reconcile device-only completion requests when connectivity returns.
+  // Never mark credit complete until the server acknowledges the request.
+  useEffect(() => {
+    const uid = currentUser.uid;
+    if (!uid) return;
+    let cancelled = false;
+    const replay = () => {
+      void syncPendingLessonCompletions().then(async result => {
+        if (cancelled || auth?.currentUser?.uid !== uid) return;
+        if (result.synced) {
+          const refreshed = await loadFirestoreUser(uid).catch(() => null);
+          if (cancelled || auth?.currentUser?.uid !== uid) return;
+          if (refreshed) { setCurrentUser(refreshed); setAllUsers([refreshed]); }
+        }
+        const remaining = pendingForUser(uid).length;
+        if (remaining) {
+          setStudyNotice(`${remaining} lesson completion${remaining === 1 ? '' : 's'} saved on this device, awaiting server confirmation.${result.rejected ? ' Some need administrator review.' : ''}`);
+        } else if (result.synced) {
+          setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} verified and synchronized.`);
+        }
+      }).catch(() => {
+        if (!cancelled) setStudyNotice('Offline lesson progress is saved on this device and will be retried when connectivity returns.');
+      });
+    };
+    window.addEventListener('online', replay);
+    replay();
+    return () => { cancelled = true; window.removeEventListener('online', replay); };
+  }, [currentUser.uid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,6 +336,7 @@ export const App: React.FC = () => {
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
         )}
+        {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
@@ -332,8 +364,15 @@ export const App: React.FC = () => {
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser} allUsers={[]} onSelectUser={() => {}} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id);
-        if (!accepted) { setStudyError('Lesson completion could not be saved to your VOP account. Check your connection and sign-in status, then try again.'); return false; }
-        if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
+        if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
+        setStudyError('');
+        if (accepted === 'queued') {
+          setStudyNotice('Lesson completion saved on this device. Official credit will appear after server verification when you reconnect.');
+        } else if (auth?.currentUser) {
+          setStudyNotice('');
+          const refreshedUser = await loadFirestoreUser(auth.currentUser.uid).catch(() => null);
+          if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); }
+        }
         if (!nextLesson) setActiveLesson(null);
         return true;
       }} />}
