@@ -587,6 +587,22 @@ service cloud.firestore {
       );
     }
 
+    match /events/{id} {
+      allow get, list: if canReadGlobal(resource.data, 'published')
+        || canManageOrg(resource.data.get('organizationId',''));
+      allow create: if isSuperAdmin()
+        || (
+          canManageOrg(request.resource.data.get('organizationId',''))
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+        );
+      allow update, delete: if isSuperAdmin() || (
+        canEditOwnedContent(resource.data)
+        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
+        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
+        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
+      );
+    }
+
     match /books/{id} {
       allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
