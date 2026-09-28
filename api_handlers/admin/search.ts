@@ -18,7 +18,13 @@ function header(req:Request,name:string){const value=req.headers?.[name]??req.he
 function q(req:Request,name:string){const query=req.query&&typeof req.query==='object'?req.query as Record<string,unknown>:{};const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};return String((query[name]??body[name])??'').trim();}
 function tokens(value:string){return value.toLowerCase().split(/\s+/).filter(Boolean).slice(0,8);}
 function haystack(data:Record<string,unknown>){return Object.values(data).filter(value=>['string','number','boolean'].includes(typeof value)).map(String).join(' ').toLowerCase();}
-function scopeOf(data:Record<string,unknown>){return String(data.scope||data.sharingScope||'organization').toLowerCase();}
+function scopeOf(data:Record<string,unknown>){
+  const declared=String(data.scope||'').toLowerCase();
+  if(['platform','organization','hierarchy'].includes(declared))return declared;
+  if(String(data.organizationId||data.ownerOrganizationId||'').trim())return 'organization';
+  if(String(data.hierarchyId||data.tenantId||data.ownerTenantId||'').trim())return 'hierarchy';
+  return 'platform';
+}
 function hierarchyNodeId(ctx:Awaited<ReturnType<typeof authenticateTenant>>){return String(ctx.tenantId||'').split(':').slice(1).join(':')||String(ctx.profile.adminNodeId||'').trim();}
 async function accessible(ctx:Awaited<ReturnType<typeof authenticateTenant>>,data:Record<string,unknown>,orgIds:string[]|null){
   if(ctx.isSuperAdmin)return true;
@@ -38,12 +44,17 @@ async function candidateDocs(db:ReturnType<typeof getFirestore>,collection:strin
   const refs:Promise<{docs:QueryDocumentSnapshot[]} >[]=[];
   const source=db.collection(collection);
   refs.push(source.where('scope','==','platform').limit(500).get());
+  refs.push(source.where('sharingScope','==','shared').limit(500).get());
+  refs.push(source.where('organizationId','==','').limit(500).get());
   if(ctx.tenantType==='hierarchy'){
     const nodeId=hierarchyNodeId(ctx);
     if(nodeId)refs.push(source.where('hierarchyId','==',nodeId).limit(500).get());
     if(ctx.tenantId)refs.push(source.where('tenantId','==',ctx.tenantId).limit(500).get());
   }
-  for(const id of (orgIds||[]).slice(0,20))refs.push(source.where('organizationId','==',id).limit(500).get());
+  for(const id of (orgIds||[]).slice(0,20)){
+    refs.push(source.where('organizationId','==',id).limit(500).get());
+    refs.push(source.where('ownerOrganizationId','==',id).limit(200).get());
+  }
   if(ctx.isSuperAdmin&&!orgIds)refs.push(source.limit(1000).get());
   const snapshots=await Promise.all(refs);const map=new Map<string,QueryDocumentSnapshot>();
   snapshots.flatMap(s=>s.docs).forEach(doc=>map.set(doc.id,doc));
@@ -79,6 +90,15 @@ export default async function handler(req:Request,res:Response){
         const data=doc.data() as Record<string,unknown>;
         if(data.archived===true||data.deleted===true||data.status==='archived')continue;
         if(!await accessible(ctx,data,orgIds))continue;
+        const owned=String(data.ownerUid||'')===ctx.auth.uid || String(data.candidateId||'')===ctx.auth.uid;
+        const privateResource=data.sharingScope==='private'||data.visibility==='private';
+        if(!ctx.isSuperAdmin&&privateResource&&!owned)continue;
+        // The general certificate view permission does not grant access to other learners' credentials.
+        if(!ctx.isSuperAdmin&&def.type==='certificate'&&String(data.candidateId||'')!==ctx.auth.uid&&
+           !(await canPermission(ctx,'certificates','manage'))&&!(await canPermission(ctx,'certificates','create')))continue;
+        const isPublished=data.published===true||data.status==='published'||data.public===true||data.visibility==='public';
+        if(!ctx.isSuperAdmin&&!owned&&!isPublished&&def.type!=='user'&&
+           !(await canPermission(ctx,def.resource,'update')))continue;
         const text=haystack(data);if(!words.every(word=>text.includes(word)))continue;
         const organizationId=String(data.organizationId||data.ownerOrganizationId||'').trim()||undefined;
         candidates.push({type:def.type,id:doc.id,title:String(data.title||data.displayName||data.certificateNumber||data.name||doc.id),description:String(data.description||data.summary||data.subtitle||data.body||'').slice(0,240),scope:scopeOf(data),organizationId});
