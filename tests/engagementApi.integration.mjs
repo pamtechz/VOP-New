@@ -193,6 +193,14 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal(expiredResult.winner,'unranked');
       assert.equal((await db.doc('users/' + learner.uid).get()).data().scriptureDuelRating,ratingBefore);
       assert.equal((await db.doc('scriptureDuels/' + expiredMatch.matchId).get()).data().status,'expired');
+      assert.equal((await api(learner, {action:'duelAvailability',enabled:true})).status,200);
+      const standings=await api(learner,{action:'duelLeaderboard'});
+      assert.equal(standings.status,200,JSON.stringify(standings));
+      assert.ok(standings.leaderboard.some(item=>item.displayName==='studentA'));
+      assert.ok(standings.leaderboard.some(item=>item.displayName==='studentB'));
+      const foreignStandings=await api(outsider,{action:'duelLeaderboard'});
+      assert.ok(!foreignStandings.leaderboard.some(item=>item.displayName==='studentA'));
+      assert.ok(standings.leaderboard.every(item=>!('uid' in item) && Number.isFinite(item.rating)));
     });
 
 
