@@ -151,6 +151,34 @@ async function publishedRequirement(db: FirebaseFirestore.Firestore, learner: Pr
 
 async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
   const action = String(b.action || '');
+  if (action === 'portfolioReviewQueue') {
+    if (!canManagePortfolio(actor)) throw new Error('Authorized evaluator access is required.');
+    const privileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin','owner','admin','teacher'].includes(role(actor));
+    let snapshots: FirebaseFirestore.DocumentSnapshot[];
+    if (privileged) {
+      const query = db.collection('masterGuidePortfolios');
+      const records = String(actor.role || '') === 'super_admin' || ['union_admin','conference_admin','district_admin','church_admin'].includes(String(actor.role || ''))
+        ? await query.limit(150).get()
+        : await query.where('organizationId','==',orgOf(actor)).limit(150).get();
+      snapshots = records.docs;
+    } else {
+      const assigned = await db.collection('mentorAssignments').where('mentorId','==',String(actor.uid)).limit(100).get();
+      snapshots = await Promise.all(assigned.docs.map(doc => db.doc('masterGuidePortfolios/' + cleanId(doc.id, 'learner')).get()));
+    }
+    const queue = await Promise.all(snapshots.filter(snapshot => snapshot.exists).map(async snapshot => {
+      const learner = await profile(db, snapshot.id);
+      if (!(await evaluatorScope(db, actor, learner))) return null;
+      const data = snapshot.data() || {};
+      const activities = Array.isArray(data.activities) ? data.activities as Array<Record<string, unknown>> : [];
+      const signoffs = Array.isArray(data.signoffs) ? data.signoffs as Array<Record<string, unknown>> : [];
+      const pending = activities.filter(activity => activity.status === 'submitted' &&
+        !signoffs.some(signoff => signoff.requirementId === activity.requirementId && signoff.decision === 'approved'));
+      return { uid:snapshot.id, displayName:String(learner.displayName || learner.email || 'Learner'),
+        organizationId:orgOf(learner), pendingCount:pending.length };
+    }));
+    return { learners:queue.filter((item):item is NonNullable<typeof item> => Boolean(item))
+      .sort((a,b)=>b.pendingCount-a.pendingCount || a.displayName.localeCompare(b.displayName)) };
+  }
   const learnerId = cleanId(b.learnerId || actor.uid, 'learner');
   const learner = await profile(db, learnerId);
   if (!(await evaluatorScope(db, actor, learner))) throw new Error('The learner is outside your organization scope.');
