@@ -49,11 +49,28 @@ function cleanId(value: unknown, field = 'identifier') {
 function orgOf(data: Profile) { return String(data.organizationId || '').trim(); }
 
 function sameOrg(actor: Profile, target: Profile) {
-  const actorRole = String(actor.role || '');
-  if (actorRole === 'super_admin') return true;
   const a = orgOf(actor);
   const b = orgOf(target);
   return Boolean(a && b && a === b);
+}
+
+/** Hierarchy evaluators can review only their descendant organizations. */
+async function evaluatorScope(db: FirebaseFirestore.Firestore, actor: Profile, learner: Profile) {
+  if (String(actor.role || '') === 'super_admin') return true;
+  if (sameOrg(actor, learner)) return true;
+  const fields: Record<string, string> = {
+    union_admin:'unionId', conference_admin:'conferenceId',
+    district_admin:'districtId', church_admin:'churchId',
+  };
+  const field = fields[String(actor.role || '')];
+  const nodeId = String(actor.adminNodeId || '');
+  const organizationId = orgOf(learner);
+  if (!field || !nodeId || !organizationId) return false;
+  const organization = await db.doc('organizations/' + cleanId(organizationId, 'organization')).get();
+  if (!organization.exists || organization.data()?.status !== 'active') return false;
+  const data = organization.data() || {};
+  const hierarchy = data.hierarchy && typeof data.hierarchy === 'object' ? data.hierarchy as Record<string, unknown> : {};
+  return String(data[field] || '') === nodeId || String(hierarchy[field] || '') === nodeId;
 }
 
 function contentVisibleToLearner(actor: Profile, data: Record<string, unknown>) {
@@ -114,7 +131,7 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   const action = String(b.action || '');
   const learnerId = cleanId(b.learnerId || actor.uid, 'learner');
   const learner = await profile(db, learnerId);
-  if (!sameOrg(actor, learner)) throw new Error('The learner is outside your organization scope.');
+  if (!(await evaluatorScope(db, actor, learner))) throw new Error('The learner is outside your organization scope.');
   if (learnerId !== String(actor.uid) && !canManagePortfolio(actor)) throw new Error('You cannot manage this learner portfolio.');
 
   if (action === 'portfolioGet') {
@@ -140,7 +157,13 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
     const activities = Array.isArray(data.activities) ? [...data.activities as unknown[]] : [];
     const existing = activities.findIndex(item => item && typeof item === 'object' && String((item as Record<string, unknown>).id || '') === activityId);
     const activity = { id: activityId, requirementId, title: String(b.title || ''), status, notes: String(b.notes || ''), updatedAt: nowIso(), updatedBy: String(actor.uid) };
-    if (existing >= 0) activities[existing] = activity; else activities.push(activity);
+    if (existing >= 0) {
+      const previous = activities[existing] as Record<string, unknown>;
+      if (String(previous.updatedBy || '') !== String(actor.uid)) {
+        throw new Error('Only the activity contributor may revise the submission.');
+      }
+      activities[existing] = activity;
+    } else activities.push(activity);
     await ref.set({ learnerId, organizationId: orgOf(learner), updatedAt: FieldValue.serverTimestamp(), updatedBy: String(actor.uid), activities }, { merge: true });
     return { activity };
   }
@@ -148,6 +171,10 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   if (action === 'portfolioEvidence') {
     const evidence = { id: randomUUID(), requirementId: cleanId(b.requirementId, 'requirement'), title: String(b.title || '').trim(), url: String(b.url || '').trim(), note: String(b.note || '').trim(), submittedBy: String(actor.uid), submittedAt: nowIso() };
     if (!evidence.title || !evidence.url) throw new Error('Evidence title and URL are required.');
+    try {
+      const link = new URL(evidence.url);
+      if (link.protocol !== 'https:' || link.username || link.password || link.hostname === 'localhost') throw new Error();
+    } catch { throw new Error('Evidence must be a public HTTPS URL without credentials.'); }
     const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
     await ref.set({ learnerId, organizationId: orgOf(learner), updatedAt: FieldValue.serverTimestamp(), evidence: FieldValue.arrayUnion(evidence) }, { merge: true });
     return { evidence };
@@ -168,7 +195,11 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
   if (action === 'portfolioShare') {
     if (learnerId !== String(actor.uid) && !canManagePortfolio(actor)) throw new Error('You cannot share this portfolio.');
     const token = randomUUID().replaceAll('-', '');
-    await db.doc(`masterGuidePortfolioShares/${token}`).set({ token, learnerId, organizationId: orgOf(learner), createdBy: String(actor.uid), createdAt: FieldValue.serverTimestamp(), active: true });
+    await db.doc(`masterGuidePortfolioShares/${token}`).set({
+      token, learnerId, organizationId:orgOf(learner), createdBy:String(actor.uid),
+      createdAt:FieldValue.serverTimestamp(),
+      expiresAt:new Date(Date.now() + 30 * 86_400_000).toISOString(), active:true,
+    });
     return { token, url: `/?portfolio=${encodeURIComponent(token)}` };
   }
 
@@ -309,14 +340,14 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
           !Array.isArray(data.questionIds) || !data.questionIds.includes(questionId)) throw new Error('You are not authorized to answer this question.');
       const previous = data.answers && typeof data.answers === 'object' ? data.answers as Record<string, unknown> : {};
       const key = `${String(actor.uid)}:${questionId}`;
-      if (Object.prototype.hasOwnProperty.call(previous, key)) return { accepted: true, duplicate: true, correct: Boolean((previous[key] as Record<string, unknown>).correct) };
+      if (Object.prototype.hasOwnProperty.call(previous, key)) return { accepted: true, duplicate: true };
       const previousScores = data.scores && typeof data.scores === 'object' ? data.scores as Record<string, number> : {};
       transaction.update(matchRef, {
         answers: { ...previous, [key]: { questionId, answer: answer.slice(0, 300), correct, answeredAt: new Date().toISOString() } },
         scores: { ...previousScores, [String(actor.uid)]: Number(previousScores[String(actor.uid)] || 0) + Number(correct) },
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { accepted: true, correct };
+      return { accepted: true };
     });
   }
 
@@ -361,7 +392,10 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
 async function publicPortfolioVerify(db: FirebaseFirestore.Firestore, b: Record<string, unknown>) {
   const token = cleanId(b.token, 'verification token');
   const share = await db.doc(`masterGuidePortfolioShares/${token}`).get();
-  if (!share.exists || share.data()?.active !== true) throw new Error('Portfolio verification link is invalid or expired.');
+  if (!share.exists || share.data()?.active !== true
+    || new Date(String(share.data()?.expiresAt || 0)).getTime() <= Date.now()) {
+    throw new Error('Portfolio verification link is invalid or expired.');
+  }
   const learnerId = String(share.data()?.learnerId || '');
   const learner = await profile(db, learnerId);
   const portfolio = await db.doc(`masterGuidePortfolios/${learnerId}`).get();
