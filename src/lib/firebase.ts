@@ -34,23 +34,3 @@ export const auth: Auth | null = app ? getAuth(app) : null;
 export const authPersistenceReady: Promise<void> = auth
   ? setPersistence(auth, indexedDBLocalPersistence).catch(() => setPersistence(auth, browserLocalPersistence)).then(() => undefined)
   : Promise.resolve();
-
-let firestorePromise: Promise<Firestore> | undefined;
-
-export function getProgressFirestore(): Promise<Firestore> {
-  if (!app) return Promise.reject(new Error('Firebase is not configured for this deployment.'));
-  const firebaseApp = app;
-  if (!firestorePromise) {
-    firestorePromise = import('firebase/firestore').then(module => {
-      try {
-        return module.initializeFirestore(firebaseApp, {
-          localCache: module.persistentLocalCache({ tabManager: module.persistentMultipleTabManager() }),
-        });
-      } catch (error) {
-        if ((error as { code?: string }).code === 'failed-precondition') return module.getFirestore(firebaseApp);
-        throw error;
-      }
-    });
-  }
-  return firestorePromise;
-}
