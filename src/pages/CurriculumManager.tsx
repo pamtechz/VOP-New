@@ -745,7 +745,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      setEditor({ ...editor, id, guideTitle: guide?.title || editor.guideTitle, published: publish });
+      setEditor({ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish });
       notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
