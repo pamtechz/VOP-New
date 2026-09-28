@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
-import { normalizeQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
+import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -167,6 +167,7 @@ export default async function handler(req: Request, res: Response) {
       const target = await resolveAttachment(ctx, { ...data, language, published });
       if (existing.exists && String(current.organizationId || '') !== target.organizationId) throw new Error('Moving a quiz between organizations is not allowed. Copy the quiz into the destination tenant instead.');
       const questions = normalizeQuizQuestions(data.questions, id);
+      const learnerQuestions = publicQuizQuestions(questions);
       if (published && questions.length === 0) throw new Error('Add at least one valid question before publishing.');
       const sourceContentId = String(current.sourceContentId || data.sourceContentId || '').trim();
       if (sourceContentId && !existing.exists) {
@@ -199,7 +200,8 @@ export default async function handler(req: Request, res: Response) {
         title, description, language,
         lessonNumber:quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
-        attachedLessonId:target.lessonId, questions, quiz:questions,
+        attachedLessonId:target.lessonId, questions:learnerQuestions, quiz:learnerQuestions,
+        answerVisibility:'public_redacted',
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,
         ownerUid, canonical:true, sharingScope, published, archived:false,
         estimatedMinutes:Math.max(1, Math.ceil(questions.length * 1.5)),

@@ -535,41 +535,28 @@ service cloud.firestore {
               && get(/databases/$(database)/documents/guides/$(guideId)).data.get('published',false) == true
               && resource.data.get('sharingScope','shared') == 'shared'
               && resource.data.get('published',false) == true);
-        allow create: if isSuperAdmin() || (
+        allow create: if (isSuperAdmin() || (
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
           && canEditOrgContent(organizationIdForUser())
           && request.resource.data.get('ownerOrganizationId','') == organizationIdForUser()
-        );
-        allow update, delete: if isSuperAdmin() || (
+        )) && request.resource.data.get('sourceQuizId','') == '';
+        allow update, delete: if (isSuperAdmin() || (
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
           && canEditOwnedContent(resource.data)
           && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
           && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
           && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
           && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
-        );
+        )) && resource.data.get('sourceQuizId','') == ''
+           && request.resource.data.get('sourceQuizId','') == '';
       }
     }
 
-    // Reusable quiz library.
+    // Quiz banks hold authoritative answers. The client cannot read or mutate
+    // them; the authenticated management API enforces contributor ownership.
     match /quizzes/{quizId} {
-      allow get: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
-      allow list: if isSuperAdmin()
-        || (resource.data.get('organizationId','') == organizationIdForUser() && isOrgMember(organizationIdForUser()))
-        || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
-      allow create: if isSuperAdmin() || (
-        canEditOrgContent(request.resource.data.get('organizationId',''))
-        && request.resource.data.get('ownerOrganizationId','') == request.resource.data.get('organizationId','')
-      );
-      allow update, delete: if isSuperAdmin() || (
-        canEditOwnedContent(resource.data)
-        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
-        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
-        && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
-      );
+      allow get, list: if isSuperAdmin() || canEditOwnedContent(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /candidates/{id} {
