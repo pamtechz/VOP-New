@@ -180,6 +180,19 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal((await db.doc('scriptureDuelResults/' + matchId).get()).exists, true);
       assert.equal((await api(learner, { action: 'duelHistory' })).status, 200);
       assert.equal((await api(outsider, { action: 'duelHistory' })).results.length, 0);
+      const ratingBefore = (await db.doc('users/' + learner.uid).get()).data().scriptureDuelRating;
+      const expiredMatch = await api(learner, {action:'duelCreate',opponentId:peer.uid});
+      assert.equal(expiredMatch.status,200,JSON.stringify(expiredMatch));
+      const firstQuestion = expiredMatch.questions[0];
+      assert.equal((await api(learner, {action:'duelAnswer',matchId:expiredMatch.matchId,
+        questionId:firstQuestion.id,answer:firstQuestion.options[0]})).status,200);
+      await db.doc('scriptureDuels/' + expiredMatch.matchId).update({expiresAt:new Date(Date.now()-60000).toISOString()});
+      const expiredResult = await api(learner, {action:'duelFinish',matchId:expiredMatch.matchId});
+      assert.equal(expiredResult.status,200,JSON.stringify(expiredResult));
+      assert.equal(expiredResult.ranked,false,'Unanswered expired duels are never ranked.');
+      assert.equal(expiredResult.winner,'unranked');
+      assert.equal((await db.doc('users/' + learner.uid).get()).data().scriptureDuelRating,ratingBefore);
+      assert.equal((await db.doc('scriptureDuels/' + expiredMatch.matchId).get()).data().status,'expired');
     });
 
 
