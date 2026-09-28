@@ -424,3 +424,52 @@ test('personal settings allow UI locale and study language but remain user-priva
     await environment.cleanup();
   }
 });
+
+test('assessment bank answer keys stay private; generated assessments require server writes', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async privileged => {
+      const db = privileged.firestore();
+      await db.doc('users/quiz-learner').set({uid:'quiz-learner',role:'student',organizationId:'school-a',organizationRole:'learner'});
+      await db.doc('users/quiz-author').set({uid:'quiz-author',role:'student',organizationId:'school-a',organizationRole:'admin'});
+      await db.doc('users/quiz-outsider').set({uid:'quiz-outsider',role:'student',organizationId:'school-b',organizationRole:'learner'});
+      await db.doc('organizations/school-a').set({id:'school-a',status:'active'});
+      await db.doc('organizations/school-b').set({id:'school-b',status:'active'});
+      await db.doc('organizations/school-a/members/quiz-learner').set({uid:'quiz-learner',role:'learner',organizationId:'school-a',active:true});
+      await db.doc('organizations/school-a/members/quiz-author').set({uid:'quiz-author',role:'admin',organizationId:'school-a',active:true});
+      await db.doc('organizations/school-b/members/quiz-outsider').set({uid:'quiz-outsider',role:'learner',organizationId:'school-b',active:true});
+      await db.doc('guides/guide-secure').set({id:'guide-secure',organizationId:'school-a',sharingScope:'organization',published:true});
+      await db.doc('quizzes/quiz-secure').set({
+        id:'quiz-secure',ownerUid:'quiz-author',ownerTenantId:'school-a',
+        ownerOrganizationId:'school-a',organizationId:'school-a',sharingScope:'shared',published:true,
+        questions:[{key:'q1',question:'Secret?',options:['A','B'],correctOptionIndex:1}],
+      });
+      await db.doc('guides/guide-secure/lessons/quiz-quiz-secure').set({
+        id:'quiz-quiz-secure',type:'Test',sourceQuizId:'quiz-secure',
+        answerVisibility:'public_redacted',organizationId:'school-a',ownerOrganizationId:'school-a',
+        ownerUid:'quiz-author',published:true,sharingScope:'organization',
+        questions:[{key:'q1',question:'Secret?',options:['A','B']}],
+      });
+    });
+    const learner = environment.authenticatedContext('quiz-learner').firestore();
+    const author = environment.authenticatedContext('quiz-author').firestore();
+    const outsider = environment.authenticatedContext('quiz-outsider').firestore();
+    await assertFails(learner.doc('quizzes/quiz-secure').get());
+    await assertFails(outsider.doc('quizzes/quiz-secure').get());
+    await assertSucceeds(author.doc('quizzes/quiz-secure').get());
+    const assessment = await assertSucceeds(learner.doc('guides/guide-secure/lessons/quiz-quiz-secure').get());
+    assert.equal(assessment.data().questions[0].correctOptionIndex, undefined);
+    await assertFails(author.doc('quizzes/quiz-secure').update({published:false}));
+    await assertFails(author.doc('guides/guide-secure/lessons/quiz-quiz-secure').update({title:'Tampered'}));
+    await assertFails(author.doc('guides/guide-secure/lessons/quiz-attacker').set({
+      sourceQuizId:'quiz-secure',organizationId:'school-a',ownerOrganizationId:'school-a',
+      ownerUid:'quiz-author',type:'Test',
+    }));
+  } finally {
+    await environment.cleanup();
+  }
+});
