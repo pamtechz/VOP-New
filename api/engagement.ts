@@ -250,13 +250,26 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if (!answer) throw new Error('An answer is required.');
     const question = await db.doc(`scriptureDuelQuestions/${questionId}`).get();
     if (!question.exists || question.data()?.status !== 'published' || !Array.isArray(match.questionIds) || !match.questionIds.includes(questionId)) throw new Error('This question is not valid for the duel.');
-    const currentAnswers = match.answers && typeof match.answers === 'object' ? match.answers as Record<string, unknown> : {};
-    const key = `${String(actor.uid)}:${questionId}`;
-    if (currentAnswers[key]) return { accepted: true, duplicate: true, correct: Boolean((currentAnswers[key] as Record<string, unknown>).correct) };
     const expected = String(question.data()?.answer || '').trim().toLowerCase();
     const correct = expected === answer.toLowerCase();
-    await matchRef.update({ [`answers.${key}`]: { questionId, answer: answer.slice(0, 300), correct, answeredAt: new Date().toISOString() }, [`scores.${String(actor.uid)}`]: FieldValue.increment(correct ? 1 : 0), updatedAt: FieldValue.serverTimestamp() });
-    return { accepted: true, correct };
+    return db.runTransaction(async transaction => {
+      const latest = await transaction.get(matchRef);
+      const data = latest.data() || {};
+      if (!latest.exists || data.status !== 'active') throw new Error('This duel is no longer active.');
+      if (new Date(String(data.expiresAt || 0)).getTime() < Date.now()) throw new Error('This duel has expired.');
+      if (![String(data.playerA || ''), String(data.playerB || '')].includes(String(actor.uid)) ||
+          !Array.isArray(data.questionIds) || !data.questionIds.includes(questionId)) throw new Error('You are not authorized to answer this question.');
+      const previous = data.answers && typeof data.answers === 'object' ? data.answers as Record<string, unknown> : {};
+      const key = `${String(actor.uid)}:${questionId}`;
+      if (Object.prototype.hasOwnProperty.call(previous, key)) return { accepted: true, duplicate: true, correct: Boolean((previous[key] as Record<string, unknown>).correct) };
+      const previousScores = data.scores && typeof data.scores === 'object' ? data.scores as Record<string, number> : {};
+      transaction.update(matchRef, {
+        answers: { ...previous, [key]: { questionId, answer: answer.slice(0, 300), correct, answeredAt: new Date().toISOString() } },
+        scores: { ...previousScores, [String(actor.uid)]: Number(previousScores[String(actor.uid)] || 0) + Number(correct) },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { accepted: true, correct };
+    });
   }
 
   if (action === 'duelFinish') {
