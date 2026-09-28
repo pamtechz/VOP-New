@@ -24,11 +24,21 @@ export default async function handler(req:Request,res:Response){
       visible.sort((a,b)=>timestampValue(b.createdAt)-timestampValue(a.createdAt));const items=visible.slice(0,100);return res.status(200).json({ok:true,items,unread:items.filter(item=>item.read!==true).length});
     }
     if(action==='send'){
-      if(!canPermission(ctx,'announcements','manage'))throw new Error('Notification management permission is required.');
+      if(!(await canPermission(ctx,'announcements','manage')))throw new Error('Notification management permission is required.');
       const input=body(req);const organizationId=String(input.organizationId||requestedOrg||ctx.organizationId||'').trim();
       if(!ctx.isSuperAdmin&&!organizationId)throw new Error('An organization is required.');
       if(!ctx.isSuperAdmin&&!(await notificationAllowed(ctx,{organizationId})))throw new Error('The notification organization is outside your scope.');
       const recipientId=String(input.recipientId||'').trim();const type=String(input.type||'system');
+      if(!recipientId||recipientId.includes('/'))throw new Error('Invalid notification recipient.');
+      const recipient=await db.doc('users/'+recipientId).get();
+      if(!recipient.exists)throw new Error('Notification recipient is not available in this scope.');
+      if(!ctx.isSuperAdmin){
+        const primaryOrganization=String(recipient.data()?.organizationId||'').trim();
+        const membership=await db.doc('organizations/'+organizationId+'/members/'+recipientId).get();
+        if(primaryOrganization!==organizationId&&!(membership.exists&&membership.data()?.active===true)){
+          throw new Error('Notification recipient is outside the selected organization scope.');
+        }
+      }
       const allowedTypes=new Set(['learning-support','assignment','mentor-feedback','certificate','announcement','prayer','system']);
       if(!allowedTypes.has(type))throw new Error('Unsupported notification type.');
       const id=await createNotification(db,{organizationId,recipientId,title:String(input.title||''),body:String(input.body||''),type:type as never,channel:input.channel==='email'?'email':'in_app',actionUrl:String(input.actionUrl||''),metadata:input.metadata&&typeof input.metadata==='object'?input.metadata as Record<string,unknown>:{}});
