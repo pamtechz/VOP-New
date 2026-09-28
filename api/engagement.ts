@@ -241,14 +241,24 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
     if (!actorIsMentor) throw new Error('You are not an authorized evaluator for this learner.');
     const requirementId = await publishedRequirement(db, learner, b.requirementId);
     if (learnerId === String(actor.uid)) throw new Error('A learner cannot sign off their own requirement.');
-    const portfolioSnap = await db.doc(`masterGuidePortfolios/${learnerId}`).get();
-    const activities = Array.isArray(portfolioSnap.data()?.activities) ? portfolioSnap.data()?.activities as Array<Record<string, unknown>> : [];
-    if (!activities.some(item => String(item.requirementId || '') === requirementId && item.status === 'submitted')) {
-      throw new Error('An activity must be submitted against this requirement before approval.');
-    }
     const signoff = { id: randomUUID(), requirementId, decision: String(b.decision || 'approved') === 'approved' ? 'approved' : 'rejected', notes: String(b.notes || ''), evaluatorId: String(actor.uid), evaluatorRole: role(actor), decidedAt: nowIso() };
     const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
-    await ref.set({ learnerId, organizationId: orgOf(learner), updatedAt: FieldValue.serverTimestamp(), signoffs: FieldValue.arrayUnion(signoff) }, { merge: true });
+    // Verify state and write the decision atomically. Two evaluators must not
+    // approve the same requirement concurrently or sign off an unsubmitted item.
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(ref);
+      const data = snapshot.data() || {};
+      const activities = Array.isArray(data.activities) ? data.activities as Array<Record<string, unknown>> : [];
+      if (!activities.some(item => String(item.requirementId || '') === requirementId && item.status === 'submitted')) {
+        throw new Error('An activity must be submitted against this requirement before approval.');
+      }
+      const decisions = Array.isArray(data.signoffs) ? data.signoffs as Array<Record<string, unknown>> : [];
+      if (decisions.some(item => String(item.requirementId || '') === requirementId && item.decision === 'approved')) {
+        throw new Error('This requirement is already approved.');
+      }
+      transaction.set(ref, {learnerId,organizationId:orgOf(learner),updatedAt:FieldValue.serverTimestamp(),
+        signoffs:FieldValue.arrayUnion(signoff)}, {merge:true});
+    });
     return { signoff };
   }
 
