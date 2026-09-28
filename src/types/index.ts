@@ -235,6 +235,8 @@ export interface Lesson {
   sharingScope?: 'private' | 'organization' | 'shared';
   canonical?: boolean;
   quizId?: string;
+  sourceQuizId?: string;
+  answerVisibility?: 'public_redacted';
   media?: { audioUrl?: string; videoUrl?: string; imageUrl?: string };
   id: string;
   title: string;
