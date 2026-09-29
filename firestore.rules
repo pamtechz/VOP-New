@@ -541,15 +541,15 @@ service cloud.firestore {
     // All mutations go through the authenticated API, which validates each
     // guide reference against the program's owning tenant and stewardship.
     match /programs/{programId} {
+      // Archived items remain inspectable to their authorized author,
+      // whereas publicly visible records must be both shared and published.
+      // Server archive operations always unpublish atomically.
       allow get, list: if isSuperAdmin()
         || (signedIn()
-          && resource.data.get('archived',false) != true
           && isOrgMember(resource.data.get('organizationId',''))
           && resource.data.get('organizationId','') == organizationIdForUser())
-        || (resource.data.get('archived',false) != true
-          && hierarchyOrganizationScope(resource.data.get('organizationId','')))
-        || (resource.data.get('archived',false) != true
-          && resource.data.get('published',false) == true
+        || hierarchyOrganizationScope(resource.data.get('organizationId',''))
+        || (resource.data.get('published',false) == true
           && resource.data.get('sharingScope','private') == 'shared');
       allow create, update, delete: if false;
     }
