@@ -121,7 +121,7 @@ export default async function handler(req: Request, res: Response) {
           : ownerOrganizationId === ctx.organizationId);
       if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
       const snap = await guide.ref.collection('lessons').get();
-      const items = snap.docs.map(doc => {
+      const items = await Promise.all(snap.docs.map(async doc => {
         const row = doc.data();
         const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
         if (!canEdit) return {
@@ -134,9 +134,18 @@ export default async function handler(req: Request, res: Response) {
         // Private quiz-bank answers never enter curriculum selector responses.
         // Historical inline quizzes are not returned in this API even to their
         // authors; those must be audited and migrated to the Quiz Library.
-        const { questions: _answers, quiz: _legacyQuiz, ...safe } = row;
-        return { ...safe, id:doc.id, guideId:selectedGuideId, canEdit:true };
-      });
+        const { questions: _answers, quiz: _legacyQuiz, teacherNotes: _oldInstructorNotes, ...safe } = row;
+        const privateNotes=await doc.ref.collection('private').doc('instructorNotes').get();
+        return {
+          ...safe, id:doc.id, guideId:selectedGuideId, canEdit:true,
+          // Historical public notes remain visible to an authorized author
+          // until the separate idempotent migration is run. Once moved they
+          // never appear in the learner-readable lesson document.
+          teacherNotes: String(privateNotes.exists
+            ? privateNotes.data()?.text || ''
+            : typeof _oldInstructorNotes === 'string' ? _oldInstructorNotes : ''),
+        };
+      }));
       return res.status(200).json({ok:true, items});
     }
 
@@ -459,8 +468,23 @@ export default async function handler(req: Request, res: Response) {
       }
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-      await ref.set({
-        ...data,
+      const { teacherNotes: _incomingNotes, ...publicData }=data;
+      const notesIncluded=Object.prototype.hasOwnProperty.call(data,'teacherNotes');
+      if(notesIncluded && typeof _incomingNotes!=='string') {
+        throw new Error('Instructor notes must be text.');
+      }
+      if(notesIncluded && String(_incomingNotes).length>20000) {
+        throw new Error('Instructor notes cannot exceed 20,000 characters.');
+      }
+      const historicalNotes=String(existing.data()?.teacherNotes || '');
+      const savedNotes=notesIncluded?String(_incomingNotes):historicalNotes;
+      const privateNotesRef=ref.collection('private').doc('instructorNotes');
+      const batch=ctx.db.batch();
+      batch.set(ref,{
+        ...publicData,
+        // Learner-readable Firestore records must never contain instructor-only
+        // notes. A delete sentinel also cleans up an old public notes field.
+        teacherNotes:FieldValue.delete(),
         // Derive learner pages on the server, not from potentially forged
         // client-side page or block payloads.
         ...(structured ? {
@@ -481,9 +505,20 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
       }, { merge:true });
+      if(notesIncluded||historicalNotes){
+        batch.set(privateNotesRef,{
+          text:savedNotes,guideId,lessonId,
+          ownerOrganizationId:existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          ownerUid:existing.data()?.ownerUid || ctx.auth.uid,
+          updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+        },{merge:true});
+      }
+      // One atomic commit ensures a lesson update cannot expose a new public
+      // note or delete the old public note without saving its private copy.
+      await batch.commit();
       const saved = await ref.get();
       await writeTenantAudit(ctx, existing.exists ? 'lesson.update' : 'lesson.create', `guides/${guideId}/lessons/${lessonId}`, existing.exists ? existing.data() : undefined, saved.data());
-      return res.status(200).json({ ok:true, item:{id:lessonId,...saved.data()} });
+      return res.status(200).json({ ok:true, item:{id:lessonId,...saved.data(),teacherNotes:savedNotes} });
     }
 
     if (action === 'publishLesson' || action === 'unpublishLesson') {
