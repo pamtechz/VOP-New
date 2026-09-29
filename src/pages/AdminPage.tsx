@@ -119,7 +119,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return window.localStorage.getItem('vop:admin-sidebar-collapsed') === '1'; }
+    catch { return false; }
+  });
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
   const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
@@ -425,7 +428,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     if (window.matchMedia('(max-width: 900px)').matches) {
       setSidebarOpen(value => !value);
     } else {
-      setSidebarCollapsed(value => !value);
+      setSidebarCollapsed(value => {
+        const next = !value;
+        try { window.localStorage.setItem('vop:admin-sidebar-collapsed', next ? '1' : '0'); }
+        catch { /* Local visual preference only. */ }
+        return next;
+      });
     }
   };
 
@@ -1021,7 +1029,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     </header>
     <div className="vop-shell">
       {sidebarOpen && <button className="vop-sidebar-backdrop open" type="button" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)} />}
-      <aside id="vop-admin-navigation" aria-label="Administration navigation" className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}><nav className="vop-nav" aria-label="Administration sections">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined} onClick={onBack}><ArrowLeft size={19}/><span>{adminT('back_to_app','Back to App')}</span></button></aside>
+      <aside id="vop-admin-navigation" aria-label="Administration navigation" className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}>
+        <button className="vop-admin-sidebar-collapse" type="button" onClick={toggleNavigation}
+          aria-label={sidebarCollapsed ? 'Expand administration sidebar' : 'Collapse administration sidebar'}
+          aria-expanded={!sidebarCollapsed} aria-controls="vop-admin-navigation"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          {sidebarCollapsed ? <ChevronRight size={19}/> : <ChevronLeft size={19}/>}
+          {!sidebarCollapsed && <span>Collapse sidebar</span>}
+        </button>
+        <nav className="vop-nav" aria-label="Administration sections">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined} onClick={onBack}><ArrowLeft size={19}/><span>{adminT('back_to_app','Back to App')}</span></button></aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}
