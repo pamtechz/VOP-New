@@ -169,7 +169,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(200).json({ok:true,code:requestedCode});
   } catch(error){
     const message=error instanceof Error?error.message:'Language operation failed.';
-    const status=/sign in/i.test(message)?401:/permission|Only|membership|forbidden/i.test(message)?403:/not found/i.test(message)?404:400;
+    const status=/sign in/i.test(message)?401:/permission|Only|membership|forbidden|cannot access|platform-stewarded|belongs to/i.test(message)?403:/not found/i.test(message)?404:400;
     return res.status(status).json({error:message});
   }
 }
