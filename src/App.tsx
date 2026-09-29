@@ -28,6 +28,7 @@ import { ReferenceProfilePage } from './pages/ReferenceProfilePage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { LessonsPage } from './pages/LessonsPage';
 import { EngagementPage } from './pages/EngagementPage';
+import './pages/learning.css';
 import { PrayerPage } from './pages/PrayerPage';
 import { RadioPage } from './pages/RadioPage';
 import { CertificatesPage } from './pages/CertificatesPage';
