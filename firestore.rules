@@ -567,6 +567,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() || canEditOwnedContent(resource.data);
 
       match /lessons/{lessonId} {
+        // Privileged author notes are fetched by the authenticated management
+        // API only; do not grant client-side reads, even to an org admin.
+        match /private/{privateId} {
+          allow read, write: if false;
+        }
         allow get: if isSuperAdmin()
           || (isOrgMember(organizationIdForUser()) && get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser())
           || hierarchyOrganizationScope(get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId',''))
