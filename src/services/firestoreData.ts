@@ -1,5 +1,5 @@
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question } from '../types';
+import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question, CurriculumProgram } from '../types';
 import { db, auth } from '../lib/firebase';
 
 function requireDb() {
@@ -225,6 +225,47 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     .sort((a, b) => a.discoverNumber - b.discoverNumber || a.language.localeCompare(b.language));
 }
 
+
+
+/** Published Course/Program catalogue. Guides remain the authoritative
+ * curriculum and are never duplicated inside the parent program record. */
+export async function loadFirestorePrograms(user?:User):Promise<CurriculumProgram[]>{
+  const firestore=requireDb();
+  if(!auth?.currentUser)return [];
+  const programsRef=collection(firestore,'programs');
+  const snapshots=await Promise.all([
+    getDocs(query(programsRef,where('sharingScope','==','shared'),where('published','==',true))),
+    ...(user?.role==='super_admin'
+      ?[getDocs(query(programsRef,where('published','==',true)))]
+      :user?.organizationId
+        ?[getDocs(query(programsRef,where('organizationId','==',user.organizationId),
+          where('published','==',true)))]
+        :[]),
+  ]);
+  const rows=new Map<string,CurriculumProgram>();
+  for(const snapshot of snapshots)for(const item of snapshot.docs){
+    const data=item.data();
+    if(data.archived===true||data.published!==true)continue;
+    const orgId=String(data.organizationId||'').trim();
+    const owned=user?.role==='super_admin'||Boolean(orgId&&orgId===user?.organizationId);
+    if(!owned && data.sharingScope!=='shared')continue;
+    const title=String(data.title||'').trim();
+    if(!title)continue;
+    const ids=Array.isArray(data.guideIds)
+      ?data.guideIds.filter((id:unknown):id is string=>typeof id==='string'&&id.length>0).slice(0,100)
+      :[];
+    rows.set(item.id,{
+      id:item.id,title,description:String(data.description||''),
+      coverImageUrl:String(data.coverImageUrl||''),
+      guideIds:ids,organizationId:orgId,
+      entryMode:data.entryMode==='sections'?'sections':'lessons',
+      sharingScope:data.sharingScope==='shared'?'shared':
+        data.sharingScope==='private'?'private':'organization',
+      published:true,archived:false,
+    });
+  }
+  return [...rows.values()].sort((a,b)=>a.title.localeCompare(b.title));
+}
 
 
 export async function loadFirestoreUser(uid: string): Promise<User | null> {
