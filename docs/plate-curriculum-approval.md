@@ -62,6 +62,10 @@ Keep **Learning Paths** separate: a pathway can arrange multiple programs or gui
 - Legacy readers and lessons remain functional; migration is per lesson, explicit, reversible until the first published Plate revision. Include backup, diff/preview and rollback paths.
 - Firestore is authoritative. Device storage is an offline cache only; tenant-scoped reads and writes must be enforced even when data is stale.
 
+### Existing privacy gap to address before rollout
+
+The current lesson API payload includes `teacherNotes` on the learner-readable lesson document. Even when the learner UI does not display that field, an authorized learner can read the Firestore document. The production migration must relocate instructor-only notes to a separately denied/private document with authenticated admin retrieval and clean historical records before treating those notes as confidential. This is an existing data-design issue, not a feature of Plate, and cannot be considered fixed by the read-only Plate renderer.
+
 ## 6. What the current PR demonstrates
 
 **Implemented in the draft:** A React/Vite Plate editing surface, compact chapter/page selector, deliberate section splitting, safe JSON-to-reader rendering, rich formatting, draft save through the existing lesson API, guarded transfers, legacy-mode fallback, selectable lesson-first/section-first guide view, and regression tests.
