@@ -593,7 +593,6 @@ export default async function handler(req: Request, res: Response) {
           const byId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
           [...flat.docs, ...nested.docs].forEach(doc => byId.set(doc.id, doc));
           snap = { docs: [...byId.values()] } as FirebaseFirestore.QuerySnapshot;
-        }
         } else {
           return res.status(200).json({ ok:true, items:[] });
         }
