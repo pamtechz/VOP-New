@@ -64,12 +64,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     const refresh = () => setContentRefresh(value => value + 1);
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
-    window.addEventListener('vop_data_updated', refresh);
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      window.removeEventListener('vop_data_updated', refresh);
       window.removeEventListener('focus', refresh);
       window.removeEventListener('online', refresh);
       document.removeEventListener('visibilitychange', onVisible);
