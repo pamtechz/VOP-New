@@ -377,6 +377,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
       if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');
+      if (current.exists) assertMutableTenantResource(ctx.isSuperAdmin, current.data(), action === 'unpublishLesson' ? 'archive' : 'edit');
       if (action === 'unpublishLesson') {
         if (!current.exists) throw new Error('The lesson was not found.');
         if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can unpublish this lesson.');
