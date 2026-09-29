@@ -466,3 +466,17 @@
   .vop-learner-main .vop-app-brand-mark img{width:28px;height:28px}
   .vop-admin .vop-admin-top .vop-avatar{width:29px;height:29px;flex-basis:29px}
 }
+
+/* Consistent thin-outline chrome for the remaining collapse/menu affordances. */
+.vop-learner-sidebar-toggle svg,
+.vop-admin-sidebar-collapse svg,
+.vop-admin .vop-top-title .vop-menu-btn svg{
+  width:18px;height:18px;stroke-width:1.8;
+}
+@media(max-width:900px){
+  .vop-admin .vop-top-title .vop-menu-btn{
+    width:35px!important;height:35px!important;
+    min-width:35px!important;min-height:35px!important;
+    flex-basis:35px!important;border-radius:8px;
+  }
+}
