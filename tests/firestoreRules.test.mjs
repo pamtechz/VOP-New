@@ -366,6 +366,48 @@ test('global resource ownership is isolated across organization and hierarchy co
       sharingScope:'private', published:false,
     }));
 
+    // Direct Firestore writes must not bypass the API's atomic platform
+    // language adoption when a tenant publishes a shared guide.
+    await assertFails(orgAdmin.doc('guides/direct-shared').set({
+      id:'direct-shared',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'shared',published:true,
+    }));
+    await assertSucceeds(orgAdmin.doc('guides/local-draft').set({
+      id:'local-draft',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'organization',published:false,
+    }));
+    await assertFails(orgAdmin.doc('guides/local-draft').update({
+      sharingScope:'shared',published:true,
+    }));
+    await assertFails(orgEditor.doc('guides/forged-author').set({
+      id:'forged-author',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'organization',published:false,
+    }));
+    await assertSucceeds(orgAdmin.doc('guides/local-draft/lessons/draft-1').set({
+      id:'draft-1',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'organization',published:false,
+    }));
+    await assertFails(orgAdmin.doc('guides/local-draft/lessons/direct-shared').set({
+      id:'direct-shared',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'shared',published:true,
+    }));
+    await assertSucceeds(orgAdmin.doc('guides/local-draft/lessons/draft-1').delete());
+    await assertSucceeds(orgAdmin.doc('guides/local-draft').delete());
+    await assertSucceeds(superAdmin.doc('guides/platform-shared').set({
+      id:'platform-shared',organizationId:'org-1',ownerOrganizationId:'org-1',
+      sharingScope:'shared',published:true,platformOwned:true,
+    }));
+    await assertFails(orgEditor.doc('radioBroadcasts/org-editor-created').update({
+      sharingScope:'shared',published:true,
+    }));
+    await assertFails(unionAdmin.doc('playlists/union-playlist-created').update({
+      sharingScope:'shared',published:true,
+    }));
+    await assertFails(unionAdmin.doc('playlists/direct-shared').set({
+      id:'direct-shared',organizationId:'',ownerUid:'union-admin',
+      ownerTenantId:'union_admin:union-1',sharingScope:'shared',published:true,
+    }));
+
     // Hierarchy admins can read the global library, but ownership still controls
     // mutation.
     await assertSucceeds(unionAdmin.doc('radioBroadcasts/hierarchy-foreign').get());
