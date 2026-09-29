@@ -3,12 +3,12 @@ import { Check, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucid
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 
-type AttachmentType = 'lesson' | 'guide';
+type AttachmentType = 'lesson' | 'guide' | 'chapter' | 'section' | 'block';
 type Quiz = {
   id: string; title: string; description?: string; language: string; archived?: boolean;
   questions: Array<Record<string, unknown>>; published?: boolean;
   sharingScope?: 'private' | 'organization' | 'shared';
-  guideId?: string; lessonId?: string; attachmentType?: AttachmentType;
+  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'final_exam'|'practice';
   ownerOrganizationId?: string; ownerUid?: string; canEdit?: boolean;
 };
 type Guide = {
@@ -17,7 +17,8 @@ type Guide = {
   lessons?: Array<{id: string; title: string; lessonNumber: string; type: string; published: boolean}>;
 };
 type Question = { question: string; options: string[]; answer: number; explanation?: string };
-interface Props { organizationId?: string }
+type LessonDetails = {id:string;title:string;chapters?:Array<{id:string;title:string;sections?:Array<{id:string;title:string;blocks?:Array<{id:string;type:string;text?:string}>}>}>};
+interface Props { organizationId?: string; initialGuideId?: string; initialLessonId?: string; initialAnchorType?:'chapter'|'section'|'block'; initialAnchorId?:string; initialExam?:boolean; onSaved?:()=>void }
 
 async function authorizedPost(path: string, payload: Record<string, unknown>) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -38,7 +39,7 @@ function normalize(value: Array<Record<string, unknown>>): Question[] {
     explanation: String(item.explanation || ''),
   }));
 }
-export default function QuizLibrary({ organizationId = '' }: Props) {
+export default function QuizLibrary({ organizationId = '',initialGuideId,initialLessonId,initialAnchorType,initialAnchorId,initialExam=false,onSaved }: Props) {
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
   const [items, setItems] = useState<Quiz[]>([]);
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -52,6 +53,8 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
   const [attachmentType, setAttachmentType] = useState<AttachmentType>('lesson');
   const [guideId, setGuideId] = useState('');
   const [lessonId, setLessonId] = useState('');
+  const [anchorId,setAnchorId] = useState('');
+  const [lessonDetails,setLessonDetails] = useState<LessonDetails[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,6 +77,24 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
     } finally { setLoading(false); }
   };
   useEffect(() => { setEditorOpen(false); setSelected(null); void load(); }, [organizationId]);
+  useEffect(() => {
+    if (!initialGuideId) return;
+    setSelected(null);setSourceId('');setEditorOpen(true);
+    setGuideId(initialGuideId);
+    setLessonId(initialLessonId || '');
+    setAttachmentType(initialExam ? 'guide' : initialAnchorType || (initialLessonId?'lesson':'guide'));
+    setAnchorId(initialAnchorId || '');
+    setTitle(initialExam ? 'Final guide examination' : '');
+    setDescription('');setQuestions([]);setPublished(false);
+  }, [initialGuideId,initialLessonId,initialAnchorType,initialAnchorId,initialExam,organizationId]);
+  useEffect(() => {
+    if (!guideId) {setLessonDetails([]);return;}
+    let canceled=false;
+    void authorizedPost('/api/admin/content',{action:'listGuideLessons',collection:'curriculum',id:guideId,...scopePayload})
+      .then(response=>{if(!canceled)setLessonDetails((response.items||[]) as LessonDetails[]);})
+      .catch(reason=>{if(!canceled){setLessonDetails([]);setError(reason instanceof Error?reason.message:'Could not load lesson sections.');}});
+    return()=>{canceled=true;};
+  }, [guideId,organizationId]);
 
   // Shared guides may be read, but quizzes must be attached to a guide that
   // the currently selected tenant can administer.
@@ -83,6 +104,15 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
   ), [guides, organizationId]);
   const currentGuide = editableGuides.find(guide => guide.id === guideId);
   const lessonOptions = (currentGuide?.lessons || []).filter(lesson => lesson.type !== 'Test');
+  const selectedLesson = lessonDetails.find(item=>item.id===lessonId);
+  const anchorOptions = (selectedLesson?.chapters || []).flatMap(chapter => [
+    {type:'chapter' as const,id:chapter.id,label:'Chapter: '+chapter.title},
+    ...(chapter.sections || []).flatMap(section=>[
+      {type:'section' as const,id:section.id,label:'Section: '+section.title},
+      ...(section.blocks || []).map((block,index)=>({type:'block' as const,id:block.id,
+        label:'Block '+(index+1)+': '+(block.text?.slice(0,45)||block.type)})),
+    ]),
+  ]).filter(item=>item.type===attachmentType);
   const guideName = (id: string) => guides.find(guide => guide.id === id)?.title || id;
   const lessonName = (guide: string, id: string) => guides.find(item => item.id === guide)?.lessons?.find(item => item.id === id)?.title || id;
   const open = (quiz: Quiz | null, copy = false) => {
@@ -101,13 +131,17 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
     setAttachmentType(quiz?.attachmentType || 'lesson');
     setGuideId(copy ? '' : quiz?.guideId || '');
     setLessonId(copy ? '' : quiz?.lessonId || '');
+    setAnchorId(copy ? '' : quiz?.anchorId || '');
     setQuestions(quiz ? normalize(quiz.questions || []) : []);
   };
   const save = async () => {
     if (!title.trim()) return setError('Quiz title is required.');
     if (!guideId || !currentGuide) return setError('Choose a guide in your selected organization.');
-    if (attachmentType === 'lesson' && (!lessonId || !lessonOptions.some(item => item.id === lessonId))) {
+    if (attachmentType !== 'guide' && (!lessonId || !lessonOptions.some(item => item.id === lessonId))) {
       return setError('Choose the lesson this quiz will assess.');
+    }
+    if (['chapter','section','block'].includes(attachmentType) && !anchorOptions.some(item=>item.id===anchorId)) {
+      return setError('Choose an existing chapter, section or block in this lesson.');
     }
     if (published && !questions.length) return setError('Add at least one question before publishing.');
     setSaving(true); setError('');
@@ -117,7 +151,8 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
         data: {
           title: title.trim(), description: description.trim(),
           language: currentGuide.language, sharingScope: scope, published,
-          attachmentType, guideId, lessonId: attachmentType === 'lesson' ? lessonId : '',
+          attachmentType, guideId, lessonId: attachmentType === 'guide' ? '' : lessonId,
+          anchorId: ['chapter','section','block'].includes(attachmentType) ? anchorId : '',
           ...(sourceId ? { sourceContentId: sourceId } : {}),
           questions: questions.map(question => ({
             question: question.question, options: question.options,
@@ -128,6 +163,7 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
       setMessage('Quiz saved and attached to its study guide.');
       setEditorOpen(false); setSelected(null); setSourceId('');
       await load();
+      onSaved?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save quiz.');
     } finally { setSaving(false); }
@@ -145,7 +181,7 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
   return <div className="vop-reference-manager">
     <div className="vop-page-head">
       <div className="vop-heading"><div className="vop-heading-icon"><Share2 size={28}/></div>
-        <div><h1>{t('admin.quiz_library','Quiz Library')}</h1><p>Attach each quiz to a particular lesson or the complete guide. Published quizzes appear as learner assessments.</p></div>
+        <div><h1>{t('admin.quiz_library','Quiz Library')}</h1><p>Private question bank: attach a quiz to a block, section, chapter, lesson or the final guide examination.</p></div>
       </div>
       <div className="vop-reference-actions">
         <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{t('common.refresh','Refresh')}</button>
@@ -165,24 +201,34 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
         <div className="vop-field"><label>Quiz Title *</label><input value={title} onChange={e => setTitle(e.target.value)}/></div>
         <div className="vop-field"><label>Language</label><input value={currentGuide?.language?.toUpperCase() || language.toUpperCase()} readOnly placeholder="Choose a guide"/></div>
         <div className="vop-field"><label>Attachment *</label>
-          <select value={attachmentType} onChange={e => { setAttachmentType(e.target.value as AttachmentType); setLessonId(''); }}>
+          <select value={attachmentType} onChange={e => { setAttachmentType(e.target.value as AttachmentType); setLessonId(''); setAnchorId(''); }}>
             <option value="lesson">Individual lesson quiz</option>
-            <option value="guide">Entire guide assessment</option>
+            <option value="chapter">Chapter quiz</option>
+            <option value="section">Section quiz</option>
+            <option value="block">Content-block quiz</option>
+            <option value="guide">Final guide examination</option>
           </select>
         </div>
         <div className="vop-field"><label>Guide *</label>
-          <select value={guideId} onChange={e => { setGuideId(e.target.value); setLessonId(''); setLanguage(editableGuides.find(item => item.id === e.target.value)?.language || ''); }}>
+          <select value={guideId} onChange={e => { setGuideId(e.target.value); setLessonId(''); setAnchorId(''); setLanguage(editableGuides.find(item => item.id === e.target.value)?.language || ''); }}>
             <option value="">Select a guide</option>
             {editableGuides.map(guide => <option key={guide.id} value={guide.id}>{guide.title} · {guide.language.toUpperCase()}{guide.published ? '' : ' (Draft)'}</option>)}
           </select>
           {!editableGuides.length && <small>No editable guides in the selected organization. Create a guide first.</small>}
         </div>
-        {attachmentType === 'lesson' && <div className="vop-field"><label>Lesson *</label>
-          <select value={lessonId} onChange={e => setLessonId(e.target.value)} disabled={!currentGuide}>
+        {attachmentType !== 'guide' && <div className="vop-field"><label>Lesson *</label>
+          <select value={lessonId} onChange={e => {setLessonId(e.target.value);setAnchorId('');}} disabled={!currentGuide}>
             <option value="">Select a lesson</option>
             {lessonOptions.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.lessonNumber}. {lesson.title}{lesson.published ? '' : ' (Draft)'}</option>)}
           </select>
           {currentGuide && !lessonOptions.length && <small>Create a lesson in this guide before attaching its quiz.</small>}
+        </div>}
+        {(['chapter','section','block'] as AttachmentType[]).includes(attachmentType) && <div className="vop-field"><label>Attach to {attachmentType} *</label>
+          <select value={anchorId} disabled={!lessonId || !anchorOptions.length} onChange={e=>setAnchorId(e.target.value)}>
+            <option value="">Select a {attachmentType}</option>
+            {anchorOptions.map(anchor=><option key={anchor.id} value={anchor.id}>{anchor.label}</option>)}
+          </select>
+          {lessonId && !anchorOptions.length && <small>This lesson has no structured {attachmentType}s. Edit and publish its chapter structure first.</small>}
         </div>}
         <div className="vop-field"><label>{t('common.sharing','Sharing')}</label><select value={scope} onChange={e => setScope(e.target.value as typeof scope)}>
           <option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared</option>
@@ -222,7 +268,7 @@ export default function QuizLibrary({ organizationId = '' }: Props) {
         <thead><tr><th>Quiz</th><th>Attached to</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{items.map(item => <tr key={item.id}>
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
-          <td>{item.attachmentType === 'guide' ? 'Entire guide: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
+          <td>{item.attachmentType === 'guide' ? 'Final guide exam: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
           <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.archived ? 'Archived' : item.published ? 'Published' : 'Draft'}</td>
           <td><div className="vop-reference-action-cell">
