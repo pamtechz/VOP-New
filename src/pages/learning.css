@@ -83,3 +83,15 @@
 }
 @media(max-width:340px){.vop-bottom-nav button{font-size:9px;padding-inline:0}.vop-bottom-nav button svg{width:19px;height:19px}}
 @media(prefers-reduced-motion:reduce){.vop-bottom-nav button,.vop-material-card{transition:none!important}}
+
+/* Keep the dense desktop header out of tablet widths; the account drawer
+ * provides the same destinations at every breakpoint. */
+.vop-desktop-nav{display:none!important}
+@media(min-width:1480px){.vop-desktop-nav{display:flex!important}}
+.vop-header-learning{position:relative;color:#cbd5e1;font-size:12px;font-weight:700}
+.vop-header-learning>summary{display:flex;align-items:center;gap:5px;cursor:pointer;list-style:none;border-radius:11px;padding:8px 10px}
+.vop-header-learning>summary::-webkit-details-marker{display:none}
+.vop-header-learning>summary:hover,.vop-header-learning[open]>summary{color:#fbbf24;background:rgba(255,255,255,.08)}
+.vop-header-learning-menu{position:absolute;z-index:120;top:calc(100% + 9px);left:0;min-width:220px;padding:7px;background:#fff;border:1px solid #d9e4f2;border-radius:13px;box-shadow:0 12px 40px rgba(6,29,67,.25);display:grid;gap:3px}
+.vop-header-learning-menu button{display:flex;align-items:center;gap:9px;min-height:43px;padding:10px 12px;background:transparent;border:0;border-radius:9px;color:#143a6c;cursor:pointer;text-align:left;font-size:12px;font-weight:750}
+.vop-header-learning-menu button:hover,.vop-header-learning-menu button:focus-visible{background:#edf4ff}
