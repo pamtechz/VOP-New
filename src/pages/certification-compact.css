@@ -156,3 +156,13 @@
   .vop-cert-toolbar{grid-template-columns:1fr}
   .vop-cert-search{grid-column:auto}
 }
+
+@media screen and (max-width:900px){
+  .vop-cert-head-actions{
+    width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:7px;
+  }
+  .vop-cert-head-actions .vop-cert-export-button,
+  .vop-cert-head-actions .vop-cert-issue-trigger{
+    width:auto;min-width:0;flex:1 1 145px;justify-content:center;
+  }
+}
