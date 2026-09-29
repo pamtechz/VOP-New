@@ -13,7 +13,7 @@ import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
 import { initializeLocalization, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
-import { loadFirestoreUser } from './services/firestoreData';
+import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import { auth, db } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
@@ -60,6 +60,21 @@ export const App: React.FC = () => {
   const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>([]);
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
+  const [contentRefresh, setContentRefresh] = useState(0);
+  useEffect(() => {
+    const refresh = () => setContentRefresh(value => value + 1);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('vop_data_updated', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('vop_data_updated', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [deepLinkPageIndex, setDeepLinkPageIndex] = useState(0);
@@ -246,7 +261,7 @@ export const App: React.FC = () => {
       }
     });
     return () => { cancelled = true; };
-  }, [currentUser.uid, currentUser.organizationId]);
+  }, [currentUser.uid, currentUser.organizationId, currentRoute, contentRefresh]);
 
   // Radio is live Firestore content. Keep the public/admin application state
   // synchronized after an administrator publishes, edits, or deletes a record;
@@ -359,7 +374,11 @@ export const App: React.FC = () => {
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
             onBack={returnHome} onOpenGuide={guide => {setActiveGuide(guide);setCurrentRoute('home');}}
-            onOpenLesson={openCatalogLesson}/>}
+            onOpenLesson={openCatalogLesson} onRefresh={async () => {
+              const latest = await loadFirestoreGuides();
+              setGuides(latest);
+              saveGuides(latest);
+            }}/>}
           {currentRoute === 'master-guide' && <EngagementPage mode="master-guide" onBack={returnHome}/>}
           {currentRoute === 'scripture-memory' && <EngagementPage mode="memory" onBack={returnHome}/>}
           {currentRoute === 'iron-duels' && <EngagementPage mode="duels" onBack={returnHome}/>} 
