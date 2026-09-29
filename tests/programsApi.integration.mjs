@@ -130,13 +130,25 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     const contributor=await call(author,{collection:'programs',action:'upsert',
       id:programId,organizationId:a,data:base});
     assert.notEqual(contributor.status,200,'platform adoption revokes contributor mutation');
+    const lessonAttempt=await call(author,{collection:'curriculum',action:'upsertLesson',
+      id:'attempt-adopted-lesson',organizationId:a,data:{
+        guideId:guideA,lessonId:'attempt-adopted-lesson',language:'en',
+        title:'Unauthorized change',lessonNumber:'99',type:'Lesson',
+      }});
+    assert.notEqual(lessonAttempt.status,200,'adopted guides must also block lesson edits');
   });
+});
+const notesGuide='program-test-notes-guide';
+await db.doc('guides/'+notesGuide).set({
+  id:notesGuide,organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
+  language:'en',title:'Private notes guide',published:true,
+  archived:false,sharingScope:'organization',canonical:true,
 });
 await test('teacher notes are private and transferred atomically from legacy lessons',async t=>{
   const lessonId='program-test-study-lesson';
-  const privatePath='guides/'+guideA+'/lessons/'+lessonId+'/private/instructorNotes';
+  const privatePath='guides/'+notesGuide+'/lessons/'+lessonId+'/private/instructorNotes';
   const notes='Instructor-only assessment instructions. NEVER SHOW TO LEARNERS.';
-  const payload={guideId:guideA,lessonId,language:'en',
+  const payload={guideId:notesGuide,lessonId,language:'en',
     title:'Study the Sabbath',lessonNumber:'1',
     type:'Lesson',published:false,teacherNotes:notes,
     sharingScope:'organization'};
@@ -144,26 +156,26 @@ await test('teacher notes are private and transferred atomically from legacy les
     const saved=await call(author,{collection:'curriculum',action:'upsertLesson',
       id:lessonId,organizationId:a,data:payload});
     assert.equal(saved.status,200,JSON.stringify(saved.value));
-    assert.equal((await db.doc('guides/'+guideA+'/lessons/'+lessonId).get())
+    assert.equal((await db.doc('guides/'+notesGuide+'/lessons/'+lessonId).get())
       .data()?.teacherNotes,undefined);
     assert.equal((await db.doc(privatePath).get()).data()?.text,notes);
   });
   await t.test('authorized author receives notes, co-editor only metadata, outsider nothing',async()=>{
-    const own=await call(author,{collection:'curriculum',action:'listGuideLessons',id:guideA,
+    const own=await call(author,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
       organizationId:a});
     assert.equal(own.status,200,JSON.stringify(own.value));
     assert.equal(own.value.items.find(item=>item.id===lessonId).teacherNotes,notes);
-    const peer=await call(coAdmin,{collection:'curriculum',action:'listGuideLessons',id:guideA,
+    const peer=await call(coAdmin,{collection:'curriculum',action:'listGuideLessons',id:notesGuide,
       organizationId:a});
     assert.equal(peer.status,200,JSON.stringify(peer.value));
     assert.equal(peer.value.items.find(item=>item.id===lessonId).teacherNotes,undefined);
     const foreign=await call(outsider,{collection:'curriculum',action:'listGuideLessons',
-      id:guideA,organizationId:b});
+      id:notesGuide,organizationId:b});
     assert.notEqual(foreign.status,200);
   });
   await t.test('editing legacy notes extracts them and deletes the public field',async()=>{
     const legacy='program-test-legacy-study';
-    const ref=db.doc('guides/'+guideA+'/lessons/'+legacy);
+    const ref=db.doc('guides/'+notesGuide+'/lessons/'+legacy);
     await ref.set({
       ...payload,id:legacy,lessonId:legacy,teacherNotes:'Historical private text',
       ownerUid:author.uid,ownerOrganizationId:a,organizationId:a,
