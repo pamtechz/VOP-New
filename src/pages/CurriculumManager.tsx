@@ -828,7 +828,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     const editorTabs = [
       ['content', tx('curriculum.content', 'Content')], ['media', tx('curriculum.media', 'Media')], ['bible', tx('curriculum.bibleReferences', 'Bible References')],
-      ['quiz', tx('curriculum.quiz', 'Quiz')], ['notes', tx('curriculum.teacherNotes', 'Teacher Notes')], ['settings', tx('common.settings', 'Settings')],
+      ['notes', tx('curriculum.teacherNotes', 'Teacher Notes')], ['settings', tx('common.settings', 'Settings')],
     ] as const;
 
     const wordCount = editor.content.trim() ? editor.content.trim().split(/\\s+/).filter(Boolean).length : 0;
@@ -873,7 +873,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-editor-head">
           <div className="vop-reference-editor-title">
             <div className="vop-reference-editor-thumb">{editor.imageUrl ? <img src={editor.imageUrl} alt="" /> : <FileText size={25}/>}</div>
-            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>{tx('curriculum.editorDescription', 'Create and edit lesson content, text, images, audio, video and quiz questions.')}</p></div>
+            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Organize this lesson into chapters, sections and blocks; attach quizzes through the private Quiz Library.</p></div>
           </div>
           <div className="vop-reference-actions">
             <button className="vop-secondary" type="button" onClick={() => setPreviewOpen(true)}><Eye size={17}/>{tx('common.preview', 'Preview')}</button>
@@ -888,7 +888,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
           <div className="vop-field"><label>{tx('curriculum.guideRequired', 'Guide *')}</label><select value={editor.guideId} onChange={e => { const selected = editableGuides.find(item => item.id === e.target.value); setEditor({...editor,guideId:e.target.value,guideTitle:valueText(selected?.title),language:valueText(selected?.language || editor.language).toLowerCase()}); }}><option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>{editableGuides.map(guide => <option key={String(guide.id)} value={String(guide.id)}>{String(guide.title)} · {String(guide.language).toUpperCase()}{guide.published === true ? '' : ' (Draft)'}</option>)}</select></div>
           <div className="vop-field"><label>{tx('curriculum.lessonNumberRequired', 'Lesson Number *')}</label><input value={editor.lessonNumber} onChange={e => setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>{tx('curriculum.seasonQuarter', 'Season / Quarter')}</label><select value={editor.season} onChange={e => setEditor({...editor,season:e.target.value})}><option value="">{tx('curriculum.selectSeason', 'Select season')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
-          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value,guideId:'',guideTitle:''})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
+          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
         </div>
 
         <div className="vop-reference-editor-layout vop-lesson-editor-grid">
@@ -898,28 +898,36 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </div>
 
             {editorTab === 'content' && <div className="vop-lesson-rich-editor">
-              <div className="vop-section-title vop-lesson-content-title"><div><h3>{tx('curriculum.lessonContentRequired', 'Lesson Content *')}</h3><p>{tx('curriculum.contentHelp', 'Format lesson text, insert media and structure the lesson without hardcoded content.')}</p></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>{tx('curriculum.addBlock', 'Add Block')}</button><button className="vop-secondary" type="button" onClick={addPageBreak}>{tx('curriculum.pageBreak', 'Page Break')}</button></div></div>
-              <div className="vop-lesson-toolbar">
-                <select aria-label="Text style" onChange={event => { const value=event.target.value; if(value==='heading') wrapSelection('[h2]','[/h2]'); if(value==='quote') wrapSelection('[quote]','[/quote]'); event.currentTarget.value='paragraph'; }} defaultValue="paragraph"><option value="paragraph">{tx('common.paragraph', 'Paragraph')}</option><option value="heading">{tx('common.heading', 'Heading')}</option><option value="quote">{tx('common.quote', 'Quote')}</option></select>
-                <span className="vop-lesson-toolbar-divider"/>
-                <button type="button" title="Bold" onClick={() => wrapSelection('[b]','[/b]')}><strong>B</strong></button>
-                <button type="button" title="Italic" onClick={() => wrapSelection('[i]','[/i]')}><em>I</em></button>
-                <button type="button" title="Underline" onClick={() => wrapSelection('[u]','[/u]')}><Underline size={17}/></button>
-                <span className="vop-lesson-toolbar-divider"/>
-                <button type="button" title="Bulleted list" onClick={() => addLinePrefix('- ')}><List size={18}/></button>
-                <button type="button" title="Numbered list" onClick={() => addLinePrefix('1. ')}><ListOrdered size={18}/></button>
-                <button type="button" title="Quote" onClick={() => addLinePrefix('> ')}><Quote size={18}/></button>
-                <button type="button" title="Link" onClick={() => wrapSelection('[link]','[/link]')}><LinkIcon size={17}/></button>
-                <button type="button" title="Image" onClick={() => setEditor({...editor,imageUrl:editor.imageUrl})}><ImageIcon size={17}/></button>
-                <button type="button" title="Video" onClick={() => setEditor({...editor,videoUrl:editor.videoUrl})}><Video size={17}/></button>
-                <button type="button" title="Table" onClick={() => wrapSelection('[table]','[/table]')}><Table2 size={17}/></button>
-                <span className="vop-lesson-toolbar-divider"/>
-                <button type="button" title="Undo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('undo'); }}><Undo2 size={17}/></button>
-                <button type="button" title="Redo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('redo'); }}><Redo2 size={17}/></button>
+              {editor.chapters.length ? <StructuredLessonEditor
+                chapters={editor.chapters}
+                onChange={chapters => setEditor({...editor,chapters})}
+                canAttachQuiz={Boolean(editor.id) && editor.published}
+                onQuiz={anchor=>{
+                  if (!editor.id || !editor.published) {
+                    setError('Save and publish this lesson before attaching a published quiz.');
+                    return;
+                  }
+                  setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
+                  setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
+                }}
+              /> : <>
+                <div className="vop-structure-legacy">
+                  <strong>Legacy flat lesson</strong>
+                  <p>This existing lesson uses the older text-page format. It remains readable. Convert it to chapter structure without losing its original text.</p>
+                  {editor.questions.length>0 && <p role="alert">This historical lesson also has inline quiz questions. Use Quiz Library and the historical answer-key migration before publishing changes.</p>}
+                  <button className="vop-primary" type="button" onClick={()=>setEditor({...editor,chapters:[{
+                    ...newChapter(),title:editor.title||'Chapter 1',
+                    sections:[{...newChapter().sections[0],title:'Section 1',blocks:[{id:newId('block'),type:'paragraph',text:editor.content||editor.description||'Study content'}]}],
+                  }]})}><Plus size={17}/> Convert to structured chapters</button>
+                </div>
+                <label className="vop-field">Legacy lesson content
+                  <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content}
+                    onChange={event=>setEditor({...editor,content:event.target.value})}/>
+                </label>
+              </>}
+              <div className="vop-field"><label>{tx('common.description', 'Description')}</label>
+                <textarea value={editor.description} onChange={event=>setEditor({...editor,description:event.target.value})}/>
               </div>
-              <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content} onChange={event => setEditor({...editor,content:event.target.value})} placeholder="Start writing the lesson content here..." />
-              <div className="vop-lesson-editor-footer"><span>Words: {wordCount}</span><span>{tx('curriculum.formattingHelp', 'Use the toolbar to add lightweight formatting markers.')}</span></div>
-              <div className="vop-form-grid vop-lesson-description-grid"><div className="vop-field"><label>{tx('common.description', 'Description')}</label><textarea value={editor.description} onChange={e => setEditor({...editor,description:e.target.value})}/></div><div className="vop-field"><label>{tx('curriculum.plainTextFallback', 'Plain-text fallback')}</label><textarea value={editor.content} onChange={e => setEditor({...editor,content:e.target.value})}/></div></div>
             </div>}
 
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column">
@@ -935,15 +943,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
             {editorTab === 'bible' && <div className="vop-field"><label>{tx('curriculum.bibleReferences', 'Bible References')}</label><textarea value={editor.bibleReferences} onChange={e => setEditor({...editor,bibleReferences:e.target.value})}/></div>}
 
-            {editorTab === 'quiz' && <div>
-              <div className="vop-section-title"><div><h3>{tx('curriculum.quizQuestions', 'Quiz Questions')}</h3><p>{tx('curriculum.quizQuestionsHelp', 'Questions belong to this lesson and are stored with it.')}</p></div><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,questions:[...editor.questions,{question:'',options:['','','',''],answer:0}]})}><Plus size={16}/>{tx('curriculum.addQuestion', 'Add Question')}</button></div>
-              {editor.questions.map((question,index) => <div className="vop-editor-question" key={index}>
-                <div className="vop-field"><label>Question {index + 1}</label><textarea value={question.question} onChange={e => { const next=[...editor.questions]; next[index]={...next[index],question:e.target.value}; setEditor({...editor,questions:next}); }}/></div>
-                {question.options.map((option,optionIndex) => <div className="vop-field" key={optionIndex}><label>Option {optionIndex + 1}</label><input value={option} onChange={e => { const next=[...editor.questions]; const options=[...next[index].options]; options[optionIndex]=e.target.value; next[index]={...next[index],options}; setEditor({...editor,questions:next}); }}/></div>)}
-                <div className="vop-editor-question-foot"><select value={question.answer} onChange={e => { const next=[...editor.questions]; next[index]={...next[index],answer:Number(e.target.value)}; setEditor({...editor,questions:next}); }}><option value={0}>Correct option 1</option><option value={1}>Correct option 2</option><option value={2}>Correct option 3</option><option value={3}>Correct option 4</option></select><button className="vop-actions" type="button" onClick={() => setEditor({...editor,questions:editor.questions.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button></div>
-              </div>)}
-              {editor.questions.length === 0 && <div className="vop-empty">{tx('curriculum.noQuizQuestions', 'No quiz questions configured.')}</div>}
-            </div>}
 
             {editorTab === 'notes' && <div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div>}
 
