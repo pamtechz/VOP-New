@@ -75,18 +75,18 @@ test('all portal sign-out controls live in top account dropdowns and learners ha
   assert.doesNotMatch(mobile,/onLogout/);
 });
 
-test('the learner and admin top navigation share reference-scale responsive controls',()=>{
+test('admin uses compact shared navigation without a duplicate nonfunctional language picker',()=>{
   const learner=read('src/components/layout/Header.tsx');
   const admin=read('src/pages/AdminPage.tsx');
   const styles=read('src/components/layout/navigation-header.css');
   const app=read('src/App.tsx');
   assert.match(learner,/vop-app-brand-mark/);
   assert.match(learner,/vop-header-locale-control/);
-  assert.match(admin,/vop-header-locale-control/);
+  assert.doesNotMatch(admin,/vop-header-locale-control/);
   assert.match(admin,/<CommunicationTools onNavigate=/);
-  assert.match(app,/onChangeUiLocale=\{setUiLocale\}/);
-  assert.match(styles,/min-height:88px!important/);
-  assert.match(styles,/font-size:clamp\(19px,1\.23vw,24px\)/);
+  assert.doesNotMatch(app,/onChangeUiLocale=\{setUiLocale\}/);
+  assert.match(styles,/height:64px!important;min-height:64px!important/);
+  assert.match(styles,/font-size:clamp\(16px,1\.06vw,19px\)/);
   assert.match(styles,/@media\(max-width:700px\)/);
   assert.match(styles,/@media\(max-width:520px\)/);
 });
