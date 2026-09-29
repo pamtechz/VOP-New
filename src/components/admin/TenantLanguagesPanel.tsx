@@ -3,7 +3,7 @@ import { BookOpen, Globe, LockKeyhole, Plus, RefreshCw, Save, Share2, Trash2 } f
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
 
-type TenantLanguage = CustomLanguage & {
+export type TenantLanguage = CustomLanguage & {
   id:string; ownerUid?:string; canEdit?:boolean; adoptedByPlatform?:boolean;
   platformOwned?:boolean; sharingScope?:string;
 };
@@ -20,6 +20,11 @@ async function languageAction(action:string, fields:Record<string,unknown>={}) {
   const payload=await response.json().catch(()=>({})) as {error?:string;items?:TenantLanguage[]};
   if (!response.ok) throw new Error(payload.error || 'The language operation failed.');
   return payload;
+}
+
+export async function getTenantLanguages():Promise<TenantLanguage[]> {
+  const data=await languageAction('tenantlist');
+  return Array.isArray(data.items)?data.items:[];
 }
 
 /** Organization language drafts never write into the global Languages registry.
@@ -39,8 +44,7 @@ export function TenantLanguagesPanel({onChanged}:{onChanged?:(items:CustomLangua
   const load=useCallback(async()=>{
     setBusy(true);setError('');
     try {
-      const data=await languageAction('tenantlist');
-      const next=Array.isArray(data.items)?data.items:[];
+      const next=await getTenantLanguages();
       setItems(next);
       onChanged?.(next.filter(item=>item.enabled!==false));
     }catch(reason){
