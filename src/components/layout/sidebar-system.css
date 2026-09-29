@@ -389,3 +389,25 @@
   .vop-admin .vop-admin-top .vop-top-page{font-size:17px}
   .vop-admin .vop-admin-top .vop-brand-name{font-size:14px}
 }
+
+/* Restore the original sidebar typography after the rail geometry update.
+   These rules are deliberately scoped to the rails: page, header, reader
+   and form font sizes stay untouched. */
+@media(min-width:1024px){
+  .vop-learner-sidebar-brand strong{font-size:12px}
+  .vop-learner-sidebar-brand small{font-size:10px}
+  .vop-learner-sidebar-link{font-size:12px;font-weight:760}
+  .vop-learner-sidebar-label{font-size:10px}
+  .vop-learner-sidebar-user-details strong{font-size:11px}
+  .vop-learner-sidebar-user-details small{font-size:9px}
+  .vop-learner-sidebar-logout{font-size:12px}
+}
+@media(min-width:901px){
+  .vop-admin-sidebar-brand-copy strong{font-size:12px}
+  .vop-admin-sidebar-brand-copy small{font-size:10px}
+  .vop-admin .vop-sidebar .vop-nav-item{font-size:12px;font-weight:760}
+  .vop-admin-sidebar-label{font-size:10px}
+  .vop-admin-sidebar-user-copy strong{font-size:11px}
+  .vop-admin-sidebar-user-copy small{font-size:9px}
+  .vop-admin .vop-sidebar .vop-back,.vop-admin-sidebar-logout{font-size:12px}
+}
