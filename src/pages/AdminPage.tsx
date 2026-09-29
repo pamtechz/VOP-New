@@ -18,7 +18,7 @@ import {
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import './admin-mobile.css';
-import { getAvailableLanguages, getTranslation, getUiLocale } from '../services/i18n';
+import { getTranslation, getUiLocale } from '../services/i18n';
 import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, permissionAllowed, roleForPermission, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
@@ -42,7 +42,6 @@ interface AdminPageProps {
   onLogout: () => void;
   onNavigate: (route:AppRoute)=>void;
   uiLocale: LanguageCode;
-  onChangeUiLocale: (locale:LanguageCode)=>void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onNavigateToCertificates?: () => void;
@@ -123,7 +122,7 @@ async function adminContent(action: string, collection: string, id?: string, dat
   return body;
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, onChangeUiLocale, sidebarCollapsed, onToggleSidebar }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
@@ -1041,17 +1040,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <CommunicationTools onNavigate={onNavigate} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
-        <div className="vop-admin-header-language">
-          <label className="vop-header-locale-control">
-            <Globe size={20} aria-hidden="true"/>
-            <select aria-label="Interface language" value={uiLocale} onChange={event=>onChangeUiLocale(event.target.value as LanguageCode)}>
-              {getAvailableLanguages(settings||undefined).map(language=><option key={language.code} value={language.code}>
-                {language.name}{language.nativeName&&language.nativeName.toLowerCase()!==language.name.toLowerCase()?` (${language.nativeName})`:''}
-              </option>)}
-            </select>
-            <ChevronDown size={17} aria-hidden="true"/>
-          </label>
-        </div>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
           <button className="vop-user" type="button" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>{setProfileOpen(value=>!value);setSidebarOpen(false)}} title="Open profile menu">
             {currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}

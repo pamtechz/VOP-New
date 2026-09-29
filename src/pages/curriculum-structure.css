@@ -87,23 +87,100 @@
 /* PCM-inspired split workspace: a compact, collapsible chapter outline at
    left and the existing full-featured editor at right. Keep inherited UI
    typography; the sidebar redesign must not resize the reader or forms. */
-.vop-structure-workspace{display:grid;grid-template-columns:minmax(190px,255px) minmax(0,1fr);gap:14px;align-items:start;min-width:0}
-.vop-structure-outline{position:sticky;top:12px;display:grid;gap:8px;padding:14px;background:#13233e;color:#f5f8ff;border-radius:13px;max-height:min(75vh,740px);overflow-y:auto;min-width:0}
-.vop-structure-outline>strong{font-size:12px;letter-spacing:.09em}
-.vop-structure-outline>a{display:flex;align-items:center;gap:11px;padding:11px 9px;border:1px solid #354660;background:#1f2b42;color:#f3f6ff;border-radius:9px;text-decoration:none;overflow-wrap:anywhere}
-.vop-structure-outline>a>span:first-child{display:grid;place-items:center;flex:0 0 32px;height:34px;border-radius:7px;background:#1146b0;font-weight:800}
-.vop-structure-outline>a>span:last-child{display:grid;gap:3px;min-width:0}
-.vop-structure-outline>a small{color:#c8d3e5;font-size:inherit;opacity:.8}
-.vop-structure-outline>a:focus-visible{outline:3px solid #f3b94f;outline-offset:2px}
-.vop-structure-outline>p{margin:7px 0 0;opacity:.8;line-height:1.5}
-.vop-structure-content{display:grid;gap:13px;min-width:0}
-.vop-structure-transfer{flex:1 1 165px;max-width:280px}
-.vop-structure-transfer select{max-width:100%}
-.vop-structure-crosslesson{display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding:7px;background:#f3f7ff;border:1px solid #e1eaf6;border-radius:9px}
-.vop-structure-crosslesson>label{flex:1 1 170px;min-width:150px}
-.vop-structure-crosslesson>button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 10px;border:1px solid #d9e4ef;background:#fff;border-radius:8px;color:#245885;font:inherit;cursor:pointer}
-.vop-structure-crosslesson button:disabled{opacity:.42;cursor:not-allowed}
-.vop-structure-block-actions .vop-structure-crosslesson{flex:1 1 100%;width:100%}
-.vop-structure-block-actions .vop-structure-crosslesson button{flex:0 0 auto}
-@media(max-width:1000px){.vop-structure-workspace{grid-template-columns:1fr}.vop-structure-outline{position:static;display:flex;flex-wrap:wrap;max-height:none}.vop-structure-outline>a{flex:1 1 190px}.vop-structure-outline>p{flex:1 1 100%}}
-@media(max-width:540px){.vop-structure-crosslesson{width:100%}.vop-structure-crosslesson>label{flex:1 1 100%;min-width:0}.vop-structure-transfer{flex:1 1 100%;max-width:none}.vop-structure-outline>a{flex:1 1 100%}}
+/* Full-width chapter editor: no redundant chapter rail. All secondary
+ * commands stay in keyboard-accessible popovers opened by the ellipsis. */
+.vop-structure-workspace,.vop-structure-content{display:grid;grid-template-columns:minmax(0,1fr);gap:11px;min-width:0}
+.vop-structure-chapter{position:relative;overflow:visible}
+.vop-structure-chapter>summary{padding:11px 14px}
+.vop-structure-chapter[open]{z-index:1}
+.vop-structure-chapter:focus-within{z-index:3}
+.vop-structure-chapter-body{padding:12px;gap:10px}
+.vop-structure-chapter-icon{width:31px;height:31px;border-radius:8px}
+.vop-structure-chapter-summary strong{font-size:14px}
+.vop-structure-section{padding:12px;gap:9px}
+.vop-structure-section-head{align-items:center;padding-bottom:9px}
+.vop-structure-inline{align-items:center}
+.vop-structure-inline>label,.vop-structure-section-head>label{flex:1 1 200px}
+.vop-structure-block{padding:10px 12px;gap:7px}
+.vop-structure-block-top{flex-wrap:nowrap}
+.vop-structure-add-block button,.vop-structure-add-section{min-height:32px;padding:6px 10px}
+.vop-structure-actions-menu{position:relative;flex:0 0 auto;margin-left:auto;z-index:1}
+.vop-structure-actions-menu.is-open{z-index:35}
+.vop-structure-more{
+  display:grid;place-items:center;min-width:33px;width:33px;height:33px;
+  padding:0;border:1px solid #d9e4ef;border-radius:8px;
+  background:#fff;color:#315980;cursor:pointer;
+}
+.vop-structure-more:hover,.vop-structure-more[aria-expanded="true"]{background:#edf5ff;border-color:#accbed}
+.vop-structure-actions-popover{
+  position:absolute;right:0;top:calc(100% + 5px);
+  display:grid;gap:4px;min-width:245px;width:min(340px,calc(100vw - 40px));
+  max-height:min(67vh,530px);overflow-y:auto;overscroll-behavior:contain;
+  padding:8px;border:1px solid #d8e4f1;border-radius:11px;background:#fff;
+  box-shadow:0 16px 36px rgba(16,49,88,.18);color:#1c406b;text-align:left;
+}
+.vop-structure-actions-popover>button{
+  display:flex;align-items:center;justify-content:flex-start;gap:9px;
+  width:100%;min-height:34px;padding:8px 10px;border:0;border-radius:7px;
+  background:transparent;color:#24547d;font-size:12px;font-weight:730;
+  line-height:1.35;text-align:left;cursor:pointer;
+}
+.vop-structure-actions-popover>button:hover:not(:disabled){background:#edf5ff}
+.vop-structure-actions-popover>.vop-structure-quiz{background:#f3f8ff}
+.vop-structure-actions-popover>.vop-structure-delete{color:#af3243}
+.vop-structure-actions-popover>label{display:grid;gap:5px;padding:7px 8px;font-size:11px}
+.vop-structure-actions-popover select{min-height:34px;padding:5px 8px;font-size:12px}
+.vop-structure-crosslesson{
+  display:grid;gap:6px;padding:8px 6px 6px;border-top:1px solid #e2e9f3;
+  min-width:0;
+}
+.vop-structure-crosslesson>label{min-width:0}
+.vop-structure-crosslesson>label>select{width:100%;max-width:100%}
+.vop-structure-transfer-buttons{display:flex;align-items:stretch;gap:5px}
+.vop-structure-transfer-buttons button{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  flex:1 1 0;min-height:34px;padding:7px 6px;border:1px solid #d8e4f0;
+  border-radius:7px;background:#fff;color:#24547d;font-size:11px;
+  font-weight:760;cursor:pointer;
+}
+.vop-structure-transfer-buttons button:hover:not(:disabled){background:#edf5ff}
+.vop-structure-crosslesson>small{font-size:10px;color:#73849a;line-height:1.4}
+.vop-structure :is(button,summary,select,input,textarea):focus-visible{outline:2px solid #d5a025;outline-offset:2px}
+@media(max-width:540px){
+  .vop-structure-chapter-body,.vop-structure-section{padding:10px}
+  .vop-structure-intro h3{font-size:16px}
+  .vop-structure-actions-popover{width:min(300px,calc(100vw - 42px))}
+  .vop-structure-inline>label,.vop-structure-section-head>label{flex:1 1 130px}
+}
+
+/* The lesson editor has one content pane; featured artwork is its own tab.
+ * Popovers may extend outside chapter cards without being clipped. */
+.vop-lesson-editor-grid{display:grid;grid-template-columns:minmax(0,1fr)!important;gap:0}
+.vop-lesson-content-card{min-width:0;overflow:visible!important}
+.vop-lesson-content-card .vop-reference-editor-tabs{overflow-x:auto}
+.vop-lesson-featured-tab{display:grid;gap:13px;padding:15px;min-width:0}
+.vop-lesson-featured-preview{
+  display:flex;align-items:center;justify-content:center;min-height:125px;
+  max-height:245px;border:1px solid #e1e9f3;border-radius:10px;
+  overflow:hidden;background:#f5f8fc;
+}
+.vop-lesson-featured-preview img{display:block;width:100%;max-height:245px;object-fit:contain}
+.vop-lesson-featured-placeholder{
+  display:flex;align-items:center;justify-content:center;flex-direction:column;
+  gap:9px;min-height:125px;color:#7487a0;font-size:12px;
+}
+.vop-lesson-featured-tab .vop-remove-button{justify-self:start;width:auto;min-height:34px;margin:0}
+.vop-reference-lesson-editor .vop-reference-editor-title h1{font-size:20px}
+.vop-reference-lesson-editor .vop-reference-editor-head{padding:10px 13px}
+.vop-reference-lesson-editor .vop-reference-editor-thumb{width:68px;height:48px}
+.vop-reference-lesson-editor .vop-reference-editor-tabs .vop-tab{
+  min-height:36px;padding:8px 12px;font-size:12px;
+}
+.vop-reference-lesson-editor .vop-reference-actions :is(.vop-primary,.vop-secondary){
+  min-height:34px;padding:7px 11px;font-size:12px;
+}
+.vop-reference-lesson-editor .vop-reference-actions svg{width:15px;height:15px}
+@media(max-width:700px){
+  .vop-lesson-featured-tab{padding:11px}
+  .vop-reference-lesson-editor .vop-reference-editor-head{flex-wrap:wrap}
+}

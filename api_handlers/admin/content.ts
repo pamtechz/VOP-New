@@ -327,7 +327,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'transferLessonStructure') {
-      if (collection !== 'curriculum') throw new Error('Only curriculum lessons support section or block transfers.');
+      if (collection !== 'curriculum') throw new Error('Only curriculum lessons support chapter, section or block transfers.');
       await requirePermission(ctx, 'curriculum', 'update');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
       const guideId = safeId(data.guideId);
@@ -336,10 +336,10 @@ export default async function handler(req: Request, res: Response) {
       const anchorId = safeId(data.anchorId);
       const parentId = safeId(data.destinationParentId);
       if (sourceId === destinationId) throw new Error('Use the lesson editor to move or duplicate content within the same lesson.');
-      if (!['section','block'].includes(String(data.kind)) || !['move','copy'].includes(String(data.mode))) {
-        throw new Error('Choose a section or block and a move or copy operation.');
+      if (!['chapter','section','block'].includes(String(data.kind)) || !['move','copy'].includes(String(data.mode))) {
+        throw new Error('Choose a chapter, section or block and a move or copy operation.');
       }
-      const kind = data.kind as 'section'|'block';
+      const kind = data.kind as 'chapter'|'section'|'block';
       const mode = data.mode as 'move'|'copy';
       const guideRef = ctx.db.doc('guides/' + guideId);
       const sourceRef = guideRef.collection('lessons').doc(sourceId);

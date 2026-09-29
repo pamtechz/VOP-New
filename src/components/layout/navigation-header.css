@@ -285,3 +285,198 @@
   .vop-learner-main .vop-app-header{padding:0 8px!important}
   .vop-header-locale-control{min-width:84px;max-width:90px}
 }
+
+/* Compact information-dense shell. These overrides intentionally supersede
+ * the earlier 88px reference navbar and large 365px navigation rail. */
+.vop-learner-shell,.vop-admin{
+  --vop-rail-expanded:clamp(230px,18vw,258px);
+  --vop-rail-compact:64px;
+}
+.vop-learner-main .vop-app-header,
+.vop-admin .vop-admin-top{
+  height:64px!important;min-height:64px!important;
+  padding:0 clamp(10px,1.1vw,18px)!important;
+}
+.vop-learner-main .vop-app-header-inner{gap:10px}
+.vop-learner-main .vop-app-brand-mark,
+.vop-admin .vop-admin-top .vop-brand-mark{
+  width:38px!important;height:38px!important;flex-basis:38px;
+  border-radius:10px;
+}
+.vop-learner-main .vop-app-brand-mark img,
+.vop-admin .vop-admin-top .vop-brand-mark img{
+  width:32px;height:32px;
+}
+.vop-learner-main .vop-app-brand-title,
+.vop-admin .vop-admin-top .vop-brand-name{
+  font-size:clamp(16px,1.06vw,19px)!important;font-weight:730;
+}
+.vop-learner-main .vop-app-brand-subtitle,
+.vop-admin .vop-admin-top .vop-brand-sub{
+  font-size:11px!important;line-height:1.25;
+}
+.vop-learner-main .vop-app-brand-version{
+  font-size:10px!important;padding:2px 7px!important;
+}
+.vop-learner-main .vop-app-header-actions,
+.vop-admin .vop-top-actions{gap:5px!important}
+.vop-app-header-actions > div > .btn.btn-ghost,
+.vop-admin .vop-top-actions > div > .btn.btn-ghost,
+.vop-learner-main .vop-header-icon-btn{
+  width:35px;min-width:35px;height:35px;border-radius:8px;
+}
+.vop-app-header-actions > div > .btn.btn-ghost svg,
+.vop-admin .vop-top-actions > div > .btn.btn-ghost svg,
+.vop-learner-main .vop-header-icon-btn svg{
+  width:17px;height:17px;stroke-width:1.8;
+}
+.vop-header-locale-control{
+  height:35px;min-width:116px;max-width:184px;
+  padding:0 9px;gap:7px;
+}
+.vop-header-locale-control select{font-size:12px;max-width:137px;font-weight:680}
+.vop-header-locale-control > svg:first-child{width:16px;height:16px}
+.vop-header-locale-control > svg:last-child{width:14px;height:14px}
+.vop-learner-main .vop-app-header-admin{
+  min-height:35px;padding:0 11px!important;font-size:12px!important;
+  gap:6px;font-weight:680;
+}
+.vop-learner-main .vop-app-header-admin svg{width:16px;height:16px}
+.vop-learner-main .vop-app-header-account-trigger,
+.vop-admin .vop-admin-top .vop-user{
+  min-height:38px;max-width:162px;gap:6px;
+  padding:3px 9px 3px 4px!important;border-radius:999px!important;
+}
+.vop-learner-main .vop-app-header-account-avatar,
+.vop-admin .vop-admin-top .vop-avatar{
+  flex:0 0 30px;width:30px;height:30px;font-size:13px;
+}
+.vop-learner-main .vop-app-header-account-identity strong,
+.vop-admin .vop-admin-top .vop-user-name{font-size:12px!important}
+.vop-admin .vop-admin-top .vop-user-copy{max-width:99px}
+.vop-admin .vop-admin-top .vop-profile-chevron,
+.vop-learner-main .vop-app-header-account-trigger>svg{width:14px;height:14px}
+.vop-admin .vop-admin-top .vop-top-page{font-size:16px!important}
+.vop-admin .vop-admin-top .vop-top-kicker{font-size:10px}
+.vop-admin .vop-heading h1{font-size:20px!important;line-height:1.2}
+.vop-admin .vop-heading p{font-size:13px!important}
+.vop-admin .vop-heading-icon{width:42px;height:42px;border-radius:10px}
+.vop-admin .vop-heading-icon svg{width:22px;height:22px;stroke-width:1.8}
+.vop-admin .vop-section-title h2,.vop-admin .vop-section-title h3{font-size:16px}
+.vop-admin :is(.vop-primary,.vop-secondary){font-size:13px}
+.vop-learner-sidebar-link svg,.vop-admin .vop-sidebar .vop-nav-item svg,
+.vop-learner-main .vop-app-header-actions svg,.vop-admin .vop-top-actions svg{
+  stroke-width:1.8;
+}
+@media(min-width:901px){
+  .vop-admin{
+    grid-template-rows:64px minmax(0,auto)!important;
+    grid-template-columns:var(--vop-rail-expanded) minmax(0,1fr);
+  }
+  .vop-admin.sidebar-collapsed{grid-template-columns:var(--vop-rail-compact) minmax(0,1fr)}
+  .vop-admin .vop-admin-top{height:64px!important}
+  .vop-admin .vop-main{min-height:calc(100dvh - 64px)!important}
+  .vop-admin .vop-sidebar{
+    width:var(--vop-rail-expanded)!important;
+    flex-basis:var(--vop-rail-expanded)!important;
+  }
+  .vop-admin .vop-sidebar.collapsed{
+    width:var(--vop-rail-compact)!important;
+    flex-basis:var(--vop-rail-compact)!important;
+  }
+  .vop-admin-sidebar-head{
+    height:64px;min-height:64px;padding:9px 11px;
+  }
+  .vop-admin-sidebar-brand img{width:34px;height:34px;border-radius:10px;padding:3px}
+  .vop-admin-sidebar-brand-copy strong{font-size:12px}
+  .vop-admin-sidebar-brand-copy small{font-size:10px}
+  .vop-admin-sidebar-collapse{
+    width:34px;height:34px;min-height:34px!important;flex-basis:34px;
+    border-radius:9px;
+  }
+  .vop-admin .vop-sidebar.collapsed .vop-admin-sidebar-head{
+    min-height:64px;height:64px;padding:12px 8px;
+  }
+  .vop-admin .vop-sidebar.collapsed .vop-admin-sidebar-collapse{
+    width:34px;height:34px;flex-basis:34px;
+  }
+  .vop-admin .vop-sidebar .vop-nav{padding:6px 8px}
+  .vop-admin-sidebar-group{padding:7px 0 10px;gap:2px}
+  .vop-admin-sidebar-label{font-size:10px;letter-spacing:.07em;margin:3px 7px 5px}
+  .vop-admin .vop-sidebar .vop-nav-item{
+    min-height:39px;height:39px;gap:10px;padding:7px 9px!important;
+    border-radius:9px;font-size:13px!important;font-weight:675;
+  }
+  .vop-admin .vop-sidebar .vop-nav-item svg{width:18px;height:18px;flex-basis:18px}
+  .vop-admin .vop-sidebar.collapsed .vop-nav{padding:7px 6px}
+  .vop-admin .vop-sidebar.collapsed .vop-nav-item{
+    width:43px;height:41px;min-height:41px;padding:0!important;border-radius:9px;
+  }
+  .vop-admin .vop-sidebar.collapsed .vop-admin-sidebar-label{font-size:12px;min-height:13px}
+}
+@media(min-width:1024px){
+  .vop-learner-shell:not(.vop-learner-simulated) .vop-learner-sidebar{
+    width:var(--vop-rail-expanded)!important;
+    flex-basis:var(--vop-rail-expanded)!important;
+  }
+  .vop-learner-shell:not(.vop-learner-simulated) .vop-learner-sidebar.is-collapsed{
+    width:var(--vop-rail-compact)!important;
+    flex-basis:var(--vop-rail-compact)!important;
+  }
+  .vop-learner-sidebar-head{height:64px;min-height:64px!important;padding:9px 11px!important}
+  .vop-learner-sidebar-brand img{width:34px;height:34px;padding:3px;border-radius:10px}
+  .vop-learner-sidebar-brand strong{font-size:12px}
+  .vop-learner-sidebar-brand small{font-size:10px}
+  .vop-learner-sidebar-toggle{width:34px;height:34px;flex-basis:34px;border-radius:9px}
+  .vop-learner-sidebar.is-collapsed .vop-learner-sidebar-head{
+    height:64px;min-height:64px!important;padding:12px 7px!important;
+  }
+  .vop-learner-sidebar-scroll{padding:6px 8px!important}
+  .vop-learner-sidebar-group{gap:2px;padding:7px 0 10px}
+  .vop-learner-sidebar-label{font-size:10px;margin:3px 7px 5px}
+  .vop-learner-sidebar-link{
+    min-height:39px;padding:7px 9px;gap:10px;border-radius:9px;
+    font-size:13px!important;font-weight:675;
+  }
+  .vop-learner-sidebar-link svg{width:18px;height:18px;flex-basis:18px}
+  .vop-learner-sidebar.is-collapsed .vop-learner-sidebar-scroll{padding:7px 6px!important}
+  .vop-learner-sidebar.is-collapsed .vop-learner-sidebar-link{
+    width:43px;height:41px;min-height:41px;padding:0;border-radius:9px;
+  }
+  .vop-learner-sidebar.is-collapsed .vop-learner-sidebar-label{font-size:12px;min-height:13px}
+  .vop-learner-main .vop-app-header-inner{min-height:0!important}
+}
+@media(max-width:900px){
+  .vop-admin .vop-admin-top{
+    height:58px!important;min-height:58px!important;padding:0 10px!important;
+  }
+  .vop-admin .vop-sidebar{top:58px!important;height:calc(100dvh - 58px)!important}
+  .vop-admin .vop-sidebar-backdrop.open{inset:58px 0 0!important}
+  .vop-learner-main .vop-app-header{height:58px!important;min-height:58px!important;padding:0 10px!important}
+  .vop-admin .vop-admin-top .vop-top-page{font-size:15px!important}
+}
+@media(max-width:520px){
+  .vop-learner-main .vop-app-header-actions > div > .btn.btn-ghost,
+  .vop-admin .vop-top-actions > div > .btn.btn-ghost,
+  .vop-learner-main .vop-header-icon-btn{
+    width:32px;min-width:32px;height:34px;
+  }
+  .vop-header-locale-control{min-width:88px;max-width:106px;height:33px}
+  .vop-learner-main .vop-app-brand-mark{width:34px!important;height:34px!important;flex-basis:34px}
+  .vop-learner-main .vop-app-brand-mark img{width:28px;height:28px}
+  .vop-admin .vop-admin-top .vop-avatar{width:29px;height:29px;flex-basis:29px}
+}
+
+/* Consistent thin-outline chrome for the remaining collapse/menu affordances. */
+.vop-learner-sidebar-toggle svg,
+.vop-admin-sidebar-collapse svg,
+.vop-admin .vop-top-title .vop-menu-btn svg{
+  width:18px;height:18px;stroke-width:1.8;
+}
+@media(max-width:900px){
+  .vop-admin .vop-top-title .vop-menu-btn{
+    width:35px!important;height:35px!important;
+    min-width:35px!important;min-height:35px!important;
+    flex-basis:35px!important;border-radius:8px;
+  }
+}

@@ -6,7 +6,7 @@ import {
   type CurriculumBlock,
 } from './curriculumStructure.ts';
 
-export type TransferKind = 'section' | 'block';
+export type TransferKind = 'chapter' | 'section' | 'block';
 export type TransferMode = 'move' | 'copy';
 export type TransferResult = {
   source: CurriculumChapter[];
@@ -24,11 +24,42 @@ export function transferCurriculumNode(
   destinationParentId: string,
   mode: TransferMode,
 ): TransferResult {
-  if (!['section','block'].includes(kind) || !['move','copy'].includes(mode)) {
-    throw new Error('Select a section or block and a move or copy operation.');
+  if (!['chapter','section','block'].includes(kind) || !['move','copy'].includes(mode)) {
+    throw new Error('Select a chapter, section or block and a move or copy operation.');
   }
   const source = normalizeCurriculumStructure(sourceInput);
   const destination = normalizeCurriculumStructure(destinationInput);
+  // A chapter can be copied or transferred only between distinct draft
+  // lessons. Its section/block IDs are preserved on move for stable anchors,
+  // and regenerated on copy so quizzes never attach to a copied chapter.
+  if (kind === 'chapter') {
+    const origin = source.find(chapter => chapter.id === anchorId);
+    if (!origin) throw new Error('The source chapter is no longer available.');
+    if (destination.length >= 40) throw new Error('A lesson supports at most 40 chapters.');
+    if (mode === 'move' && source.length <= 1) {
+      throw new Error('Add another chapter before moving the last chapter.');
+    }
+    const movedAnchorIds = [
+      origin.id,...origin.sections.flatMap(section => [
+        section.id,...section.blocks.map(block => block.id),
+      ]),
+    ];
+    const copy:CurriculumChapter = mode === 'move' ? origin : {
+      ...origin,id:'chapter-'+randomUUID().replace(/-/g,''),
+      sections:origin.sections.map(section => ({
+        ...section,id:'section-'+randomUUID().replace(/-/g,''),
+        blocks:section.blocks.map(block => ({
+          ...block,id:'block-'+randomUUID().replace(/-/g,''),
+        })),
+      })),
+    };
+    return {
+      source:normalizeCurriculumStructure(mode === 'move'
+        ? source.filter(chapter => chapter.id !== anchorId) : source),
+      destination:normalizeCurriculumStructure([...destination,copy]),
+      movedAnchorIds,
+    };
+  }
   const originChapter = source.find(chapter => chapter.sections.some(section =>
     kind === 'section' ? section.id === anchorId : section.blocks.some(block => block.id === anchorId)));
   const originSection = originChapter?.sections.find(section =>

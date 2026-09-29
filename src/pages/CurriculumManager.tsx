@@ -396,7 +396,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
-  const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'notes' | 'settings'>('content');
+  const [editorTab, setEditorTab] = useState<'content' | 'image' | 'media' | 'bible' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
@@ -851,7 +851,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     if (previewOpen) return <LearnerPreview editor={editor} guideTitle={editor.guideTitle} onClose={() => setPreviewOpen(false)} />;
 
     const editorTabs = [
-      ['content', tx('curriculum.content', 'Content')], ['media', tx('curriculum.media', 'Media')], ['bible', tx('curriculum.bibleReferences', 'Bible References')],
+      ['content', tx('curriculum.content', 'Content')], ['image', tx('curriculum.featuredImage', 'Featured Image')],
+      ['media', tx('curriculum.media', 'Media')], ['bible', tx('curriculum.bibleReferences', 'Bible References')],
       ['notes', tx('curriculum.teacherNotes', 'Teacher Notes')], ['settings', tx('common.settings', 'Settings')],
     ] as const;
 
@@ -981,13 +982,32 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               </div>
             </div>}
 
+            {editorTab === 'image' && <section className="vop-lesson-featured-tab"
+              aria-label={tx('curriculum.featuredImage','Featured Image')}>
+              <div className="vop-lesson-featured-preview">
+                {editor.imageUrl
+                  ? <img src={editor.imageUrl} alt="Lesson featured image preview"/>
+                  : <div className="vop-lesson-featured-placeholder"><ImageIcon size={24}/>
+                      <span>No featured image selected</span></div>}
+              </div>
+              <div className="vop-field">
+                <label htmlFor="vop-lesson-featured-url">{tx('curriculum.featuredImageUrl','Featured image URL')}</label>
+                <input id="vop-lesson-featured-url" type="url" value={editor.imageUrl}
+                  placeholder="https://..."
+                  onChange={event=>setEditor({...editor,imageUrl:event.target.value})}/>
+                <small className="vop-field-help">The featured image is used in study listings and the lesson preview. Only use trusted public HTTPS images.</small>
+              </div>
+              {editor.imageUrl&&<button className="vop-secondary vop-remove-button" type="button"
+                onClick={()=>setEditor({...editor,imageUrl:''})}><Trash2 size={16}/>
+                {tx('common.remove','Remove image')}</button>}
+            </section>}
+
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column">
               <div className="vop-field"><label>Import public media from a trusted source</label>
                 <input type="url" placeholder="Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link" value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
                 <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving?'Checking source…':'Add media'}</button>
                 <small className="vop-field-help">Public provider embeds are used where available; trusted pages may expose direct media. No login-only or DRM-protected material is extracted.</small>
               </div>
-              <div className="vop-field"><label>{tx('curriculum.featuredImageUrl', 'Featured image URL')}</label><input value={editor.imageUrl} onChange={e => setEditor({...editor,imageUrl:e.target.value})}/></div>
               <div className="vop-field"><label>{tx('curriculum.audioUrl', 'Audio URL')}</label><div className="vop-input-with-icon"><Volume2 size={18}/><input value={editor.audioUrl} onChange={e => setEditor({...editor,audioUrl:e.target.value})}/></div></div>
               <div className="vop-field"><label>{tx('curriculum.videoUrl', 'Video URL')}</label><div className="vop-input-with-icon"><Video size={18}/><input value={editor.videoUrl} onChange={e => setEditor({...editor,videoUrl:e.target.value})}/></div></div>
             </div>}
@@ -1005,21 +1025,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </div>}
           </div>
 
-          <aside className="vop-reference-editor-side">
-            <div className="vop-card vop-side-card">
-              <h3>{tx('curriculum.featuredImage', 'Featured Image')}</h3>
-              {editor.imageUrl ? <img src={editor.imageUrl} alt="" className="vop-featured-large"/> : <div className="vop-featured-empty"><ImageIcon size={28}/></div>}
-              <button className="vop-secondary vop-full-button" type="button" onClick={() => setEditorTab('media')}><ImageIcon size={16}/>{tx('common.changeImage', 'Change Image')}</button>
-              {editor.imageUrl && <button className="vop-secondary vop-remove-button" type="button" onClick={() => setEditor({...editor,imageUrl:''})}><Trash2 size={16}/>{tx('common.remove', 'Remove')}</button>}
-            </div>
-            <div className="vop-card vop-side-card">
-              <div className="vop-field"><label>{tx('curriculum.lessonStatus', 'Lesson Status')}</label><select value={editor.published ? 'published' : 'draft'} onChange={e => setEditor({...editor,published:e.target.value==='published'})}><option value="draft">{tx('common.draft', 'Draft')}</option><option value="published">{tx('common.published', 'Published')}</option></select></div>
-              <div className="vop-field"><label>{tx('curriculum.scheduleOptional', 'Schedule (Optional)')}</label><input type="datetime-local" value="" onChange={() => undefined} disabled /></div>
-              <div className="vop-field"><label>{tx('common.tags', 'Tags')}</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/><small className="vop-field-help">{tx('curriculum.tagsHint', 'Press Enter to add tags')}</small></div>
-              <div className="vop-reference-info"><Globe size={17}/><span>{tx('curriculum.publicationLearnerHint', 'This lesson will be available to learners in the selected language after publication.')}</span></div>
-              <button className="vop-primary vop-full-button" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>{tx('common.saveChanges', 'Save Changes')}</button>
-            </div>
-          </aside>
         </div>
       </div>
     );

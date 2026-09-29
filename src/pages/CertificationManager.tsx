@@ -8,6 +8,7 @@ import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import CertificationConfigStudio from './CertificationConfigStudio';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
+import './certification-compact.css';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
 
