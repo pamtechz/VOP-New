@@ -46,6 +46,7 @@ The current repository already has `learningPaths` and `guides`. Before introduc
 ## 2. Review prototype implemented in this branch
 
 - Author opens an existing guide and its lesson; the **Try Plate editor** switch is opt-in. The classic editor remains available.
+- Authorized guide authors can select **Lessons** (default) or **Sections/pages** for learner navigation. In the latter mode, published section links open the lesson at the selected saved page, without changing lesson IDs, completion, final-exam gates or credentials.
 - Compact breadcrumb, chapter selector, section/page tabs, page title, and editorial canvas. The canvas provides headings, marks, quotations, lists, safe hyperlinks, safe public images and a **More** popup.
 - At a paragraph boundary, **Start a new section here** separates the document into two pages. The new page gets a new section ID; retained paragraphs keep their stable block IDs. One section renders as one learner page.
 - Duplicate chapter/section generates fresh IDs to avoid inherited quiz links. Cross-lesson moves still use the existing server transaction, permission and quiz-attachment guard.
@@ -56,7 +57,7 @@ The current repository already has `learningPaths` and `guides`. Before introduc
 ### Still proposed, not implemented
 
 - New first-class **program** registry, mapping existing learning paths, default enrollment, program navigation and distinct tenant-scoped program CRUD.
-- Author-configurable **Lessons / Sections** guide navigation applied end-to-end to the learner catalog. This does not need a second storage hierarchy.
+- Full program-wide navigation across multiple guides and the global lesson-search catalogue (the selected guide's learner timeline already supports the two modes).
 - Rich optional plugins such as images with captions, gallery, tables, Scripture reference cards, footnotes, reviewer comments, suggestions and vetted AI assistance. None is advertised as functional in this prototype.
 - Bulk conversion of historical pages and advanced audio/video to Plate.
 - Production browser/device visual QA, collaborative real-time coediting, autosave/revision history, RTL authoring behavior and accessiblity audit.
