@@ -665,19 +665,25 @@ export default async function handler(req: Request, res: Response) {
           return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: true })) });
         }
         const snap = await ctx.db.collection(collection).get();
+        const descendantIds = ctx.tenantType === 'hierarchy'
+          ? new Set(await accessibleOrganizationIds(ctx))
+          : new Set<string>();
         const visible = snap.docs.filter(d => {
           const data = d.data() || {};
-          const ownerUid = String(data.ownerUid || '');
-          if (ownerUid === ctx.auth.uid) return true;
-          // Hierarchy administrators can inspect the platform-wide global library,
-          // but ownership is still enforced for every mutation.
-          if (ctx.tenantType === 'hierarchy') return true;
-          if (collection === 'translations') return true;
-          if (ctx.orgId && String(data.organizationId || '') === ctx.orgId) return true;
-          if (String(data.sharingScope || '') !== 'shared') return false;
-          if (collection === 'languages') return data.enabled === true;
-          if (collection === 'playlists') return data.published === true;
-          return data.published === true;
+          const orgId = String(data.organizationId || '');
+          const ownerOrgId = String(data.ownerOrganizationId || '');
+          const ownTenant = ctx.tenantType === 'hierarchy'
+            ? String(data.ownerTenantId || '') === ctx.tenantId
+            : Boolean(ctx.organizationId && (ownerOrgId || orgId) === ctx.organizationId);
+          if (String(data.ownerUid || '') === ctx.auth.uid && ownTenant) return true;
+          if (ctx.tenantType === 'hierarchy'
+            && (String(data.ownerTenantId || '') === ctx.tenantId
+              || descendantIds.has(ownerOrgId || orgId))) return true;
+          if (ctx.organizationId && orgId === ctx.organizationId) return true;
+          const published = collection === 'languages'
+            ? data.enabled === true
+            : data.published === true;
+          return published && (String(data.sharingScope || '') === 'shared' || orgId === '');
         });
         if (collection === 'translations') {
           const items = await Promise.all(visible.map(async d => {
