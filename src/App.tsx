@@ -412,10 +412,12 @@ export const App: React.FC = () => {
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
               onLogout={() => void firebaseSignOut()} />}
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
-            onBack={() => setActiveGuide(null)} onSelectLesson={lesson => {
+            onBack={() => setActiveGuide(null)} onSelectLesson={(lesson,initialPageIndex) => {
               setStudyError('');
               const resumeKey = `${activeGuide.language}:${activeGuide.id}:${lesson.id}`;
-              setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
+              setDeepLinkPageIndex(initialPageIndex===undefined
+                ? Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)
+                : Math.max(0, Math.min((lesson.contentPages?.length||1)-1,Math.trunc(initialPageIndex))));
               setActiveLesson(lesson);
             }} onOpenCertificate={() => navigate('certificates')} />}
           {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={setActiveGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
