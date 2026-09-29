@@ -95,3 +95,8 @@
 .vop-header-learning-menu{position:absolute;z-index:120;top:calc(100% + 9px);left:0;min-width:220px;padding:7px;background:#fff;border:1px solid #d9e4f2;border-radius:13px;box-shadow:0 12px 40px rgba(6,29,67,.25);display:grid;gap:3px}
 .vop-header-learning-menu button{display:flex;align-items:center;gap:9px;min-height:43px;padding:10px 12px;background:transparent;border:0;border-radius:9px;color:#143a6c;cursor:pointer;text-align:left;font-size:12px;font-weight:750}
 .vop-header-learning-menu button:hover,.vop-header-learning-menu button:focus-visible{background:#edf4ff}
+
+.vop-lessons-toolbar .vop-lessons-refresh{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:10px 13px;border:1px solid #b9cfe6;border-radius:9px;background:#fff;color:#164b85;font-size:12px;font-weight:850;cursor:pointer}
+.vop-lessons-toolbar .vop-lessons-refresh:disabled{opacity:.6;cursor:wait}
+.vop-lessons-refresh-error{padding:12px 15px;margin-bottom:14px;border:1px solid #f1c2cb;border-radius:10px;background:#fff1f2;color:#922b40;font-size:13px;overflow-wrap:anywhere}
+@media(max-width:650px){.vop-lessons-toolbar .vop-lessons-refresh{flex:1 1 100%;width:100%}}
