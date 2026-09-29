@@ -109,7 +109,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
         {tab === 'memory' && <section style={{ display:'grid', gap:'1rem' }}>
           <article className="vop-material-card"><div className="vop-material-body"><h2>Scripture Memory</h2><p>Review verses using persisted spaced repetition. Your schedule and mastery are stored against your account.</p><select value={deckId} onChange={event => setDeckId(event.target.value)} disabled={busy} aria-label="Scripture memory deck"><option value="">Select a deck</option>{decks.map(deck => <option key={String(deck.id)} value={String(deck.id)}>{String(deck.title || deck.name || deck.id)}</option>)}</select></div></article>
-          {due.map(verse => <article className="vop-material-card" key={String(verse.id)}><div className="vop-material-body"><span className="vop-material-kicker"><Brain size={14}/> Due for review</span><h2>{String(verse.reference || verse.title || 'Scripture')}</h2><p>{String(verse.text || verse.content || '')}</p><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{[0,1,2,3,4,5].map(rating => <button key={rating} type="button" disabled={busy} onClick={() => void run(async () => { await engagement({ action:'memoryReview', deckId, verseId:String(verse.id), rating }); const result=await engagement({action:'memoryDue',deckId}); setDue((result.due as Array<Record<string,unknown>>) || []); setMessage('Review saved and next review scheduled.'); })}>{rating}</button>)}</div></div></article>)}
+          {due.map(verse => <article className="vop-material-card" key={String(verse.id)}><div className="vop-material-body"><span className="vop-material-kicker"><Brain size={14}/> Due for review</span><h2>{String(verse.reference || verse.title || 'Scripture')}</h2><p>{String(verse.text || verse.content || '')}</p><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating) => <button key={rating} type="button" aria-label={label} title={label} disabled={busy} onClick={() => void run(async () => { await engagement({ action:'memoryReview', deckId, verseId:String(verse.id), rating }); const result=await engagement({action:'memoryDue',deckId}); setDue((result.due as Array<Record<string,unknown>>) || []); setMessage('Review saved and next review scheduled.'); })}>{label}</button>)}</div></div></article>)}
           {!due.length && deckId && <div className="vop-materials-empty"><Brain size={40}/><h2>Nothing due</h2><p>Your Scripture memory queue is clear for this deck.</p></div>}
         </section>}
 
@@ -130,7 +130,22 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
             })}><RefreshCw size={15}/>Refresh rankings</button>
           </div></article>
           {matchId && duelQuestions.map(question => <article className="vop-material-card" key={String(question.id)}><div className="vop-material-body"><h3>{String(question.question || '')}</h3><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{(Array.isArray(question.options)?question.options:[]).map(option => <button key={String(option)} type="button" disabled={busy || answeredQuestionIds.includes(String(question.id))} onClick={() => void run(async () => { await engagement({action:'duelAnswer',matchId,questionId:String(question.id),answer:String(option)}); setAnsweredQuestionIds(current => [...new Set([...current, String(question.id)])]); setMessage('Answer recorded.'); })}>{String(option)}</button>)}</div></div></article>)}
-          {matchId && <button type="button" disabled={busy} onClick={() => void run(async () => { const result=await engagement({action:'duelFinish',matchId}); setMessage(`Duel completed. Result: ${String(result.winner || 'draw')}.`); setMatchId(''); })}>Finish duel</button>}
+          {matchId && <button type="button" disabled={busy} onClick={() => void run(async () => {
+            const result=await engagement({action:'duelFinish',matchId});
+            const winner=String(result.winner || '');
+            const outcome=winner==='unranked'?'Challenge expired without a ranked result.'
+              : winner==='draw'?'Duel completed in a draw.'
+              : winner===auth?.currentUser?.uid?'Duel completed. You won!'
+              : 'Duel completed. Your opponent won.';
+            const [overview,standings]=await Promise.all([
+              engagement({action:'duelOverview'}),engagement({action:'duelLeaderboard'}),
+            ]);
+            setOpponents((overview.opponents as Array<{uid:string;displayName:string}>) || []);
+            setActiveMatches((overview.matches as Array<{id:string;opponentName:string}>) || []);
+            setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number}>) || []);
+            setMatchId('');setDuelQuestions([]);setAnsweredQuestionIds([]);
+            setMessage(outcome);
+          })}>Finish duel</button>}
           {!matchId && !activeMatches.length && <div className="vop-materials-empty"><Swords size={40}/><h2>No active challenges</h2><p>Choose a learner to start a Scripture Duel.</p></div>}
         </section>}
       </div>
