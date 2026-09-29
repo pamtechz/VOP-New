@@ -39,6 +39,10 @@ export default async function handler(req: Request, res: Response) {
     if (req.method !== 'POST') return res.status(405).json({error:'Method not allowed.'});
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string,unknown> : {};
     const action = lower(body.action);
+    // This endpoint writes the canonical, system-wide registry and locales.
+    // Tenant contributors must never acquire platform language authority from
+    // an organization-level permission-matrix grant.
+    if (!ctx.isSuperAdmin) throw new Error('Only VOP Super Admin may manage the system language registry.');
     const requestedCode = lower(body.code || body.id);
     const db = getAdminDb();
 
