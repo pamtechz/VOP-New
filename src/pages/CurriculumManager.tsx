@@ -16,6 +16,7 @@ import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
 import { StructuredLessonEditor, newChapter } from '../components/admin/StructuredLessonEditor';
+import './curriculum-structure.css';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
