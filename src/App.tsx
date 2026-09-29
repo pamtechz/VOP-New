@@ -26,6 +26,8 @@ import { QuizModal } from './components/quiz/QuizModal';
 import { AboutPage } from './pages/AboutPage';
 import { ReferenceProfilePage } from './pages/ReferenceProfilePage';
 import { ResourcesPage } from './pages/ResourcesPage';
+import { LessonsPage } from './pages/LessonsPage';
+import { EngagementPage } from './pages/EngagementPage';
 import { PrayerPage } from './pages/PrayerPage';
 import { RadioPage } from './pages/RadioPage';
 import { CertificatesPage } from './pages/CertificatesPage';
@@ -327,6 +329,13 @@ export const App: React.FC = () => {
     setCurrentRoute(route);
   };
   const returnHome = () => navigate('home');
+  const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson) => {
+    setStudyError('');
+    setActiveGuide(guide);
+    const resumeKey = `${guide.language}:${guide.id}:${lesson.id}`;
+    setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
+    setActiveLesson(lesson);
+  };
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
   const showCourse = currentRoute === 'home' && activeGuide !== null;
 
@@ -334,7 +343,7 @@ export const App: React.FC = () => {
     <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
       <div className={isMobileShell ? 'mobile-device-frame' : ''} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {isMobileShell && <div className="device-notch" />}
-        {showDashboardShell && (
+        {currentRoute !== 'admin' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
@@ -342,11 +351,17 @@ export const App: React.FC = () => {
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
-        <main style={{ flex: 1, minWidth: 0 }}>
+        <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={() => setCurrentRoute('profile')} />}
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
+          {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
+            onBack={returnHome} onOpenGuide={guide => {setActiveGuide(guide);setCurrentRoute('home');}}
+            onOpenLesson={openCatalogLesson}/>}
+          {currentRoute === 'master-guide' && <EngagementPage mode="master-guide" onBack={returnHome}/>}
+          {currentRoute === 'scripture-memory' && <EngagementPage mode="memory" onBack={returnHome}/>}
+          {currentRoute === 'iron-duels' && <EngagementPage mode="duels" onBack={returnHome}/>} 
           {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={returnHome} />}
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={returnHome} />}
@@ -364,7 +379,7 @@ export const App: React.FC = () => {
             }} onOpenCertificate={() => navigate('certificates')} />}
           {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={setActiveGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
         </main>
-        {showDashboardShell && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
+        {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser} allUsers={[]} onSelectUser={() => {}} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
