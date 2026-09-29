@@ -36,7 +36,7 @@ function renderNode(node:StudyPlateNode|StudyPlateLeaf,key:string):React.ReactNo
   }
 }
 
-/** Read-only rendering of validated Plate JSON. No dangerouslySetInnerHTML,
+/** Read-only rendering of validated Plate JSON without raw HTML injection,
  * arbitrary embedded scripts or private assessment data. */
 export function StudyPlateContent({document,afterBlock}: {
   document:StudyPlateDocument;
