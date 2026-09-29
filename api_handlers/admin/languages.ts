@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -114,34 +115,8 @@ export default async function handler(req: Request, res: Response) {
         await requirePermission(ctx,'languages','publish');
         // Sharing is adoption: no temporary global edit rights are given to
         // the originating tenant, and existing platform codes are immutable.
-        await db.runTransaction(async transaction=>{
-          const [existing,global]=await Promise.all([transaction.get(ref),transaction.get(globalRef)]);
-          if (!existing.exists) throw new Error('Language not found.');
-          const data=existing.data() || {};
-          if (data.ownerUid!==ctx.auth.uid && !ctx.isSuperAdmin)
-            throw new Error('Only the contributor or Super Admin can share this language.');
-          if (global.exists) throw new Error('The language code is already managed by the platform.');
-          if (data.adoptedByPlatform) throw new Error('This language is already platform-stewarded.');
-          const now=FieldValue.serverTimestamp();
-          transaction.create(globalRef,{
-            id:code,code,name:data.name,nativeName:data.nativeName,
-            enabled:data.enabled!==false,rtl:data.rtl===true,
-            sortOrder:data.sortOrder || 0,scope:'platform',sharingScope:'shared',
-            organizationId:'',ownerOrganizationId:'',ownerUid:'',
-            platformOwned:true,adoptedByPlatform:true,
-            sourceOrganizationId:organizationId,sourceContentId:ref.path,
-            published:true,createdAt:now,updatedAt:now,updatedBy:ctx.auth.uid,
-          });
-          transaction.set(db.doc('locales/' + code),{
-            id:code,code,name:data.name,nativeName:data.nativeName,
-            enabled:data.enabled!==false,direction:data.rtl===true?'rtl':'ltr',
-            fallback:'en',version:1,updatedAt:now,updatedBy:ctx.auth.uid,
-          },{merge:true});
-          transaction.update(ref,{
-            adoptedByPlatform:true,platformOwned:true,sharingScope:'shared',
-            published:true,sharedAt:now,updatedAt:now,updatedBy:ctx.auth.uid,
-          });
-        });
+        await db.runTransaction(transaction =>
+          adoptOrganizationLanguage(ctx,transaction,organizationId,code));
         await writeTenantAudit(ctx,'tenant.language.adopted',ref.path,undefined,{code,platformPath:globalRef.path});
         return res.status(200).json({ok:true,code,platformOwned:true});
       }
