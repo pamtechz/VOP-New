@@ -24,6 +24,7 @@ function renderNode(node:StudyPlateNode|StudyPlateLeaf,key:string):React.ReactNo
     case 'ul':return <ul key={key}>{children}</ul>;
     case 'ol':return <ol key={key}>{children}</ol>;
     case 'li':return <li key={key}>{children}</li>;
+    case 'lic':return <span key={key}>{children}</span>;
     case 'a':return node.url && isSafeHttpsMediaUrl(node.url)
       ? <a key={key} href={node.url} target="_blank" rel="noopener noreferrer">{children}</a>
       : <span key={key}>{children}</span>;
