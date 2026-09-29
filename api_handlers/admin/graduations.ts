@@ -78,7 +78,7 @@ async function submit(req: Request, res: Response) {
 
   const stages = await loadWorkflow(ctx);
   const lessonsSnapshot = await guideSnapshot.ref.collection('lessons').get();
-  const lessons = lessonsSnapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+  const lessons = lessonsSnapshot.docs.map(item => ({ ...item.data(), id: item.id }));
   const publishedLessons = lessons.filter(item => item.published === true);
   const studyLessons = publishedLessons.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
   const testLessons = publishedLessons.filter(item => String(item.type ?? '') === 'Test');
@@ -224,7 +224,7 @@ async function decide(req: Request, res: Response) {
     const threshold = configuredPassThreshold(configSnapshot.data()?.minimumScore)
       ?? configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
     if (!language || threshold === null) return res.status(409).json({ error: 'The graduation assessment language or pass mark is not configured.' });
-    const records = (await guideSnapshot.ref.collection('lessons').get()).docs.map(item => ({ id: item.id, ...item.data() }));
+    const records = (await guideSnapshot.ref.collection('lessons').get()).docs.map(item => ({ ...item.data(), id: item.id }));
     if (!records.length || records.some(item => item.published !== true || item.archived === true)) {
       return res.status(409).json({ error: 'All graduation requirements must be published and active.' });
     }
