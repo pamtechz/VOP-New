@@ -4,6 +4,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
+import { assertMutableTenantResource } from '../../shared/platformStewardship.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
@@ -78,6 +79,12 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    // Platform locale records are not organization-owned. Only Super Admin may mutate them;
+    // other tenants contribute translation proposals through the reviewed workflow.
+    if (!ctx.isSuperAdmin && ['languages','translations'].includes(collection) &&
+        !['list','proposeTranslation'].includes(action)) {
+      throw new Error('Only VOP Super Admin may change system languages and translations. Submit a translation proposal instead.');
+    }
     const permissionResource = resourceForCollection(collection);
     const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
@@ -175,6 +182,7 @@ export default async function handler(req: Request, res: Response) {
       }
       if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
+      if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, current, 'edit');
       await ref.set({
         id,
         organizationId: effectiveOrganizationId,
@@ -215,6 +223,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`guides/${requestedId ? safeId(requestedId) : guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
+      assertMutableTenantResource(ctx.isSuperAdmin, current.data(), 'archive');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
       return res.status(200).json({ ok: true });
     }
@@ -327,6 +336,7 @@ export default async function handler(req: Request, res: Response) {
         }
       }
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
+      if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
       await ref.set({
         ...data,
         // Derive learner pages on the server, not from potentially forged
@@ -746,6 +756,7 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       if (action === 'delete') {
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can delete it.');
+        assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'delete');
         await ref.delete();
         const deleted = await ref.get();
         if (deleted.exists) throw new Error('The record could not be deleted from Firestore.');
@@ -811,6 +822,7 @@ export default async function handler(req: Request, res: Response) {
           if (quotaKey && ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
+        if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
         if (collection === 'radioBroadcasts') {
           const urls = ['videoUrl','audioUrl','streamUrl'].map(key => ({key,url:String(incoming[key] || '').trim()})).filter(item => item.url);
           if (!urls.length) throw new Error('Add an approved radio audio, video or stream URL.');
@@ -908,6 +920,7 @@ export default async function handler(req: Request, res: Response) {
 
       if (action === 'delete') {
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization can delete this content.');
+        assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'delete');
         await ref.delete();
         await writeTenantAudit(ctx, 'content.delete', `${collection}/${id}`, existing.data(), undefined);
         return res.status(200).json({ ok:true, id });
@@ -921,6 +934,7 @@ export default async function handler(req: Request, res: Response) {
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
+        if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
         await ref.set({
           ...incoming,
           id,
