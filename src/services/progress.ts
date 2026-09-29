@@ -105,6 +105,15 @@ function isRequiredQuizConfigured(test: Lesson): boolean {
 /** Display-only readiness must not demand that answer keys reach the learner. */
 function validateRequiredQuizzes(guides: DiscoverGuide[]): string | undefined {
   for (const guide of guides) {
+    if (guide.requiresFinalExam === true && !guide.lessons.some(lesson=>
+      lesson.type === 'Test'
+      && lesson.attachmentType === 'guide'
+      && lesson.assessmentKind === 'final_exam'
+      && Boolean(lesson.sourceQuizId)
+      && lesson.answerVisibility === 'public_redacted'
+      && isRequiredQuizConfigured(lesson))) {
+      return 'The required published final guide examination is missing.';
+    }
     if (guide.lessons.some(lesson => lesson.type === 'Test' && !isRequiredQuizConfigured(lesson))) {
       return 'A required assessment has missing or invalid questions or answer keys.';
     }
