@@ -20,8 +20,8 @@ test('Library is materials-only; the learning tools have independent application
   }
   assert.match(app,/currentRoute === 'lessons'/);
   assert.match(source('src/pages/EngagementPage.tsx'),/action:'duelFinish'/);
-  assert.match(source('src/pages/EngagementPage.tsx'),/action:'portfolioGet'/);
-  assert.match(source('src/pages/EngagementPage.tsx'),/action:'memoryDue'/);
+  assert.match(source('src/pages/EngagementPage.tsx'),/action:\s*'portfolioGet'/);
+  assert.match(source('src/pages/EngagementPage.tsx'),/action:\s*'memoryDue'/);
 });
 
 test('mobile bottom nav contains five learning destinations, while account actions stay in sidebar',()=>{
