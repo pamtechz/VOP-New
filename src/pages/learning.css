@@ -136,3 +136,22 @@
   .vop-app-brand img{width:24px!important;height:24px!important}
   .vop-app-header-actions{gap:0!important}
 }
+
+/* Full-height, scroll-safe lesson and assessment modals on narrow screens.
+ * Scope rules to the learning modals, not the global account overlays. */
+.vop-study-modal section[role="dialog"]{min-width:0;max-width:min(100%,740px);overscroll-behavior:contain}
+.vop-study-modal :is(button,input,select,textarea):focus-visible{outline:3px solid #f2ba48;outline-offset:3px}
+.vop-study-modal p,.vop-study-modal h2,.vop-study-modal h3{overflow-wrap:anywhere}
+@media(max-width:560px){
+  .vop-study-modal{padding:0!important;align-items:stretch}
+  .vop-study-modal section[role="dialog"]{
+    width:100%!important;max-width:100%!important;max-height:100dvh!important;
+    height:100dvh;border-radius:0!important;box-shadow:none!important;
+  }
+  .vop-study-modal section[role="dialog"]>header{border-radius:0!important;padding:13px 14px!important}
+  .vop-study-modal section[role="dialog"]>footer{
+    display:flex;flex-wrap:wrap;gap:7px;padding:11px 12px calc(11px + env(safe-area-inset-bottom,0px))!important
+  }
+  .vop-study-modal section[role="dialog"]>footer button{min-height:44px;flex:1 1 auto}
+  .vop-quiz-modal section[role="dialog"]{overflow-y:auto}
+}
