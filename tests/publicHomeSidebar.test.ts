@@ -22,7 +22,7 @@ test('visitors see the public homepage before signing in',()=>{
   assert.match(page,/configurationMissing/);
 });
 
-test('desktop has permanent collapsible learner sidebar with account actions guarded',()=>{
+test('desktop has permanent collapsible learner sidebar without duplicate account actions',()=>{
   const app=read('src/App.tsx');
   const sidebar=read('src/components/layout/LearnerSidebar.tsx');
   const css=read('src/components/layout/sidebar-system.css');
@@ -34,6 +34,8 @@ test('desktop has permanent collapsible learner sidebar with account actions gua
   assert.match(sidebar,/isAdmin\?\[\{route:'admin'/);
   assert.match(sidebar,/aria-current=\{currentRoute===item\.route\?'page':undefined\}/);
   assert.match(sidebar,/aria-controls="vop-learner-sidebar-links"/);
+  assert.doesNotMatch(sidebar,/vop-learner-sidebar-(user|logout|foot)/);
+  assert.doesNotMatch(sidebar,/onLogout/);
   assert.match(css,/\.vop-learner-sidebar\.is-collapsed/);
   assert.match(css,/@media\(max-width:1023px\)/);
   assert.match(css,/\.vop-learner-sidebar\{display:none!important\}/);
@@ -52,6 +54,39 @@ test('admin persists its collapse state while preserving the accessible mobile d
   assert.match(css,/grid-template-columns:var\(--vop-rail-expanded\) minmax\(0,1fr\)/);
   assert.match(css,/\.vop-admin \.vop-shell\{display:contents!important\}/);
   assert.match(css,/grid-column:1;grid-row:1 \/ span 2/);
-  assert.match(page,/vop-admin-sidebar-footer/);
-  assert.match(page,/vop-admin-sidebar-logout/);
+  assert.doesNotMatch(page,/vop-admin-sidebar-footer/);
+  assert.doesNotMatch(page,/vop-admin-sidebar-logout/);
+  assert.match(page,/onClick=\{\(\)=>\{setProfileOpen\(false\);onLogout\(\)\}\}/);
+});
+
+test('all portal sign-out controls live in top account dropdowns and learners have no Back to App',()=>{
+  const learner=read('src/components/layout/Header.tsx');
+  const admin=read('src/pages/AdminPage.tsx');
+  const mobile=read('src/components/layout/MenuDrawer.tsx');
+  assert.match(learner,/aria-label="Account menu"/);
+  assert.match(learner,/Account & Settings/);
+  assert.match(learner,/onLogout\(\)/);
+  assert.doesNotMatch(learner,/Back to App/);
+  assert.doesNotMatch(learner,/accountNav\('home'\)/);
+  assert.match(admin,/vop-profile-menu/);
+  assert.match(admin,/Back to App/);
+  assert.match(admin,/onLogout\(\)/);
+  assert.doesNotMatch(mobile,/vop-account-logout/);
+  assert.doesNotMatch(mobile,/onLogout/);
+});
+
+test('the learner and admin top navigation share reference-scale responsive controls',()=>{
+  const learner=read('src/components/layout/Header.tsx');
+  const admin=read('src/pages/AdminPage.tsx');
+  const styles=read('src/components/layout/navigation-header.css');
+  const app=read('src/App.tsx');
+  assert.match(learner,/vop-app-brand-mark/);
+  assert.match(learner,/vop-header-locale-control/);
+  assert.match(admin,/vop-header-locale-control/);
+  assert.match(admin,/<CommunicationTools onNavigate=/);
+  assert.match(app,/onChangeUiLocale=\{setUiLocale\}/);
+  assert.match(styles,/min-height:88px!important/);
+  assert.match(styles,/font-size:clamp\(19px,1\.23vw,24px\)/);
+  assert.match(styles,/@media\(max-width:700px\)/);
+  assert.match(styles,/@media\(max-width:520px\)/);
 });
