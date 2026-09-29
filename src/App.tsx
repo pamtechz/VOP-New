@@ -374,7 +374,7 @@ export const App: React.FC = () => {
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
-            onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
+            onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} onLogout={() => void firebaseSignOut()} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
