@@ -725,6 +725,7 @@ export default async function handler(req: Request, res: Response) {
         })));
         return res.status(200).json({ ok: true, items });
       }
+    }
 
     if (collection === 'translations' && action === 'proposeTranslation') {
       if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
