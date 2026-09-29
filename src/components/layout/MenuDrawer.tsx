@@ -1,93 +1,197 @@
-import React, { useState } from 'react';
-import type { User, AppRoute } from '../../types';
-import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck, Megaphone, CalendarDays, Brain, Swords, FileText, LibraryBig } from 'lucide-react';
-import { getActiveLanguage, getStoredGuides, getStoredSettings } from '../../services/storage';
+import React, { useEffect, useRef, useState } from 'react';
+import type { AppRoute, AppSettings, DiscoverGuide, LanguageCode, User } from '../../types';
+import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, Info, LibraryBig, LogOut, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, X, type LucideIcon } from 'lucide-react';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
+import './menu-drawer.css';
 
 interface MenuDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  currentRoute: AppRoute;
   currentUser: User;
-  allUsers: User[];
-  onSelectUser: (user: User) => void;
+  guides: DiscoverGuide[];
+  settings: AppSettings;
+  activeLanguage: LanguageCode;
   onNavigate: (route: AppRoute) => void;
   onLogout: () => void;
 }
 
-export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, currentUser, onNavigate, onLogout }) => {
-  const [expanded, setExpanded] = useState(false);
+interface MenuItem {
+  route: AppRoute;
+  label: string;
+  detail: string;
+  icon: LucideIcon;
+}
+
+export const MenuDrawer: React.FC<MenuDrawerProps> = ({
+  isOpen, onClose, currentRoute, currentUser, guides, settings, activeLanguage, onNavigate, onLogout,
+}) => {
   const [showNews, setShowNews] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const focusedBeforeOpen = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.style.overflow = 'hidden';
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter(element => element.getClientRects().length > 0);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      focusedBeforeOpen?.focus();
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  const settings = getStoredSettings();
-  const language = getActiveLanguage();
-  const progress = calculateCurriculumProgress(getStoredGuides(), currentUser, settings.quizPassThreshold, language);
-  const t = (key: string, english: string) => getTranslation(key, getUiLocale(), settings.customTranslations, english, 'MenuDrawer');
-  const isAdmin = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+  const t = (key: string, english: string) =>
+    getTranslation(key, getUiLocale(), settings.customTranslations, english, 'MenuDrawer');
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
-  const itemStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', width: '100%', gap: '1rem', border: 0, background: 'transparent', color: '#171d27', fontWeight: 650, fontSize: '.92rem', textAlign: 'left', padding: '.8rem .9rem', minHeight: '3.5rem', cursor: 'pointer' };
+  const isAdmin = ['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']
+    .includes(String(currentUser.role || '')) || ['owner', 'admin'].includes(String(currentUser.organizationRole || ''));
+  const progress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
+  const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
+  const initial = name.charAt(0).toUpperCase();
+  const whatsapp = String(settings.whatsappNumber || '').replace(/\D/g, '');
 
-  return (
-    <div className="modal-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label="VOP account menu" style={{ width: '100%', maxWidth: '430px', maxHeight: 'calc(100dvh - 2rem)', overflowY: 'auto', borderRadius: '2rem', background: '#f4f7ff', padding: '.85rem', boxShadow: '0 18px 45px #0003' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2.5rem 1fr 2.5rem', alignItems: 'center', padding: '.25rem .5rem 1rem' }}>
-          <button type="button" onClick={onClose} aria-label="Close menu" style={{ border: 0, background: 'transparent', color: '#6b7280', minHeight: '2.5rem' }}><X size={27}/></button>
-          <h2 style={{ textAlign: 'center', fontSize: '1.08rem', color: '#111827' }}>{settings.appName}</h2>
-        </div>
-        <div style={{ borderRadius: '1.9rem', background: '#fff', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '1.6rem .9rem 1.2rem' }}>
-            {currentUser.photoURL ? (
-              <img src={currentUser.photoURL} alt="Profile" style={{ width: '5.2rem', height: '5.2rem', objectFit: 'cover', borderRadius: '50%' }} />
-            ) : (
-              <span style={{ width: '5.2rem', height: '5.2rem', display: 'grid', placeItems: 'center', background: '#0c2d63', color: '#fff', borderRadius: '50%', fontSize: '1.8rem' }}>{currentUser.displayName.charAt(0).toUpperCase()}</span>
-            )}
-            <h3 style={{ fontSize: '1.13rem', margin: '.45rem 0 .1rem', color: '#111827' }}>{currentUser.displayName}</h3>
-            <p style={{ fontSize: '.82rem', color: '#64748b', overflowWrap: 'anywhere' }}>{currentUser.email}</p>
-            <button type="button" onClick={() => navigate('profile')} style={{ background: '#fff', color: '#152a4c', border: '1.5px solid #253d65', borderRadius: '3rem', width: 'min(100%,19rem)', minHeight: '2.6rem', marginTop: '.7rem', cursor: 'pointer' }}>
-              {t('account.manage', 'Manage your VOP account')}
+  const learning: MenuItem[] = [
+    { route: 'lessons', label: t('navigation.lessons', 'Lessons & assessments'), detail: t('navigation.lessons_detail', 'Published studies and tests'), icon: FileText },
+    { route: 'resources', label: t('navigation.library', 'Library'), detail: t('navigation.library_detail', 'Books and study materials'), icon: LibraryBig },
+    { route: 'master-guide', label: t('navigation.master_guide', 'Master Guide'), detail: t('navigation.master_guide_detail', 'Activities and mentor sign-offs'), icon: ShieldCheck },
+    { route: 'scripture-memory', label: t('navigation.scripture_memory', 'Scripture Memory'), detail: t('navigation.scripture_memory_detail', 'Learn and review Bible verses'), icon: Brain },
+    { route: 'iron-duels', label: t('navigation.iron_duels', 'Iron Duels'), detail: t('navigation.iron_duels_detail', 'Scripture challenges'), icon: Swords },
+  ];
+  const community: MenuItem[] = [
+    { route: 'prayer', label: t('navigation.prayer_requests', 'Prayer Requests'), detail: t('navigation.prayer_detail', 'Share and support prayer needs'), icon: HeartHandshake },
+    { route: 'radio', label: t('navigation.radio_broadcasts', 'Radio & Broadcasts'), detail: t('navigation.radio_detail', 'Listen to ministry programmes'), icon: Radio },
+    { route: 'announcements', label: t('navigation.announcements', 'Announcements'), detail: t('navigation.announcements_detail', 'News from your organization'), icon: Megaphone },
+    { route: 'events', label: t('navigation.events', 'Events & Programmes'), detail: t('navigation.events_detail', 'Upcoming activities'), icon: CalendarDays },
+    ...(currentUser.role === 'student'
+      ? [{ route: 'support' as const, label: t('navigation.mentor', 'Talk to my mentor'), detail: t('navigation.mentor_detail', 'Get guidance and support'), icon: MessageCircle }]
+      : []),
+  ];
+  const account: MenuItem[] = [
+    { route: 'profile', label: t('navigation.profile', 'Profile'), detail: t('navigation.profile_detail', 'Your learner account'), icon: UserCheck },
+    { route: 'personal-settings', label: t('navigation.personal_settings', 'Personal Settings'), detail: t('navigation.settings_detail', 'Language and preferences'), icon: UserCheck },
+    { route: 'certificates', label: t('certificates.my_certificate', 'My Certificates'), detail: t('navigation.certificates_detail', 'Graduation and awards'), icon: Award },
+    { route: 'about', label: t('navigation.about', 'About'), detail: t('navigation.about_detail', 'About the Voice of Prophecy'), icon: Info },
+    ...(isAdmin ? [{ route: 'admin' as const, label: t('navigation.admin', 'Admin Panel'), detail: t('navigation.admin_detail', 'Manage authorized ministry content'), icon: ShieldCheck }] : []),
+  ];
+
+  const renderLinks = (items: MenuItem[]) => items.map(item => {
+    const Icon = item.icon;
+    return <button type="button" key={item.route}
+      className={'vop-account-link' + (currentRoute === item.route ? ' active' : '')}
+      aria-current={currentRoute === item.route ? 'page' : undefined}
+      onClick={() => navigate(item.route)}>
+      <span className="vop-account-link-icon"><Icon size={21} aria-hidden="true" /></span>
+      <span className="vop-account-link-copy"><strong>{item.label}</strong><small>{item.detail}</small></span>
+    </button>;
+  });
+
+  return <div className="modal-overlay vop-account-overlay" role="presentation"
+    onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div ref={dialogRef} className="vop-account-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="vop-account-title">
+      <header className="vop-account-head">
+        <span className="vop-account-brand"><img src="/assets/vop_logo_2.png" alt="" aria-hidden="true" />
+          <span id="vop-account-title">{settings.appName || 'Voice of Prophecy'}</span>
+        </span>
+        <button ref={closeRef} type="button" className="vop-account-close" onClick={onClose}
+          aria-label={t('common.close', 'Close account menu')}><X size={23}/></button>
+      </header>
+
+      <div className="vop-account-workspace">
+        <aside className="vop-account-overview" aria-label={t('account.summary', 'Your account and progress')}>
+          <div className="vop-account-profile">
+            {currentUser.photoURL
+              ? <img src={currentUser.photoURL} alt="" className="vop-account-avatar" />
+              : <span className="vop-account-avatar vop-account-initial">{initial}</span>}
+            <div className="vop-account-identity">
+              <span className="vop-account-eyebrow">{t('account.learner', 'Learner account')}</span>
+              <h2>{name}</h2>
+              <p>{currentUser.email}</p>
+            </div>
+            <button type="button" className="vop-account-manage" onClick={() => navigate('profile')}>
+              <UserCheck size={17}/>{t('account.manage', 'Manage your VOP account')}
             </button>
           </div>
-          <div style={{ borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '1rem 1.1rem' }}>
-            <div style={{ display: 'flex', gap: '.65rem', alignItems: 'start' }}>
-              <UserCheck size={24} color="#111827" />
-              <div><strong style={{ fontSize: '.9rem' }}>{t('progress.title', 'Your Progress')}</strong>
-                <p style={{ fontSize: '.81rem', lineHeight: 1.35, color: '#4b5563', margin: '.15rem 0 0' }}>{t('progress.description', 'How far you have gone in your learning and what remains before you are certified.')}</p>
-              </div>
-            </div>
-            <div className="vop-cert-progress" style={{ margin: '.8rem 0 .45rem 2.2rem', height: '.8rem' }} role="progressbar" aria-label="Course progress" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
-              <div style={{ width: `${progress.percent}%` }}/>
-            </div>
-            <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
+          <section className="vop-account-progress">
+            <div className="vop-account-progress-title"><BookOpen size={20}/><h3>{t('progress.title', 'Your Progress')}</h3></div>
+            <p>{t('progress.description', 'Track your required studies and certification progress.')}</p>
+            {progress.totalGuides > 0
+              ? <>
+                <div className="vop-account-progress-stats"><strong>{progress.percent}%</strong>
+                  <span>{progress.completedGuides} / {progress.totalGuides} {t('progress.guides', 'guides')}</span></div>
+                <div className="vop-account-progress-track" role="progressbar"
+                  aria-label={t('progress.title', 'Your Progress')} aria-valuenow={progress.percent}
+                  aria-valuemin={0} aria-valuemax={100}>
+                  <span style={{ width: progress.percent + '%' }}/>
+                </div>
+                <p className="vop-account-progress-detail">{progress.completedGuides} {t('progress.of', 'of')} {progress.totalGuides} {t('progress.completed', 'certificate-eligible guides completed')}</p>
+              </>
+              : <div className="vop-account-progress-empty" role="status">
+                {t('progress.no_guides', 'No certificate-eligible guides are available in your selected language yet.')}
+              </div>}
+            <button type="button" className="vop-account-progress-action" onClick={() => navigate('lessons')}>
+              {t('navigation.lessons', 'Browse lessons')} <span aria-hidden="true">→</span>
+            </button>
+          </section>
+          <div className="vop-account-overview-footer">
+            <button type="button" onClick={() => navigate('certificates')}><Award size={19}/>{t('certificates.my_certificate', 'My Certificates')}</button>
+            <button type="button" onClick={() => navigate('personal-settings')}><UserCheck size={19}/>{t('navigation.personal_settings', 'Personal Settings')}</button>
           </div>
-          <div className="vop-menu-section-label">{t('navigation.learning','Learning & engagement')}</div>
-          <button type="button" style={itemStyle} onClick={() => navigate('lessons')}><FileText size={22}/>{t('navigation.lessons','Lessons & assessments')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('resources')}><LibraryBig size={22}/>{t('navigation.library','Library')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('master-guide')}><ShieldCheck size={22}/>{t('navigation.master_guide','Master Guide')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('scripture-memory')}><Brain size={22}/>{t('navigation.scripture_memory','Scripture Memory')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('iron-duels')}><Swords size={22}/>{t('navigation.iron_duels','Iron Duels')}</button>
-          <div className="vop-menu-section-label">{t('navigation.account','Account')}</div>
-          <button type="button" style={itemStyle} onClick={() => navigate('profile')}><UserCheck size={22}/>{t('navigation.profile','Profile')}</button>
-          {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('navigation.admin', 'Admin Panel')}</button>}
-          <button type="button" style={itemStyle} onClick={() => navigate('personal-settings')}><UserCheck size={24}/>{t('navigation.personal_settings','Personal Settings')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>{t('navigation.about','About')}</button>
-          <button type="button" style={{ ...itemStyle, color: '#991b1b' }} onClick={() => { onClose(); onLogout(); }}><LogOut size={24}/>{t('navigation.logout','Logout')}</button>
+        </aside>
+
+        <div className="vop-account-navigation">
+          <section className="vop-account-group" aria-labelledby="vop-account-learning">
+            <h3 id="vop-account-learning">{t('navigation.learning', 'Learning & engagement')}</h3>
+            <nav aria-label={t('navigation.learning', 'Learning & engagement')} className="vop-account-link-grid">{renderLinks(learning)}</nav>
+          </section>
+          <section className="vop-account-group" aria-labelledby="vop-account-community">
+            <h3 id="vop-account-community">{t('navigation.community', 'Church & community')}</h3>
+            <nav aria-label={t('navigation.community', 'Church & community')} className="vop-account-link-grid">{renderLinks(community)}</nav>
+          </section>
+          <section className="vop-account-group" aria-labelledby="vop-account-settings">
+            <h3 id="vop-account-settings">{t('navigation.account', 'Account & settings')}</h3>
+            <nav aria-label={t('navigation.account', 'Account & settings')} className="vop-account-link-grid">{renderLinks(account)}</nav>
+          </section>
+          <details className="vop-account-news" open={showNews} onToggle={event => setShowNews(event.currentTarget.open)}>
+            <summary><Bell size={17}/>{t('common.whats_new', "What's New")}</summary>
+            <p>{t('account.latest_update', 'Published Bible study guides, Scripture activities, announcements and graduation progress are connected to your VOP account and organization.')}</p>
+          </details>
+          <div className="vop-account-nav-footer">
+            {whatsapp && <a href={'https://wa.me/' + whatsapp} target="_blank" rel="noopener noreferrer"><MessageCircle size={18}/>{t('account.whatsapp', 'Contact ministry support')}</a>}
+            <button type="button" className="vop-account-logout" onClick={() => { onClose(); onLogout(); }}>
+              <LogOut size={18}/>{t('navigation.logout', 'Logout')}
+            </button>
+          </div>
         </div>
-        <button type="button" style={{ ...itemStyle, marginTop: '.75rem' }} onClick={() => navigate('certificates')}><Award size={24}/>{t('certificates.my_certificate', 'My Certificate')}</button>
-        <button type="button" style={itemStyle} onClick={() => navigate('radio')}><Radio size={24}/>{t('navigation.radio_broadcasts','Radio & Broadcasts')}</button>
-        <button type="button" style={itemStyle} onClick={() => navigate('announcements')}><Megaphone size={24}/>{t('navigation.announcements','Announcements')}</button>
-        <button type="button" style={itemStyle} onClick={() => navigate('events')}><CalendarDays size={24}/>{t('navigation.events','Events & Programmes')}</button>
-        {currentUser.role === 'student' && <button type="button" style={itemStyle} onClick={() => navigate('support')}><MessageCircle size={24}/>{t('navigation.mentor','Talk to my mentor')}</button>}
-        <button type="button" style={itemStyle} aria-expanded={showNews} onClick={() => setShowNews(!showNews)}><Bell size={24}/>{t('common.whats_new',"What's New")}</button>
-        {showNews && <p style={{ fontSize: '.78rem', padding: '.2rem 1rem 1rem', color: '#334155' }}>Bible study guides, language management, announcements and graduation progress are now connected to the VOP account and organization services.</p>}
-        <button type="button" style={{ ...itemStyle, borderTop: '1px solid #e5e7eb' }} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><BookOpen size={24}/>{t('navigation.ministry_services','More ministry services')} {expanded ? '−' : '+'}</button>
-        {expanded && <div style={{ borderRadius: '1rem', background: '#fff' }}>
-          <button type="button" style={itemStyle} onClick={() => navigate('resources')}><BookOpen size={22}/>{t('navigation.library_books','Library & Books')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('prayer')}><HeartHandshake size={22}/>{t('navigation.prayer_requests','Prayer Requests')}</button>
-          <button type="button" style={itemStyle} onClick={() => navigate('radio')}><Radio size={22}/>{t('navigation.radio_broadcasts','Radio & Broadcasts')}</button>
-          {settings.whatsappNumber && <a style={{ ...itemStyle, textDecoration: 'none' }} href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={22}/>Contact WhatsApp</a>}
-        </div>}
       </div>
     </div>
-  );
+  </div>;
 };

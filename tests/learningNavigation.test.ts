@@ -32,7 +32,7 @@ test('mobile bottom nav contains five learning destinations, while account actio
   }
   assert.doesNotMatch(bottom,/route:'profile'|route:'admin'/);
   for(const route of ['profile','personal-settings','admin','master-guide','scripture-memory','iron-duels']){
-    assert.ok(drawer.includes("navigate('"+route+"')"),route);
+    assert.ok(drawer.includes("route: '"+route+"'") || drawer.includes("route:'"+route+"'"),route);
   }
 });
 
