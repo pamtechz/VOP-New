@@ -64,7 +64,7 @@ export function TenantTranslationsPanel({languages}:{languages:CustomLanguage[]}
     stored.forEach(item=>{
       if(!keyMap.has(item.key))keyMap.set(item.key,{
         key:item.key,english:translationSourceLabel(item.key),component:'Stored entry',
-        translations:{},
+        translations:{},discoveredAt:'',
       });
     });
     return [...keyMap.values()].filter(item=>
