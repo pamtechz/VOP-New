@@ -11,6 +11,12 @@ type Props = {
   onChange:(chapters:CurriculumChapter[])=>void;
   onQuiz:(anchor:QuizAnchor)=>void;
   canAttachQuiz:boolean;
+  otherLessons?: Array<{id:string;title:string;chapters:CurriculumChapter[]}>;
+  canTransfer?:boolean;
+  onTransfer?:(request:{
+    kind:'section'|'block';anchorId:string;destinationLessonId:string;
+    destinationParentId:string;mode:'move'|'copy';
+  })=>void;
 };
 const id=(type:string)=>type+'-'+Math.random().toString(36).slice(2,11);
 export const newChapter=():CurriculumChapter=>({
@@ -19,7 +25,38 @@ export const newChapter=():CurriculumChapter=>({
   }],
 });
 
-export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:Props){
+export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz,
+  otherLessons=[],canTransfer=false,onTransfer}:Props){
+  const [transferTargets,setTransferTargets]=React.useState<Record<string,string>>({});
+  const transfer=(kind:'section'|'block',anchorId:string,mode:'move'|'copy')=>{
+    const selected=transferTargets[anchorId];
+    if(!selected||!canTransfer||!onTransfer)return;
+    const [destinationLessonId,destinationParentId]=JSON.parse(selected) as [string,string];
+    onTransfer({kind,anchorId,destinationLessonId,destinationParentId,mode});
+  };
+  const transferPicker=(kind:'section'|'block',anchorId:string,canMove:boolean)=>
+    <div className="vop-structure-crosslesson">
+      <label>Transfer to another lesson
+        <select value={transferTargets[anchorId]||''}
+          aria-label={'Destination for '+kind+' '+anchorId}
+          onChange={event=>setTransferTargets(previous=>({...previous,[anchorId]:event.target.value}))}
+          disabled={!canTransfer||!otherLessons.length}>
+          <option value="">Choose lesson and {kind==='section'?'chapter':'section'}…</option>
+          {otherLessons.flatMap(lesson=>lesson.chapters.flatMap(chapter=>
+            kind==='section'
+              ? [<option key={lesson.id+chapter.id} value={JSON.stringify([lesson.id,chapter.id])}
+                  disabled={chapter.sections.length>=40}>{lesson.title} / {chapter.title}</option>]
+              : chapter.sections.map(section=><option key={lesson.id+section.id}
+                  value={JSON.stringify([lesson.id,section.id])} disabled={section.blocks.length>=50}>
+                  {lesson.title} / {chapter.title} / {section.title}</option>)))}
+        </select>
+      </label>
+      <button type="button" disabled={!transferTargets[anchorId]||!canTransfer} 
+        onClick={()=>transfer(kind,anchorId,'copy')}><Copy size={15}/> Copy</button>
+      <button type="button" disabled={!transferTargets[anchorId]||!canMove||!canTransfer}
+        onClick={()=>transfer(kind,anchorId,'move')}><ArrowDown size={15}/> Move</button>
+    </div>;
+
   const updateChapter=(chapterIndex:number,patch:Partial<CurriculumChapter>)=>
     onChange(chapters.map((chapter,index)=>index===chapterIndex?{...chapter,...patch}:chapter));
   const addSection=(chapterIndex:number)=>{
@@ -126,7 +163,16 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
         <Plus size={17}/> Add chapter
       </button>
     </div>
-    {chapters.map((chapter,chapterIndex)=><details key={chapter.id} className="vop-structure-chapter" open={chapterIndex===0?true:undefined}>
+    <div className="vop-structure-workspace">
+      <aside className="vop-structure-outline" aria-label="Lesson chapters">
+        <strong>CHAPTERS</strong>
+        {chapters.map((chapter,index)=><a key={chapter.id} href={'#chapter-'+chapter.id}>
+          <span>{index+1}</span><span>{chapter.title||'Untitled chapter'}<small>{chapter.sections.length} sections</small></span>
+        </a>)}
+        <p>Select a chapter to edit its sections, blocks and quizzes.</p>
+      </aside>
+      <div className="vop-structure-content">
+    {chapters.map((chapter,chapterIndex)=><details id={'chapter-'+chapter.id} key={chapter.id} className="vop-structure-chapter" open={chapterIndex===0?true:undefined}>
       <summary><span className="vop-structure-chapter-icon"><BookOpen size={18}/></span>
         <span className="vop-structure-chapter-summary"><strong>{chapter.title||'Untitled chapter'}</strong><small>{chapter.sections.length} sections</small></span>
         <ChevronDown size={17}/>
@@ -144,6 +190,7 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
           <div className="vop-structure-section-head">
             <label>Section title<input value={section.title} onChange={event=>updateSection(chapterIndex,sectionIndex,{title:event.target.value})}/></label>
             {quizButton({type:'section',id:section.id},'Section quiz')}
+            {transferPicker('section',section.id,chapter.sections.length>1)}
             <button type="button" className="vop-structure-quiz" aria-label={'Duplicate '+section.title}
               disabled={chapter.sections.length>=40} onClick={()=>duplicateSection(chapterIndex,sectionIndex)}>
               <Copy size={15}/> Duplicate</button>
@@ -164,6 +211,7 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
             return <div className="vop-structure-block" key={block.id}>
               <div className="vop-structure-block-top"><span><GripVertical size={15}/> {block.type}</span><div className="vop-structure-block-actions">
                 {quizButton({type:'block',id:block.id},'Block quiz')}
+                {transferPicker('block',block.id,section.blocks.length>1)}
                 <button type="button" aria-label="Duplicate block" title="Duplicate block without linked quiz"
                   disabled={section.blocks.length>=50} onClick={()=>duplicateBlock(chapterIndex,sectionIndex,blockIndex)}>
                   <Copy size={15}/></button>
@@ -201,6 +249,8 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
         <button className="vop-structure-add-section" type="button" onClick={()=>addSection(chapterIndex)}><Plus size={16}/> Add section</button>
       </div>
     </details>)}
+      </div>
+    </div>
     {!chapters.length&&<p role="alert">Add a chapter to begin authoring your lesson.</p>}
   </div>;
 }
