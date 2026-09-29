@@ -164,17 +164,32 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                       </div>
                       {isCompleted&&<CheckCircle2 size={17} className="text-emerald-600" aria-label="Completed"/>}
                     </header>
-                    <div className="vop-guide-section-links">
-                      {sectionPages.map((sectionPage,pageIndex)=>{
-                        const actualIndex=lesson.contentPages?.findIndex(item=>
-                          item.sectionId===sectionPage.sectionId)??pageIndex;
-                        return <button type="button" key={sectionPage.sectionId}
-                          onClick={()=>onSelectLesson(lesson,actualIndex)}
-                          aria-label={'Open section '+sectionPage.title+' in '+lesson.title}>
-                          <span>{pageIndex+1}</span>
-                          <span>{sectionPage.title}</span>
-                          <ChevronRight size={15} aria-hidden="true"/>
-                        </button>;
+                    <div className="vop-guide-section-chapters">
+                      {lesson.chapters!.map((chapter,chapterIndex)=>{
+                        const pages=sectionPages.filter(item=>item.chapterId===chapter.id ||
+                          chapter.sections.some(section=>section.id===item.sectionId));
+                        if(!pages.length)return null;
+                        return <details key={chapter.id} className="vop-guide-section-chapter"
+                          open={chapterIndex===0}>
+                          <summary><BookOpen size={15} strokeWidth={1.8}/>
+                            <strong>{chapter.title}</strong>
+                            <small>{pages.length} {pages.length===1?'page':'pages'}</small>
+                            <ChevronRight size={15} className="vop-guide-section-chevron"/>
+                          </summary>
+                          <div className="vop-guide-section-links">
+                            {pages.map((sectionPage,index)=>{
+                              const actualIndex=lesson.contentPages?.findIndex(item=>
+                                item.sectionId===sectionPage.sectionId)??index;
+                              return <button type="button" key={sectionPage.sectionId}
+                                onClick={()=>onSelectLesson(lesson,actualIndex)}
+                                aria-label={'Open section '+sectionPage.title+' in '+chapter.title}>
+                                <span>{index+1}</span>
+                                <span>{sectionPage.title}</span>
+                                <ChevronRight size={15} aria-hidden="true"/>
+                              </button>;
+                            })}
+                          </div>
+                        </details>;
                       })}
                     </div>
                   </article>;
