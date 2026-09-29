@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, HeartHandshake,
   House, LibraryBig, LogOut, Megaphone, MessageCircle, Radio, ScrollText,
@@ -13,24 +12,18 @@ type Props = {
   currentRoute:AppRoute;
   currentUser:User;
   settings:AppSettings;
+  collapsed:boolean;
+  onToggle:()=>void;
   onNavigate:(route:AppRoute)=>void;
   onLogout:()=>void;
 };
-const collapsedKey='vop:learner-sidebar-collapsed';
 
 /** Persistent desktop navigation; the mobile account sheet remains a separate,
  * focus-trapped overlay. Only a visual preference is stored on the device. */
-export function LearnerSidebar({currentRoute,currentUser,settings,onNavigate,onLogout}:Props){
-  const [collapsed,setCollapsed]=useState<boolean>(() => {
-    try{return window.localStorage.getItem(collapsedKey)==='1';}catch{return false;}
-  });
+export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onToggle,onNavigate,onLogout}:Props){
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
     || ['owner','admin'].includes(String(currentUser.organizationRole||''));
-  const toggle=()=>{
-    const next=!collapsed;setCollapsed(next);
-    try{window.localStorage.setItem(collapsedKey,next?'1':'0');}catch{/* visual preference only */}
-  };
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
@@ -51,17 +44,18 @@ export function LearnerSidebar({currentRoute,currentUser,settings,onNavigate,onL
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
       {route:'personal-settings',label:t('navigation.personal_settings','Personal settings'),icon:Settings},
       {route:'certificates',label:t('certificates.my_certificate','Certificates'),icon:GraduationCap},
+      {route:'about',label:t('navigation.about','About VOP'),icon:BookOpen},
       ...(isAdmin?[{route:'admin' as const,label:t('navigation.admin','Admin panel'),icon:ShieldCheck}]:[]),
     ]},
   ];
   return <aside className={'vop-learner-sidebar'+(collapsed?' is-collapsed':'')} aria-label="Learner sidebar">
     <div className="vop-learner-sidebar-head">
-      <button type="button" className="vop-learner-sidebar-brand" title="Discover home"
+      {!collapsed&&<button type="button" className="vop-learner-sidebar-brand" title="Discover home"
         aria-label="Voice of Prophecy – Discover home" onClick={()=>onNavigate('home')}>
         <img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/>
-        {!collapsed&&<span><strong>Voice of Prophecy</strong><small>Learning workspace</small></span>}
-      </button>
-      <button type="button" className="vop-learner-sidebar-toggle" onClick={toggle}
+        <span><strong>Voice of Prophecy</strong><small>Learning workspace</small></span>
+      </button>}
+      <button type="button" className="vop-learner-sidebar-toggle" onClick={onToggle}
         aria-label={collapsed?'Expand sidebar':'Collapse sidebar'} aria-expanded={!collapsed}
         aria-controls="vop-learner-sidebar-links" title={collapsed?'Expand sidebar':'Collapse sidebar'}>
         {collapsed?<ChevronRight size={19}/>:<ChevronLeft size={19}/>}
