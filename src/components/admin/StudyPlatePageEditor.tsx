@@ -60,9 +60,10 @@ type Props={
   onChange:(document:StudyPlateDocument)=>void;
   onSplitPage:(before:StudyPlateDocument,after:StudyPlateDocument)=>void;
   onNotify?:(message:string)=>void;
+  onValidationError?:(message:string)=>void;
 };
 
-export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,onNotify}:Props){
+export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,onNotify,onValidationError}:Props){
   const [invalid,setInvalid]=useState('');
   const [initialValue]=useState(document);
   const editor=usePlateEditor({
@@ -155,9 +156,12 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
       try{
         const normalized=normalizeStudyPlateDocument(value);
         setInvalid('');
+        onValidationError?.('');
         onChange(normalized);
       }catch(error){
-        setInvalid(error instanceof Error?error.message:'The page contains unsupported content.');
+        const message=error instanceof Error?error.message:'The page contains unsupported content.';
+        setInvalid(message);
+        onValidationError?.(message);
       }
     }}>
       <div className="vop-plate-paper">
