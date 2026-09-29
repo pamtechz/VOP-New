@@ -137,6 +137,27 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
       }});
     assert.notEqual(lessonAttempt.status,200,'adopted guides must also block lesson edits');
   });
+  await t.test('platform adoption stays permanent after archive and restoration',async()=>{
+    const archived=await call(superAdmin,{collection:'programs',action:'delete',
+      id:programId,organizationId:a});
+    assert.equal(archived.status,200,JSON.stringify(archived.value));
+    const record=await db.doc('programs/'+programId).get();
+    assert.equal(record.data()?.archived,true);
+    assert.equal(record.data()?.published,false);
+    assert.equal(record.data()?.adoptedByPlatform,true);
+    const foreign=await call(outsider,{collection:'programs',action:'list',organizationId:b});
+    assert.equal(foreign.value.items.some(item=>item.id===programId),false);
+    const ownList=await call(author,{collection:'programs',action:'list',organizationId:a});
+    assert.equal(ownList.value.items.find(item=>item.id===programId).canEdit,false);
+    const rejected=await call(author,{collection:'programs',action:'upsert',organizationId:a,
+      id:programId,data:{...base,published:false,archived:false}});
+    assert.notEqual(rejected.status,200);
+    const restored=await call(superAdmin,{collection:'programs',action:'upsert',
+      id:programId,organizationId:a,
+      data:{...base,published:false,archived:false,sharingScope:'shared'}});
+    assert.equal(restored.status,200,JSON.stringify(restored.value));
+    assert.equal((await db.doc('programs/'+programId).get()).data()?.adoptedByPlatform,true);
+  });
 });
 const notesGuide='program-test-notes-guide';
 await db.doc('guides/'+notesGuide).set({
