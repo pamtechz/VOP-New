@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import {
+import test, { after } from 'node:test';
+import { createServer } from 'vite';
+
+const server = await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom'});
+after(async()=>{await server.close();});
+const {
   normalizeCurriculumStructure,curriculumPages,curriculumAnchorExists,
   containsPublicQuizAnswer,hasRequiredFinalExam,
-} from '../shared/curriculumStructure.ts';
+} = await server.ssrLoadModule('/shared/curriculumStructure.ts') as typeof import('../shared/curriculumStructure.ts');
 
 const chapter=()=>[{
   id:'chapter-one',title:'The beginning',
