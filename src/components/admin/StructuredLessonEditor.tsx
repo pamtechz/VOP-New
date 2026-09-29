@@ -4,6 +4,7 @@ import {
   GripVertical, Image, Music, Plus, Trash2, Video,
 } from 'lucide-react';
 import type { CurriculumBlock, CurriculumBlockType, CurriculumChapter } from '../../../shared/curriculumStructure';
+import { StructureActionsMenu } from './StructureActionsMenu';
 
 type QuizAnchor = {type:'chapter'|'section'|'block';id:string};
 type Props = {
@@ -14,7 +15,7 @@ type Props = {
   otherLessons?: Array<{id:string;title:string;chapters:CurriculumChapter[]}>;
   canTransfer?:boolean;
   onTransfer?:(request:{
-    kind:'section'|'block';anchorId:string;destinationLessonId:string;
+    kind:'chapter'|'section'|'block';anchorId:string;destinationLessonId:string;
     destinationParentId:string;mode:'move'|'copy';
   })=>void;
 };
@@ -28,33 +29,40 @@ export const newChapter=():CurriculumChapter=>({
 export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz,
   otherLessons=[],canTransfer=false,onTransfer}:Props){
   const [transferTargets,setTransferTargets]=React.useState<Record<string,string>>({});
-  const transfer=(kind:'section'|'block',anchorId:string,mode:'move'|'copy')=>{
+  const transfer=(kind:'chapter'|'section'|'block',anchorId:string,mode:'move'|'copy')=>{
     const selected=transferTargets[anchorId];
     if(!selected||!canTransfer||!onTransfer)return;
     const [destinationLessonId,destinationParentId]=JSON.parse(selected) as [string,string];
     onTransfer({kind,anchorId,destinationLessonId,destinationParentId,mode});
   };
-  const transferPicker=(kind:'section'|'block',anchorId:string,canMove:boolean)=>
+  const transferPicker=(kind:'chapter'|'section'|'block',anchorId:string,canMove:boolean)=>
     <div className="vop-structure-crosslesson">
-      <label>Transfer to another lesson
+      <label>To another lesson
         <select value={transferTargets[anchorId]||''}
           aria-label={'Destination for '+kind+' '+anchorId}
           onChange={event=>setTransferTargets(previous=>({...previous,[anchorId]:event.target.value}))}
           disabled={!canTransfer||!otherLessons.length}>
-          <option value="">Choose lesson and {kind==='section'?'chapter':'section'}…</option>
-          {otherLessons.flatMap(lesson=>lesson.chapters.flatMap(chapter=>
-            kind==='section'
-              ? [<option key={lesson.id+chapter.id} value={JSON.stringify([lesson.id,chapter.id])}
-                  disabled={chapter.sections.length>=40}>{lesson.title} / {chapter.title}</option>]
-              : chapter.sections.map(section=><option key={lesson.id+section.id}
-                  value={JSON.stringify([lesson.id,section.id])} disabled={section.blocks.length>=50}>
-                  {lesson.title} / {chapter.title} / {section.title}</option>)))}
+          <option value="">Choose destination…</option>
+          {otherLessons.flatMap(lesson=>
+            kind==='chapter'
+              ? [<option key={lesson.id} value={JSON.stringify([lesson.id,lesson.id])}
+                  disabled={lesson.chapters.length>=40}>{lesson.title}</option>]
+              : lesson.chapters.flatMap(chapter=>
+                kind==='section'
+                  ? [<option key={lesson.id+chapter.id} value={JSON.stringify([lesson.id,chapter.id])}
+                      disabled={chapter.sections.length>=40}>{lesson.title} / {chapter.title}</option>]
+                  : chapter.sections.map(section=><option key={lesson.id+section.id}
+                      value={JSON.stringify([lesson.id,section.id])} disabled={section.blocks.length>=50}>
+                      {lesson.title} / {chapter.title} / {section.title}</option>)))}
         </select>
       </label>
-      <button type="button" disabled={!transferTargets[anchorId]||!canTransfer} 
-        onClick={()=>transfer(kind,anchorId,'copy')}><Copy size={15}/> Copy</button>
-      <button type="button" disabled={!transferTargets[anchorId]||!canMove||!canTransfer}
-        onClick={()=>transfer(kind,anchorId,'move')}><ArrowDown size={15}/> Move</button>
+      <div className="vop-structure-transfer-buttons">
+        <button type="button" disabled={!transferTargets[anchorId]||!canTransfer}
+          onClick={()=>transfer(kind,anchorId,'copy')}><Copy size={15}/> Copy to lesson</button>
+        <button type="button" disabled={!transferTargets[anchorId]||!canMove||!canTransfer}
+          onClick={()=>transfer(kind,anchorId,'move')}><ArrowDown size={15}/> Move to lesson</button>
+      </div>
+      {!canTransfer&&<small>Save both lessons as editable drafts to transfer content.</small>}
     </div>;
 
   const updateChapter=(chapterIndex:number,patch:Partial<CurriculumChapter>)=>
@@ -139,6 +147,13 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz,
         return section;
       }),
     })));
+  };
+  const moveChapter=(chapterIndex:number,direction:-1|1)=>{
+    const destination=chapterIndex+direction;
+    if(destination<0||destination>=chapters.length)return;
+    const reordered=[...chapters];
+    [reordered[chapterIndex],reordered[destination]]=[reordered[destination],reordered[chapterIndex]];
+    onChange(reordered);
   };
   const duplicateChapter=(chapterIndex:number)=>{
     if(chapters.length>=40)return;
