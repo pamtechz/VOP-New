@@ -415,6 +415,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [plateReview,setPlateReview] = useState(false);
+  const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
   const [editorTab, setEditorTab] = useState<'content' | 'image' | 'media' | 'bible' | 'notes' | 'settings'>('content');
@@ -634,6 +635,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     setEditor(editorFromLesson(row));
+    setPlateValidationErrors({});
     setEditorTab('content');
     setPreviewOpen(false);
   };
@@ -646,6 +648,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     next.guideTitle = String(guide?.title || '');
     next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
     setEditor(next);
+    setPlateValidationErrors({});
     setEditorTab('content');
     setPreviewOpen(false);
   };
@@ -711,6 +714,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const saveLesson = async (publish: boolean) => {
     if (!editor) return;
+    if(Object.values(plateValidationErrors).some(Boolean)){
+      setError('The Plate document has invalid unsaved content. Correct the page before saving or publishing.');
+      setEditorTab('content');
+      return;
+    }
     if (!editor.title.trim()) return setError(tx('curriculum.lessonTitleRequired', 'Lesson title is required.'));
     if (!editor.lessonNumber.trim()) return setError(tx('curriculum.lessonNumberRequiredMessage', 'Lesson number is required.'));
     if (editor.audioUrl.trim() && !['direct-audio','embed'].includes(resolveMediaSource(editor.audioUrl.trim())?.kind || '') ) {
@@ -929,7 +937,13 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Organize this lesson into chapters, sections and blocks; attach quizzes through the private Quiz Library.</p></div>
           </div>
           <div className="vop-reference-actions">
-            <button className="vop-secondary" type="button" onClick={() => setPreviewOpen(true)}><Eye size={17}/>{tx('common.preview', 'Preview')}</button>
+            <button className="vop-secondary" type="button" onClick={() => {
+              if(Object.values(plateValidationErrors).some(Boolean)){
+                setError('Correct the invalid study page before previewing.');
+                setEditorTab('content');return;
+              }
+              setPreviewOpen(true);
+            }}><Eye size={17}/>{tx('common.preview', 'Preview')}</button>
             <button className="vop-secondary" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>{tx('curriculum.saveDraft', 'Save Draft')}</button>
             {editor.published && <button className="vop-secondary vop-danger-button" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>{tx('curriculum.unpublish', 'Unpublish')}</button>}
             <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}><Send size={17}/>{editor.published ? 'Update & Publish' : 'Publish'}</button>
@@ -947,7 +961,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-editor-layout vop-lesson-editor-grid">
           <div className="vop-card vop-editor vop-lesson-content-card">
             <div className="vop-settings-tabs vop-reference-editor-tabs">
-              {editorTabs.map(([id, label]) => <button key={id} type="button" className={'vop-tab ' + (editorTab === id ? 'active' : '')} onClick={() => setEditorTab(id)}>{label}</button>)}
+              {editorTabs.map(([id, label]) => <button key={id} type="button" className={'vop-tab ' + (editorTab === id ? 'active' : '')} onClick={() => {
+                if(id!=='content'&&Object.values(plateValidationErrors).some(Boolean)){
+                  setError('Resolve the invalid study page before leaving the editor.');return;
+                }
+                setEditorTab(id);
+              }}>{label}</button>)}
             </div>
 
             {editorTab === 'content' && <div className="vop-lesson-rich-editor">
@@ -970,6 +989,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 <EditorComponent
                 guideTitle={editor.guideTitle} lessonTitle={editor.title}
                 chapters={editor.chapters}
+                onPageError={(sectionId,error)=>setPlateValidationErrors(previous=>{
+                  if(previous[sectionId]===error)return previous;
+                  const next={...previous};
+                  if(error)next[sectionId]=error;else delete next[sectionId];
+                  return next;
+                })}
                 onChange={chapters => setEditor({...editor,chapters})}
                 canTransfer={Boolean(editor.id) && !editor.published && !saving}
                 otherLessons={moduleLessons.filter(item=>
