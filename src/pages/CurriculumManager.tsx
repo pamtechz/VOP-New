@@ -93,7 +93,7 @@ type EditorState = {
 };
 
 async function adminContentRequest(
-  action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'transferLessonStructure' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
@@ -106,7 +106,7 @@ async function adminContentRequest(
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action, collection, id, data, organizationId: organizationId || undefined }),
   });
-  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[]; item?: unknown };
+  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[]; item?: unknown; source?:CurriculumChapter[]; destination?:CurriculumChapter[] };
   if (!response.ok) throw new Error(body.error || 'Request failed.');
   return body;
 }
@@ -925,6 +925,33 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               {editor.chapters.length ? <StructuredLessonEditor
                 chapters={editor.chapters}
                 onChange={chapters => setEditor({...editor,chapters})}
+                canTransfer={Boolean(editor.id) && !editor.published && !saving}
+                otherLessons={moduleLessons.filter(item=>
+                  item.type!=='Test' && item.published!==true && item.archived!==true &&
+                  item.canEdit!==false && String(item.id)!==editor.id &&
+                  Array.isArray(item.chapters) && item.chapters.length>0
+                ).map(item=>({
+                  id:String(item.id),title:String(item.title||'Untitled lesson'),
+                  chapters:item.chapters as CurriculumChapter[],
+                }))}
+                onTransfer={request=>{
+                  if(!editor.id||editor.published){
+                    setError('Save this lesson as a draft before transferring content.');
+                    return;
+                  }
+                  if(!window.confirm('Transfers use the last saved draft. Save unsaved changes before continuing.'))return;
+                  setSaving(true);setError('');
+                  void adminContent('transferLessonStructure','curriculum',undefined,{
+                    ...request,guideId:editor.guideId,sourceLessonId:editor.id,
+                  }).then(async result=>{
+                    if(Array.isArray(result.source))setEditor(previous=>previous?{
+                      ...previous,chapters:result.source as CurriculumChapter[],
+                    }:previous);
+                    setMessage('Lesson content '+(request.mode==='copy'?'copied':'moved')+' successfully.');
+                    await load();
+                  }).catch(reason=>setError(reason instanceof Error?reason.message:'Transfer failed.'))
+                    .finally(()=>setSaving(false));
+                }}
                 canAttachQuiz={Boolean(editor.id) && editor.published}
                 onQuiz={anchor=>{
                   if (!editor.id || !editor.published) {
