@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import type {
@@ -61,6 +61,7 @@ export const App: React.FC = () => {
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [contentRefresh, setContentRefresh] = useState(0);
+  const appliedDeepLink = useRef(false);
   useEffect(() => {
     const refresh = () => setContentRefresh(value => value + 1);
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
@@ -227,7 +228,8 @@ export const App: React.FC = () => {
       const guideParam = deepLinkParams.get('guide');
       const lessonParam = deepLinkParams.get('lesson');
       const pageParam = Number.parseInt(deepLinkParams.get('page') || '1', 10);
-      if (guideParam) {
+      if (guideParam && !appliedDeepLink.current) {
+        appliedDeepLink.current = true;
         const deepGuide = snapshot.guides.find(guide => guide.id === guideParam || guide.language === guideParam);
         if (deepGuide) {
           setActiveGuide(deepGuide);
