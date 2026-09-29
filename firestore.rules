@@ -506,6 +506,17 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      // Locale overrides stay confined to this organization's authenticated
+      // users. Canonical /locales paths have no client-side write grant.
+      match /locales/{locale} {
+        allow get: if isSuperAdmin() || isOrgMember(organizationId);
+        allow list, create, update, delete: if false;
+        match /translations/{key} {
+          allow get, list: if isSuperAdmin() || isOrgMember(organizationId);
+          allow create, update, delete: if false;
+        }
+      }
+
       match /audit/{entryId} {
         allow get, list: if isSuperAdmin() || canManageOrg(organizationId);
         allow create: if isSuperAdmin() || isOrgMember(organizationId);
