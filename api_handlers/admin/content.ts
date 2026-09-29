@@ -6,6 +6,7 @@ import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuo
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
+import { normalizeCurriculumStructure, curriculumPages } from '../../shared/curriculumStructure.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -288,6 +289,27 @@ export default async function handler(req: Request, res: Response) {
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
+      // Answer keys live exclusively in the private Quiz Library. Lesson and
+      // chapter bodies are readable by learners; never persist inline keys.
+      if ((Array.isArray(data.questions) && data.questions.length) ||
+          (Array.isArray(data.quiz) && data.quiz.length)) {
+        throw new Error('Create quizzes in the private Quiz Library; lesson documents cannot contain answer keys.');
+      }
+      const structured = data.chapters !== undefined
+        ? normalizeCurriculumStructure(data.chapters) : undefined;
+      const structuredPages = structured ? curriculumPages(structured) : undefined;
+      if (data.chapters !== undefined && data.type === 'Test') throw new Error('Study chapters must use the Lesson type.');
+      if (structured) {
+        for (const page of structuredPages || []) for (const block of page.blocks) {
+          if (block.type !== 'video' && block.type !== 'audio') continue;
+          const source = resolveMediaSource(String(block.src || ''));
+          if (!source || source.kind === 'external' ||
+              (block.type === 'audio' && source.kind === 'direct-video') ||
+              (block.type === 'video' && source.kind === 'direct-audio')) {
+            throw new Error('Chapter media must be an approved public HTTPS embed or direct media file.');
+          }
+        }
+      }
       const media = data.media && typeof data.media === 'object' && !Array.isArray(data.media) ? data.media as Record<string, unknown> : {};
       for (const key of ['audioUrl','videoUrl']) {
         const value = String(media[key] || '').trim();
@@ -300,6 +322,14 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
+        // Derive learner pages on the server, not from potentially forged
+        // client-side page or block payloads.
+        ...(structured ? {
+          chapters:structured,
+          contentPages:structuredPages?.map(({ blocks:_blocks, ...page })=>page),
+          pages:structuredPages?.map(page=>({pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+            chapterTitle:page.chapterTitle,sectionId:page.sectionId,sectionTitle:page.sectionTitle,blocks:page.blocks})),
+        } : {}),
         id: lessonId,
         lessonId,
         organizationId: effectiveOrganizationId,
@@ -340,15 +370,16 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Only an authorized tenant administrator or VOP Super Admin can publish this lesson.');
       }
       if (!current.exists) throw new Error('The lesson was not found. Create the lesson before publishing it.');
+      // Publication updates status only. The old endpoint spread arbitrary
+      // request data, allowing an unsafe inline answer bank to bypass upsert.
       await ref.set({
-        ...data,
         id: lessonId,
         lessonId,
         organizationId: effectiveOrganizationId,
         ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
-        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
+        sharingScope: current.data()?.sharingScope === 'shared' ? 'shared' : current.data()?.sharingScope === 'private' ? 'private' : 'organization',
         published: true,
         publishedAt: FieldValue.serverTimestamp(),
         publishedBy: ctx.auth.uid,
