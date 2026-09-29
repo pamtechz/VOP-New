@@ -111,6 +111,8 @@ export const App: React.FC = () => {
       if (!firebaseUser) {
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
+        // Clear cached tenant-only labels before showing the anonymous registry.
+        void initializeLocalization(settings);
         return;
       }
       const params = new URLSearchParams(window.location.search);
@@ -150,6 +152,8 @@ export const App: React.FC = () => {
           setActiveLang(profile.preferences.studyLanguage);
           setActiveLanguage(profile.preferences.studyLanguage);
         }
+        // Reload the authenticated tenant language registry and overlays.
+        void initializeLocalization(settings);
         setAllUsers([profile]);
         if (shareCode && firebaseAuth.currentUser) {
           try {
