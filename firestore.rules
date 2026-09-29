@@ -92,9 +92,16 @@ service cloud.firestore {
         || data.get('ownerOrganizationId', '') == orgId;
     }
 
+    function platformStewarded(data) {
+      return data.get('platformOwned', false) == true
+        || data.get('adoptedByPlatform', false) == true
+        || (data.get('sharingScope','private') == 'shared' && data.get('published',false) == true)
+        || (data.get('scope','organization') == 'platform' && data.get('ownerOrganizationId','') == '');
+    }
+
     function canEditOwnedContent(data) {
       return isSuperAdmin()
-        || (
+        || (!platformStewarded(data) && (
           isOrgMember(organizationIdForUser())
           && data.get('organizationId', data.get('ownerOrganizationId', '')) == organizationIdForUser()
           && data.get('ownerUid', '') == request.auth.uid
@@ -106,7 +113,7 @@ service cloud.firestore {
           && hierarchyOrganizationScope(data.get('organizationId', data.get('ownerOrganizationId', '')))
           && data.get('ownerTenantId', '') == hierarchyTenantId()
           && data.get('ownerUid', '') == request.auth.uid
-        );
+        ));
     }
 
     function isHierarchyTenant() {
@@ -148,7 +155,7 @@ service cloud.firestore {
 
     function canEditOwnedGlobal(data) {
       return isSuperAdmin()
-        || (
+        || (!platformStewarded(data) && (
           signedIn()
           && data.get('ownerUid', '') == request.auth.uid
           && isOrgMember(organizationIdForUser())
@@ -158,7 +165,7 @@ service cloud.firestore {
           isHierarchyTenant()
           && data.get('ownerUid', '') == request.auth.uid
           && data.get('ownerTenantId', '') == hierarchyTenantId()
-        );
+        ));
     }
 
     function canReadGlobal(data, publishedField) {
@@ -491,6 +498,14 @@ service cloud.firestore {
         allow create, update, delete: if canManageOrg(organizationId);
       }
 
+      // Organization language records are private until the trusted server
+      // promotes them into the global registry. No direct-client privilege
+      // can forge adoption, break a usage lock or publish a system locale.
+      match /languages/{languageId} {
+        allow get, list: if isSuperAdmin() || isOrgMember(organizationId);
+        allow create, update, delete: if false;
+      }
+
       match /audit/{entryId} {
         allow get, list: if isSuperAdmin() || canManageOrg(organizationId);
         allow create: if isSuperAdmin() || isOrgMember(organizationId);
@@ -672,27 +687,11 @@ service cloud.firestore {
       );
     }
 
+    // The canonical language registry and translations belong to the platform.
+    // Tenant language drafts live under their own organization, never here.
     match /languages/{languageId} {
       allow get, list: if canReadGlobal(resource.data, 'enabled');
-      allow create: if isSuperAdmin() || (
-        (
-          isOrgMember(organizationIdForUser())
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
-        )
-        || (
-          isHierarchyTenant()
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
-          && request.resource.data.get('organizationId','') == ''
-        )
-      );
-      allow update, delete: if isSuperAdmin() || (
-        canEditOwnedGlobal(resource.data)
-        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
-      );
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /translations/{languageId} {
@@ -700,25 +699,7 @@ service cloud.firestore {
         || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser())
         || isHierarchyTenant()
         || resource.data.get('sharingScope','private') == 'shared';
-      allow create: if isSuperAdmin() || (
-        (
-          isOrgMember(organizationIdForUser())
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
-        )
-        || (
-          isHierarchyTenant()
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
-          && request.resource.data.get('organizationId','') == ''
-        )
-      );
-      allow update, delete: if isSuperAdmin() || (
-        canEditOwnedGlobal(resource.data)
-        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
-      );
+      allow create, update, delete: if isSuperAdmin();
     }
 
     // Platform certification configuration.
