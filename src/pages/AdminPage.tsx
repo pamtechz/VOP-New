@@ -172,6 +172,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const detectedTimeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '', []);
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isHierarchyAdmin = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
+  const accountRoleLabel = isSuperAdmin ? 'Super Admin' : isHierarchyAdmin
+    ? String(currentUser.role).replaceAll('_',' ').replace(/\\b\\w/g,character=>character.toUpperCase())
+    : currentUser.organizationRole === 'owner' ? 'Organization Owner'
+    : currentUser.organizationRole === 'admin' ? 'Organization Admin'
+    : currentUser.organizationRole === 'editor' ? 'Organization Editor'
+    : String(currentUser.role || 'Learner').replaceAll('_',' ');
   const availableSettingsTabs: Array<{id: SettingsSubtab; label: string; icon: React.ComponentType<{size?:number}>}> = isSuperAdmin
     ? [
         {id:'general',label:'General',icon:Settings},{id:'appInfo',label:'App Info',icon:Book},{id:'features',label:'Features',icon:Grid2X2},
@@ -409,6 +415,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       : permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
     return NAV.filter(item => {
       if (!canSee(item.id)) return false;
+      if (item.id === 'languages' && !isSuperAdmin) return false;
       const role = String(currentUser.role || '');
       if (item.id === 'conferences' && !['super_admin','union_admin','conference_admin'].includes(role)) return false;
       if (item.id === 'districts' && !['super_admin','union_admin','conference_admin','district_admin'].includes(role)) return false;
@@ -416,7 +423,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
       return true;
     }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
-  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations]);
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, isSuperAdmin]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
@@ -986,6 +993,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
   const canAdminResource = (kind: ManagedAdminCollection, action: PermissionAction) => {
     if (kind === 'unions' && currentUser.role === 'union_admin' && action === 'create') return false;
+    if (kind === 'translations' && !isSuperAdmin && action !== 'view') return false;
     return permissionAllowed(permissionMatrix, currentPermissionRole, adminResourceForCollection[kind], action);
   };
 
@@ -1010,13 +1018,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className={'vop-profile '+(profileOpen?'open':'')}>
           <button className="vop-user" type="button" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>{setProfileOpen(value=>!value);setSidebarOpen(false)}} title="Open profile menu">
             {currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}
-            <div className="vop-user-copy"><div className="vop-user-name">{currentUser.displayName || currentUser.email || ''}</div><div className="vop-user-role">{currentUser.role === 'super_admin' ? 'Super Admin' : currentUser.role || ''}</div></div>
+            <div className="vop-user-copy"><div className="vop-user-name">{currentUser.displayName || currentUser.email || ''}</div><div className="vop-user-role">{accountRoleLabel}</div></div>
             <ChevronDown className="vop-profile-chevron" size={18}/>
           </button>
           {profileOpen&&<div className="vop-profile-menu" role="menu">
             <div className="vop-profile-menu-head">{currentUser.photoURL ? <img className="vop-profile-menu-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-profile-menu-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><strong>{currentUser.displayName || currentUser.email || 'Account'}</strong><span>{currentUser.email || ''}</span></div></div>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);setActiveTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
+            <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onLogout()}}><LogOut size={16}/>Sign out</button>
           </div>}
         </div>
       </div>
