@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { User, DiscoverGuide, Announcement, AppSettings, LanguageCode } from '../../types';
 import { getTranslation, getAvailableLanguages, getUiLocale } from '../../services/i18n';
 import { Award, ArrowRight, BookOpen, CheckCircle2, Clock3, Languages, Play, Sparkles, Target, TrendingUp, HeartHandshake, Radio } from 'lucide-react';
+import { lessonIsComplete } from '../../services/lessonProgress';
 
 interface HomeDashboardProps {
   currentUser: User;
@@ -32,9 +33,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
   const languageOptions = getAvailableLanguages(settings).filter(item => item.enabled !== false);
   const filteredGuides = useMemo(() => guides.filter(guide => languageFilter === 'all' || (guide.language || 'en') === languageFilter), [guides, languageFilter]);
-  const completedLessons = currentUser.progress.completedLessons.length;
-  const primaryGuide = filteredGuides.find(guide => guide.lessons.some(lesson => !currentUser.progress.completedLessons.includes(lesson.id))) || filteredGuides[0];
-  const primaryCompleted = primaryGuide ? primaryGuide.lessons.filter(lesson => currentUser.progress.completedLessons.includes(lesson.id)).length : 0;
+  const isCompleted = (guide: DiscoverGuide, lesson: DiscoverGuide['lessons'][number]) =>
+    lessonIsComplete(guide, lesson, currentUser, settings.quizPassThreshold);
+  const completedLessons = guides.reduce((total,guide)=>
+    total + guide.lessons.filter(lesson=>lesson.type==='Lesson'&&isCompleted(guide,lesson)).length,0);
+  const primaryGuide = filteredGuides.find(guide=>guide.lessons.some(lesson=>!isCompleted(guide,lesson))) || filteredGuides[0];
+  const primaryCompleted = primaryGuide ? primaryGuide.lessons.filter(lesson=>isCompleted(primaryGuide,lesson)).length : 0;
   const primaryPercent = primaryGuide?.lessons.length ? Math.round((primaryCompleted / primaryGuide.lessons.length) * 100) : 0;
   const announcement = announcements[announcementIndex % Math.max(announcements.length, 1)];
   const firstName = currentUser.displayName?.split(' ')[0] || t('common.learner','Learner');
@@ -108,7 +112,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <label className="vop-home-language"><Languages size={15}/><select value={languageFilter} onChange={e=>setLanguageFilter(e.target.value)}><option value="all">All languages</option>{languageOptions.map(language=><option key={language.code} value={language.code}>{language.nativeName || language.name}</option>)}</select></label>
         </div>
         {filteredGuides.length ? <div className="vop-home-guide-grid">{filteredGuides.map(guide => {
-          const done = guide.lessons.filter(lesson => currentUser.progress.completedLessons.includes(lesson.id)).length;
+          const done = guide.lessons.filter(lesson => isCompleted(guide,lesson)).length;
           const complete = guide.lessons.length > 0 && done === guide.lessons.length;
           const percent = guide.lessons.length ? Math.round((done / guide.lessons.length) * 100) : 0;
           const language = languageOptions.find(item => item.code === (guide.language || 'en'));
