@@ -56,7 +56,8 @@ async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>)
 
 async function submit(req: Request, res: Response) {
   const ctx = await authenticateTenant(req);
-  await requirePermission(ctx, 'certificates', 'create');
+  // Learners submit their own requests through this authenticated self-service
+  // endpoint. They must not need the certificate issuance/create permission.
   if (ctx.isSuperAdmin) return res.status(403).json({ error: 'Super administrators do not submit candidate graduation requests.' });
   const body = bodyOf(req);
   const guideId = text(body.guideId);
@@ -250,7 +251,7 @@ export default async function handler(req: Request, res: Response) {
     const message = error instanceof Error ? error.message : 'Graduation workflow failed.';
     if (/Sign in|organization|permission|authorized|member|tenant/i.test(message)) return res.status(403).json({ error: message });
     if (/not found/i.test(message)) return res.status(404).json({ error: message });
-    if (/configured|changed before|already/i.test(message)) return res.status(409).json({ error: message });
+    if (/configured|changed before|already|no longer has/i.test(message)) return res.status(409).json({ error: message });
     return res.status(500).json({ error: 'Graduation workflow failed.' });
   }
 }
