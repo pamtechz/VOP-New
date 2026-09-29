@@ -18,6 +18,7 @@ type GuideRecord = {
   season: string;
   quarter: string;
   certificateEligible: boolean;
+  requiresFinalExam: boolean;
   published: boolean;
   archived: boolean;
   sharingScope: 'private' | 'organization' | 'shared';
@@ -51,6 +52,7 @@ type Props = {
   guides: DiscoverGuide[];
   onSaved?: () => void;
   onOpenSettings?: () => void;
+  onOpenGuide?: (guideId: string) => void;
   organizationId?: string;
 };
 
@@ -66,7 +68,7 @@ async function guideAdmin(
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action, collection: 'guides', data, organizationId: organizationId || undefined }),
   });
-  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[] };
+  const body = await response.json().catch(() => ({})) as { error?: string; items?: unknown[]; item?: { id?: string } };
   if (!response.ok) throw new Error(body.error || 'Guide request failed.');
   return body;
 }
@@ -103,6 +105,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     season: valueText(value.season),
     quarter: valueText(value.quarter),
     certificateEligible: value.certificateEligible === true,
+    requiresFinalExam: value.requiresFinalExam === true,
     published: value.published === true,
     archived: value.archived === true,
     sharingScope: value.sharingScope === 'shared' ? 'shared' : value.sharingScope === 'private' ? 'private' : 'organization',
@@ -160,7 +163,7 @@ function groupGuides(records: GuideRecord[]): GuideGroup[] {
   return [...groups.values()].sort((a, b) => a.discoverNumber - b.discoverNumber || a.title.localeCompare(b.title));
 }
 
-export default function GuideManager({ languages, guides, onSaved, onOpenSettings, organizationId = '' }: Props) {
+export default function GuideManager({ languages, guides, onSaved, onOpenSettings, onOpenGuide, organizationId = '' }: Props) {
   const [records, setRecords] = useState<GuideRecord[]>([]);
   const [editing, setEditing] = useState<GuideRecord | null>(null);
   const [search, setSearch] = useState('');
@@ -185,8 +188,8 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     try {
       const response = await guideAdmin('listGuides', undefined, organizationId);
       const apiRecords = (response.items || []) as Array<Record<string, unknown>>;
-      const lessonCounts = new Map(guides.map(guide => [guide.language, guide.lessons.length]));
-      setRecords(apiRecords.map(item => makeRecord(item, lessonCounts.get(valueText(item.language)) || 0)));
+      const lessonCounts = new Map(guides.map(guide => [guide.id, guide.lessons.length]));
+      setRecords(apiRecords.map(item => makeRecord(item, lessonCounts.get(valueText(item.id)) || 0)));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load guides.');
     } finally {
@@ -235,6 +238,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       season: '',
       quarter: '',
       certificateEligible: false,
+      requiresFinalExam: true,
       published: false,
       archived: false,
       sharingScope: organizationId ? 'organization' : 'shared',
@@ -267,8 +271,8 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     setSaving(true);
     setError('');
     try {
-      await guideAdmin('upsertGuide', {
-        id: editing.id || 'discover-' + editing.language,
+      const saved = await guideAdmin('upsertGuide', {
+        id: editing.id || '',
         discoverNumber: editing.discoverNumber,
         title: editing.title.trim(),
         subtitle: editing.subtitle.trim(),
@@ -278,6 +282,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         season: editing.season.trim(),
         quarter: editing.quarter.trim(),
         certificateEligible: editing.certificateEligible,
+        requiresFinalExam: editing.requiresFinalExam,
         published: editing.published,
         archived: false,
         sharingScope: editing.sharingScope,
@@ -286,6 +291,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       setMessage(editing.published ? 'Guide published.' : 'Guide saved as draft.');
       onSaved?.();
       await load();
+      if (saved.item?.id) onOpenGuide?.(saved.item.id);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save guide.');
     } finally {
@@ -310,7 +316,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     setSaving(true);
     setError('');
     try {
-      await guideAdmin('archiveGuide', { language: record.language }, organizationId);
+      await guideAdmin('archiveGuide', { id:record.id, language: record.language }, organizationId);
       setMessage('Guide archived.');
       onSaved?.();
       await load();
@@ -327,8 +333,8 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         <div className="vop-heading">
           <div className="vop-heading-icon vop-icon-orange"><BookOpen size={31}/></div>
           <div>
-            <h1>Guides Management</h1>
-            <p>Create and manage study guides for each lesson and season.</p>
+            <h1>Guides & modules</h1>
+            <p>Create a guide first. Open it to add lessons, chapters, sections, blocks and assessments.</p>
           </div>
         </div>
         <div className="vop-reference-actions">
@@ -358,17 +364,21 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           <div className="vop-form-grid vop-reference-form-grid">
             <div className="vop-field"><label>Guide Title *</label><input value={editing.title} onChange={e => setEditing({...editing,title:e.target.value})}/></div>
             <div className="vop-field"><label>Subtitle</label><input value={editing.subtitle} onChange={e => setEditing({...editing,subtitle:e.target.value})}/></div>
-            <div className="vop-field"><label>Language *</label><select value={editing.language} onChange={e => setEditing({...editing,language:e.target.value,id:editing.id || 'discover-'+e.target.value})}><option value="">Select language</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name} · {item.code}</option>)}</select></div>
+            <div className="vop-field"><label>Language *</label><select value={editing.language} onChange={e => setEditing({...editing,language:e.target.value})}><option value="">Select language</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name} · {item.code}</option>)}</select></div>
             <div className="vop-field"><label>Discover Number</label><input type="number" min="1" value={editing.discoverNumber} onChange={e => setEditing({...editing,discoverNumber:Math.max(1,Number(e.target.value)||1)})}/></div>
             <div className="vop-field"><label>Season</label><input value={editing.season} onChange={e => setEditing({...editing,season:e.target.value})}/></div>
             <div className="vop-field"><label>Quarter</label><input value={editing.quarter} onChange={e => setEditing({...editing,quarter:e.target.value})}/></div>
             <div className="vop-field"><label>Cover Image</label><input value={editing.image} onChange={e => setEditing({...editing,image:e.target.value})}/></div>
-            <div className="vop-field"><label>Guide ID</label><input value={editing.id || 'discover-'+editing.language} disabled /></div>
+            <div className="vop-field"><label>Guide ID</label><input value={editing.id || 'Generated securely on save'} disabled /></div>
           </div>
           <div className="vop-field"><label>Description</label><textarea value={editing.description} onChange={e => setEditing({...editing,description:e.target.value})}/></div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Certificate eligibility</div><div className="vop-setting-help">Available to the configured certification workflow.</div></div>
             <input type="checkbox" checked={editing.certificateEligible} onChange={e => setEditing({...editing,certificateEligible:e.target.checked})}/>
+          </div>
+          <div className="vop-setting-row">
+            <div><div className="vop-setting-name">Final guide examination</div><div className="vop-setting-help">A guide-level final examination is required for newly created structured modules.</div></div>
+            <input type="checkbox" checked={editing.requiresFinalExam} onChange={event=>setEditing({...editing,requiresFinalExam:event.target.checked})}/>
           </div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Sharing</div><div className="vop-setting-help">Shared guides can be consumed by other organizations. Canonical editing remains with the owner and VOP Super Admin.</div></div>
@@ -412,7 +422,11 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
                   <td><div className="vop-language-pills">{group.languages.map(code => <span key={code}>{code.toUpperCase()}</span>)}</div></td>
                   <td><span className={'vop-status ' + group.status.toLowerCase()}>{group.status}</span></td>
                   <td><div className="vop-reference-updated">{formatDate(group.updatedAt)}{group.updatedBy && <small>by {group.updatedBy}</small>}</div></td>
-                  <td><div className="vop-reference-action-cell"><button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
+                  <td><div className="vop-reference-action-cell">{onOpenGuide && group.records.filter(record=>!record.archived && record.canEdit!==false).map(record=>
+                    <button key={'open-'+record.id} className="vop-secondary vop-guide-open-button" type="button"
+                      onClick={()=>onOpenGuide(record.id)} title={'Manage '+record.language.toUpperCase()+' module lessons'}>
+                      <BookOpen size={15}/> Open {record.language.toUpperCase()}
+                    </button>)}<button className="vop-actions" type="button" onClick={() => openEdit(group)} title={group.records.some(record => record.canEdit !== false) ? 'Edit guide' : 'Owned by another contributor'} disabled={!group.records.some(record => record.canEdit !== false)}><MoreVertical size={18}/></button>{group.records.filter(record => record.sharingScope === 'shared' && record.published).map(record => <button key={'copy-'+record.id} className="vop-actions" type="button" onClick={() => void fork(record)} title="Copy shared guide"><Copy size={16}/></button>)}</div></td>
                 </tr>
               ))}
             </tbody>
