@@ -101,6 +101,23 @@ test('graduation: learner self-submission and official issuance require verified
       assert.equal(response.status,403,JSON.stringify(response));
     });
 
+    await t.test('approval rejects a later failing retake and repairs an old client average',async()=>{
+      const request=(await db.collection('graduationRequests').where('candidateId','==',candidate.uid).get()).docs[0];
+      const downgraded={...scores,[org+':'+lang+':'+guide+':test-two']:45};
+      await db.doc('users/'+candidate.uid).update({'progress.guideScores':downgraded});
+      const rejected=await api(graduation,admin,{
+        action:'decision',requestId:request.id,revision:1,decision:'approve',
+      });
+      assert.equal(rejected.status,409,JSON.stringify(rejected));
+      const stillPending=(await request.ref.get()).data();
+      assert.equal(stillPending?.revision,1);
+      assert.notEqual(stillPending?.status,'approved');
+      assert.equal((await db.doc('users/'+candidate.uid).get()).data()?.information?.graduated,false);
+      await db.doc('users/'+candidate.uid).update({'progress.guideScores':scores});
+      // Simulate an old pending graduation record written before the fix.
+      await request.ref.update({averageScore:100});
+    });
+
     await t.test('authorized admin approves, learner still cannot issue, admin issues verified average',async()=>{
       const pending=(await db.collection('graduationRequests').where('candidateId','==',candidate.uid).get()).docs[0];
       const approval=await api(graduation,admin,{
@@ -108,6 +125,7 @@ test('graduation: learner self-submission and official issuance require verified
       });
       assert.equal(approval.status,200,JSON.stringify(approval));
       assert.equal(approval.request.status,'approved');
+      assert.equal(approval.request.averageScore,90,'Approval must recompute the authoritative average.');
       assert.equal((await api(certificates,candidate,{action:'issue',candidateId:candidate.uid})).status,403);
       const issued=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
       assert.equal(issued.status,201,JSON.stringify(issued));
