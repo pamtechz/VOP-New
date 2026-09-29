@@ -101,15 +101,9 @@ export async function authenticateTenant(request: Request, requestedOrganization
   const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
   if (!isSuperAdmin && (!membershipSnap.exists || membershipSnap.data()?.active !== true)) throw new Error('You are not a member of this organization.');
 
-  let membership = membershipSnap.data() || { role: 'platform' };
-  if (!isSuperAdmin && membershipSnap.exists) {
-    const profileRole = String(profile.organizationRole || '').trim();
-    const membershipRole = String(membership.role || '').trim();
-    if (['owner', 'admin'].includes(profileRole) && membershipRole !== profileRole) {
-      membership = { ...membership, role: profileRole };
-      await db.doc(`organizations/${organizationId}/members/${auth.uid}`).set({ uid: auth.uid, organizationId, role: profileRole, active: true, updatedAt: new Date().toISOString() }, { merge: true });
-    }
-  }
+  // Membership records are the source of truth. An editable profile role
+  // must never escalate a learner into an organization administrator.
+  const membership = membershipSnap.data() || { role: 'platform' };
 
   return { db, auth, profile, organizationId, membership, isSuperAdmin, tenantType: 'organization', tenantId: organizationId };
 }
