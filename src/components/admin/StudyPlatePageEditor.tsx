@@ -24,10 +24,12 @@ import './plate-authoring.css';
 
 function ImageElement({element,children,...props}:PlateElementProps){
   const url=String((element as {url?:unknown}).url||'');
-  return <PlateElement as="figure" {...props} contentEditable={false}>
+  return <PlateElement as="figure" {...props}>
+    <span contentEditable={false}>
     {isSafeHttpsMediaUrl(url)
       ? <img className="vop-plate-image" src={url} alt="Lesson content" loading="lazy"/>
       : <span className="vop-plate-error">Invalid image URL</span>}
+    </span>
     {children}
   </PlateElement>;
 }
@@ -62,10 +64,11 @@ type Props={
 
 export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,onNotify}:Props){
   const [invalid,setInvalid]=useState('');
+  const [initialValue]=useState(document);
   const editor=usePlateEditor({
     id:'vop-plate-'+sectionId,
     plugins,
-    value:document as Value,
+    value:initialValue as Value,
     maxLength:40000,
     nodeId:{initialValueIds:'always',filter:([,path])=>path.length===1},
   });
