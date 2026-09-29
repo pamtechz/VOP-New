@@ -14,6 +14,7 @@ type Anchor={type:'chapter'|'section'|'block';id:string};
 type Props={
   chapters:CurriculumChapter[];
   onChange:(chapters:CurriculumChapter[])=>void;
+  onPageError?:(sectionId:string,message:string)=>void;
   onQuiz:(anchor:Anchor)=>void;
   canAttachQuiz:boolean;
   guideTitle:string;
@@ -54,12 +55,13 @@ const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
 };
 
 export function PlateCurriculumAuthoringReview({
-  chapters,onChange,onQuiz,canAttachQuiz,guideTitle,lessonTitle,
+  chapters,onChange,onPageError,onQuiz,canAttachQuiz,guideTitle,lessonTitle,
   canTransfer,otherLessons,onTransfer,
 }:Props){
   const [chapterId,setChapterId]=useState(chapters[0]?.id||'');
   const [pageId,setPageId]=useState(chapters[0]?.sections[0]?.id||'');
   const [message,setMessage]=useState('');
+  const [invalidPage,setInvalidPage]=useState('');
   const [transferTarget,setTransferTarget]=useState('');
   const chapter=chapters.find(item=>item.id===chapterId)||chapters[0];
   const page=chapter?.sections.find(item=>item.id===pageId)||chapter?.sections[0];
@@ -67,6 +69,12 @@ export function PlateCurriculumAuthoringReview({
   const pageIndex=chapter?.sections.findIndex(item=>item.id===page?.id)??-1;
   const sourceDocument=useMemo(()=>page?doc(page):[],[page]);
   const legacyMedia=Boolean(page?.blocks.some(item=>item.type==='video'||item.type==='audio'));
+  const canLeavePage=()=>{
+    if(!invalidPage)return true;
+    setMessage('Correct this page before leaving: '+invalidPage);
+    return false;
+  };
+  useEffect(()=>setInvalidPage(''),[pageId]);
   useEffect(()=>{
     if(!chapters.some(item=>item.id===chapterId)){
       setChapterId(chapters[0]?.id||'');
@@ -86,6 +94,7 @@ export function PlateCurriculumAuthoringReview({
     if(page)updatePage(setDocument(page,value));
   };
   const splitPage=(before:StudyPlateDocument,after:StudyPlateDocument)=>{
+    if(!canLeavePage())return;
     if(!page||chapter.sections.length>=40)return setMessage('This chapter already has 40 sections.');
     const next=freshPage(chapter.sections.length+1);
     next.title=after[0] && 'children' in after[0]
@@ -102,6 +111,7 @@ export function PlateCurriculumAuthoringReview({
     setMessage('A new student page was created from that paragraph.');
   };
   const addPage=()=>{
+    if(!canLeavePage())return;
     if(!chapter||chapter.sections.length>=40)return;
     const next=freshPage(chapter.sections.length+1);
     onChange(chapters.map(item=>item.id===chapter.id
@@ -109,11 +119,13 @@ export function PlateCurriculumAuthoringReview({
     setPageId(next.id);
   };
   const addChapter=()=>{
+    if(!canLeavePage())return;
     if(chapters.length>=40)return;
     const next=freshChapter(chapters.length+1);
     onChange([...chapters,next]);setChapterId(next.id);setPageId(next.sections[0].id);
   };
   const duplicatePage=()=>{
+    if(!canLeavePage())return;
     if(!chapter||!page||chapter.sections.length>=40)return;
     const copy:CurriculumSection={
       ...duplicateSectionSafely(page),title:page.title+' (copy)',
@@ -125,6 +137,7 @@ export function PlateCurriculumAuthoringReview({
     }:item));setPageId(copy.id);
   };
   const duplicateChapter=()=>{
+    if(!canLeavePage())return;
     if(!chapter||chapters.length>=40)return;
     const copy:CurriculumChapter={
       ...chapter,id:id('chapter'),title:chapter.title+' (copy)',
@@ -134,6 +147,7 @@ export function PlateCurriculumAuthoringReview({
     setChapterId(copy.id);setPageId(copy.sections[0].id);
   };
   const moveToChapter=(targetId:string)=>{
+    if(!canLeavePage())return;
     if(!chapter||!page||chapter.sections.length<=1)return;
     const target=chapters.find(item=>item.id===targetId);
     if(!target||target.id===chapter.id||target.sections.length>=40)return;
@@ -143,7 +157,7 @@ export function PlateCurriculumAuthoringReview({
     setChapterId(target.id);setPageId(page.id);
   };
   const transfer=(kind:'chapter'|'section',anchorId:string,mode:'copy'|'move')=>{
-    if(!transferTarget||!canTransfer)return;
+    if(!transferTarget||!canTransfer||!canLeavePage())return;
     const [destinationLessonId,destinationParentId]=JSON.parse(transferTarget) as [string,string];
     onTransfer({kind,anchorId,destinationLessonId,destinationParentId,mode});
   };
@@ -198,7 +212,7 @@ export function PlateCurriculumAuthoringReview({
       <label>Chapter
         <select value={chapter?.id||''} onChange={e=>{
           const next=chapters.find(item=>item.id===e.target.value);
-          if(!next)return;setChapterId(next.id);setPageId(next.sections[0]?.id||'');
+          if(!next||!canLeavePage())return;setChapterId(next.id);setPageId(next.sections[0]?.id||'');
         }}>
           {chapters.map((item,index)=><option key={item.id} value={item.id}>
             {index+1}. {item.title}
@@ -221,7 +235,7 @@ export function PlateCurriculumAuthoringReview({
       {chapter?.sections.map((part,index)=>
         <button key={part.id} type="button" className={part.id===page?.id?'active':''}
           aria-current={part.id===page?.id?'page':undefined}
-          onClick={()=>setPageId(part.id)}>
+          onClick={()=>{if(canLeavePage())setPageId(part.id);}}>
           <span>{index+1}</span><span>{part.title}</span>
         </button>)}
       <button type="button" className="vop-plate-add-page" onClick={addPage}
@@ -253,7 +267,11 @@ export function PlateCurriculumAuthoringReview({
     {page&&(!legacyMedia
       ?<StudyPlatePageEditor key={page.id} sectionId={page.id}
         document={sourceDocument} onChange={updateDocument}
-        onSplitPage={splitPage} onNotify={setMessage}/>
+        onSplitPage={splitPage} onNotify={setMessage}
+        onValidationError={value=>{
+          setInvalidPage(value);
+          onPageError?.(page.id,value);
+        }}/>
       :<div className="vop-plate-review-compat" role="alert">
           <strong>Existing media content is preserved.</strong>
           Use the classic editor for this section until its audio and video
