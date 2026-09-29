@@ -221,6 +221,12 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
+        // Presentation changes the learner's navigation, never the underlying
+        // lesson/progress/certificate identity. Existing guides remain in
+        // their familiar lesson-list mode until the author chooses otherwise.
+        learnerEntryMode: data.learnerEntryMode === 'sections' ? 'sections'
+          : data.learnerEntryMode === 'lessons' ? 'lessons'
+          : current.learnerEntryMode === 'sections' ? 'sections':'lessons',
         // Structured guides always require a final exam; existing legacy guides
         // can opt in, but their configured requirement cannot be disabled.
         requiresFinalExam: !existing.exists || current.requiresFinalExam === true || data.requiresFinalExam === true,
