@@ -193,7 +193,9 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
-        requiresFinalExam: data.requiresFinalExam === undefined ? (existing.exists ? current.requiresFinalExam === true : true) : data.requiresFinalExam === true,
+        // Structured guides always require a final exam; existing legacy guides
+        // can opt in, but their configured requirement cannot be disabled.
+        requiresFinalExam: !existing.exists || current.requiresFinalExam === true || data.requiresFinalExam === true,
         published: data.published === true,
         archived: data.archived === true,
         createdAt: current.createdAt || new Date().toISOString(),
