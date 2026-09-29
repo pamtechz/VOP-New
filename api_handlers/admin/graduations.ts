@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
+import { verifiedAssessmentAverage } from '../../shared/graduationEvidence.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -55,7 +56,8 @@ async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>)
 
 async function submit(req: Request, res: Response) {
   const ctx = await authenticateTenant(req);
-  await requirePermission(ctx, 'certificates', 'create');
+  // Learners submit their own requests through this authenticated self-service
+  // endpoint. They must not need the certificate issuance/create permission.
   if (ctx.isSuperAdmin) return res.status(403).json({ error: 'Super administrators do not submit candidate graduation requests.' });
   const body = bodyOf(req);
   const guideId = text(body.guideId);
@@ -104,15 +106,14 @@ async function submit(req: Request, res: Response) {
     const key = `${language}:${guideId}:${String(lesson.id)}`;
     if (!completedLessons.has(key)) return res.status(409).json({ error: 'The candidate has not completed all required lessons.' });
   }
-  for (const test of testLessons) {
-    const key = `${ctx.organizationId}:${language}:${guideId}:${String(test.id)}`;
-    const score = Number(scores[key]);
-    if (!Number.isFinite(score) || score < threshold) return res.status(409).json({ error: 'The candidate has not passed all required assessments.' });
+  if (verifiedAssessmentAverage(testLessons, scores, ctx.organizationId, language, guideId, threshold) === null) {
+    return res.status(409).json({ error: 'The candidate has not passed all required assessments.' });
   }
 
   const ref = ctx.db.doc(`graduationRequests/${requestId(ctx.organizationId, ctx.auth.uid, guideId)}`);
   const userRef = ctx.db.doc(`users/${ctx.auth.uid}`);
-  const score = Number(body.averageScore);
+  // Client-provided averageScore is deliberately ignored; only persisted
+  // tenant-scoped grades may enter an official graduation request.
   const now = FieldValue.serverTimestamp();
 
   const result = await ctx.db.runTransaction(async transaction => {
@@ -124,17 +125,37 @@ async function submit(req: Request, res: Response) {
       }
       if (current.status !== 'rejected') return { created: false, data: safeRequest(existing.id, current) };
     }
+    // Read the candidate in the same transaction as the request write. A
+    // retake or organization change between initial validation and commit
+    // must never leave a fabricated or stale graduation score.
+    const freshCandidate = await transaction.get(userRef);
+    if (!freshCandidate.exists || String(freshCandidate.data()?.organizationId || '') !== ctx.organizationId) {
+      throw new Error('The candidate account changed before graduation submission.');
+    }
+    const freshData = freshCandidate.data() || {};
+    const freshProgress = freshData.progress && typeof freshData.progress === 'object'
+      ? freshData.progress as Record<string, unknown> : {};
+    const freshCompleted = new Set(Array.isArray(freshProgress.completedLessons) ? freshProgress.completedLessons.map(String) : []);
+    if (studyLessons.some(lesson => !freshCompleted.has(`${language}:${guideId}:${String(lesson.id)}`))) {
+      throw new Error('The candidate no longer has all required completed lessons.');
+    }
+    const freshScores = freshProgress.guideScores && typeof freshProgress.guideScores === 'object'
+      ? freshProgress.guideScores as Record<string, unknown> : {};
+    const authoritativeAverage = verifiedAssessmentAverage(testLessons, freshScores, ctx.organizationId, language, guideId, threshold);
+    if (authoritativeAverage === null) {
+      throw new Error('The candidate no longer has all required passing assessments.');
+    }
     const firstStage = stages[0];
     const data = {
       candidateId: ctx.auth.uid, candidateName: text(candidate.displayName), candidateEmail: text(candidate.email || ctx.auth.email),
       organizationId: ctx.organizationId, guideId, guideTitle: text(guide.title), churchId: text(candidate.churchId),
       districtId: text(candidate.districtId), conferenceId: text(candidate.conferenceId), unionId: text(candidate.unionId),
-      averageScore: Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0, status: requestStatus(firstStage),
+      averageScore: authoritativeAverage, status: requestStatus(firstStage),
       workflowStageId: firstStage.id, workflowStageIndex: 0, revision: 1, submittedAt: now, approvedAt: null,
       approverNotes: '', decisions: [], updatedAt: now,
     };
     transaction.set(ref, data);
-    transaction.set(userRef, { information: { ...(candidate.information && typeof candidate.information === 'object' ? candidate.information : {}), graduating: true }, updatedAt: now }, { merge: true });
+    transaction.set(userRef, { information: { ...(freshData.information && typeof freshData.information === 'object' ? freshData.information : {}), graduating: true }, updatedAt: now }, { merge: true });
     return { created: true, data: safeRequest(ref.id, data) };
   });
   if (result.created) await writeTenantAudit(ctx, 'graduation.request.submitted', ref.path, undefined, result.data as Record<string, unknown>);
@@ -230,7 +251,7 @@ export default async function handler(req: Request, res: Response) {
     const message = error instanceof Error ? error.message : 'Graduation workflow failed.';
     if (/Sign in|organization|permission|authorized|member|tenant/i.test(message)) return res.status(403).json({ error: message });
     if (/not found/i.test(message)) return res.status(404).json({ error: message });
-    if (/configured|changed before|already/i.test(message)) return res.status(409).json({ error: message });
+    if (/configured|changed before|already|no longer has/i.test(message)) return res.status(409).json({ error: message });
     return res.status(500).json({ error: 'Graduation workflow failed.' });
   }
 }
