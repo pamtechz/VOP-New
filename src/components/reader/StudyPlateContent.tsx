@@ -1,5 +1,5 @@
 import React from 'react';
-import type { StudyPlateDocument, StudyPlateLeaf, StudyPlateNode } from '../../../shared/studyPlateDocument';
+import { normalizeStudyPlateDocument, type StudyPlateDocument, type StudyPlateLeaf, type StudyPlateNode } from '../../../shared/studyPlateDocument';
 import { isSafeHttpsMediaUrl } from '../../../shared/mediaSources';
 import './study-plate.css';
 
@@ -43,7 +43,17 @@ export function StudyPlateContent({document,afterBlock}: {
   document:StudyPlateDocument;
   afterBlock?:(anchorId:string)=>React.ReactNode;
 }){
-  return <div className="vop-study-plate">{document.map((node,index)=><React.Fragment key={node.id||String(index)}>
+  // Treat learner-readable Firestore records as untrusted, including older
+  // records written before the API enforced document validation. A malformed
+  // document must fail closed rather than crash the entire lesson reader.
+  const safe=React.useMemo(()=>{
+    try{return normalizeStudyPlateDocument(document)}
+    catch{return null}
+  },[document]);
+  if(!safe)return <p className="vop-study-plate-error" role="alert">
+    This page contains unsupported content. Contact your course administrator.
+  </p>;
+  return <div className="vop-study-plate">{safe.map((node,index)=><React.Fragment key={node.id||String(index)}>
     {renderNode(node,node.id||String(index))}
     {node.id&&afterBlock?.(node.id)}
   </React.Fragment>)}</div>;
