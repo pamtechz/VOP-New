@@ -68,15 +68,12 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
   const transferSection=(fromChapter:number,sectionIndex:number,toChapter:number)=>{
     if(fromChapter===toChapter)return;
     const source=chapters[fromChapter],destination=chapters[toChapter];
-    if(!source||!destination||destination.sections.length>=40)return;
+    if(!source||!destination||source.sections.length<=1||destination.sections.length>=40)return;
     const section=source.sections[sectionIndex];if(!section)return;
-    // Structured lessons require every chapter to retain at least one section.
+    // Keep at least one section in each chapter; the author can add a replacement first.
     const remaining=source.sections.filter((_,index)=>index!==sectionIndex);
     onChange(chapters.map((chapter,index)=>index===fromChapter
-      ? {...chapter,sections:remaining.length?remaining:[{
-          id:id('section'),title:'New section',
-          blocks:[{id:id('block'),type:'paragraph' as const,text:''}],
-        }]}
+      ? {...chapter,sections:remaining}
       : index===toChapter?{...chapter,sections:[...chapter.sections,section]}:chapter));
   };
   const duplicateBlock=(chapterIndex:number,sectionIndex:number,blockIndex:number)=>{
@@ -91,13 +88,13 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
     if(fromChapter===toChapter&&fromSection===toSection)return;
     const source=chapters[fromChapter]?.sections[fromSection];
     const destination=chapters[toChapter]?.sections[toSection];
-    if(!source||!destination||destination.blocks.length>=50)return;
+    if(!source||!destination||source.blocks.length<=1||destination.blocks.length>=50)return;
     const block=source.blocks[blockIndex];if(!block)return;
     onChange(chapters.map((chapter,chapterIndex)=>({...chapter,
       sections:chapter.sections.map((section,sectionIndex)=>{
         if(chapterIndex===fromChapter&&sectionIndex===fromSection){
           const remaining=section.blocks.filter((_,index)=>index!==blockIndex);
-          return {...section,blocks:remaining.length?remaining:[{id:id('block'),type:'paragraph' as const,text:''}]};
+          return {...section,blocks:remaining};
         }
         if(chapterIndex===toChapter&&sectionIndex===toSection){
           return {...section,blocks:[...section.blocks,block]};
@@ -152,7 +149,7 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
               <Copy size={15}/> Duplicate</button>
             <label className="vop-structure-transfer">Move section
               <select aria-label={'Move '+section.title+' to chapter'} value=""
-                disabled={chapters.length<2}
+                disabled={chapters.length<2||chapter.sections.length<=1}
                 onChange={event=>{const target=Number(event.target.value);if(Number.isInteger(target))transferSection(chapterIndex,sectionIndex,target);}}>
                 <option value="">Select chapter…</option>
                 {chapters.map((target,index)=>index===chapterIndex?null:<option key={target.id} value={index}
@@ -172,6 +169,7 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
                   <Copy size={15}/></button>
                 <label className="vop-structure-transfer">Move block
                   <select aria-label={'Move '+block.type+' block to section'} value=""
+                    disabled={section.blocks.length<=1}
                     onChange={event=>{const [c,si]=event.target.value.split(':').map(Number);
                       if(Number.isInteger(c)&&Number.isInteger(si))transferBlock(chapterIndex,sectionIndex,blockIndex,c,si);}}>
                     <option value="">Select section…</option>
