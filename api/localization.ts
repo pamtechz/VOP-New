@@ -65,14 +65,17 @@ export default async function handler(req:Request,res:Response){
     if(req.method!=='POST') return res.status(405).json({error:'Method not allowed.'});
     const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
     const action=normalize(body.action); const locale=(await resolveLocale(db,cleanLocale(body.locale))).code;
+    // All canonical locales and their translations are platform assets. A
+    // tenant permission grants proposal submission, never platform writes.
+    const ctx=await authenticateTenant(req);
+    if (action !== 'list' && !ctx.isSuperAdmin) throw new Error('Only VOP Super Admin may modify system locales and translations. Submit a translation proposal for review.');
     if(action==='bootstrap'){
-      const ctx=await authenticateTenant(req); await requirePermission(ctx,'translations','update');
+      await requirePermission(ctx,'translations','update');
       const name=String(body.name||'').trim(); const nativeName=String(body.nativeName||name).trim(); if(!name) throw new Error('Language name is required.');
       const ref=db.doc(`locales/${locale}`); const current=await ref.get();
       await ref.set({code:locale,name,nativeName,enabled:body.enabled!==false,direction:String(body.direction||'ltr')==='rtl'?'rtl':'ltr',fallback:body.fallback?cleanLocale(body.fallback):'',version:Number(current.data()?.version||1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
       return res.status(200).json({ok:true,locale});
     }
-    const ctx=await authenticateTenant(req);
     if(action==='list'){ await requirePermission(ctx,'translations','view'); const requestedNamespace=String(body.namespace||'').trim(); const snap=await db.collection(`locales/${locale}/translations`).get(); const items=snap.docs.map(doc=>({id:doc.id,...doc.data()})).filter(item=>!requestedNamespace||String(item.namespace||'')===requestedNamespace); return res.status(200).json({ok:true,items}); }
     if(action==='bulksave'){
       await requirePermission(ctx,'translations','update');
