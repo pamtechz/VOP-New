@@ -24,7 +24,7 @@ import './plate-authoring.css';
 
 function ImageElement({element,children,...props}:PlateElementProps){
   const url=String((element as {url?:unknown}).url||'');
-  return <PlateElement as="figure" {...props}>
+  return <PlateElement as="figure" element={element} {...props}>
     <span contentEditable={false}>
     {isSafeHttpsMediaUrl(url)
       ? <img className="vop-plate-image" src={url} alt="Lesson content" loading="lazy"/>
