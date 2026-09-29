@@ -4,7 +4,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
-import { assertMutableTenantResource } from '../../shared/platformStewardship.js';
+import { assertMutableTenantResource, platformStewardedResource } from '../../shared/platformStewardship.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
@@ -120,7 +120,7 @@ export default async function handler(req: Request, res: Response) {
       const snap = await guide.ref.collection('lessons').get();
       const items = snap.docs.map(doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || String(row.ownerUid || '') === ctx.auth.uid;
+        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -159,7 +159,7 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid,
+          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)),
         };
       }));
       return res.status(200).json({ ok: true, items });
@@ -593,7 +593,7 @@ export default async function handler(req: Request, res: Response) {
           items: visible.map(d => ({
             id:d.id,
             ...d.data(),
-            canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
+            canEdit: ctx.isSuperAdmin || (canEditCanonicalContent(ctx, d.data()) && !platformStewardedResource(d.data())),
           })),
         });
       }
@@ -613,7 +613,7 @@ export default async function handler(req: Request, res: Response) {
         const items = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
-          canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
+          canEdit: ctx.isSuperAdmin || (canEditCanonicalContent(ctx, d.data()) && !platformStewardedResource(d.data())),
           scope: 'organization',
         })));
         return res.status(200).json({ ok: true, items });
