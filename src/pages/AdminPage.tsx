@@ -173,7 +173,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isHierarchyAdmin = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
   const accountRoleLabel = isSuperAdmin ? 'Super Admin' : isHierarchyAdmin
-    ? String(currentUser.role).replaceAll('_',' ').replace(/\\b\\w/g,character=>character.toUpperCase())
+    ? String(currentUser.role).replaceAll('_',' ').replace(/\b\w/g,character=>character.toUpperCase())
     : currentUser.organizationRole === 'owner' ? 'Organization Owner'
     : currentUser.organizationRole === 'admin' ? 'Organization Admin'
     : currentUser.organizationRole === 'editor' ? 'Organization Editor'
