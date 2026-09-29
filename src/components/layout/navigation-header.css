@@ -272,3 +272,16 @@
   .vop-learner-main .vop-app-header-account-avatar,
   .vop-admin .vop-admin-top .vop-avatar{width:34px;height:34px;flex-basis:34px}
 }
+
+/* Compact 320–380px phones: preserve the account and navigation affordances.
+   Search and theme remain available from larger layouts/settings. */
+@media(max-width:380px){
+  .vop-learner-main .vop-app-header-actions > div:first-child,
+  .vop-admin .vop-top-actions > div:first-child{display:none}
+}
+@media(max-width:360px){
+  .vop-learner-main .vop-header-icon-btn:not(.vop-app-header-menu){display:none}
+  .vop-learner-main .vop-app-header-actions{gap:2px!important}
+  .vop-learner-main .vop-app-header{padding:0 8px!important}
+  .vop-header-locale-control{min-width:84px;max-width:90px}
+}
