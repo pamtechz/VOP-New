@@ -6,7 +6,7 @@ import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuo
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
-import { normalizeCurriculumStructure, curriculumPages } from '../../shared/curriculumStructure.js';
+import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -293,8 +293,13 @@ export default async function handler(req: Request, res: Response) {
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
       // Answer keys live exclusively in the private Quiz Library. Lesson and
       // chapter bodies are readable by learners; never persist inline keys.
+      if (data.type === 'Test') {
+        throw new Error('Create assessments in the private Quiz Library, not through the lesson authoring endpoint.');
+      }
       if ((Array.isArray(data.questions) && data.questions.length) ||
-          (Array.isArray(data.quiz) && data.quiz.length)) {
+          (Array.isArray(data.quiz) && data.quiz.length) ||
+          containsPublicQuizAnswer(data.chapters) || containsPublicQuizAnswer(data.contentPages) ||
+          containsPublicQuizAnswer(data.pages) || containsPublicQuizAnswer(data.blocks)) {
         throw new Error('Create quizzes in the private Quiz Library; lesson documents cannot contain answer keys.');
       }
       const structured = data.chapters !== undefined
