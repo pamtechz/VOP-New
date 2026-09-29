@@ -95,7 +95,9 @@ service cloud.firestore {
     function canEditOwnedContent(data) {
       return isSuperAdmin()
         || (
-          isOrgMember(organizationIdForUser())
+          data.get('platformOwned', false) != true
+          && !(data.get('sharingScope','private') == 'shared' && data.get('published',false) == true)
+          && isOrgMember(organizationIdForUser())
           && data.get('organizationId', data.get('ownerOrganizationId', '')) == organizationIdForUser()
           && data.get('ownerUid', '') == request.auth.uid
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
@@ -149,8 +151,11 @@ service cloud.firestore {
     function canEditOwnedGlobal(data) {
       return isSuperAdmin()
         || (
-          signedIn()
+          data.get('platformOwned',false) != true
+          && !(data.get('sharingScope','private') == 'shared' && data.get('published',false) == true)
+          && signedIn()
           && data.get('ownerUid', '') == request.auth.uid
+          && data.get('organizationId', '') == organizationIdForUser()
           && isOrgMember(organizationIdForUser())
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
         )
@@ -164,7 +169,7 @@ service cloud.firestore {
     function canReadGlobal(data, publishedField) {
       return isSuperAdmin()
         || (isOrgMember(organizationIdForUser()) && data.get('organizationId', '') == organizationIdForUser())
-        || (isHierarchyTenant())
+        || (isHierarchyTenant() && hierarchyOrganizationScope(data.get('organizationId', '')))
         || (data.get('sharingScope', 'private') == 'shared' && data.get(publishedField, false) == true)
         || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true)
         || (signedIn() && data.get('ownerUid', '') == request.auth.uid);
@@ -609,7 +614,7 @@ service cloud.firestore {
         (
           isOrgMember(organizationIdForUser())
           && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+          && request.resource.data.get('organizationId','') == organizationIdForUser()
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
         )
         || (
@@ -632,7 +637,7 @@ service cloud.firestore {
         (
           isOrgMember(organizationIdForUser())
           && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
+          && request.resource.data.get('organizationId','') == organizationIdForUser()
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
         )
         || (
@@ -655,7 +660,7 @@ service cloud.firestore {
         (
           isOrgMember(organizationIdForUser())
           && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') == ''
+          && request.resource.data.get('organizationId','') == organizationIdForUser()
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
         )
         || (
