@@ -1123,6 +1123,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {managedTabs.includes(activeTab as ManagedAdminCollection) && (activeTab!=='translations'||isSuperAdmin) && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
+            isSuperAdmin={isSuperAdmin}
             languages={languages}
             preferredLanguage={activeLanguage}
             canCreate={canAdminResource(activeTab as ManagedAdminCollection, 'create')}
