@@ -30,7 +30,7 @@ test('desktop has permanent collapsible learner sidebar with account actions gua
   assert.match(sidebar,/collapsed:boolean/);
   assert.match(app,/readSidebarCollapsed/);
   assert.match(app,/persistSidebarCollapsed/);
-  assert.match(sidebar,/onToggle=\{onToggle\}/);
+  assert.match(sidebar,/onClick=\{onToggle\}/);
   assert.match(sidebar,/isAdmin\?\[\{route:'admin'/);
   assert.match(sidebar,/aria-current=\{currentRoute===item\.route\?'page':undefined\}/);
   assert.match(sidebar,/aria-controls="vop-learner-sidebar-links"/);
