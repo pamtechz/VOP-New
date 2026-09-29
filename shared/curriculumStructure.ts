@@ -113,3 +113,18 @@ export function curriculumAnchorExists(chapters:unknown,type:'chapter'|'section'
   }
   return false;
 }
+
+/** New guides must finish with a real private-bank final examination.
+ * Existing guides that predate the flag keep their established policy. */
+export function hasRequiredFinalExam(
+  guide: {requiresFinalExam?:unknown},
+  records: readonly Record<string,unknown>[],
+):boolean {
+  if(guide.requiresFinalExam!==true)return true;
+  return records.some(item=>item.type==='Test'
+    && item.published===true && item.archived!==true
+    && item.attachmentType==='guide' && item.assessmentKind==='final_exam'
+    && item.answerVisibility==='public_redacted'
+    && typeof item.sourceQuizId==='string' && idPattern.test(item.sourceQuizId)
+    && Array.isArray(item.questions) && item.questions.length>0);
+}
