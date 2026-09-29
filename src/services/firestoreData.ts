@@ -179,6 +179,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       image: String(data.image ?? '').trim(),
       lessons: [],
       certificateEligible: data.certificateEligible === true,
+      learnerEntryMode: data.learnerEntryMode === 'sections' ? 'sections':'lessons',
       requiresFinalExam: data.requiresFinalExam === true,
     };
     if (!guide.title) continue;
