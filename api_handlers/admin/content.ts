@@ -78,6 +78,12 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    // The global language registry and translations are platform assets.
+    // Organization contributors submit scoped translation proposals instead.
+    if (!ctx.isSuperAdmin && (collection === 'languages' || collection === 'translations')
+        && !['list','proposeTranslation'].includes(action)) {
+      throw new Error('Only the VOP Super Admin can change system languages or translations.');
+    }
     const permissionResource = resourceForCollection(collection);
     const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
@@ -174,6 +180,9 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
       }
       if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
+      if (!ctx.isSuperAdmin && (current.platformOwned === true || (current.published === true && current.sharingScope === 'shared'))) {
+        throw new Error('A publicly shared guide is governed by the VOP Super Admin; fork a copy for changes.');
+      }
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       await ref.set({
         id,
@@ -183,6 +192,7 @@ export default async function handler(req: Request, res: Response) {
         scope: effectiveOrganizationId ? 'organization' : 'platform',
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : (effectiveOrganizationId ? 'organization' : 'shared'),
+        platformOwned: current.platformOwned === true || (data.sharingScope === 'shared' && data.published === true),
         curriculumId: 'discover',
         discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
         title,
@@ -214,6 +224,7 @@ export default async function handler(req: Request, res: Response) {
       const requestedId = String((body.data as Record<string, unknown> | undefined)?.id || '').trim();
       const ref = ctx.db.doc(`guides/${requestedId ? safeId(requestedId) : guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
+      if (!ctx.isSuperAdmin && (current.data()?.platformOwned === true || (current.data()?.published === true && current.data()?.sharingScope === 'shared'))) throw new Error('This shared guide is governed by the VOP Super Admin.');
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
       return res.status(200).json({ ok: true });
@@ -326,6 +337,7 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Lesson media must be an approved public HTTPS embed or direct media file.');
         }
       }
+      if (!ctx.isSuperAdmin && (existing.data()?.platformOwned === true || (existing.data()?.published === true && existing.data()?.sharingScope === 'shared'))) throw new Error('This shared lesson is governed by the VOP Super Admin; create a local copy to edit it.');
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
@@ -344,6 +356,7 @@ export default async function handler(req: Request, res: Response) {
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
+        platformOwned: existing.data()?.platformOwned === true || (data.sharingScope === 'shared' && data.published === true),
         published: data.published === true,
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -367,6 +380,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
       if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');
+      if (!ctx.isSuperAdmin && (current.data()?.platformOwned === true || (current.data()?.published === true && current.data()?.sharingScope === 'shared'))) throw new Error('This shared lesson is governed by the VOP Super Admin.');
       if (action === 'unpublishLesson') {
         if (!current.exists) throw new Error('The lesson was not found.');
         if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can unpublish this lesson.');
@@ -555,9 +569,9 @@ export default async function handler(req: Request, res: Response) {
           if (ownerUid === ctx.auth.uid) return true;
           // Hierarchy administrators can inspect the platform-wide global library,
           // but ownership is still enforced for every mutation.
-          if (ctx.tenantType === 'hierarchy') return true;
           if (collection === 'translations') return true;
-          if (ctx.orgId && String(data.organizationId || '') === ctx.orgId) return true;
+          if (ctx.organizationId && String(data.organizationId || '') === ctx.organizationId) return true;
+          if (ctx.tenantType === 'hierarchy' && String(data.ownerTenantId || '') === tenantOwnerKey(ctx)) return true;
           if (String(data.sharingScope || '') !== 'shared') return false;
           if (collection === 'languages') return data.enabled === true;
           if (collection === 'playlists') return data.published === true;
@@ -572,7 +586,7 @@ export default async function handler(req: Request, res: Response) {
             return {
               id:d.id,
               ...d.data(),
-              canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
+              canEdit: ctx.isSuperAdmin,
               proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() })).sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
             };
           }));
@@ -583,7 +597,10 @@ export default async function handler(req: Request, res: Response) {
           items: visible.map(d => ({
             id:d.id,
             ...d.data(),
-            canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
+            canEdit: ctx.isSuperAdmin || (
+              !(d.data().platformOwned === true || (d.data().published === true && d.data().sharingScope === 'shared'))
+              && canEditCanonicalContent(ctx, d.data())
+            ),
           })),
         });
       }
@@ -810,6 +827,12 @@ export default async function handler(req: Request, res: Response) {
             collection === 'playlists' ? 'maxRadioPlaylists' : '';
           if (quotaKey && ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, collection, quotaKey);
         }
+        if (!ctx.isSuperAdmin && (existing.data()?.platformOwned === true || (existing.data()?.published === true && existing.data()?.sharingScope === 'shared'))) {
+          throw new Error('This published shared resource is governed by the VOP Super Admin.');
+        }
+        if (existing.exists && !ctx.isSuperAdmin && String(existing.data()?.organizationId || '') !== effectiveOrganizationId) {
+          throw new Error('This resource belongs to another organization.');
+        }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
         if (collection === 'radioBroadcasts') {
           const urls = ['videoUrl','audioUrl','streamUrl'].map(key => ({key,url:String(incoming[key] || '').trim()})).filter(item => item.url);
@@ -824,13 +847,15 @@ export default async function handler(req: Request, res: Response) {
           ...incoming,
           id,
           ...(Object.prototype.hasOwnProperty.call(incoming, 'published') ? { published: incoming.published === true } : {}),
-          organizationId: '',
-          ownerOrganizationId: existing.data()?.ownerOrganizationId || (ctx.tenantType === 'organization' ? ctx.organizationId : ''),
+          organizationId: effectiveOrganizationId,
+          platformOwned: existing.data()?.platformOwned === true || (incoming.published === true && incoming.sharingScope === 'shared'),
+          ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
           ownerTenantId: existing.data()?.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
-          scope: 'platform',
+          scope: effectiveOrganizationId ? 'organization' : 'platform',
           canonical: true,
-          sharingScope: 'shared',
+          sharingScope: incoming.sharingScope === 'private' ? 'private' : incoming.sharingScope === 'organization' ? 'organization' : 'shared',
+          platformOwned: existing.data()?.platformOwned === true || (incoming.published === true && incoming.sharingScope === 'shared'),
           createdAt: existing.data()?.createdAt || new Date().toISOString(),
           updatedAt: FieldValue.serverTimestamp(),
           updatedBy: ctx.auth.uid,
@@ -907,6 +932,7 @@ export default async function handler(req: Request, res: Response) {
       }
 
       if (action === 'delete') {
+        if (!ctx.isSuperAdmin && (existing.data()?.platformOwned === true || (existing.data()?.published === true && existing.data()?.sharingScope === 'shared'))) throw new Error('Shared content in use is governed by the VOP Super Admin.');
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization can delete this content.');
         await ref.delete();
         await writeTenantAudit(ctx, 'content.delete', `${collection}/${id}`, existing.data(), undefined);
@@ -920,6 +946,7 @@ export default async function handler(req: Request, res: Response) {
           const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'playlists' ? 'maxRadioPlaylists' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
         }
+        if (!ctx.isSuperAdmin && (existing.data()?.platformOwned === true || (existing.data()?.published === true && existing.data()?.sharingScope === 'shared'))) throw new Error('Shared content in use is governed by the VOP Super Admin.');
         if (existing.exists && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
         await ref.set({
           ...incoming,
