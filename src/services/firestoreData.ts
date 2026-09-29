@@ -233,6 +233,22 @@ export async function loadFirestorePrograms(user?:User):Promise<CurriculumProgra
   const firestore=requireDb();
   if(!auth?.currentUser)return [];
   const programsRef=collection(firestore,'programs');
+  // Hierarchy admins may inspect published courses in their descendants but
+  // not arbitrary organizations. Use the same organization hierarchy fields
+  // used by the existing guide loader.
+  const hierarchical=['union_admin','conference_admin','district_admin','church_admin']
+    .includes(String(user?.role||''))&&Boolean(user?.adminNodeId);
+  const hierarchyField=user?.role==='union_admin'?'unionId':
+    user?.role==='conference_admin'?'conferenceId':
+    user?.role==='district_admin'?'districtId':'churchId';
+  let scopedOrganizationIds:string[]=[];
+  if(hierarchical){
+    const [direct,nested]=await Promise.all([
+      getDocs(query(collection(firestore,'organizations'),where(hierarchyField,'==',user!.adminNodeId))),
+      getDocs(query(collection(firestore,'organizations'),where('hierarchy.'+hierarchyField,'==',user!.adminNodeId))),
+    ]);
+    scopedOrganizationIds=[...new Set([...direct.docs,...nested.docs].map(item=>item.id))];
+  }
   const snapshots=await Promise.all([
     getDocs(query(programsRef,where('sharingScope','==','shared'),where('published','==',true))),
     ...(user?.role==='super_admin'
@@ -240,14 +256,17 @@ export async function loadFirestorePrograms(user?:User):Promise<CurriculumProgra
       :user?.organizationId
         ?[getDocs(query(programsRef,where('organizationId','==',user.organizationId),
           where('published','==',true)))]
-        :[]),
+        :scopedOrganizationIds.map(organizationId=>
+          getDocs(query(programsRef,where('organizationId','==',organizationId),
+            where('published','==',true)))),
   ]);
   const rows=new Map<string,CurriculumProgram>();
   for(const snapshot of snapshots)for(const item of snapshot.docs){
     const data=item.data();
     if(data.archived===true||data.published!==true)continue;
     const orgId=String(data.organizationId||'').trim();
-    const owned=user?.role==='super_admin'||Boolean(orgId&&orgId===user?.organizationId);
+    const owned=user?.role==='super_admin'||
+      Boolean(orgId&&(orgId===user?.organizationId||scopedOrganizationIds.includes(orgId)));
     if(!owned && data.sharingScope!=='shared')continue;
     const title=String(data.title||'').trim();
     if(!title)continue;
