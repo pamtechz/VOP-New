@@ -5,6 +5,8 @@ import { assertMutableTenantResource, platformStewardedResource } from '../share
 test('published shared or adopted records are platform stewarded', () => {
   assert.equal(platformStewardedResource({sharingScope:'shared',published:true}),true);
   assert.equal(platformStewardedResource({scope:'platform'}),true);
+  assert.equal(platformStewardedResource({scope:'platform',ownerOrganizationId:'org-a',published:false,sharingScope:'organization'}),false);
+  assert.equal(platformStewardedResource({scope:'platform',ownerOrganizationId:'org-a',published:true,sharingScope:'shared'}),true);
   assert.equal(platformStewardedResource({adoptedByPlatform:true}),true);
   assert.equal(platformStewardedResource({sharingScope:'organization',published:true}),false);
   assert.equal(platformStewardedResource({sharingScope:'shared',published:false}),false);
