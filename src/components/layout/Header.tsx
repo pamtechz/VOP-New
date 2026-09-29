@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
-import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays } from 'lucide-react';
+import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown } from 'lucide-react';
 import { CommunicationTools } from './CommunicationTools';
 
 interface HeaderProps {
@@ -32,9 +32,18 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
           <div style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',border:'1px solid rgba(255,255,255,.2)',boxShadow:'var(--shadow-sm)'}}><img src="/assets/vop_logo_2.png" alt="Voice of Prophecy" style={{width:26,height:26,objectFit:'contain'}} onError={(e)=>{(e.target as HTMLElement).style.display='none';}}/></div>
           <div><div style={{display:'flex',alignItems:'center',gap:'.4rem'}}><span style={{fontWeight:800,fontSize:'1.05rem',letterSpacing:'-.01em',fontFamily:'var(--font-display)'}}>{t('common.app_title',settings.appName||'Voice of Prophecy')}</span><span className="badge badge-gold hide-sm" style={{fontSize:'.6rem',padding:'.1rem .4rem'}}>v4.0 PRO</span></div><div className="hide-sm" style={{fontSize:'.68rem',color:'rgba(255,255,255,.7)',fontWeight:500}}>{t('common.school_subtitle',settings.schoolName||'Bible Correspondence School')}</div></div>
         </div>
-        <nav aria-label="Desktop Navigation" className="hidden lg:flex items-center gap-1">
+        <nav aria-label="Desktop Navigation" className="hidden vop-desktop-nav items-center gap-1">
           <button onClick={()=>nav('home')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${currentRoute==='home'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}>{t('navigation.discover','Discover')}</button>
           <button onClick={()=>nav('resources')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='resources'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><BookOpen size={14}/><span>{t('navigation.library','Library')}</span></button>
+          <button type="button" onClick={()=>nav('lessons')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='lessons'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><FileText size={14}/><span>{t('navigation.lessons','Lessons')}</span></button>
+          <details className="vop-header-learning" key={currentRoute}>
+            <summary><span>{t('navigation.learning','Learning')}</span><ChevronDown size={14}/></summary>
+            <div className="vop-header-learning-menu">
+              <button type="button" onClick={()=>nav('master-guide')}><ShieldCheck size={16}/>{t('navigation.master_guide','Master Guide')}</button>
+              <button type="button" onClick={()=>nav('scripture-memory')}><Brain size={16}/>{t('navigation.scripture_memory','Scripture Memory')}</button>
+              <button type="button" onClick={()=>nav('iron-duels')}><Swords size={16}/>{t('navigation.iron_duels','Iron Duels')}</button>
+            </div>
+          </details>
           <button onClick={()=>nav('prayer')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='prayer'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><HeartHandshake size={14}/><span>{t('navigation.prayer','Prayer')}</span></button>
           <button onClick={()=>nav('radio')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='radio'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Radio size={14}/><span>{t('navigation.radio','Radio')}</span></button>
           <button onClick={()=>nav('announcements')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='announcements'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Megaphone size={14}/><span>{t('navigation.announcements','Announcements')}</span></button>
