@@ -112,3 +112,27 @@
   }
   .vop-radio-page{padding-bottom:calc(180px + env(safe-area-inset-bottom,0px))}
 }
+
+/* A persistent header must fit 320px screens while keeping Search,
+ * Notifications and the account drawer reachable. Language selection is
+ * available in Personal Settings on narrow phones. */
+.vop-app-header-inner{min-width:0}
+.vop-app-brand{min-width:0}
+.vop-app-brand-copy{min-width:0}
+.vop-app-brand-copy span{overflow:hidden;text-overflow:ellipsis}
+.vop-app-header-actions{min-width:0}
+@media(max-width:640px){
+  .vop-app-header{padding:8px!important}
+  .vop-app-header-inner{gap:5px!important}
+  .vop-app-brand{min-width:0;flex-shrink:1!important;gap:5px!important}
+  .vop-app-brand-copy{min-width:0;max-width:clamp(76px,30vw,180px)}
+  .vop-app-brand-copy>div:first-child>span:first-child{display:block;min-width:0;max-width:100%;font-size:clamp(11px,3vw,15px)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vop-app-brand-copy .badge{display:none!important}
+  .vop-app-language{display:none!important}
+  .vop-app-header-actions{flex-shrink:0;gap:1px!important}
+  .vop-app-header-actions .btn{min-width:34px;min-height:40px;padding:7px!important}
+}
+@media(max-width:360px){
+  .vop-app-brand img{width:24px!important;height:24px!important}
+  .vop-app-header-actions{gap:0!important}
+}
