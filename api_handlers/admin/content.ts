@@ -169,6 +169,9 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
+      if (existing.exists && String(current.organizationId || '').trim() !== effectiveOrganizationId) {
+        throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
+      }
       if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       await ref.set({
