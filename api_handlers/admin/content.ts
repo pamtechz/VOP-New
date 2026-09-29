@@ -9,6 +9,7 @@ import { notifyOrganizationMembers, normalizePublicationAudience } from '../../s
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
+import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -182,9 +183,11 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
       }
       if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
+      await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
+      if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, current, 'edit');
-      await ref.set({
+      const nextGuide = {
         id,
         organizationId: effectiveOrganizationId,
         ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
@@ -210,7 +213,28 @@ export default async function handler(req: Request, res: Response) {
         createdAt: current.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
-      }, { merge: true });
+      };
+      const isSharedPublication = Boolean(effectiveOrganizationId &&
+        data.published===true && data.sharingScope==='shared');
+      if (isSharedPublication) {
+        // Cross-tenant visibility implies platform language stewardship.
+        // Publication and adoption commit together or not at all.
+        await ctx.db.runTransaction(async transaction=>{
+          const currentSnapshot=await transaction.get(ref);
+          if(currentSnapshot.exists){
+            const now=currentSnapshot.data()||{};
+            if(String(now.organizationId||'')!==effectiveOrganizationId ||
+              !(await canManageOrganizationContent(ctx,now)))
+              throw new Error('The guide is no longer editable in this organization.');
+            assertMutableTenantResource(ctx.isSuperAdmin,now,'edit');
+          }
+          await adoptOrganizationLanguage(ctx,transaction,effectiveOrganizationId,lang);
+          transaction.set(ref,nextGuide,{merge:true});
+        });
+        await writeTenantAudit(ctx,'guide.language.adoption',`guides/${id}`,undefined,{language:lang});
+      } else {
+        await ref.set(nextGuide,{merge:true});
+      }
       const saved = await ref.get();
       await writeTenantAudit(ctx, existing.exists ? 'guide.update' : 'guide.create', `guides/${id}`, current, saved.data());
       return res.status(200).json({ ok: true, item: { id, ...saved.data() } });
