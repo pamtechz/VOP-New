@@ -622,9 +622,32 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const language = String(guide.language || 'en').toLowerCase();
     const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
     next.guideTitle = String(guide?.title || '');
+    next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
     setEditor(next);
     setEditorTab('content');
     setPreviewOpen(false);
+  };
+
+  const openModuleLesson=(raw:RecordItem)=>{
+    if (raw.canEdit===false || raw.type==='Test') {
+      setError('This assessment is managed in the private Quiz Library or belongs to another contributor.');
+      return;
+    }
+    const guide=guides.find(item=>item.id===selectedGuideId)||null;
+    const row:LessonRow={
+      key:selectedGuideId+'|'+raw.id,guide,raw,
+      lesson:{
+        id:String(raw.id||''),title:String(raw.title||''),description:String(raw.description||''),
+        lessonNumber:String(raw.lessonNumber||'1'),type:'Lesson',
+        contentPages:Array.isArray(raw.contentPages)?raw.contentPages as Lesson['contentPages']:[],
+        chapters:Array.isArray(raw.chapters)?raw.chapters as CurriculumChapter[]:undefined,
+        estimatedMinutes:Number(raw.estimatedMinutes||15),
+      } as Lesson,
+      language:String(raw.language||guide?.language||'en'),
+      guideTitle:String(raw.guideTitle||guideRecords.find(item=>item.id===selectedGuideId)?.title||''),
+      season:String(raw.season||''),status:raw.archived===true?'Archived':raw.published===true?'Published':'Draft',
+    };
+    openLesson(row);
   };
 
   const moveBlock = (index: number, direction: -1 | 1) => {
