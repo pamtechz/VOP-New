@@ -48,7 +48,7 @@ function reset() {
   records.clear();
   records.set('languages/bem', { code: 'bem', name: 'Bemba', enabled: true });
   records.set('languages/eng', { code: 'eng', name: 'English', enabled: true });
-  ctx.auth.uid = 'translator'; ctx.isSuperAdmin = false;
+  ctx.auth.uid = 'translator'; ctx.isSuperAdmin = true;
 }
 
 test('bulkSave publishes flat and namespaced translations returned by selected language', async () => {
@@ -71,9 +71,11 @@ test('drafting, clearing and deleting a translation cannot resurrect old publish
   assert.deepEqual((await request('GET', {}, { locale: 'bem' })).payload.translations, {});
 });
 
-test('translation owner is enforced while Super Admin can update without taking ownership', async () => {
+test('only Super Admin may modify canonical translations, preserving provenance', async () => {
   reset();
   await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Original' } });
+  ctx.auth.uid = 'translator'; ctx.isSuperAdmin = false;
+  assert.equal((await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Changed' } })).code, 403);
   ctx.auth.uid = 'other';
   assert.equal((await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Changed' } })).code, 403);
   assert.equal(records.get('translations/bem').values['common.save'], 'Original');
