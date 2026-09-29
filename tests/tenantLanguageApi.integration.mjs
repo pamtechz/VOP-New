@@ -114,6 +114,16 @@ test('tenant languages, organization overrides and irreversible platform adoptio
       assert.equal((await db.doc(`organizations/${prefix}/locales/${code}/translations/common.save`).get()).data()?.value,'Save for org A');
     });
 
+    await t.test('a foreign tenant cannot claim an unshared language by code',async()=>{
+      const denied=await call(content,outsider,{
+        action:'upsertGuide',collection:'guides',
+        data:{language:code,title:'Unauthorized language use',
+          published:false,sharingScope:'organization'},
+      });
+      assert.notEqual(denied.status,200);
+      assert.equal((await db.doc('languages/'+code).get()).exists,false);
+    });
+
     let guideId='';
     await t.test('guide use prevents deletion before global adoption',async()=>{
       const guide=await call(content,author,{
