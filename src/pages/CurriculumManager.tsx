@@ -869,7 +869,13 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   ];
 
   if (editor) {
-    const EditorComponent=plateReview?PlateCurriculumAuthoringReview:StructuredLessonEditor;
+    // The legacy editor only understands plain blocks. Once any section owns
+    // a rich Plate document, opening the legacy editor would silently change
+    // a derived compatibility view rather than the authoritative document.
+    const hasRichSections=editor.chapters.some(chapter=>
+      chapter.sections.some(section=>Boolean(section.document)));
+    const EditorComponent=plateReview||hasRichSections
+      ?PlateCurriculumAuthoringReview:StructuredLessonEditor;
     if (previewOpen) return <LearnerPreview editor={editor} guideTitle={editor.guideTitle} onClose={() => setPreviewOpen(false)} />;
 
     const editorTabs = [
@@ -948,13 +954,17 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               {editor.chapters.length ? <>
                 <div className="vop-plate-review-mode">
                   <div><strong>{plateReview?'Plate document authoring preview':'Classic structured lesson editor'}</strong>
-                    <span>{plateReview
-                      ? 'Review the new paragraph-first writing and section-as-page flow. Drafts save to the same Firestore lesson.'
-                      : 'The original editor is retained during the Plate review.'}</span>
+                    <span>{hasRichSections
+                      ? 'This lesson contains rich Plate pages. The classic text-only editor is locked to prevent loss of formatting and quiz anchors.'
+                      : plateReview
+                        ? 'Review the new paragraph-first writing and section-as-page flow. Drafts save to the same Firestore lesson.'
+                        : 'The original editor is retained during the Plate review.'}</span>
                   </div>
                   <button className="vop-secondary" type="button"
+                    disabled={hasRichSections}
+                    title={hasRichSections?'Rich pages can only be edited in Plate without destructive conversion.':''}
                     onClick={()=>setPlateReview(value=>!value)}>
-                    {plateReview?'Use classic editor':'Try Plate editor'}
+                    {hasRichSections?'Plate document mode':plateReview?'Use classic editor':'Try Plate editor'}
                   </button>
                 </div>
                 <EditorComponent
