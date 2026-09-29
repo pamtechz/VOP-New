@@ -11,12 +11,13 @@ const localeRegistry: CustomLanguage[] = [];
 const localeAliases: Record<string,string> = {};
 let localeRegistryLoaded = false;
 let localeAccountScope = '';
+let localeOrganizationScope = '';
 const listeners = new Set<() => void>();
 let localeRequest = 0;
 
 function notify() { listeners.forEach(listener => listener()); }
 function clearForAccountChange() {
-  const next=auth?.currentUser?.uid || '';
+  const next=(auth?.currentUser?.uid || '')+'|'+localeOrganizationScope;
   if(next===localeAccountScope)return;
   localeAccountScope=next;
   Object.keys(dictionaryCache).forEach(key=>delete dictionaryCache[key]);
@@ -27,6 +28,14 @@ function clearForAccountChange() {
   localeRegistryLoaded=false;
   localeState.version++;
   notify();
+}
+/** Distinguish every tenant context even when a single user belongs to
+ * multiple organizations. Never reuse private labels across tenant switches. */
+export function setLocalizationOrganizationScope(organizationId:string) {
+  const next=String(organizationId||'').trim();
+  if(next===localeOrganizationScope)return;
+  localeOrganizationScope=next;
+  clearForAccountChange();
 }
 async function localeHeaders():Promise<Record<string,string>> {
   const result:Record<string,string>={Accept:'application/json'};
