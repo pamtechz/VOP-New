@@ -1,4 +1,5 @@
 import { isEnglishLocale } from '../../shared/locales.js';
+import { randomUUID } from 'node:crypto';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
@@ -77,7 +78,7 @@ export default async function handler(req: Request, res: Response) {
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
     const permissionResource = resourceForCollection(collection);
-    const permissionAction = action === 'list' || action === 'listGuides' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
+    const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
@@ -85,7 +86,7 @@ export default async function handler(req: Request, res: Response) {
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
-    if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
+    if (action !== 'list' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
         throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
@@ -95,6 +96,37 @@ export default async function handler(req: Request, res: Response) {
       } else {
         throw new Error('Only the VOP Super Admin can manage platform configuration.');
       }
+    }
+
+    if (action === 'listGuideLessons') {
+      if (collection !== 'curriculum') throw new Error('Lesson listing requires the curriculum collection.');
+      const selectedGuideId = safeId(body.guideId);
+      const guide = await ctx.db.doc(`guides/${selectedGuideId}`).get();
+      if (!guide.exists) throw new Error('Guide not found.');
+      const ownerOrganizationId = String(guide.data()?.organizationId || '').trim();
+      const permitted = ctx.isSuperAdmin
+        || (ctx.tenantType === 'hierarchy'
+          ? Boolean(ownerOrganizationId && await organizationInHierarchyScope(ctx, ownerOrganizationId))
+          : ownerOrganizationId === ctx.organizationId);
+      if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
+      const snap = await guide.ref.collection('lessons').get();
+      const items = snap.docs.map(doc => {
+        const row = doc.data();
+        const canEdit = ctx.isSuperAdmin || String(row.ownerUid || '') === ctx.auth.uid;
+        if (!canEdit) return {
+          id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
+          lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
+          language:String(row.language || guide.data()?.language || ''), published:row.published === true,
+          archived:row.archived === true, estimatedMinutes:Number(row.estimatedMinutes || 15),
+          canEdit:false,
+        };
+        // Private quiz-bank answers never enter curriculum selector responses.
+        // Historical inline quizzes are not returned in this API even to their
+        // authors; those must be audited and migrated to the Quiz Library.
+        const { questions: _answers, quiz: _legacyQuiz, ...safe } = row;
+        return { ...safe, id:doc.id, guideId:selectedGuideId, canEdit:true };
+      });
+      return res.status(200).json({ok:true, items});
     }
 
     if (action === 'listGuides') {
@@ -133,7 +165,7 @@ export default async function handler(req: Request, res: Response) {
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const id = guideId(effectiveOrganizationId, lang);
+      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
@@ -157,6 +189,7 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
+        requiresFinalExam: data.requiresFinalExam === undefined ? (existing.exists ? current.requiresFinalExam === true : true) : data.requiresFinalExam === true,
         published: data.published === true,
         archived: data.archived === true,
         createdAt: current.createdAt || new Date().toISOString(),
@@ -172,7 +205,8 @@ export default async function handler(req: Request, res: Response) {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
       const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim().toLowerCase();
       if (!isLanguageCode(lang) || (!effectiveOrganizationId && !ctx.isSuperAdmin)) throw new Error('A valid language is required; an organization is required unless you are the VOP Super Admin.');
-      const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
+      const requestedId = String((body.data as Record<string, unknown> | undefined)?.id || '').trim();
+      const ref = ctx.db.doc(`guides/${requestedId ? safeId(requestedId) : guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
