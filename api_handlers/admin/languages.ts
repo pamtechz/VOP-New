@@ -41,6 +41,7 @@ export default async function handler(req: Request, res: Response) {
     const action = lower(body.action);
     const requestedCode = lower(body.code || body.id);
     const db = getAdminDb();
+    if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage the system language registry.');
 
     if (action === 'upsert' || action === 'status') await requirePermission(ctx, 'languages', 'update');
     else if (action === 'delete') await requirePermission(ctx, 'languages', 'delete');
