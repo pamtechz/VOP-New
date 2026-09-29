@@ -132,26 +132,33 @@ test('legacy fallback labels use selected locale, exact keys win and missing lab
 });
 
 
-test('Curriculum Studio accepts uppercase guide language codes and updates the same canonical guide', async () => {
+test('Curriculum Studio accepts uppercase guide codes and supports separate modules per language', async () => {
   reset();
   ctx.isSuperAdmin = true;
   const { default: content } = await server.ssrLoadModule('/api_handlers/admin/content.ts');
-  const save = async (language, title = 'Discover') => {
+  const save = async (language, title = 'Discover', id = '') => {
     const res = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; } };
-    await content({ method: 'POST', body: { action: 'upsertGuide', collection: 'guides', data: { language, title } } }, res);
+    await content({ method: 'POST', body: { action: 'upsertGuide', collection: 'guides', data: { language, title, id } } }, res);
     return res;
   };
   const created = await save(' BEM ');
   assert.equal(created.code, 200, JSON.stringify(created.payload));
   assert.equal(created.payload.item.language, 'bem');
-  assert.equal(created.payload.item.id, 'platform__bem');
-  assert.equal((await save('bem', 'Updated')).code, 200);
-  assert.equal(records.get('guides/platform__bem').title, 'Updated');
-  assert.equal([...records.keys()].filter(key => key.startsWith('guides/')).length, 1);
+  const firstId = created.payload.item.id;
+  assert.match(firstId, /^guide-[A-Za-z0-9_-]{1,120}$/);
+  const second = await save('bem', 'Another module');
+  assert.equal(second.code, 200, JSON.stringify(second.payload));
+  assert.notEqual(second.payload.item.id, firstId);
+  assert.equal([...records.keys()].filter(key => key.startsWith('guides/')).length, 2);
+  const edited = await save('bem', 'Updated', firstId);
+  assert.equal(edited.code, 200, JSON.stringify(edited.payload));
+  assert.equal(records.get('guides/'+firstId).title, 'Updated');
+  assert.equal(records.get('guides/'+second.payload.item.id).title, 'Another module');
   const archived = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; } };
-  await content({ method: 'POST', body: { action: 'archiveGuide', collection: 'guides', data: { language: 'BEM' } } }, archived);
+  await content({ method: 'POST', body: { action: 'archiveGuide', collection: 'guides', data: { id:firstId, language:'BEM' } } }, archived);
   assert.equal(archived.code, 200, JSON.stringify(archived.payload));
-  assert.equal(records.get('guides/platform__bem').archived, true);
+  assert.equal(records.get('guides/'+firstId).archived, true);
+  assert.equal(records.get('guides/'+second.payload.item.id).archived, false);
   assert.notEqual((await save('bad/path')).code, 200);
   assert.notEqual((await save('')).code, 200);
 });
