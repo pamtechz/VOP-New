@@ -101,6 +101,11 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   const input=normalizeProgramDraft(raw);
   if(input.sharingScope==='shared'&&!ctx.isSuperAdmin)
     throw new Error('Only VOP Super Admin may publish a cross-organization program.');
+  if(!targetOrganizationId&&input.sharingScope==='organization')
+    throw new Error('Platform-wide programs must be private or shared.');
+  if(targetOrganizationId && !ctx.isSuperAdmin && input.published &&
+     input.sharingScope==='private')
+    throw new Error('Publish an organization-visible program instead of a private draft.');
   if(input.published&&!input.guideIds.length)
     throw new Error('Add at least one guide before publishing the program.');
   if(input.archived&&input.published)
@@ -117,6 +122,8 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
         throw new Error('A selected guide is missing or belongs to another organization.');
       if(input.published&&value.published!==true)
         throw new Error('Publish every assigned guide before publishing the program.');
+      if(input.published&&input.sharingScope==='shared'&&value.sharingScope!=='shared')
+        throw new Error('A publicly shared program may contain only publicly shared guides.');
       if(!ctx.isSuperAdmin&&!await mayEdit(ctx,value))
         throw new Error('You cannot assign a guide owned by another contributor.');
     }
