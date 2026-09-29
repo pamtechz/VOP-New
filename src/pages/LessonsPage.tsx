@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowLeft, BookOpen, CheckCircle2, ChevronRight, CircleHelp, Clock3, Search, Sparkles } from 'lucide-react';
 import type { DiscoverGuide, Lesson, User } from '../types';
 import { getStoredSettings } from '../services/storage';
+import { lessonIsComplete, lessonScoreForDisplay } from '../services/lessonProgress';
 import { getTranslation, getUiLocale } from '../services/i18n';
 
 interface Props {
@@ -35,23 +36,11 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
     return !needle||[guide.title,guide.subtitle,lesson.title,lesson.description,lesson.lessonNumber]
       .join(' ').toLowerCase().includes(needle);
   }),[guides,query,language,kind]);
-  const completed=new Set(currentUser.progress.completedLessons||[]);
-  const scores=currentUser.progress.guideScores||{};
-
   const status=(guide:DiscoverGuide,lesson:Lesson)=>{
-    if(lesson.type==='Lesson') {
-      return completed.has(lesson.id)||completed.has(`${guide.language}:${guide.id}:${lesson.id}`)
-        ? {label:'Completed',done:true}:{label:'Not started',done:false};
-    }
-    const authoritativeKey=`${currentUser.organizationId||'platform'}:${guide.language}:${guide.id}:${lesson.id}`;
-    const legacyKey=`${guide.language}:${guide.id}:${lesson.id}`;
-    const score=scores[authoritativeKey]??(!lesson.sourceQuizId?scores[legacyKey]:undefined);
-    if(typeof score!=='number'||!Number.isFinite(score)||score<0||score>100) {
-      return {label:'Assessment',done:false};
-    }
-    const threshold=settings.quizPassThreshold;
-    const passed=Number.isFinite(threshold)&&threshold>=1&&threshold<=100&&score>=threshold;
-    return {label:`${passed?'Passed':'Score'} · ${Math.round(score)}%`,done:passed};
+    const done=lessonIsComplete(guide,lesson,currentUser,settings.quizPassThreshold);
+    if(lesson.type==='Lesson') return {label:done?'Completed':'Not started',done};
+    const score=lessonScoreForDisplay(guide,lesson,currentUser);
+    return {label:score===undefined?'Assessment':`${done?'Passed':'Score'} · ${Math.round(score)}%`,done};
   };
 
   return <main className="vop-materials-page vop-lessons-page">
