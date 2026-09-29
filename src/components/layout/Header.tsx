@@ -61,15 +61,15 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
               </select>
             </div>
           </div>
-          <button onClick={()=>nav('certificates')} className="btn btn-gold hide-sm" title="My Certificate" style={{padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><Award size={14}/><span>{t('navigation.certificate','Certificate')}</span></button>
-          {isPrivileged&&<button onClick={()=>nav('admin')} className="btn btn-outline hide-sm" title={t('navigation.admin','Admin Panel')} style={{borderColor:'rgba(255,255,255,.25)',color:'#fff',padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><ShieldCheck size={14} color="var(--vop-gold-400)"/><span>{t('admin_panel','Admin Panel')}</span></button>}
+          <button onClick={()=>nav('certificates')} className="btn btn-gold hide-sm vop-app-header-admin" title="My Certificate" style={{padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><Award size={14}/><span>{t('navigation.certificate','Certificate')}</span></button>
+          {isPrivileged&&<button onClick={()=>nav('admin')} className="btn btn-outline hide-sm vop-app-header-admin" title={t('navigation.admin','Admin Panel')} style={{borderColor:'rgba(255,255,255,.25)',color:'#fff',padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><ShieldCheck size={14} color="var(--vop-gold-400)"/><span>{t('admin_panel','Admin Panel')}</span></button>}
           <button onClick={onToggleMobileShell} className="btn btn-ghost hide-sm" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title={isMobileShell?'Switch to Full Desktop View':'Simulate Phone Shell (Mobile App Experience)'}>{isMobileShell?<Monitor size={16}/>:<Smartphone size={16}/>}</button>
           <button onClick={onToggleDarkMode} className="btn btn-ghost" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title={isDarkMode?'Light Mode':'Dark Mode'}>{isDarkMode?<Sun size={16}/>:<Moon size={16}/>}</button>
-          <button onClick={()=>nav('profile')} className="hide-sm" style={{display:'flex',alignItems:'center',gap:'.4rem',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'var(--radius-full)',padding:'.2rem .5rem .2rem .2rem',cursor:'pointer',color:'#fff',transition:'background var(--transition-fast)'}} title="Manage Profile & Church">
+          <button onClick={()=>nav('profile')} className="hide-sm vop-app-header-profile" style={{display:'flex',alignItems:'center',gap:'.4rem',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'var(--radius-full)',padding:'.2rem .5rem .2rem .2rem',cursor:'pointer',color:'#fff',transition:'background var(--transition-fast)'}} title="Manage Profile & Church">
             <div style={{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,var(--vop-gold-500),var(--vop-gold-600))',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',fontWeight:700,fontSize:'.78rem',color:'#0b2244'}}>{currentUser.displayName.charAt(0)}</div>
             <span style={{fontSize:'.75rem',fontWeight:600,maxWidth:90,overflow:'hidden',textOverflow:'ellipsis'}}>{currentUser.displayName.split(' ')[0]}</span>
           </button>
-          <button onClick={onOpenMenu} className="btn btn-ghost" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title="Open Menu"><Menu size={18}/></button>
+          <button onClick={onOpenMenu} className="btn btn-ghost vop-app-header-menu" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title="Open Menu"><Menu size={18}/></button>
         </div>
       </div>
     </header>
