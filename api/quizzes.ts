@@ -139,6 +139,7 @@ export default async function handler(req: Request, res: Response) {
       if (!existing.exists) throw new Error('The quiz no longer exists.');
       const current = existing.data() || {};
       await requirePermission(ctx, 'quizzes', 'update');
+      if (!ctx.isSuperAdmin && (current.platformOwned === true || (current.published === true && current.sharingScope === 'shared'))) throw new Error('This shared quiz is governed by the VOP Super Admin.');
       if (!canEditCanonicalContent(ctx, current) || (!ctx.isSuperAdmin && String(current.ownerUid || '') !== ctx.auth.uid)) {
         throw new Error('Only the contributing quiz author or VOP Super Admin can archive it.');
       }
@@ -164,6 +165,7 @@ export default async function handler(req: Request, res: Response) {
       const current = existing.exists ? existing.data() || {} : {};
       await requirePermission(ctx, 'quizzes', existing.exists ? 'update' : 'create');
       if (!existing.exists) await enforceQuota(ctx, 'quizzes', 'maxQuizzes');
+      if (!ctx.isSuperAdmin && (current.platformOwned === true || (current.published === true && current.sharingScope === 'shared'))) throw new Error('This shared quiz is governed by the VOP Super Admin; copy it locally.');
       if (existing.exists && (!canEditCanonicalContent(ctx, current) || (!ctx.isSuperAdmin && String(current.ownerUid || '') !== ctx.auth.uid))) {
         throw new Error('Only this quiz\'s contributor or VOP Super Admin can edit it.');
       }
@@ -203,6 +205,7 @@ export default async function handler(req: Request, res: Response) {
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid, canonical:true, sharingScope, published, archived:false, questions, sourceContentId,
+        platformOwned:current.platformOwned === true || (published && sharingScope === 'shared'),
         assessmentId, assessmentPath:assessmentRef.path,
         createdAt:current.createdAt || now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
       };
