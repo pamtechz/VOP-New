@@ -10,6 +10,7 @@ import type { CustomLanguage, DiscoverGuide, Lesson, User } from '../types';
 import { auth } from '../lib/firebase';
 import { loadFirestoreGuides } from '../services/firestoreData';
 import GuideManager from './GuideManager';
+import ProgramManager from './ProgramManager';
 import QuizLibrary from './QuizLibrary';
 import { getTranslation } from '../services/i18n';
 import { MediaPlayer } from '../components/media/MediaPlayer';
@@ -20,7 +21,7 @@ import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurricu
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 
-export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
+export type CurriculumStudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
 type RecordItem = { id: string; [key: string]: unknown };
 
@@ -399,6 +400,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [moduleLessons, setModuleLessons] = useState<RecordItem[]>([]);
   const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
+  const [programCount,setProgramCount]=useState(0);
   const [drafts, setDrafts] = useState<RecordItem[]>([]);
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [collectionCounts, setCollectionCounts] = useState({ paths: 0, topics: 0, seasons: 0 });
@@ -868,6 +870,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   const tabs: Array<{ id: CurriculumStudioTab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+    { id: 'programs', label: tx('curriculum.programs','Programs'), icon: Layers },
     { id: 'lessons', label: tx('curriculum.lessons', 'Lessons'), icon: FileText },
     { id: 'guides', label: tx('curriculum.guides', 'Guides'), icon: BookOpen },
     { id: 'quizzes', label: tx('curriculum.quizzes', 'Quizzes'), icon: CircleHelp },
@@ -1122,7 +1125,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   if (tab === 'paths' || tab === 'topics' || tab === 'seasons') return renderManager(tab);
 
   const activeTabMeta = tabs.find(item => item.id === tab) || tabs[0];
-  const activeCount = tab === 'lessons' ? lessonCount : tab === 'guides' ? guideCount : tab === 'quizzes' ? quizCount : currentCollectionCount;
+  const activeCount = tab === 'programs' ? programCount : tab === 'lessons' ? lessonCount : tab === 'guides' ? guideCount : tab === 'quizzes' ? quizCount : currentCollectionCount;
 
   return (
     <div className="vop-reference-manager">
@@ -1147,12 +1150,24 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       <div className="vop-reference-tabs">
         {tabs.map(item => {
           const Icon = item.icon;
-          const count = item.id === 'lessons' ? lessonCount : item.id === 'guides' ? guideCount : item.id === 'quizzes' ? quizCount : item.id === 'paths' ? collectionCounts.paths : item.id === 'topics' ? collectionCounts.topics : collectionCounts.seasons;
+          const count = item.id === 'programs' ? programCount : item.id === 'lessons' ? lessonCount : item.id === 'guides' ? guideCount : item.id === 'quizzes' ? quizCount : item.id === 'paths' ? collectionCounts.paths : item.id === 'topics' ? collectionCounts.topics : collectionCounts.seasons;
           return <button key={item.id} type="button" className={'vop-reference-tab ' + (tab === item.id ? 'active' : '')} onClick={() => { setTab(item.id); setSearch(''); onTabChange?.(item.id); }}><Icon size={18}/>{item.label} ({count})</button>;
         })}
       </div>
 
-      {tab === 'quizzes' ? <QuizLibrary key={[scopeOrganizationId,quizPlacement?.guideId,quizPlacement?.anchorId].join(':')}
+      {tab === 'programs' ? <ProgramManager organizationId={scopeOrganizationId}
+        guides={guideRecords.map(item=>({
+          id:String(item.id),title:String(item.title||''),language:String(item.language||'en'),
+          organizationId:String(item.organizationId||''),published:item.published===true,
+          archived:item.archived===true,canEdit:item.canEdit!==false,
+          lessons:Array.isArray(item.lessons)?item.lessons.map(raw=>({
+            id:String((raw as RecordItem).id||''),title:String((raw as RecordItem).title||''),
+            type:String((raw as RecordItem).type||'Lesson'),
+            published:(raw as RecordItem).published===true,
+          })):[],
+        }))} onCountChange={setProgramCount}
+        onOpenGuide={id=>{setSelectedGuideId(id);setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
+      : tab === 'quizzes' ? <QuizLibrary key={[scopeOrganizationId,quizPlacement?.guideId,quizPlacement?.anchorId].join(':')}
         organizationId={scopeOrganizationId} initialGuideId={quizPlacement?.guideId}
         initialLessonId={quizPlacement?.lessonId} initialAnchorType={quizPlacement?.anchorType}
         initialAnchorId={quizPlacement?.anchorId} initialExam={quizPlacement?.kind==='final_exam'}
