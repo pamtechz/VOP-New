@@ -43,8 +43,8 @@ function firebaseMessage(error: unknown, mode: Mode): string {
   }
 }
 
-export function SignInPage({ configurationMissing = false }: { configurationMissing?: boolean }) {
-  const [mode, setMode] = useState<Mode>('sign-in');
+export function SignInPage({ configurationMissing = false, initialMode = 'sign-in', onBack }: { configurationMissing?: boolean; initialMode?: Mode; onBack?: () => void }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
@@ -102,6 +102,7 @@ export function SignInPage({ configurationMissing = false }: { configurationMiss
 
   return (
     <main className="vop-login-page">
+      {onBack && <button type="button" className="vop-login-home-link" onClick={onBack} aria-label="Return to Voice of Prophecy home">← Back to VOP home</button>}
       <section className="vop-login-brand">
         <div className="vop-login-logo">
           <img src="/assets/vop_logo_2.png" alt="Voice of Prophecy" />
