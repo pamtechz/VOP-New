@@ -113,7 +113,7 @@ service cloud.firestore {
           && hierarchyOrganizationScope(data.get('organizationId', data.get('ownerOrganizationId', '')))
           && data.get('ownerTenantId', '') == hierarchyTenantId()
           && data.get('ownerUid', '') == request.auth.uid
-        ));
+        )));
     }
 
     function isHierarchyTenant() {
@@ -165,7 +165,7 @@ service cloud.firestore {
           isHierarchyTenant()
           && data.get('ownerUid', '') == request.auth.uid
           && data.get('ownerTenantId', '') == hierarchyTenantId()
-        ));
+        )));
     }
 
     function canReadGlobal(data, publishedField) {
