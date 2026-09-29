@@ -6,6 +6,7 @@
  * This script never changes legacy tests without a matching canonical quiz.
  */
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { hasEmbeddedAnswerKeys } from './quiz-answer-inventory.mjs';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 const apply = process.argv.includes('--apply');
 const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
@@ -23,7 +24,7 @@ const app = getApps()[0] || initializeApp({ credential: cert({
 }) });
 const db = getFirestore(app);
 const summary = { projectId, mode:apply?'APPLY':'REPORT', scanned:0, redacted:0, alreadySafe:0,
-  skipped:0, legacyWithoutBank:0, issues:[] };
+  skipped:0, legacyWithoutBank:0, embeddedInLessons:0, issues:[] };
 const restricted = (record) => Array.isArray(record)
   && record.some(item => item && typeof item === 'object'
     && (Object.hasOwn(item, 'correctOptionIndex') || Object.hasOwn(item, 'answer')
@@ -33,10 +34,23 @@ const sanitized = (records) => records.map(item => ({
   options:Array.isArray(item.options) ? item.options.map(String) : [],
 }));
 for (const guide of (await db.collection('guides').get()).docs) {
-  const assessments = await guide.ref.collection('lessons').where('type','==','Test').get();
+  // Inventory every learner-readable lesson, not just Test documents. Some
+  // historical authoring paths stored quizzes inside regular lesson pages.
+  const assessments = await guide.ref.collection('lessons').get();
   for (const assessment of assessments.docs) {
     summary.scanned++;
     const row = assessment.data();
+    if (hasEmbeddedAnswerKeys(row.contentPages) || hasEmbeddedAnswerKeys(row.pages)) {
+      summary.embeddedInLessons++;
+      summary.issues.push({path:assessment.ref.path,reason:'Answer-bearing questions inside lesson pages: requires a separate migration'});
+    }
+    if (row.type !== 'Test') {
+      if (restricted(row.questions) || restricted(row.quiz)) {
+        summary.embeddedInLessons++;
+        summary.issues.push({path:assessment.ref.path,reason:'Answer-bearing inline quiz on a study lesson: requires a separate migration'});
+      }
+      continue;
+    }
     if (!restricted(row.questions) && !restricted(row.quiz)) { summary.alreadySafe++; continue; }
     const quizId = String(row.sourceQuizId || '');
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(quizId)) {
@@ -72,16 +86,19 @@ for (const guide of (await db.collection('guides').get()).docs) {
 // Never delete, silently redact or re-score it as if it had a canonical source.
 const legacyLanguages = await db.collection('curricula/discover/languages').get();
 for (const lang of legacyLanguages.docs) {
-  const tests = await lang.ref.collection('lessons').where('type','==','Test').get();
+  const tests = await lang.ref.collection('lessons').get();
   for (const record of tests.docs) {
     const value = record.data();
-    if (restricted(value.questions) || restricted(value.quiz)) {
-      summary.legacyWithoutBank++;
-      summary.issues.push({path:record.ref.path,reason:'Legacy bundled assessment: migration requires answer-bank design'});
+    const inline = restricted(value.questions) || restricted(value.quiz);
+    const embedded = hasEmbeddedAnswerKeys(value.contentPages) || hasEmbeddedAnswerKeys(value.pages);
+    if (inline || embedded) {
+      if (value.type === 'Test') summary.legacyWithoutBank++;
+      else summary.embeddedInLessons++;
+      summary.issues.push({path:record.ref.path,reason:'Legacy learner-readable answer keys: migrate to a private bank without modifying existing grades'});
     }
   }
 }
 console.log(JSON.stringify(summary,null,2));
-if (summary.legacyWithoutBank || summary.skipped) {
+if (summary.legacyWithoutBank || summary.embeddedInLessons || summary.skipped) {
   process.exitCode = 2; // migration is NOT complete; do not certify historical answer secrecy
 }
