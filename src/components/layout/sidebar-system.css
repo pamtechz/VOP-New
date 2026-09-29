@@ -67,3 +67,12 @@
 }
 @media(max-width:900px){.vop-admin .vop-sidebar{padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}}
 @media(prefers-reduced-motion:reduce){.vop-learner-sidebar,.vop-admin .vop-sidebar{transition:none!important}}
+
+.vop-admin-sidebar-collapse{display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%;min-height:42px;padding:10px 12px;margin-bottom:11px;border:1px solid #d5e2f0;border-radius:11px;background:#fff;color:#315b86;cursor:pointer;font-size:11px;font-weight:850}
+.vop-admin-sidebar-collapse:hover{background:#eaf2ff}
+.vop-admin-sidebar-collapse:focus-visible{outline:3px solid #e8ad40;outline-offset:2px}
+@media(min-width:901px){
+  .vop-admin .vop-sidebar.collapsed .vop-admin-sidebar-collapse{justify-content:center;padding:10px}
+  .vop-admin .vop-sidebar.collapsed .vop-admin-sidebar-collapse span{display:none}
+}
+@media(max-width:900px){.vop-admin-sidebar-collapse{display:none!important}}
