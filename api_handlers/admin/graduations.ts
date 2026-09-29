@@ -78,7 +78,7 @@ async function submit(req: Request, res: Response) {
 
   const stages = await loadWorkflow(ctx);
   const lessonsSnapshot = await guideSnapshot.ref.collection('lessons').get();
-  const lessons = lessonsSnapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+  const lessons = lessonsSnapshot.docs.map(item => ({ ...item.data(), id: item.id }));
   const publishedLessons = lessons.filter(item => item.published === true);
   const studyLessons = publishedLessons.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
   const testLessons = publishedLessons.filter(item => String(item.type ?? '') === 'Test');
@@ -197,6 +197,46 @@ async function decide(req: Request, res: Response) {
   const allowed = stage.approverRoles?.some(role => role === profileRole || role === membershipRole);
   if (!allowed && !ctx.isSuperAdmin) return res.status(403).json({ error: 'You are not authorized to decide this approval stage.' });
 
+  // An approval may occur days after submission, after another retake or a
+  // guide edit. Historical pending requests may also contain the former
+  // client-supplied average. Fetch authoritative requirements before deciding;
+  // the candidate's current progress is checked inside the transaction.
+  let approvalEvidence: {
+    guideId: string; language: string; threshold: number;
+    studyLessons: { id: string }[]; testLessons: { id: string }[];
+  } | null = null;
+  if (decision === 'approve') {
+    const guideId = text(current.guideId);
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(guideId)) return res.status(409).json({ error: 'The graduation request has an invalid guide reference.' });
+    const [guideSnapshot, configSnapshot, settingsSnapshot] = await Promise.all([
+      ctx.db.doc(`guides/${guideId}`).get(),
+      ctx.db.doc('system/certification').get(),
+      ctx.db.doc(`organizations/${requestOrganizationId}/settings/settings`).get(),
+    ]);
+    const guide = guideSnapshot.data() || {};
+    const guideOwner = text(guide.organizationId || guide.ownerOrganizationId);
+    if (!guideSnapshot.exists || guide.published !== true || guide.archived === true ||
+        guide.certificateEligible !== true ||
+        (guideOwner !== requestOrganizationId && guide.sharingScope !== 'shared')) {
+      return res.status(409).json({ error: 'The graduation guide is no longer eligible for approval.' });
+    }
+    const language = text(guide.language);
+    const threshold = configuredPassThreshold(configSnapshot.data()?.minimumScore)
+      ?? configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
+    if (!language || threshold === null) return res.status(409).json({ error: 'The graduation assessment language or pass mark is not configured.' });
+    const records = (await guideSnapshot.ref.collection('lessons').get()).docs.map(item => ({ ...item.data(), id: item.id }));
+    if (!records.length || records.some(item => item.published !== true || item.archived === true)) {
+      return res.status(409).json({ error: 'All graduation requirements must be published and active.' });
+    }
+    const studyLessons = records.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
+    const testLessons = records.filter(item => item.type === 'Test');
+    if (!studyLessons.length || !testLessons.length ||
+        testLessons.some(item => !Array.isArray(item.questions) || !item.questions.length)) {
+      return res.status(409).json({ error: 'The graduation guide has missing study or assessment requirements.' });
+    }
+    approvalEvidence = { guideId, language, threshold, studyLessons, testLessons };
+  }
+
   const result = await ctx.db.runTransaction(async transaction => {
     const fresh = await transaction.get(ref);
     if (!fresh.exists) throw new Error('Graduation request was not found.');
@@ -214,6 +254,29 @@ async function decide(req: Request, res: Response) {
     decisions.push({ stageId: stage.id, stageLabel: stage.label || stage.id, decision, notes, approverUid: ctx.auth.uid, approverRole: profileRole || membershipRole, decidedAt: new Date().toISOString() });
     const nextIndex = stageIndex + 1, nextStage = stages[nextIndex];
     const nextData: Record<string, unknown> = { decisions, revision: revision + 1, approverNotes: notes, updatedAt: timestamp };
+    if (decision === 'approve' && approvalEvidence) {
+      if (text(data.organizationId) !== requestOrganizationId || text(data.guideId) !== approvalEvidence.guideId ||
+          text(candidateData.organizationId) !== requestOrganizationId) {
+        throw new Error('The candidate organization or graduation request changed before approval.');
+      }
+      const progress = candidateData.progress && typeof candidateData.progress === 'object'
+        ? candidateData.progress as Record<string, unknown> : {};
+      const completed = new Set(Array.isArray(progress.completedLessons) ? progress.completedLessons.map(String) : []);
+      if (approvalEvidence.studyLessons.some(lesson =>
+        !completed.has(`${approvalEvidence.language}:${approvalEvidence.guideId}:${lesson.id}`))) {
+        throw new Error('The candidate no longer has all required completed lessons.');
+      }
+      const scores = progress.guideScores && typeof progress.guideScores === 'object'
+        ? progress.guideScores as Record<string, unknown> : {};
+      const verifiedAverage = verifiedAssessmentAverage(
+        approvalEvidence.testLessons, scores, requestOrganizationId,
+        approvalEvidence.language, approvalEvidence.guideId, approvalEvidence.threshold,
+      );
+      if (verifiedAverage === null) throw new Error('The candidate no longer has all required passing assessments.');
+      // Repair historical pending requests with an untrusted average as each
+      // approval stage is saved. This does not overwrite completed decisions.
+      nextData.averageScore = verifiedAverage;
+    }
     if (decision === 'reject') {
       nextData.status = 'rejected'; nextData.workflowStageId = stage.id; nextData.workflowStageIndex = stageIndex;
     } else if (nextStage) {
