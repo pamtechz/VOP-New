@@ -1,6 +1,12 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { transferCurriculumNode } from '../shared/curriculumTransfer.ts';
+import { createServer } from 'vite';
+
+const server = await createServer({configFile:false,
+  server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
+after(async()=>{await server.close();});
+const { transferCurriculumNode } = await server.ssrLoadModule('/shared/curriculumTransfer.ts')
+  as typeof import('../shared/curriculumTransfer.ts');
 
 const source = [{
   id:'chapter-source',title:'Original',
