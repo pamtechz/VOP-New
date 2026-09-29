@@ -16,6 +16,7 @@ import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
 import { StructuredLessonEditor, newChapter } from '../components/admin/StructuredLessonEditor';
+import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
 import './curriculum-structure.css';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -394,6 +395,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [plateReview,setPlateReview] = useState(false);
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
   const [editorTab, setEditorTab] = useState<'content' | 'image' | 'media' | 'bible' | 'notes' | 'settings'>('content');
@@ -848,6 +850,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   ];
 
   if (editor) {
+    const EditorComponent=plateReview?PlateCurriculumAuthoringReview:StructuredLessonEditor;
     if (previewOpen) return <LearnerPreview editor={editor} guideTitle={editor.guideTitle} onClose={() => setPreviewOpen(false)} />;
 
     const editorTabs = [
@@ -923,7 +926,20 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </div>
 
             {editorTab === 'content' && <div className="vop-lesson-rich-editor">
-              {editor.chapters.length ? <StructuredLessonEditor
+              {editor.chapters.length ? <>
+                <div className="vop-plate-review-mode">
+                  <div><strong>{plateReview?'Plate document authoring preview':'Classic structured lesson editor'}</strong>
+                    <span>{plateReview
+                      ? 'Review the new paragraph-first writing and section-as-page flow. Drafts save to the same Firestore lesson.'
+                      : 'The original editor is retained during the Plate review.'}</span>
+                  </div>
+                  <button className="vop-secondary" type="button"
+                    onClick={()=>setPlateReview(value=>!value)}>
+                    {plateReview?'Use classic editor':'Try Plate editor'}
+                  </button>
+                </div>
+                <EditorComponent
+                guideTitle={editor.guideTitle} lessonTitle={editor.title}
                 chapters={editor.chapters}
                 onChange={chapters => setEditor({...editor,chapters})}
                 canTransfer={Boolean(editor.id) && !editor.published && !saving}
@@ -962,7 +978,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
                   setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
                 }}
-              /> : <>
+              /></> : <>
                 <div className="vop-structure-legacy">
                   <strong>Legacy flat lesson</strong>
                   <p>This existing lesson uses the older text-page format. It remains readable. Convert it to chapter structure without losing its original text.</p>
