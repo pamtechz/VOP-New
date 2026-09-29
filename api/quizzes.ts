@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
 import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
+import { quizManagementItem } from '../shared/quizManagementVisibility.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -72,7 +73,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'list') {
       if (ctx.isSuperAdmin && !ctx.organizationId) {
         const snap = await ctx.db.collection('quizzes').get();
-        return res.status(200).json({ ok:true, items:snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit:true })) });
+        return res.status(200).json({ ok:true, items:snap.docs.map(d => quizManagementItem(d.id, d.data(), ctx.auth.uid, ctx.isSuperAdmin)) });
       }
       const scopedOrganizations = ctx.tenantType === 'hierarchy' ? await accessibleOrganizationIds(ctx) : [];
       const scopedSnapshots = await Promise.all(scopedOrganizations.map(orgId =>
@@ -82,10 +83,8 @@ export default async function handler(req: Request, res: Response) {
         : await ctx.db.collection('quizzes').where('organizationId','==',ctx.organizationId).get();
       const shared = await ctx.db.collection('quizzes').where('sharingScope','==','shared').where('published','==',true).get();
       const unique = new Map([...owned.docs, ...scopedSnapshots.flatMap(snap => snap.docs), ...shared.docs].map(d => [d.id, d]));
-      const items = [...unique.values()].filter(d => scopedOrganizations.includes(String(d.data().organizationId || '')) || quizVisible(ctx, d.data())).map(d => ({
-        id:d.id, ...d.data(),
-        canEdit:ctx.isSuperAdmin || String(d.data().ownerUid || '') === ctx.auth.uid,
-      }));
+      const items = [...unique.values()].filter(d => scopedOrganizations.includes(String(d.data().organizationId || '')) || quizVisible(ctx, d.data())).map(d =>
+        quizManagementItem(d.id, d.data(), ctx.auth.uid, ctx.isSuperAdmin));
       return res.status(200).json({ ok:true, items });
     }
 
@@ -96,7 +95,7 @@ export default async function handler(req: Request, res: Response) {
       const hierarchyAccess = ctx.tenantType === 'hierarchy'
         && await organizationInHierarchyScope(ctx, String(data.organizationId || ''));
       if (!snap.exists || (!hierarchyAccess && !quizVisible(ctx, data))) throw new Error('This quiz is not available to your organization.');
-      return res.status(200).json({ ok:true, item:{ id, ...snap.data() } });
+      return res.status(200).json({ ok:true, item:quizManagementItem(id, data, ctx.auth.uid, ctx.isSuperAdmin) });
     }
 
     // Copying a shared quiz needs a new local target; never retain another
