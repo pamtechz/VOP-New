@@ -43,6 +43,15 @@ const cloneDocument=(source:StudyPlateDocument):StudyPlateDocument=>
     ...node,id:id('block'),
     children:JSON.parse(JSON.stringify(node.children)) as typeof node.children,
   }));
+const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
+  const clone:CurriculumSection={...section,id:id('section')};
+  // Never project an unsupported legacy media block to a paragraph. Keep
+  // old video/audio assets intact until an explicit reviewed conversion.
+  if(!section.document&&section.blocks.some(block=>block.type==='audio'||block.type==='video')){
+    return {...clone,blocks:section.blocks.map(block=>({...block,id:id('block')}))};
+  }
+  return setDocument(clone,cloneDocument(doc(section)));
+};
 
 export function PlateCurriculumAuthoringReview({
   chapters,onChange,onQuiz,canAttachQuiz,guideTitle,lessonTitle,
@@ -106,9 +115,9 @@ export function PlateCurriculumAuthoringReview({
   };
   const duplicatePage=()=>{
     if(!chapter||!page||chapter.sections.length>=40)return;
-    const copy:CurriculumSection=setDocument({
-      ...page,id:id('section'),title:page.title+' (copy)',
-    },cloneDocument(sourceDocument));
+    const copy:CurriculumSection={
+      ...duplicateSectionSafely(page),title:page.title+' (copy)',
+    };
     onChange(chapters.map(item=>item.id===chapter.id?{
       ...item,sections:[
         ...item.sections.slice(0,pageIndex+1),copy,...item.sections.slice(pageIndex+1),
@@ -119,9 +128,7 @@ export function PlateCurriculumAuthoringReview({
     if(!chapter||chapters.length>=40)return;
     const copy:CurriculumChapter={
       ...chapter,id:id('chapter'),title:chapter.title+' (copy)',
-      sections:chapter.sections.map(section=>setDocument({
-        ...section,id:id('section'),
-      },cloneDocument(doc(section)))),
+      sections:chapter.sections.map(duplicateSectionSafely),
     };
     onChange([...chapters.slice(0,chapterIndex+1),copy,...chapters.slice(chapterIndex+1)]);
     setChapterId(copy.id);setPageId(copy.sections[0].id);
