@@ -174,6 +174,21 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim().toLowerCase();
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
+      if (!isEnglishLocale(lang)) {
+        // A tenant cannot claim another organization's private language simply
+        // by submitting its code. The global or own organization registry
+        // must contain an enabled entry before a guide can use the language.
+        const [globalLanguage, tenantLanguage] = await Promise.all([
+          ctx.db.doc('languages/' + lang).get(),
+          effectiveOrganizationId
+            ? ctx.db.doc('organizations/' + effectiveOrganizationId + '/languages/' + lang).get()
+            : Promise.resolve(null),
+        ]);
+        if (!(globalLanguage.exists && globalLanguage.data()?.enabled !== false)
+          && !(tenantLanguage?.exists && tenantLanguage.data()?.enabled !== false)) {
+          throw new Error('Choose an enabled platform language or a language registered by your organization.');
+        }
+      }
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
       const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
