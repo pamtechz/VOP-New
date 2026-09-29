@@ -581,7 +581,16 @@ service cloud.firestore {
     // Quiz banks hold authoritative answers. The client cannot read or mutate
     // them; the authenticated management API enforces contributor ownership.
     match /quizzes/{quizId} {
-      allow get, list: if isSuperAdmin() || canEditOwnedContent(resource.data);
+      // Stewardship removes mutation rights, never the author's right to
+      // inspect their own private answer bank within their current tenant.
+      allow get, list: if isSuperAdmin() || canEditOwnedContent(resource.data)
+        || (signedIn() && resource.data.get('ownerUid','') == request.auth.uid
+          && (
+            (isOrgMember(organizationIdForUser())
+              && resource.data.get('ownerOrganizationId',resource.data.get('organizationId','')) == organizationIdForUser())
+            || (isHierarchyTenant()
+              && resource.data.get('ownerTenantId','') == hierarchyTenantId())
+          ));
       allow create, update, delete: if false;
     }
 
