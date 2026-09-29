@@ -9,6 +9,7 @@ import { notifyOrganizationMembers, normalizePublicationAudience } from '../../s
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
+import { handleCurriculumPrograms } from '../../server/programManager.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 import { translationKey } from '../../server/localization.js';
 
@@ -17,14 +18,14 @@ type Response = { status: (code: number) => Response; json: (body: unknown) => v
 
 const COLLECTIONS = new Set([
   'languages','translations','announcements','events','books','radioBroadcasts','playlists','unions','conferences','districts','churches',
-  'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
+  'users','curriculum','guides','programs','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
 const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts','playlists']);
 
 const ORG_COLLECTIONS = new Set([
-  'announcements','events','learningPaths','bibleTopics','seasons',
+  'announcements','events','programs','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
 ]);
 
@@ -93,7 +94,7 @@ export default async function handler(req: Request, res: Response) {
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
-    const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
+    const curriculum = ['curriculum','guides','programs','learningPaths','bibleTopics','seasons'].includes(collection);
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
@@ -107,6 +108,10 @@ export default async function handler(req: Request, res: Response) {
       } else {
         throw new Error('Only the VOP Super Admin can manage platform configuration.');
       }
+    }
+
+    if(collection==='programs'){
+      return handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
     }
 
     if (action === 'listGuideLessons') {
