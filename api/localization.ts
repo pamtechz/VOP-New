@@ -1,5 +1,5 @@
 import { saveLocaleTranslations, translationKey } from '../server/localization.js';
-import { localeAliases } from '../shared/locales.js';
+import { isEnglishLocale, localeAliases } from '../shared/locales.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
