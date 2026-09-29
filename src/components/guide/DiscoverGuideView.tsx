@@ -10,7 +10,7 @@ interface DiscoverGuideViewProps {
   guide: DiscoverGuide;
   currentUser: User;
   onBack: () => void;
-  onSelectLesson: (lesson: Lesson) => void;
+  onSelectLesson: (lesson: Lesson, initialPageIndex?: number) => void;
   onOpenCertificate: () => void;
 }
 
@@ -137,7 +137,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         ) : (
           <div className="space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4 px-1">
-              Curriculum Modules
+              {guide.learnerEntryMode==='sections' ? 'Study sections' : 'Curriculum modules'}
             </h2>
             {orderedLessons.map((lesson, index) => {
               const isCompleted = lessonIsComplete(guide, lesson, currentUser, threshold);
@@ -148,6 +148,37 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
               const hasScore = typeof score === 'number' && Number.isFinite(score);
               const passed = hasScore && Number.isFinite(threshold) && threshold >= 1 && threshold <= 100 && score! >= threshold;
 
+              // Sections mode changes only the entry-point index. Resume,
+              // assessment and certificate credit stay tied to the lesson ID.
+              if(guide.learnerEntryMode==='sections' && !isTest && lesson.chapters?.length){
+                const sectionPages=(lesson.contentPages||[]).filter(item=>
+                  Boolean(item.sectionId) &&
+                  lesson.chapters?.some(chapter=>chapter.sections.some(section=>section.id===item.sectionId)));
+                if(sectionPages.length){
+                  return <article key={lesson.id} className="vop-guide-section-group"
+                    aria-label={lesson.title}>
+                    <header><BookOpen size={18} aria-hidden="true"/>
+                      <div><strong>{lesson.title}</strong>
+                        <small>{sectionPages.length} {sectionPages.length===1?'section':'sections'} · Lesson {lesson.lessonNumber}</small>
+                      </div>
+                      {isCompleted&&<CheckCircle2 size={17} className="text-emerald-600" aria-label="Completed"/>}
+                    </header>
+                    <div className="vop-guide-section-links">
+                      {sectionPages.map((sectionPage,pageIndex)=>{
+                        const actualIndex=lesson.contentPages?.findIndex(item=>
+                          item.sectionId===sectionPage.sectionId)??pageIndex;
+                        return <button type="button" key={sectionPage.sectionId}
+                          onClick={()=>onSelectLesson(lesson,actualIndex)}
+                          aria-label={'Open section '+sectionPage.title+' in '+lesson.title}>
+                          <span>{pageIndex+1}</span>
+                          <span>{sectionPage.title}</span>
+                          <ChevronRight size={15} aria-hidden="true"/>
+                        </button>;
+                      })}
+                    </div>
+                  </article>;
+                }
+              }
               return (
                 <button
                   key={lesson.id}
