@@ -5,8 +5,7 @@ import { createServer } from 'vite';
 const server = await createServer({configFile:false,
   server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
 after(async()=>{await server.close();});
-const { transferCurriculumNode } = (await server.ssrLoadModule('/shared/curriculumTransfer.ts'))
-  as typeof import('../shared/curriculumTransfer.ts');
+const { transferCurriculumNode } = await server.ssrLoadModule('/shared/curriculumTransfer.ts') as typeof import('../shared/curriculumTransfer.ts');
 
 const source = [{
   id:'chapter-source',title:'Original',
