@@ -66,7 +66,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay vop-study-modal vop-quiz-modal"
       role="presentation"
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
     >
