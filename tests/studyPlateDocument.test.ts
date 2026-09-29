@@ -14,6 +14,7 @@ const {
 const {
   normalizeCurriculumStructure,curriculumPages,containsPublicQuizAnswer,
 }=await server.ssrLoadModule('/shared/curriculumStructure.ts') as typeof import('../shared/curriculumStructure.ts');
+const {transferCurriculumNode}=await server.ssrLoadModule('/shared/curriculumTransfer.ts') as typeof import('../shared/curriculumTransfer.ts');
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
 
@@ -104,4 +105,50 @@ test('Plate review remains opt-in and does not replace the existing editor',()=>
   assert.match(reader,/currentSection\.document/);
   assert.match(reader,/afterBlock=\{blockId=>assessmentLinks\('block',blockId\)\}/);
   assert.doesNotMatch(safe,/dangerouslySetInnerHTML/);
+});
+
+test('cross-lesson Plate copies regenerate every canonical block ID without losing formatting',()=>{
+  const document=normalizeStudyPlateDocument(rich());
+  const from=[{id:'chapter-a',title:'Guide chapter',sections:[
+    {id:'section-a',title:'Study page',blocks:studyPlateLegacyBlocks(document),document},
+    {id:'section-b',title:'Second page',blocks:[{id:'paragraph-b',type:'paragraph',text:'Keep'}]},
+  ]}];
+  const to=[{id:'chapter-z',title:'Destination',sections:[
+    {id:'section-z',title:'Target',blocks:[{id:'paragraph-z',type:'paragraph',text:'Existing'}]},
+  ]}];
+  const copied=transferCurriculumNode(from,to,'section','section-a','chapter-z','copy');
+  const page=copied.destination[0].sections[1];
+  assert.notEqual(page.id,'section-a');
+  assert.deepEqual(page.document?.map(item=>item.id).length,3);
+  assert.notEqual(page.document?.[0].id,'block-title');
+  assert.equal(page.blocks[0].id,page.document?.[0].id);
+  assert.equal(page.document?.[0].children[0] && 'text' in page.document[0].children[0]
+    && page.document[0].children[0].bold,true);
+  const moved=transferCurriculumNode(from,to,'section','section-a','chapter-z','move');
+  assert.equal(moved.destination[0].sections[1].document?.[0].id,'block-title');
+  assert.equal(moved.source[0].sections.length,1);
+  assert.equal(from[0].sections.length,2);
+});
+
+test('individual Plate blocks can move between rich pages without flattening, mixed formats are rejected',()=>{
+  const sourceDoc=normalizeStudyPlateDocument(rich());
+  const targetDoc=normalizeStudyPlateDocument([
+    {id:'destination-paragraph',type:'p',children:[{text:'Target'}]},
+  ]);
+  const from=[{id:'source-chapter',title:'Source',sections:[
+    {id:'source-page',title:'Source page',blocks:studyPlateLegacyBlocks(sourceDoc),document:sourceDoc},
+  ]}];
+  const richTarget=[{id:'target-chapter',title:'Target',sections:[
+    {id:'target-page',title:'Target page',blocks:studyPlateLegacyBlocks(targetDoc),document:targetDoc},
+  ]}];
+  const moved=transferCurriculumNode(from,richTarget,'block','block-title','target-page','move');
+  assert.equal(moved.source[0].sections[0].document?.length,2);
+  assert.equal(moved.destination[0].sections[0].document?.[1].id,'block-title');
+  assert.equal(moved.destination[0].sections[0].document?.[1].children[0] &&
+    'text' in moved.destination[0].sections[0].document[1].children[0] &&
+    moved.destination[0].sections[0].document[1].children[0].bold,true);
+  const legacy=[{id:'target-chapter',title:'Target',sections:[
+    {id:'target-page',title:'Target page',blocks:[{id:'target-block',type:'paragraph',text:'Original'}]},
+  ]}];
+  assert.throws(()=>transferCurriculumNode(from,legacy,'block','block-title','target-page','move'),/same document format/);
 });
