@@ -1,6 +1,6 @@
 import {
   BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, HeartHandshake,
-  House, LibraryBig, LogOut, Megaphone, MessageCircle, Radio, ScrollText,
+  House, LibraryBig, Megaphone, MessageCircle, Radio, ScrollText,
   Settings, ShieldCheck, Swords, Brain, UserRound, type LucideIcon,
 } from 'lucide-react';
 import type { AppRoute, AppSettings, User } from '../../types';
@@ -15,12 +15,11 @@ type Props = {
   collapsed:boolean;
   onToggle:()=>void;
   onNavigate:(route:AppRoute)=>void;
-  onLogout:()=>void;
 };
 
 /** Persistent desktop navigation; the mobile account sheet remains a separate,
  * focus-trapped overlay. Only a visual preference is stored on the device. */
-export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onToggle,onNavigate,onLogout}:Props){
+export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onToggle,onNavigate}:Props){
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
     || ['owner','admin'].includes(String(currentUser.organizationRole||''));
@@ -76,15 +75,5 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
         })}
       </div>)}
     </nav>
-    <div className="vop-learner-sidebar-foot">
-      <button type="button" className="vop-learner-sidebar-user" onClick={()=>onNavigate('profile')}
-        title={collapsed?'Profile':undefined} aria-label="Your profile">
-        <span className="vop-learner-sidebar-avatar">{currentUser.photoURL
-          ? <img src={currentUser.photoURL} alt=""/>:(currentUser.displayName||currentUser.email||'V').charAt(0).toUpperCase()}</span>
-        {!collapsed&&<span className="vop-learner-sidebar-user-details"><strong>{currentUser.displayName||'My profile'}</strong><small>{currentUser.email||''}</small></span>}
-      </button>
-      <button type="button" className="vop-learner-sidebar-logout" onClick={onLogout}
-        title={collapsed?'Sign out':undefined} aria-label="Sign out"><LogOut size={19}/>{!collapsed&&<span>Sign out</span>}</button>
-    </div>
   </aside>;
 }
