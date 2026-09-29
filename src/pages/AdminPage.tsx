@@ -53,7 +53,7 @@ type AdminTab =
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
-type StudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
+type StudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
 const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?: number}>}> = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -950,9 +950,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
 
   const renderLegacyStudio = () => {
     if (editorMode) return renderLessonEditor();
-    const tabCounts: Record<StudioTab, number> = {lessons:totalLessons,guides:guides.length,quizzes:quizCount,paths:0,topics:0,seasons:0};
+    const tabCounts: Record<StudioTab, number> = {programs:0,lessons:totalLessons,guides:guides.length,quizzes:quizCount,paths:0,topics:0,seasons:0};
     const tabs: Array<{id:StudioTab;label:string;icon:React.ComponentType<{size?:number}>}> = [
-      {id:'lessons',label:'Lessons',icon:FileText},{id:'guides',label:'Guides',icon:BookOpen},{id:'quizzes',label:'Quizzes',icon:CircleHelp},
+      {id:'programs',label:'Programs',icon:Layers},{id:'lessons',label:'Lessons',icon:FileText},{id:'guides',label:'Guides',icon:BookOpen},{id:'quizzes',label:'Quizzes',icon:CircleHelp},
       {id:'paths',label:'Learning Paths',icon:Layers},{id:'topics',label:'Bible Topics',icon:Book},{id:'seasons',label:'Seasons',icon:CalendarDays},
     ];
     return <div>
