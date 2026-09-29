@@ -1028,7 +1028,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
-          {tab !== 'quizzes' && <button className="vop-primary" type="button" onClick={() => openNewLesson(false)}><Plus size={18}/>{tx('curriculum.newContent', 'New Content')}</button>}
+          {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):(setTab('guides'),onTabChange?.('guides'))}><Plus size={18}/>{selectedGuideId?'New lesson':'New guide/module'}</button>}
         </div>
       </div>
 
@@ -1049,26 +1049,97 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         })}
       </div>
 
-      {tab === 'quizzes' ? <QuizLibrary organizationId={scopeOrganizationId} /> : tab === 'guides' ? (
-        <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
+      {tab === 'quizzes' ? <QuizLibrary key={[scopeOrganizationId,quizPlacement?.guideId,quizPlacement?.anchorId].join(':')}
+        organizationId={scopeOrganizationId} initialGuideId={quizPlacement?.guideId}
+        initialLessonId={quizPlacement?.lessonId} initialAnchorType={quizPlacement?.anchorType}
+        initialAnchorId={quizPlacement?.anchorId} initialExam={quizPlacement?.kind==='final_exam'}
+        onSaved={()=>void load()}/> : tab === 'guides' ? (
+        <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId}
+          onSaved={() => void load()} onOpenSettings={onOpenSettings}
+          onOpenGuide={id=>{setSelectedGuideId(id);setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
+      ) : selectedGuideId ? (
+        <section className="vop-module-workspace">
+          <div className="vop-module-breadcrumb">
+            <button type="button" onClick={()=>setSelectedGuideId('')}><ArrowLeft size={16}/> All guides</button>
+            <ChevronRight size={15}/><span>{String(guideRecords.find(item=>item.id===selectedGuideId)?.title||'Guide')}</span>
+          </div>
+          <div className="vop-module-workspace-head">
+            <div><span className="vop-module-eyebrow">SELECTED GUIDE / MODULE</span>
+              <h2>{String(guideRecords.find(item=>item.id===selectedGuideId)?.title||'Your guide')}</h2>
+              <p>Create lessons with chapters, sections and blocks. Add quizzes, then a final guide examination.</p>
+            </div>
+            <div className="vop-reference-actions">
+              <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}>
+                <Plus size={17}/> Create lesson</button>
+              <button className="vop-secondary" type="button" onClick={()=>{
+                setQuizPlacement({guideId:selectedGuideId,kind:'final_exam'});
+                setTab('quizzes');onTabChange?.('quizzes');
+              }}><CircleHelp size={17}/> Create final exam</button>
+              <button className="vop-secondary" type="button" onClick={()=>void load()}>
+                <RefreshCw size={16}/> Refresh</button>
+            </div>
+          </div>
+          <div className="vop-module-exam-banner"><CircleHelp size={20}/>
+            <span>{guideRecords.find(item=>item.id===selectedGuideId)?.requiresFinalExam===true
+              ? 'Final examination required for certificate eligibility.'
+              : 'Optional guide examination (legacy policy).'}
+              {' '}Answer keys are stored in the private Quiz Library.</span>
+          </div>
+          <div className="vop-module-item-list">
+            {loading?<div className="vop-empty">Loading module content…</div>
+            :moduleLessons.length?moduleLessons.slice().sort((a,b)=>
+              String(a.lessonNumber||'').localeCompare(String(b.lessonNumber||''),undefined,{numeric:true}))
+              .map(item=><article key={String(item.id)} className="vop-module-item">
+                <div className={'vop-module-item-icon'+(item.type==='Test'?' assessment':'')}>
+                  {item.type==='Test'?<CircleHelp size={19}/>:<FileText size={19}/>}
+                </div>
+                <div className="vop-module-item-content">
+                  <span>{item.type==='Test'?(item.assessmentKind==='final_exam'?'FINAL EXAM':'QUIZ'):
+                    'LESSON '+String(item.lessonNumber||'')}</span>
+                  <h3>{String(item.title||'Untitled lesson')}</h3>
+                  <p>{item.type==='Test'
+                    ? (item.attachmentType==='guide'?'Guide-wide examination':String(item.attachmentType||'lesson')+' quiz')
+                    : Array.isArray(item.chapters)?item.chapters.length+' chapters · '+String(item.estimatedMinutes||15)+' min':
+                      'Legacy lesson · '+String(item.estimatedMinutes||15)+' min'}
+                  </p>
+                </div>
+                <span className={'vop-status '+(item.published===true?'published':'draft')}>{item.published===true?'Published':'Draft'}</span>
+                <button type="button" className="vop-secondary" disabled={item.canEdit===false}
+                  onClick={()=>item.type==='Test'
+                    ? (setQuizPlacement(null),setTab('quizzes'),onTabChange?.('quizzes'))
+                    : openModuleLesson(item)}><Edit3 size={16}/> {item.type==='Test'?'Quiz Library':'Edit lesson'}</button>
+              </article>)
+            :<div className="vop-empty"><BookOpen size={30}/>
+              <h3>This guide has no lessons yet</h3><p>Create a lesson, then build its chapters, sections and blocks.</p>
+              <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}><Plus size={17}/> Create first lesson</button>
+            </div>}
+          </div>
+        </section>
       ) : (
-        <>
-          <div className="vop-reference-toolbar">
-            <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label="Search lessons"/></div>
-            <select value={languageFilter} onChange={e => setLanguageFilter(e.target.value)}><option value="all">{tx('curriculum.allLanguages', 'All Languages')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{tx('curriculum.allStatus', 'All Status')}</option><option value="published">{tx('common.published', 'Published')}</option><option value="draft">{tx('common.draft', 'Draft')}</option><option value="archived">{tx('common.archived', 'Archived')}</option></select>
-            <select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">{tx('curriculum.allSeasons', 'All Seasons')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select>
-            <button className="vop-primary vop-filter-button" type="button"><Filter size={17}/>{tx('common.filter', 'Filter')}</button>
+        <section className="vop-guide-first">
+          <div className="vop-module-workspace-head">
+            <div><span className="vop-module-eyebrow">START HERE</span>
+              <h2>Choose a guide or module</h2>
+              <p>Every lesson belongs to a guide. Choose an existing guide or create a new one.</p>
+            </div>
+            <button className="vop-primary" type="button" onClick={()=>{setTab('guides');onTabChange?.('guides');}}>
+              <Plus size={18}/> Create guide/module
+            </button>
           </div>
-          <div className="vop-reference-table-wrap">
-            {loading ? <div className="vop-empty">Loading lessons…</div> : lessonPageRows.length === 0 ? <div className="vop-empty">{tx('curriculum.noLessons', 'No lessons are configured.')}</div> : (
-              <table className="vop-reference-table vop-lessons-reference-table"><thead><tr><th>#</th><th>{tx('curriculum.lesson', 'Lesson')}</th><th>{tx('curriculum.guide', 'Guide')}</th><th>{tx('curriculum.quiz', 'Quiz')}</th><th>{tx('common.time', 'Time')}</th><th>{tx('common.status', 'Status')}</th><th>{tx('common.language', 'Language')}</th><th>{tx('common.created', 'Created')}</th><th>{tx('common.actions', 'Actions')}</th></tr></thead>
-                <tbody>{lessonPageRows.map((row,index) => <tr key={row.key}><td>{(lessonPage - 1) * lessonPageSize + index + 1}</td><td><div className="vop-lesson-reference-cell">{row.raw?.imageUrl || row.guide?.image ? <img src={valueText(row.raw?.imageUrl) || row.guide?.image || ''} alt="" /> : <div className="vop-reference-image-empty"><FileText size={20}/></div>}<div><strong>{row.lesson.lessonNumber}. {row.lesson.title}</strong><span>{row.lesson.description}</span></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.guide?.discoverNumber ? 'Guide ' + row.guide.discoverNumber : ''}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-time-cell"><Clock size={14}/>{row.lesson.estimatedMinutes} mins</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><span className="vop-language-pill"><Globe size={12}/>{row.language.toUpperCase()}</span></td><td>{formatDate(row.createdAt)}</td><td><button className="vop-actions" type="button" onClick={() => openLesson(row)}><MoreVertical size={18}/></button></td></tr>)}</tbody>
-              </table>
-            )}
-            <div className="vop-reference-pager"><span>Showing {lessonRows.length ? ((lessonPage - 1) * lessonPageSize + 1) : 0}–{Math.min(lessonPage * lessonPageSize, filteredLessons.length)} of {filteredLessons.length} lessons</span><div><button className="vop-page-btn" type="button" onClick={() => setLessonPage(value => Math.max(1,value-1))} disabled={lessonPage===1}><ChevronLeft size={17}/></button>{Array.from({length:lessonPages},(_,i)=>i+1).slice(0,5).map(item=><button key={item} className={'vop-page-btn '+(item===lessonPage?'active':'')} type="button" onClick={() => setLessonPage(item)}>{item}</button>)}<button className="vop-page-btn" type="button" onClick={() => setLessonPage(value => Math.min(lessonPages,value+1))} disabled={lessonPage===lessonPages}><ChevronRight size={17}/></button></div></div>
+          <div className="vop-guide-first-grid">
+            {editableGuides.filter(guide=>guide.canEdit!==false).map(guide=><button type="button" key={String(guide.id)}
+              className="vop-guide-first-card" onClick={()=>setSelectedGuideId(String(guide.id))}>
+              <div className="vop-guide-first-icon"><BookOpen size={24}/></div>
+              <span>{String(guide.language||'en').toUpperCase()} · {guide.published===true?'PUBLISHED':'DRAFT'}</span>
+              <h3>{String(guide.title||'Untitled guide')}</h3>
+              <p>{String(guide.description||'Open to manage lessons and assessments.')}</p>
+              <small>{Number(guide.lessonCount||0)} content items <ChevronRight size={15}/></small>
+            </button>)}
+            {!editableGuides.some(guide=>guide.canEdit!==false)&&<div className="vop-empty">
+              <BookOpen size={30}/><p>No editable guide is available for this organization. Create a new guide first.</p>
+            </div>}
           </div>
-        </>
+        </section>
       )}
 
       {message && <div className="vop-toast">{message}</div>}
