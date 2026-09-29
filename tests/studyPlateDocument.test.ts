@@ -152,3 +152,22 @@ test('individual Plate blocks can move between rich pages without flattening, mi
   ]}];
   assert.throws(()=>transferCurriculumNode(from,legacy,'block','block-title','target-page','move'),/same document format/);
 });
+
+test('guide editor persists a learner navigation preference without changing course completion',()=>{
+  const manager=read('src/pages/GuideManager.tsx');
+  const api=read('api_handlers/admin/content.ts');
+  const loader=read('src/services/firestoreData.ts');
+  const view=read('src/components/guide/DiscoverGuideView.tsx');
+  const app=read('src/App.tsx');
+  assert.match(manager,/Student guide navigation/);
+  assert.match(manager,/<option value="lessons">Lessons \(default\)<\/option>/);
+  assert.match(manager,/<option value="sections">Sections \/ pages<\/option>/);
+  assert.match(api,/learnerEntryMode: data\.learnerEntryMode === 'sections'/);
+  assert.match(loader,/learnerEntryMode: data\.learnerEntryMode === 'sections'/);
+  assert.match(view,/guide\.learnerEntryMode==='sections'/);
+  assert.match(view,/onSelectLesson\(lesson,actualIndex\)/);
+  assert.match(app,/initialPageIndex===undefined/);
+  assert.match(app,/lessonResume/);
+  assert.match(view,/completedStudyLessons/);
+  assert.match(view,/isFinalExam/);
+});
