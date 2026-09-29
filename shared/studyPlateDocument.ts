@@ -12,14 +12,14 @@ export type StudyPlateLeaf = {
   code?:true;
 };
 export type StudyPlateNode = {
-  type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'a'|'img'|'code_block';
+  type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'lic'|'a'|'img'|'code_block';
   id?:string;
   url?:string;
   children:Array<StudyPlateNode|StudyPlateLeaf>;
 };
 export type StudyPlateDocument=StudyPlateNode[];
 
-const blockTypes=new Set(['p','h1','h2','h3','blockquote','ul','ol','li','a','img','code_block']);
+const blockTypes=new Set(['p','h1','h2','h3','blockquote','ul','ol','li','lic','a','img','code_block']);
 const idPattern=/^[A-Za-z0-9_-]{1,120}$/;
 const record=(value:unknown):Record<string,unknown>|null=>
   value!==null&&typeof value==='object'&&!Array.isArray(value)
@@ -67,7 +67,7 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
     }
     const type=String(node.type||'');
     if(!blockTypes.has(type))throw new Error('Unsupported study editor node: '+type);
-    if(top&&['li','a'].includes(type))
+    if(top&&['li','lic','a'].includes(type))
       throw new Error('Lists and links must be contained within a content block.');
     if(!Array.isArray(node.children)||!node.children.length||node.children.length>160)
       throw new Error('Every study block needs its content children.');
@@ -95,8 +95,11 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
     }
     if((type==='ul'||type==='ol')&&children.some(child=>!('type' in child)||child.type!=='li'))
       throw new Error('List containers must contain list items.');
-    if(type==='li'&&children.some(child=>!('type' in child)))
-      throw new Error('List items must contain content elements.');
+    if(type==='li'&&children.some(child=>!('type' in child)
+      || !['lic','p','ul','ol'].includes(child.type)))
+      throw new Error('List items must contain list text or nested lists.');
+    if(type==='lic'&&children.some(child=>'type' in child))
+      throw new Error('List item content must contain text only.');
     return element;
   };
   return raw.map(node=>normalize(node,0,true) as StudyPlateNode);
