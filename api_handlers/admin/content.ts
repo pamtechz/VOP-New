@@ -7,6 +7,7 @@ import { requirePermission, resourceForCollection } from '../../server/permissio
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
+import { transferCurriculumStructure, transferAnchorIds, type StructureTransfer } from '../../shared/curriculumTransfer.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -85,7 +86,7 @@ export default async function handler(req: Request, res: Response) {
       throw new Error('Only the VOP Super Admin can change system languages or translations.');
     }
     const permissionResource = resourceForCollection(collection);
-    const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
+    const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'transferStructure' ? 'update' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
@@ -291,6 +292,97 @@ export default async function handler(req: Request, res: Response) {
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
       });
       return res.status(200).json({ ok:true, item:{id, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`, organizationId:ctx.organizationId} });
+    }
+
+    if (action === 'transferStructure') {
+      if (collection !== 'curriculum') throw new Error('Content transfer requires the curriculum collection.');
+      await requirePermission(ctx, 'curriculum', 'update');
+      const sourceGuideId = safeId(body.sourceGuideId);
+      const targetGuideId = safeId(body.targetGuideId || sourceGuideId);
+      const sourceLessonId = safeId(body.sourceLessonId);
+      const targetLessonId = safeId(body.targetLessonId || sourceLessonId);
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
+      const operation:StructureTransfer = {
+        kind: data.kind === 'section' ? 'section' : data.kind === 'block' ? 'block' : (() => {throw new Error('Choose a section or block to transfer.');})(),
+        itemId: safeId(data.itemId), targetChapterId: safeId(data.targetChapterId),
+        ...(data.kind === 'block' ? {targetSectionId: safeId(data.targetSectionId)} : {}),
+        copy: data.copy === true,
+      };
+      const sourceGuideRef = ctx.db.doc('guides/' + sourceGuideId);
+      const targetGuideRef = ctx.db.doc('guides/' + targetGuideId);
+      const sourceRef = sourceGuideRef.collection('lessons').doc(sourceLessonId);
+      const targetRef = targetGuideRef.collection('lessons').doc(targetLessonId);
+      const sameLesson = sourceRef.path === targetRef.path;
+      const result = await ctx.db.runTransaction(async transaction => {
+        // Authorize both ends and compute both writes from the transaction's
+        // current documents. Never trust a client-submitted chapter snapshot.
+        const sourceGuide = await transaction.get(sourceGuideRef);
+        const targetGuide = sourceGuideRef.path === targetGuideRef.path
+          ? sourceGuide : await transaction.get(targetGuideRef);
+        if (!sourceGuide.exists || !targetGuide.exists
+            || sourceGuide.data()?.archived === true || targetGuide.data()?.archived === true) {
+          throw new Error('Both source and destination guides must exist and be active.');
+        }
+        const sourceOrganizationId = String(sourceGuide.data()?.organizationId || '');
+        if (sourceOrganizationId !== String(targetGuide.data()?.organizationId || '') ||
+            (!ctx.isSuperAdmin && sourceOrganizationId !== effectiveOrganizationId)) {
+          throw new Error('Content cannot be transferred across organization boundaries.');
+        }
+        if (String(sourceGuide.data()?.language || '').toLowerCase() !==
+            String(targetGuide.data()?.language || '').toLowerCase()) {
+          throw new Error('Content can only be transferred between lessons in the same language.');
+        }
+        const from = await transaction.get(sourceRef);
+        const to = sameLesson ? from : await transaction.get(targetRef);
+        if (!from.exists || !to.exists || from.data()?.type !== 'Lesson' || to.data()?.type !== 'Lesson'
+            || from.data()?.archived === true || to.data()?.archived === true) {
+          throw new Error('Choose existing active study lessons as the source and destination.');
+        }
+        if (from.data()?.published === true || to.data()?.published === true) {
+          throw new Error('Unpublish both lessons before changing structure; published course progress must not change silently.');
+        }
+        if (!ctx.isSuperAdmin && (
+          [sourceGuide.data(),targetGuide.data(),from.data(),to.data()].some(row =>
+            row?.platformOwned === true || (row?.published === true && row?.sharingScope === 'shared')) ||
+          !canEditCanonicalContent(ctx,from.data()) || !canEditCanonicalContent(ctx,to.data())
+        )) throw new Error('Only the authorized contributor may modify both draft lessons. Copy shared content into your organization first.');
+        const sourceChapters = normalizeCurriculumStructure(from.data()?.chapters);
+        const targetChapters = sameLesson ? sourceChapters : normalizeCurriculumStructure(to.data()?.chapters);
+        if (!sameLesson && !operation.copy) {
+          // A moved anchor could otherwise silently strand a private quiz in
+          // the original lesson. Ask authors to relocate/retire those quizzes first.
+          const movedAnchors = new Set(transferAnchorIds(sourceChapters,operation.kind,operation.itemId));
+          const quizSnapshot = await transaction.get(ctx.db.collection('quizzes').where('guideId','==',sourceGuideId));
+          if (quizSnapshot.docs.some(doc => {
+            const quiz = doc.data();
+            return quiz.archived !== true && String(quiz.lessonId || '') === sourceLessonId
+              && movedAnchors.has(String(quiz.anchorId || ''));
+          })) throw new Error('Move the linked section/block quizzes first, or duplicate content without copying quizzes.');
+        }
+        const transferred = transferCurriculumStructure(sourceChapters,targetChapters,operation);
+        const normalizeAndPages = (chapters: typeof sourceChapters) => {
+          const validated = normalizeCurriculumStructure(chapters);
+          const pages = curriculumPages(validated);
+          return {
+            chapters:validated,
+            content:pages.map(page=>page.content).join('\n\n'),
+            contentPages:pages.map(({blocks:_blocks,...page})=>page),
+            pages:pages.map(page=>({pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+              chapterTitle:page.chapterTitle,sectionId:page.sectionId,sectionTitle:page.sectionTitle,blocks:page.blocks})),
+            updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+          };
+        };
+        if (sameLesson) transaction.update(sourceRef,normalizeAndPages(transferred.destination));
+        else {
+          transaction.update(sourceRef,normalizeAndPages(transferred.source));
+          transaction.update(targetRef,normalizeAndPages(transferred.destination));
+        }
+        return {sameLesson,sourceLessonId,targetLessonId,sourceGuideId,targetGuideId};
+      });
+      await writeTenantAudit(ctx,'curriculum.transfer',sourceRef.path,undefined,{
+        ...result,kind:operation.kind,itemId:operation.itemId,copy:operation.copy,
+      });
+      return res.status(200).json({ok:true,...result});
     }
 
     if (action === 'upsertLesson') {
