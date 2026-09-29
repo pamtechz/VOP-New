@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
-import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, Settings as SettingsIcon, ArrowLeft } from 'lucide-react';
+import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { CommunicationTools } from './CommunicationTools';
 
 interface HeaderProps {
@@ -40,12 +40,16 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
   const accountNav=(route:AppRoute)=>{setAccountOpen(false);nav(route);};
 
   return (
-    <header className="vop-app-header" style={{background:'linear-gradient(135deg, var(--vop-navy-950) 0%, var(--vop-navy-900) 100%)',borderBottom:'1px solid rgba(255,255,255,.08)',color:'#fff',padding:'0.65rem 1rem',position:'sticky',top:0,zIndex:40,boxShadow:'var(--shadow-md)'}}>
-      <div className="vop-app-header-inner" style={{maxWidth:'1360px',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.75rem'}}>
-        <div className="vop-app-brand" style={{display:'flex',alignItems:'center',gap:'.65rem',cursor:'pointer',flexShrink:0}} onClick={()=>nav('home')}>
-          <div style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.1)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',border:'1px solid rgba(255,255,255,.2)',boxShadow:'var(--shadow-sm)'}}><img src="/assets/vop_logo_2.png" alt="Voice of Prophecy" style={{width:26,height:26,objectFit:'contain'}} onError={(e)=>{(e.target as HTMLElement).style.display='none';}}/></div>
-          <div className="vop-app-brand-copy"><div style={{display:'flex',alignItems:'center',gap:'.4rem'}}><span style={{fontWeight:800,fontSize:'1.05rem',letterSpacing:'-.01em',fontFamily:'var(--font-display)'}}>{t('common.app_title',settings.appName||'Voice of Prophecy')}</span><span className="badge badge-gold hide-sm" style={{fontSize:'.6rem',padding:'.1rem .4rem'}}>v4.0 PRO</span></div><div className="hide-sm" style={{fontSize:'.68rem',color:'rgba(255,255,255,.7)',fontWeight:500}}>{t('common.school_subtitle',settings.schoolName||'Bible Correspondence School')}</div></div>
-        </div>
+    <header className="vop-app-header">
+      <div className="vop-app-header-inner">
+        <button type="button" className="vop-app-brand" onClick={()=>nav('home')}
+          aria-label={t('navigation.discover','Discover')+' — '+(settings.appName||'Voice of Prophecy')}>
+          <span className="vop-app-brand-mark"><img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/></span>
+          <span className="vop-app-brand-copy"><span className="vop-app-brand-line">
+            <strong className="vop-app-brand-title">{t('common.app_title',settings.appName||'Voice of Prophecy')}</strong>
+            <span className="vop-app-brand-version badge badge-gold hide-sm">{settings.versionLabel||'v4.0 PRO'}</span>
+          </span><span className="vop-app-brand-subtitle hide-sm">{t('common.school_subtitle',settings.schoolName||'Bible Correspondence School')}</span></span>
+        </button>
         <nav aria-label="Desktop Navigation" className="hidden vop-desktop-nav items-center gap-1">
           <button onClick={()=>nav('home')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${currentRoute==='home'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}>{t('navigation.discover','Discover')}</button>
           <button onClick={()=>nav('resources')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='resources'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><BookOpen size={14}/><span>{t('navigation.library','Library')}</span></button>
@@ -65,27 +69,31 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
           {currentUser.role==='student'&&<button onClick={()=>nav('support')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='support'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><MessageCircle size={14}/><span>{t('navigation.support','Support')}</span></button>}
           <button onClick={()=>nav('about')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='about'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Info size={14}/><span>{t('navigation.about','About')}</span></button>
         </nav>
-        <div className="vop-app-header-actions" style={{display:'flex',alignItems:'center',gap:'.4rem',flexShrink:0}}>
+        <div className="vop-app-header-actions">
           <CommunicationTools onNavigate={onNavigate} t={(key,fallback)=>t(key,fallback) || fallback} />
-          <div className="vop-app-language" style={{position:'relative',display:'flex',alignItems:'center'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'.25rem',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'var(--radius-full)',padding:'.25rem .5rem',fontSize:'.75rem',color:'#fff'}}>
-              <Globe size={13} color="var(--vop-gold-400)"/>
-              <select aria-label={t('settings.ui_language', 'Interface language')} value={activeLanguage} onChange={e=>onChangeLanguage(e.target.value as LanguageCode)} style={{background:'transparent',border:'none',color:'#fff',outline:'none',fontWeight:600,fontSize:'.75rem',cursor:'pointer',maxWidth:'160px'}}>
-                {availableLanguages.map(lang=><option key={lang.code} value={lang.code} style={{background:'#0b2244',color:'#fff'}}>{lang.name}{lang.nativeName&&lang.nativeName.toLowerCase()!==lang.name.toLowerCase()?` (${lang.nativeName})`:''}</option>)}
+          <div className="vop-app-language">
+            <label className="vop-header-locale-control">
+              <Globe size={20} aria-hidden="true"/>
+              <select aria-label={t('settings.ui_language','Interface language')} value={activeLanguage}
+                onChange={event=>onChangeLanguage(event.target.value as LanguageCode)}>
+                {availableLanguages.map(lang=><option key={lang.code} value={lang.code}>
+                  {lang.name}{lang.nativeName&&lang.nativeName.toLowerCase()!==lang.name.toLowerCase()?` (${lang.nativeName})`:''}
+                </option>)}
               </select>
-            </div>
+              <ChevronDown size={17} aria-hidden="true"/>
+            </label>
           </div>
-          <button onClick={()=>nav('certificates')} className="btn btn-gold hide-sm vop-app-header-admin" title="My Certificate" style={{padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><Award size={14}/><span>{t('navigation.certificate','Certificate')}</span></button>
-          {isPrivileged&&<button onClick={()=>nav('admin')} className="btn btn-outline hide-sm vop-app-header-admin" title={t('navigation.admin','Admin Panel')} style={{borderColor:'rgba(255,255,255,.25)',color:'#fff',padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><ShieldCheck size={14} color="var(--vop-gold-400)"/><span>{t('admin_panel','Admin Panel')}</span></button>}
-          <button onClick={onToggleMobileShell} className="btn btn-ghost hide-sm" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title={isMobileShell?'Switch to Full Desktop View':'Simulate Phone Shell (Mobile App Experience)'}>{isMobileShell?<Monitor size={16}/>:<Smartphone size={16}/>}</button>
-          <button onClick={onToggleDarkMode} className="btn btn-ghost" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title={isDarkMode?'Light Mode':'Dark Mode'}>{isDarkMode?<Sun size={16}/>:<Moon size={16}/>}</button>
+          <button type="button" onClick={()=>nav('certificates')} className="btn btn-gold hide-sm vop-app-header-admin" title="My Certificate"><Award size={19}/><span>{t('navigation.certificate','Certificate')}</span></button>
+          {isPrivileged&&<button type="button" onClick={()=>nav('admin')} className="btn btn-outline hide-sm vop-app-header-admin" title={t('navigation.admin','Admin Panel')}><ShieldCheck size={19}/><span>{t('admin_panel','Admin Panel')}</span></button>}
+          <button type="button" onClick={onToggleMobileShell} className="btn btn-ghost hide-sm vop-header-icon-btn vop-header-device-switch" title={isMobileShell?'Switch to Full Desktop View':'Simulate Phone Shell (Mobile App Experience)'} aria-label={isMobileShell?'Switch to desktop view':'Simulate mobile view'}>{isMobileShell?<Monitor size={21}/>:<Smartphone size={21}/>}</button>
+          <button type="button" onClick={onToggleDarkMode} className="btn btn-ghost vop-header-icon-btn" title={isDarkMode?'Light Mode':'Dark Mode'} aria-label={isDarkMode?'Light mode':'Dark mode'}>{isDarkMode?<Sun size={21}/>:<Moon size={21}/>}</button>
           <div className="vop-app-header-account" ref={accountRef}>
             <button type="button" className="vop-app-header-account-trigger" aria-label="Account menu"
               aria-haspopup="menu" aria-expanded={accountOpen} onClick={()=>setAccountOpen(open=>!open)}>
               <span className="vop-app-header-account-avatar">{currentUser.photoURL
                 ? <img src={currentUser.photoURL} alt="" />
                 : (currentUser.displayName||currentUser.email||'V').charAt(0).toUpperCase()}</span>
-              <span className="vop-app-header-account-identity"><strong>{currentUser.displayName||'My account'}</strong>
+              <span className="vop-app-header-account-identity"><strong>{(currentUser.displayName||'My account').trim().split(/\s+/)[0]}</strong>
                 <small>{currentUser.role==='super_admin'?'Super Admin':
                   currentUser.organizationRole==='owner'?'Organization Owner':
                   currentUser.organizationRole==='admin'?'Organization Admin':
@@ -102,10 +110,9 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
               </div>
               <button role="menuitem" type="button" onClick={()=>accountNav('personal-settings')}><SettingsIcon size={18}/>Account & Settings</button>
               <button role="menuitem" type="button" onClick={()=>{setAccountOpen(false);onLogout();}}><LogOut size={18}/>Sign out</button>
-              <button role="menuitem" type="button" onClick={()=>accountNav('home')}><ArrowLeft size={18}/>Back to App</button>
             </div>}
           </div>
-          <button onClick={onOpenMenu} className="btn btn-ghost vop-app-header-menu" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title="Open Menu"><Menu size={18}/></button>
+          <button type="button" onClick={onOpenMenu} className="btn btn-ghost vop-app-header-menu vop-header-icon-btn" title="Open Menu" aria-label="Open navigation menu"><Menu size={22}/></button>
         </div>
       </div>
     </header>
