@@ -380,7 +380,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           </div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Final guide examination</div><div className="vop-setting-help">A guide-level final examination is required for newly created structured modules.</div></div>
-            <input type="checkbox" checked={editing.requiresFinalExam} onChange={event=>setEditing({...editing,requiresFinalExam:event.target.checked})}/>
+            <input type="checkbox" checked={editing.requiresFinalExam} disabled={editing.requiresFinalExam} onChange={event=>setEditing({...editing,requiresFinalExam:event.target.checked})}/>
           </div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Sharing</div><div className="vop-setting-help">Shared guides can be consumed by other organizations. Canonical editing remains with the owner and VOP Super Admin.</div></div>
