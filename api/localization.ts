@@ -116,6 +116,37 @@ export default async function handler(req:Request,res:Response){
       if((!globalLanguage.exists||globalLanguage.data()?.enabled===false)
         && (!tenantLanguage.exists||tenantLanguage.data()?.enabled===false))
         throw new Error('Choose a language configured for this organization.');
+      if(action==='tenantbulksave'){
+        await requirePermission(ctx,'translations','update');
+        const raw=body.values&&typeof body.values==='object'&&!Array.isArray(body.values)
+          ? body.values as Record<string,unknown>: {};
+        const entries=Object.entries(raw)
+          .filter(([,value])=>typeof value==='string' && String(value).trim())
+          .map(([key,value])=>[cleanKey(key),String(value).trim()] as const);
+        if(!entries.length || entries.length>350)
+          throw new Error('Save between 1 and 350 nonempty translations.');
+        if(entries.some(([,value])=>value.length>12000))
+          throw new Error('Translations must not exceed 12,000 characters.');
+        await db.runTransaction(async transaction=>{
+          const refs=entries.map(([key])=>db.doc(base+'/'+key));
+          const existing=await Promise.all(refs.map(ref=>transaction.get(ref)));
+          for(let index=0;index<entries.length;index++){
+            const [key,value]=entries[index];
+            const current=existing[index];
+            if(current.exists && !ctx.isSuperAdmin && current.data()?.ownerUid!==ctx.auth.uid)
+              throw new Error('An existing organization translation belongs to another contributor.');
+            transaction.set(refs[index],{
+              key,locale,namespace:namespaceOf(key),value,status:'published',
+              ownerUid:current.data()?.ownerUid || ctx.auth.uid,ownerOrganizationId:organizationId,
+              organizationId,scope:'organization',sharingScope:'organization',platformOwned:false,
+              updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+              createdAt:current.data()?.createdAt || FieldValue.serverTimestamp(),
+            },{merge:true});
+          }
+        });
+        await writeTenantAudit(ctx,'tenant.translation.bulkSave',base,undefined,{locale,count:entries.length});
+        return res.status(200).json({ok:true,count:entries.length});
+      }
       const key=cleanKey(body.key);
       const ref=db.doc(base+'/'+key);
       if(action==='tenantsave'){
