@@ -69,3 +69,17 @@
 .vop-structure-legacy p[role=alert]{color:#a33737}
 @media(max-width:760px){.vop-module-workspace-head{align-items:stretch;flex-direction:column;padding:17px}.vop-module-workspace-head .vop-reference-actions{justify-content:flex-start}.vop-module-item{flex-wrap:wrap;padding:13px}.vop-module-item>.vop-secondary{width:100%}.vop-structure-intro{flex-direction:column}.vop-structure-intro .vop-primary{width:100%;justify-content:center}}
 @media(max-width:480px){.vop-structure-chapter-body,.vop-structure-section{padding:10px}.vop-structure-block-actions{width:100%}.vop-structure-block-actions>button{flex:1}.vop-guide-first-grid{grid-template-columns:1fr}.vop-module-exam-banner{font-size:11px}}
+
+.vop-structured-reader{display:grid;gap:13px;min-width:0}
+.vop-structured-reader-breadcrumb{display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:#3a6697;font-size:12px;font-weight:850;border-bottom:1px solid #e8edf4;padding-bottom:12px}
+.vop-structured-reader-breadcrumb strong{color:#16396b}
+.vop-structured-reader h3{font-size:clamp(21px,3vw,27px);line-height:1.3;color:#123a6c;margin:2px 0 9px}
+.vop-structured-reader-heading{font-size:19px;line-height:1.3;color:#153e72;margin:15px 0 4px}
+.vop-structured-reader-text{font-size:15px;line-height:1.85;color:#364963;white-space:pre-wrap;overflow-wrap:anywhere}
+.vop-structured-reader-quote{padding:15px 18px;border-left:4px solid #e9ac38;border-radius:0 10px 10px 0;background:#fffbf1;color:#4d5369;font-size:15px;font-style:italic;white-space:pre-wrap}
+.vop-structured-reader-image{max-width:100%;max-height:520px;object-fit:contain;border-radius:11px;background:#edf1f5}
+.vop-lesson-anchored-quizzes{display:grid;gap:7px;margin:9px 0 15px}
+.vop-lesson-anchored-quizzes button{display:flex;align-items:center;justify-content:space-between;gap:9px;min-height:47px;padding:12px 15px;border:1px solid #b9cee5;border-radius:11px;background:#f0f7ff;color:#124c91;font-size:12px;font-weight:850;text-align:left;cursor:pointer}
+.vop-lesson-anchored-quizzes button span{flex:1}
+.vop-lesson-anchored-quizzes button:hover{background:#e2efff}
+.vop-lesson-anchored-quizzes button:focus-visible{outline:3px solid #edb749;outline-offset:2px}
