@@ -161,6 +161,56 @@ test('tenant languages, organization overrides and irreversible platform adoptio
       assert.equal(foreignGuide.status,200,JSON.stringify(foreignGuide.payload));
     });
 
+    await t.test('translation proposals for a newly adopted language require platform review',async()=>{
+      assert.equal((await db.doc('translations/'+code).get()).exists,false);
+      const proposal=await call(content,author,{
+        action:'proposeTranslation',collection:'translations',languageId:code,
+        key:'common.save',proposedValue:'Save across VOP',
+      });
+      assert.equal(proposal.status,200,JSON.stringify(proposal.payload));
+      const proposalId=proposal.payload.item.id;
+      assert.equal((await db.doc('translations/'+code).get()).exists,false);
+      const queue=await call(content,superAdmin,{action:'list',collection:'translations'});
+      assert.equal(queue.status,200,JSON.stringify(queue.payload));
+      const record=queue.payload.items.find(item=>item.code===code);
+      assert.ok(record?.proposals?.some(item=>item.id===proposalId));
+      const unauthorizedReview=await call(content,outsider,{
+        action:'reviewTranslationProposal',collection:'translations',
+        languageId:code,proposalId,decision:'approve',
+      });
+      assert.notEqual(unauthorizedReview.status,200);
+      const approval=await call(content,superAdmin,{
+        action:'reviewTranslationProposal',collection:'translations',
+        languageId:code,proposalId,decision:'approve',
+      });
+      assert.equal(approval.status,200,JSON.stringify(approval.payload));
+      const canonical=await call(localization,null,{},'GET',{locale:code});
+      assert.equal(canonical.payload.translations['common.save'],'Save across VOP');
+      const org=await call(localization,author,{},'GET',{locale:code});
+      assert.equal(org.payload.translations['common.save'],'Save for org A');
+      const foreign=await call(localization,outsider,{},'GET',{locale:code});
+      assert.equal(foreign.payload.translations['common.save'],'Save across VOP');
+      const after=await call(content,superAdmin,{action:'list',collection:'translations'});
+      assert.equal(after.payload.items.find(item=>item.code===code)?.proposals?.some(item=>item.id===proposalId),false);
+      const repeat=await call(content,superAdmin,{
+        action:'reviewTranslationProposal',collection:'translations',
+        languageId:code,proposalId,decision:'approve',
+      });
+      assert.notEqual(repeat.status,200);
+      const rejectionProposal=await call(content,author,{
+        action:'proposeTranslation',collection:'translations',languageId:code,
+        key:'common.save',proposedValue:'Another global suggestion',
+      });
+      assert.equal(rejectionProposal.status,200,JSON.stringify(rejectionProposal.payload));
+      const rejection=await call(content,superAdmin,{
+        action:'reviewTranslationProposal',collection:'translations',
+        languageId:code,proposalId:rejectionProposal.payload.item.id,decision:'reject',
+      });
+      assert.equal(rejection.status,200,JSON.stringify(rejection.payload));
+      assert.equal((await call(localization,null,{},'GET',{locale:code}))
+        .payload.translations['common.save'],'Save across VOP');
+    });
+
     await t.test('Super Admin retains platform language authority',async()=>{
       const update=await call(languages,superAdmin,{
         action:'upsert',code,name:'Managed by VOP',nativeName:'Platform language',enabled:true,
