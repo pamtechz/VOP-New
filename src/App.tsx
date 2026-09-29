@@ -11,7 +11,7 @@ import {
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
-import { initializeLocalization, setUiLocale, useLocalization } from './services/i18n';
+import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import { auth, db } from './lib/firebase';
@@ -109,6 +109,7 @@ export const App: React.FC = () => {
     const firebaseAuth = auth;
     return onAuthStateChanged(firebaseAuth, async firebaseUser => {
       if (!firebaseUser) {
+        setLocalizationOrganizationScope('');
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
         // Clear cached tenant-only labels before showing the anonymous registry.
@@ -144,6 +145,7 @@ export const App: React.FC = () => {
           setStudyError(previous => previous || 'Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
           return;
         }
+        setLocalizationOrganizationScope(profile.organizationId || '');
         setCurrentUser(profile);
         if (profile.preferences?.uiLocale) {
           setUiLocale(profile.preferences.uiLocale);
