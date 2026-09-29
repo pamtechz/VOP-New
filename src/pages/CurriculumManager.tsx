@@ -14,6 +14,9 @@ import QuizLibrary from './QuizLibrary';
 import { getTranslation } from '../services/i18n';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
+import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
+import { StructuredLessonEditor, newChapter } from '../components/admin/StructuredLessonEditor';
+import './curriculum-structure.css';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -81,6 +84,7 @@ type EditorState = {
   videoUrl: string;
   bibleReferences: string;
   questions: EditorQuestion[];
+  chapters: CurriculumChapter[];
   teacherNotes: string;
   tags: string;
   estimatedMinutes: number;
@@ -89,7 +93,7 @@ type EditorState = {
 };
 
 async function adminContentRequest(
-  action: 'list' | 'listGuides' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
@@ -148,6 +152,7 @@ function blankEditor(language = '', guideId = ''): EditorState {
     videoUrl: '',
     bibleReferences: '',
     questions: [],
+    chapters: [newChapter()],
     teacherNotes: '',
     tags: '',
     estimatedMinutes: 15,
@@ -295,6 +300,7 @@ function editorFromLesson(row: LessonRow): EditorState {
     videoUrl: valueText(raw.videoUrl) || valueText((raw.media as Record<string, unknown> | undefined)?.videoUrl),
     bibleReferences: Array.isArray(raw.bibleReferences) ? raw.bibleReferences.map(valueText).join('\n') : valueText(raw.bibleReferences),
     questions: questionsFromUnknown(raw.questions ?? raw.quiz ?? row.lesson.questions),
+    chapters: Array.isArray(raw.chapters) ? raw.chapters as CurriculumChapter[] : Array.isArray(row.lesson.chapters) ? row.lesson.chapters : [],
     teacherNotes: valueText(raw.teacherNotes),
     tags: Array.isArray(raw.tags) ? raw.tags.map(valueText).join(', ') : valueText(raw.tags),
     estimatedMinutes: Math.max(1, Number(raw.estimatedMinutes ?? row.lesson.estimatedMinutes ?? 15) || 15),
@@ -369,6 +375,9 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
 export default function CurriculumManager({ languages, currentUser, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
   const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
+  const [selectedGuideId, setSelectedGuideId] = useState('');
+  const [moduleLessons, setModuleLessons] = useState<RecordItem[]>([]);
+  const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
   const [drafts, setDrafts] = useState<RecordItem[]>([]);
   const [records, setRecords] = useState<RecordItem[]>([]);
@@ -387,7 +396,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
-  const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'quiz' | 'notes' | 'settings'>('content');
+  const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
@@ -553,14 +562,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setLoading(true);
     setError('');
     try {
-      const [loadedGuides, draftResponse, guideResponse] = await Promise.all([
+      const [loadedGuides, draftResponse, guideResponse, moduleResponse] = await Promise.all([
         loadFirestoreGuides().catch(() => [] as DiscoverGuide[]),
         adminContent('list', 'curriculum'),
         adminContent('listGuides', 'guides'),
+        selectedGuideId ? adminContent('listGuideLessons','curriculum',selectedGuideId) : Promise.resolve({items:[]}),
       ]);
       setGuides(loadedGuides);
       setDrafts((draftResponse.items || []) as RecordItem[]);
       setGuideRecords((guideResponse.items || []) as RecordItem[]);
+      setModuleLessons((moduleResponse.items || []) as RecordItem[]);
 
       const [pathsResponse, topicsResponse, seasonsResponse] = await Promise.all([
         adminContent('list', COLLECTIONS.paths),
@@ -589,7 +600,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     }
   };
 
-  useEffect(() => { void load(); }, [tab, scopeOrganizationId]);
+  useEffect(() => { void load(); }, [tab, scopeOrganizationId, selectedGuideId]);
+  useEffect(() => { setSelectedGuideId(''); setModuleLessons([]); }, [scopeOrganizationId]);
 
   const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
@@ -605,14 +617,38 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setPreviewOpen(false);
   };
 
-  const openNewLesson = (quizMode = false) => {
-    const language = enabledLanguages[0]?.code || 'en';
-    const guide = editableGuides.find(item => String(item.language).toLowerCase() === language) || editableGuides[0];
+  const openNewLesson = (guideId = selectedGuideId) => {
+    const guide = editableGuides.find(item => String(item.id) === guideId && item.canEdit !== false);
+    if (!guide) {setError('Create or select a guide/module before adding lessons.');return;}
+    const language = String(guide.language || 'en').toLowerCase();
     const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
     next.guideTitle = String(guide?.title || '');
+    next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
     setEditor(next);
-    setEditorTab(quizMode ? 'quiz' : 'content');
+    setEditorTab('content');
     setPreviewOpen(false);
+  };
+
+  const openModuleLesson=(raw:RecordItem)=>{
+    if (raw.canEdit===false || raw.type==='Test') {
+      setError('This assessment is managed in the private Quiz Library or belongs to another contributor.');
+      return;
+    }
+    const guide=guides.find(item=>item.id===selectedGuideId)||null;
+    const row:LessonRow={
+      key:selectedGuideId+'|'+raw.id,guide,raw,
+      lesson:{
+        id:String(raw.id||''),title:String(raw.title||''),description:String(raw.description||''),
+        lessonNumber:String(raw.lessonNumber||'1'),type:'Lesson',
+        contentPages:Array.isArray(raw.contentPages)?raw.contentPages as Lesson['contentPages']:[],
+        chapters:Array.isArray(raw.chapters)?raw.chapters as CurriculumChapter[]:undefined,
+        estimatedMinutes:Number(raw.estimatedMinutes||15),
+      } as Lesson,
+      language:String(raw.language||guide?.language||'en'),
+      guideTitle:String(raw.guideTitle||guideRecords.find(item=>item.id===selectedGuideId)?.title||''),
+      season:String(raw.season||''),status:raw.archived===true?'Archived':raw.published===true?'Published':'Draft',
+    };
+    openLesson(row);
   };
 
   const moveBlock = (index: number, direction: -1 | 1) => {
@@ -674,10 +710,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     const guide = existingGuideRecord;
 
-    const duplicate = lessonRows.some(row =>
-      row.key !== editor.language + '|' + editor.id
-      && row.guide?.id === editor.guideId
-      && Number.parseFloat(row.lesson.lessonNumber) === Number.parseFloat(editor.lessonNumber),
+    const duplicate = moduleLessons.some(row =>
+      valueText(row.id || row.lessonId) !== editor.id
+      && valueText(row.type) !== 'Test'
+      && valueText(row.lessonNumber).trim() === editor.lessonNumber.trim()
     );
     if (duplicate) return setError(tx('curriculum.lessonNumberDuplicate', 'Lesson number is already used in the selected guide.'));
 
@@ -685,6 +721,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setError('');
     try {
       const id = editor.id || newId('lesson');
+      const chapters = editor.chapters.length ? normalizeCurriculumStructure(editor.chapters) : undefined;
+      const structuredPages = chapters ? curriculumPages(chapters) : undefined;
       const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
       const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
@@ -696,14 +734,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         guideId: editor.guideId,
         guideTitle: valueText(guide.title) || editor.guideTitle,
         season: editor.season.trim(),
-        content: editor.content,
-        contentPages: pageBlocks.map((blocks, index) => ({
+        content: chapters ? structuredPages?.map(page=>page.content).join('\n\n') : editor.content,
+        ...(chapters ? {chapters} : {}),
+        contentPages: structuredPages?.map(({blocks:_blocks,...page})=>page) || pageBlocks.map((blocks, index) => ({
           pageNumber: index + 1,
           title: index === 0 ? editor.title.trim() : (blocks.find(block => block.type === 'heading')?.text || ''),
           content: blocks.filter(block => ['paragraph', 'heading', 'quote'].includes(block.type)).map(block => block.text || '').filter(Boolean).join('\n\n') || editor.content,
           imageUrl: blocks.find(block => block.type === 'image')?.src || (index === 0 ? editor.imageUrl.trim() : ''),
         })),
-        pages: pageBlocks.map((blocks, index) => ({
+        pages: structuredPages?.map(page=>({pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+          chapterTitle:page.chapterTitle,sectionId:page.sectionId,sectionTitle:page.sectionTitle,blocks:page.blocks})) || pageBlocks.map((blocks, index) => ({
           pageNumber: index + 1,
           title: index === 0 ? editor.title.trim() : (blocks.find(block => block.type === 'heading')?.text || ''),
           blocks: blocks.map(block => ({
@@ -711,22 +751,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             ...(block.text ? { text: block.text } : {}),
             ...(block.src ? { src: block.src } : {}),
           })),
-        })),
-        quiz: editor.questions.map((question, index) => ({
-          key: id + '-q' + (index + 1),
-          question: question.question,
-          answer: false,
-          options: question.options,
-          correctOptionIndex: question.answer,
-          explanation: '',
-        })),
-        questions: editor.questions.map((question, index) => ({
-          key: id + '-q' + (index + 1),
-          question: question.question,
-          answer: false,
-          options: question.options,
-          correctOptionIndex: question.answer,
-          explanation: '',
         })),
         media: {
           imageUrl: editor.imageUrl.trim(),
@@ -746,6 +770,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
       setEditor({ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish });
+      setSelectedGuideId(editor.guideId);
       notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
@@ -827,7 +852,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     const editorTabs = [
       ['content', tx('curriculum.content', 'Content')], ['media', tx('curriculum.media', 'Media')], ['bible', tx('curriculum.bibleReferences', 'Bible References')],
-      ['quiz', tx('curriculum.quiz', 'Quiz')], ['notes', tx('curriculum.teacherNotes', 'Teacher Notes')], ['settings', tx('common.settings', 'Settings')],
+      ['notes', tx('curriculum.teacherNotes', 'Teacher Notes')], ['settings', tx('common.settings', 'Settings')],
     ] as const;
 
     const wordCount = editor.content.trim() ? editor.content.trim().split(/\\s+/).filter(Boolean).length : 0;
@@ -872,7 +897,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-editor-head">
           <div className="vop-reference-editor-title">
             <div className="vop-reference-editor-thumb">{editor.imageUrl ? <img src={editor.imageUrl} alt="" /> : <FileText size={25}/>}</div>
-            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>{tx('curriculum.editorDescription', 'Create and edit lesson content, text, images, audio, video and quiz questions.')}</p></div>
+            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Organize this lesson into chapters, sections and blocks; attach quizzes through the private Quiz Library.</p></div>
           </div>
           <div className="vop-reference-actions">
             <button className="vop-secondary" type="button" onClick={() => setPreviewOpen(true)}><Eye size={17}/>{tx('common.preview', 'Preview')}</button>
@@ -887,7 +912,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
           <div className="vop-field"><label>{tx('curriculum.guideRequired', 'Guide *')}</label><select value={editor.guideId} onChange={e => { const selected = editableGuides.find(item => item.id === e.target.value); setEditor({...editor,guideId:e.target.value,guideTitle:valueText(selected?.title),language:valueText(selected?.language || editor.language).toLowerCase()}); }}><option value="">{tx('curriculum.selectGuide', 'Select guide')}</option>{editableGuides.map(guide => <option key={String(guide.id)} value={String(guide.id)}>{String(guide.title)} · {String(guide.language).toUpperCase()}{guide.published === true ? '' : ' (Draft)'}</option>)}</select></div>
           <div className="vop-field"><label>{tx('curriculum.lessonNumberRequired', 'Lesson Number *')}</label><input value={editor.lessonNumber} onChange={e => setEditor({...editor,lessonNumber:e.target.value})}/></div>
           <div className="vop-field"><label>{tx('curriculum.seasonQuarter', 'Season / Quarter')}</label><select value={editor.season} onChange={e => setEditor({...editor,season:e.target.value})}><option value="">{tx('curriculum.selectSeason', 'Select season')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
-          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value,guideId:'',guideTitle:''})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
+          <div className="vop-field"><label>{tx('common.language', 'Language')}</label><select value={editor.language} onChange={e => setEditor({...editor,language:e.target.value})}><option value="">{tx('curriculum.selectLanguage', 'Select language')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>
         </div>
 
         <div className="vop-reference-editor-layout vop-lesson-editor-grid">
@@ -897,28 +922,36 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             </div>
 
             {editorTab === 'content' && <div className="vop-lesson-rich-editor">
-              <div className="vop-section-title vop-lesson-content-title"><div><h3>{tx('curriculum.lessonContentRequired', 'Lesson Content *')}</h3><p>{tx('curriculum.contentHelp', 'Format lesson text, insert media and structure the lesson without hardcoded content.')}</p></div><div className="vop-reference-actions"><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,blocks:[...editor.blocks,{id:newId('block'),type:'paragraph',text:''}]})}><Plus size={16}/>{tx('curriculum.addBlock', 'Add Block')}</button><button className="vop-secondary" type="button" onClick={addPageBreak}>{tx('curriculum.pageBreak', 'Page Break')}</button></div></div>
-              <div className="vop-lesson-toolbar">
-                <select aria-label="Text style" onChange={event => { const value=event.target.value; if(value==='heading') wrapSelection('[h2]','[/h2]'); if(value==='quote') wrapSelection('[quote]','[/quote]'); event.currentTarget.value='paragraph'; }} defaultValue="paragraph"><option value="paragraph">{tx('common.paragraph', 'Paragraph')}</option><option value="heading">{tx('common.heading', 'Heading')}</option><option value="quote">{tx('common.quote', 'Quote')}</option></select>
-                <span className="vop-lesson-toolbar-divider"/>
-                <button type="button" title="Bold" onClick={() => wrapSelection('[b]','[/b]')}><strong>B</strong></button>
-                <button type="button" title="Italic" onClick={() => wrapSelection('[i]','[/i]')}><em>I</em></button>
-                <button type="button" title="Underline" onClick={() => wrapSelection('[u]','[/u]')}><Underline size={17}/></button>
-                <span className="vop-lesson-toolbar-divider"/>
-                <button type="button" title="Bulleted list" onClick={() => addLinePrefix('- ')}><List size={18}/></button>
-                <button type="button" title="Numbered list" onClick={() => addLinePrefix('1. ')}><ListOrdered size={18}/></button>
-                <button type="button" title="Quote" onClick={() => addLinePrefix('> ')}><Quote size={18}/></button>
-                <button type="button" title="Link" onClick={() => wrapSelection('[link]','[/link]')}><LinkIcon size={17}/></button>
-                <button type="button" title="Image" onClick={() => setEditor({...editor,imageUrl:editor.imageUrl})}><ImageIcon size={17}/></button>
-                <button type="button" title="Video" onClick={() => setEditor({...editor,videoUrl:editor.videoUrl})}><Video size={17}/></button>
-                <button type="button" title="Table" onClick={() => wrapSelection('[table]','[/table]')}><Table2 size={17}/></button>
-                <span className="vop-lesson-toolbar-divider"/>
-                <button type="button" title="Undo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('undo'); }}><Undo2 size={17}/></button>
-                <button type="button" title="Redo" onClick={() => { const element=document.getElementById('vop-lesson-content-editor') as HTMLTextAreaElement|null; element?.focus(); document.execCommand?.('redo'); }}><Redo2 size={17}/></button>
+              {editor.chapters.length ? <StructuredLessonEditor
+                chapters={editor.chapters}
+                onChange={chapters => setEditor({...editor,chapters})}
+                canAttachQuiz={Boolean(editor.id) && editor.published}
+                onQuiz={anchor=>{
+                  if (!editor.id || !editor.published) {
+                    setError('Save and publish this lesson before attaching a published quiz.');
+                    return;
+                  }
+                  setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
+                  setEditor(null);setTab('quizzes');onTabChange?.('quizzes');
+                }}
+              /> : <>
+                <div className="vop-structure-legacy">
+                  <strong>Legacy flat lesson</strong>
+                  <p>This existing lesson uses the older text-page format. It remains readable. Convert it to chapter structure without losing its original text.</p>
+                  {editor.questions.length>0 && <p role="alert">This historical lesson also has inline quiz questions. Use Quiz Library and the historical answer-key migration before publishing changes.</p>}
+                  <button className="vop-primary" type="button" onClick={()=>setEditor({...editor,chapters:[{
+                    ...newChapter(),title:editor.title||'Chapter 1',
+                    sections:[{...newChapter().sections[0],title:'Section 1',blocks:[{id:newId('block'),type:'paragraph',text:editor.content||editor.description||'Study content'}]}],
+                  }]})}><Plus size={17}/> Convert to structured chapters</button>
+                </div>
+                <label className="vop-field">Legacy lesson content
+                  <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content}
+                    onChange={event=>setEditor({...editor,content:event.target.value})}/>
+                </label>
+              </>}
+              <div className="vop-field"><label>{tx('common.description', 'Description')}</label>
+                <textarea value={editor.description} onChange={event=>setEditor({...editor,description:event.target.value})}/>
               </div>
-              <textarea id="vop-lesson-content-editor" className="vop-lesson-content-area" value={editor.content} onChange={event => setEditor({...editor,content:event.target.value})} placeholder="Start writing the lesson content here..." />
-              <div className="vop-lesson-editor-footer"><span>Words: {wordCount}</span><span>{tx('curriculum.formattingHelp', 'Use the toolbar to add lightweight formatting markers.')}</span></div>
-              <div className="vop-form-grid vop-lesson-description-grid"><div className="vop-field"><label>{tx('common.description', 'Description')}</label><textarea value={editor.description} onChange={e => setEditor({...editor,description:e.target.value})}/></div><div className="vop-field"><label>{tx('curriculum.plainTextFallback', 'Plain-text fallback')}</label><textarea value={editor.content} onChange={e => setEditor({...editor,content:e.target.value})}/></div></div>
             </div>}
 
             {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column">
@@ -934,15 +967,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
             {editorTab === 'bible' && <div className="vop-field"><label>{tx('curriculum.bibleReferences', 'Bible References')}</label><textarea value={editor.bibleReferences} onChange={e => setEditor({...editor,bibleReferences:e.target.value})}/></div>}
 
-            {editorTab === 'quiz' && <div>
-              <div className="vop-section-title"><div><h3>{tx('curriculum.quizQuestions', 'Quiz Questions')}</h3><p>{tx('curriculum.quizQuestionsHelp', 'Questions belong to this lesson and are stored with it.')}</p></div><button className="vop-secondary" type="button" onClick={() => setEditor({...editor,questions:[...editor.questions,{question:'',options:['','','',''],answer:0}]})}><Plus size={16}/>{tx('curriculum.addQuestion', 'Add Question')}</button></div>
-              {editor.questions.map((question,index) => <div className="vop-editor-question" key={index}>
-                <div className="vop-field"><label>Question {index + 1}</label><textarea value={question.question} onChange={e => { const next=[...editor.questions]; next[index]={...next[index],question:e.target.value}; setEditor({...editor,questions:next}); }}/></div>
-                {question.options.map((option,optionIndex) => <div className="vop-field" key={optionIndex}><label>Option {optionIndex + 1}</label><input value={option} onChange={e => { const next=[...editor.questions]; const options=[...next[index].options]; options[optionIndex]=e.target.value; next[index]={...next[index],options}; setEditor({...editor,questions:next}); }}/></div>)}
-                <div className="vop-editor-question-foot"><select value={question.answer} onChange={e => { const next=[...editor.questions]; next[index]={...next[index],answer:Number(e.target.value)}; setEditor({...editor,questions:next}); }}><option value={0}>Correct option 1</option><option value={1}>Correct option 2</option><option value={2}>Correct option 3</option><option value={3}>Correct option 4</option></select><button className="vop-actions" type="button" onClick={() => setEditor({...editor,questions:editor.questions.filter((_,i)=>i!==index)})}><Trash2 size={15}/></button></div>
-              </div>)}
-              {editor.questions.length === 0 && <div className="vop-empty">{tx('curriculum.noQuizQuestions', 'No quiz questions configured.')}</div>}
-            </div>}
 
             {editorTab === 'notes' && <div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div>}
 
@@ -1005,7 +1029,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-actions">
           <button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={17}/>{tx('common.refresh', 'Refresh')}</button>
           <button className="vop-secondary" type="button" onClick={() => onOpenSettings?.()}><Settings size={17}/>{tab === 'quizzes' ? 'Quiz Settings' : 'Curriculum Settings'}</button>
-          {tab !== 'quizzes' && <button className="vop-primary" type="button" onClick={() => openNewLesson(false)}><Plus size={18}/>{tx('curriculum.newContent', 'New Content')}</button>}
+          {tab==='lessons' && <button className="vop-primary" type="button" onClick={()=>selectedGuideId?openNewLesson(selectedGuideId):(setTab('guides'),onTabChange?.('guides'))}><Plus size={18}/>{selectedGuideId?'New lesson':'New guide/module'}</button>}
         </div>
       </div>
 
@@ -1026,26 +1050,97 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         })}
       </div>
 
-      {tab === 'quizzes' ? <QuizLibrary organizationId={scopeOrganizationId} /> : tab === 'guides' ? (
-        <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId} onSaved={() => void load()} onOpenSettings={onOpenSettings} />
+      {tab === 'quizzes' ? <QuizLibrary key={[scopeOrganizationId,quizPlacement?.guideId,quizPlacement?.anchorId].join(':')}
+        organizationId={scopeOrganizationId} initialGuideId={quizPlacement?.guideId}
+        initialLessonId={quizPlacement?.lessonId} initialAnchorType={quizPlacement?.anchorType}
+        initialAnchorId={quizPlacement?.anchorId} initialExam={quizPlacement?.kind==='final_exam'}
+        onSaved={()=>void load()}/> : tab === 'guides' ? (
+        <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId}
+          onSaved={() => void load()} onOpenSettings={onOpenSettings}
+          onOpenGuide={id=>{setSelectedGuideId(id);setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
+      ) : selectedGuideId ? (
+        <section className="vop-module-workspace">
+          <div className="vop-module-breadcrumb">
+            <button type="button" onClick={()=>setSelectedGuideId('')}><ArrowLeft size={16}/> All guides</button>
+            <ChevronRight size={15}/><span>{String(guideRecords.find(item=>item.id===selectedGuideId)?.title||'Guide')}</span>
+          </div>
+          <div className="vop-module-workspace-head">
+            <div><span className="vop-module-eyebrow">SELECTED GUIDE / MODULE</span>
+              <h2>{String(guideRecords.find(item=>item.id===selectedGuideId)?.title||'Your guide')}</h2>
+              <p>Create lessons with chapters, sections and blocks. Add quizzes, then a final guide examination.</p>
+            </div>
+            <div className="vop-reference-actions">
+              <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}>
+                <Plus size={17}/> Create lesson</button>
+              <button className="vop-secondary" type="button" onClick={()=>{
+                setQuizPlacement({guideId:selectedGuideId,kind:'final_exam'});
+                setTab('quizzes');onTabChange?.('quizzes');
+              }}><CircleHelp size={17}/> Create final exam</button>
+              <button className="vop-secondary" type="button" onClick={()=>void load()}>
+                <RefreshCw size={16}/> Refresh</button>
+            </div>
+          </div>
+          <div className="vop-module-exam-banner"><CircleHelp size={20}/>
+            <span>{guideRecords.find(item=>item.id===selectedGuideId)?.requiresFinalExam===true
+              ? 'Final examination required for certificate eligibility.'
+              : 'Optional guide examination (legacy policy).'}
+              {' '}Answer keys are stored in the private Quiz Library.</span>
+          </div>
+          <div className="vop-module-item-list">
+            {loading?<div className="vop-empty">Loading module content…</div>
+            :moduleLessons.length?moduleLessons.slice().sort((a,b)=>
+              String(a.lessonNumber||'').localeCompare(String(b.lessonNumber||''),undefined,{numeric:true}))
+              .map(item=><article key={String(item.id)} className="vop-module-item">
+                <div className={'vop-module-item-icon'+(item.type==='Test'?' assessment':'')}>
+                  {item.type==='Test'?<CircleHelp size={19}/>:<FileText size={19}/>}
+                </div>
+                <div className="vop-module-item-content">
+                  <span>{item.type==='Test'?(item.assessmentKind==='final_exam'?'FINAL EXAM':'QUIZ'):
+                    'LESSON '+String(item.lessonNumber||'')}</span>
+                  <h3>{String(item.title||'Untitled lesson')}</h3>
+                  <p>{item.type==='Test'
+                    ? (item.attachmentType==='guide'?'Guide-wide examination':String(item.attachmentType||'lesson')+' quiz')
+                    : Array.isArray(item.chapters)?item.chapters.length+' chapters · '+String(item.estimatedMinutes||15)+' min':
+                      'Legacy lesson · '+String(item.estimatedMinutes||15)+' min'}
+                  </p>
+                </div>
+                <span className={'vop-status '+(item.published===true?'published':'draft')}>{item.published===true?'Published':'Draft'}</span>
+                <button type="button" className="vop-secondary" disabled={item.canEdit===false}
+                  onClick={()=>item.type==='Test'
+                    ? (setQuizPlacement(null),setTab('quizzes'),onTabChange?.('quizzes'))
+                    : openModuleLesson(item)}><Edit3 size={16}/> {item.type==='Test'?'Quiz Library':'Edit lesson'}</button>
+              </article>)
+            :<div className="vop-empty"><BookOpen size={30}/>
+              <h3>This guide has no lessons yet</h3><p>Create a lesson, then build its chapters, sections and blocks.</p>
+              <button className="vop-primary" type="button" onClick={()=>openNewLesson(selectedGuideId)}><Plus size={17}/> Create first lesson</button>
+            </div>}
+          </div>
+        </section>
       ) : (
-        <>
-          <div className="vop-reference-toolbar">
-            <div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label="Search lessons"/></div>
-            <select value={languageFilter} onChange={e => setLanguageFilter(e.target.value)}><option value="all">{tx('curriculum.allLanguages', 'All Languages')}</option>{enabledLanguages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{tx('curriculum.allStatus', 'All Status')}</option><option value="published">{tx('common.published', 'Published')}</option><option value="draft">{tx('common.draft', 'Draft')}</option><option value="archived">{tx('common.archived', 'Archived')}</option></select>
-            <select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)}><option value="all">{tx('curriculum.allSeasons', 'All Seasons')}</option>{seasons.map(item => <option key={item} value={item}>{item}</option>)}</select>
-            <button className="vop-primary vop-filter-button" type="button"><Filter size={17}/>{tx('common.filter', 'Filter')}</button>
+        <section className="vop-guide-first">
+          <div className="vop-module-workspace-head">
+            <div><span className="vop-module-eyebrow">START HERE</span>
+              <h2>Choose a guide or module</h2>
+              <p>Every lesson belongs to a guide. Choose an existing guide or create a new one.</p>
+            </div>
+            <button className="vop-primary" type="button" onClick={()=>{setTab('guides');onTabChange?.('guides');}}>
+              <Plus size={18}/> Create guide/module
+            </button>
           </div>
-          <div className="vop-reference-table-wrap">
-            {loading ? <div className="vop-empty">Loading lessons…</div> : lessonPageRows.length === 0 ? <div className="vop-empty">{tx('curriculum.noLessons', 'No lessons are configured.')}</div> : (
-              <table className="vop-reference-table vop-lessons-reference-table"><thead><tr><th>#</th><th>{tx('curriculum.lesson', 'Lesson')}</th><th>{tx('curriculum.guide', 'Guide')}</th><th>{tx('curriculum.quiz', 'Quiz')}</th><th>{tx('common.time', 'Time')}</th><th>{tx('common.status', 'Status')}</th><th>{tx('common.language', 'Language')}</th><th>{tx('common.created', 'Created')}</th><th>{tx('common.actions', 'Actions')}</th></tr></thead>
-                <tbody>{lessonPageRows.map((row,index) => <tr key={row.key}><td>{(lessonPage - 1) * lessonPageSize + index + 1}</td><td><div className="vop-lesson-reference-cell">{row.raw?.imageUrl || row.guide?.image ? <img src={valueText(row.raw?.imageUrl) || row.guide?.image || ''} alt="" /> : <div className="vop-reference-image-empty"><FileText size={20}/></div>}<div><strong>{row.lesson.lessonNumber}. {row.lesson.title}</strong><span>{row.lesson.description}</span></div></div></td><td><strong>{row.guideTitle || '—'}</strong><small>{row.guide?.discoverNumber ? 'Guide ' + row.guide.discoverNumber : ''}</small></td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-time-cell"><Clock size={14}/>{row.lesson.estimatedMinutes} mins</span></td><td><span className={'vop-status ' + row.status.toLowerCase()}>{row.status}</span></td><td><span className="vop-language-pill"><Globe size={12}/>{row.language.toUpperCase()}</span></td><td>{formatDate(row.createdAt)}</td><td><button className="vop-actions" type="button" onClick={() => openLesson(row)}><MoreVertical size={18}/></button></td></tr>)}</tbody>
-              </table>
-            )}
-            <div className="vop-reference-pager"><span>Showing {lessonRows.length ? ((lessonPage - 1) * lessonPageSize + 1) : 0}–{Math.min(lessonPage * lessonPageSize, filteredLessons.length)} of {filteredLessons.length} lessons</span><div><button className="vop-page-btn" type="button" onClick={() => setLessonPage(value => Math.max(1,value-1))} disabled={lessonPage===1}><ChevronLeft size={17}/></button>{Array.from({length:lessonPages},(_,i)=>i+1).slice(0,5).map(item=><button key={item} className={'vop-page-btn '+(item===lessonPage?'active':'')} type="button" onClick={() => setLessonPage(item)}>{item}</button>)}<button className="vop-page-btn" type="button" onClick={() => setLessonPage(value => Math.min(lessonPages,value+1))} disabled={lessonPage===lessonPages}><ChevronRight size={17}/></button></div></div>
+          <div className="vop-guide-first-grid">
+            {editableGuides.filter(guide=>guide.canEdit!==false).map(guide=><button type="button" key={String(guide.id)}
+              className="vop-guide-first-card" onClick={()=>setSelectedGuideId(String(guide.id))}>
+              <div className="vop-guide-first-icon"><BookOpen size={24}/></div>
+              <span>{String(guide.language||'en').toUpperCase()} · {guide.published===true?'PUBLISHED':'DRAFT'}</span>
+              <h3>{String(guide.title||'Untitled guide')}</h3>
+              <p>{String(guide.description||'Open to manage lessons and assessments.')}</p>
+              <small>{Number(guide.lessonCount||0)} content items <ChevronRight size={15}/></small>
+            </button>)}
+            {!editableGuides.some(guide=>guide.canEdit!==false)&&<div className="vop-empty">
+              <BookOpen size={30}/><p>No editable guide is available for this organization. Create a new guide first.</p>
+            </div>}
           </div>
-        </>
+        </section>
       )}
 
       {message && <div className="vop-toast">{message}</div>}

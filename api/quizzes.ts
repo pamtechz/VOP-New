@@ -4,6 +4,7 @@ import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantA
 import { requirePermission } from '../server/permissions.js';
 import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 import { quizManagementItem } from '../shared/quizManagementVisibility.js';
+import { curriculumAnchorExists } from '../shared/curriculumStructure.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -26,7 +27,9 @@ function quizVisible(ctx: Context, data: Record<string, unknown>) {
 /** The owning tenant must select a real, unarchived guide or one of its lessons. */
 async function resolveAttachment(ctx: Context, data: Record<string, unknown>) {
   const attachmentType = data.attachmentType;
-  if (attachmentType !== 'lesson' && attachmentType !== 'guide') throw new Error('Attach the quiz to either a lesson or an entire guide.');
+  if (!['lesson','guide','chapter','section','block'].includes(String(attachmentType))) {
+    throw new Error('Attach a quiz to a guide, lesson, chapter, section or block.');
+  }
   const guideId = safeId(data.guideId);
   const guideRef = ctx.db.doc(`guides/${guideId}`);
   const guideSnap = await guideRef.get();
@@ -44,18 +47,26 @@ async function resolveAttachment(ctx: Context, data: Record<string, unknown>) {
   if (String(data.language || '').trim().toLowerCase() !== String(guide.language || '').trim().toLowerCase()) throw new Error('The quiz language must match the guide.');
   let parentLesson: Record<string, unknown> | undefined;
   let lessonId = '';
-  if (attachmentType === 'lesson') {
+  const isLessonAnchor = attachmentType !== 'guide';
+  let anchorId = '';
+  if (isLessonAnchor) {
     lessonId = safeId(data.lessonId);
     const parent = await guideRef.collection('lessons').doc(lessonId).get();
     if (!parent.exists || parent.data()?.archived === true || parent.data()?.type === 'Test') throw new Error('Choose a study lesson from the selected guide.');
     parentLesson = parent.data() || {};
-  } else if (data.lessonId) {
+    if (attachmentType === 'chapter' || attachmentType === 'section' || attachmentType === 'block') {
+      anchorId = safeId(data.anchorId);
+      if (!curriculumAnchorExists(parentLesson.chapters,attachmentType,anchorId)) {
+        throw new Error('Choose a chapter, section or block in the selected lesson.');
+      }
+    } else if (data.anchorId) throw new Error('Lesson-wide quizzes cannot reference a chapter or block.');
+  } else if (data.lessonId || data.anchorId) {
     throw new Error('An entire-guide quiz must not reference a particular lesson.');
   }
   if (data.published === true && (guide.published !== true || (parentLesson && parentLesson.published !== true))) {
     throw new Error('Publish the parent guide and lesson before publishing their quiz.');
   }
-  return { attachmentType: attachmentType as QuizAttachmentType, guideId, guideRef, guide, lessonId, parentLesson, organizationId };
+  return { attachmentType: attachmentType as QuizAttachmentType, guideId, guideRef, guide, lessonId, anchorId, parentLesson, organizationId };
 }
 
 export default async function handler(req: Request, res: Response) {
@@ -187,6 +198,7 @@ export default async function handler(req: Request, res: Response) {
       const quizDocument = {
         id, title, description, language, guideId:target.guideId,
         attachmentType:target.attachmentType, lessonId:target.lessonId,
+        anchorId:target.anchorId, assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
         organizationId:current.organizationId || target.organizationId,
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
@@ -199,7 +211,9 @@ export default async function handler(req: Request, res: Response) {
         title, description, language,
         lessonNumber:quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
-        attachedLessonId:target.lessonId, questions:learnerQuestions, quiz:learnerQuestions,
+        attachedLessonId:target.lessonId, anchorId:target.anchorId,
+        assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        questions:learnerQuestions, quiz:learnerQuestions,
         answerVisibility:'public_redacted',
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,
         ownerUid, canonical:true, sharingScope, published, archived:false,

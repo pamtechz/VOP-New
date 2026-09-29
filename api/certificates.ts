@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { configuredPassThreshold } from '../shared/studyValidation.js';
 import { verifiedAssessmentAverage } from '../shared/graduationEvidence.js';
+import { hasRequiredFinalExam } from '../shared/curriculumStructure.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -106,7 +107,7 @@ async function issue(req:Request,res:Response){
  const threshold=configuredPassThreshold(config.minimumScore)??configuredPassThreshold(orgSettingsSnapshot.data()?.quizPassThreshold);if(threshold===null)return res.status(503).json({error:'The certification pass mark is not configured.'});
  const guideId=String(gd.id??matching.id),lessons=(await matching.ref.collection('lessons').get()).docs.map(d=>({...d.data(),id:d.id}));if(!lessons.length)return res.status(409).json({error:'The approved guide has no published curriculum items.'});
  const published=lessons.filter(x=>x.published===true);if(published.length!==lessons.length)return res.status(409).json({error:'The approved guide contains unpublished items and cannot be certified.'});
- const study=published.filter(x=>String(x.type??'Lesson')==='Lesson'),tests=published.filter(x=>String(x.type??'')==='Test');if(!study.length||!tests.length)return res.status(409).json({error:'The approved guide must contain lessons and an assessment before certification.'});
+ const study=published.filter(x=>String(x.type??'Lesson')==='Lesson'),tests=published.filter(x=>String(x.type??'')==='Test');if(!hasRequiredFinalExam(gd,published))return res.status(409).json({error:'The required published final guide examination is missing.'});if(!study.length||!tests.length)return res.status(409).json({error:'The approved guide must contain lessons and an assessment before certification.'});
  for(const lesson of study)if(!completed.has(completionKey(lang,guideId,String(lesson.id))))return res.status(409).json({error:'The candidate has not completed all required lessons.'});
  for(const test of tests)if(!Array.isArray(test.questions)||!test.questions.length)return res.status(409).json({error:'The approved guide has an invalid assessment configuration.'});
  const attestedAverage=verifiedAssessmentAverage(tests,scores,organizationId,lang,guideId,threshold);

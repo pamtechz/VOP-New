@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowLeft, Award, Bell, Book, BookOpen, CalendarDays, Check,
   ChevronDown, ChevronLeft, ChevronRight, Church, Clock, Edit3, ExternalLink, UserCheck,
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
-  Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload,
+  Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload, LogOut,
   Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
   Send, FileText, Grid2X2, Building2, HeartHandshake
 } from 'lucide-react';
@@ -36,6 +36,9 @@ interface AdminPageProps {
   currentUser: User;
   activeLanguage: string;
   onBack: () => void;
+  onLogout: () => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
   onNavigateToCertificates?: () => void;
 }
 
@@ -114,15 +117,11 @@ async function adminContent(action: string, collection: string, id?: string, dat
   return body;
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, sidebarCollapsed, onToggleSidebar }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try { return window.localStorage.getItem('vop:admin-sidebar-collapsed') === '1'; }
-    catch { return false; }
-  });
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
   const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
@@ -428,12 +427,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     if (window.matchMedia('(max-width: 900px)').matches) {
       setSidebarOpen(value => !value);
     } else {
-      setSidebarCollapsed(value => {
-        const next = !value;
-        try { window.localStorage.setItem('vop:admin-sidebar-collapsed', next ? '1' : '0'); }
-        catch { /* Local visual preference only. */ }
-        return next;
-      });
+      onToggleSidebar();
     }
   };
 
@@ -1007,7 +1001,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     'churches',
   ];
 
-  return <div className="vop-admin">
+  return <div className={'vop-admin'+(sidebarCollapsed?' sidebar-collapsed':' sidebar-expanded')}>
     <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
       <div className="vop-brand"><div className="vop-brand-mark"><img src="/assets/vop_logo_2.png" alt="" /></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
@@ -1030,14 +1024,54 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     <div className="vop-shell">
       {sidebarOpen && <button className="vop-sidebar-backdrop open" type="button" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)} />}
       <aside id="vop-admin-navigation" aria-label="Administration navigation" className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}>
-        <button className="vop-admin-sidebar-collapse" type="button" onClick={toggleNavigation}
-          aria-label={sidebarCollapsed ? 'Expand administration sidebar' : 'Collapse administration sidebar'}
-          aria-expanded={!sidebarCollapsed} aria-controls="vop-admin-navigation"
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-          {sidebarCollapsed ? <ChevronRight size={19}/> : <ChevronLeft size={19}/>}
-          {!sidebarCollapsed && <span>Collapse sidebar</span>}
-        </button>
-        <nav className="vop-nav" aria-label="Administration sections">{visibleNav.map(item=>{const Icon=item.icon;return <button key={item.id} type="button" title={sidebarCollapsed?item.label:undefined} className={'vop-nav-item '+(activeTab===item.id?'active':'')} onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={22}/><span>{item.label}</span></button>})}</nav><button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined} onClick={onBack}><ArrowLeft size={19}/><span>{adminT('back_to_app','Back to App')}</span></button></aside>
+        <div className="vop-admin-sidebar-head">
+          <button type="button" className="vop-admin-sidebar-brand" onClick={()=>{setActiveTab('dashboard');setSidebarOpen(false)}}
+            title="Admin dashboard" aria-label="Voice of Prophecy – Admin dashboard">
+            <img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/>
+            <span className="vop-admin-sidebar-brand-copy"><strong>{settings?.appName || 'Voice of Prophecy'}</strong><small>Administration workspace</small></span>
+          </button>
+          <button className="vop-admin-sidebar-collapse" type="button" onClick={toggleNavigation}
+            aria-label={sidebarCollapsed ? 'Expand administration sidebar' : 'Collapse administration sidebar'}
+            aria-expanded={!sidebarCollapsed} aria-controls="vop-admin-navigation"
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            {sidebarCollapsed ? <ChevronRight size={20}/> : <ChevronLeft size={20}/>}
+          </button>
+          <button type="button" className="vop-admin-sidebar-dismiss" onClick={()=>setSidebarOpen(false)}
+            aria-label="Close administration navigation"><X size={20}/></button>
+        </div>
+        <nav className="vop-nav" aria-label="Administration sections">{([
+          {label:'WORKSPACE',ids:['dashboard','userManagement','settings','candidates']},
+          {label:'LEARNING & CONTENT',ids:['curriculum','engagement','languages','translations','materials','certification']},
+          {label:'COMMUNITY',ids:['announcements','events','radio','prayer','mentorship']},
+          {label:'ORGANIZATION',ids:['organizations','unions','conferences','districts','churches']},
+        ] as Array<{label:string;ids:AdminTab[]}>).map(group=>{
+          const entries=visibleNav.filter(item=>group.ids.includes(item.id));
+          return entries.length?<div key={group.label} className="vop-admin-sidebar-group">
+            <span className="vop-admin-sidebar-label" aria-hidden="true">{sidebarCollapsed?'•':group.label}</span>
+            {entries.map(item=>{const Icon=item.icon;return <button key={item.id} type="button"
+              title={sidebarCollapsed?item.label:undefined} aria-label={item.label}
+              aria-current={activeTab===item.id?'page':undefined}
+              className={'vop-nav-item '+(activeTab===item.id?'active':'')}
+              onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={20}/><span>{item.label}</span></button>})}
+          </div>:null;
+        })}</nav>
+        <div className="vop-admin-sidebar-footer">
+          <button className="vop-admin-sidebar-user" type="button"
+            title={sidebarCollapsed?'Account & settings':undefined}
+            onClick={()=>{setActiveTab('settings');setSettingsSubtab('general');setSidebarOpen(false)}}>
+            <span className="vop-admin-sidebar-avatar">{currentUser.photoURL
+              ? <img src={currentUser.photoURL} alt=""/>
+              : (currentUser.displayName||currentUser.email||'V').trim().slice(0,1).toUpperCase()}</span>
+            <span className="vop-admin-sidebar-user-copy"><strong>{currentUser.displayName||'Account'}</strong><small>{currentUser.email||''}</small></span>
+          </button>
+          <button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined}
+            onClick={onBack}><ArrowLeft size={19}/><span>{adminT('back_to_app','Back to App')}</span></button>
+          <button className="vop-admin-sidebar-logout" type="button"
+            onClick={onLogout} title={sidebarCollapsed?'Sign out':undefined} aria-label="Sign out">
+            <LogOut size={19}/><span>Sign out</span>
+          </button>
+        </div>
+      </aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}

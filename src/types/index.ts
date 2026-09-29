@@ -219,6 +219,11 @@ export interface Question {
 
 export interface LessonContentPage {
   pageNumber: number;
+  chapterId?: string;
+  chapterTitle?: string;
+  sectionId?: string;
+  sectionTitle?: string;
+  blocks?: import('../../shared/curriculumStructure').CurriculumBlock[];
   title: string;
   content: string;
   scriptureQuote?: {
@@ -230,6 +235,11 @@ export interface LessonContentPage {
 }
 
 export interface Lesson {
+  chapters?: import('../../shared/curriculumStructure').CurriculumChapter[];
+  attachedLessonId?: string;
+  anchorId?: string;
+  attachmentType?: 'guide' | 'lesson' | 'chapter' | 'section' | 'block';
+  assessmentKind?: 'final_exam' | 'practice';
   ownerOrganizationId?: string;
   ownerUid?: string;
   sharingScope?: 'private' | 'organization' | 'shared';
@@ -249,6 +259,7 @@ export interface Lesson {
 }
 
 export interface DiscoverGuide {
+  requiresFinalExam?: boolean;
   ownerOrganizationId?: string;
   ownerUid?: string;
   sharingScope?: 'private' | 'organization' | 'shared';

@@ -2,7 +2,7 @@
  * One quiz belongs to exactly one guide or to a specific lesson inside a guide.
  * Reused by API writes and regression tests. Never trust client-supplied answer keys.
  */
-export type QuizAttachmentType = 'guide' | 'lesson';
+export type QuizAttachmentType = 'guide' | 'lesson' | 'chapter' | 'section' | 'block';
 export type QuizQuestion = {
   key: string;
   question: string;

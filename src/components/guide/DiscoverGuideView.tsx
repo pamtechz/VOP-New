@@ -38,6 +38,10 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   }), [guide.lessons]);
 
   const threshold = settings.quizPassThreshold;
+  const completedStudyLessons = new Set(currentUser.progress?.completedLessons ?? []);
+  const finalExamReady = orderedLessons.some(item=>item.type==='Lesson') && orderedLessons
+    .filter(item=>item.type==='Lesson')
+    .every(item=>completedStudyLessons.has(`${guide.language}:${guide.id}:${item.id}`));
   const lessonStats = (() => {
     const completedCount = orderedLessons.filter(lesson =>
       lessonIsComplete(guide, lesson, currentUser, threshold)).length;
@@ -138,6 +142,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
             {orderedLessons.map((lesson, index) => {
               const isCompleted = lessonIsComplete(guide, lesson, currentUser, threshold);
               const isTest = lesson.type === 'Test';
+              const isFinalExam = isTest && lesson.attachmentType==='guide' && lesson.assessmentKind==='final_exam';
+              const lockedFinal = isFinalExam && guide.requiresFinalExam===true && !finalExamReady;
               const score = isTest ? lessonScoreForDisplay(guide, lesson, currentUser) : undefined;
               const hasScore = typeof score === 'number' && Number.isFinite(score);
               const passed = hasScore && Number.isFinite(threshold) && threshold >= 1 && threshold <= 100 && score! >= threshold;
@@ -147,8 +153,12 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                   key={lesson.id}
                   type="button"
                   onClick={() => onSelectLesson(lesson)}
+                  disabled={lockedFinal}
+                  aria-disabled={lockedFinal}
                   className={`w-full text-left p-5 rounded-2xl border transition-all cursor-pointer group ${
-                    isTest
+                    lockedFinal
+                      ? 'bg-slate-100 border-slate-200 opacity-80 cursor-not-allowed'
+                      : isTest
                       ? isCompleted || hasScore
                         ? passed
                           ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-400 hover:shadow-sm'
@@ -158,7 +168,9 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                         ? 'bg-emerald-50/60 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
                         : 'bg-white border-slate-200/80 hover:border-[#002d72] hover:shadow-md'
                   }`}
-                  aria-label={`${lesson.lessonNumber} ${lesson.type}: ${lesson.title}`}
+                  aria-label={lockedFinal
+                    ? `Final examination locked. Complete all study lessons before taking ${lesson.title}.`
+                    : `${lesson.lessonNumber} ${lesson.type}: ${lesson.title}`}
                 >
                   <div className="flex items-start gap-4">
                     {/* Step indicator */}
@@ -173,7 +185,9 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                         ? 'bg-emerald-500 text-white'
                         : 'bg-slate-100 text-[#002d72] group-hover:bg-[#002d72] group-hover:text-white'
                     }`}>
-                      {isTest ? (
+                      {lockedFinal ? (
+                        <Lock size={20}/>
+                      ) : isTest ? (
                         <Trophy size={20} />
                       ) : isCompleted ? (
                         <CheckCircle2 size={20} />
@@ -190,7 +204,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                             ? 'bg-amber-100 text-amber-800 border border-amber-200'
                             : 'bg-blue-50 text-[#002d72] border border-blue-100'
                         }`}>
-                          {lesson.lessonNumber} {lesson.type}
+                          {lesson.lessonNumber} {isFinalExam?'Final examination':lesson.type}
                         </span>
                         {isCompleted && !isTest && (
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
@@ -221,7 +235,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                             {lesson.estimatedMinutes} mins
                           </span>
                         )}
-                        {isTest && !hasScore && (
+                        {lockedFinal && <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full">Locked until lessons are complete</span>}
+                        {isTest && !hasScore && !lockedFinal && (
                           <span className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
                             <Sparkles size={12} />
                             Assessment

@@ -83,6 +83,12 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     sourceQuizId: typeof item.sourceQuizId === 'string' ? item.sourceQuizId : undefined,
     answerVisibility: item.answerVisibility === 'public_redacted' ? 'public_redacted' : undefined,
     contentPages: rawPages,
+    chapters: Array.isArray(item.chapters) ? item.chapters as Lesson['chapters'] : undefined,
+    attachedLessonId: typeof item.attachedLessonId === 'string' ? item.attachedLessonId : undefined,
+    anchorId: typeof item.anchorId === 'string' ? item.anchorId : undefined,
+    attachmentType: ['guide','lesson','chapter','section','block'].includes(String(item.attachmentType || ''))
+      ? item.attachmentType as Lesson['attachmentType'] : undefined,
+    assessmentKind: item.assessmentKind === 'final_exam' ? 'final_exam' : 'practice',
     questions,
     media: item.media && typeof item.media === 'object' && !Array.isArray(item.media)
       ? { audioUrl: String((item.media as Record<string, unknown>).audioUrl || ''), videoUrl: String((item.media as Record<string, unknown>).videoUrl || ''), imageUrl: String((item.media as Record<string, unknown>).imageUrl || '') }
@@ -173,6 +179,7 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       image: String(data.image ?? '').trim(),
       lessons: [],
       certificateEligible: data.certificateEligible === true,
+      requiresFinalExam: data.requiresFinalExam === true,
     };
     if (!guide.title) continue;
 

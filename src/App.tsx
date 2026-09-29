@@ -19,6 +19,7 @@ import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { LearnerSidebar } from './components/layout/LearnerSidebar';
+import { persistSidebarCollapsed, readSidebarCollapsed } from './components/layout/sidebarPreference';
 import { BottomNav } from './components/layout/BottomNav';
 import { HomeDashboard } from './components/home/HomeDashboard';
 import { DiscoverGuideView } from './components/guide/DiscoverGuideView';
@@ -83,6 +84,12 @@ export const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobileShell, setIsMobileShell] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
+    const next = !value;
+    persistSidebarCollapsed(next);
+    return next;
+  });
 
   useEffect(() => {
     void initializeLocalization(settings);
@@ -359,8 +366,9 @@ export const App: React.FC = () => {
   return (
     <div className={'vop-learner-shell'+(isMobileShell?' vop-learner-simulated':'')} style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'row' }}>
       {currentRoute !== 'admin' && !isMobileShell && <LearnerSidebar currentRoute={currentRoute} currentUser={currentUser}
-        settings={settings} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />}
-      <div className={'vop-learner-main'+(isMobileShell?' mobile-device-frame':'')} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        settings={settings} collapsed={sidebarCollapsed} onToggle={toggleDesktopSidebar}
+        onNavigate={navigate} onLogout={() => void firebaseSignOut()} />}
+      <div className={'vop-learner-main'+(isMobileShell?' mobile-device-frame':'')+(sidebarCollapsed?' sidebar-collapsed':' sidebar-expanded')} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {isMobileShell && <div className="device-notch" />}
         {currentRoute !== 'admin' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
@@ -392,7 +400,9 @@ export const App: React.FC = () => {
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={returnHome} />}
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}
-          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome} />}
+          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome}
+              sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
+              onLogout={() => void firebaseSignOut()} />}
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={() => setActiveGuide(null)} onSelectLesson={lesson => {
               setStudyError('');
@@ -405,7 +415,7 @@ export const App: React.FC = () => {
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />
-      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
+      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onOpenQuiz={quiz=>{setStudyError('');setActiveLesson(quiz);}} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id, activeGuide.language);
         if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
         setStudyError('');

@@ -1,10 +1,12 @@
 import { isEnglishLocale } from '../../shared/locales.js';
+import { randomUUID } from 'node:crypto';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
+import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -77,7 +79,7 @@ export default async function handler(req: Request, res: Response) {
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
     const permissionResource = resourceForCollection(collection);
-    const permissionAction = action === 'list' || action === 'listGuides' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
+    const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
@@ -85,7 +87,7 @@ export default async function handler(req: Request, res: Response) {
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
-    if (action !== 'list' && action !== 'listGuides' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
+    if (action !== 'list' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
         throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
@@ -95,6 +97,37 @@ export default async function handler(req: Request, res: Response) {
       } else {
         throw new Error('Only the VOP Super Admin can manage platform configuration.');
       }
+    }
+
+    if (action === 'listGuideLessons') {
+      if (collection !== 'curriculum') throw new Error('Lesson listing requires the curriculum collection.');
+      const selectedGuideId = safeId(body.guideId || body.id);
+      const guide = await ctx.db.doc(`guides/${selectedGuideId}`).get();
+      if (!guide.exists) throw new Error('Guide not found.');
+      const ownerOrganizationId = String(guide.data()?.organizationId || '').trim();
+      const permitted = ctx.isSuperAdmin
+        || (ctx.tenantType === 'hierarchy'
+          ? Boolean(ownerOrganizationId && await organizationInHierarchyScope(ctx, ownerOrganizationId))
+          : ownerOrganizationId === ctx.organizationId);
+      if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
+      const snap = await guide.ref.collection('lessons').get();
+      const items = snap.docs.map(doc => {
+        const row = doc.data();
+        const canEdit = ctx.isSuperAdmin || String(row.ownerUid || '') === ctx.auth.uid;
+        if (!canEdit) return {
+          id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
+          lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
+          language:String(row.language || guide.data()?.language || ''), published:row.published === true,
+          archived:row.archived === true, estimatedMinutes:Number(row.estimatedMinutes || 15),
+          canEdit:false,
+        };
+        // Private quiz-bank answers never enter curriculum selector responses.
+        // Historical inline quizzes are not returned in this API even to their
+        // authors; those must be audited and migrated to the Quiz Library.
+        const { questions: _answers, quiz: _legacyQuiz, ...safe } = row;
+        return { ...safe, id:doc.id, guideId:selectedGuideId, canEdit:true };
+      });
+      return res.status(200).json({ok:true, items});
     }
 
     if (action === 'listGuides') {
@@ -133,10 +166,13 @@ export default async function handler(req: Request, res: Response) {
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
-      const id = guideId(effectiveOrganizationId, lang);
+      const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
       const ref = ctx.db.doc(`guides/${id}`);
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
+      if (existing.exists && String(current.organizationId || '').trim() !== effectiveOrganizationId) {
+        throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
+      }
       if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       await ref.set({
@@ -157,6 +193,9 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
+        // Structured guides always require a final exam; existing legacy guides
+        // can opt in, but their configured requirement cannot be disabled.
+        requiresFinalExam: !existing.exists || current.requiresFinalExam === true || data.requiresFinalExam === true,
         published: data.published === true,
         archived: data.archived === true,
         createdAt: current.createdAt || new Date().toISOString(),
@@ -172,7 +211,8 @@ export default async function handler(req: Request, res: Response) {
       if (collection !== 'guides') throw new Error('Guide archiving requires the guides collection.');
       const lang = String((body.data as Record<string, unknown> | undefined)?.language || '').trim().toLowerCase();
       if (!isLanguageCode(lang) || (!effectiveOrganizationId && !ctx.isSuperAdmin)) throw new Error('A valid language is required; an organization is required unless you are the VOP Super Admin.');
-      const ref = ctx.db.doc(`guides/${guideId(effectiveOrganizationId, lang)}`);
+      const requestedId = String((body.data as Record<string, unknown> | undefined)?.id || '').trim();
+      const ref = ctx.db.doc(`guides/${requestedId ? safeId(requestedId) : guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
@@ -251,6 +291,32 @@ export default async function handler(req: Request, res: Response) {
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
+      // Answer keys live exclusively in the private Quiz Library. Lesson and
+      // chapter bodies are readable by learners; never persist inline keys.
+      if (data.type === 'Test') {
+        throw new Error('Create assessments in the private Quiz Library, not through the lesson authoring endpoint.');
+      }
+      if ((Array.isArray(data.questions) && data.questions.length) ||
+          (Array.isArray(data.quiz) && data.quiz.length) ||
+          containsPublicQuizAnswer(data.chapters) || containsPublicQuizAnswer(data.contentPages) ||
+          containsPublicQuizAnswer(data.pages) || containsPublicQuizAnswer(data.blocks)) {
+        throw new Error('Create quizzes in the private Quiz Library; lesson documents cannot contain answer keys.');
+      }
+      const structured = data.chapters !== undefined
+        ? normalizeCurriculumStructure(data.chapters) : undefined;
+      const structuredPages = structured ? curriculumPages(structured) : undefined;
+      if (data.chapters !== undefined && data.type === 'Test') throw new Error('Study chapters must use the Lesson type.');
+      if (structured) {
+        for (const page of structuredPages || []) for (const block of page.blocks) {
+          if (block.type !== 'video' && block.type !== 'audio') continue;
+          const source = resolveMediaSource(String(block.src || ''));
+          if (!source || source.kind === 'external' ||
+              (block.type === 'audio' && source.kind === 'direct-video') ||
+              (block.type === 'video' && source.kind === 'direct-audio')) {
+            throw new Error('Chapter media must be an approved public HTTPS embed or direct media file.');
+          }
+        }
+      }
       const media = data.media && typeof data.media === 'object' && !Array.isArray(data.media) ? data.media as Record<string, unknown> : {};
       for (const key of ['audioUrl','videoUrl']) {
         const value = String(media[key] || '').trim();
@@ -263,6 +329,14 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       await ref.set({
         ...data,
+        // Derive learner pages on the server, not from potentially forged
+        // client-side page or block payloads.
+        ...(structured ? {
+          chapters:structured,
+          contentPages:structuredPages?.map(({ blocks:_blocks, ...page })=>page),
+          pages:structuredPages?.map(page=>({pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+            chapterTitle:page.chapterTitle,sectionId:page.sectionId,sectionTitle:page.sectionTitle,blocks:page.blocks})),
+        } : {}),
         id: lessonId,
         lessonId,
         organizationId: effectiveOrganizationId,
@@ -303,15 +377,16 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Only an authorized tenant administrator or VOP Super Admin can publish this lesson.');
       }
       if (!current.exists) throw new Error('The lesson was not found. Create the lesson before publishing it.');
+      // Publication updates status only. The old endpoint spread arbitrary
+      // request data, allowing an unsafe inline answer bank to bypass upsert.
       await ref.set({
-        ...data,
         id: lessonId,
         lessonId,
         organizationId: effectiveOrganizationId,
         ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
-        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
+        sharingScope: current.data()?.sharingScope === 'shared' ? 'shared' : current.data()?.sharingScope === 'private' ? 'private' : 'organization',
         published: true,
         publishedAt: FieldValue.serverTimestamp(),
         publishedBy: ctx.auth.uid,
