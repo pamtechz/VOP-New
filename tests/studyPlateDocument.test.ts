@@ -139,6 +139,8 @@ test('Plate review remains opt-in and does not replace the existing editor',()=>
   assert.match(reader,/currentSection\.document/);
   assert.match(reader,/afterBlock=\{blockId=>assessmentLinks\('block',blockId\)\}/);
   assert.doesNotMatch(safe,/dangerouslySetInnerHTML/);
+  assert.match(safe,/normalizeStudyPlateDocument\(document\)/);
+  assert.match(safe,/This page contains unsupported content/);
 });
 
 test('cross-lesson Plate copies regenerate every canonical block ID without losing formatting',()=>{
