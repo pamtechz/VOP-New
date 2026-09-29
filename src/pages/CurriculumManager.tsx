@@ -14,6 +14,8 @@ import QuizLibrary from './QuizLibrary';
 import { getTranslation } from '../services/i18n';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
+import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
+import { StructuredLessonEditor, newChapter } from '../components/admin/StructuredLessonEditor';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -81,6 +83,7 @@ type EditorState = {
   videoUrl: string;
   bibleReferences: string;
   questions: EditorQuestion[];
+  chapters: CurriculumChapter[];
   teacherNotes: string;
   tags: string;
   estimatedMinutes: number;
@@ -89,7 +92,7 @@ type EditorState = {
 };
 
 async function adminContentRequest(
-  action: 'list' | 'listGuides' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
+  action: 'list' | 'listGuides' | 'listGuideLessons' | 'upsert' | 'upsertLesson' | 'delete' | 'publishLesson' | 'unpublishLesson',
   collection: string,
   id?: string,
   data?: Record<string, unknown>,
@@ -148,6 +151,7 @@ function blankEditor(language = '', guideId = ''): EditorState {
     videoUrl: '',
     bibleReferences: '',
     questions: [],
+    chapters: [newChapter()],
     teacherNotes: '',
     tags: '',
     estimatedMinutes: 15,
@@ -295,6 +299,7 @@ function editorFromLesson(row: LessonRow): EditorState {
     videoUrl: valueText(raw.videoUrl) || valueText((raw.media as Record<string, unknown> | undefined)?.videoUrl),
     bibleReferences: Array.isArray(raw.bibleReferences) ? raw.bibleReferences.map(valueText).join('\n') : valueText(raw.bibleReferences),
     questions: questionsFromUnknown(raw.questions ?? raw.quiz ?? row.lesson.questions),
+    chapters: Array.isArray(raw.chapters) ? raw.chapters as CurriculumChapter[] : Array.isArray(row.lesson.chapters) ? row.lesson.chapters : [],
     teacherNotes: valueText(raw.teacherNotes),
     tags: Array.isArray(raw.tags) ? raw.tags.map(valueText).join(', ') : valueText(raw.tags),
     estimatedMinutes: Math.max(1, Number(raw.estimatedMinutes ?? row.lesson.estimatedMinutes ?? 15) || 15),
@@ -369,6 +374,9 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
 export default function CurriculumManager({ languages, currentUser, initialTab = 'lessons', onTabChange, onOpenSettings }: Props) {
   const [tab, setTab] = useState<CurriculumStudioTab>(initialTab);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
+  const [selectedGuideId, setSelectedGuideId] = useState('');
+  const [moduleLessons, setModuleLessons] = useState<RecordItem[]>([]);
+  const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
   const [drafts, setDrafts] = useState<RecordItem[]>([]);
   const [records, setRecords] = useState<RecordItem[]>([]);
@@ -387,7 +395,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
-  const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'quiz' | 'notes' | 'settings'>('content');
+  const [editorTab, setEditorTab] = useState<'content' | 'media' | 'bible' | 'notes' | 'settings'>('content');
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
@@ -553,14 +561,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setLoading(true);
     setError('');
     try {
-      const [loadedGuides, draftResponse, guideResponse] = await Promise.all([
+      const [loadedGuides, draftResponse, guideResponse, moduleResponse] = await Promise.all([
         loadFirestoreGuides().catch(() => [] as DiscoverGuide[]),
         adminContent('list', 'curriculum'),
         adminContent('listGuides', 'guides'),
+        selectedGuideId ? adminContent('listGuideLessons','curriculum',selectedGuideId) : Promise.resolve({items:[]}),
       ]);
       setGuides(loadedGuides);
       setDrafts((draftResponse.items || []) as RecordItem[]);
       setGuideRecords((guideResponse.items || []) as RecordItem[]);
+      setModuleLessons((moduleResponse.items || []) as RecordItem[]);
 
       const [pathsResponse, topicsResponse, seasonsResponse] = await Promise.all([
         adminContent('list', COLLECTIONS.paths),
@@ -589,7 +599,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     }
   };
 
-  useEffect(() => { void load(); }, [tab, scopeOrganizationId]);
+  useEffect(() => { void load(); }, [tab, scopeOrganizationId, selectedGuideId]);
+  useEffect(() => { setSelectedGuideId(''); setModuleLessons([]); }, [scopeOrganizationId]);
 
   const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
@@ -605,13 +616,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setPreviewOpen(false);
   };
 
-  const openNewLesson = (quizMode = false) => {
-    const language = enabledLanguages[0]?.code || 'en';
-    const guide = editableGuides.find(item => String(item.language).toLowerCase() === language) || editableGuides[0];
+  const openNewLesson = (guideId = selectedGuideId) => {
+    const guide = editableGuides.find(item => String(item.id) === guideId && item.canEdit !== false);
+    if (!guide) {setError('Create or select a guide/module before adding lessons.');return;}
+    const language = String(guide.language || 'en').toLowerCase();
     const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
     next.guideTitle = String(guide?.title || '');
     setEditor(next);
-    setEditorTab(quizMode ? 'quiz' : 'content');
+    setEditorTab('content');
     setPreviewOpen(false);
   };
 
