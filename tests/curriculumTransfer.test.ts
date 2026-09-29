@@ -59,3 +59,49 @@ test('enforces structure and destination size limits',()=>{
   }))}];
   assert.throws(()=>transferCurriculumNode(source,full,'section','section-one','chapter-target','copy'),/at most 40 sections/);
 });
+
+test('chapter copy regenerates chapter, section and block anchors without changing source',()=>{
+  const result=transferCurriculumNode(source,destination,'chapter','chapter-source','lesson-target','copy');
+  assert.equal(result.source.length,1);
+  assert.equal(result.destination.length,2);
+  const copied=result.destination[1];
+  assert.notEqual(copied.id,source[0].id);
+  assert.equal(copied.title,source[0].title);
+  assert.equal(copied.sections.length,2);
+  assert.notEqual(copied.sections[0].id,source[0].sections[0].id);
+  assert.notEqual(copied.sections[0].blocks[0].id,source[0].sections[0].blocks[0].id);
+  assert.deepEqual(result.movedAnchorIds,[
+    'chapter-source','section-one','block-one','section-two','block-two','block-three',
+  ]);
+  assert.equal(destination.length,1,'input is immutable');
+});
+test('chapter transfer keeps anchors but refuses emptying the source lesson',()=>{
+  assert.throws(()=>transferCurriculumNode(
+    source,destination,'chapter','chapter-source','lesson-target','move',
+  ),/last chapter/);
+  const augmented=[...source,{id:'chapter-keep',title:'Replacement',
+    sections:[{id:'section-keep',title:'Keep',
+      blocks:[{id:'block-keep',type:'paragraph',text:'Keep text'}]}]}];
+  const moved=transferCurriculumNode(
+    augmented,destination,'chapter','chapter-source','lesson-target','move',
+  );
+  assert.equal(moved.source.length,1);
+  assert.equal(moved.source[0].id,'chapter-keep');
+  assert.equal(moved.destination[1].id,'chapter-source');
+  assert.equal(moved.destination[1].sections[0].id,'section-one');
+  assert.equal(moved.destination[1].sections[0].blocks[0].id,'block-one');
+  assert.equal(augmented.length,2,'original array unchanged');
+});
+test('chapter transfers enforce destination capacity and real source identifier',()=>{
+  const full=Array.from({length:40},(_,index)=>({
+    id:'chapter-full-'+index,title:'Full chapter',
+    sections:[{id:'section-full-'+index,title:'Section',
+      blocks:[{id:'block-full-'+index,type:'paragraph',text:'Valid'}]}],
+  }));
+  assert.throws(()=>transferCurriculumNode(
+    source,full,'chapter','chapter-source','lesson-target','copy',
+  ),/at most 40 chapters/);
+  assert.throws(()=>transferCurriculumNode(
+    source,destination,'chapter','missing','lesson-target','copy',
+  ),/source chapter/);
+});
