@@ -5,6 +5,7 @@ import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
+import './guide-sections.css';
 
 interface DiscoverGuideViewProps {
   guide: DiscoverGuide;
