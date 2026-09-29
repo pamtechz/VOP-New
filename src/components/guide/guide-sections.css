@@ -1,0 +1,24 @@
+/* Learner page-first view: every section button opens its own saved
+ * page without changing completion, quiz or certificate identity. */
+.vop-guide-section-group{border:1px solid #dee8f3;border-radius:12px;
+  overflow:hidden;background:white;box-shadow:0 3px 11px rgba(25,63,113,.035);}
+.vop-guide-section-group>header{display:flex;align-items:center;gap:10px;
+  padding:12px 14px;background:#f6f9fd;border-bottom:1px solid #e6edf5;
+  color:#204572;}
+.vop-guide-section-group>header>svg:first-child{color:#21579e;flex:none}
+.vop-guide-section-group>header>div{display:grid;gap:2px;flex:1;min-width:0}
+.vop-guide-section-group>header strong{font-size:14px;font-weight:750;overflow-wrap:anywhere}
+.vop-guide-section-group>header small{font-size:11px;color:#637d9c}
+.vop-guide-section-links{display:grid}
+.vop-guide-section-links>button{display:flex;align-items:center;gap:10px;
+  width:100%;min-height:43px;padding:7px 14px;border:0;border-bottom:1px solid #eef3f8;
+  background:white;color:#234675;font-size:13px;text-align:left;cursor:pointer;}
+.vop-guide-section-links>button:last-child{border-bottom:0}
+.vop-guide-section-links>button:hover,.vop-guide-section-links>button:focus-visible{
+  background:#f1f7ff;outline:none;}
+.vop-guide-section-links>button:focus-visible{box-shadow:inset 0 0 0 2px #bf8e25}
+.vop-guide-section-links>button>span:first-child{display:grid;place-items:center;
+  width:27px;height:27px;flex:0 0 27px;border-radius:8px;
+  background:#edf3fb;color:#2658a0;font-size:11px;font-weight:800}
+.vop-guide-section-links>button>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.vop-guide-section-links>button>svg{flex:none;color:#7690ad}
