@@ -100,3 +100,15 @@
 .vop-lessons-toolbar .vop-lessons-refresh:disabled{opacity:.6;cursor:wait}
 .vop-lessons-refresh-error{padding:12px 15px;margin-bottom:14px;border:1px solid #f1c2cb;border-radius:10px;background:#fff1f2;color:#922b40;font-size:13px;overflow-wrap:anywhere}
 @media(max-width:650px){.vop-lessons-toolbar .vop-lessons-refresh{flex:1 1 100%;width:100%}}
+
+/* The persistent audio dock and primary mobile navigation must never overlap. */
+@media(max-width:767px){
+  .vop-radio-docked-player{
+    bottom:calc(71px + env(safe-area-inset-bottom,0px))!important;
+    z-index:79;
+  }
+  .vop-radio-player-error,.vop-radio-player-waiting{
+    bottom:calc(180px + env(safe-area-inset-bottom,0px))!important;
+  }
+  .vop-radio-page{padding-bottom:calc(180px + env(safe-area-inset-bottom,0px))}
+}
