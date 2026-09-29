@@ -28,6 +28,10 @@ function getTestScore(guide: DiscoverGuide, test: Lesson, scores: Record<string,
   // The authoritative study API scopes scores by the learner's organization.
   const serverKey = `${organizationId || 'platform'}:${language}:${guide.id}:${test.id}`;
   if (Object.hasOwn(scores, serverKey)) return scores[serverKey];
+  // A canonical redacted assessment can only use the organization-bound
+  // score written by the authenticated grading API. Legacy local or
+  // aggregate marks cannot attest to this private-bank assessment.
+  if (test.sourceQuizId) return undefined;
   const languageKey = `${language}:${guide.id}:${test.id}`;
   if (Object.hasOwn(scores, languageKey)) return scores[languageKey];
   const key = `${guide.id}:${test.id}`;

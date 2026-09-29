@@ -183,6 +183,18 @@ test('redacted Quiz Library assessments count only after a server-issued passing
   // A score recorded for another organization cannot satisfy this learner.
   assert.equal(calculateCurriculumProgress([course], { ...candidate, organizationId: 'church-2' }, 80, 'en').certificateEligible, false);
 
+  // Old local, language and guide-wide keys cannot stand in for the
+  // authenticated server grade of a private-bank assessment.
+  for (const oldScores of [
+    { 'secured': 100 },
+    { 'secured:secured-test-0': 100 },
+    { 'en:secured:secured-test-0': 100 },
+  ]) {
+    const oldCandidate = { ...candidate, progress: { ...candidate.progress, guideScores: oldScores } };
+    assert.equal(calculateCurriculumProgress([course], oldCandidate, 80, 'en').certificateEligible, false);
+    assert.equal(calculateCurriculumAverageScore([course], oldCandidate, 'en'), null);
+  }
+
   // A learner-visible answer key is not a legitimate redacted assessment.
   course.lessons[1].questions = [{ key: 'quiz-secured-q1', question: 'Which option is true?',
     options: ['First', 'Second'], correctOptionIndex: 0, answer: false, explanation: '' }];

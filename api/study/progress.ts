@@ -92,6 +92,16 @@ export default async function handler(
     if (!userSnapshot.exists) return res.status(404).json({ error: 'VOP account profile was not found.' });
     const userData = userSnapshot.data() || {};
     const organizationId = String(userData.organizationId || '').trim();
+    if (organizationId) {
+      const [organization, membership] = await Promise.all([
+        db.doc(`organizations/${organizationId}`).get(),
+        db.doc(`organizations/${organizationId}/members/${decoded.uid}`).get(),
+      ]);
+      if (!organization.exists || organization.data()?.status !== 'active' ||
+          (membership.exists && membership.data()?.active !== true)) {
+        return res.status(403).json({ error: 'Your organization membership is not active.' });
+      }
+    }
 
     // A learner without an organization can still study an approved shared guide.
     // Only the literal legacy "discover" ID selects the legacy curriculum.
@@ -105,6 +115,14 @@ export default async function handler(
       (Boolean(organizationId) && candidateGuideOrganizationId === organizationId)
       || candidateGuideShared
     ));
+    // Never resolve an unknown or forbidden canonical guide against the
+    // legacy Discover collection. Only the literal "discover" ID is legacy.
+    if (guideId !== 'discover' && !candidateGuide?.exists) {
+      return res.status(404).json({ error: 'The selected guide was not found.' });
+    }
+    if (guideId !== 'discover' && !useTenantGuide) {
+      return res.status(403).json({ error: 'The selected guide is outside your organization.' });
+    }
     const guideRef = useTenantGuide ? tenantGuideRef! : legacyGuideRef;
     const lessonRef = guideRef.collection('lessons').doc(lessonId);
     const [guideSnapshot, lessonSnapshot] = await Promise.all([guideRef.get(), lessonRef.get()]);
