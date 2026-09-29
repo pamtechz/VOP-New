@@ -159,6 +159,7 @@ service cloud.firestore {
           (signedIn()
           && data.get('ownerUid', '') == request.auth.uid
           && isOrgMember(organizationIdForUser())
+          && data.get('ownerOrganizationId',data.get('organizationId','')) == organizationIdForUser()
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
         )
         || (
@@ -171,7 +172,9 @@ service cloud.firestore {
     function canReadGlobal(data, publishedField) {
       return isSuperAdmin()
         || (isOrgMember(organizationIdForUser()) && data.get('organizationId', '') == organizationIdForUser())
-        || (isHierarchyTenant())
+        || (isHierarchyTenant()
+            && (data.get('ownerTenantId','') == hierarchyTenantId()
+              || hierarchyOrganizationScope(data.get('organizationId',data.get('ownerOrganizationId','')))))
         || (data.get('sharingScope', 'private') == 'shared' && data.get(publishedField, false) == true)
         || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true)
         || (signedIn() && data.get('ownerUid', '') == request.auth.uid);
