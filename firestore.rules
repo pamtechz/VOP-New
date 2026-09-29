@@ -534,17 +534,24 @@ service cloud.firestore {
         || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser())
         || hierarchyOrganizationScope(resource.data.get('organizationId',''))
         || (resource.data.get('sharingScope','private') == 'shared' && resource.data.get('published',false) == true);
+      // Global publication is a trusted server transaction that also adopts
+      // the language. A client may create/edit only an unadopted tenant draft.
       allow create: if isSuperAdmin() || (
         request.resource.data.get('organizationId','') == organizationIdForUser()
+        && request.resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+        && request.resource.data.get('ownerUid','') == request.auth.uid
         && canEditOrgContent(organizationIdForUser())
+        && !platformStewarded(request.resource.data)
       );
-      allow update, delete: if isSuperAdmin() || (
+      allow update: if isSuperAdmin() || (
         canEditOwnedContent(resource.data)
+        && !platformStewarded(request.resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
         && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
         && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
         && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
       );
+      allow delete: if isSuperAdmin() || canEditOwnedContent(resource.data);
 
       match /lessons/{lessonId} {
         allow get: if isSuperAdmin()
@@ -565,16 +572,24 @@ service cloud.firestore {
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
           && canEditOrgContent(organizationIdForUser())
           && request.resource.data.get('ownerOrganizationId','') == organizationIdForUser()
+          && request.resource.data.get('ownerUid','') == request.auth.uid
+          && !platformStewarded(request.resource.data)
         )) && request.resource.data.get('sourceQuizId','') == '';
-        allow update, delete: if (isSuperAdmin() || (
+        allow update: if (isSuperAdmin() || (
           get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
           && canEditOwnedContent(resource.data)
+          && !platformStewarded(request.resource.data)
           && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
           && request.resource.data.get('ownerOrganizationId','') == resource.data.get('ownerOrganizationId','')
           && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
           && request.resource.data.get('canonical',true) == resource.data.get('canonical',true)
         )) && resource.data.get('sourceQuizId','') == ''
            && request.resource.data.get('sourceQuizId','') == '';
+        allow delete: if isSuperAdmin() || (
+          get(/databases/$(database)/documents/guides/$(guideId)).data.get('organizationId','') == organizationIdForUser()
+          && canEditOwnedContent(resource.data)
+          && resource.data.get('sourceQuizId','') == ''
+        );
       }
     }
 
@@ -641,7 +656,8 @@ service cloud.firestore {
     match /books/{id} {
       allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
-        (
+        !platformStewarded(request.resource.data)
+        && (
           isOrgMember(organizationIdForUser())
           && request.resource.data.get('ownerUid','') == request.auth.uid
           && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
@@ -654,17 +670,20 @@ service cloud.firestore {
           && request.resource.data.get('organizationId','') == ''
         )
       );
-      allow update, delete: if isSuperAdmin() || (
+      allow update: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
+        && !platformStewarded(request.resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
         && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
+      allow delete: if isSuperAdmin() || canEditOwnedGlobal(resource.data);
     }
 
     match /radioBroadcasts/{id} {
       allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
-        (
+        !platformStewarded(request.resource.data)
+        && (
           isOrgMember(organizationIdForUser())
           && request.resource.data.get('ownerUid','') == request.auth.uid
           && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
@@ -677,17 +696,20 @@ service cloud.firestore {
           && request.resource.data.get('organizationId','') == ''
         )
       );
-      allow update, delete: if isSuperAdmin() || (
+      allow update: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
+        && !platformStewarded(request.resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
         && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
+      allow delete: if isSuperAdmin() || canEditOwnedGlobal(resource.data);
     }
 
     match /playlists/{id} {
       allow get, list: if canReadGlobal(resource.data, 'published');
       allow create: if isSuperAdmin() || (
-        (
+        !platformStewarded(request.resource.data)
+        && (
           isOrgMember(organizationIdForUser())
           && request.resource.data.get('ownerUid','') == request.auth.uid
           && request.resource.data.get('organizationId','') == ''
@@ -700,11 +722,13 @@ service cloud.firestore {
           && request.resource.data.get('organizationId','') == ''
         )
       );
-      allow update, delete: if isSuperAdmin() || (
+      allow update: if isSuperAdmin() || (
         canEditOwnedGlobal(resource.data)
+        && !platformStewarded(request.resource.data)
         && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
         && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
       );
+      allow delete: if isSuperAdmin() || canEditOwnedGlobal(resource.data);
     }
 
     // The canonical language registry and translations belong to the platform.
