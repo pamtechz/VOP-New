@@ -4,7 +4,7 @@ import {
   type CurriculumChapter,
   type CurriculumSection,
   type CurriculumBlock,
-} from './curriculumStructure.js';
+} from './curriculumStructure.ts';
 
 export type TransferKind = 'section' | 'block';
 export type TransferMode = 'move' | 'copy';
