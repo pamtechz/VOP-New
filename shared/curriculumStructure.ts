@@ -128,3 +128,17 @@ export function hasRequiredFinalExam(
     && typeof item.sourceQuizId==='string' && idPattern.test(item.sourceQuizId)
     && Array.isArray(item.questions) && item.questions.length>0);
 }
+
+/** Detect legacy answer-bearing question objects anywhere in author-supplied
+ * public lesson fields. Reject new writes rather than embedding a key in a
+ * learner-readable page, text block or metadata object. */
+export function containsPublicQuizAnswer(value:unknown,depth=0):boolean {
+  if(depth>24||value===null||typeof value!=='object')return false;
+  if(Array.isArray(value))return value.some(item=>containsPublicQuizAnswer(item,depth+1));
+  const row=value as Record<string,unknown>;
+  const questionLike=Object.hasOwn(row,'question')||Object.hasOwn(row,'prompt')
+    ||Object.hasOwn(row,'options');
+  if(questionLike&&(Object.hasOwn(row,'correctOptionIndex')||Object.hasOwn(row,'answer')
+    ||Object.hasOwn(row,'explanation')))return true;
+  return Object.values(row).some(item=>containsPublicQuizAnswer(item,depth+1));
+}
