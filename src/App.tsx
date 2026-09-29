@@ -373,7 +373,7 @@ export const App: React.FC = () => {
     <div className={'vop-learner-shell'+(isMobileShell?' vop-learner-simulated':'')} style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'row' }}>
       {currentRoute !== 'admin' && !isMobileShell && <LearnerSidebar currentRoute={currentRoute} currentUser={currentUser}
         settings={settings} collapsed={sidebarCollapsed} onToggle={toggleDesktopSidebar}
-        onNavigate={navigate} onLogout={() => void firebaseSignOut()} />}
+        onNavigate={navigate} />}
       <div className={'vop-learner-main'+(isMobileShell?' mobile-device-frame':'')+(sidebarCollapsed?' sidebar-collapsed':' sidebar-expanded')} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {isMobileShell && <div className="device-notch" />}
         {currentRoute !== 'admin' && (
