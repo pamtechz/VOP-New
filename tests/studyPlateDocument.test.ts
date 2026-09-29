@@ -128,7 +128,8 @@ test('Plate review remains opt-in and does not replace the existing editor',()=>
   const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
   const reader=read('src/components/reader/LessonReaderModal.tsx');
   const safe=read('src/components/reader/StudyPlateContent.tsx');
-  assert.match(manager,/plateReview\?PlateCurriculumAuthoringReview:StructuredLessonEditor/);
+  assert.match(manager,/const EditorComponent=plateReview\|\|hasRichSections/);
+  assert.match(manager,/PlateCurriculumAuthoringReview:StructuredLessonEditor/);
   assert.match(manager,/Try Plate editor/);
   assert.match(plate,/onSplitPage=\{splitPage\}/);
   assert.match(plate,/vop-plate-page-tabs/);
