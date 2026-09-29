@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, firebaseConfigured } from './lib/firebase';
 import { SignInPage } from './pages/SignInPage';
+import { PublicHome } from './pages/PublicHome';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
@@ -12,6 +13,10 @@ import type { User } from './types';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
+  const [authView, setAuthView] = useState<'home' | 'sign-in' | 'register'>(() => {
+    const intent = new URLSearchParams(window.location.search).get('account');
+    return intent === 'register' ? 'register' : intent === 'login' ? 'sign-in' : 'home';
+  });
   const [authReady, setAuthReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
@@ -145,12 +150,12 @@ export function Root() {
     );
   }
 
-  if (!firebaseConfigured || !auth) {
-    return <SignInPage configurationMissing />;
-  }
-
   if (!account) {
-    return <SignInPage />;
+    return authView === 'home'
+      ? <PublicHome onSignIn={() => setAuthView('sign-in')} onRegister={() => setAuthView('register')}
+          configurationMissing={!firebaseConfigured || !auth} />
+      : <SignInPage initialMode={authView === 'register' ? 'register' : 'sign-in'}
+          configurationMissing={!firebaseConfigured || !auth} onBack={() => setAuthView('home')} />;
   }
 
   if (dataError) {

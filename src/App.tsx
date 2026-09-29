@@ -18,6 +18,7 @@ import { auth, db } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
+import { LearnerSidebar } from './components/layout/LearnerSidebar';
 import { BottomNav } from './components/layout/BottomNav';
 import { HomeDashboard } from './components/home/HomeDashboard';
 import { DiscoverGuideView } from './components/guide/DiscoverGuideView';
@@ -356,8 +357,10 @@ export const App: React.FC = () => {
   const showCourse = currentRoute === 'home' && activeGuide !== null;
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
-      <div className={isMobileShell ? 'mobile-device-frame' : ''} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <div className={'vop-learner-shell'+(isMobileShell?' vop-learner-simulated':'')} style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'row' }}>
+      {currentRoute !== 'admin' && !isMobileShell && <LearnerSidebar currentRoute={currentRoute} currentUser={currentUser}
+        settings={settings} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />}
+      <div className={'vop-learner-main'+(isMobileShell?' mobile-device-frame':'')} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {isMobileShell && <div className="device-notch" />}
         {currentRoute !== 'admin' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
