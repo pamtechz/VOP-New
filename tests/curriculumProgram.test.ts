@@ -6,8 +6,7 @@ import {createServer} from 'vite';
 
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
 after(async()=>vite.close());
-const {normalizeProgramDraft}=await vite.ssrLoadModule('/shared/programModel.ts')
-  as typeof import('../shared/programModel.ts');
+const {normalizeProgramDraft}=await vite.ssrLoadModule('/shared/programModel.ts');
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
 const valid={title:'Biblical Foundations',description:'A Bible study program',
