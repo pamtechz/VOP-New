@@ -10,12 +10,10 @@ after(async()=>server.close());
 const {
   normalizeStudyPlateDocument,studyPlatePlainText,legacyBlocksToPlate,
   studyPlateLegacyBlocks,
-}=await server.ssrLoadModule('/shared/studyPlateDocument.ts')
-  as typeof import('../shared/studyPlateDocument.ts');
+}=await server.ssrLoadModule('/shared/studyPlateDocument.ts') as typeof import('../shared/studyPlateDocument.ts');
 const {
   normalizeCurriculumStructure,curriculumPages,containsPublicQuizAnswer,
-}=await server.ssrLoadModule('/shared/curriculumStructure.ts')
-  as typeof import('../shared/curriculumStructure.ts');
+}=await server.ssrLoadModule('/shared/curriculumStructure.ts') as typeof import('../shared/curriculumStructure.ts');
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
 
