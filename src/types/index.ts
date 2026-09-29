@@ -258,6 +258,20 @@ export interface Lesson {
   estimatedMinutes: number;
 }
 
+/** Tenant-owned course catalogue metadata; guide records remain canonical. */
+export interface CurriculumProgram {
+  id:string;
+  title:string;
+  description:string;
+  coverImageUrl:string;
+  entryMode:'lessons'|'sections';
+  guideIds:string[];
+  organizationId:string;
+  sharingScope:'private'|'organization'|'shared';
+  published:boolean;
+  archived:boolean;
+}
+
 export interface DiscoverGuide {
   learnerEntryMode?: 'lessons'|'sections';
   requiresFinalExam?: boolean;
