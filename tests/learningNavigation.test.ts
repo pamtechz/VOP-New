@@ -56,3 +56,21 @@ test('learning workspace has mobile, tablet and accessible bottom nav breakpoint
   assert.match(css,/safe-area-inset-bottom/);
   assert.match(css,/vop-radio-docked-player/);
 });
+
+test('lesson reader, grading and offline completion follow each guide language',()=>{
+  const app=source('src/App.tsx');
+  const study=source('src/services/localStudy.ts');
+  assert.ok(app.includes('completeLesson(activeGuide.id, activeLesson.id, activeGuide.language)'));
+  assert.ok(app.includes('submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language)'));
+  assert.ok(study.includes('uid:firebaseUser.uid, language, guideId, lessonId'));
+  assert.ok(app.includes('${activeGuide.language}:${activeGuide.id}:${lesson.id}'));
+});
+
+test('published lesson and guide status share server-scoped completion checks',()=>{
+  for(const file of ['src/pages/LessonsPage.tsx','src/components/guide/DiscoverGuideView.tsx','src/components/home/HomeDashboard.tsx']){
+    assert.match(source(file),/lessonIsComplete/);
+  }
+  const progress=source('src/services/lessonProgress.ts');
+  assert.match(progress,/if \(lesson.sourceQuizId\) return undefined/);
+  assert.match(progress,/organizationId \|\| 'platform'/);
+});
