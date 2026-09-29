@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
-import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown } from 'lucide-react';
+import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, Settings as SettingsIcon, ArrowLeft } from 'lucide-react';
 import { CommunicationTools } from './CommunicationTools';
 
 interface HeaderProps {
@@ -14,16 +14,30 @@ interface HeaderProps {
   isMobileShell: boolean;
   onToggleMobileShell: () => void;
   onOpenMenu: () => void;
+  onLogout: () => void;
   currentRoute?: AppRoute;
   onNavigate?: (route: AppRoute) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLanguage, onChangeLanguage, isDarkMode, onToggleDarkMode, isMobileShell, onToggleMobileShell, onOpenMenu, currentRoute = 'home', onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLanguage, onChangeLanguage, isDarkMode, onToggleDarkMode, isMobileShell, onToggleMobileShell, onOpenMenu, onLogout, currentRoute = 'home', onNavigate }) => {
   const t = (key: string, fallback?: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback);
   useLocalization(settings);
   const availableLanguages = getAvailableLanguages(settings);
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
   const nav = (route: AppRoute) => { if (onNavigate) onNavigate(route); };
+  const [accountOpen,setAccountOpen]=useState(false);
+  const accountRef=useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    if(!accountOpen)return;
+    const close=(event:MouseEvent)=>{
+      if(accountRef.current&&!accountRef.current.contains(event.target as Node))setAccountOpen(false);
+    };
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setAccountOpen(false);};
+    document.addEventListener('mousedown',close);
+    document.addEventListener('keydown',escape);
+    return()=>{document.removeEventListener('mousedown',close);document.removeEventListener('keydown',escape);};
+  },[accountOpen]);
+  const accountNav=(route:AppRoute)=>{setAccountOpen(false);nav(route);};
 
   return (
     <header className="vop-app-header" style={{background:'linear-gradient(135deg, var(--vop-navy-950) 0%, var(--vop-navy-900) 100%)',borderBottom:'1px solid rgba(255,255,255,.08)',color:'#fff',padding:'0.65rem 1rem',position:'sticky',top:0,zIndex:40,boxShadow:'var(--shadow-md)'}}>
@@ -65,10 +79,32 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
           {isPrivileged&&<button onClick={()=>nav('admin')} className="btn btn-outline hide-sm vop-app-header-admin" title={t('navigation.admin','Admin Panel')} style={{borderColor:'rgba(255,255,255,.25)',color:'#fff',padding:'.35rem .75rem',fontSize:'.75rem',borderRadius:'var(--radius-full)'}}><ShieldCheck size={14} color="var(--vop-gold-400)"/><span>{t('admin_panel','Admin Panel')}</span></button>}
           <button onClick={onToggleMobileShell} className="btn btn-ghost hide-sm" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title={isMobileShell?'Switch to Full Desktop View':'Simulate Phone Shell (Mobile App Experience)'}>{isMobileShell?<Monitor size={16}/>:<Smartphone size={16}/>}</button>
           <button onClick={onToggleDarkMode} className="btn btn-ghost" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title={isDarkMode?'Light Mode':'Dark Mode'}>{isDarkMode?<Sun size={16}/>:<Moon size={16}/>}</button>
-          <button onClick={()=>nav('profile')} className="hide-sm vop-app-header-profile" style={{display:'flex',alignItems:'center',gap:'.4rem',background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'var(--radius-full)',padding:'.2rem .5rem .2rem .2rem',cursor:'pointer',color:'#fff',transition:'background var(--transition-fast)'}} title="Manage Profile & Church">
-            <div style={{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,var(--vop-gold-500),var(--vop-gold-600))',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',fontWeight:700,fontSize:'.78rem',color:'#0b2244'}}>{currentUser.displayName.charAt(0)}</div>
-            <span style={{fontSize:'.75rem',fontWeight:600,maxWidth:90,overflow:'hidden',textOverflow:'ellipsis'}}>{currentUser.displayName.split(' ')[0]}</span>
-          </button>
+          <div className="vop-app-header-account" ref={accountRef}>
+            <button type="button" className="vop-app-header-account-trigger" aria-label="Account menu"
+              aria-haspopup="menu" aria-expanded={accountOpen} onClick={()=>setAccountOpen(open=>!open)}>
+              <span className="vop-app-header-account-avatar">{currentUser.photoURL
+                ? <img src={currentUser.photoURL} alt="" />
+                : (currentUser.displayName||currentUser.email||'V').charAt(0).toUpperCase()}</span>
+              <span className="vop-app-header-account-identity"><strong>{currentUser.displayName||'My account'}</strong>
+                <small>{currentUser.role==='super_admin'?'Super Admin':
+                  currentUser.organizationRole==='owner'?'Organization Owner':
+                  currentUser.organizationRole==='admin'?'Organization Admin':
+                  currentUser.organizationRole==='editor'?'Organization Editor':
+                  String(currentUser.role||'Learner').replaceAll('_',' ')}</small></span>
+              <ChevronDown aria-hidden="true" size={16}/>
+            </button>
+            {accountOpen&&<div className="vop-app-header-account-menu" role="menu">
+              <div className="vop-app-header-account-overview">
+                <span className="vop-app-header-account-avatar">{currentUser.photoURL
+                  ? <img src={currentUser.photoURL} alt=""/>
+                  : (currentUser.displayName||currentUser.email||'V').charAt(0).toUpperCase()}</span>
+                <span><strong>{currentUser.displayName||'My account'}</strong><small>{currentUser.email||''}</small></span>
+              </div>
+              <button role="menuitem" type="button" onClick={()=>accountNav('personal-settings')}><SettingsIcon size={18}/>Account & Settings</button>
+              <button role="menuitem" type="button" onClick={()=>{setAccountOpen(false);onLogout();}}><LogOut size={18}/>Sign out</button>
+              <button role="menuitem" type="button" onClick={()=>accountNav('home')}><ArrowLeft size={18}/>Back to App</button>
+            </div>}
+          </div>
           <button onClick={onOpenMenu} className="btn btn-ghost vop-app-header-menu" style={{color:'rgba(255,255,255,.85)',padding:'.4rem'}} title="Open Menu"><Menu size={18}/></button>
         </div>
       </div>
