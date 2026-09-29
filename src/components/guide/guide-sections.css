@@ -22,3 +22,27 @@
   background:#edf3fb;color:#2658a0;font-size:11px;font-weight:800}
 .vop-guide-section-links>button>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
 .vop-guide-section-links>button>svg{flex:none;color:#7690ad}
+
+/* Course section-first view: author-defined chapters collapse independently. */
+.vop-guide-section-chapters{display:grid;gap:0}
+.vop-guide-section-chapter{min-width:0;border-bottom:1px solid #e9eff7}
+.vop-guide-section-chapter:last-child{border-bottom:0}
+.vop-guide-section-chapter>summary{
+  display:flex;align-items:center;gap:9px;list-style:none;
+  min-height:40px;padding:7px 13px;background:#fbfdff;
+  color:#244b7a;cursor:pointer;
+}
+.vop-guide-section-chapter>summary::-webkit-details-marker{display:none}
+.vop-guide-section-chapter>summary>svg:first-child{color:#205da5;flex:none}
+.vop-guide-section-chapter>summary>strong{
+  flex:1;min-width:0;font-size:12px;font-weight:750;overflow-wrap:anywhere
+}
+.vop-guide-section-chapter>summary>small{font-size:10px;color:#6a829e}
+.vop-guide-section-chapter>summary>.vop-guide-section-chevron{
+  flex:none;transition:transform .16s ease;color:#66829f
+}
+.vop-guide-section-chapter[open]>summary>.vop-guide-section-chevron{transform:rotate(90deg)}
+.vop-guide-section-chapter>summary:focus-visible{
+  outline:2px solid #d6a03d;outline-offset:-2px
+}
+.vop-guide-section-chapter .vop-guide-section-links>button{padding-left:22px}
