@@ -29,7 +29,10 @@ export function quizManagementItem(
     description: String(data.description || ''),
     language: String(data.language || ''),
     guideId: String(data.guideId || ''),
-    attachmentType: data.attachmentType === 'lesson' ? 'lesson' : 'guide',
+    attachmentType: ['guide','lesson','chapter','section','block'].includes(String(data.attachmentType || ''))
+      ? String(data.attachmentType) : 'guide',
+    anchorId: String(data.anchorId || ''),
+    assessmentKind: data.assessmentKind === 'final_exam' ? 'final_exam' : 'practice',
     lessonId: String(data.lessonId || ''),
     organizationId: String(data.organizationId || ''),
     ownerOrganizationId: String(data.ownerOrganizationId || ''),
