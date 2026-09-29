@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
+const applySharedPreference=()=>read('src/components/layout/sidebarPreference.ts');
 
 test('visitors see the public homepage before signing in',()=>{
   const rootView=read('src/Root.tsx');
@@ -26,7 +27,10 @@ test('desktop has permanent collapsible learner sidebar with account actions gua
   const sidebar=read('src/components/layout/LearnerSidebar.tsx');
   const css=read('src/components/layout/sidebar-system.css');
   assert.match(app,/currentRoute !== 'admin' && !isMobileShell && <LearnerSidebar/);
-  assert.match(sidebar,/vop:learner-sidebar-collapsed/);
+  assert.match(sidebar,/collapsed:boolean/);
+  assert.match(app,/readSidebarCollapsed/);
+  assert.match(app,/persistSidebarCollapsed/);
+  assert.match(sidebar,/onToggle=\{onToggle\}/);
   assert.match(sidebar,/isAdmin\?\[\{route:'admin'/);
   assert.match(sidebar,/aria-current=\{currentRoute===item\.route\?'page':undefined\}/);
   assert.match(sidebar,/aria-controls="vop-learner-sidebar-links"/);
@@ -38,9 +42,16 @@ test('desktop has permanent collapsible learner sidebar with account actions gua
 test('admin persists its collapse state while preserving the accessible mobile drawer',()=>{
   const page=read('src/pages/AdminPage.tsx');
   const css=read('src/components/layout/sidebar-system.css');
-  assert.match(page,/vop:admin-sidebar-collapsed/);
+  assert.match(page,/sidebarCollapsed: boolean/);
+  assert.match(page,/onToggleSidebar: \(\) => void/);
+  assert.match(applySharedPreference(),/vop:sidebar-collapsed/);
   assert.match(page,/vop-admin-sidebar-collapse/);
   assert.match(page,/aria-label=\{sidebarCollapsed \? 'Expand administration sidebar'/);
   assert.match(page,/vop-sidebar-backdrop open/);
   assert.match(css,/@media\(max-width:900px\)\{\.vop-admin-sidebar-collapse\{display:none!important\}\}/);
+  assert.match(css,/grid-template-columns:var\(--vop-rail-expanded\) minmax\(0,1fr\)/);
+  assert.match(css,/\.vop-admin \.vop-shell\{display:contents!important\}/);
+  assert.match(css,/grid-column:1;grid-row:1 \/ span 2/);
+  assert.match(page,/vop-admin-sidebar-footer/);
+  assert.match(page,/vop-admin-sidebar-logout/);
 });
