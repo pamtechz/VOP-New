@@ -44,9 +44,10 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     const known=new Map<string,Record<string,unknown>>();
     for(const snapshot of collections)for(const document of snapshot.docs){
       const data=document.data();
-      if(data.archived===true)continue;
       const owned=ctx.isSuperAdmin||ids.includes(String(data.organizationId||''));
-      const shared=data.sharingScope==='shared'&&data.published===true;
+      const shared=data.sharingScope==='shared'&&data.published===true
+        && data.archived!==true;
+      if(data.archived===true&&!owned)continue;
       if(!owned&&!shared)continue;
       known.set(document.id,{
         id:document.id,...data,
@@ -137,7 +138,12 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     ownerUid:previous.exists
       ?String(current.ownerUid||''):ctx.auth.uid,
     scope:targetOrganizationId?'organization':'platform',
-    canonical:true,createdAt:current.createdAt||new Date().toISOString(),
+    canonical:true,
+    // Adoption remains permanent even after unpublishing or archiving. An
+    // organization must never regain control over publicly adopted material.
+    adoptedByPlatform:current.adoptedByPlatform===true||
+      (input.published&&input.sharingScope==='shared'),
+    createdAt:current.createdAt||new Date().toISOString(),
     updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
   };
   await ref.set(next,{merge:false});
