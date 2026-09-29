@@ -1,0 +1,274 @@
+/* Unified top navigation for learner and administration portals.
+ * Matches the supplied full-size VOP navbar reference; intentionally scoped
+ * to headers, leaving lesson readers, tables and sidebar typography intact. */
+.vop-learner-main .vop-app-header,
+.vop-admin .vop-admin-top{
+  min-height:88px!important;
+  height:88px!important;
+  padding:0 clamp(12px,1.5vw,27px)!important;
+  background:linear-gradient(105deg,#0b3270 0%,#0c2447 100%)!important;
+  color:#fff;
+  border-bottom:1px solid rgba(255,255,255,.13)!important;
+  box-shadow:0 3px 14px rgba(7,35,72,.08);
+  z-index:80;
+}
+.vop-learner-main .vop-app-header-inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  height:100%;
+  min-height:0!important;
+  max-width:none!important;
+  width:100%;
+  margin:0!important;
+}
+.vop-learner-main .vop-app-brand{
+  display:flex;align-items:center;gap:12px;flex:0 1 auto;min-width:0;
+  padding:0;border:0;background:transparent;color:#fff;text-align:left;
+  cursor:pointer;font:inherit;
+}
+.vop-learner-main .vop-app-brand-mark,
+.vop-admin .vop-admin-top .vop-brand-mark{
+  display:grid;place-items:center;flex:0 0 52px;
+  width:52px!important;height:52px!important;border-radius:15px;
+  background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.24);
+  overflow:hidden;
+}
+.vop-learner-main .vop-app-brand-mark img,
+.vop-admin .vop-admin-top .vop-brand-mark img{
+  display:block;width:43px;height:43px;object-fit:contain;padding:0;
+}
+.vop-learner-main .vop-app-brand-copy{
+  display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+.vop-learner-main .vop-app-brand-line{
+  display:flex;align-items:center;gap:10px;min-width:0;
+}
+.vop-learner-main .vop-app-brand-title,
+.vop-admin .vop-admin-top .vop-brand-name{
+  font-family:var(--font-display,Inter,system-ui,sans-serif);
+  font-size:clamp(19px,1.23vw,24px)!important;
+  font-weight:850;letter-spacing:-.025em;line-height:1.14;
+  color:#fff;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;
+}
+.vop-learner-main .vop-app-brand-version{
+  display:inline-flex;align-items:center;flex:none;
+  padding:4px 10px!important;font-size:13px!important;
+  font-weight:850;letter-spacing:.015em;border-radius:999px;
+}
+.vop-learner-main .vop-app-brand-subtitle,
+.vop-admin .vop-admin-top .vop-brand-sub{
+  display:block;
+  color:#d1dded;font-size:clamp(12px,.83vw,16px)!important;
+  font-weight:500;letter-spacing:0;line-height:1.25;
+  text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.vop-learner-main .vop-app-header-actions,
+.vop-admin .vop-top-actions{
+  display:flex;align-items:center;justify-content:flex-end;
+  gap:clamp(6px,.7vw,13px)!important;flex:0 1 auto;min-width:0;
+  margin-left:auto;
+}
+.vop-app-header-actions > div > .btn.btn-ghost,
+.vop-admin .vop-top-actions > div > .btn.btn-ghost,
+.vop-learner-main .vop-header-icon-btn{
+  width:44px;min-width:44px;height:44px;padding:0!important;
+  display:grid;place-items:center;border-radius:13px;color:#eff5ff!important;
+  background:transparent;border:1px solid transparent;
+}
+.vop-app-header-actions > div > .btn.btn-ghost:hover,
+.vop-admin .vop-top-actions > div > .btn.btn-ghost:hover,
+.vop-learner-main .vop-header-icon-btn:hover{
+  background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);
+}
+.vop-app-header-actions > div > .btn.btn-ghost svg,
+.vop-admin .vop-top-actions > div > .btn.btn-ghost svg{width:22px;height:22px;}
+.vop-learner-main .vop-app-language,.vop-admin .vop-admin-header-language{
+  position:relative;min-width:0;flex:0 1 auto;
+}
+.vop-header-locale-control{
+  display:flex;align-items:center;gap:11px;
+  min-width:160px;max-width:260px;height:43px;
+  padding:0 12px;border-radius:999px;
+  color:#fff;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.17);
+}
+.vop-header-locale-control > svg:first-child{flex:none;color:#ffbc2d}
+.vop-header-locale-control > svg:last-child{flex:none;pointer-events:none}
+.vop-header-locale-control select{
+  appearance:none;-webkit-appearance:none;min-width:0;width:100%;
+  max-width:190px;border:0;outline:0;background:transparent;color:#fff;
+  font:inherit;font-size:15px;font-weight:780;cursor:pointer;text-overflow:ellipsis;
+}
+.vop-header-locale-control option{background:#0b274f;color:#fff}
+.vop-header-locale-control:focus-within,
+.vop-learner-main .vop-app-brand:focus-visible,
+.vop-admin .vop-admin-top .vop-brand:focus-visible,
+.vop-learner-main .vop-app-header-actions button:focus-visible,
+.vop-admin .vop-top-actions button:focus-visible{
+  outline:3px solid #f4c250;outline-offset:2px;
+}
+.vop-learner-main .vop-app-header-admin{
+  min-height:44px;min-width:0;
+  align-items:center;justify-content:center;gap:9px;
+  padding:0 17px!important;font-size:15px!important;
+  font-weight:760;white-space:nowrap;border-radius:999px!important;
+}
+.vop-learner-main .vop-app-header-admin.btn-outline{
+  border:1px solid rgba(255,255,255,.25);color:#fff;background:transparent;
+}
+.vop-learner-main .vop-app-header-admin.btn-outline svg{color:#f6bf39}
+.vop-learner-main .vop-app-header-account,
+.vop-admin .vop-profile{position:relative;min-width:0;flex:none}
+.vop-learner-main .vop-app-header-account-trigger,
+.vop-admin .vop-admin-top .vop-user{
+  display:flex;align-items:center;gap:9px;min-height:48px;
+  max-width:200px;min-width:0;
+  padding:4px 12px 4px 5px!important;
+  border:1px solid rgba(255,255,255,.22)!important;
+  background:rgba(255,255,255,.1)!important;
+  border-radius:999px!important;color:#fff;
+  text-align:left;
+}
+.vop-learner-main .vop-app-header-account-trigger:hover,
+.vop-admin .vop-admin-top .vop-user:hover,
+.vop-admin .vop-profile.open .vop-user{background:rgba(255,255,255,.18)!important}
+.vop-learner-main .vop-app-header-account-avatar,
+.vop-admin .vop-admin-top .vop-avatar{
+  display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;
+  border-radius:50%;overflow:hidden;
+  background:#e8a61d;color:#15325c;font-size:17px;font-weight:850;
+}
+.vop-admin .vop-admin-top .vop-avatar{border:0;object-fit:cover}
+.vop-learner-main .vop-app-header-account-identity{max-width:120px}
+.vop-learner-main .vop-app-header-account-identity strong,
+.vop-admin .vop-admin-top .vop-user-name{
+  display:block;color:#fff;font-size:15px!important;font-weight:800;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.vop-learner-main .vop-app-header-account-identity small,
+.vop-admin .vop-admin-top .vop-user-role{display:none}
+.vop-admin .vop-admin-top .vop-user-copy{display:block;min-width:0;max-width:115px}
+.vop-admin .vop-admin-top .vop-profile-chevron{width:17px;height:17px;flex:none}
+.vop-admin .vop-profile-menu-head small{
+  display:block;color:#68809e;font-size:11px;margin-top:4px;
+}
+.vop-admin .vop-admin-top .vop-brand{
+  display:flex;align-items:center;flex:none;min-width:0;width:auto;
+  height:100%;gap:12px;padding:0;border:0;background:transparent;
+  color:#fff;text-align:left;cursor:pointer;
+}
+.vop-admin .vop-admin-top .vop-brand-copy{
+  display:flex!important;flex-direction:column;gap:4px;
+  min-width:0;max-width:min(300px,26vw);
+}
+.vop-admin .vop-admin-top .vop-top-title{flex:1 1 0;min-width:0}
+.vop-admin .vop-admin-top .vop-top-page{font-size:20px!important;font-weight:800}
+.vop-admin .vop-admin-top .vop-top-kicker{font-size:11px}
+.vop-admin .vop-top-actions{flex:0 0 auto}
+.vop-admin .vop-profile-menu,.vop-learner-main .vop-app-header-account-menu{
+  width:min(325px,calc(100vw - 20px));max-width:calc(100vw - 20px);
+  border-radius:17px;box-shadow:0 18px 48px rgba(8,32,70,.2);
+}
+.vop-admin .vop-profile-menu>button,
+.vop-learner-main .vop-app-header-account-menu>button{
+  min-height:46px;font-size:14px;gap:11px;
+}
+@media(min-width:901px){
+  .vop-admin{grid-template-rows:88px minmax(0,auto)!important}
+  .vop-admin .vop-admin-top{grid-column:2;grid-row:1}
+  .vop-admin .vop-main{min-height:calc(100dvh - 88px)!important}
+}
+/* The expanded sidebar already carries the brand at intermediate widths.
+ * Reveal the complete brand inside the top bar once there is sufficient room. */
+@media(min-width:1600px){
+  .vop-admin.sidebar-expanded .vop-admin-top .vop-brand{display:flex!important}
+  .vop-admin.sidebar-expanded .vop-admin-top .vop-top-title{display:none!important}
+}
+@media(min-width:901px) and (max-width:1599px){
+  .vop-admin.sidebar-expanded .vop-admin-top .vop-brand{display:none!important}
+}
+@media(min-width:901px) and (max-width:1310px){
+  .vop-admin.sidebar-collapsed .vop-admin-top .vop-top-title{display:none}
+}
+@media(min-width:901px) and (max-width:1150px){
+  .vop-admin .vop-admin-top .vop-user-copy{display:block}
+  .vop-admin .vop-admin-top .vop-brand-name{font-size:19px!important}
+}
+@media(min-width:1680px){
+  .vop-learner-shell:not(.vop-learner-simulated) .vop-learner-main .vop-app-header-admin{
+    display:inline-flex!important;
+  }
+}
+@media(max-width:1679px){
+  .vop-learner-main .vop-app-header-admin{display:none!important}
+}
+@media(min-width:1024px){
+  .vop-learner-shell:not(.vop-learner-simulated) .vop-learner-main.sidebar-expanded .vop-app-brand{
+    display:flex!important;
+  }
+}
+@media(min-width:1024px) and (max-width:1330px){
+  .vop-learner-shell:not(.vop-learner-simulated) .vop-learner-main.sidebar-expanded .vop-app-brand{
+    display:none!important;
+  }
+}
+@media(max-width:1350px){
+  .vop-learner-main .vop-header-device-switch{display:none}
+  .vop-admin .vop-admin-top .vop-brand-copy{max-width:235px}
+  .vop-header-locale-control{min-width:145px;max-width:196px}
+  .vop-header-locale-control select{font-size:14px}
+}
+@media(max-width:1100px){
+  .vop-admin .vop-admin-top .vop-admin-header-language{display:none}
+  .vop-learner-main .vop-app-brand-version{display:none}
+  .vop-learner-main .vop-app-brand-title{font-size:18px!important}
+  .vop-admin .vop-admin-top .vop-brand-name{font-size:18px!important}
+}
+@media(max-width:900px){
+  .vop-admin .vop-admin-top{
+    height:76px!important;min-height:76px!important;
+    padding:0 13px!important;
+  }
+  .vop-admin .vop-admin-top .vop-brand{display:none!important}
+  .vop-admin .vop-admin-top .vop-top-title{flex:1;gap:10px}
+  .vop-admin .vop-admin-top .vop-top-page{font-size:18px!important}
+  .vop-admin .vop-admin-top .vop-top-kicker{font-size:10px}
+  .vop-admin .vop-top-actions{gap:4px!important}
+  .vop-admin .vop-admin-top .vop-user-copy{display:none!important}
+  .vop-admin .vop-admin-top .vop-user{padding:3px!important}
+  .vop-admin .vop-sidebar{top:76px!important;height:calc(100dvh - 76px)!important}
+  .vop-admin .vop-sidebar-backdrop.open{inset:76px 0 0!important}
+  .vop-learner-main .vop-app-header{
+    min-height:76px!important;height:76px!important;
+    padding:0 12px!important;
+  }
+}
+@media(max-width:700px){
+  .vop-learner-main .vop-app-brand-title{font-size:17px!important}
+  .vop-learner-main .vop-app-brand-subtitle,
+  .vop-learner-main .vop-app-brand-version{display:none!important}
+  .vop-learner-main .vop-app-header-inner{gap:8px}
+  .vop-learner-main .vop-app-header-actions{gap:3px!important}
+  .vop-learner-main .vop-app-brand-mark{width:43px!important;height:43px!important;flex-basis:43px}
+  .vop-learner-main .vop-app-brand-mark img{width:36px;height:36px}
+  .vop-learner-main .vop-app-header-account-identity{display:none}
+  .vop-learner-main .vop-app-header-account-trigger{padding:3px!important;min-height:44px}
+  .vop-header-locale-control{height:40px;min-width:102px;max-width:140px;padding:0 7px;gap:4px}
+  .vop-header-locale-control select{font-size:12px}
+  .vop-header-locale-control > svg:first-child{width:16px;height:16px}
+  .vop-header-locale-control > svg:last-child{width:13px;height:13px}
+}
+@media(max-width:520px){
+  .vop-learner-main .vop-app-header-actions > div > .btn.btn-ghost,
+  .vop-admin .vop-top-actions > div > .btn.btn-ghost,
+  .vop-learner-main .vop-header-icon-btn{width:36px;min-width:36px;height:40px}
+  .vop-learner-main .vop-app-brand-copy{display:none}
+  .vop-header-locale-control{min-width:90px;max-width:105px}
+  .vop-admin .vop-admin-top .vop-top-page{font-size:15px!important}
+  .vop-admin .vop-admin-top .vop-top-kicker{display:none}
+  .vop-admin .vop-top-actions{gap:2px!important}
+  .vop-learner-main .vop-app-header-account-avatar,
+  .vop-admin .vop-admin-top .vop-avatar{width:34px;height:34px;flex-basis:34px}
+}
