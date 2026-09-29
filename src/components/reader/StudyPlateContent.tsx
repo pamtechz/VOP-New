@@ -38,6 +38,12 @@ function renderNode(node:StudyPlateNode|StudyPlateLeaf,key:string):React.ReactNo
 
 /** Read-only rendering of validated Plate JSON. No dangerouslySetInnerHTML,
  * arbitrary embedded scripts or private assessment data. */
-export function StudyPlateContent({document}: {document:StudyPlateDocument}){
-  return <div className="vop-study-plate">{document.map((node,index)=>renderNode(node,node.id||String(index)))}</div>;
+export function StudyPlateContent({document,afterBlock}: {
+  document:StudyPlateDocument;
+  afterBlock?:(anchorId:string)=>React.ReactNode;
+}){
+  return <div className="vop-study-plate">{document.map((node,index)=><React.Fragment key={node.id||String(index)}>
+    {renderNode(node,node.id||String(index))}
+    {node.id&&afterBlock?.(node.id)}
+  </React.Fragment>)}</div>;
 }
