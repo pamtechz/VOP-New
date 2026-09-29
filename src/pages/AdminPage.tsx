@@ -1081,22 +1081,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={20}/><span>{item.label}</span></button>})}
           </div>:null;
         })}</nav>
-        <div className="vop-admin-sidebar-footer">
-          <button className="vop-admin-sidebar-user" type="button"
-            title={sidebarCollapsed?'Account & settings':undefined}
-            onClick={()=>{setActiveTab('settings');setSettingsSubtab('general');setSidebarOpen(false)}}>
-            <span className="vop-admin-sidebar-avatar">{currentUser.photoURL
-              ? <img src={currentUser.photoURL} alt=""/>
-              : (currentUser.displayName||currentUser.email||'V').trim().slice(0,1).toUpperCase()}</span>
-            <span className="vop-admin-sidebar-user-copy"><strong>{currentUser.displayName||'Account'}</strong><small>{currentUser.email||''}</small></span>
-          </button>
-          <button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined}
-            onClick={onBack}><ArrowLeft size={19}/><span>{adminT('back_to_app','Back to App')}</span></button>
-          <button className="vop-admin-sidebar-logout" type="button"
-            onClick={onLogout} title={sidebarCollapsed?'Sign out':undefined} aria-label="Sign out">
-            <LogOut size={19}/><span>Sign out</span>
-          </button>
-        </div>
       </aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
