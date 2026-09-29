@@ -376,3 +376,16 @@
   .vop-admin.sidebar-collapsed .vop-admin-top .vop-brand{display:flex!important}
 }
 @media(prefers-reduced-motion:reduce){.vop-admin,.vop-learner-sidebar{transition:none!important}}
+
+/* Let dashboard and all inner portals occupy the newly available width. */
+@media(min-width:1024px){
+  .vop-learner-shell:not(.vop-learner-simulated) .vop-learner-main .vop-home{
+    max-width:none!important;width:100%;margin:0!important;
+    padding:28px clamp(19px,2.6vw,46px) 65px;
+  }
+}
+@media(min-width:901px) and (max-width:1150px){
+  .vop-admin .vop-admin-top .vop-user-copy{display:none}
+  .vop-admin .vop-admin-top .vop-top-page{font-size:17px}
+  .vop-admin .vop-admin-top .vop-brand-name{font-size:14px}
+}
