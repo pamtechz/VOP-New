@@ -14,7 +14,7 @@ const {
 const {
   normalizeCurriculumStructure,curriculumPages,containsPublicQuizAnswer,
 }=await server.ssrLoadModule('/shared/curriculumStructure.ts') as typeof import('../shared/curriculumStructure.ts');
-const {transferCurriculumNode}=await server.ssrLoadModule('/shared/curriculumTransfer.ts') as typeof import('../shared/curriculumTransfer.ts');
+const {transferCurriculumNode}=await server.ssrLoadModule('/shared/curriculumTransfer.ts');
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
 
