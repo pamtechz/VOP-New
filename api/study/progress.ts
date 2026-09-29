@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
+import { curriculumAnchorExists } from '../../shared/curriculumStructure.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -257,6 +258,23 @@ export default async function handler(
         || String(quiz.language || '') !== language
         || String(quiz.organizationId || '') !== candidateGuideOrganizationId
       ) return res.status(409).json({ error: 'This assessment is not available for grading.' });
+      // A chapter/section/block quiz must still reference a published,
+      // currently existing part of the same study lesson.
+      if (['chapter','section','block'].includes(String(quiz.attachmentType||''))) {
+        const parentId = String(quiz.lessonId || '');
+        const anchorId = String(quiz.anchorId || '');
+        if (!validStudyId(parentId) || !validStudyId(anchorId) ||
+            String(lessonData.attachedLessonId || '') !== parentId ||
+            String(lessonData.anchorId || '') !== anchorId) {
+          return res.status(409).json({ error:'The assessment attachment has changed.' });
+        }
+        const parent = await guideRef.collection('lessons').doc(parentId).get();
+        if (!parent.exists || parent.data()?.published !== true || parent.data()?.archived === true ||
+            parent.data()?.type === 'Test' ||
+            !curriculumAnchorExists(parent.data()?.chapters,quiz.attachmentType,anchorId)) {
+          return res.status(409).json({ error:'The assessment chapter, section or block is no longer published.' });
+        }
+      }
       gradeable = quiz;
     }
     const questions = Array.isArray(gradeable.questions)
@@ -277,6 +295,14 @@ export default async function handler(
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
 
+    const finalExam = lessonData.assessmentKind === 'final_exam' && lessonData.attachmentType === 'guide';
+    const finalRequirements = finalExam ? (await guideRef.collection('lessons').get()).docs
+      .filter(doc => doc.data().type !== 'Test' && doc.data().published === true && doc.data().archived !== true)
+      .map(doc => `${language}:${guideId}:${doc.id}`) : [];
+    if (finalExam && (!finalRequirements.length || finalRequirements.some(key =>
+      !Array.isArray(userData.progress?.completedLessons) || !userData.progress.completedLessons.includes(key)))) {
+      return res.status(409).json({ error:'Complete all published study lessons before taking the final guide examination.' });
+    }
     const effectiveGuideId = legacyStudyGuide ? 'discover' : guideId;
     const scoreKey = `${organizationId || 'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
     const passed = score >= threshold;
@@ -311,6 +337,10 @@ export default async function handler(
       const progress = data.progress && typeof data.progress === 'object'
         ? data.progress as Record<string, unknown>
         : {};
+      if (finalExam && finalRequirements.some(key =>
+        !Array.isArray(progress.completedLessons) || !progress.completedLessons.includes(key))) {
+        throw new Error('Complete all published study lessons before taking the final guide examination.');
+      }
       const existingScores = progress.guideScores && typeof progress.guideScores === 'object'
         ? progress.guideScores as Record<string, unknown>
         : {};
@@ -376,6 +406,7 @@ export default async function handler(
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
     if (message.includes('not configured')) return res.status(503).json({ error: message });
+    if (message.includes('Complete all published study lessons')) return res.status(409).json({error:message});
     if (message.includes('profile was not found')) return res.status(404).json({ error: message });
     return res.status(500).json({ error: 'Study progress could not be saved.' });
   }
