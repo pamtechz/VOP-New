@@ -10,6 +10,7 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
+import { translationKey } from '../../server/localization.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -644,7 +645,12 @@ export default async function handler(req: Request, res: Response) {
             const legacySnap = await ctx.db.doc(`translations/${code}`).get();
             const legacyValues = legacySnap.data()?.values;
             if (legacyValues && typeof legacyValues === 'object') Object.entries(legacyValues as Record<string,unknown>).forEach(([key,value]) => { if (!values[key] && typeof value === 'string' && value.trim()) values[key] = value; });
-            return { id: code, code, languageCode: code, name: String(language.name || language.nativeName || code), nativeName: String(language.nativeName || language.name || code), values, enabled: language.enabled !== false, canEdit: ctx.isSuperAdmin, localeExists: localeSnap.exists };
+            const proposalsSnap=ctx.isSuperAdmin
+              ? await ctx.db.collection(`translations/${code}/proposals`).where('status','==','pending').limit(100).get()
+              : await ctx.db.collection(`translations/${code}/proposals`).where('proposerUid','==',ctx.auth.uid).limit(20).get();
+            return { id: code, code, languageCode: code, name: String(language.name || language.nativeName || code), nativeName: String(language.nativeName || language.name || code), values, enabled: language.enabled !== false,
+              canEdit: ctx.isSuperAdmin, localeExists: localeSnap.exists,
+              proposals:proposalsSnap.docs.map(doc=>({id:doc.id,...doc.data()})) };
           }));
           return res.status(200).json({ ok:true, items });
         }
@@ -722,19 +728,24 @@ export default async function handler(req: Request, res: Response) {
 
     if (collection === 'translations' && action === 'proposeTranslation') {
       if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
-      const languageId = safeId(body.languageId);
-      if (isEnglishLocale(languageId)) throw new Error('English is the source language. Select another language to translate into.');
-      const key = String(body.key || '').trim();
+      const languageId = safeId(body.languageId).toLowerCase();
+      if (!isLanguageCode(languageId) || isEnglishLocale(languageId)) throw new Error('Choose a valid non-English language.');
+      const key = translationKey(body.key);
       const proposedValue = String(body.proposedValue || '').trim();
       const reason = String(body.reason || '').trim();
       if (!key || !proposedValue) throw new Error('Translation key and proposed value are required.');
+      const registry=await ctx.db.doc('languages/'+languageId).get();
+      if (!registry.exists || registry.data()?.enabled===false)
+        throw new Error('This platform language is unavailable. Publish the language before proposing global wording.');
       const sourceRef = ctx.db.doc('translations/' + languageId);
-      const source = await sourceRef.get();
-      if (!source.exists) throw new Error('The selected translation record does not exist.');
+      const [source,canonical]=await Promise.all([
+        sourceRef.get(),ctx.db.doc(`locales/${languageId}/translations/${key}`).get(),
+      ]);
       const sourceData = source.data() || {};
-      const existingValues = sourceData.values && typeof sourceData.values === 'object' ? sourceData.values as Record<string, unknown> : {};
-      if (!(key in existingValues)) throw new Error('The selected translation key does not exist.');
-      if (String(existingValues[key] || '') === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
+      const existingValues = sourceData.values && typeof sourceData.values === 'object'
+        ? sourceData.values as Record<string, unknown> : {};
+      const currentValue=String(canonical.data()?.value || existingValues[key] || '');
+      if (currentValue === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
       const proposalCollection = ctx.db.collection('translations/' + languageId + '/proposals');
       const existingProposals = await proposalCollection
         .where('proposerUid','==',ctx.auth.uid)
@@ -751,7 +762,7 @@ export default async function handler(req: Request, res: Response) {
         id: proposalRef.id,
         languageId,
         key,
-        currentValue: String(existingValues[key] || ''),
+        currentValue,
         proposedValue,
         reason,
         proposerUid: ctx.auth.uid,
@@ -769,25 +780,31 @@ export default async function handler(req: Request, res: Response) {
 
     if (collection === 'translations' && action === 'reviewTranslationProposal') {
       if (!ctx.isSuperAdmin) throw new Error('Only an authorized platform reviewer can approve or reject global translation proposals.');
-      const languageId = safeId(body.languageId);
-      if (isEnglishLocale(languageId)) throw new Error('English is the source language. Select another language to translate into.');
+      const languageId = safeId(body.languageId).toLowerCase();
+      if (!isLanguageCode(languageId) || isEnglishLocale(languageId)) throw new Error('Choose a valid non-English language.');
       const proposalId = safeId(body.proposalId);
       const decision = body.decision === 'approve' ? 'approved' : body.decision === 'reject' ? 'rejected' : '';
       if (!decision) throw new Error('A valid review decision is required.');
       const proposalRef = ctx.db.doc('translations/' + languageId + '/proposals/' + proposalId);
       const translationRef = ctx.db.doc('translations/' + languageId);
       await ctx.db.runTransaction(async transaction => {
-        const [proposalSnapshot, translationSnapshot] = await Promise.all([transaction.get(proposalRef), transaction.get(translationRef)]);
+        const [proposalSnapshot, translationSnapshot, languageSnapshot] = await Promise.all([
+          transaction.get(proposalRef), transaction.get(translationRef),
+          transaction.get(ctx.db.doc('languages/'+languageId)),
+        ]);
         if (!proposalSnapshot.exists) throw new Error('The translation proposal was not found.');
-        if (!translationSnapshot.exists) throw new Error('The canonical translation was not found.');
+        if (!languageSnapshot.exists || languageSnapshot.data()?.enabled===false)
+          throw new Error('The platform language is not available for review.');
         const proposal = proposalSnapshot.data() || {};
         if (String(proposal.status || '') !== 'pending') throw new Error('This translation proposal has already been reviewed.');
         const translation = translationSnapshot.data() || {};
         const values = translation.values && typeof translation.values === 'object' ? { ...(translation.values as Record<string, unknown>) } : {};
-        const key = String(proposal.key || '');
-        if (!key) throw new Error('The proposal is missing its translation key.');
+        const key = translationKey(proposal.key);
+        const requestedValue=String(proposal.proposedValue||'').trim();
+        if (!requestedValue || requestedValue.length>12000)
+          throw new Error('The translation proposal has no valid value.');
         if (decision === 'approved') {
-          values[key] = String(proposal.proposedValue || '');
+          values[key] = requestedValue;
           transaction.set(ctx.db.doc(`locales/${languageId}/translations/${key}`), {
             key, locale: languageId, namespace: key.split('.')[0], value: values[key], status: 'published',
             version: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid,
@@ -796,6 +813,10 @@ export default async function handler(req: Request, res: Response) {
             version: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
           }, { merge:true });
           transaction.set(translationRef, {
+            id:languageId,languageCode:languageId,code:languageId,
+            sharingScope:'shared',scope:'platform',platformOwned:true,
+            organizationId:'',ownerOrganizationId:'',
+            ...(!translationSnapshot.exists?{ownerUid:''}:{}),
             values,
             translationRevision: Number(translation.translationRevision || 0) + 1,
             lastReviewedBy: ctx.auth.uid,
