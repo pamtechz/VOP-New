@@ -119,7 +119,10 @@ export default async function handler(req: Request, res: Response) {
       const snap = await guide.ref.collection('lessons').get();
       const items = snap.docs.map(doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || String(row.ownerUid || '') === ctx.auth.uid;
+        const canEdit = ctx.isSuperAdmin || (
+          String(row.ownerUid || '') === ctx.auth.uid
+          && row.platformOwned !== true && !(row.published === true && row.sharingScope === 'shared')
+        );
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -158,7 +161,10 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid,
+          canEdit: ctx.isSuperAdmin || (
+            !(d.data().platformOwned === true || (d.data().published === true && d.data().sharingScope === 'shared'))
+            && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)
+          ),
         };
       }));
       return res.status(200).json({ ok: true, items });
@@ -620,7 +626,10 @@ export default async function handler(req: Request, res: Response) {
         const items = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
-          canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
+          canEdit: ctx.isSuperAdmin || (
+            !(d.data().platformOwned === true || (d.data().published === true && d.data().sharingScope === 'shared'))
+            && canEditCanonicalContent(ctx, d.data())
+          ),
           scope: 'organization',
         })));
         return res.status(200).json({ ok: true, items });
@@ -762,7 +771,8 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(collection + '/' + id);
       const existing = await ref.get();
       if (action === 'delete') {
-        if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can delete it.');
+        if (!ctx.isSuperAdmin && (existing.data()?.platformOwned === true || (existing.data()?.published === true && existing.data()?.sharingScope === 'shared'))) throw new Error('A published shared resource is governed by the VOP Super Admin.');
+        if (!existing.exists || (!ctx.isSuperAdmin && String(existing.data()?.organizationId || '') !== effectiveOrganizationId) || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor in the owning organization or VOP Super Admin can delete it.');
         await ref.delete();
         const deleted = await ref.get();
         if (deleted.exists) throw new Error('The record could not be deleted from Firestore.');
