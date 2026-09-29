@@ -4,7 +4,9 @@
  * before making incompatible changes to a shared version.
  */
 export function platformStewardedResource(data: Record<string, unknown>): boolean {
-  return data.scope === 'platform'
+  // A tenant can draft a contribution in a platform collection. The scope
+  // alone does not transfer ownership; adoption or public sharing does.
+  return (data.scope === 'platform' && !String(data.ownerOrganizationId || '').trim())
     || data.platformOwned === true
     || data.adoptedByPlatform === true
     || (data.sharingScope === 'shared' && data.published === true);
