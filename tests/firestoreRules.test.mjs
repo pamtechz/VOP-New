@@ -410,8 +410,20 @@ test('global resource ownership is isolated across organization and hierarchy co
 
     // Hierarchy admins can read the global library, but ownership still controls
     // mutation.
-    await assertSucceeds(unionAdmin.doc('radioBroadcasts/hierarchy-foreign').get());
+    await assertFails(unionAdmin.doc('radioBroadcasts/hierarchy-foreign').get());
     await assertSucceeds(unionAdmin.doc('books/org-other').get());
+    await assertFails(foreignAdmin.doc('books/org-other').get());
+    await environment.withSecurityRulesDisabled(async privileged=>{
+      const db=privileged.firestore();
+      await db.doc('books/foreign-owner').set({
+        ownerUid:'org-admin',ownerOrganizationId:'org-2',
+        organizationId:'',sharingScope:'private',published:false,
+      });
+    });
+    await assertFails(orgAdmin.doc('books/foreign-owner').get());
+    await assertFails(orgAdmin.doc('books/foreign-owner').update({title:'wrong tenant'}));
+    await assertFails(unionAdmin.doc('books/foreign-owner').get());
+    await assertSucceeds(foreignAdmin.doc('books/foreign-owner').get());
   } finally {
     await environment.cleanup();
   }
