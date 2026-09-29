@@ -8,7 +8,7 @@ import {
   Send, FileText, Grid2X2, Building2, HeartHandshake
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson } from '../types';
+import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson, AppRoute, LanguageCode } from '../types';
 import {
   subscribeLanguages, saveLanguageToFirestore, updateLanguageStatusInFirestore,
   deleteLanguageFromFirestore, subscribeSettings, saveSettingsToFirestore,
@@ -18,7 +18,7 @@ import {
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
 import './admin-mobile.css';
-import { getTranslation, getUiLocale } from '../services/i18n';
+import { getAvailableLanguages, getTranslation, getUiLocale } from '../services/i18n';
 import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, permissionAllowed, roleForPermission, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
 import CurriculumManager from './CurriculumManager';
@@ -33,12 +33,16 @@ import EngagementStudio from './EngagementStudio';
 import { TenantLanguagesPanel, getTenantLanguages } from '../components/admin/TenantLanguagesPanel';
 import { TenantTranslationsPanel } from '../components/admin/TenantTranslationsPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
+import { CommunicationTools } from '../components/layout/CommunicationTools';
 
 interface AdminPageProps {
   currentUser: User;
   activeLanguage: string;
   onBack: () => void;
   onLogout: () => void;
+  onNavigate: (route:AppRoute)=>void;
+  uiLocale: LanguageCode;
+  onChangeUiLocale: (locale:LanguageCode)=>void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onNavigateToCertificates?: () => void;
@@ -119,7 +123,7 @@ async function adminContent(action: string, collection: string, id?: string, dat
   return body;
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, sidebarCollapsed, onToggleSidebar }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, onChangeUiLocale, sidebarCollapsed, onToggleSidebar }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
@@ -1028,18 +1032,34 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
 
   return <div className={'vop-admin'+(sidebarCollapsed?' sidebar-collapsed':' sidebar-expanded')}>
     <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
-      <div className="vop-brand"><div className="vop-brand-mark"><img src="/assets/vop_logo_2.png" alt="" /></div><div className="vop-brand-copy"><div className="vop-brand-name">{settings?.appName || 'VOP Admin'}</div><div className="vop-brand-sub">{settings?.appTagline || 'Manage · Equip · Empower'}</div></div></div>
+      <button type="button" className="vop-brand" onClick={()=>{setActiveTab('dashboard');setSidebarOpen(false)}}
+        aria-label="Voice of Prophecy – Administration dashboard">
+        <span className="vop-brand-mark"><img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/></span>
+        <span className="vop-brand-copy"><span className="vop-brand-name">{settings?.appName || 'Voice of Prophecy'}</span>
+          <span className="vop-brand-sub">{settings?.appTagline || 'Bible Correspondence School'}</span></span>
+      </button>
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
-        <button className="vop-notification" type="button" aria-label="Notifications" title="Notifications"><Bell size={25}/>{activities.length>0&&<span className="vop-notification-dot"/>}</button>
+        <CommunicationTools onNavigate={onNavigate} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
+        <div className="vop-admin-header-language">
+          <label className="vop-header-locale-control">
+            <Globe size={20} aria-hidden="true"/>
+            <select aria-label="Interface language" value={uiLocale} onChange={event=>onChangeUiLocale(event.target.value as LanguageCode)}>
+              {getAvailableLanguages(settings||undefined).map(language=><option key={language.code} value={language.code}>
+                {language.name}{language.nativeName&&language.nativeName.toLowerCase()!==language.name.toLowerCase()?` (${language.nativeName})`:''}
+              </option>)}
+            </select>
+            <ChevronDown size={17} aria-hidden="true"/>
+          </label>
+        </div>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
           <button className="vop-user" type="button" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>{setProfileOpen(value=>!value);setSidebarOpen(false)}} title="Open profile menu">
             {currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}
-            <div className="vop-user-copy"><div className="vop-user-name">{currentUser.displayName || currentUser.email || ''}</div><div className="vop-user-role">{accountRoleLabel}</div></div>
+            <div className="vop-user-copy"><div className="vop-user-name">{(currentUser.displayName || currentUser.email || 'Account').trim().split(/\s+/)[0]}</div><div className="vop-user-role">{accountRoleLabel}</div></div>
             <ChevronDown className="vop-profile-chevron" size={18}/>
           </button>
           {profileOpen&&<div className="vop-profile-menu" role="menu">
-            <div className="vop-profile-menu-head">{currentUser.photoURL ? <img className="vop-profile-menu-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-profile-menu-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><strong>{currentUser.displayName || currentUser.email || 'Account'}</strong><span>{currentUser.email || ''}</span></div></div>
+            <div className="vop-profile-menu-head">{currentUser.photoURL ? <img className="vop-profile-menu-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-profile-menu-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><strong>{currentUser.displayName || currentUser.email || 'Account'}</strong><span>{currentUser.email || ''}</span><small>{accountRoleLabel}</small></div></div>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);setActiveTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onLogout()}}><LogOut size={16}/>Sign out</button>
@@ -1081,22 +1101,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={20}/><span>{item.label}</span></button>})}
           </div>:null;
         })}</nav>
-        <div className="vop-admin-sidebar-footer">
-          <button className="vop-admin-sidebar-user" type="button"
-            title={sidebarCollapsed?'Account & settings':undefined}
-            onClick={()=>{setActiveTab('settings');setSettingsSubtab('general');setSidebarOpen(false)}}>
-            <span className="vop-admin-sidebar-avatar">{currentUser.photoURL
-              ? <img src={currentUser.photoURL} alt=""/>
-              : (currentUser.displayName||currentUser.email||'V').trim().slice(0,1).toUpperCase()}</span>
-            <span className="vop-admin-sidebar-user-copy"><strong>{currentUser.displayName||'Account'}</strong><small>{currentUser.email||''}</small></span>
-          </button>
-          <button className="vop-back" type="button" title={sidebarCollapsed?adminT('back_to_app','Back to App'):undefined}
-            onClick={onBack}><ArrowLeft size={19}/><span>{adminT('back_to_app','Back to App')}</span></button>
-          <button className="vop-admin-sidebar-logout" type="button"
-            onClick={onLogout} title={sidebarCollapsed?'Sign out':undefined} aria-label="Sign out">
-            <LogOut size={19}/><span>Sign out</span>
-          </button>
-        </div>
       </aside>
       <main className="vop-main">
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { AppRoute, AppSettings, DiscoverGuide, LanguageCode, User } from '../../types';
-import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, Info, LibraryBig, LogOut, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, X, type LucideIcon } from 'lucide-react';
+import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, Info, LibraryBig, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, X, type LucideIcon } from 'lucide-react';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
@@ -14,7 +14,6 @@ interface MenuDrawerProps {
   settings: AppSettings;
   activeLanguage: LanguageCode;
   onNavigate: (route: AppRoute) => void;
-  onLogout: () => void;
 }
 
 interface MenuItem {
@@ -25,7 +24,7 @@ interface MenuItem {
 }
 
 export const MenuDrawer: React.FC<MenuDrawerProps> = ({
-  isOpen, onClose, currentRoute, currentUser, guides, settings, activeLanguage, onNavigate, onLogout,
+  isOpen, onClose, currentRoute, currentUser, guides, settings, activeLanguage, onNavigate,
 }) => {
   const [showNews, setShowNews] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -186,9 +185,6 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
           </details>
           <div className="vop-account-nav-footer">
             {whatsapp && <a href={'https://wa.me/' + whatsapp} target="_blank" rel="noopener noreferrer"><MessageCircle size={18}/>{t('account.whatsapp', 'Contact ministry support')}</a>}
-            <button type="button" className="vop-account-logout" onClick={() => { onClose(); onLogout(); }}>
-              <LogOut size={18}/>{t('navigation.logout', 'Logout')}
-            </button>
           </div>
         </div>
       </div>
