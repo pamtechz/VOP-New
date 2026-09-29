@@ -181,7 +181,13 @@ service cloud.firestore {
               )))
         || (data.get('sharingScope', 'private') == 'shared' && data.get(publishedField, false) == true)
         || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true)
-        || (signedIn() && data.get('ownerUid', '') == request.auth.uid);
+        || (signedIn() && data.get('ownerUid', '') == request.auth.uid
+          && (
+            (isOrgMember(organizationIdForUser())
+              && data.get('ownerOrganizationId',data.get('organizationId','')) == organizationIdForUser())
+            || (isHierarchyTenant()
+              && data.get('ownerTenantId','') == hierarchyTenantId())
+          ));
     }
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
