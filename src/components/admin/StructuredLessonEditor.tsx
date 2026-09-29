@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  ArrowDown, ArrowUp, BookOpen, CheckCircle2, ChevronDown, FileQuestion, FileText,
+  ArrowDown, ArrowUp, BookOpen, CheckCircle2, ChevronDown, Copy, FileQuestion, FileText,
   GripVertical, Image, Music, Plus, Trash2, Video,
 } from 'lucide-react';
 import type { CurriculumBlock, CurriculumBlockType, CurriculumChapter } from '../../../shared/curriculumStructure';
@@ -53,6 +53,68 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
     [blocks[target],blocks[blockIndex]]=[blocks[blockIndex],blocks[target]];
     updateSection(chapterIndex,sectionIndex,{blocks});
   };
+  // Preserve original IDs when moving so existing anchored quizzes remain attached.
+  // Copies get fresh IDs; otherwise the destination could inherit someone else's quiz.
+  const duplicateSection=(chapterIndex:number,sectionIndex:number)=>{
+    const chapter=chapters[chapterIndex];
+    if(chapter.sections.length>=40)return;
+    const source=chapter.sections[sectionIndex];
+    const copy={...source,id:id('section'),title:source.title+' (copy)',
+      blocks:source.blocks.map(block=>({...block,id:id('block')}))};
+    updateChapter(chapterIndex,{sections:[
+      ...chapter.sections.slice(0,sectionIndex+1),copy,...chapter.sections.slice(sectionIndex+1),
+    ]});
+  };
+  const transferSection=(fromChapter:number,sectionIndex:number,toChapter:number)=>{
+    if(fromChapter===toChapter)return;
+    const source=chapters[fromChapter],destination=chapters[toChapter];
+    if(!source||!destination||destination.sections.length>=40)return;
+    const section=source.sections[sectionIndex];if(!section)return;
+    // Structured lessons require every chapter to retain at least one section.
+    const remaining=source.sections.filter((_,index)=>index!==sectionIndex);
+    onChange(chapters.map((chapter,index)=>index===fromChapter
+      ? {...chapter,sections:remaining.length?remaining:[{
+          id:id('section'),title:'New section',
+          blocks:[{id:id('block'),type:'paragraph' as const,text:''}],
+        }]}
+      : index===toChapter?{...chapter,sections:[...chapter.sections,section]}:chapter));
+  };
+  const duplicateBlock=(chapterIndex:number,sectionIndex:number,blockIndex:number)=>{
+    const section=chapters[chapterIndex].sections[sectionIndex];
+    if(section.blocks.length>=50)return;
+    const copy={...section.blocks[blockIndex],id:id('block')};
+    updateSection(chapterIndex,sectionIndex,{blocks:[
+      ...section.blocks.slice(0,blockIndex+1),copy,...section.blocks.slice(blockIndex+1),
+    ]});
+  };
+  const transferBlock=(fromChapter:number,fromSection:number,blockIndex:number,toChapter:number,toSection:number)=>{
+    if(fromChapter===toChapter&&fromSection===toSection)return;
+    const source=chapters[fromChapter]?.sections[fromSection];
+    const destination=chapters[toChapter]?.sections[toSection];
+    if(!source||!destination||destination.blocks.length>=50)return;
+    const block=source.blocks[blockIndex];if(!block)return;
+    onChange(chapters.map((chapter,chapterIndex)=>({...chapter,
+      sections:chapter.sections.map((section,sectionIndex)=>{
+        if(chapterIndex===fromChapter&&sectionIndex===fromSection){
+          const remaining=section.blocks.filter((_,index)=>index!==blockIndex);
+          return {...section,blocks:remaining.length?remaining:[{id:id('block'),type:'paragraph' as const,text:''}]};
+        }
+        if(chapterIndex===toChapter&&sectionIndex===toSection){
+          return {...section,blocks:[...section.blocks,block]};
+        }
+        return section;
+      }),
+    })));
+  };
+  const duplicateChapter=(chapterIndex:number)=>{
+    if(chapters.length>=40)return;
+    const source=chapters[chapterIndex];
+    onChange([...chapters.slice(0,chapterIndex+1),{
+      ...source,id:id('chapter'),title:source.title+' (copy)',
+      sections:source.sections.map(section=>({...section,id:id('section'),
+        blocks:section.blocks.map(block=>({...block,id:id('block')}))})),
+    },...chapters.slice(chapterIndex+1)]);
+  };
   const quizButton=(anchor:QuizAnchor,label:string)=>
     <button className="vop-structure-quiz" type="button" disabled={!canAttachQuiz}
       title={!canAttachQuiz?'Save this lesson before creating its assessment':label}
@@ -75,6 +137,9 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
       <div className="vop-structure-chapter-body">
         <div className="vop-structure-inline"><label>Chapter title<input value={chapter.title} onChange={event=>updateChapter(chapterIndex,{title:event.target.value})}/></label>
           {quizButton({type:'chapter',id:chapter.id},'Chapter quiz')}
+          <button type="button" className="vop-structure-quiz" aria-label={'Duplicate '+chapter.title}
+            disabled={chapters.length>=40} onClick={()=>duplicateChapter(chapterIndex)}>
+            <Copy size={15}/> Duplicate chapter</button>
           <button className="vop-structure-delete" type="button" aria-label="Delete chapter" disabled={chapters.length===1}
             onClick={()=>onChange(chapters.filter((_,index)=>index!==chapterIndex))}><Trash2 size={16}/></button>
         </div>
@@ -82,6 +147,18 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
           <div className="vop-structure-section-head">
             <label>Section title<input value={section.title} onChange={event=>updateSection(chapterIndex,sectionIndex,{title:event.target.value})}/></label>
             {quizButton({type:'section',id:section.id},'Section quiz')}
+            <button type="button" className="vop-structure-quiz" aria-label={'Duplicate '+section.title}
+              disabled={chapter.sections.length>=40} onClick={()=>duplicateSection(chapterIndex,sectionIndex)}>
+              <Copy size={15}/> Duplicate</button>
+            <label className="vop-structure-transfer">Move section
+              <select aria-label={'Move '+section.title+' to chapter'} value=""
+                disabled={chapters.length<2}
+                onChange={event=>{const target=Number(event.target.value);if(Number.isInteger(target))transferSection(chapterIndex,sectionIndex,target);}}>
+                <option value="">Select chapter…</option>
+                {chapters.map((target,index)=>index===chapterIndex?null:<option key={target.id} value={index}
+                  disabled={target.sections.length>=40}>{target.title}</option>)}
+              </select>
+            </label>
             <button className="vop-structure-delete" type="button" aria-label="Delete section" disabled={chapter.sections.length===1}
               onClick={()=>updateChapter(chapterIndex,{sections:chapter.sections.filter((_,index)=>index!==sectionIndex)})}><Trash2 size={16}/></button>
           </div>
@@ -90,6 +167,19 @@ export function StructuredLessonEditor({chapters,onChange,onQuiz,canAttachQuiz}:
             return <div className="vop-structure-block" key={block.id}>
               <div className="vop-structure-block-top"><span><GripVertical size={15}/> {block.type}</span><div className="vop-structure-block-actions">
                 {quizButton({type:'block',id:block.id},'Block quiz')}
+                <button type="button" aria-label="Duplicate block" title="Duplicate block without linked quiz"
+                  disabled={section.blocks.length>=50} onClick={()=>duplicateBlock(chapterIndex,sectionIndex,blockIndex)}>
+                  <Copy size={15}/></button>
+                <label className="vop-structure-transfer">Move block
+                  <select aria-label={'Move '+block.type+' block to section'} value=""
+                    onChange={event=>{const [c,si]=event.target.value.split(':').map(Number);
+                      if(Number.isInteger(c)&&Number.isInteger(si))transferBlock(chapterIndex,sectionIndex,blockIndex,c,si);}}>
+                    <option value="">Select section…</option>
+                    {chapters.flatMap((target,c)=>target.sections.map((targetSection,si)=>
+                      c===chapterIndex&&si===sectionIndex?null:<option key={targetSection.id} value={c+':'+si}
+                        disabled={targetSection.blocks.length>=50}>{target.title} / {targetSection.title}</option>))}
+                  </select>
+                </label>
                 <button type="button" aria-label="Move block up" disabled={blockIndex===0} onClick={()=>moveBlock(chapterIndex,sectionIndex,blockIndex,-1)}><ArrowUp size={15}/></button>
                 <button type="button" aria-label="Move block down" disabled={blockIndex===section.blocks.length-1} onClick={()=>moveBlock(chapterIndex,sectionIndex,blockIndex,1)}><ArrowDown size={15}/></button>
                 <button type="button" aria-label="Delete block" disabled={section.blocks.length===1} onClick={()=>removeBlock(chapterIndex,sectionIndex,blockIndex)}><Trash2 size={15}/></button>
