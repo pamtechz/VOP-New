@@ -40,6 +40,7 @@ export default async function handler(req: Request, res: Response) {
     if (req.method !== 'POST') return res.status(405).json({error:'Method not allowed.'});
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string,unknown> : {};
     const action = lower(body.action);
+    const db = getAdminDb();
     if (action.startsWith('tenant')) {
       // These records are private organization drafts. The canonical registry
       // has a distinct, Super-Admin-only authorization boundary.
@@ -152,7 +153,6 @@ export default async function handler(req: Request, res: Response) {
     // an organization-level permission-matrix grant.
     if (!ctx.isSuperAdmin) throw new Error('Only VOP Super Admin may manage the system language registry.');
     const requestedCode = lower(body.code || body.id);
-    const db = getAdminDb();
 
     if (action === 'upsert' || action === 'status') await requirePermission(ctx, 'languages', 'update');
     else if (action === 'delete') await requirePermission(ctx, 'languages', 'delete');
