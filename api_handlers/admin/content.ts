@@ -101,7 +101,7 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'listGuideLessons') {
       if (collection !== 'curriculum') throw new Error('Lesson listing requires the curriculum collection.');
-      const selectedGuideId = safeId(body.guideId);
+      const selectedGuideId = safeId(body.guideId || body.id);
       const guide = await ctx.db.doc(`guides/${selectedGuideId}`).get();
       if (!guide.exists) throw new Error('Guide not found.');
       const ownerOrganizationId = String(guide.data()?.organizationId || '').trim();
