@@ -1,5 +1,3 @@
-import { publicQuizQuestions, type QuizQuestion } from './quizAttachments.js';
-
 /**
  * A contributor can discover shared or same-tenant quizzes, but only the author
  * (and the Super Admin) may receive an unredacted quiz bank. A whitelist, rather
@@ -16,7 +14,14 @@ export function quizManagementItem(
   }
 
   const questions = Array.isArray(data.questions)
-    ? publicQuizQuestions(data.questions as QuizQuestion[])
+    ? data.questions.map((raw: unknown) => {
+      const item = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+      return {
+        key: String(item.key || ''),
+        question: String(item.question || ''),
+        options: Array.isArray(item.options) ? item.options.map(String) : [],
+      };
+    })
     : [];
   return {
     id,
