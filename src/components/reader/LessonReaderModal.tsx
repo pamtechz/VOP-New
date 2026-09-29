@@ -14,13 +14,14 @@ interface LessonReaderModalProps {
   onComplete: () => boolean | void | Promise<boolean | void>;
   onPreviousLesson?: () => void;
   onNextLesson?: () => void;
+  onOpenQuiz?: (quiz: Lesson) => void;
   initialPageIndex?: number;
   hasPreviousLesson?: boolean;
   hasNextLesson?: boolean;
 }
 
 export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
-  lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson,
+  lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz,
   hasPreviousLesson = false, hasNextLesson = false, initialPageIndex = 0,
 }) => {
   const language = getActiveLanguage();
@@ -32,6 +33,22 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [notice, setNotice] = useState('');
   const currentPage = pages[currentPageIndex];
+  const currentChapter = lesson.chapters?.find(chapter=>chapter.id===currentPage?.chapterId);
+  const currentSection = currentChapter?.sections.find(section=>section.id===currentPage?.sectionId);
+  const availableQuizzes = guide.lessons.filter(item=>item.type==='Test'
+    && item.attachedLessonId===lesson.id
+    && ['chapter','section','block','lesson'].includes(String(item.attachmentType||'lesson')));
+  const quizzesFor=(type:'chapter'|'section'|'block'|'lesson',anchorId='')=>
+    availableQuizzes.filter(item=>String(item.attachmentType||'lesson')===type
+      && (type==='lesson'||item.anchorId===anchorId));
+  const assessmentLinks=(type:'chapter'|'section'|'block'|'lesson',anchorId='')=>{
+    const items=quizzesFor(type,anchorId);
+    return onOpenQuiz && items.length>0?<div className="vop-lesson-anchored-quizzes">
+      {items.map(item=><button type="button" key={item.id} onClick={()=>onOpenQuiz(item)}>
+        <BookOpen size={16}/><span>{item.title||'Take '+type+' quiz'}</span><ChevronRight size={16}/>
+      </button>)}
+    </div>:null;
+  };
 
   useEffect(() => { setCurrentPageIndex(Math.max(0, initialPageIndex)); }, [lesson.id, initialPageIndex]);
 
@@ -261,35 +278,39 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
             </div>
           ) : (
             <>
-              {/* Page title */}
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.3 }}>
-                {currentPage.title}
-              </h3>
-
-              {/* Optional image */}
-              {currentPage.imageUrl && (
-                <div style={{ borderRadius: '1rem', overflow: 'hidden', background: '#f1f5f9' }}>
-                  <img
-                    src={currentPage.imageUrl}
-                    alt=""
-                    loading="lazy"
-                    style={{ width: '100%', maxHeight: '22rem', objectFit: 'contain', display: 'block' }}
-                  />
+              {/* Published authoring hierarchy. Every section is one saved
+                  reader page; quizzes reference actual stable chapter/section
+                  and block identifiers in the private Quiz Library. */}
+              {currentChapter && currentSection ? <div className="vop-structured-reader">
+                <div className="vop-structured-reader-breadcrumb"><BookOpen size={15}/>
+                  <span>{currentChapter.title}</span><ChevronRight size={15}/><strong>{currentSection.title}</strong>
                 </div>
-              )}
-
-              {currentPageIndex === 0 && lesson.media?.videoUrl && <MediaPlayer src={lesson.media.videoUrl} title={lesson.title + ' video'} kind="video" />}
-              {currentPageIndex === 0 && lesson.media?.audioUrl && <MediaPlayer src={lesson.media.audioUrl} title={lesson.title + ' audio'} kind="audio" />}
-
-              {/* Body text */}
-              <p style={{
-                fontSize: '1rem',
-                lineHeight: 1.75,
-                whiteSpace: 'pre-line',
-                color: '#334155',
-              }}>
-                {currentPage.content}
-              </p>
+                <h3>{currentSection.title}</h3>
+                {currentPageIndex===0&&lesson.media?.videoUrl&&<MediaPlayer src={lesson.media.videoUrl} title={lesson.title+' video'} kind="video"/>}
+                {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
+                {currentSection.blocks.map(block=><React.Fragment key={block.id}>
+                  {block.type==='heading'&&<h4 className="vop-structured-reader-heading">{block.text}</h4>}
+                  {block.type==='paragraph'&&<p className="vop-structured-reader-text">{block.text}</p>}
+                  {block.type==='quote'&&<blockquote className="vop-structured-reader-quote">{block.text}</blockquote>}
+                  {block.type==='image'&&block.src&&<img className="vop-structured-reader-image" loading="lazy" src={block.src} alt={block.text||''}/>}
+                  {block.type==='video'&&<MediaPlayer src={block.src} title={currentSection.title+' video'} kind="video"/>}
+                  {block.type==='audio'&&<MediaPlayer src={block.src} title={currentSection.title+' audio'} kind="audio"/>}
+                  {assessmentLinks('block',block.id)}
+                </React.Fragment>)}
+                {assessmentLinks('section',currentSection.id)}
+                {pages[currentPageIndex+1]?.chapterId!==currentChapter.id&&assessmentLinks('chapter',currentChapter.id)}
+                {currentPageIndex===pages.length-1&&assessmentLinks('lesson')}
+              </div> : <>
+                <h3 style={{ fontSize:'1.3rem',fontWeight:800,color:'#0f172a',lineHeight:1.3 }}>{currentPage.title}</h3>
+                {currentPage.imageUrl&&<div style={{borderRadius:'1rem',overflow:'hidden',background:'#f1f5f9'}}>
+                  <img src={currentPage.imageUrl} alt="" loading="lazy"
+                    style={{width:'100%',maxHeight:'22rem',objectFit:'contain',display:'block'}}/>
+                </div>}
+                {currentPageIndex===0&&lesson.media?.videoUrl&&<MediaPlayer src={lesson.media.videoUrl} title={lesson.title+' video'} kind="video"/>}
+                {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
+                <p style={{fontSize:'1rem',lineHeight:1.75,whiteSpace:'pre-line',color:'#334155'}}>{currentPage.content}</p>
+                {currentPageIndex===pages.length-1&&assessmentLinks('lesson')}
+              </>}
 
               {/* Scripture quote */}
               {currentPage.scriptureQuote && (
