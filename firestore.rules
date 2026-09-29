@@ -537,6 +537,23 @@ service cloud.firestore {
       }
     }
 
+    // Programs reference existing guides; they never duplicate private lessons.
+    // All mutations go through the authenticated API, which validates each
+    // guide reference against the program's owning tenant and stewardship.
+    match /programs/{programId} {
+      allow get, list: if isSuperAdmin()
+        || (signedIn()
+          && resource.data.get('archived',false) != true
+          && isOrgMember(resource.data.get('organizationId',''))
+          && resource.data.get('organizationId','') == organizationIdForUser())
+        || (resource.data.get('archived',false) != true
+          && hierarchyOrganizationScope(resource.data.get('organizationId','')))
+        || (resource.data.get('archived',false) != true
+          && resource.data.get('published',false) == true
+          && resource.data.get('sharingScope','private') == 'shared');
+      allow create, update, delete: if false;
+    }
+
     // Tenant-owned guides and lessons. Canonical editing never transfers through sharing.
     match /guides/{guideId} {
       allow get: if isSuperAdmin()
