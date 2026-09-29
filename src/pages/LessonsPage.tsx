@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, BookOpen, CheckCircle2, ChevronRight, CircleHelp, Clock3, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle2, ChevronRight, CircleHelp, Clock3, Search, Sparkles, RefreshCw } from 'lucide-react';
 import type { DiscoverGuide, Lesson, User } from '../types';
 import { getStoredSettings } from '../services/storage';
 import { lessonIsComplete, lessonScoreForDisplay } from '../services/lessonProgress';
@@ -11,6 +11,7 @@ interface Props {
   onBack: () => void;
   onOpenGuide: (guide: DiscoverGuide) => void;
   onOpenLesson: (guide: DiscoverGuide, lesson: Lesson) => void;
+  onRefresh: () => Promise<void>;
 }
 
 function orderedLessons(guide: DiscoverGuide) {
@@ -20,7 +21,9 @@ function orderedLessons(guide: DiscoverGuide) {
 
 /** Published lessons are supplied by the same scoped Firestore guide loader as
  * the administrator's curriculum studio. No duplicate public content store. */
-export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGuide,onOpenLesson}) => {
+export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGuide,onOpenLesson,onRefresh}) => {
+  const [refreshing,setRefreshing]=useState(false);
+  const [refreshError,setRefreshError]=useState('');
   const [query,setQuery] = useState('');
   const [language,setLanguage] = useState('all');
   const [kind,setKind] = useState<'all'|'Lesson'|'Test'>('all');
@@ -68,7 +71,14 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
           <option value="all">All items</option><option value="Lesson">Lessons</option><option value="Test">Assessments</option>
         </select></label>
         <span role="status">{entries.length} published item{entries.length===1?'':'s'}</span>
+        <button type="button" className="vop-lessons-refresh" disabled={refreshing} onClick={()=>void(async()=>{
+          setRefreshing(true);setRefreshError('');
+          try{await onRefresh();}
+          catch(error){setRefreshError(error instanceof Error?error.message:'Could not refresh published lessons.');}
+          finally{setRefreshing(false);}
+        })()}><RefreshCw size={16}/>{refreshing?'Refreshing…':'Refresh lessons'}</button>
       </div>
+      {refreshError&&<div className="vop-lessons-refresh-error" role="alert">{refreshError}</div>}
       {entries.length ? <div className="vop-lessons-grid">{entries.map(({guide,lesson})=>{
         const state=status(guide,lesson);
         return <article className="vop-material-card vop-lesson-card" key={guide.id+':'+guide.language+':'+lesson.id}>
