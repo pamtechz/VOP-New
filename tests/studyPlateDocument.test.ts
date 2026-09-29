@@ -102,6 +102,9 @@ test('Plate review remains opt-in and does not replace the existing editor',()=>
   assert.match(manager,/Try Plate editor/);
   assert.match(plate,/onSplitPage=\{splitPage\}/);
   assert.match(plate,/vop-plate-page-tabs/);
+  assert.match(plate,/duplicateSectionSafely/);
+  assert.match(plate,/section\.blocks\.some\(block=>block\.type==='audio'\|\|block\.type==='video'\)/);
+  assert.match(plate,/blocks:section\.blocks\.map\(block=>\(\{\.\.\.block,id:id\('block'\)\}\)\)/);
   assert.match(reader,/currentSection\.document/);
   assert.match(reader,/afterBlock=\{blockId=>assessmentLinks\('block',blockId\)\}/);
   assert.doesNotMatch(safe,/dangerouslySetInnerHTML/);
