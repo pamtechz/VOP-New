@@ -174,7 +174,11 @@ service cloud.firestore {
         || (isOrgMember(organizationIdForUser()) && data.get('organizationId', '') == organizationIdForUser())
         || (isHierarchyTenant()
             && (data.get('ownerTenantId','') == hierarchyTenantId()
-              || hierarchyOrganizationScope(data.get('organizationId',data.get('ownerOrganizationId','')))))
+              || hierarchyOrganizationScope(
+                data.get('organizationId','') != ''
+                  ? data.get('organizationId','')
+                  : data.get('ownerOrganizationId','')
+              )))
         || (data.get('sharingScope', 'private') == 'shared' && data.get(publishedField, false) == true)
         || (data.get('organizationId', '') == '' && data.get(publishedField, false) == true)
         || (signedIn() && data.get('ownerUid', '') == request.auth.uid);
