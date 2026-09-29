@@ -102,7 +102,7 @@ service cloud.firestore {
     function canEditOwnedContent(data) {
       return isSuperAdmin()
         || (!platformStewarded(data) && (
-          isOrgMember(organizationIdForUser())
+          (isOrgMember(organizationIdForUser())
           && data.get('organizationId', data.get('ownerOrganizationId', '')) == organizationIdForUser()
           && data.get('ownerUid', '') == request.auth.uid
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
@@ -156,7 +156,7 @@ service cloud.firestore {
     function canEditOwnedGlobal(data) {
       return isSuperAdmin()
         || (!platformStewarded(data) && (
-          signedIn()
+          (signedIn()
           && data.get('ownerUid', '') == request.auth.uid
           && isOrgMember(organizationIdForUser())
           && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
