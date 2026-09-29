@@ -111,7 +111,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if(collection==='programs'){
-      return handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
+      return await handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
     }
 
     if (action === 'listGuideLessons') {
