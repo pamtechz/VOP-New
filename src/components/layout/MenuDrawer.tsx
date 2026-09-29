@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { User, AppRoute } from '../../types';
-import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck, Megaphone, CalendarDays } from 'lucide-react';
+import { X, Award, ShieldCheck, Info, LogOut, Bell, BookOpen, HeartHandshake, Radio, MessageCircle, UserCheck, Megaphone, CalendarDays, Brain, Swords, FileText, LibraryBig } from 'lucide-react';
 import { getActiveLanguage, getStoredGuides, getStoredSettings } from '../../services/storage';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -60,6 +60,14 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({ isOpen, onClose, current
             </div>
             <p style={{ fontSize: '.77rem', color: '#6b7280', paddingLeft: '2.2rem' }}>Guide {progress.completedGuides} of {progress.totalGuides}</p>
           </div>
+          <div className="vop-menu-section-label">{t('navigation.learning','Learning & engagement')}</div>
+          <button type="button" style={itemStyle} onClick={() => navigate('lessons')}><FileText size={22}/>{t('navigation.lessons','Lessons & assessments')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('resources')}><LibraryBig size={22}/>{t('navigation.library','Library')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('master-guide')}><ShieldCheck size={22}/>{t('navigation.master_guide','Master Guide')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('scripture-memory')}><Brain size={22}/>{t('navigation.scripture_memory','Scripture Memory')}</button>
+          <button type="button" style={itemStyle} onClick={() => navigate('iron-duels')}><Swords size={22}/>{t('navigation.iron_duels','Iron Duels')}</button>
+          <div className="vop-menu-section-label">{t('navigation.account','Account')}</div>
+          <button type="button" style={itemStyle} onClick={() => navigate('profile')}><UserCheck size={22}/>{t('navigation.profile','Profile')}</button>
           {isAdmin && <button type="button" style={itemStyle} onClick={() => navigate('admin')}><ShieldCheck size={24}/>{t('navigation.admin', 'Admin Panel')}</button>}
           <button type="button" style={itemStyle} onClick={() => navigate('personal-settings')}><UserCheck size={24}/>{t('navigation.personal_settings','Personal Settings')}</button>
           <button type="button" style={itemStyle} onClick={() => navigate('about')}><Info size={24}/>{t('navigation.about','About')}</button>

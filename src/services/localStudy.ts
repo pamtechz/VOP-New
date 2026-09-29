@@ -9,11 +9,12 @@ import { queueCompletion, dropCompletion, type PendingCompletion } from './offli
 export async function completeLesson(
   guideId: string,
   lessonId: string,
+  language: string = getActiveLanguage(),
 ): Promise<'synced' | 'queued' | 'failed'> {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return 'failed';
   const item: PendingCompletion = {
-    uid:firebaseUser.uid, language:getActiveLanguage(), guideId, lessonId, queuedAt:Date.now(),
+    uid:firebaseUser.uid, language, guideId, lessonId, queuedAt:Date.now(),
   };
   const queue = () => queueCompletion(item) ? 'queued' as const : 'failed' as const;
   if (typeof navigator !== 'undefined' && !navigator.onLine) return queue();
@@ -38,11 +39,11 @@ export async function submitQuizAnswers(
   guideId: string,
   testId: string,
   answers: Record<number, number | boolean>,
+  language: string = getActiveLanguage(),
 ): Promise<number | null> {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return null;
 
-  const language = getActiveLanguage();
   const token = await firebaseUser.getIdToken();
   const response = await fetch('/api/study/progress', {
     method: 'POST',

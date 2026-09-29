@@ -1,0 +1,42 @@
+/* Mobile administration navigation.
+ * Loaded after admin.css to resolve historical overlapping responsive rules,
+ * including the <=420px rule that hid the hamburger entirely. */
+@media(max-width:900px){
+  .vop-admin .vop-top-title .vop-menu-btn{
+    display:grid!important;visibility:visible;place-items:center;
+    flex:0 0 42px;min-width:42px;min-height:42px;
+    cursor:pointer;position:relative;z-index:102;
+  }
+  .vop-admin .vop-menu-btn:focus-visible{outline:3px solid #f5c353;outline-offset:2px}
+  .vop-admin .vop-sidebar{
+    display:flex!important;position:fixed!important;left:0;top:68px;bottom:0;
+    height:calc(100dvh - 68px);width:min(310px,88vw)!important;max-width:88vw;
+    flex-basis:auto!important;z-index:95;transform:translateX(-110%);
+    visibility:hidden;pointer-events:none;opacity:0;
+    overflow-y:auto;overscroll-behavior:contain;
+    transition:transform .22s ease,visibility .22s ease,opacity .22s ease;
+    box-shadow:12px 0 32px rgba(6,35,75,.22);
+  }
+  .vop-admin .vop-sidebar.open{
+    transform:translateX(0)!important;visibility:visible!important;
+    opacity:1;pointer-events:auto;
+  }
+  .vop-admin .vop-sidebar-backdrop.open{
+    display:block!important;position:fixed;inset:68px 0 0;
+    z-index:94;opacity:1!important;pointer-events:auto!important;
+    background:rgba(4,20,45,.44);border:0;
+  }
+  .vop-admin .vop-sidebar .vop-nav{display:flex;flex-direction:column;gap:3px;flex:1 0 auto}
+  .vop-admin .vop-sidebar .vop-nav-item{display:flex;align-items:center;min-height:45px}
+  .vop-admin .vop-sidebar .vop-nav-item span,
+  .vop-admin .vop-sidebar .vop-back span{display:inline!important;visibility:visible!important}
+  .vop-admin .vop-sidebar .vop-back{display:flex;align-items:center;flex:0 0 auto}
+  .vop-admin .vop-shell,.vop-admin .vop-main{min-width:0;max-width:100%}
+}
+@media(max-width:640px){
+  .vop-admin .vop-top-title .vop-menu-btn{display:grid!important;min-width:42px;width:42px;height:42px}
+  .vop-admin .vop-sidebar{top:60px;height:calc(100dvh - 60px)}
+  .vop-admin .vop-sidebar-backdrop.open{inset:60px 0 0}
+  .vop-admin .vop-top-page{overflow:hidden;text-overflow:ellipsis}
+}
+@media(prefers-reduced-motion:reduce){.vop-admin .vop-sidebar{transition:none}}

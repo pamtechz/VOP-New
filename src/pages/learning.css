@@ -1,0 +1,157 @@
+/* Learner navigation and shared learning workspace styles.
+ * Admin-created published guides, decks, requirements and match data use
+ * the existing API stores; these rules only improve presentation. */
+.vop-bottom-nav{
+  position:fixed;inset:auto 0 0;z-index:80;
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:stretch;
+  background:rgba(5,26,59,.98);backdrop-filter:blur(14px);
+  border-top:1px solid rgba(255,255,255,.14);
+  box-shadow:0 -8px 28px rgba(4,23,49,.2);
+  padding:7px max(6px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left));
+}
+.vop-bottom-nav button{
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  gap:3px;min-width:0;min-height:53px;padding:6px 1px;border:0;border-radius:12px;
+  color:#bdcce0;background:transparent;font:inherit;font-size:clamp(9px,2.6vw,11px);
+  font-weight:650;cursor:pointer;line-height:1.15;
+}
+.vop-bottom-nav button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vop-bottom-nav button.active{color:#f8c85f;background:rgba(248,200,95,.14)}
+.vop-bottom-nav button:focus-visible{outline:2px solid #f8c85f;outline-offset:-2px}
+.vop-menu-section-label{padding:13px 16px 5px;margin-top:6px;color:#536a87;font-weight:900;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-top:1px solid #e4eaf2}
+.vop-engagement-page,.vop-lessons-page{min-width:0}
+.vop-engagement-hero-content{padding:23px 0 4px;max-width:760px}
+.vop-engagement-page .vop-materials-main{width:100%}
+.vop-engagement-page .vop-material-card{max-width:100%}
+.vop-engagement-page .vop-material-body{padding:clamp(15px,2.6vw,27px);min-width:0}
+.vop-engagement-page .vop-material-body h2{font-size:clamp(19px,2vw,25px);margin:0 0 10px;line-height:1.3}
+.vop-engagement-page .vop-material-body h3{font-size:16px;color:#163a70;margin:0 0 8px}
+.vop-engagement-page .vop-material-body p{font-size:13px;line-height:1.6;color:#526880;margin:6px 0 13px}
+.vop-engagement-page .vop-material-body>div,.vop-engagement-page .vop-material-body form{min-width:0}
+.vop-engagement-page .vop-material-body button:not(.vop-materials-back){
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  min-height:40px;max-width:100%;padding:9px 13px;margin:3px 5px 3px 0;
+  border:1px solid #d3dfed;border-radius:10px;background:#0b3979;color:#fff;
+  font-size:12px;font-weight:750;line-height:1.35;cursor:pointer;white-space:normal;
+}
+.vop-engagement-page .vop-material-body button:disabled{opacity:.5;cursor:not-allowed}
+.vop-engagement-page .vop-material-body button:focus-visible{outline:3px solid #f6be50;outline-offset:2px}
+.vop-engagement-page .vop-material-body :is(select,input:not([type="checkbox"]),textarea){
+  display:block;width:100%;max-width:100%;min-width:0;min-height:43px;
+  background:#fff;border:1px solid #cbdbeb;border-radius:10px;
+  padding:10px 12px;color:#163b70;font:inherit;font-size:13px;
+}
+.vop-engagement-page .vop-material-body textarea{min-height:94px;resize:vertical}
+.vop-engagement-page .vop-material-body label{font-size:13px;line-height:1.5;font-weight:650;color:#1b3c6c}
+.vop-engagement-page .vop-material-body input[type="checkbox"]{width:19px;height:19px;accent-color:#0c4b9a;flex:none}
+.vop-engagement-page .vop-material-body a{color:#0c4b9a;overflow-wrap:anywhere}
+.vop-engagement-page .vop-material-body strong{overflow-wrap:anywhere}
+.vop-lessons-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 17px}
+.vop-lessons-toolbar label{display:flex;align-items:center;gap:9px;color:#45627f;font-size:12px;font-weight:800}
+.vop-lessons-toolbar select{min-height:42px;min-width:160px;border:1px solid #d5e0ed;border-radius:9px;background:#fff;color:#173a64;padding:9px 12px;font:inherit}
+.vop-lessons-toolbar>span{margin-left:auto;font-size:12px;color:#667c92;font-weight:750}
+.vop-lessons-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.vop-lesson-card{display:flex;flex-direction:column;min-width:0;padding:19px;gap:14px}
+.vop-lesson-card-meta,.vop-lesson-card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.vop-lesson-card-meta>span:first-child{font-size:11px;color:#426586;font-weight:850;text-transform:uppercase;letter-spacing:.045em}
+.vop-lesson-status{display:inline-flex;align-items:center;gap:4px;background:#eff5fc;color:#365d83;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:850}
+.vop-lesson-status.completed{background:#e6f7ef;color:#047857}
+.vop-lesson-card-body{flex:1;min-width:0}
+.vop-lesson-card-body h2{font-size:clamp(17px,2vw,21px);line-height:1.25;color:#133b70;margin:0 0 9px;overflow-wrap:anywhere}
+.vop-lesson-card-body>p{font-size:13px;line-height:1.55;color:#506c87;margin:0 0 13px}
+.vop-lesson-card .vop-lesson-guide{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;background:transparent;color:#0b4c96;cursor:pointer;font-size:12px;font-weight:850;text-align:left;min-width:0}
+.vop-lesson-guide span{overflow-wrap:anywhere}
+.vop-lesson-card-footer{border-top:1px solid #e7edf5;padding-top:14px}
+.vop-lesson-card-footer>span{display:flex;gap:6px;align-items:center;color:#668098;font-size:12px}
+.vop-lesson-card .vop-lesson-open{display:inline-flex;gap:6px;align-items:center;justify-content:center;min-height:42px;padding:10px 13px;border:0;border-radius:10px;background:#0a438f;color:#fff;font-size:12px;font-weight:850;cursor:pointer}
+.vop-lesson-card button:focus-visible{outline:3px solid #f1bd4f;outline-offset:3px}
+@media(max-width:900px){.vop-lessons-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:767px){
+  .vop-app-content{padding-bottom:calc(78px + env(safe-area-inset-bottom,0px))}
+  .vop-engagement-page,.vop-lessons-page{min-height:0;padding-bottom:18px}
+  .vop-engagement-hero-content{padding-top:14px}
+}
+@media(max-width:650px){
+  .vop-lessons-grid{grid-template-columns:1fr}
+  .vop-lessons-toolbar{align-items:stretch}
+  .vop-lessons-toolbar label{flex:1 1 160px;flex-direction:column;align-items:stretch;gap:5px}
+  .vop-lessons-toolbar select{width:100%;min-width:0}
+  .vop-lessons-toolbar>span{margin-left:0;flex:1 0 100%}
+  .vop-lesson-card{padding:15px}
+  .vop-engagement-page .vop-material-body{padding:16px}
+  .vop-engagement-page .vop-material-body button:not(.vop-materials-back){margin-right:3px}
+}
+@media(max-width:340px){.vop-bottom-nav button{font-size:9px;padding-inline:0}.vop-bottom-nav button svg{width:19px;height:19px}}
+@media(prefers-reduced-motion:reduce){.vop-bottom-nav button,.vop-material-card{transition:none!important}}
+
+/* Keep the dense desktop header out of tablet widths; the account drawer
+ * provides the same destinations at every breakpoint. */
+.vop-desktop-nav{display:none!important}
+@media(min-width:1480px){.vop-desktop-nav{display:flex!important}}
+.vop-header-learning{position:relative;color:#cbd5e1;font-size:12px;font-weight:700}
+.vop-header-learning>summary{display:flex;align-items:center;gap:5px;cursor:pointer;list-style:none;border-radius:11px;padding:8px 10px}
+.vop-header-learning>summary::-webkit-details-marker{display:none}
+.vop-header-learning>summary:hover,.vop-header-learning[open]>summary{color:#fbbf24;background:rgba(255,255,255,.08)}
+.vop-header-learning-menu{position:absolute;z-index:120;top:calc(100% + 9px);left:0;min-width:220px;padding:7px;background:#fff;border:1px solid #d9e4f2;border-radius:13px;box-shadow:0 12px 40px rgba(6,29,67,.25);display:grid;gap:3px}
+.vop-header-learning-menu button{display:flex;align-items:center;gap:9px;min-height:43px;padding:10px 12px;background:transparent;border:0;border-radius:9px;color:#143a6c;cursor:pointer;text-align:left;font-size:12px;font-weight:750}
+.vop-header-learning-menu button:hover,.vop-header-learning-menu button:focus-visible{background:#edf4ff}
+
+.vop-lessons-toolbar .vop-lessons-refresh{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:10px 13px;border:1px solid #b9cfe6;border-radius:9px;background:#fff;color:#164b85;font-size:12px;font-weight:850;cursor:pointer}
+.vop-lessons-toolbar .vop-lessons-refresh:disabled{opacity:.6;cursor:wait}
+.vop-lessons-refresh-error{padding:12px 15px;margin-bottom:14px;border:1px solid #f1c2cb;border-radius:10px;background:#fff1f2;color:#922b40;font-size:13px;overflow-wrap:anywhere}
+@media(max-width:650px){.vop-lessons-toolbar .vop-lessons-refresh{flex:1 1 100%;width:100%}}
+
+/* The persistent audio dock and primary mobile navigation must never overlap. */
+@media(max-width:767px){
+  .vop-radio-docked-player{
+    bottom:calc(71px + env(safe-area-inset-bottom,0px))!important;
+    z-index:79;
+  }
+  .vop-radio-player-error,.vop-radio-player-waiting{
+    bottom:calc(180px + env(safe-area-inset-bottom,0px))!important;
+  }
+  .vop-radio-page{padding-bottom:calc(180px + env(safe-area-inset-bottom,0px))}
+}
+
+/* A persistent header must fit 320px screens while keeping Search,
+ * Notifications and the account drawer reachable. Language selection is
+ * available in Personal Settings on narrow phones. */
+.vop-app-header-inner{min-width:0}
+.vop-app-brand{min-width:0}
+.vop-app-brand-copy{min-width:0}
+.vop-app-brand-copy span{overflow:hidden;text-overflow:ellipsis}
+.vop-app-header-actions{min-width:0}
+@media(max-width:640px){
+  .vop-app-header{padding:8px!important}
+  .vop-app-header-inner{gap:5px!important}
+  .vop-app-brand{min-width:0;flex-shrink:1!important;gap:5px!important}
+  .vop-app-brand-copy{min-width:0;max-width:clamp(76px,30vw,180px)}
+  .vop-app-brand-copy>div:first-child>span:first-child{display:block;min-width:0;max-width:100%;font-size:clamp(11px,3vw,15px)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vop-app-brand-copy .badge{display:none!important}
+  .vop-app-language{display:none!important}
+  .vop-app-header-actions{flex-shrink:0;gap:1px!important}
+  .vop-app-header-actions .btn{min-width:34px;min-height:40px;padding:7px!important}
+}
+@media(max-width:360px){
+  .vop-app-brand img{width:24px!important;height:24px!important}
+  .vop-app-header-actions{gap:0!important}
+}
+
+/* Full-height, scroll-safe lesson and assessment modals on narrow screens.
+ * Scope rules to the learning modals, not the global account overlays. */
+.vop-study-modal section[role="dialog"]{min-width:0;max-width:min(100%,740px);overscroll-behavior:contain}
+.vop-study-modal :is(button,input,select,textarea):focus-visible{outline:3px solid #f2ba48;outline-offset:3px}
+.vop-study-modal p,.vop-study-modal h2,.vop-study-modal h3{overflow-wrap:anywhere}
+@media(max-width:560px){
+  .vop-study-modal{padding:0!important;align-items:stretch}
+  .vop-study-modal section[role="dialog"]{
+    width:100%!important;max-width:100%!important;max-height:100dvh!important;
+    height:100dvh;border-radius:0!important;box-shadow:none!important;
+  }
+  .vop-study-modal section[role="dialog"]>header{border-radius:0!important;padding:13px 14px!important}
+  .vop-study-modal section[role="dialog"]>footer{
+    display:flex;flex-wrap:wrap;gap:7px;padding:11px 12px calc(11px + env(safe-area-inset-bottom,0px))!important
+  }
+  .vop-study-modal section[role="dialog"]>footer button{min-height:44px;flex:1 1 auto}
+  .vop-quiz-modal section[role="dialog"]{overflow-y:auto}
+}

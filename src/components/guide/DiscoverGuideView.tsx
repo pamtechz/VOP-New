@@ -4,6 +4,7 @@ import { ArrowLeft, Award, Trophy, BookOpen, CheckCircle2, Clock, Lock, ChevronR
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
+import { lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
 
 interface DiscoverGuideViewProps {
   guide: DiscoverGuide;
@@ -36,25 +37,14 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     return a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true, sensitivity: 'base' });
   }), [guide.lessons]);
 
-  const completedLessons = new Set(currentUser.progress.completedLessons ?? []);
-  const guideScores = currentUser.progress.guideScores ?? {};
-
-  const lessonStats = useMemo(() => {
-    const completedCount = orderedLessons.filter(l => completedLessons.has(l.id)).length;
+  const threshold = settings.quizPassThreshold;
+  const lessonStats = (() => {
+    const completedCount = orderedLessons.filter(lesson =>
+      lessonIsComplete(guide, lesson, currentUser, threshold)).length;
     const totalCount = orderedLessons.length;
-    const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const percent = totalCount ? Math.round(completedCount * 100 / totalCount) : 0;
     return { completedCount, totalCount, percent };
-  }, [orderedLessons, completedLessons]);
-
-  const getLessonScore = (lesson: Lesson): number | undefined => {
-    const key = `${guide.id}:${lesson.id}`;
-    if (Object.hasOwn(guideScores, key)) return guideScores[key];
-    // Fallback for guides with a single test
-    if (orderedLessons.filter(l => l.type === 'Test').length === 1) return guideScores[guide.id];
-    return undefined;
-  };
-
-  const threshold = getStoredSettings().quizPassThreshold;
+  })();
 
   return (
     <div className="min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
@@ -146,11 +136,11 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
               Curriculum Modules
             </h2>
             {orderedLessons.map((lesson, index) => {
-              const isCompleted = completedLessons.has(lesson.id);
+              const isCompleted = lessonIsComplete(guide, lesson, currentUser, threshold);
               const isTest = lesson.type === 'Test';
-              const score = isTest ? getLessonScore(lesson) : undefined;
+              const score = isTest ? lessonScoreForDisplay(guide, lesson, currentUser) : undefined;
               const hasScore = typeof score === 'number' && Number.isFinite(score);
-              const passed = hasScore && score! >= threshold;
+              const passed = hasScore && Number.isFinite(threshold) && threshold >= 1 && threshold <= 100 && score! >= threshold;
 
               return (
                 <button
