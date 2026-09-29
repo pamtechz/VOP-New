@@ -686,10 +686,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
     const guide = existingGuideRecord;
 
-    const duplicate = lessonRows.some(row =>
-      row.key !== editor.language + '|' + editor.id
-      && row.guide?.id === editor.guideId
-      && Number.parseFloat(row.lesson.lessonNumber) === Number.parseFloat(editor.lessonNumber),
+    const duplicate = moduleLessons.some(row =>
+      valueText(row.id || row.lessonId) !== editor.id
+      && valueText(row.type) !== 'Test'
+      && valueText(row.lessonNumber).trim() === editor.lessonNumber.trim()
     );
     if (duplicate) return setError(tx('curriculum.lessonNumberDuplicate', 'Lesson number is already used in the selected guide.'));
 
@@ -697,6 +697,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setError('');
     try {
       const id = editor.id || newId('lesson');
+      const chapters = editor.chapters.length ? normalizeCurriculumStructure(editor.chapters) : undefined;
+      const structuredPages = chapters ? curriculumPages(chapters) : undefined;
       const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
       const pageBlocks = splitLessonBlocks(sourceBlocks);
       const payload: Record<string, unknown> = {
@@ -708,14 +710,16 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         guideId: editor.guideId,
         guideTitle: valueText(guide.title) || editor.guideTitle,
         season: editor.season.trim(),
-        content: editor.content,
-        contentPages: pageBlocks.map((blocks, index) => ({
+        content: chapters ? structuredPages?.map(page=>page.content).join('\n\n') : editor.content,
+        ...(chapters ? {chapters} : {}),
+        contentPages: structuredPages?.map(({blocks:_blocks,...page})=>page) || pageBlocks.map((blocks, index) => ({
           pageNumber: index + 1,
           title: index === 0 ? editor.title.trim() : (blocks.find(block => block.type === 'heading')?.text || ''),
           content: blocks.filter(block => ['paragraph', 'heading', 'quote'].includes(block.type)).map(block => block.text || '').filter(Boolean).join('\n\n') || editor.content,
           imageUrl: blocks.find(block => block.type === 'image')?.src || (index === 0 ? editor.imageUrl.trim() : ''),
         })),
-        pages: pageBlocks.map((blocks, index) => ({
+        pages: structuredPages?.map(page=>({pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+          chapterTitle:page.chapterTitle,sectionId:page.sectionId,sectionTitle:page.sectionTitle,blocks:page.blocks})) || pageBlocks.map((blocks, index) => ({
           pageNumber: index + 1,
           title: index === 0 ? editor.title.trim() : (blocks.find(block => block.type === 'heading')?.text || ''),
           blocks: blocks.map(block => ({
@@ -723,22 +727,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             ...(block.text ? { text: block.text } : {}),
             ...(block.src ? { src: block.src } : {}),
           })),
-        })),
-        quiz: editor.questions.map((question, index) => ({
-          key: id + '-q' + (index + 1),
-          question: question.question,
-          answer: false,
-          options: question.options,
-          correctOptionIndex: question.answer,
-          explanation: '',
-        })),
-        questions: editor.questions.map((question, index) => ({
-          key: id + '-q' + (index + 1),
-          question: question.question,
-          answer: false,
-          options: question.options,
-          correctOptionIndex: question.answer,
-          explanation: '',
         })),
         media: {
           imageUrl: editor.imageUrl.trim(),
@@ -758,6 +746,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
       setEditor({ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish });
+      setSelectedGuideId(editor.guideId);
       notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('curriculum.couldNotSaveLesson', 'Could not save lesson.'));
