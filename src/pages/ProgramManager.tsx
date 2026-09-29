@@ -101,6 +101,20 @@ export default function ProgramManager({
     }catch(reason){setError(reason instanceof Error?reason.message:'Archive failed.');}
     finally{setSaving(false);}
   };
+  const restore=async(program:Program)=>{
+    if(!program.canEdit||!program.archived||saving)return;
+    setSaving(true);setError('');
+    try{
+      await programApi('upsert',organizationId,program.id,{
+        title:program.title,description:program.description,
+        coverImageUrl:program.coverImageUrl,entryMode:program.entryMode,
+        guideIds:program.guideIds,sharingScope:program.sharingScope,
+        archived:false,published:false,
+      });
+      await load();setNotice('Program restored as an unpublished draft.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Restore failed.');}
+    finally{setSaving(false);}
+  };
   const moveGuide=(index:number,step:-1|1)=>{
     if(!editing)return;
     const next=index+step;
@@ -215,14 +229,16 @@ export default function ProgramManager({
       <header>
         <button type="button" className="vop-secondary" onClick={()=>setSelectedId('')}>
           <ArrowLeft size={15}/> All programs</button>
-        <span>{selected.published?'Published':'Draft'} · {selected.entryMode==='sections'?'Section navigation':'Lesson navigation'}</span>
+        <span>{selected.archived?'Archived':selected.published?'Published':'Draft'} · {selected.entryMode==='sections'?'Section navigation':'Lesson navigation'}</span>
       </header>
       <h3>{selected.title}</h3><p>{selected.description||'No description provided.'}</p>
       <div className="vop-program-detail-actions">
         {selected.canEdit&&<button className="vop-secondary" type="button" onClick={startEdit(selected)}>
           <Edit3 size={15}/> Edit program</button>}
-        {selected.canEdit&&<button className="vop-secondary" type="button"
+        {selected.canEdit&&!selected.archived&&<button className="vop-secondary" type="button"
           onClick={()=>void archive(selected)}><Trash2 size={15}/> Archive</button>}
+        {selected.canEdit&&selected.archived&&<button className="vop-secondary" type="button"
+          onClick={()=>void restore(selected)}><RefreshCw size={15}/> Restore as draft</button>}
         {!selected.canEdit&&<span><ShieldCheck size={15}/> Shared program · read only</span>}
       </div>
       <h4>Guides & modules</h4>
