@@ -13,6 +13,7 @@ export const ResourcesPage: React.FC<Props> = ({ books, onBack }) => {
   const [query, setQuery] = useState('');
   const settings = getStoredSettings();
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'ResourcesPage');
+  const openResource = (book: BookResource) => { if (book.downloadUrl) window.open(book.downloadUrl, '_blank', 'noopener,noreferrer'); };
   const categories = ['All', ...Array.from(new Set(books.filter(book => book.published !== false).map(book => book.category).filter(Boolean)))];
   const filtered = useMemo(() => books.filter(book => {
     if (book.published === false) return false;
