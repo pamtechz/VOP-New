@@ -184,3 +184,15 @@
   .vop-lesson-featured-tab{padding:11px}
   .vop-reference-lesson-editor .vop-reference-editor-head{flex-wrap:wrap}
 }
+
+/* Opt-in side-by-side workflow review: the classic authoring surface is
+ * still available without altering existing lesson content. */
+.vop-plate-review-mode{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;padding:9px 11px;margin-bottom:11px;background:#f3f8ff;
+  border:1px solid #dce9fa;border-radius:8px;}
+.vop-plate-review-mode>div{display:grid;gap:3px;min-width:0}
+.vop-plate-review-mode strong{font-size:12px;color:#163d73}
+.vop-plate-review-mode span{font-size:11px;color:#627a95;line-height:1.45}
+.vop-plate-review-mode>button{min-height:33px;flex:none;font-size:12px;padding:6px 9px}
+@media(max-width:620px){.vop-plate-review-mode{align-items:stretch;flex-direction:column}
+  .vop-plate-review-mode>button{width:100%;justify-content:center}}
