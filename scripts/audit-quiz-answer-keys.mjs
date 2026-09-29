@@ -6,7 +6,7 @@
  * This script never changes legacy tests without a matching canonical quiz.
  */
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { hasEmbeddedAnswerKeys } from './quiz-answer-inventory.mjs';
+import { hasEmbeddedAnswerKeys, verifiedMigrationCandidate } from './quiz-answer-inventory.mjs';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 const apply = process.argv.includes('--apply');
 const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
@@ -14,8 +14,9 @@ if (!projectId || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL || !process.env.FIREB
   throw new Error('Firebase Admin credentials and project ID are required.');
 }
 if (apply && (process.env.VOP_QUIZ_MIGRATION_APPLY !== 'YES'
-  || process.env.VOP_QUIZ_MIGRATION_PROJECT !== projectId)) {
-  throw new Error('Application refused. Set explicit matching migration project and VOP_QUIZ_MIGRATION_APPLY=YES.');
+  || process.env.VOP_QUIZ_MIGRATION_PROJECT !== projectId
+  || !String(process.env.VOP_QUIZ_MIGRATION_BACKUP_REF || '').trim())) {
+  throw new Error('Application refused. Confirm the target project, VOP_QUIZ_MIGRATION_APPLY=YES, and a verified VOP_QUIZ_MIGRATION_BACKUP_REF.');
 }
 const app = getApps()[0] || initializeApp({ credential: cert({
   projectId,
@@ -29,10 +30,6 @@ const restricted = (record) => Array.isArray(record)
   && record.some(item => item && typeof item === 'object'
     && (Object.hasOwn(item, 'correctOptionIndex') || Object.hasOwn(item, 'answer')
     || Object.hasOwn(item, 'explanation')));
-const sanitized = (records) => records.map(item => ({
-  key:String(item.key), question:String(item.question),
-  options:Array.isArray(item.options) ? item.options.map(String) : [],
-}));
 for (const guide of (await db.collection('guides').get()).docs) {
   // Inventory every learner-readable lesson, not just Test documents. Some
   // historical authoring paths stored quizzes inside regular lesson pages.
@@ -58,26 +55,53 @@ for (const guide of (await db.collection('guides').get()).docs) {
       continue;
     }
     const bank = await db.doc('quizzes/' + quizId).get();
-    const canonical = bank.data() || {};
-    if (!bank.exists || !Array.isArray(canonical.questions)
-      || canonical.assessmentPath !== assessment.ref.path
-      || canonical.guideId !== guide.id
-      || String(canonical.organizationId || '') !== String(row.organizationId || '')
-      || canonical.questions.length !== (row.questions || []).length) {
-      summary.skipped++; summary.issues.push({path:assessment.ref.path,reason:'Quiz bank mismatch'});
-      continue;
-    }
-    const publicQuestions = sanitized(canonical.questions);
-    const publicRows = sanitized(Array.isArray(row.questions) ? row.questions : []);
-    if (JSON.stringify(publicQuestions) !== JSON.stringify(publicRows)) {
-      summary.skipped++; summary.issues.push({path:assessment.ref.path,reason:'Question order/content mismatch'});
+    const candidate = verifiedMigrationCandidate({
+      guideId:guide.id,
+      guideOrganizationId:String(guide.data()?.organizationId || ''),
+      assessmentPath:assessment.ref.path,
+      assessment:row,
+      bank:bank.exists ? bank.data() : undefined,
+    });
+    if (!candidate.publicQuestions) {
+      summary.skipped++;
+      summary.issues.push({path:assessment.ref.path,reason:candidate.reason || 'Quiz bank mismatch'});
       continue;
     }
     if (apply) {
-      await assessment.ref.update({
-        questions:publicQuestions, quiz:publicQuestions,
-        answerVisibility:'public_redacted', updatedAt:FieldValue.serverTimestamp(),
-      });
+      try {
+        // Recheck both snapshots in one transaction. A quiz edit performed
+        // after the audit read must not redact a newer set of questions.
+        await db.runTransaction(async transaction => {
+          const [freshAssessment, freshBank] = await Promise.all([
+            transaction.get(assessment.ref), transaction.get(bank.ref),
+          ]);
+          if (!freshAssessment.exists || !freshBank.exists ||
+              !freshAssessment.updateTime?.isEqual(assessment.updateTime) ||
+              !freshBank.updateTime?.isEqual(bank.updateTime)) {
+            throw new Error('Assessment or private bank changed since audit read');
+          }
+          const current = verifiedMigrationCandidate({
+            guideId:guide.id,
+            guideOrganizationId:String(guide.data()?.organizationId || ''),
+            assessmentPath:assessment.ref.path,
+            assessment:freshAssessment.data(),
+            bank:freshBank.data(),
+          });
+          if (!current.publicQuestions) throw new Error(current.reason || 'Quiz bank mismatch');
+          transaction.update(assessment.ref, {
+            questions:current.publicQuestions, quiz:current.publicQuestions,
+            answerVisibility:'public_redacted',
+            updatedAt:FieldValue.serverTimestamp(),
+          });
+        });
+      } catch (error) {
+        summary.skipped++;
+        summary.issues.push({
+          path:assessment.ref.path,
+          reason:error instanceof Error ? error.message : 'Redaction precondition failed',
+        });
+        continue;
+      }
     }
     summary.redacted++;
   }
