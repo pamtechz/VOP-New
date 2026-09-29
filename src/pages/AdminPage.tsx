@@ -17,6 +17,7 @@ import {
 } from '../services/adminFirestore';
 import { loadFirestoreGuides } from '../services/firestoreData';
 import './admin.css';
+import './admin-mobile.css';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, permissionAllowed, roleForPermission, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
 import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
