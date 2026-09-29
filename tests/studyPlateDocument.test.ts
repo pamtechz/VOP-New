@@ -39,6 +39,36 @@ test('canonical Plate nodes preserve approved marks, links, hierarchy and stable
   assert.deepEqual(bridge.map(x=>x.id),['block-title','block-intro','block-list']);
   assert.equal(bridge[0].type,'heading');
 });
+test('Plate List Classic lic nodes round-trip through validated section pages',()=>{
+  const nested=normalizeStudyPlateDocument([
+    {id:'list-one',type:'ul',children:[
+      {type:'li',children:[{type:'lic',children:[{text:'First point',bold:true}]}]},
+      {type:'li',children:[{type:'lic',children:[{text:'Second point'}]}]},
+    ]},
+  ]);
+  assert.equal(nested[0].type,'ul');
+  assert.equal(nested[0].children[0].type,'li');
+  assert.equal(nested[0].children[0].children[0].type,'lic');
+  assert.match(studyPlatePlainText(nested),/Second point/);
+  const pages=curriculumPages(normalizeCurriculumStructure([{
+    id:'chapter-list',title:'List lesson',sections:[{
+      id:'section-list',title:'Key points',document:nested,
+      blocks:studyPlateLegacyBlocks(nested),
+    }],
+  }]));
+  assert.equal(pages[0].document?.[0].children[0].children[0].type,'lic');
+});
+test('the Plate preview locks the classic editor for rich documents and guards invalid drafts',()=>{
+  const studio=read('src/pages/CurriculumManager.tsx');
+  const editor=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
+  assert.match(studio,/hasRichSections=editor\.chapters\.some/);
+  assert.match(studio,/disabled=\{hasRichSections\}/);
+  assert.match(studio,/plateValidationErrors/);
+  assert.match(studio,/onPageError=/);
+  assert.match(editor,/canLeavePage/);
+  assert.match(editor,/onValidationError=/);
+});
+
 test('one author-defined section corresponds to exactly one student page',()=>{
   const first=normalizeStudyPlateDocument(rich());
   const second=normalizeStudyPlateDocument([
