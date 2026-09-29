@@ -674,51 +674,14 @@ service cloud.firestore {
 
     match /languages/{languageId} {
       allow get, list: if canReadGlobal(resource.data, 'enabled');
-      allow create: if isSuperAdmin() || (
-        (
-          isOrgMember(organizationIdForUser())
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
-        )
-        || (
-          isHierarchyTenant()
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
-          && request.resource.data.get('organizationId','') == ''
-        )
-      );
-      allow update, delete: if isSuperAdmin() || (
-        canEditOwnedGlobal(resource.data)
-        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
-      );
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /translations/{languageId} {
       allow get, list: if isSuperAdmin()
         || (isOrgMember(organizationIdForUser()) && resource.data.get('organizationId','') == organizationIdForUser())
-        || isHierarchyTenant()
         || resource.data.get('sharingScope','private') == 'shared';
-      allow create: if isSuperAdmin() || (
-        (
-          isOrgMember(organizationIdForUser())
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('organizationId','') in ['', organizationIdForUser()]
-          && orgRole(organizationIdForUser()) in ['owner', 'admin', 'editor']
-        )
-        || (
-          isHierarchyTenant()
-          && request.resource.data.get('ownerUid','') == request.auth.uid
-          && request.resource.data.get('ownerTenantId','') == hierarchyTenantId()
-          && request.resource.data.get('organizationId','') == ''
-        )
-      );
-      allow update, delete: if isSuperAdmin() || (
-        canEditOwnedGlobal(resource.data)
-        && request.resource.data.get('organizationId','') == resource.data.get('organizationId','')
-        && request.resource.data.get('ownerUid','') == resource.data.get('ownerUid','')
-      );
+      allow create, update, delete: if isSuperAdmin();
     }
 
     // Platform certification configuration.
