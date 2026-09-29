@@ -259,6 +259,7 @@ export interface Lesson {
 }
 
 export interface DiscoverGuide {
+  learnerEntryMode?: 'lessons'|'sections';
   requiresFinalExam?: boolean;
   ownerOrganizationId?: string;
   ownerUid?: string;
