@@ -17,6 +17,7 @@ import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
 import { StructuredLessonEditor, newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
+import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 
 export type CurriculumStudioTab = 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -316,9 +317,11 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
   const [section, setSection] = useState(0);
   const sourceBlocks = editor.content.trim() ? contentToBlocks(editor.content) : editor.blocks;
   const pages = useMemo(() => splitLessonBlocks(sourceBlocks), [sourceBlocks]);
+  const authoredPages=useMemo(()=>editor.chapters.length?curriculumPages(editor.chapters):[],[editor.chapters]);
+  const count=authoredPages.length||pages.length;
   const sections = ['Lesson', ...(editor.bibleReferences.trim() ? ['Bible References'] : []), ...(editor.questions.length ? ['Quiz'] : [])];
   const next = () => {
-    if (section === 0 && page < pages.length - 1) return setPage(value => value + 1);
+    if (section === 0 && page < count - 1) return setPage(value => value + 1);
     setSection(value => Math.min(value + 1, sections.length - 1));
     setPage(0);
   };
@@ -327,7 +330,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
     setSection(value => Math.max(0, value - 1));
     setPage(0);
   };
-  const canNext = section < sections.length - 1 || (section === 0 && page < pages.length - 1);
+  const canNext = section < sections.length - 1 || (section === 0 && page < count - 1);
   const canPrevious = section > 0 || (section === 0 && page > 0);
 
   return (
@@ -347,7 +350,23 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
             <h1>{editor.title}</h1>
             {editor.description && <p className="vop-preview-description">{editor.description}</p>}
             {section === 0 && <div className="vop-preview-blocks">
-              {(pages[page] || []).map(block => {
+              {authoredPages.length>0 && <div className="vop-preview-structured-page">
+                <div className="vop-structured-reader-breadcrumb">
+                  {authoredPages[page]?.chapterTitle} / {authoredPages[page]?.sectionTitle}
+                </div>
+                <h2>{authoredPages[page]?.sectionTitle}</h2>
+                {authoredPages[page]?.document
+                  ? <StudyPlateContent document={authoredPages[page].document}/>
+                  : authoredPages[page]?.blocks.map(block=>{
+                    if(block.type==='heading')return <h3 key={block.id}>{block.text}</h3>;
+                    if(block.type==='quote')return <blockquote key={block.id}>{block.text}</blockquote>;
+                    if(block.type==='image'&&block.src)return <img key={block.id} src={block.src} alt=""/>;
+                    if(block.type==='video'&&block.src)return <MediaPlayer key={block.id} src={block.src} title="Video" kind="video"/>;
+                    if(block.type==='audio'&&block.src)return <MediaPlayer key={block.id} src={block.src} title="Audio" kind="audio"/>;
+                    return <p key={block.id}>{block.text}</p>;
+                  })}
+              </div>}
+              {!authoredPages.length&&(pages[page] || []).map(block => {
                 if (block.type === 'heading') return <h2 key={block.id}>{renderMarkedText(block.text || '')}</h2>;
                 if (block.type === 'quote') return <blockquote key={block.id}>{renderMarkedText(block.text || '')}</blockquote>;
                 if (block.type === 'image' && block.src) return <img key={block.id} src={block.src} alt="" />;
@@ -355,7 +374,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
                 if (block.type === 'audio' && block.src) return <MediaPlayer key={block.id} src={block.src} title="Lesson audio" kind="audio"/>;
                 return <p key={block.id}>{renderMarkedText(block.text || '')}</p>;
               })}
-              {!pages.length && editor.content && <p>{renderMarkedText(editor.content)}</p>}
+              {!authoredPages.length&&!pages.length && editor.content && <p>{renderMarkedText(editor.content)}</p>}
               {page === 0 && editor.videoUrl && <MediaPlayer src={editor.videoUrl} title="Lesson video" kind="video" />}
               {page === 0 && editor.audioUrl && <MediaPlayer src={editor.audioUrl} title="Lesson audio" kind="audio" />}
             </div>}
@@ -366,7 +385,7 @@ function LearnerPreview({ editor, guideTitle, onClose }: { editor: EditorState; 
       </main>
       <footer className="vop-preview-footer">
         <button type="button" className="vop-secondary" onClick={previous} disabled={!canPrevious}><ChevronLeft size={17}/>{tx('common.previous', 'Previous')}</button>
-        <span>{section === 0 ? `Page ${pages.length ? page + 1 : 0} of ${pages.length}` : `${section + 1} / ${sections.length}`}</span>
+        <span>{section === 0 ? `Page ${count ? page + 1 : 0} of ${count}` : `${section + 1} / ${sections.length}`}</span>
         <button type="button" className="vop-primary" onClick={next} disabled={!canNext}>{canNext ? <>{tx('common.next', 'Next')}<ChevronRight size={17}/></> : <><CheckCircle size={17}/>{tx('common.complete', 'Complete')}</>}</button>
       </footer>
     </div>
