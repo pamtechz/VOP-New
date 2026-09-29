@@ -1,3 +1,5 @@
+import { isSafeHttpsMediaUrl } from './mediaSources.js';
+
 /**
  * Published content hierarchy:
  *   Guide -> Lesson -> Chapter -> Section -> Block
@@ -34,11 +36,8 @@ function validTitle(value:unknown, kind:string) {
 function validSrc(value:unknown, kind:'image'|'video'|'audio') {
   const text=String(value||'').trim();
   if(!text||text.length>2048)throw new Error(`A ${kind} block needs a valid media URL.`);
-  let url:URL;
-  try {url=new URL(text);} catch {throw new Error('Media block requires an absolute HTTPS URL.');}
-  if(url.protocol!=='https:'||url.username||url.password||!url.hostname||
-      ['localhost','127.0.0.1','0.0.0.0','::1'].includes(url.hostname.toLowerCase())) {
-    throw new Error('Media blocks require public HTTPS URLs without credentials.');
+  if (!isSafeHttpsMediaUrl(text)) {
+    throw new Error('Media blocks require safe public HTTPS URLs without credentials or local network destinations.');
   }
   return text;
 }
