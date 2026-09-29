@@ -4,6 +4,7 @@ import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } fr
 import { requirePermission } from '../../server/permissions.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { verifiedAssessmentAverage } from '../../shared/graduationEvidence.js';
+import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -82,6 +83,7 @@ async function submit(req: Request, res: Response) {
   const publishedLessons = lessons.filter(item => item.published === true);
   const studyLessons = publishedLessons.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
   const testLessons = publishedLessons.filter(item => String(item.type ?? '') === 'Test');
+  if (!hasRequiredFinalExam(guide, publishedLessons)) return res.status(409).json({error:'The required published final guide examination is missing.'});
   if (publishedLessons.length !== lessons.length || !studyLessons.length || !testLessons.length) {
     return res.status(409).json({ error: 'The candidate cannot submit graduation until the certificate-eligible guide has all required published lessons and assessments.' });
   }
@@ -230,6 +232,7 @@ async function decide(req: Request, res: Response) {
     }
     const studyLessons = records.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
     const testLessons = records.filter(item => item.type === 'Test');
+    if (!hasRequiredFinalExam(guide, records)) return res.status(409).json({error:'The required published final guide examination is missing.'});
     if (!studyLessons.length || !testLessons.length ||
         testLessons.some(item => !Array.isArray(item.questions) || !item.questions.length)) {
       return res.status(409).json({ error: 'The graduation guide has missing study or assessment requirements.' });
