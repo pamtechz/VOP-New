@@ -15,8 +15,8 @@ test('Library is materials-only; the learning tools have independent application
     ['master-guide','master-guide'],['scripture-memory','memory'],['iron-duels','duels'],
   ]) {
     assert.match(routes,new RegExp("'"+route+"'"));
-    assert.ok(app.includes('currentRoute === \' '+route+'\'' ) === false);
-    assert.ok(app.includes('currentRoute === \' '+route)); 
+    assert.ok(app.includes(`currentRoute === '${route}'`),route);
+    assert.ok(app.includes(`mode="${mode}"`),mode);
   }
   assert.match(app,/currentRoute === 'lessons'/);
   assert.match(source('src/pages/EngagementPage.tsx'),/action:'duelFinish'/);
