@@ -310,7 +310,15 @@ test('global resource ownership is isolated across organization and hierarchy co
     const foreignAdmin = environment.authenticatedContext('foreign-admin').firestore();
     const superAdmin = environment.authenticatedContext('super-admin').firestore();
 
-    for (const collection of ['languages','translations','books','radioBroadcasts','playlists']) {
+    // Canonical languages and translations are platform-owned regardless of
+    // contributor role or private/shared flags.
+    for(const collection of ['languages','translations']){
+      await assertFails(orgAdmin.doc(`${collection}/org-owned`).update({title:'tenant bypass'}));
+      await assertFails(orgEditor.doc(`${collection}/org-owned`).update({title:'peer bypass'}));
+      await assertFails(unionAdmin.doc(`${collection}/hierarchy-owned`).update({title:'hierarchy bypass'}));
+      await assertSucceeds(superAdmin.doc(`${collection}/hierarchy-foreign`).update({title:'platform update'}));
+    }
+    for (const collection of ['books','radioBroadcasts','playlists']) {
       await assertSucceeds(orgAdmin.doc(`${collection}/org-owned`).update({ title:'org update' }));
       await assertFails(orgEditor.doc(`${collection}/org-owned`).update({ title:'cross contributor update' }));
       await assertFails(orgEditor.doc(`${collection}/org-owned`).delete());
@@ -319,6 +327,28 @@ test('global resource ownership is isolated across organization and hierarchy co
       await assertFails(foreignAdmin.doc(`${collection}/hierarchy-owned`).delete());
       await assertSucceeds(superAdmin.doc(`${collection}/hierarchy-foreign`).update({ title:'platform update' }));
     }
+    await environment.withSecurityRulesDisabled(async privileged=>{
+      const database=privileged.firestore();
+      await database.doc('books/stewarded').set({
+        ownerUid:'org-admin',ownerOrganizationId:'org-1',organizationId:'',
+        sharingScope:'shared',published:true,
+      });
+      await database.doc('organizations/org-1/languages/abc').set({
+        code:'abc',name:'Organization language',organizationId:'org-1',ownerUid:'org-admin',
+      });
+      await database.doc('organizations/org-1/locales/abc/translations/common.save').set({
+        key:'common.save',value:'Private text',ownerUid:'org-admin',
+      });
+    });
+    await assertFails(orgAdmin.doc('books/stewarded').update({title:'cannot reclaim'}));
+    await assertFails(unionAdmin.doc('books/stewarded').delete());
+    await assertSucceeds(superAdmin.doc('books/stewarded').update({title:'platform steward'}));
+    await assertSucceeds(orgAdmin.doc('organizations/org-1/languages/abc').get());
+    await assertFails(foreignAdmin.doc('organizations/org-1/languages/abc').get());
+    await assertFails(orgAdmin.doc('organizations/org-1/languages/abc').update({name:'direct bypass'}));
+    await assertSucceeds(orgAdmin.doc('organizations/org-1/locales/abc/translations/common.save').get());
+    await assertFails(foreignAdmin.doc('organizations/org-1/locales/abc/translations/common.save').get());
+    await assertFails(orgAdmin.doc('organizations/org-1/locales/abc/translations/common.save').update({value:'direct bypass'}));
 
     // Organization contributors may create their own global contribution.
     await assertSucceeds(orgEditor.doc('radioBroadcasts/org-editor-created').set({
@@ -336,10 +366,64 @@ test('global resource ownership is isolated across organization and hierarchy co
       sharingScope:'private', published:false,
     }));
 
+    // Direct Firestore writes must not bypass the API's atomic platform
+    // language adoption when a tenant publishes a shared guide.
+    await assertFails(orgAdmin.doc('guides/direct-shared').set({
+      id:'direct-shared',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'shared',published:true,
+    }));
+    await assertSucceeds(orgAdmin.doc('guides/local-draft').set({
+      id:'local-draft',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'organization',published:false,
+    }));
+    await assertFails(orgAdmin.doc('guides/local-draft').update({
+      sharingScope:'shared',published:true,
+    }));
+    await assertFails(orgEditor.doc('guides/forged-author').set({
+      id:'forged-author',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'organization',published:false,
+    }));
+    await assertSucceeds(orgAdmin.doc('guides/local-draft/lessons/draft-1').set({
+      id:'draft-1',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'organization',published:false,
+    }));
+    await assertFails(orgAdmin.doc('guides/local-draft/lessons/direct-shared').set({
+      id:'direct-shared',organizationId:'org-1',ownerOrganizationId:'org-1',
+      ownerUid:'org-admin',sharingScope:'shared',published:true,
+    }));
+    await assertSucceeds(orgAdmin.doc('guides/local-draft/lessons/draft-1').delete());
+    await assertSucceeds(orgAdmin.doc('guides/local-draft').delete());
+    await assertSucceeds(superAdmin.doc('guides/platform-shared').set({
+      id:'platform-shared',organizationId:'org-1',ownerOrganizationId:'org-1',
+      sharingScope:'shared',published:true,platformOwned:true,
+    }));
+    await assertFails(orgEditor.doc('radioBroadcasts/org-editor-created').update({
+      sharingScope:'shared',published:true,
+    }));
+    await assertFails(unionAdmin.doc('playlists/union-playlist-created').update({
+      sharingScope:'shared',published:true,
+    }));
+    await assertFails(unionAdmin.doc('playlists/direct-shared').set({
+      id:'direct-shared',organizationId:'',ownerUid:'union-admin',
+      ownerTenantId:'union_admin:union-1',sharingScope:'shared',published:true,
+    }));
+
     // Hierarchy admins can read the global library, but ownership still controls
     // mutation.
-    await assertSucceeds(unionAdmin.doc('radioBroadcasts/hierarchy-foreign').get());
+    await assertFails(unionAdmin.doc('radioBroadcasts/hierarchy-foreign').get());
     await assertSucceeds(unionAdmin.doc('books/org-other').get());
+    await assertFails(foreignAdmin.doc('books/org-other').get());
+    await environment.withSecurityRulesDisabled(async privileged=>{
+      const db=privileged.firestore();
+      await db.doc('books/foreign-owner').set({
+        ownerUid:'org-admin',ownerOrganizationId:'org-2',
+        organizationId:'',sharingScope:'private',published:false,
+      });
+    });
+    await assertFails(orgAdmin.doc('books/foreign-owner').get());
+    await assertFails(orgAdmin.doc('books/foreign-owner').update({title:'wrong tenant'}));
+    await assertFails(unionAdmin.doc('books/foreign-owner').get());
+    await assertSucceeds(foreignAdmin.doc('books/foreign-owner').get());
   } finally {
     await environment.cleanup();
   }

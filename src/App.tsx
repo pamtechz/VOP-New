@@ -11,7 +11,7 @@ import {
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
-import { initializeLocalization, setUiLocale, useLocalization } from './services/i18n';
+import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import { auth, db } from './lib/firebase';
@@ -109,8 +109,11 @@ export const App: React.FC = () => {
     const firebaseAuth = auth;
     return onAuthStateChanged(firebaseAuth, async firebaseUser => {
       if (!firebaseUser) {
+        setLocalizationOrganizationScope('');
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
+        // Clear cached tenant-only labels before showing the anonymous registry.
+        void initializeLocalization(settings);
         return;
       }
       const params = new URLSearchParams(window.location.search);
@@ -142,6 +145,7 @@ export const App: React.FC = () => {
           setStudyError(previous => previous || 'Your Firebase account profile is not configured. Ask an administrator to complete account setup.');
           return;
         }
+        setLocalizationOrganizationScope(profile.organizationId || '');
         setCurrentUser(profile);
         if (profile.preferences?.uiLocale) {
           setUiLocale(profile.preferences.uiLocale);
@@ -150,6 +154,8 @@ export const App: React.FC = () => {
           setActiveLang(profile.preferences.studyLanguage);
           setActiveLanguage(profile.preferences.studyLanguage);
         }
+        // Reload the authenticated tenant language registry and overlays.
+        void initializeLocalization(settings);
         setAllUsers([profile]);
         if (shareCode && firebaseAuth.currentUser) {
           try {
@@ -374,7 +380,7 @@ export const App: React.FC = () => {
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
-            onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} currentRoute={currentRoute} onNavigate={navigate} />
+            onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} onLogout={() => void firebaseSignOut()} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}

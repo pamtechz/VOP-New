@@ -90,7 +90,7 @@ function globalCollectionSubscription(
     callback({ docs: [...docs.values()] } as import('firebase/firestore').QuerySnapshot);
   };
 
-  void currentTenantScope().then(scope => {
+  void currentTenantScope().then(async scope => {
     if (cancelled) return;
     const firestore = getDb();
     const ref = collection(firestore, collectionName);
@@ -103,16 +103,23 @@ function globalCollectionSubscription(
       return;
     }
     const organizationId = scope.organizationId;
-    // Hierarchy administrators have read access to global resources platform-wide,
-    // but mutation remains owner-only. Loading the full global collection here keeps
-    // the admin UI consistent with that policy; canEdit is still decided server-side.
-    if (['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
-      stops.push(onSnapshot(ref, snapshot => {
-        buckets.set('hierarchy-global', snapshot);
-        emit();
-      }, err => onError?.(err)));
-      return;
+    // Full-collection subscriptions would expose other tenants' private drafts.
+    // Hierarchy admins subscribe only to their descendants and public records.
+    const isHierarchy = ['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role);
+    let descendantIds:string[]=[];
+    if (isHierarchy) {
+      const token=await auth?.currentUser?.getIdToken();
+      if (!token) throw new Error('Sign in to inspect hierarchy resources.');
+      const result=await fetch('/api/admin/organizations',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({action:'list'}),
+      });
+      const payload=await result.json().catch(()=>({})) as {items?:Array<{id:string}>;error?:string};
+      if(!result.ok)throw new Error(payload.error||'Could not load descendant organizations.');
+      descendantIds=(payload.items||[]).map(item=>String(item.id||'').trim()).filter(Boolean);
     }
+    if(cancelled)return;
     const publishedField = collectionName === 'languages' ? 'enabled' : collectionName === 'translations' ? null : 'published';
     const sharedQuery = publishedField
       ? query(ref, where('sharingScope', '==', 'shared'), where(publishedField, '==', true))
@@ -120,11 +127,20 @@ function globalCollectionSubscription(
     const platformQuery = publishedField
       ? query(ref, where('organizationId', '==', ''), where(publishedField, '==', true))
       : query(ref, where('organizationId', '==', ''));
-    const sources = [
+    const sources: import('firebase/firestore').Query[] = [
       sharedQuery,
       platformQuery,
-      ...(organizationId ? [query(ref, where('organizationId', '==', organizationId))] : []),
-      query(ref, where('ownerUid', '==', uid)),
+      ...(organizationId ? [
+        query(ref, where('organizationId', '==', organizationId)),
+        query(ref, where('ownerUid', '==', uid),where('ownerOrganizationId','==',organizationId)),
+      ] : []),
+      ...(isHierarchy ? [
+        query(ref,where('ownerTenantId','==',scope.role+':'+scope.nodeId)),
+        ...descendantIds.flatMap(orgId=>[
+          query(ref,where('organizationId','==',orgId)),
+          query(ref,where('ownerOrganizationId','==',orgId)),
+        ]),
+      ] : []),
     ];
     let errorCount = 0;
     sources.forEach((source, index) => {

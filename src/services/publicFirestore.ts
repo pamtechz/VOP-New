@@ -176,6 +176,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
 
   const [
     languageDocs,
+    organizationLanguageDocs,
     translationDocs,
     announcementDocs,
     eventDocs,
@@ -188,6 +189,11 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     churchesSnap,
   ] = await Promise.all([
     loadScoped('languages', 'enabled'),
+    organizationId && currentUser
+      ? getDocs(collection(firestore,'organizations',organizationId,'languages'))
+          .then(snapshot=>snapshot.docs)
+          .catch(()=>[])
+      : Promise.resolve([]),
     organizationId
       ? Promise.all([
           getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))),
@@ -206,10 +212,19 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     loadHierarchy<ChurchOrganization>('churches', 'churchId'),
   ]);
 
-  const languages = languageDocs
-    .map(item => normalizeLanguage(item.id, item.data()))
-    .filter(item => item.enabled)
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  const globalLanguages=languageDocs.map(item=>normalizeLanguage(item.id,item.data()))
+    .filter(item=>item.enabled);
+  const languageMap=new Map(globalLanguages.map(item=>[item.code.toLowerCase(),item]));
+  // Tenant-only languages must be visible in learner study-language selection.
+  // A canonical platform entry always wins a colliding code.
+  organizationLanguageDocs.forEach(item=>{
+    const language=normalizeLanguage(item.id,item.data());
+    if(language.enabled&&!languageMap.has(language.code.toLowerCase())){
+      languageMap.set(language.code.toLowerCase(),language);
+    }
+  });
+  const languages=[...languageMap.values()].sort((a,b)=>
+    (a.sortOrder??0)-(b.sortOrder??0)||a.name.localeCompare(b.name));
 
   const translations: Record<string, Record<string, string>> = {};
   translationDocs.forEach(item => {

@@ -1,3 +1,4 @@
+import { platformStewardedResource } from './platformStewardship.ts';
 /**
  * A contributor can discover shared or same-tenant quizzes, but only the author
  * (and the Super Admin) may receive an unredacted quiz bank. A whitelist, rather
@@ -10,7 +11,7 @@ export function quizManagementItem(
   isSuperAdmin: boolean,
 ) {
   if (isSuperAdmin || (Boolean(callerUid) && data.ownerUid === callerUid)) {
-    return { id, ...data, canEdit: true };
+    return { id, ...data, canEdit: isSuperAdmin || !platformStewardedResource(data) };
   }
 
   const questions = Array.isArray(data.questions)

@@ -5,6 +5,7 @@ import { requirePermission } from '../server/permissions.js';
 import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 import { quizManagementItem } from '../shared/quizManagementVisibility.js';
 import { curriculumAnchorExists } from '../shared/curriculumStructure.js';
+import { assertMutableTenantResource } from '../shared/platformStewardship.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -142,6 +143,7 @@ export default async function handler(req: Request, res: Response) {
       if (!canEditCanonicalContent(ctx, current) || (!ctx.isSuperAdmin && String(current.ownerUid || '') !== ctx.auth.uid)) {
         throw new Error('Only the contributing quiz author or VOP Super Admin can archive it.');
       }
+      assertMutableTenantResource(ctx.isSuperAdmin, current, 'archive');
       const batch = ctx.db.batch();
       batch.update(ref, { archived:true, published:false, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid });
       const assessmentPath = String(current.assessmentPath || '');
@@ -167,6 +169,7 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && (!canEditCanonicalContent(ctx, current) || (!ctx.isSuperAdmin && String(current.ownerUid || '') !== ctx.auth.uid))) {
         throw new Error('Only this quiz\'s contributor or VOP Super Admin can edit it.');
       }
+      if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, current, 'edit');
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const title = String(data.title || '').trim();
       if (!title || title.length > 240) throw new Error('Quiz title is required (max 240 characters).');

@@ -39,8 +39,14 @@ interface TranslationRecord {
   ownerOrganizationId?: string;
 }
 
+interface PendingTranslationProposal {
+  id:string;languageId:string;key:string;currentValue:string;proposedValue:string;
+  reason?:string;status:string;
+}
+
 interface Props {
   kind: ManagedAdminCollection;
+  isSuperAdmin?:boolean;
   languages: CustomLanguage[];
   preferredLanguage?: string;
   canCreate?: boolean;
@@ -154,7 +160,7 @@ function validateRadioMedia(form: FormState) {
   });
 }
 
-export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage, canCreate = true, canUpdate = true, canDelete = true }) => {
+export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredLanguage, canCreate = true, canUpdate = true, canDelete = true, isSuperAdmin=false }) => {
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
   const [records, setRecords] = useState<AdminRecord[]>([]);
   const [playlists, setPlaylists] = useState<AdminRecord[]>([]);
@@ -171,6 +177,8 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   const [proposalValue, setProposalValue] = useState('');
   const [proposalReason, setProposalReason] = useState('');
   const [proposalSaving, setProposalSaving] = useState(false);
+  const [pendingProposals,setPendingProposals]=useState<PendingTranslationProposal[]>([]);
+  const [reviewingProposal,setReviewingProposal]=useState('');
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -178,6 +186,45 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   const [editorOpen, setEditorOpen] = useState(false);
 
   const loadError = (reason: Error) => setError(reason.message || 'Could not load records.');
+  const loadPendingProposals=async()=>{
+    if(!isSuperAdmin)return;
+    const user=auth?.currentUser;
+    if(!user)return;
+    const token=await user.getIdToken();
+    const response=await fetch('/api/admin/content',{method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      body:JSON.stringify({action:'list',collection:'translations'}),
+    });
+    const payload=await response.json().catch(()=>({})) as {
+      error?:string;items?:Array<{id:string;proposals?:PendingTranslationProposal[]}>;
+    };
+    if(!response.ok)throw new Error(payload.error||'Could not load pending translation proposals.');
+    setPendingProposals((payload.items||[]).flatMap(item=>
+      (item.proposals||[]).map(proposal=>({...proposal,languageId:item.id})))
+      .filter(item=>item.status==='pending'));
+  };
+  const reviewProposal=async(proposal:PendingTranslationProposal,decision:'approve'|'reject')=>{
+    if(!isSuperAdmin||reviewingProposal)return;
+    if(!window.confirm((decision==='approve'?'Publish':'Reject')+' this proposed translation?'))return;
+    setReviewingProposal(proposal.id);setError('');setMessage('');
+    try{
+      if(!auth?.currentUser)throw new Error('Sign in first.');
+      const token=await auth.currentUser.getIdToken();
+      const response=await fetch('/api/admin/content',{method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({action:'reviewTranslationProposal',collection:'translations',
+          languageId:proposal.languageId,proposalId:proposal.id,decision}),
+      });
+      const result=await response.json().catch(()=>({})) as {error?:string};
+      if(!response.ok)throw new Error(result.error||'The review could not be saved.');
+      await loadPendingProposals();
+      setMessage(decision==='approve'?'Approved translation published globally.':'Translation proposal rejected.');
+      if(decision==='approve')window.dispatchEvent(new CustomEvent('vop_ui_translation_updated',{
+        detail:{locale:proposal.languageId},
+      }));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not review proposal.');}
+    finally{setReviewingProposal('');}
+  };
 
   useEffect(() => {
     setForm(blankForm(kind));
@@ -207,6 +254,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       window.addEventListener('vop_localization_discovered', refreshDetectedTranslations);
       window.addEventListener('vop_data_updated', refreshDetectedTranslations);
       const unsubscribe = subscribeTranslations(setTranslations, loadError);
+      if(isSuperAdmin)void loadPendingProposals().catch(loadError);
       return () => {
         window.removeEventListener('vop_localization_discovered', refreshDetectedTranslations);
         window.removeEventListener('vop_data_updated', refreshDetectedTranslations);
@@ -218,7 +266,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
     if (kind !== 'radio') { setPlaylists([]); return unsubscribe; }
     const unsubscribePlaylists = subscribeAdminCollection('playlists', setPlaylists, loadError);
     return () => { unsubscribe(); unsubscribePlaylists(); };
-  }, [kind]);
+  }, [kind,isSuperAdmin]);
 
   useEffect(() => {
     const enabledLanguages = languages.filter(language => language.enabled !== false && !isEnglishLocale(language.code));
@@ -443,6 +491,34 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
         } />
         {error && <ErrorBox message={error} clear={()=>setError('')} />}
         {message && <Toast message={message}/>}
+        {isSuperAdmin&&<section className="vop-card vop-form-card" aria-label="Pending translation reviews" style={{marginBottom:18}}>
+          <div className="vop-section-title"><div><h2>Translation review queue</h2>
+            <p>Approve a contribution to publish its wording system-wide, or reject it without changing the canonical translation.</p>
+          </div><button type="button" className="vop-secondary"
+            onClick={()=>void loadPendingProposals().catch(loadError)}>
+            <RefreshCw size={16}/>Refresh reviews</button></div>
+          {!pendingProposals.length?<div className="vop-empty">No pending translation proposals.</div>
+          :<div className="vop-translation-list">{pendingProposals.map(proposal=>
+            <article key={proposal.languageId+':'+proposal.id} className="vop-translation-row">
+              <div className="vop-translation-source">
+                <strong>{translationSourceLabel(proposal.key,
+                  detectedTranslations.find(entry=>entry.key===proposal.key)?.english)}</strong>
+                <small>{languages.find(language=>language.code.toLowerCase()===proposal.languageId)?.name||'Configured language'}</small>
+                <p>Current: {proposal.currentValue||'Not translated'}</p>
+                {proposal.reason&&<p>Contributor note: {proposal.reason}</p>}
+              </div>
+              <div className="vop-translation-input-wrap"><strong>Proposed: {proposal.proposedValue}</strong>
+                <div className="vop-reference-actions">
+                  <button type="button" className="vop-primary"
+                    disabled={Boolean(reviewingProposal)}
+                    onClick={()=>void reviewProposal(proposal,'approve')}><Check size={16}/>Approve</button>
+                  <button type="button" className="vop-secondary vop-danger-button"
+                    disabled={Boolean(reviewingProposal)}
+                    onClick={()=>void reviewProposal(proposal,'reject')}><X size={16}/>Reject</button>
+                </div>
+              </div>
+            </article>)}</div>}
+        </section>}
         <div className="vop-grid-2">
           <div className="vop-card vop-form-card vop-translation-target">
             <div className="vop-section-title"><div><h2>{t('admin.translation_target','Translation Target')}</h2><p>{t('admin.translation_target_hint','Keys are detected by the application; administrators do not create them manually.')}</p></div></div>

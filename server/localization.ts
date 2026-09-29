@@ -13,6 +13,7 @@ export async function saveLocaleTranslations(
   ctx: TenantContext, locale: string, values: Record<string, unknown>,
   sources: Record<string, unknown>, status: string,
 ) {
+  if (!ctx.isSuperAdmin) throw new Error('Only VOP Super Admin may update canonical translations. Submit a review proposal instead.');
   if (isEnglishLocale(locale)) throw new Error('English is the source language. Select another language to translate into.');
   if (!['draft', 'review', 'published', 'deleted'].includes(status)) throw new Error('Invalid translation status.');
   const entries = Object.entries(values).map(([key, value]) => [translationKey(key), String(value ?? '')] as const);

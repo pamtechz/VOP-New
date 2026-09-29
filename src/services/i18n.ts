@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { LanguageCode, CustomLanguage, AppSettings } from '../types';
 import { registerLocalizationString } from './storage';
+import { auth } from '../lib/firebase';
 
 const UI_LOCALE_KEY = 'vop_ui_locale';
 const dictionaryCache: Record<string, Record<string,string>> = {};
@@ -9,10 +10,41 @@ const localeState = { value: '', version: 0 };
 const localeRegistry: CustomLanguage[] = [];
 const localeAliases: Record<string,string> = {};
 let localeRegistryLoaded = false;
+let localeAccountScope = '';
+let localeOrganizationScope = '';
 const listeners = new Set<() => void>();
 let localeRequest = 0;
 
 function notify() { listeners.forEach(listener => listener()); }
+function clearForAccountChange() {
+  const next=(auth?.currentUser?.uid || '')+'|'+localeOrganizationScope;
+  if(next===localeAccountScope)return;
+  localeAccountScope=next;
+  Object.keys(dictionaryCache).forEach(key=>delete dictionaryCache[key]);
+  Object.keys(localeFallbacks).forEach(key=>delete localeFallbacks[key]);
+  Object.keys(localeDirections).forEach(key=>delete localeDirections[key]);
+  Object.keys(localeAliases).forEach(key=>delete localeAliases[key]);
+  localeRegistry.splice(0,localeRegistry.length);
+  localeRegistryLoaded=false;
+  localeState.version++;
+  notify();
+}
+/** Distinguish every tenant context even when a single user belongs to
+ * multiple organizations. Never reuse private labels across tenant switches. */
+export function setLocalizationOrganizationScope(organizationId:string) {
+  const next=String(organizationId||'').trim();
+  if(next===localeOrganizationScope)return;
+  localeOrganizationScope=next;
+  clearForAccountChange();
+}
+async function localeHeaders():Promise<Record<string,string>> {
+  const result:Record<string,string>={Accept:'application/json'};
+  if(auth?.currentUser) {
+    try { result.Authorization='Bearer '+await auth.currentUser.getIdToken(); }
+    catch { /* Anonymous public locale fallback remains available. */ }
+  }
+  return result;
+}
 function normalizeLocale(value: unknown) { return String(value || '').trim().toLowerCase(); }
 function isLocale(value: unknown) { return /^[a-z]{2,3}(?:[-_][a-z]{2,4})?$/i.test(String(value || '').trim()); }
 function resolveRegisteredLocale(value: unknown) {
@@ -53,8 +85,9 @@ export const getAvailableLanguages = (settings?: AppSettings): CustomLanguage[] 
 export const getAvailableUiLocales = (): CustomLanguage[] => [...localeRegistry];
 
 export async function loadUiLocaleRegistry(): Promise<CustomLanguage[]> {
+  clearForAccountChange();
   try {
-    const response = await fetch('/api/localization', { headers:{Accept:'application/json'} });
+    const response = await fetch('/api/localization', { headers:await localeHeaders() });
     if (!response.ok) throw new Error('Locale registry unavailable.');
     const payload = await response.json();
     const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -97,11 +130,12 @@ export const setUiLocale = (locale: LanguageCode) => {
 };
 
 async function loadDictionary(locale: string, fallback: string, visited = new Set<string>()): Promise<void> {
+  clearForAccountChange();
   const requested = resolveRegisteredLocale(locale);
   if (!requested || visited.has(requested)) return;
   visited.add(requested);
   if (!dictionaryCache[requested]) {
-    const response = await fetch(`/api/localization?locale=${encodeURIComponent(requested)}`, { headers:{Accept:'application/json'} });
+    const response = await fetch(`/api/localization?locale=${encodeURIComponent(requested)}`, { headers:await localeHeaders() });
     if (!response.ok) throw new Error(`Locale ${requested} is unavailable.`);
     const payload = await response.json();
     dictionaryCache[requested] = payload?.translations && typeof payload.translations === 'object' ? payload.translations : {};
@@ -117,6 +151,7 @@ async function loadDictionary(locale: string, fallback: string, visited = new Se
 const localeDirections: Record<string, 'rtl' | 'ltr'> = {};
 export async function loadUiLocale(locale: LanguageCode, fallback = 'en', force = false): Promise<void> {
   const request = ++localeRequest;
+  clearForAccountChange();
   if (!localeRegistryLoaded) await loadUiLocaleRegistry();
   const requested = resolveRegisteredLocale(locale) || resolveRegisteredLocale(fallback);
   if (force) delete dictionaryCache[requested];

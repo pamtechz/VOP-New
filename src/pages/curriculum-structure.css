@@ -83,3 +83,27 @@
 .vop-lesson-anchored-quizzes button span{flex:1}
 .vop-lesson-anchored-quizzes button:hover{background:#e2efff}
 .vop-lesson-anchored-quizzes button:focus-visible{outline:3px solid #edb749;outline-offset:2px}
+
+/* PCM-inspired split workspace: a compact, collapsible chapter outline at
+   left and the existing full-featured editor at right. Keep inherited UI
+   typography; the sidebar redesign must not resize the reader or forms. */
+.vop-structure-workspace{display:grid;grid-template-columns:minmax(190px,255px) minmax(0,1fr);gap:14px;align-items:start;min-width:0}
+.vop-structure-outline{position:sticky;top:12px;display:grid;gap:8px;padding:14px;background:#13233e;color:#f5f8ff;border-radius:13px;max-height:min(75vh,740px);overflow-y:auto;min-width:0}
+.vop-structure-outline>strong{font-size:12px;letter-spacing:.09em}
+.vop-structure-outline>a{display:flex;align-items:center;gap:11px;padding:11px 9px;border:1px solid #354660;background:#1f2b42;color:#f3f6ff;border-radius:9px;text-decoration:none;overflow-wrap:anywhere}
+.vop-structure-outline>a>span:first-child{display:grid;place-items:center;flex:0 0 32px;height:34px;border-radius:7px;background:#1146b0;font-weight:800}
+.vop-structure-outline>a>span:last-child{display:grid;gap:3px;min-width:0}
+.vop-structure-outline>a small{color:#c8d3e5;font-size:inherit;opacity:.8}
+.vop-structure-outline>a:focus-visible{outline:3px solid #f3b94f;outline-offset:2px}
+.vop-structure-outline>p{margin:7px 0 0;opacity:.8;line-height:1.5}
+.vop-structure-content{display:grid;gap:13px;min-width:0}
+.vop-structure-transfer{flex:1 1 165px;max-width:280px}
+.vop-structure-transfer select{max-width:100%}
+.vop-structure-crosslesson{display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding:7px;background:#f3f7ff;border:1px solid #e1eaf6;border-radius:9px}
+.vop-structure-crosslesson>label{flex:1 1 170px;min-width:150px}
+.vop-structure-crosslesson>button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 10px;border:1px solid #d9e4ef;background:#fff;border-radius:8px;color:#245885;font:inherit;cursor:pointer}
+.vop-structure-crosslesson button:disabled{opacity:.42;cursor:not-allowed}
+.vop-structure-block-actions .vop-structure-crosslesson{flex:1 1 100%;width:100%}
+.vop-structure-block-actions .vop-structure-crosslesson button{flex:0 0 auto}
+@media(max-width:1000px){.vop-structure-workspace{grid-template-columns:1fr}.vop-structure-outline{position:static;display:flex;flex-wrap:wrap;max-height:none}.vop-structure-outline>a{flex:1 1 190px}.vop-structure-outline>p{flex:1 1 100%}}
+@media(max-width:540px){.vop-structure-crosslesson{width:100%}.vop-structure-crosslesson>label{flex:1 1 100%;min-width:0}.vop-structure-transfer{flex:1 1 100%;max-width:none}.vop-structure-outline>a{flex:1 1 100%}}

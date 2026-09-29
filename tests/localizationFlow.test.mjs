@@ -20,11 +20,11 @@ const db = {
   collection(path) { return { get: async () => ({ docs: [...records.keys()].filter(key => key.startsWith(path + '/') && key.split('/').length === path.split('/').length + 1).map(snapshot) }) }; },
   async runTransaction(callback) {
     const writes = [];
-    await callback({ get: async ref => snapshot(ref.path), set: (ref, value) => writes.push([ref.path, value]) });
-    for (const [path, value] of writes) records.set(path, merge({ ...records.get(path) }, value));
+    await callback({ get: async ref => snapshot(ref.path), set: (ref, value) => writes.push([ref.path, value]), delete: ref => writes.push([ref.path, null]) });
+    for (const [path, value] of writes) { if(value===null)records.delete(path); else records.set(path, merge({ ...records.get(path) }, value)); }
   },
 };
-const ctx = { db, auth: { uid: 'translator' }, isSuperAdmin: false };
+const ctx = { db, auth: { uid: 'translator' }, isSuperAdmin: false, organizationId:'', tenantType:'platform' };
 globalThis.__vopLocaleTestContext = ctx;
 const server = await createServer({ configFile: false, server: { middlewareMode: true }, appType: 'custom', plugins: [{
   name: 'localization-test-boundaries', enforce: 'pre',
@@ -39,16 +39,16 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
 }] });
 after(async () => { await server.close(); delete globalThis.__vopLocaleTestContext; });
 const { default: handler } = await server.ssrLoadModule('/api/localization.ts');
-async function request(method, body = {}, query = {}) {
+async function request(method, body = {}, query = {}, headers = {}) {
   const res = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; } };
-  await handler({ method, body, query }, res);
+  await handler({ method, body, query, headers }, res);
   return res;
 }
 function reset() {
   records.clear();
   records.set('languages/bem', { code: 'bem', name: 'Bemba', enabled: true });
   records.set('languages/eng', { code: 'eng', name: 'English', enabled: true });
-  ctx.auth.uid = 'translator'; ctx.isSuperAdmin = false;
+  ctx.auth.uid = 'translator'; ctx.isSuperAdmin = true; ctx.organizationId=''; ctx.tenantType='platform';
 }
 
 test('bulkSave publishes flat and namespaced translations returned by selected language', async () => {
@@ -71,9 +71,11 @@ test('drafting, clearing and deleting a translation cannot resurrect old publish
   assert.deepEqual((await request('GET', {}, { locale: 'bem' })).payload.translations, {});
 });
 
-test('translation owner is enforced while Super Admin can update without taking ownership', async () => {
+test('only Super Admin may modify canonical translations, preserving provenance', async () => {
   reset();
   await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Original' } });
+  ctx.auth.uid = 'translator'; ctx.isSuperAdmin = false;
+  assert.equal((await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Changed' } })).code, 403);
   ctx.auth.uid = 'other';
   assert.equal((await request('POST', { action: 'bulkSave', locale: 'bem', values: { 'common.save': 'Changed' } })).code, 403);
   assert.equal(records.get('translations/bem').values['common.save'], 'Original');
@@ -93,6 +95,43 @@ test('English destinations, invalid keys and excessive writes are rejected atomi
   const values = Object.fromEntries(Array.from({length:351}, (_, i) => ['key_' + i, 'value']));
   assert.equal((await request('POST', { action: 'bulkSave', locale: 'bem', values })).code, 400);
   assert.equal(records.has('translations/bem'), false);
+});
+
+test('organization translations never alter canonical text or another organization', async()=>{
+  reset();
+  ctx.isSuperAdmin=false;ctx.organizationId='org-a';ctx.tenantType='organization';
+  const orgLanguage='organizations/org-a/languages/bem';
+  records.set(orgLanguage,{code:'bem',enabled:true,organizationId:'org-a',ownerUid:'translator'});
+  const save=await request('POST',{action:'tenantbulksave',locale:'bem',values:{'common.save':'Sunga (Org A)'}});
+  assert.equal(save.code,200,JSON.stringify(save.payload));
+  assert.equal(records.has('translations/bem'),false);
+  assert.equal(records.has('locales/bem/translations/common.save'),false);
+  assert.deepEqual((await request('GET',{}, {locale:'bem'})).payload.translations,{});
+  const owned=await request('GET',{}, {locale:'bem'},{authorization:'Bearer mock'});
+  assert.equal(owned.payload.translations['common.save'],'Sunga (Org A)');
+  ctx.organizationId='org-b';ctx.auth.uid='other';
+  assert.deepEqual((await request('GET',{}, {locale:'bem'},{authorization:'Bearer mock'})).payload.translations,{});
+  const foreignList=await request('POST',{action:'tenantlist',locale:'bem'});
+  assert.deepEqual(foreignList.payload.items,[]);
+  ctx.organizationId='org-a';ctx.auth.uid='other';
+  assert.equal((await request('POST',{action:'tenantsave',locale:'bem',key:'common.save',value:'Takeover'})).code,403);
+  assert.equal(records.get('organizations/org-a/locales/bem/translations/common.save').value,'Sunga (Org A)');
+  ctx.auth.uid='translator';
+  assert.equal((await request('POST',{action:'tenantdelete',locale:'bem',key:'common.save'})).code,200);
+  assert.equal(records.has('organizations/org-a/locales/bem/translations/common.save'),false);
+});
+
+test('tenant locale registry is visible only after authenticated tenant selection',async()=>{
+  reset();
+  ctx.isSuperAdmin=false;ctx.organizationId='org-a';ctx.tenantType='organization';
+  records.set('organizations/org-a/languages/gzz',{code:'gzz',enabled:true,name:'Local language',ownerUid:'translator'});
+  const publicList=await request('GET');
+  assert.equal(publicList.payload.items.some(item=>item.code==='gzz'),false);
+  const privateList=await request('GET',{}, {},{authorization:'Bearer mock'});
+  assert.equal(privateList.payload.items.some(item=>item.code==='gzz'),true);
+  ctx.organizationId='org-b';
+  const other=await request('GET',{}, {},{authorization:'Bearer mock'});
+  assert.equal(other.payload.items.some(item=>item.code==='gzz'),false);
 });
 
 test('legacy fallback labels use selected locale, exact keys win and missing labels keep original text', async () => {

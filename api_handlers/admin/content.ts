@@ -4,9 +4,13 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
 import { requirePermission, resourceForCollection } from '../../server/permissions.js';
+import { assertMutableTenantResource, platformStewardedResource } from '../../shared/platformStewardship.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
+import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
+import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
+import { translationKey } from '../../server/localization.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -78,6 +82,12 @@ export default async function handler(req: Request, res: Response) {
 
     const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    // Platform locale records are not organization-owned. Only Super Admin may mutate them;
+    // other tenants contribute translation proposals through the reviewed workflow.
+    if (!ctx.isSuperAdmin && ['languages','translations'].includes(collection) &&
+        !['list','proposeTranslation'].includes(action)) {
+      throw new Error('Only VOP Super Admin may change system languages and translations. Submit a translation proposal instead.');
+    }
     const permissionResource = resourceForCollection(collection);
     const permissionAction = action === 'list' || action === 'listGuides' || action === 'listGuideLessons' ? 'view' : action === 'delete' ? 'delete' : action === 'publishLesson' || action === 'unpublishLesson' ? 'publish' : action === 'forkGuide' || action === 'forkLesson' ? 'create' : action === 'proposeTranslation' ? 'create' : action === 'reviewTranslationProposal' ? 'approve' : '';
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
@@ -113,7 +123,7 @@ export default async function handler(req: Request, res: Response) {
       const snap = await guide.ref.collection('lessons').get();
       const items = snap.docs.map(doc => {
         const row = doc.data();
-        const canEdit = ctx.isSuperAdmin || String(row.ownerUid || '') === ctx.auth.uid;
+        const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
         if (!canEdit) return {
           id:doc.id, guideId:selectedGuideId, title:String(row.title || ''),
           lessonNumber:String(row.lessonNumber || ''), type:row.type === 'Test' ? 'Test' : 'Lesson',
@@ -152,7 +162,7 @@ export default async function handler(req: Request, res: Response) {
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
-          canEdit: ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid,
+          canEdit: ctx.isSuperAdmin || (!platformStewardedResource(d.data()) && (ctx.tenantType === 'hierarchy' || String(d.data().ownerUid || '') === ctx.auth.uid)),
         };
       }));
       return res.status(200).json({ ok: true, items });
@@ -164,6 +174,21 @@ export default async function handler(req: Request, res: Response) {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       const lang = String(data.language || '').trim().toLowerCase();
       if (!isLanguageCode(lang)) throw new Error('A valid language code is required for a guide.');
+      if (!isEnglishLocale(lang)) {
+        // A tenant cannot claim another organization's private language simply
+        // by submitting its code. The global or own organization registry
+        // must contain an enabled entry before a guide can use the language.
+        const [globalLanguage, tenantLanguage] = await Promise.all([
+          ctx.db.doc('languages/' + lang).get(),
+          effectiveOrganizationId
+            ? ctx.db.doc('organizations/' + effectiveOrganizationId + '/languages/' + lang).get()
+            : Promise.resolve(null),
+        ]);
+        if (!(globalLanguage.exists && globalLanguage.data()?.enabled !== false)
+          && !(tenantLanguage?.exists && tenantLanguage.data()?.enabled !== false)) {
+          throw new Error('Choose an enabled platform language or a language registered by your organization.');
+        }
+      }
       const title = String(data.title || '').trim();
       if (!title) throw new Error('Guide title is required.');
       const id = data.id ? safeId(data.id) : safeId(`guide-${randomUUID().replace(/-/g, '').slice(0,24)}`);
@@ -174,8 +199,11 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
       }
       if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
+      await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
+      if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
-      await ref.set({
+      if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, current, 'edit');
+      const nextGuide = {
         id,
         organizationId: effectiveOrganizationId,
         ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
@@ -201,7 +229,28 @@ export default async function handler(req: Request, res: Response) {
         createdAt: current.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
-      }, { merge: true });
+      };
+      const isSharedPublication = Boolean(effectiveOrganizationId &&
+        data.published===true && data.sharingScope==='shared');
+      if (isSharedPublication) {
+        // Cross-tenant visibility implies platform language stewardship.
+        // Publication and adoption commit together or not at all.
+        await ctx.db.runTransaction(async transaction=>{
+          const currentSnapshot=await transaction.get(ref);
+          if(currentSnapshot.exists){
+            const now=currentSnapshot.data()||{};
+            if(String(now.organizationId||'')!==effectiveOrganizationId ||
+              !(await canManageOrganizationContent(ctx,now)))
+              throw new Error('The guide is no longer editable in this organization.');
+            assertMutableTenantResource(ctx.isSuperAdmin,now,'edit');
+          }
+          await adoptOrganizationLanguage(ctx,transaction,effectiveOrganizationId,lang);
+          transaction.set(ref,nextGuide,{merge:true});
+        });
+        await writeTenantAudit(ctx,'guide.language.adoption',`guides/${id}`,undefined,{language:lang});
+      } else {
+        await ref.set(nextGuide,{merge:true});
+      }
       const saved = await ref.get();
       await writeTenantAudit(ctx, existing.exists ? 'guide.update' : 'guide.create', `guides/${id}`, current, saved.data());
       return res.status(200).json({ ok: true, item: { id, ...saved.data() } });
@@ -215,6 +264,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`guides/${requestedId ? safeId(requestedId) : guideId(effectiveOrganizationId, lang)}`);
       const current = await ref.get();
       if (!current.exists || !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can archive this guide.');
+      assertMutableTenantResource(ctx.isSuperAdmin, current.data(), 'archive');
       await ref.set({ published: false, archived: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid }, { merge: true });
       return res.status(200).json({ ok: true });
     }
@@ -276,6 +326,81 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true, item:{id, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`, organizationId:ctx.organizationId} });
     }
 
+    if (action === 'transferLessonStructure') {
+      if (collection !== 'curriculum') throw new Error('Only curriculum lessons support section or block transfers.');
+      await requirePermission(ctx, 'curriculum', 'update');
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
+      const guideId = safeId(data.guideId);
+      const sourceId = safeId(data.sourceLessonId);
+      const destinationId = safeId(data.destinationLessonId);
+      const anchorId = safeId(data.anchorId);
+      const parentId = safeId(data.destinationParentId);
+      if (sourceId === destinationId) throw new Error('Use the lesson editor to move or duplicate content within the same lesson.');
+      if (!['section','block'].includes(String(data.kind)) || !['move','copy'].includes(String(data.mode))) {
+        throw new Error('Choose a section or block and a move or copy operation.');
+      }
+      const kind = data.kind as 'section'|'block';
+      const mode = data.mode as 'move'|'copy';
+      const guideRef = ctx.db.doc('guides/' + guideId);
+      const sourceRef = guideRef.collection('lessons').doc(sourceId);
+      const destinationRef = guideRef.collection('lessons').doc(destinationId);
+      const quizQuery = ctx.db.collection('quizzes').where('guideId','==',guideId);
+      const result = await ctx.db.runTransaction(async transaction => {
+        const [guideSnapshot,sourceSnapshot,destinationSnapshot,quizSnapshot] = await Promise.all([
+          transaction.get(guideRef),transaction.get(sourceRef),transaction.get(destinationRef),
+          transaction.get(quizQuery),
+        ]);
+        if (!guideSnapshot.exists || guideSnapshot.data()?.archived === true ||
+            String(guideSnapshot.data()?.organizationId || '') !== effectiveOrganizationId) {
+          throw new Error('The source guide is not available in the selected tenant.');
+        }
+        if (!sourceSnapshot.exists || !destinationSnapshot.exists) throw new Error('Both lessons must exist before transfer.');
+        const source = sourceSnapshot.data() || {};
+        const destination = destinationSnapshot.data() || {};
+        for (const lesson of [source,destination]) {
+          if (lesson.archived === true || lesson.published === true || lesson.type === 'Test' ||
+              lesson.sourceQuizId || String(lesson.guideId || guideId) !== guideId) {
+            throw new Error('Transfers require two draft study lessons in the same guide.');
+          }
+          if (!(ctx.isSuperAdmin || canEditCanonicalContent(ctx,lesson))) {
+            throw new Error('You may transfer content only between lessons you are authorized to edit.');
+          }
+          assertMutableTenantResource(ctx.isSuperAdmin,lesson,'edit');
+        }
+        const next = transferCurriculumNode(
+          source.chapters,destination.chapters,kind,anchorId,parentId,mode,
+        );
+        if (mode === 'move' && quizSnapshot.docs.some(doc => {
+          const quiz = doc.data();
+          return quiz.archived !== true && String(quiz.lessonId || '') === sourceId &&
+            next.movedAnchorIds.includes(String(quiz.anchorId || ''));
+        })) {
+          throw new Error('This content has attached quizzes. Keep it in its current lesson or copy it without quiz links.');
+        }
+        const fields = (chapters: typeof next.source) => {
+          const pages = curriculumPages(chapters);
+          return {
+            chapters,
+            contentPages:pages.map(({blocks:_blocks,...page})=>page),
+            pages:pages.map(page=>({
+              pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+              chapterTitle:page.chapterTitle,sectionId:page.sectionId,
+              sectionTitle:page.sectionTitle,blocks:page.blocks,
+            })),
+            updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+          };
+        };
+        if (mode === 'move') transaction.update(sourceRef,fields(next.source));
+        transaction.update(destinationRef,fields(next.destination));
+        return {source:mode==='move'?next.source:source.chapters,destination:next.destination};
+      });
+      await writeTenantAudit(ctx,'lesson.structure.'+mode,
+        sourceRef.path+' -> '+destinationRef.path,undefined,{
+          kind,anchorId,sourceLessonId:sourceId,destinationLessonId:destinationId,
+        });
+      return res.status(200).json({ok:true,...result});
+    }
+
     if (action === 'upsertLesson') {
       if (collection !== 'curriculum') throw new Error('Lesson management requires the curriculum collection.');
       if (!effectiveOrganizationId && !ctx.isSuperAdmin) throw new Error('Select an organization within your authorized scope before saving a lesson.');
@@ -327,6 +452,7 @@ export default async function handler(req: Request, res: Response) {
         }
       }
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
+      if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
       await ref.set({
         ...data,
         // Derive learner pages on the server, not from potentially forged
@@ -367,6 +493,7 @@ export default async function handler(req: Request, res: Response) {
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
       if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');
+      if (current.exists) assertMutableTenantResource(ctx.isSuperAdmin, current.data(), action === 'unpublishLesson' ? 'archive' : 'edit');
       if (action === 'unpublishLesson') {
         if (!current.exists) throw new Error('The lesson was not found.');
         if (!(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, current.data()) : canEditCanonicalContent(ctx, current.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can unpublish this lesson.');
@@ -481,7 +608,6 @@ export default async function handler(req: Request, res: Response) {
           const byId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
           [...flat.docs, ...nested.docs].forEach(doc => byId.set(doc.id, doc));
           snap = { docs: [...byId.values()] } as FirebaseFirestore.QuerySnapshot;
-        }
         } else {
           return res.status(200).json({ ok:true, items:[] });
         }
@@ -533,7 +659,12 @@ export default async function handler(req: Request, res: Response) {
             const legacySnap = await ctx.db.doc(`translations/${code}`).get();
             const legacyValues = legacySnap.data()?.values;
             if (legacyValues && typeof legacyValues === 'object') Object.entries(legacyValues as Record<string,unknown>).forEach(([key,value]) => { if (!values[key] && typeof value === 'string' && value.trim()) values[key] = value; });
-            return { id: code, code, languageCode: code, name: String(language.name || language.nativeName || code), nativeName: String(language.nativeName || language.name || code), values, enabled: language.enabled !== false, canEdit: ctx.isSuperAdmin, localeExists: localeSnap.exists };
+            const proposalsSnap=ctx.isSuperAdmin
+              ? await ctx.db.collection(`translations/${code}/proposals`).where('status','==','pending').limit(100).get()
+              : await ctx.db.collection(`translations/${code}/proposals`).where('proposerUid','==',ctx.auth.uid).limit(20).get();
+            return { id: code, code, languageCode: code, name: String(language.name || language.nativeName || code), nativeName: String(language.nativeName || language.name || code), values, enabled: language.enabled !== false,
+              canEdit: ctx.isSuperAdmin, localeExists: localeSnap.exists,
+              proposals:proposalsSnap.docs.map(doc=>({id:doc.id,...doc.data()})) };
           }));
           return res.status(200).json({ ok:true, items });
         }
@@ -549,19 +680,25 @@ export default async function handler(req: Request, res: Response) {
           return res.status(200).json({ ok: true, items: snap.docs.map(d => ({ id:d.id, ...d.data(), canEdit: true })) });
         }
         const snap = await ctx.db.collection(collection).get();
+        const descendantIds = ctx.tenantType === 'hierarchy'
+          ? new Set(await accessibleOrganizationIds(ctx))
+          : new Set<string>();
         const visible = snap.docs.filter(d => {
           const data = d.data() || {};
-          const ownerUid = String(data.ownerUid || '');
-          if (ownerUid === ctx.auth.uid) return true;
-          // Hierarchy administrators can inspect the platform-wide global library,
-          // but ownership is still enforced for every mutation.
-          if (ctx.tenantType === 'hierarchy') return true;
-          if (collection === 'translations') return true;
-          if (ctx.orgId && String(data.organizationId || '') === ctx.orgId) return true;
-          if (String(data.sharingScope || '') !== 'shared') return false;
-          if (collection === 'languages') return data.enabled === true;
-          if (collection === 'playlists') return data.published === true;
-          return data.published === true;
+          const orgId = String(data.organizationId || '');
+          const ownerOrgId = String(data.ownerOrganizationId || '');
+          const ownTenant = ctx.tenantType === 'hierarchy'
+            ? String(data.ownerTenantId || '') === ctx.tenantId
+            : Boolean(ctx.organizationId && (ownerOrgId || orgId) === ctx.organizationId);
+          if (String(data.ownerUid || '') === ctx.auth.uid && ownTenant) return true;
+          if (ctx.tenantType === 'hierarchy'
+            && (String(data.ownerTenantId || '') === ctx.tenantId
+              || descendantIds.has(ownerOrgId || orgId))) return true;
+          if (ctx.organizationId && orgId === ctx.organizationId) return true;
+          const published = collection === 'languages'
+            ? data.enabled === true
+            : data.published === true;
+          return published && (String(data.sharingScope || '') === 'shared' || orgId === '');
         });
         if (collection === 'translations') {
           const items = await Promise.all(visible.map(async d => {
@@ -583,7 +720,7 @@ export default async function handler(req: Request, res: Response) {
           items: visible.map(d => ({
             id:d.id,
             ...d.data(),
-            canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
+            canEdit: ctx.isSuperAdmin || (canEditCanonicalContent(ctx, d.data()) && !platformStewardedResource(d.data())),
           })),
         });
       }
@@ -603,27 +740,33 @@ export default async function handler(req: Request, res: Response) {
         const items = snapshots.flatMap(snap => snap.docs.map(d => ({
           id:d.id,
           ...d.data(),
-          canEdit: ctx.isSuperAdmin || canEditCanonicalContent(ctx, d.data()),
+          canEdit: ctx.isSuperAdmin || (canEditCanonicalContent(ctx, d.data()) && !platformStewardedResource(d.data())),
           scope: 'organization',
         })));
         return res.status(200).json({ ok: true, items });
       }
+    }
 
     if (collection === 'translations' && action === 'proposeTranslation') {
       if (!ctx.organizationId && ctx.tenantType !== 'hierarchy') throw new Error('A tenant membership is required to submit a translation proposal.');
-      const languageId = safeId(body.languageId);
-      if (isEnglishLocale(languageId)) throw new Error('English is the source language. Select another language to translate into.');
-      const key = String(body.key || '').trim();
+      const languageId = safeId(body.languageId).toLowerCase();
+      if (!isLanguageCode(languageId) || isEnglishLocale(languageId)) throw new Error('Choose a valid non-English language.');
+      const key = translationKey(body.key);
       const proposedValue = String(body.proposedValue || '').trim();
       const reason = String(body.reason || '').trim();
       if (!key || !proposedValue) throw new Error('Translation key and proposed value are required.');
+      const registry=await ctx.db.doc('languages/'+languageId).get();
+      if (!registry.exists || registry.data()?.enabled===false)
+        throw new Error('This platform language is unavailable. Publish the language before proposing global wording.');
       const sourceRef = ctx.db.doc('translations/' + languageId);
-      const source = await sourceRef.get();
-      if (!source.exists) throw new Error('The selected translation record does not exist.');
+      const [source,canonical]=await Promise.all([
+        sourceRef.get(),ctx.db.doc(`locales/${languageId}/translations/${key}`).get(),
+      ]);
       const sourceData = source.data() || {};
-      const existingValues = sourceData.values && typeof sourceData.values === 'object' ? sourceData.values as Record<string, unknown> : {};
-      if (!(key in existingValues)) throw new Error('The selected translation key does not exist.');
-      if (String(existingValues[key] || '') === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
+      const existingValues = sourceData.values && typeof sourceData.values === 'object'
+        ? sourceData.values as Record<string, unknown> : {};
+      const currentValue=String(canonical.data()?.value || existingValues[key] || '');
+      if (currentValue === proposedValue) throw new Error('The proposed translation is identical to the current translation.');
       const proposalCollection = ctx.db.collection('translations/' + languageId + '/proposals');
       const existingProposals = await proposalCollection
         .where('proposerUid','==',ctx.auth.uid)
@@ -640,7 +783,7 @@ export default async function handler(req: Request, res: Response) {
         id: proposalRef.id,
         languageId,
         key,
-        currentValue: String(existingValues[key] || ''),
+        currentValue,
         proposedValue,
         reason,
         proposerUid: ctx.auth.uid,
@@ -658,25 +801,31 @@ export default async function handler(req: Request, res: Response) {
 
     if (collection === 'translations' && action === 'reviewTranslationProposal') {
       if (!ctx.isSuperAdmin) throw new Error('Only an authorized platform reviewer can approve or reject global translation proposals.');
-      const languageId = safeId(body.languageId);
-      if (isEnglishLocale(languageId)) throw new Error('English is the source language. Select another language to translate into.');
+      const languageId = safeId(body.languageId).toLowerCase();
+      if (!isLanguageCode(languageId) || isEnglishLocale(languageId)) throw new Error('Choose a valid non-English language.');
       const proposalId = safeId(body.proposalId);
       const decision = body.decision === 'approve' ? 'approved' : body.decision === 'reject' ? 'rejected' : '';
       if (!decision) throw new Error('A valid review decision is required.');
       const proposalRef = ctx.db.doc('translations/' + languageId + '/proposals/' + proposalId);
       const translationRef = ctx.db.doc('translations/' + languageId);
       await ctx.db.runTransaction(async transaction => {
-        const [proposalSnapshot, translationSnapshot] = await Promise.all([transaction.get(proposalRef), transaction.get(translationRef)]);
+        const [proposalSnapshot, translationSnapshot, languageSnapshot] = await Promise.all([
+          transaction.get(proposalRef), transaction.get(translationRef),
+          transaction.get(ctx.db.doc('languages/'+languageId)),
+        ]);
         if (!proposalSnapshot.exists) throw new Error('The translation proposal was not found.');
-        if (!translationSnapshot.exists) throw new Error('The canonical translation was not found.');
+        if (!languageSnapshot.exists || languageSnapshot.data()?.enabled===false)
+          throw new Error('The platform language is not available for review.');
         const proposal = proposalSnapshot.data() || {};
         if (String(proposal.status || '') !== 'pending') throw new Error('This translation proposal has already been reviewed.');
         const translation = translationSnapshot.data() || {};
         const values = translation.values && typeof translation.values === 'object' ? { ...(translation.values as Record<string, unknown>) } : {};
-        const key = String(proposal.key || '');
-        if (!key) throw new Error('The proposal is missing its translation key.');
+        const key = translationKey(proposal.key);
+        const requestedValue=String(proposal.proposedValue||'').trim();
+        if (!requestedValue || requestedValue.length>12000)
+          throw new Error('The translation proposal has no valid value.');
         if (decision === 'approved') {
-          values[key] = String(proposal.proposedValue || '');
+          values[key] = requestedValue;
           transaction.set(ctx.db.doc(`locales/${languageId}/translations/${key}`), {
             key, locale: languageId, namespace: key.split('.')[0], value: values[key], status: 'published',
             version: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.auth.uid,
@@ -685,6 +834,10 @@ export default async function handler(req: Request, res: Response) {
             version: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
           }, { merge:true });
           transaction.set(translationRef, {
+            id:languageId,languageCode:languageId,code:languageId,
+            sharingScope:'shared',scope:'platform',platformOwned:true,
+            organizationId:'',ownerOrganizationId:'',
+            ...(!translationSnapshot.exists?{ownerUid:''}:{}),
             values,
             translationRevision: Number(translation.translationRevision || 0) + 1,
             lastReviewedBy: ctx.auth.uid,
@@ -746,6 +899,7 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       if (action === 'delete') {
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can delete it.');
+        assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'delete');
         await ref.delete();
         const deleted = await ref.get();
         if (deleted.exists) throw new Error('The record could not be deleted from Firestore.');
@@ -811,6 +965,7 @@ export default async function handler(req: Request, res: Response) {
           if (quotaKey && ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the contributor who added this global content or VOP Super Admin can edit it.');
+        if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
         if (collection === 'radioBroadcasts') {
           const urls = ['videoUrl','audioUrl','streamUrl'].map(key => ({key,url:String(incoming[key] || '').trim()})).filter(item => item.url);
           if (!urls.length) throw new Error('Add an approved radio audio, video or stream URL.');
@@ -908,6 +1063,7 @@ export default async function handler(req: Request, res: Response) {
 
       if (action === 'delete') {
         if (!existing.exists || !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization can delete this content.');
+        assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'delete');
         await ref.delete();
         await writeTenantAudit(ctx, 'content.delete', `${collection}/${id}`, existing.data(), undefined);
         return res.status(200).json({ ok:true, id });
@@ -921,6 +1077,7 @@ export default async function handler(req: Request, res: Response) {
           if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
         }
         if (existing.exists && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
+        if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
         await ref.set({
           ...incoming,
           id,
