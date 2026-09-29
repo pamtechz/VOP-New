@@ -1,0 +1,158 @@
+/* Compact certification workspace. Never scale the issued certificate
+ * artwork: it has its own print geometry and must remain legible. */
+@media screen {
+  .vop-cert-page{font-size:13px;line-height:1.45}
+  .vop-cert-list-head,.vop-cert-preview-head{gap:12px;margin-bottom:12px}
+  .vop-cert-kicker{font-size:11px;font-weight:700}
+  .vop-cert-list-head h1,.vop-cert-preview-head h1{
+    font-size:20px!important;line-height:1.25;font-weight:750;
+  }
+  .vop-cert-list-head p,.vop-cert-preview-title-row p{
+    font-size:13px!important;line-height:1.4;margin-top:4px;
+  }
+  .vop-cert-head-actions{gap:7px}
+  .vop-cert-export-button{
+    height:36px!important;min-height:36px;padding:0 12px!important;
+    gap:6px;font-size:12px!important;border-radius:8px;font-weight:700;
+  }
+  .vop-cert-export-button svg,.vop-cert-page :is(
+    .vop-cert-primary-button,.vop-cert-secondary-button,
+    .vop-cert-filter-button,.vop-cert-small-button,.vop-cert-icon-button,
+    .vop-cert-row-actions>button
+  ) svg{width:16px;height:16px;stroke-width:1.8}
+  .vop-cert-title-row,.vop-cert-preview-title-row{gap:10px;margin-bottom:12px}
+  .vop-cert-title-icon{width:42px;height:42px;border-radius:10px}
+  .vop-cert-title-icon svg{width:20px;height:20px;stroke-width:1.8}
+  .vop-cert-title-row h2,.vop-cert-preview-title-row h2{
+    font-size:16px!important;line-height:1.25;font-weight:750;
+  }
+  .vop-cert-metrics{gap:9px;margin-bottom:11px}
+  .vop-cert-metric{
+    height:auto;min-height:76px;padding:10px 12px;
+    gap:10px;border-radius:9px;
+  }
+  .vop-cert-metric>span{
+    width:40px;height:40px;flex:0 0 40px;
+    border-radius:10px;
+  }
+  .vop-cert-metric>span svg{width:20px;height:20px;stroke-width:1.8}
+  .vop-cert-metric small{font-size:11px!important;font-weight:650}
+  .vop-cert-metric strong{font-size:20px!important;font-weight:780;margin-top:2px}
+  .vop-cert-metric em{font-size:11px;margin-top:1px}
+  .vop-cert-toolbar{
+    grid-template-columns:minmax(200px,2fr) repeat(3,minmax(105px,1fr)) minmax(84px,auto);
+    gap:8px;margin-bottom:12px;
+  }
+  .vop-cert-search,.vop-cert-toolbar select,
+  .vop-cert-filter-button{
+    height:36px!important;min-height:36px;border-radius:8px;
+    font-size:12px!important;
+  }
+  .vop-cert-search{gap:7px;padding:0 10px}
+  .vop-cert-search svg{width:16px;height:16px}
+  .vop-cert-toolbar select{padding:0 9px;font-weight:630}
+  .vop-cert-filter-button{gap:6px;font-weight:700}
+  .vop-cert-table th{
+    height:34px;padding:6px 10px;font-size:11px;font-weight:750;
+  }
+  .vop-cert-table td{
+    height:44px;padding:6px 10px;font-size:12px;
+  }
+  .vop-cert-candidate-cell{min-width:165px;gap:8px}
+  .vop-cert-candidate-cell img,.vop-cert-avatar-empty{width:32px;height:32px}
+  .vop-cert-candidate-cell strong{font-size:12px}
+  .vop-cert-candidate-cell span,.vop-cert-table td>span{font-size:11px}
+  .vop-cert-status{padding:4px 8px;font-size:11px!important}
+  .vop-cert-row-actions{gap:4px}
+  .vop-cert-row-actions>button,.vop-cert-pager button{
+    width:31px;height:31px;border-radius:7px;
+  }
+  .vop-cert-row-menu button{padding:7px 9px;font-size:12px}
+  .vop-cert-pager{font-size:12px;padding-top:10px}
+  .vop-cert-empty{min-height:140px;padding:20px 14px}
+  .vop-cert-empty>svg{width:24px;height:24px}
+  .vop-cert-empty strong{font-size:14px}
+  .vop-cert-empty span{font-size:12px}
+  .vop-cert-preview-grid{
+    grid-template-columns:minmax(185px,230px) minmax(0,1fr) minmax(210px,255px);
+    gap:10px;
+  }
+  .vop-cert-candidate-card,.vop-cert-action-card{padding:11px}
+  .vop-cert-card-head{margin-bottom:10px}
+  .vop-cert-card-head h3{font-size:14px}
+  .vop-cert-details{gap:8px}
+  .vop-cert-details dt{font-size:11px}
+  .vop-cert-details dd{font-size:12px}
+  .vop-cert-profile-image,.vop-cert-profile-image .vop-cert-avatar-empty{width:46px;height:46px}
+  .vop-cert-primary-button,.vop-cert-secondary-button,
+  .vop-cert-small-button{
+    min-height:35px!important;padding:7px 11px!important;
+    border-radius:8px;font-size:12px!important;font-weight:700;
+    line-height:1.25;gap:7px;
+  }
+  .vop-cert-issue-trigger{min-height:36px!important}
+  .vop-cert-action-card{gap:7px}
+  .vop-cert-info,.vop-cert-note{padding:9px 10px;gap:8px;font-size:12px}
+  .vop-cert-info svg,.vop-cert-note svg{width:16px;height:16px}
+  .vop-cert-ready{padding:10px;gap:8px}
+  .vop-cert-ready>svg{width:19px;height:19px}
+  .vop-cert-ready strong{font-size:13px}
+  .vop-cert-ready span{font-size:11px}
+  .vop-cert-config-status{padding:9px 11px;gap:8px;margin-bottom:10px}
+  .vop-cert-config-status-icon{width:33px;height:33px}
+  .vop-cert-config-status-icon svg{width:18px;height:18px}
+  .vop-cert-config-grid{gap:10px}
+  .vop-cert-config-card{padding:12px;border-radius:9px}
+  .vop-cert-config-card-head{margin-bottom:10px}
+  .vop-cert-config-card-head h2{font-size:16px!important;font-weight:750}
+  .vop-cert-config-card-head p{font-size:12px}
+  .vop-cert-config-card-head>svg{width:18px;height:18px;stroke-width:1.8}
+  .vop-cert-toggle-list{gap:6px;margin-bottom:10px}
+  .vop-cert-toggle-row{padding:8px 10px;gap:9px}
+  .vop-cert-config-fields{gap:9px}
+  .vop-cert-config-field input{height:35px;font-size:12px}
+  .vop-cert-config-field textarea{min-height:70px;font-size:12px}
+  .vop-cert-config-save,.vop-cert-config-back{min-height:35px!important}
+  .vop-cert-issuer-modal{padding:15px}
+  .vop-cert-issuer-head h2{font-size:18px}
+  .vop-cert-issuer-row{padding:8px 10px;gap:8px}
+  .vop-cert-issuer-row strong{font-size:12px}
+  .vop-cert-issuer-row span{font-size:11px}
+  .vop-cert-issuer-avatar{width:34px;height:34px}
+  .vop-cert-issuer-avatar svg{width:18px;height:18px}
+  .vop-cert-issuer-row .vop-cert-primary-button{min-height:33px;padding:6px 10px}
+}
+@media screen and (max-width:1440px){
+  .vop-cert-preview-grid{grid-template-columns:minmax(170px,225px) minmax(0,1fr)}
+  .vop-cert-action-card{
+    grid-column:1/-1;display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;
+  }
+  .vop-cert-info,.vop-cert-ready{grid-column:1/-1}
+}
+@media screen and (max-width:1150px){
+  .vop-cert-toolbar{grid-template-columns:minmax(190px,2fr) repeat(2,minmax(110px,1fr))}
+  .vop-cert-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media screen and (max-width:700px){
+  .vop-cert-head-actions{display:flex;flex-wrap:wrap;width:100%}
+  .vop-cert-head-actions .vop-cert-export-button,
+  .vop-cert-head-actions .vop-cert-issue-trigger{width:auto;flex:1 1 150px}
+  .vop-cert-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .vop-cert-search{grid-column:1/-1}
+  .vop-cert-list-head h1,.vop-cert-preview-head h1{font-size:20px!important}
+  .vop-cert-preview-grid{grid-template-columns:1fr}
+  .vop-cert-action-card{grid-column:auto;grid-template-columns:1fr}
+  .vop-cert-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .vop-cert-candidate-card{order:0}
+  .vop-cert-preview-stage{order:1}
+  .vop-cert-action-card{order:2}
+  .vop-cert-issuer-row{grid-template-columns:34px minmax(0,1fr)}
+}
+@media screen and (max-width:420px){
+  .vop-cert-metrics{gap:7px}
+  .vop-cert-metric{padding:8px;gap:7px}
+  .vop-cert-metric>span{width:33px;height:33px;flex-basis:33px}
+  .vop-cert-toolbar{grid-template-columns:1fr}
+  .vop-cert-search{grid-column:auto}
+}
