@@ -393,7 +393,7 @@ export const App: React.FC = () => {
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={() => setActiveGuide(null)} onSelectLesson={lesson => {
               setStudyError('');
-              const resumeKey = `${activeLanguage}:${activeGuide.id}:${lesson.id}`;
+              const resumeKey = `${activeGuide.language}:${activeGuide.id}:${lesson.id}`;
               setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
               setActiveLesson(lesson);
             }} onOpenCertificate={() => navigate('certificates')} />}
@@ -402,8 +402,8 @@ export const App: React.FC = () => {
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentUser={currentUser} allUsers={[]} onSelectUser={() => {}} onNavigate={navigate} onLogout={() => void firebaseSignOut()} />
-      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeLanguage}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
-        const accepted = await completeLesson(activeGuide.id, activeLesson.id);
+      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
+        const accepted = await completeLesson(activeGuide.id, activeLesson.id, activeGuide.language);
         if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
         setStudyError('');
         if (accepted === 'queued') {
@@ -417,7 +417,7 @@ export const App: React.FC = () => {
         return true;
       }} />}
       {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
-        const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers);
+        const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
         if (score === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
