@@ -258,7 +258,7 @@ export async function loadFirestorePrograms(user?:User):Promise<CurriculumProgra
           where('published','==',true)))]
         :scopedOrganizationIds.map(organizationId=>
           getDocs(query(programsRef,where('organizationId','==',organizationId),
-            where('published','==',true)))),
+            where('published','==',true))))),
   ]);
   const rows=new Map<string,CurriculumProgram>();
   for(const snapshot of snapshots)for(const item of snapshot.docs){
