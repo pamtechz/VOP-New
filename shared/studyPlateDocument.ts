@@ -133,10 +133,12 @@ export function legacyBlocksToPlate(blocks:ReadonlyArray<{
 
 /** Legacy projection is a compatibility view, never the rich-text source
  * of truth. IDs are Plate node IDs, not array offsets. */
-export function studyPlateLegacyBlocks(value:StudyPlateDocument){
+export function studyPlateLegacyBlocks(value:StudyPlateDocument):Array<{
+  id:string;type:'image'|'heading'|'quote'|'paragraph';src?:string;text?:string;
+}>{
   return value.map(node=>{
     const text=studyPlateText(node).trim();
-    const type=node.type==='img'?'image':
+    const type:'image'|'heading'|'quote'|'paragraph'=node.type==='img'?'image':
       ['h1','h2','h3'].includes(node.type)?'heading':
       node.type==='blockquote'?'quote':'paragraph';
     return {
