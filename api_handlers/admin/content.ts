@@ -8,6 +8,7 @@ import { assertMutableTenantResource, platformStewardedResource } from '../../sh
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
+import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -283,6 +284,81 @@ export default async function handler(req: Request, res: Response) {
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
       });
       return res.status(200).json({ ok:true, item:{id, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`, organizationId:ctx.organizationId} });
+    }
+
+    if (action === 'transferLessonStructure') {
+      if (collection !== 'curriculum') throw new Error('Only curriculum lessons support section or block transfers.');
+      await requirePermission(ctx, 'curriculum', 'update');
+      const data = body.data && typeof body.data === 'object' ? body.data as Record<string,unknown> : {};
+      const guideId = safeId(data.guideId);
+      const sourceId = safeId(data.sourceLessonId);
+      const destinationId = safeId(data.destinationLessonId);
+      const anchorId = safeId(data.anchorId);
+      const parentId = safeId(data.destinationParentId);
+      if (sourceId === destinationId) throw new Error('Use the lesson editor to move or duplicate content within the same lesson.');
+      if (!['section','block'].includes(String(data.kind)) || !['move','copy'].includes(String(data.mode))) {
+        throw new Error('Choose a section or block and a move or copy operation.');
+      }
+      const kind = data.kind as 'section'|'block';
+      const mode = data.mode as 'move'|'copy';
+      const guideRef = ctx.db.doc('guides/' + guideId);
+      const sourceRef = guideRef.collection('lessons').doc(sourceId);
+      const destinationRef = guideRef.collection('lessons').doc(destinationId);
+      const quizQuery = ctx.db.collection('quizzes').where('guideId','==',guideId);
+      const result = await ctx.db.runTransaction(async transaction => {
+        const [guideSnapshot,sourceSnapshot,destinationSnapshot,quizSnapshot] = await Promise.all([
+          transaction.get(guideRef),transaction.get(sourceRef),transaction.get(destinationRef),
+          transaction.get(quizQuery),
+        ]);
+        if (!guideSnapshot.exists || guideSnapshot.data()?.archived === true ||
+            String(guideSnapshot.data()?.organizationId || '') !== effectiveOrganizationId) {
+          throw new Error('The source guide is not available in the selected tenant.');
+        }
+        if (!sourceSnapshot.exists || !destinationSnapshot.exists) throw new Error('Both lessons must exist before transfer.');
+        const source = sourceSnapshot.data() || {};
+        const destination = destinationSnapshot.data() || {};
+        for (const lesson of [source,destination]) {
+          if (lesson.archived === true || lesson.published === true || lesson.type === 'Test' ||
+              lesson.sourceQuizId || String(lesson.guideId || guideId) !== guideId) {
+            throw new Error('Transfers require two draft study lessons in the same guide.');
+          }
+          if (!(ctx.isSuperAdmin || canEditCanonicalContent(ctx,lesson))) {
+            throw new Error('You may transfer content only between lessons you are authorized to edit.');
+          }
+          assertMutableTenantResource(ctx.isSuperAdmin,lesson,'edit');
+        }
+        const next = transferCurriculumNode(
+          source.chapters,destination.chapters,kind,anchorId,parentId,mode,
+        );
+        if (mode === 'move' && quizSnapshot.docs.some(doc => {
+          const quiz = doc.data();
+          return quiz.archived !== true && String(quiz.lessonId || '') === sourceId &&
+            next.movedAnchorIds.includes(String(quiz.anchorId || ''));
+        })) {
+          throw new Error('This content has attached quizzes. Keep it in its current lesson or copy it without quiz links.');
+        }
+        const fields = (chapters: typeof next.source) => {
+          const pages = curriculumPages(chapters);
+          return {
+            chapters,
+            contentPages:pages.map(({blocks:_blocks,...page})=>page),
+            pages:pages.map(page=>({
+              pageNumber:page.pageNumber,title:page.title,chapterId:page.chapterId,
+              chapterTitle:page.chapterTitle,sectionId:page.sectionId,
+              sectionTitle:page.sectionTitle,blocks:page.blocks,
+            })),
+            updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+          };
+        };
+        if (mode === 'move') transaction.update(sourceRef,fields(next.source));
+        transaction.update(destinationRef,fields(next.destination));
+        return {source:mode==='move'?next.source:source.chapters,destination:next.destination};
+      });
+      await writeTenantAudit(ctx,'lesson.structure.'+mode,
+        sourceRef.path+' -> '+destinationRef.path,undefined,{
+          kind,anchorId,sourceLessonId:sourceId,destinationLessonId:destinationId,
+        });
+      return res.status(200).json({ok:true,...result});
     }
 
     if (action === 'upsertLesson') {
