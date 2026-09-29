@@ -9,10 +9,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: lockfile-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lockfile:
     if: "!contains(github.event.head_commit.message, '[skip lockfile]')"
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
