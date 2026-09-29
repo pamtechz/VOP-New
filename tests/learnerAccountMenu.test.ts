@@ -26,7 +26,8 @@ test('desktop menu groups the learner routes without exposing admin to learners'
   assert.match(menu, /\.\.\.\(isAdmin \? \[\{ route: 'admin'/);
   assert.match(menu, /currentRoute === item\.route/);
   assert.match(menu, /onNavigate\(route\)/);
-  assert.match(menu, /onLogout\(\)/);
+  assert.doesNotMatch(menu, /onLogout\(\)/);
+  assert.match(read('src/components/layout/Header.tsx'), /onLogout\(\)/);
 });
 
 test('account menu handles escape, focus, tab cycling and body scroll recovery', () => {
