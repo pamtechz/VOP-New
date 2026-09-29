@@ -110,6 +110,8 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     archived: value.archived === true,
     sharingScope: value.sharingScope === 'shared' ? 'shared' : value.sharingScope === 'private' ? 'private' : 'organization',
     lessonCount: Number(value.lessonCount ?? fallbackLessons) || 0,
+    ownerUid: valueText(value.ownerUid),
+    canEdit: value.canEdit !== false,
     updatedAt: timestampText(value.updatedAt),
     updatedBy: valueText(value.updatedBy),
   };
