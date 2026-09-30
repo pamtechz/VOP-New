@@ -34,6 +34,7 @@ import { TenantLanguagesPanel, getTenantLanguages } from '../components/admin/Te
 import { TenantTranslationsPanel } from '../components/admin/TenantTranslationsPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
+import { ModalLayer } from '../components/layout/ModalLayer';
 
 interface AdminPageProps {
   currentUser: User;
@@ -171,6 +172,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [candidateStatus, setCandidateStatus] = useState<'all' | 'active' | 'graduated' | 'graduating'>('all');
   const [candidateBaptism, setCandidateBaptism] = useState<'all' | 'not_marked' | 'candidate' | 'baptized'>('all');
   const [selectedCandidate, setSelectedCandidate] = useState<User | null>(null);
+  const [candidateMode,setCandidateMode]=useState<'list'|'enroll'>('list');
+  const [candidateBaptismDraft,setCandidateBaptismDraft]=useState<'not_marked'|'candidate'|'baptized'>('not_marked');
+  const [candidateBaptismDate,setCandidateBaptismDate]=useState('');
   const [baptismSaving, setBaptismSaving] = useState(false);
   const [certification, setCertification] = useState<Record<string, unknown> | null>(null);
   const [certificationLoading, setCertificationLoading] = useState(false);
@@ -796,6 +800,89 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     </div>;
   };
 
+  const openCandidate=(candidate:User)=>{
+    const info=candidate.information;
+    setSelectedCandidate(candidate);
+    setCandidateBaptismDraft(info?.baptized===true?'baptized':info?.baptismCandidate===true?'candidate':'not_marked');
+    setCandidateBaptismDate(info?.baptismDate||'');
+  };
+
+  const renderCandidates=()=>{
+    if(candidateMode==='enroll')return <div className="vop-candidate-management">
+      <div className="vop-page-head"><div className="vop-heading"><div className="vop-heading-icon"><Users size={28}/></div><div><h1>Enroll Candidate</h1><p>Create or connect a learner account and enroll it into a course.</p></div></div>
+        <button type="button" className="vop-secondary" onClick={()=>setCandidateMode('list')}><ArrowLeft size={16}/> Candidate list</button>
+      </div>
+      <CandidateEnrollment currentUser={currentUser}/>
+    </div>;
+
+    const graduated=candidates.filter(item=>item.information?.graduated===true).length;
+    const baptismCandidates=candidates.filter(item=>item.information?.baptismCandidate===true&&item.information?.baptized!==true).length;
+    const baptized=candidates.filter(item=>item.information?.baptized===true).length;
+    return <div className="vop-candidate-management">
+      {renderHeader(Users,'Candidates','View enrolled learners, ministry status and baptism follow-up.',
+        <button type="button" className="vop-primary" onClick={()=>setCandidateMode('enroll')}><Plus size={17}/> Enroll Candidate</button>)}
+      <div className="vop-candidate-metrics">
+        <div className="vop-card"><span>Total candidates</span><strong>{candidates.length}</strong></div>
+        <div className="vop-card"><span>Graduated</span><strong>{graduated}</strong></div>
+        <div className="vop-card"><span>Baptism candidates</span><strong>{baptismCandidates}</strong></div>
+        <div className="vop-card"><span>Baptized</span><strong>{baptized}</strong></div>
+      </div>
+      <div className="vop-candidate-toolbar">
+        <div className="vop-search"><Search size={18}/><input value={candidateSearch}
+          onChange={e=>setCandidateSearch(e.target.value)} placeholder="Search candidate, email, church or hierarchy…"/></div>
+        <select value={candidateStatus} onChange={e=>setCandidateStatus(e.target.value as typeof candidateStatus)}>
+          <option value="all">All study statuses</option><option value="active">Active</option><option value="graduating">Graduating</option><option value="graduated">Graduated</option>
+        </select>
+        <select value={candidateBaptism} onChange={e=>setCandidateBaptism(e.target.value as typeof candidateBaptism)}>
+          <option value="all">All baptism statuses</option><option value="not_marked">Not marked</option><option value="candidate">Baptism candidate</option><option value="baptized">Baptized</option>
+        </select>
+      </div>
+      <div className="vop-reference-table-wrap vop-candidate-table-wrap">
+        <table className="vop-reference-table vop-candidate-table">
+          <thead><tr><th>#</th><th>Candidate</th><th>Ministry scope</th><th>Study progress</th><th>Baptism</th><th>Enrolled</th><th>Action</th></tr></thead>
+          <tbody>{filteredCandidates.map((candidate,index)=>{
+            const info=candidate.information;
+            const baptism=info?.baptized?'Baptized':info?.baptismCandidate?'Candidate':'Not marked';
+            const scope=[candidate.organizationId,candidate.churchId,candidate.districtId,candidate.conferenceId,candidate.unionId].filter(Boolean)[0]||'Platform';
+            return <tr key={candidate.uid}>
+              <td>{index+1}</td>
+              <td><div className="vop-candidate-person"><span>{(candidate.displayName||candidate.email||'?').charAt(0).toUpperCase()}</span><div><strong>{candidate.displayName||'Unnamed candidate'}</strong><small>{candidate.email||candidate.phoneNumber||candidate.uid}</small></div></div></td>
+              <td><strong>{scope}</strong></td>
+              <td><div className="vop-candidate-progress"><strong>{candidate.progress?.discoverProgress||0}%</strong><span>{candidate.progress?.completedLessons?.length||0} lessons completed</span></div></td>
+              <td><span className={'vop-status '+(info?.baptized?'published':info?.baptismCandidate?'draft':'')}>{baptism}</span></td>
+              <td>{info?.enrollmentDate?new Date(info.enrollmentDate).toLocaleDateString():'—'}</td>
+              <td><button className="vop-actions" type="button" onClick={()=>openCandidate(candidate)} title="Open candidate"><Eye size={16}/></button></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {!filteredCandidates.length&&<div className="vop-empty"><Users size={28}/><p>No candidates match the current filters.</p></div>}
+      </div>
+      {selectedCandidate&&<ModalLayer><div className="vop-candidate-modal-backdrop" onMouseDown={()=>!baptismSaving&&setSelectedCandidate(null)}>
+        <section className="vop-card vop-candidate-modal" role="dialog" aria-modal="true" aria-labelledby="candidate-details-title" onMouseDown={e=>e.stopPropagation()}>
+          <div className="vop-section-title"><div><h2 id="candidate-details-title">{selectedCandidate.displayName||'Candidate'}</h2><p>{selectedCandidate.email||'No email recorded'}</p></div><button className="vop-actions" type="button" onClick={()=>setSelectedCandidate(null)} disabled={baptismSaving}><X size={17}/></button></div>
+          <div className="vop-candidate-detail-grid">
+            <div><small>Enrollment</small><strong>{selectedCandidate.information?.enrollmentDate?new Date(selectedCandidate.information.enrollmentDate).toLocaleDateString():'Not recorded'}</strong></div>
+            <div><small>Progress</small><strong>{selectedCandidate.progress?.discoverProgress||0}%</strong></div>
+            <div><small>Completed lessons</small><strong>{selectedCandidate.progress?.completedLessons?.length||0}</strong></div>
+            <div><small>Organization</small><strong>{selectedCandidate.organizationId||'Platform'}</strong></div>
+            <div><small>Church</small><strong>{selectedCandidate.churchId||'Not assigned'}</strong></div>
+            <div><small>Study status</small><strong>{selectedCandidate.information?.graduated?'Graduated':selectedCandidate.information?.graduating?'Graduating':'Active'}</strong></div>
+          </div>
+          <div className="vop-candidate-baptism-editor">
+            <div className="vop-field"><label>Baptism status</label><select value={candidateBaptismDraft} onChange={e=>setCandidateBaptismDraft(e.target.value as typeof candidateBaptismDraft)}>
+              <option value="not_marked">Not marked</option><option value="candidate">Baptism candidate</option><option value="baptized">Baptized</option>
+            </select></div>
+            {candidateBaptismDraft==='baptized'&&<div className="vop-field"><label>Baptism date</label><input type="date" value={candidateBaptismDate} onChange={e=>setCandidateBaptismDate(e.target.value)}/></div>}
+          </div>
+          <div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" disabled={baptismSaving} onClick={()=>setSelectedCandidate(null)}>Close</button>
+            <button className="vop-primary" type="button" disabled={baptismSaving||candidateBaptismDraft==='baptized'&&!candidateBaptismDate}
+              onClick={()=>void saveBaptismMark(selectedCandidate,candidateBaptismDraft,candidateBaptismDate)}>{baptismSaving?'Saving…':'Save candidate status'}</button>
+          </div>
+        </section>
+      </div></ModalLayer>}
+    </div>;
+  };
+
   const renderSettings = () => {
     if (!settings) return <div className="vop-empty">Loading settings…</div>;
     const detail = {
@@ -1112,7 +1199,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='languages'&&(isSuperAdmin?renderLanguages():<TenantLanguagesPanel onChanged={setTenantLanguages}/>)}
         {activeTab==='translations'&&!isSuperAdmin&&<TenantTranslationsPanel languages={scopedLanguages}/>}
         {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={scopedLanguages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={scopedLanguages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
-        {activeTab==='candidates'&&<CandidateEnrollment currentUser={currentUser}/>}
+        {activeTab==='candidates'&&renderCandidates()}
         {activeTab==='certification'&&(
           <CertificationManager
             settings={settings}
