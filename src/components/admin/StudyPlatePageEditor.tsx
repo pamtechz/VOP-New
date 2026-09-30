@@ -158,6 +158,14 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
         const stored=source.kind==='embed'||source.kind==='external'?source.originalUrl:source.url;
         const resolved=resolveMediaSource(stored);
         if(!resolved)throw new Error('The resolved media URL is not safe for playback.');
+        if(resolved.kind==='external'){
+          command(()=>editor.tf.insertNodes({
+            type:'p',
+            children:[{type:'a',url:stored,children:[{text:'Open '+resolved.provider+' content'}]}],
+          }));
+          onNotify?.(resolved.provider+' page added as a safe external link because it has no approved embed.');
+          setMediaResolving(false);closeInsert();return;
+        }
         const type=resolved.kind==='direct-audio'||['AudioVerse','SoundCloud'].includes(resolved.provider)
           ?'audio':'video';
         command(()=>editor.tf.insertNodes({type,url:stored,children:[{text:''}]}));
