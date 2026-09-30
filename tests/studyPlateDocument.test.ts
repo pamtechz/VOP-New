@@ -95,6 +95,27 @@ test('unchanged legacy lessons bridge without rewriting their anchor IDs',()=>{
   assert.deepEqual(d.map(x=>x.id),['block-first','block-second']);
   assert.equal(studyPlateLegacyBlocks(d)[0].id,'block-first');
 });
+test('Plate images preserve bounded accessible alternative text end to end',()=>{
+  const document=normalizeStudyPlateDocument([
+    {id:'image-one',type:'img',url:'https://example.org/sabbath.jpg',
+      alt:'An open Bible beside a calendar highlighting the seventh day.',
+      children:[{text:''}]},
+    {id:'decorative',type:'img',url:'https://example.org/divider.jpg',alt:'',children:[{text:''}]},
+  ]);
+  assert.equal(document[0].alt,'An open Bible beside a calendar highlighting the seventh day.');
+  assert.equal(document[1].alt,undefined);
+  assert.throws(()=>normalizeStudyPlateDocument([
+    {id:'too-long',type:'img',url:'https://example.org/image.jpg',
+      alt:'a'.repeat(301),children:[{text:''}]},
+  ]),/alternative text cannot exceed 300/);
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const reader=read('src/components/reader/StudyPlateContent.tsx');
+  assert.match(editor,/Alternative text for learners using screen readers/);
+  assert.match(editor,/type:'img',url:raw,alt,children/);
+  assert.match(editor,/alt=\{alt\}/);
+  assert.match(reader,/alt=\{node\.alt\|\|''\}/);
+});
+
 test('approved audio and video stay as first-class Plate blocks and legacy media keeps stable IDs',()=>{
   const document=normalizeStudyPlateDocument([
     {id:'video-one',type:'video',url:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',children:[{text:''}]},
