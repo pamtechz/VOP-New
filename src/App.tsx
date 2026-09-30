@@ -45,6 +45,7 @@ import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
 import './components/layout/navigation-header.css';
+import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -91,7 +92,7 @@ export const App: React.FC = () => {
   const [studyError, setStudyError] = useState('');
   const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => readThemePreference()==='dark');
   const [isMobileShell, setIsMobileShell] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
@@ -356,9 +357,11 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
-    else document.documentElement.removeAttribute('data-theme');
+    persistThemePreference(isDarkMode?'dark':'light');
   }, [isDarkMode]);
+  useEffect(() => {
+    applyThemePreference(readThemePreference());
+  }, []);
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
