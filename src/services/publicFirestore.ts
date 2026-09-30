@@ -149,11 +149,28 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     ? hierarchyRole + ':' + hierarchyNodeId
     : '';
 
-  const settingsSnap = organizationId
+  const systemSettingsSnap = await getDoc(doc(firestore, 'system', 'settings'));
+  const scopedSettingsSnap = organizationId
     ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
     : hierarchyTenantId
       ? await getDoc(doc(firestore, 'tenantSettings', hierarchyTenantId, 'settings', 'settings'))
-      : await getDoc(doc(firestore, 'system', 'settings'));
+      : null;
+  const platformSettings = systemSettingsSnap.exists() ? normalizeSettings(systemSettingsSnap.data()) : emptySettings();
+  const scopedSettings = scopedSettingsSnap?.exists() ? normalizeSettings(scopedSettingsSnap.data()) : null;
+  const effectiveSettings: AppSettings = scopedSettings ? {
+    ...platformSettings,
+    ...scopedSettings,
+    // Product availability and platform security remain authoritative at the
+    // platform layer; tenant settings customize identity, mission and contacts.
+    appName: platformSettings.appName || scopedSettings.appName,
+    appTagline: platformSettings.appTagline || scopedSettings.appTagline,
+    versionLabel: platformSettings.versionLabel || scopedSettings.versionLabel,
+    themeColor: platformSettings.themeColor || scopedSettings.themeColor,
+    systemOptions: platformSettings.systemOptions,
+    features: platformSettings.features,
+    security: platformSettings.security,
+    notifications: platformSettings.notifications,
+  } : platformSettings;
 
   const ownHierarchyIds = {
     unionId: String(profileData.unionId || '').trim(),
@@ -268,7 +285,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const guides = await loadFirestoreGuides();
 
   return {
-    settings: settingsSnap.exists() ? normalizeSettings(settingsSnap.data()) : emptySettings(),
+    settings: effectiveSettings,
     languages,
     translations,
     announcements,
