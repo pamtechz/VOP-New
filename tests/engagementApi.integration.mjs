@@ -50,9 +50,13 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
     const learner = await identity('studentA', 'org-A');
     const peer = await identity('studentB', 'org-A', { scriptureDuelOptIn: true });
     const mentor = await identity('mentorA', 'org-A', { organizationRole: 'mentor' });
+    const evaluator2 = await identity('evaluatorB', 'org-A', { organizationRole: 'admin' });
     const outsider = await identity('studentOther', 'org-B');
     await db.doc('organizations/org-A').set({ id: 'org-A', status: 'active' });
     await db.doc('organizations/org-B').set({ id: 'org-B', status: 'active' });
+    await db.doc('organizations/org-A/members/' + evaluator2.uid).set({
+      uid:evaluator2.uid,role:'admin',organizationId:'org-A',active:true,
+    });
     await db.doc('mentorAssignments/' + learner.uid).set({ mentorId: mentor.uid });
     await db.doc('masterGuideRequirements/req-1').set({
       title: 'Personal devotion', organizationId: 'org-A', status: 'published',
@@ -101,7 +105,8 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       })).status, 200, 'Approved requirements may not be approved again.');
       const reviewQueue = await api(mentor, {action:'portfolioReviewQueue'});
       assert.equal(reviewQueue.status,200,JSON.stringify(reviewQueue));
-      assert.ok(reviewQueue.learners.some(item=>item.uid===learner.uid));
+      assert.ok(!reviewQueue.learners.some(item=>item.uid===learner.uid),
+        'A fully approved requirement must leave the pending review queue.');
       assert.notEqual((await api(learner, {action:'portfolioReviewQueue'})).status,200);
       const shared = await api(learner, { action: 'portfolioShare' });
       assert.equal(shared.status, 200);
@@ -111,6 +116,89 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal(publicView.portfolio.activityCount, 1);
       assert.ok(!('evidence' in publicView.portfolio), 'Private evidence must not leak through a public link.');
       assert.ok(!('signoffs' in publicView.portfolio), 'Private evaluator details must not leak.');
+    });
+
+
+    await t.test('requested evidence changes create a new revision and require every configured signature', async () => {
+      await db.doc('masterGuideRequirements/req-2').set({
+        title:'Community service evidence',organizationId:'org-A',status:'published',requiredSignatures:2,
+      });
+      const submitted=await api(learner,{
+        action:'portfolioSaveActivity',requirementId:'req-2',title:'Community service',status:'submitted',
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+      assert.equal(submitted.activity.revision,1);
+      assert.equal(submitted.activity.requiredSignatures,2);
+
+      const incomplete=await api(learner,{
+        action:'portfolioEvidence',requirementId:'req-2',title:'Initial evidence',
+        url:'https://example.org/initial-evidence',note:'First submission',
+      });
+      assert.equal(incomplete.status,200,JSON.stringify(incomplete));
+      assert.equal(incomplete.evidence.revision,1);
+
+      const requested=await api(mentor,{
+        action:'portfolioSignoff',learnerId:learner.uid,requirementId:'req-2',
+        decision:'changes_requested',notes:'Add the signed service log before approval.',
+      });
+      assert.equal(requested.status,200,JSON.stringify(requested));
+      assert.equal(requested.signoff.revision,1);
+      assert.equal(requested.signoff.decision,'changes_requested');
+      assert.equal((await api(mentor,{
+        action:'portfolioSignoff',learnerId:learner.uid,requirementId:'req-2',
+        decision:'approved',
+      })).status,400,'A revision with requested changes cannot be approved until the learner resubmits.');
+
+      const learnerView=await api(learner,{action:'portfolioGet'});
+      assert.ok(learnerView.portfolio.signoffs.some(item=>
+        item.requirementId==='req-2'&&item.decision==='changes_requested'&&
+        String(item.notes||'').includes('signed service log')));
+      assert.equal((await api(outsider,{action:'portfolioGet',learnerId:learner.uid})).status,403);
+
+      const revisionEvidence=await api(learner,{
+        action:'portfolioEvidence',requirementId:'req-2',title:'Signed service log',
+        url:'https://example.org/signed-service-log',note:'Requested evidence added.',
+      });
+      assert.equal(revisionEvidence.status,200,JSON.stringify(revisionEvidence));
+      assert.equal(revisionEvidence.evidence.revision,2);
+      const resubmitted=await api(learner,{
+        action:'portfolioSaveActivity',requirementId:'req-2',title:'Community service',status:'submitted',
+      });
+      assert.equal(resubmitted.status,200,JSON.stringify(resubmitted));
+      assert.equal(resubmitted.activity.revision,2);
+
+      const firstApproval=await api(mentor,{
+        action:'portfolioSignoff',learnerId:learner.uid,requirementId:'req-2',
+        decision:'approved',notes:'Mentor signature',
+      });
+      assert.equal(firstApproval.status,200,JSON.stringify(firstApproval));
+      assert.equal(firstApproval.complete,false);
+      assert.equal(firstApproval.approvals,1);
+      assert.equal(firstApproval.requiredSignatures,2);
+      const queueAfterOne=await api(mentor,{action:'portfolioReviewQueue'});
+      assert.ok(queueAfterOne.learners.some(item=>item.uid===learner.uid),
+        'One of two required signatures must not complete the review.');
+
+      assert.equal((await api(outsider,{
+        action:'portfolioSignoff',learnerId:learner.uid,requirementId:'req-2',decision:'approved',
+      })).status,403);
+      const secondApproval=await api(evaluator2,{
+        action:'portfolioSignoff',learnerId:learner.uid,requirementId:'req-2',
+        decision:'approved',notes:'Administrative signature',
+      });
+      assert.equal(secondApproval.status,200,JSON.stringify(secondApproval));
+      assert.equal(secondApproval.complete,true);
+      assert.equal(secondApproval.approvals,2);
+      assert.equal((await api(mentor,{
+        action:'portfolioSignoff',learnerId:learner.uid,requirementId:'req-2',decision:'approved',
+      })).status,400);
+
+      const queueComplete=await api(mentor,{action:'portfolioReviewQueue'});
+      assert.ok(!queueComplete.learners.some(item=>item.uid===learner.uid));
+      const stored=(await db.doc('masterGuidePortfolios/'+learner.uid).get()).data();
+      const revisionTwoApprovals=stored.signoffs.filter(item=>
+        item.requirementId==='req-2'&&item.revision===2&&item.decision==='approved');
+      assert.equal(new Set(revisionTwoApprovals.map(item=>item.evaluatorId)).size,2);
     });
 
     await db.doc('scriptureMemoryDecks/deck-A').set({
