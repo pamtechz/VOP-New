@@ -432,14 +432,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     };
     return NAV.filter(item => {
       const feature=featureForTab[item.id];
-      if(feature&&settings?.features?.[feature]===false)return false;
       const role = String(currentUser.role || '');
-      const organizationAdmin = ['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId);
-      // Candidate management is an explicit organization-admin responsibility.
-      // Do not let a customized matrix accidentally remove the organisation's learner-enrollment workspace.
-      if (item.id === 'candidates') {
-        if (!(isSuperAdmin || isHierarchyAdmin || organizationAdmin)) return false;
-      } else if (!canSee(item.id)) return false;
+      const organizationRole=String(currentUser.organizationRole||'');
+      const organizationAdmin = ['owner','admin'].includes(organizationRole) && Boolean(currentUser.organizationId);
+      const curriculumContributor=['editor','teacher'].includes(organizationRole)&&Boolean(currentUser.organizationId);
+      const coreTenantAdmin=isSuperAdmin||isHierarchyAdmin||organizationAdmin;
+      // Candidates and Curriculum Studio are core tenant workspaces. Platform
+      // feature switches and stale/custom permission matrices must not make
+      // them disappear for the tenant roles that are responsible for them.
+      if(item.id==='candidates'){
+        if(!coreTenantAdmin)return false;
+      }else if(item.id==='curriculum'){
+        if(!(coreTenantAdmin||curriculumContributor||canSee(item.id)))return false;
+      }else{
+        if(feature&&settings?.features?.[feature]===false)return false;
+        if(!canSee(item.id))return false;
+      }
       // Language registry and canonical localization are platform governance.
       // Tenant administrators use published locales; only Super Admin gets these admin tabs.
       if ((item.id === 'languages' || item.id === 'translations') && !isSuperAdmin) return false;
