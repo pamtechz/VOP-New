@@ -71,7 +71,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     const author=await identity('share-author',{organizationId:orgA,organizationRole:'owner',membershipRole:'owner'});
     const sameOrg=await identity('share-existing-owner',{organizationId:orgA,organizationRole:'learner',membershipRole:'owner'});
     const newcomer=await identity('share-newcomer');
-    const foreign=await identity('share-foreign',{organizationId:orgB,organizationRole:'learner',membershipRole:'learner'});
+    const foreign=await identity('share-enroll-foreign',{organizationId:orgB,organizationRole:'learner',membershipRole:'learner'});
     const platformAdmin=await identity('share-platform-admin',{role:'super_admin'});
 
     const guideId='share-enroll-guide',lessonId='share-enroll-lesson';
