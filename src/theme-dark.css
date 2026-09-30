@@ -534,3 +534,377 @@
 }
 [data-theme="dark"] .vop-radio-admin-tabs button{color:var(--text-secondary)!important}
 [data-theme="dark"] .vop-radio-admin-tabs button.active{background:#183a62!important;color:#eef6ff!important}
+
+
+/* Portal-wide dark theme contract v3 ---------------------------------------
+   This is the authoritative dark-mode layer for application chrome. Legacy
+   page styles still contain light-theme literals, so every reusable app
+   surface is normalized here. Printable/authored document canvases are
+   intentionally excluded and restored below. */
+[data-theme="dark"]{
+  --surface-page:var(--bg-primary);
+  --surface-card:var(--bg-card);
+  --surface-raised:var(--bg-elevated);
+  --surface-input:var(--bg-input);
+  --surface-hover:var(--bg-hover);
+  --surface-border:var(--border-subtle);
+  --surface-border-strong:var(--border-strong);
+  --content-primary:var(--text-primary);
+  --content-secondary:var(--text-secondary);
+  --content-muted:var(--text-muted);
+}
+
+/* Page canvases: every authenticated/public portal must use the same dark
+   background instead of preserving light reference-page paper. */
+[data-theme="dark"] :is(
+  .vop-events-page,
+  .vop-certificate-page,
+  .vop-certificate-verification,
+  .vop-admin-reference-page,
+  .vop-reference-page,
+  .vop-reference-profile-page,
+  .vop-profile-page,
+  .vop-personal-settings,
+  .vop-user-management,
+  .vop-candidates-page,
+  .vop-lessons-page,
+  .vop-materials-page,
+  .vop-engagement-page,
+  .vop-prayer-page,
+  .vop-radio-page,
+  .vop-announcements-page,
+  .vop-support-page,
+  .vop-mentoring-page,
+  .vop-program-manager,
+  .vop-curriculum-page,
+  .vop-inbox-page
+){
+  background:var(--surface-page)!important;
+  color:var(--content-primary)!important;
+}
+
+/* Shared application cards and content panels. This intentionally covers the
+   large white "islands" visible in dashboard, candidates, users, settings,
+   events, account/profile and certificate-status screens. */
+[data-theme="dark"] :is(
+  .vop-page-head,
+  .vop-card,
+  .vop-section-card,
+  .vop-form-card,
+  .vop-empty,
+  .vop-candidate-list-card,
+  .vop-candidate-table-wrap,
+  .vop-candidate-metrics>div,
+  .vop-user-metric,
+  .vop-user-table-wrap,
+  .vop-user-side-card,
+  .vop-user-modal,
+  .vop-user-profile-summary,
+  .vop-user-detail-grid>div,
+  .vop-personal-header,
+  .vop-personal-card,
+  .vop-reference-card,
+  .vop-reference-form,
+  .vop-progress-ring,
+  .vop-admin-reference-card,
+  .vop-admin-reference-more,
+  .vop-events-empty,
+  .vop-event-card,
+  .vop-events-search,
+  .vop-official-certificate-meta>div,
+  .vop-official-certificate-actions button,
+  .vop-certificate-verification-head,
+  .vop-certificate-verification-search,
+  .vop-certificate-verification-result,
+  .vop-verification-grid>div,
+  .vop-reference-table-wrap,
+  .vop-reference-editor,
+  .vop-reference-editor-head,
+  .vop-reference-pager,
+  .vop-editor-block,
+  .vop-editor-question,
+  .vop-search,
+  .vop-filter,
+  .vop-tab,
+  .vop-table,
+  .vop-lesson-row,
+  .vop-quiz-metric,
+  .vop-translation-auto-row,
+  .vop-translation-summary>div,
+  .vop-settings-about-card,
+  .vop-org-list-card,
+  .vop-org-editor-modal,
+  .vop-org-editor-head
+){
+  background:var(--surface-card)!important;
+  color:var(--content-primary)!important;
+  border-color:var(--surface-border)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.20)!important;
+}
+
+/* Raised controls and secondary surfaces. */
+[data-theme="dark"] :is(
+  .vop-events-toolbar select,
+  .vop-page-back,
+  .vop-user-actions>button,
+  .vop-user-pager button,
+  .vop-user-side-card>button,
+  .vop-candidate-pager button,
+  .vop-candidate-modal-head button,
+  .vop-official-certificate-actions button,
+  .vop-reference-icon-button,
+  .vop-reference-tabs button,
+  .vop-preview-tabs,
+  .vop-preview-tabs button,
+  .vop-editor-toolbar,
+  .vop-editor-toolbar button,
+  .vop-page-break,
+  .vop-reference-info
+){
+  background:var(--surface-raised)!important;
+  color:var(--content-secondary)!important;
+  border-color:var(--surface-border)!important;
+}
+
+/* Inputs: wrappers plus native controls. */
+[data-theme="dark"] :is(
+  .vop-user-search,
+  .vop-reset-link,
+  .vop-candidate-icon-input,
+  .vop-certificate-search-field>div,
+  .vop-input-with-icon
+){
+  background:var(--surface-input)!important;
+  color:var(--content-primary)!important;
+  border-color:var(--surface-border)!important;
+}
+[data-theme="dark"] :is(
+  .vop-admin,
+  .vop-user-management,
+  .vop-candidates-page,
+  .vop-personal-settings,
+  .vop-reference-page,
+  .vop-events-page,
+  .vop-certificate-page,
+  .vop-certificate-verification
+) :is(input:not([type="checkbox"]):not([type="radio"]),textarea,select){
+  background:var(--surface-input)!important;
+  color:var(--content-primary)!important;
+  border-color:var(--surface-border)!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] :is(input,textarea)::placeholder{
+  color:#7f91a5!important;
+  opacity:1!important;
+}
+
+/* Text hierarchy. Legacy pages hard-code navy/black foregrounds on many
+   non-semantic div/span elements; normalize those explicitly. */
+[data-theme="dark"] :is(
+  .vop-heading h1,
+  .vop-heading h2,
+  .vop-heading h3,
+  .vop-metric-value,
+  .vop-quick-title,
+  .vop-section-title h2,
+  .vop-section-title h3,
+  .vop-user-heading h1,
+  .vop-user-metric strong,
+  .vop-user-cell strong,
+  .vop-user-side-card h3,
+  .vop-user-profile-summary h3,
+  .vop-user-detail-grid strong,
+  .vop-user-form-grid label>span,
+  .vop-candidate-metrics strong,
+  .vop-candidate-person strong,
+  .vop-personal-header h1,
+  .vop-personal-card h2,
+  .vop-reference-card strong,
+  .vop-reference-card h1,
+  .vop-reference-card h2,
+  .vop-reference-card h3,
+  .vop-progress-ring,
+  .vop-progress-label,
+  .vop-guide-progress-copy strong,
+  .vop-events-section-head h2,
+  .vop-event-card h3,
+  .vop-events-empty h3,
+  .vop-reference-editor-title h1,
+  .vop-reference-guide-cell strong,
+  .vop-lesson-reference-cell strong,
+  .vop-quiz-metric strong,
+  .vop-quiz-title strong,
+  .vop-side-card h3,
+  .vop-translation-source strong,
+  .vop-translation-summary strong
+){
+  color:var(--content-primary)!important;
+}
+[data-theme="dark"] :is(
+  .vop-heading p,
+  .vop-metric-label,
+  .vop-quick-desc,
+  .vop-section-title p,
+  .vop-activity-desc,
+  .vop-activity-time,
+  .vop-user-heading p,
+  .vop-user-metric small,
+  .vop-user-metric span,
+  .vop-user-cell span,
+  .vop-user-cell small,
+  .vop-org-cell span,
+  .vop-org-cell small,
+  .vop-user-pager,
+  .vop-user-side-card p,
+  .vop-role-info small,
+  .vop-user-profile-summary>div>span,
+  .vop-user-detail-grid small,
+  .vop-candidate-metrics small,
+  .vop-candidate-person small,
+  .vop-candidate-table td>small,
+  .vop-candidate-pager,
+  .vop-personal-header p,
+  .vop-personal-card small,
+  .vop-personal-card>label,
+  .vop-reference-card-title,
+  .vop-reference-muted,
+  .vop-event-card p,
+  .vop-event-meta,
+  .vop-events-hero p,
+  .vop-reference-editor-title p,
+  .vop-reference-guide-cell span,
+  .vop-lesson-reference-cell span,
+  .vop-reference-updated,
+  .vop-quiz-metric small,
+  .vop-quiz-title small,
+  .vop-translation-source small,
+  .vop-translation-summary span
+){
+  color:var(--content-muted)!important;
+}
+
+/* Tables must be dark across their entire scroll area, including empty space. */
+[data-theme="dark"] :is(
+  .vop-table-wrap,
+  .vop-candidate-table-wrap,
+  .vop-user-table-wrap,
+  .vop-reference-table-wrap
+){background:var(--surface-card)!important}
+[data-theme="dark"] :is(
+  .vop-table,
+  .vop-candidate-table,
+  .vop-user-table,
+  .vop-reference-table
+){background:var(--surface-card)!important;color:var(--content-secondary)!important}
+[data-theme="dark"] :is(
+  .vop-table th,
+  .vop-candidate-table th,
+  .vop-user-table th,
+  .vop-reference-table th
+){
+  background:var(--bg-secondary)!important;
+  color:#b8c7d7!important;
+  border-color:var(--surface-border)!important;
+}
+[data-theme="dark"] :is(
+  .vop-table td,
+  .vop-candidate-table td,
+  .vop-user-table td,
+  .vop-reference-table td
+){
+  background:var(--surface-card)!important;
+  color:var(--content-secondary)!important;
+  border-color:var(--surface-border)!important;
+}
+
+/* Events */
+[data-theme="dark"] .vop-events-hero{
+  background:linear-gradient(130deg,#0b2c55,#123f70)!important;
+  box-shadow:0 18px 50px rgba(0,0,0,.30)!important;
+}
+[data-theme="dark"] .vop-event-date{
+  background:#172c43!important;color:#a9d1f7!important
+}
+[data-theme="dark"] .vop-event-tags span,
+[data-theme="dark"] .vop-events-section-head span{
+  background:#1b3047!important;color:#a9d2fa!important
+}
+[data-theme="dark"] .vop-event-actions button{
+  background:var(--surface-raised)!important;color:#bed8f2!important;border-color:var(--surface-border)!important
+}
+
+/* Personal settings uses local variables; override them so every section gets
+   the same readable foreground hierarchy. */
+[data-theme="dark"] .vop-personal-settings{
+  --personal-text:var(--content-primary);
+  --personal-muted:var(--content-muted);
+}
+[data-theme="dark"] .vop-personal-settings .vop-kicker{color:#8fc4ff!important}
+[data-theme="dark"] .vop-personal-settings .vop-personal-card h2 svg{
+  background:#1b3047!important;color:#a9d2fa!important
+}
+
+/* Admin dashboard/user/candidate icon tiles retain semantic hue but use dark
+   fills rather than pale light-mode discs. */
+[data-theme="dark"] :is(
+  .vop-metric-icon,
+  .vop-mini-stat-icon,
+  .vop-user-metric-icon,
+  .vop-candidate-metrics>div>span,
+  .vop-candidate-person>span,
+  .vop-user-avatar-fallback,
+  .vop-quiz-metric>svg,
+  .vop-quiz-title>span
+){
+  background:#1b3047!important;
+  color:#a9d2fa!important;
+  box-shadow:none!important;
+}
+
+/* Primary buttons must keep high-contrast light text. An earlier dark-theme
+   rule incorrectly forced dark text onto blue buttons. */
+[data-theme="dark"] :is(
+  .vop-primary,
+  .btn-primary,
+  .apk-btn-primary,
+  .vop-cert-primary-button
+){
+  color:#fff!important;
+}
+[data-theme="dark"] :is(
+  .vop-primary,
+  .btn-primary,
+  .apk-btn-primary,
+  .vop-cert-primary-button
+) :is(svg,span,strong){color:inherit!important}
+
+/* Semantic feedback remains dark, not pastel paper. */
+[data-theme="dark"] .vop-reference-success,
+[data-theme="dark"] .vop-official-verification-note{
+  background:#102f26!important;color:#a8e7c5!important;border-color:#2b6652!important
+}
+[data-theme="dark"] .vop-official-verification-note span{color:#92cdb0!important}
+[data-theme="dark"] .vop-reset-link{background:#14283d!important}
+
+/* Keep real document canvases/print previews paper-white by design. These are
+   content artifacts, not application cards. */
+[data-theme="dark"] :is(
+  .vop-certificate-artwork,
+  .vop-official-certificate,
+  .vop-certificate-reference-card
+){
+  background:#fff!important;
+  color:#111!important;
+  border-color:#dce3ea!important;
+}
+[data-theme="dark"] .vop-certificate-reference-card :is(
+  .vop-certificate-reference-kicker,
+  .vop-certificate-reference-name,
+  .vop-certificate-reference-course,
+  .vop-certificate-reference-copy,
+  .vop-certificate-reference-meta
+){color:#111827!important}
+[data-theme="dark"] .vop-certificate-artwork :is(h1,h2,h3,h4,p,strong,span,small,div),
+[data-theme="dark"] .vop-official-certificate :is(h1,h2,h3,h4,p,strong,span,small,div){
+  color:inherit;
+}
