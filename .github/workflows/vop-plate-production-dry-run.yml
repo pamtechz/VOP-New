@@ -1,0 +1,78 @@
+name: VOP Plate production migration dry run
+
+on:
+  push:
+    branches:
+      - ops/plate-production-dry-run-20260930
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vop-plate-production-dry-run
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout reviewed migration tooling
+        uses: actions/checkout@v5
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write temporary Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOP }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+            echo "Required repository secret FIREBASE_SERVICE_ACCOUNT_VOP is not configured." >&2
+            exit 1
+          fi
+          credential_path="$RUNNER_TEMP/vop-firebase-service-account-${GITHUB_RUN_ID}.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$credential_path"
+          chmod 600 "$credential_path"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$credential_path" >> "$GITHUB_ENV"
+
+      - name: Preview legacy-to-Plate production migration
+        run: |
+          set -euo pipefail
+          npm run migrate:plate-lessons --             --project=voiceofprophecy             --report-file="$RUNNER_TEMP/plate-production-preview.json"
+
+      - name: Fail if production migration has conflicts
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const path=process.env.RUNNER_TEMP+'/plate-production-preview.json';
+          const report=JSON.parse(fs.readFileSync(path,'utf8'));
+          console.log(JSON.stringify({totals:report.totals,conflicts:report.conflicts},null,2));
+          if((report.conflicts||[]).length){
+            console.error('Production migration has conflicts; execution must not proceed.');
+            process.exit(2);
+          }
+          NODE
+
+      - name: Upload migration preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plate-production-preview-${{ github.run_id }}
+          path: ${{ runner.temp }}/plate-production-preview.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove temporary Firebase credentials
+        if: always()
+        run: |
+          if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+          fi
