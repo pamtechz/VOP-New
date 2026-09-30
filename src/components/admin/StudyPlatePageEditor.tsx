@@ -5,6 +5,7 @@ import {
   BoldPlugin, ItalicPlugin, UnderlinePlugin, StrikethroughPlugin, CodePlugin,
   H1Plugin, H2Plugin, H3Plugin, BlockquotePlugin,
 } from '@platejs/basic-nodes/react';
+import { LinkRules, upsertLink } from '@platejs/link';
 import { LinkPlugin } from '@platejs/link/react';
 import {
   ListPlugin, BulletedListPlugin, NumberedListPlugin,
@@ -69,7 +70,13 @@ const plugins=[
   BulletedListPlugin.configure({render:{as:'ul'}}),
   NumberedListPlugin.configure({render:{as:'ol'}}),
   LinkPlugin.configure({
-    options:{allowedSchemes:['https'],dangerouslySkipSanitization:false},
+    options:{allowedSchemes:['https'],dangerouslySkipSanitization:false,keepSelectedTextOnPaste:true},
+    inputRules:[
+      LinkRules.markdown(),
+      LinkRules.autolink({variant:'paste'}),
+      LinkRules.autolink({variant:'space'}),
+      LinkRules.autolink({variant:'break'}),
+    ],
     render:{as:'a'},
   }),
   StudyImagePlugin,StudyVideoPlugin,StudyAudioPlugin,
@@ -144,9 +151,7 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
     if(!isSafeHttpsMediaUrl(raw)){setInvalid('Choose a safe public HTTPS link.');return;}
     command(()=>{
       const selected=editor.selection?editor.api.string(editor.selection):'';
-      editor.tf.insertNodes({
-        type:'a',url:raw,children:[{text:selected||raw}],
-      });
+      upsertLink(editor,{url:raw,text:selected||raw,target:'_blank'});
     });
   };
   const splitPage=()=>{
