@@ -4,6 +4,7 @@ import {ArrowDown,ArrowLeft,ArrowUp,BookOpen,Check,ChevronRight,
 import {auth} from '../lib/firebase';
 import type {CurriculumProgramDraft} from '../../shared/programModel';
 import './program-manager.css';
+import { appConfirm } from '../components/layout/AppDialog';
 
 type Guide={
   id:string;title:string;language:string;organizationId?:string;
@@ -93,7 +94,7 @@ export default function ProgramManager({
   };
   const archive=async(program:Program)=>{
     if(!program.canEdit||saving||
-      !window.confirm('Archive this program? Existing guides and learner progress will be retained.'))return;
+      !await appConfirm('Archive this program? Existing guides and learner progress will be retained.', {title:'Archive program',confirmLabel:'Archive'}))return;
     setSaving(true);setError('');
     try{
       await programApi('delete',organizationId,program.id);

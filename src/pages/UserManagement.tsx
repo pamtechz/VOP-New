@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, ChevronLeft, ChevronRight, Download, Edit3, Eye, Filter, KeyRound, MoreVertical,
+  Activity, ChevronLeft, ChevronRight, Download, Edit3, Eye, Filter, KeyRound,
   Plus, Search, Shield, ShieldCheck, Trash2, Upload, UserCheck, UserPlus, Users, X
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import { ModalLayer } from '../components/layout/ModalLayer';
+import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
+import { StructureActionsMenu } from '../components/admin/StructureActionsMenu';
 import './userManagement.css';
 
 type ManagedUser = {
@@ -107,7 +109,6 @@ export default function UserManagement({ onBack, scope }: Props) {
   const [selected, setSelected] = useState<ManagedUser | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saving, setSaving] = useState(false);
-  const [menuUid, setMenuUid] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [bulkInput, setBulkInput] = useState(false);
   const [resetLink, setResetLink] = useState('');
@@ -242,7 +243,6 @@ export default function UserManagement({ onBack, scope }: Props) {
       adminNodeId:user.adminNodeId||'',
       password: '',
     });
-    setMenuUid(null);
   };
 
   const saveUser = async () => {
@@ -289,7 +289,6 @@ export default function UserManagement({ onBack, scope }: Props) {
   };
 
   const setStatus = async (user: ManagedUser, disabled: boolean) => {
-    setMenuUid(null);
     try {
       await userApi('setStatus', { uid: user.uid, disabled });
       await load();
@@ -300,7 +299,6 @@ export default function UserManagement({ onBack, scope }: Props) {
   };
 
   const resetPassword = async (user: ManagedUser) => {
-    setMenuUid(null);
     try {
       const body = await userApi('resetPassword', { uid: user.uid });
       setSelected(user);
@@ -312,8 +310,9 @@ export default function UserManagement({ onBack, scope }: Props) {
   };
 
   const deleteUser = async (user: ManagedUser) => {
-    setMenuUid(null);
-    if (!window.confirm('Delete this user account and its profile?')) return;
+    if (!await appConfirm('Delete this user account and its profile?', {
+      title:'Delete user',confirmLabel:'Delete',tone:'danger',
+    })) return;
     try {
       await userApi('delete', { uid: user.uid });
       setSelected(null);
@@ -439,15 +438,14 @@ export default function UserManagement({ onBack, scope }: Props) {
                       <td className="vop-user-last-login">{formatLastLogin(user.lastLogin)}</td>
                       <td>
                         <div className="vop-user-actions">
-                          <button type="button" title={t('common.view','View')} onClick={() => { setSelected(user); setMenuUid(null); }}><Eye size={16}/></button>
+                          <button type="button" title={t('common.view','View')} onClick={() => setSelected(user)}><Eye size={16}/></button>
                           <button type="button" title={t('common.edit','Edit')} onClick={() => openEdit(user)}><Edit3 size={16}/></button>
-                          <button type="button" title={t('common.more','More')} onClick={() => setMenuUid(current => current === user.uid ? null : user.uid)}><MoreVertical size={16}/></button>
-                          {menuUid === user.uid && <div className="vop-user-menu">
+                          <StructureActionsMenu label={(user.displayName || user.email || 'User')+' actions'}>
                             <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>{t('admin.edit_user','Edit User')}</button>
                             <button type="button" onClick={() => void setStatus(user, !user.disabled)}><Activity size={15}/>{user.disabled ? t('admin.activate_user','Activate User') : t('admin.disable_user','Disable User')}</button>
                             <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
-                            <button type="button" className="danger" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
-                          </div>}
+                            <button type="button" className="vop-structure-delete" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
+                          </StructureActionsMenu>
                         </div>
                       </td>
                     </tr>
@@ -490,7 +488,7 @@ export default function UserManagement({ onBack, scope }: Props) {
       </div>
 
       {message && <div className="vop-toast vop-user-toast">{message}</div>}
-      {error && <div className="vop-user-alert"><X size={16}/><span>{error}</span><button type="button" onClick={() => setError('')}><X size={15}/></button></div>}
+      {error && <AppAlertDialog message={error} title="User management" onClose={() => setError('')}/>} 
 
       {selected && <ModalLayer><div className="vop-user-modal-backdrop" onMouseDown={() => setSelected(null)}>
         <div className="vop-user-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>

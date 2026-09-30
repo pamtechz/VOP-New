@@ -3,6 +3,7 @@ import { BookOpen, CheckCircle2, GraduationCap, Plus, RefreshCw, Save, Search, S
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import type { User } from '../types';
+import { appConfirm } from '../components/layout/AppDialog';
 
 type Kind = 'requirements' | 'memoryDecks' | 'duelQuestions';
 type Status = 'draft' | 'published' | 'archived';
@@ -136,7 +137,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     } finally {setBusy(false);}
   };
   const decideRequirement = async (requirementId:string,decision:'approved'|'changes_requested') => {
-    if (!reviewLearner || busy || !window.confirm('Record this '+decision+' decision for the learner?')) return;
+    if (!reviewLearner || busy || !await appConfirm('Record this '+decision+' decision for the learner?', {title:'Record portfolio decision',confirmLabel:'Record decision'})) return;
     setBusy(true);setError('');setMessage('');
     try {
       await engagementRequest({action:'portfolioSignoff',learnerId:reviewLearner,
@@ -191,7 +192,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     finally {setBusy(false)}
   };
   const archive = async (item:Item) => {
-    if (busy || item.canEdit === false || !window.confirm('Archive this '+labels[kind]+'? It will no longer appear as published content.')) return;
+    if (busy || item.canEdit === false || !await appConfirm('Archive this '+labels[kind]+'? It will no longer appear as published content.', {title:'Archive content',confirmLabel:'Archive'})) return;
     setBusy(true);setError('');setMessage('');
     try {
       await engagementRequest({action:'catalogArchive',kind,organizationId,id:item.id});

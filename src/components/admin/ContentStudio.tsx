@@ -3,6 +3,7 @@ import { BookOpen, Check, Filter, Globe, Landmark, Megaphone, Plus, Radio, Refre
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
 import { getTranslation } from '../../services/i18n';
+import { appConfirm } from '../layout/AppDialog';
 
 type CollectionName =
   | 'languages' | 'translations' | 'announcements' | 'books' | 'radioBroadcasts'
@@ -225,7 +226,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
   const remove = async (id: string) => {
     const item = state[active].find(candidate => identity(active, candidate) === id);
     if (item?.canEdit === false) { setError('This record is read-only. Only its contributor or the VOP Super Admin can delete it.'); return; }
-    if (!id || !window.confirm(`${t('common.delete','Delete')} this record permanently?`)) return;
+    if (!id || !await appConfirm(`${t('common.delete','Delete')} this record permanently?`, {title:'Delete record',confirmLabel:t('common.delete','Delete'),tone:'danger'})) return;
     setPending(true); setError(''); setMessage('');
     try {
       await adminContent('delete', active, id);

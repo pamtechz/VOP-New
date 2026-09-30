@@ -1,0 +1,44 @@
+.vop-app-dialog-backdrop{
+  position:fixed;inset:0;display:grid;place-items:center;padding:18px;
+  background:rgba(7,24,47,.46);backdrop-filter:blur(2px);
+}
+.vop-app-dialog{
+  width:min(510px,calc(100vw - 28px));max-height:min(78vh,620px);overflow:auto;
+  border:1px solid #dce5ef;border-radius:15px;background:#fff;color:#1e3f68;
+  box-shadow:0 26px 80px rgba(5,25,55,.32);
+}
+.vop-app-dialog-head{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;padding:18px 18px 14px;
+}
+.vop-app-dialog-icon{
+  display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#eaf3ff;color:#195ca7;
+}
+.vop-app-dialog.tone-warning .vop-app-dialog-icon{background:#fff3dc;color:#b76700}
+.vop-app-dialog.tone-danger .vop-app-dialog-icon{background:#ffe9ec;color:#c52239}
+.vop-app-dialog.tone-success .vop-app-dialog-icon{background:#e7f8ee;color:#178448}
+.vop-app-dialog-head h2{margin:1px 0 5px;color:#123d76;font-size:17px;line-height:1.25}
+.vop-app-dialog-head p{margin:0;color:#5d7590;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.vop-app-dialog-close{
+  display:grid;place-items:center;width:31px;height:31px;border:0;border-radius:8px;
+  background:#f3f6fa;color:#60758e;cursor:pointer;
+}
+.vop-app-dialog-prompt{display:grid;gap:6px;padding:0 18px 12px;color:#42617f;font-size:11px;font-weight:760}
+.vop-app-dialog-prompt input{
+  width:100%;height:39px;box-sizing:border-box;border:1px solid #d7e2ee;border-radius:8px;
+  padding:0 10px;background:#fff;color:#1d416b;font:inherit;font-size:12px;outline:0;
+}
+.vop-app-dialog-prompt input:focus{border-color:#4a8bd1;box-shadow:0 0 0 3px rgba(48,119,193,.12)}
+.vop-app-dialog-actions{
+  display:flex;justify-content:flex-end;gap:8px;padding:13px 18px 17px;border-top:1px solid #edf1f5;
+}
+.vop-app-dialog-actions button{min-height:36px;padding:7px 14px}
+.vop-app-dialog-danger{
+  border:1px solid #bb2438;border-radius:8px;background:#c92b40;color:#fff;font:inherit;font-weight:760;cursor:pointer;
+}
+@media(max-width:560px){
+  .vop-app-dialog-backdrop{align-items:end;padding:0}
+  .vop-app-dialog{width:100%;max-height:82vh;border-radius:16px 16px 0 0}
+  .vop-app-dialog-head{padding:16px 15px 13px}
+  .vop-app-dialog-actions{padding:12px 15px 15px}
+  .vop-app-dialog-actions button{flex:1}
+}

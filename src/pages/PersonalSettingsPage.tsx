@@ -7,6 +7,7 @@ import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocal
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import './personalSettings.css';
+import { appConfirm } from '../components/layout/AppDialog';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -47,8 +48,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
   const [trustedDevice, setTrustedDevice] = useState(hasTrustedOfflineDeviceConsent);
-  const changeTrustedDevice = (enabled: boolean) => {
-    if (enabled && !window.confirm('Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.')) return;
+  const changeTrustedDevice = async (enabled: boolean) => {
+    if (enabled && !await appConfirm(
+      'Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.',
+      {title:'Enable offline study storage',confirmLabel:'Enable'}
+    )) return;
     if (!setTrustedOfflineDeviceConsent(enabled)) {
       setMessage('This browser does not permit persistent offline storage.');
       return;
@@ -133,7 +137,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-personal-card vop-card">
         <h2><BookOpen size={19}/> Offline study on this device</h2>
-        <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
+        <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
         <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
         <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
       </section>
