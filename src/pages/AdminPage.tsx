@@ -191,7 +191,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       ]
     : [
         {id:'general',label:isHierarchyAdmin ? 'Tenant Profile' : 'Organisation Profile',icon:Building2},
-        {id:'notifications',label:'Notifications',icon:Bell},
       ];
 
   useEffect(() => {
