@@ -101,7 +101,8 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
     }
     if(type==='video'||type==='audio'){
       const source=resolveMediaSource(node.url);
-      if(!source)throw new Error('Study media requires an approved public HTTPS source.');
+      if(!source||source.kind==='external')
+        throw new Error('Study media requires an approved embeddable or direct public HTTPS source.');
       if(type==='video'&&source.kind==='direct-audio')
         throw new Error('Choose a video source for a video block.');
       if(type==='audio'&&source.kind==='direct-video')
