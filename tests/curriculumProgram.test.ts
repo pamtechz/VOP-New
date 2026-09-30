@@ -39,7 +39,9 @@ test('program UI links canonical guides and passes section-first entry mode to t
   assert.match(admin,/tab === 'programs'/);
   assert.match(admin,/<ProgramManager organizationId=\{scopeOrganizationId\}/);
   assert.match(manager,/guideIds:/);
-  assert.match(manager,/onOpenGuide\(id\)/);
+  assert.match(manager,/onOpenGuide\(id,\{programId:selected\.id,programTitle:selected\.title,entryMode:selected\.entryMode\}\)/);
+  assert.match(admin,/programContext\?\.entryMode==='sections'/);
+  assert.match(admin,/openModuleLesson\(item,section\.id\)/);
   assert.match(learner,/onOpenGuide\(\{\.\.\.guide,learnerEntryMode:activeProgram\.entryMode\}\)/);
   assert.match(loader,/loadFirestorePrograms/);
   assert.match(reader,/guide\.learnerEntryMode==='sections'/);
