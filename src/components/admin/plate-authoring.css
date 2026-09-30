@@ -86,3 +86,9 @@
   .vop-plate-more{position:static}
   .vop-plate-more>div{position:fixed;right:12px;top:auto;max-height:55vh;overflow:auto}
 }
+
+.vop-plate-media-block{display:block;width:100%;margin:10px 0}
+.vop-plate-media-block :is(video,iframe){max-width:100%}
+.vop-plate-media-block audio{display:block;width:100%}
+.vop-plate-spin{animation:vop-plate-spin .8s linear infinite}
+@keyframes vop-plate-spin{to{transform:rotate(360deg)}}
