@@ -554,15 +554,23 @@ export default async function handler(request: Request, response: Response) {
       const requestedNodeType = String(body.adminNodeType || '').trim();
       const requestedNodeId = String(body.adminNodeId || '').trim();
       const hierarchyReassignment = type === 'admin' && assignmentMode === 'hierarchy';
+      const organizationReassignment = tenant.isSuperAdmin && assignmentMode === 'organization'
+        && Object.prototype.hasOwnProperty.call(body, 'organizationId');
       if (hierarchyReassignment) {
         if (!tenant.isSuperAdmin) throw new Error('Only VOP Super Admin can assign hierarchy administrator roles.');
         await validatedHierarchyAssignment(db, requestedNodeType, requestedNodeId);
       }
-      // Organization membership is preserved by ordinary edits. A deliberate
-      // hierarchy reassignment is the only update path that detaches an account.
+      if (tenant.isSuperAdmin && type === 'admin' && assignmentMode === 'organization' && !requestedManagedOrganizationId) {
+        throw new Error('Choose an organization for an organization administrator.');
+      }
+      // Ordinary tenant edits preserve membership. Super Admin can explicitly
+      // move or detach an account by sending the assignment field, including an
+      // empty organizationId for a platform-level non-admin account.
       const effectiveOrganizationId = hierarchyReassignment
         ? ''
-        : tenantOrganizationId || String(existingData.organizationId || '').trim();
+        : organizationReassignment
+          ? requestedManagedOrganizationId
+          : tenantOrganizationId || String(existingData.organizationId || '').trim();
       const baseProfile = profileForType(type, {
         ...body,
         ...(hierarchyReassignment ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
@@ -586,6 +594,8 @@ export default async function handler(request: Request, response: Response) {
           conferenceId: requestedNodeType === 'conference' ? requestedNodeId : '',
           districtId: requestedNodeType === 'district' ? requestedNodeId : '',
           churchId: requestedNodeType === 'church' ? requestedNodeId : '',
+        } : organizationReassignment && !effectiveOrganizationId ? {
+          organizationId:'', organizationRole:'',
         } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -600,13 +610,12 @@ export default async function handler(request: Request, response: Response) {
               ? { role: 'mentor' }
               : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
-      if (hierarchyReassignment) {
-        const previousOrganizationId = String(existingData.organizationId || '').trim();
-        if (previousOrganizationId) {
-          await db.doc(`organizations/${previousOrganizationId}/members/${uid}`).set({
-            active:false, updatedAt:new Date().toISOString(), assignedBy:decoded.uid,
-          }, {merge:true});
-        }
+      const previousOrganizationId = String(existingData.organizationId || '').trim();
+      if ((hierarchyReassignment || organizationReassignment)
+        && previousOrganizationId && previousOrganizationId !== membershipOrganizationId) {
+        await db.doc(`organizations/${previousOrganizationId}/members/${uid}`).set({
+          active:false, updatedAt:new Date().toISOString(), assignedBy:decoded.uid,
+        }, {merge:true});
       }
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
