@@ -426,19 +426,17 @@ export default function UserManagement({ onBack, scope }: Props) {
               <table className="vop-user-table">
                 <thead><tr>
                   <th><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(user => selectedRows.has(user.uid))} onChange={toggleAll}/></th>
-                  <th>#</th><th>{t('common.user','User')}</th><th>{t('common.email','Email')}</th><th>{t('common.role','Role')}</th><th>{t('admin.conference_district','Conference / District')}</th><th>{t('common.status','Status')}</th><th>{t('admin.last_login','Last Login')}</th><th>{t('common.actions','Actions')}</th>
+                  <th>{t('common.user','User')}</th><th>{t('common.role','Role')}</th><th>Assignment / Scope</th><th>{t('common.status','Status')}</th><th>{t('admin.last_login','Last Login')}</th><th>{t('common.actions','Actions')}</th>
                 </tr></thead>
                 <tbody>
-                  {pageRows.map((user, index) => (
+                  {pageRows.map(user => (
                     <tr key={user.uid}>
                       <td><input type="checkbox" checked={selectedRows.has(user.uid)} onChange={() => toggleRow(user.uid)}/></td>
-                      <td>{(page - 1) * pageSize + index + 1}</td>
-                      <td><div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.userCode}</span></div></div></td>
-                      <td>{user.email || 'Not recorded'}</td>
-                      <td><div><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span>{user.organizationName && <small style={{display:'block',marginTop:4,color:'#7183a4'}}>{user.organizationName}</small>}</div></td>
-                      <td><div className="vop-org-cell"><span>{user.conferenceName || 'Not assigned'}</span><small>{user.districtName || 'Not assigned'}</small></div></td>
+                      <td><div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email || 'No email recorded'}</span><small>{user.userCode}</small></div></div></td>
+                      <td><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span></td>
+                      <td><div className="vop-user-scope-cell"><strong>{user.organizationName || user.conferenceName || user.districtName || user.unionName || 'Platform / not assigned'}</strong><span>{user.organizationName ? [user.conferenceName,user.districtName].filter(Boolean).join(' · ') || 'Organisation scope' : user.adminNodeType && user.adminNodeId ? user.adminNodeType.replace(/^./,value=>value.toUpperCase()) + ' administrator' : 'No tenant assignment'}</span></div></td>
                       <td><span className={'vop-user-status ' + (user.disabled ? 'inactive' : 'active')}>{user.disabled ? t('common.inactive','Inactive') : t('common.active','Active')}</span></td>
-                      <td>{formatLastLogin(user.lastLogin)}</td>
+                      <td className="vop-user-last-login">{formatLastLogin(user.lastLogin)}</td>
                       <td>
                         <div className="vop-user-actions">
                           <button type="button" title={t('common.view','View')} onClick={() => { setSelected(user); setMenuUid(null); }}><Eye size={16}/></button>
