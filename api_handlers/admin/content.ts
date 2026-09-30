@@ -608,6 +608,20 @@ export default async function handler(req: Request, res: Response) {
           incoming.quizPassThreshold = normalized;
         }
       }
+      if (collection === 'settings' && Object.hasOwn(incoming, 'quizMaxAttempts')) {
+        const attempts = Number(incoming.quizMaxAttempts);
+        if (!Number.isInteger(attempts) || attempts < 0 || attempts > 100) {
+          throw new Error('Maximum assessment attempts must be a whole number from 0 to 100.');
+        }
+        incoming.quizMaxAttempts = attempts;
+      }
+      if (collection === 'settings' && Object.hasOwn(incoming, 'quizRetakeCooldownMinutes')) {
+        const minutes = Number(incoming.quizRetakeCooldownMinutes);
+        if (!Number.isInteger(minutes) || minutes < 0 || minutes > 10080) {
+          throw new Error('Assessment retake waiting period must be a whole number from 0 to 10,080 minutes.');
+        }
+        incoming.quizRetakeCooldownMinutes = minutes;
+      }
 
       if (collection === 'curriculumSettings' && !targetOrganizationId) {
         throw new Error('Curriculum settings belong to an organization tenant.');
