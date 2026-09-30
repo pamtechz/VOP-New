@@ -14,12 +14,15 @@ import {
   Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Link2, ImagePlus, MoreVertical, Quote,
   Scissors, FilePlus2, Type, AlertCircle, Undo2, Redo2, Code2, ChevronDown,
+  Film, LoaderCircle,
 } from 'lucide-react';
 import {
   normalizeStudyPlateDocument, studyPlatePlainText,
   type StudyPlateDocument,
 } from '../../../shared/studyPlateDocument';
-import { isSafeHttpsMediaUrl } from '../../../shared/mediaSources';
+import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../../shared/mediaSources';
+import { auth } from '../../lib/firebase';
+import { MediaPlayer } from '../media/MediaPlayer';
 import './plate-authoring.css';
 
 function ImageElement({element,children,...props}:PlateElementProps){
@@ -38,6 +41,24 @@ const StudyImagePlugin=createPlatePlugin({
   key:'studyImage',node:{isElement:true,isVoid:true,type:'img'},
 }).withComponent(ImageElement);
 
+function MediaElement({element,children,...props}:PlateElementProps){
+  const media=element as {type?:unknown;url?:unknown};
+  const kind=media.type==='audio'?'audio':'video';
+  const url=String(media.url||'');
+  return <PlateElement as="div" element={element} {...props}>
+    <span contentEditable={false} className="vop-plate-media-block">
+      <MediaPlayer src={url} title={kind==='audio'?'Study audio':'Study video'} kind={kind}/>
+    </span>
+    {children}
+  </PlateElement>;
+}
+const StudyVideoPlugin=createPlatePlugin({
+  key:'studyVideo',node:{isElement:true,isVoid:true,type:'video'},
+}).withComponent(MediaElement);
+const StudyAudioPlugin=createPlatePlugin({
+  key:'studyAudio',node:{isElement:true,isVoid:true,type:'audio'},
+}).withComponent(MediaElement);
+
 const plugins=[
   BoldPlugin,ItalicPlugin,UnderlinePlugin,StrikethroughPlugin,CodePlugin,
   H1Plugin.configure({render:{as:'h1'}}),
@@ -51,11 +72,12 @@ const plugins=[
     options:{allowedSchemes:['https'],dangerouslySkipSanitization:false},
     render:{as:'a'},
   }),
-  StudyImagePlugin,
+  StudyImagePlugin,StudyVideoPlugin,StudyAudioPlugin,
 ];
 
 type Props={
   sectionId:string;
+  organizationId?:string;
   document:StudyPlateDocument;
   onChange:(document:StudyPlateDocument)=>void;
   onSplitPage:(before:StudyPlateDocument,after:StudyPlateDocument)=>void;
@@ -63,8 +85,9 @@ type Props={
   onValidationError?:(message:string)=>void;
 };
 
-export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,onNotify,onValidationError}:Props){
+export function StudyPlatePageEditor({sectionId,organizationId,document,onChange,onSplitPage,onNotify,onValidationError}:Props){
   const [invalid,setInvalid]=useState('');
+  const [mediaResolving,setMediaResolving]=useState(false);
   const [initialValue]=useState(document);
   const editor=usePlateEditor({
     id:'vop-plate-'+sectionId,
@@ -83,6 +106,37 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
     if(raw===null)return;
     if(!isSafeHttpsMediaUrl(raw)){setInvalid('Choose a safe public HTTPS image URL.');return;}
     command(()=>editor.tf.insertNodes({type:'img',url:raw,children:[{text:''}]}));
+  };
+  const insertMedia=async()=>{
+    const raw=window.prompt('Public media URL (YouTube, AudioVerse, Vimeo, Facebook, Instagram, TikTok, SoundCloud, or direct HTTPS media)');
+    if(raw===null)return;
+    if(!raw.trim())return setInvalid('Paste a public media URL first.');
+    setMediaResolving(true);setInvalid('');
+    try{
+      if(!auth?.currentUser)throw new Error('Sign in again before adding media.');
+      const token=await auth.currentUser.getIdToken();
+      const response=await fetch('/api/media',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({url:raw.trim(),organizationId:organizationId||undefined}),
+      });
+      const payload=await response.json().catch(()=>({})) as {
+        error?:string;media?:{kind:string;provider:string;url:string;originalUrl:string};
+      };
+      if(!response.ok||!payload.media)throw new Error(payload.error||'This media source is not approved.');
+      const source=payload.media;
+      const stored=source.kind==='embed'||source.kind==='external'
+        ?source.originalUrl:source.url;
+      const resolved=resolveMediaSource(stored);
+      if(!resolved)throw new Error('The resolved media URL is not safe for playback.');
+      const type=resolved.kind==='direct-audio'||['AudioVerse','SoundCloud'].includes(resolved.provider)
+        ?'audio':'video';
+      command(()=>editor.tf.insertNodes({type,url:stored,children:[{text:''}]}));
+      onNotify?.(source.provider+' media added to this section.');
+    }catch(reason){
+      const message=reason instanceof Error?reason.message:'Could not add this media source.';
+      setInvalid(message);onValidationError?.(message);
+    }finally{setMediaResolving(false);}
   };
   const insertLink=()=>{
     const raw=window.prompt('Public HTTPS link');
@@ -160,6 +214,9 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
         {toolbarButton('Quotation',<Quote size={17}/>,()=>editor.tf.blockquote.toggle())}
         {toolbarButton('Link',<Link2 size={17}/>,insertLink)}
         {toolbarButton('Image',<ImagePlus size={17}/>,insertImage)}
+        <button type="button" title="Insert approved audio or video" aria-label="Insert approved audio or video"
+          disabled={mediaResolving} onMouseDown={event=>event.preventDefault()} onClick={()=>void insertMedia()}>
+          {mediaResolving?<LoaderCircle className="vop-plate-spin" size={17}/>:<Film size={17}/>}</button>
       </div>
       <button type="button" className="vop-plate-section-break"
         title="Start a new student section/page at this paragraph"
@@ -173,6 +230,7 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
         <div role="group" aria-label="Additional study editing actions">
           <button type="button" onClick={insertLink}><Link2 size={15}/> Insert link</button>
           <button type="button" onClick={insertImage}><ImagePlus size={15}/> Insert image</button>
+          <button type="button" disabled={mediaResolving} onClick={()=>void insertMedia()}><Film size={15}/> Insert audio / video</button>
           <button type="button" onClick={()=>command(()=>editor.tf.blockquote.toggle())}>
             <Quote size={15}/> Quotation block
           </button>
