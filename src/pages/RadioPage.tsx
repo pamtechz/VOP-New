@@ -439,7 +439,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       <main className="vop-radio-audience-main">
         <section className="vop-radio-section-grid">
           <div className="vop-radio-schedule-card">
-            <div className="vop-radio-section-head"><h2><CalendarDays size={19}/> Program Schedule</h2><button type="button">View Full Schedule <ChevronRight size={15}/></button></div>
+            <div className="vop-radio-section-head"><h2><CalendarDays size={19}/> Program Schedule</h2><button type="button" onClick={()=>setScheduleRange('week')}>View Full Schedule <ChevronRight size={15}/></button></div>
             <div className="vop-radio-schedule-tabs">
               {(['today', 'tomorrow', 'week'] as const).map(range => (
                 <button key={range} className={scheduleRange === range ? 'active' : ''} type="button" onClick={() => setScheduleRange(range)}>
