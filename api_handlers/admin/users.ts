@@ -622,7 +622,7 @@ export default async function handler(request: Request, response: Response) {
       const baseProfile = profileForType(type, body, effectiveOrganizationId);
       const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
       const explicitHierarchyChange=type==='admin'&&!effectiveOrganizationId&&Boolean(body.adminNodeType)&&Boolean(body.adminNodeId);
-      const profile = existingPlatformRole && !explicitHierarchyChange
+      const profile = existingPlatformRole && !effectiveOrganizationId && !explicitHierarchyChange
         ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
         : baseProfile;
       await profileRef.set({
