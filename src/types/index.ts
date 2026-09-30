@@ -49,6 +49,26 @@ export interface AppSettings {
   certificateTitle?: string;
   certificateBodyText?: string;
   detailPages?: DetailPagesSettings;
+  appTagline?: string;
+  timezone?: string;
+  website?: string;
+  welcomeMessage?: string;
+  systemOptions?: {
+    maintenanceMode?: boolean;
+    showChurchInfo?: boolean;
+  };
+  features?: {
+    candidatesModule?: boolean;
+    curriculumStudio?: boolean;
+    translations?: boolean;
+    radio?: boolean;
+    announcements?: boolean;
+    certification?: boolean;
+  };
+  security?: {
+    /** Signed-in inactivity timeout. Zero/undefined uses the application default. */
+    sessionTimeoutMinutes?: number;
+  };
 }
 
 export interface Union {
