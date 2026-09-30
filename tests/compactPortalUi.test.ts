@@ -36,23 +36,25 @@ test('featured image uses an editor tab rather than a permanent right column',()
   assert.match(css,/grid-template-columns:minmax\(0,1fr\)!important/);
 });
 
-test('lesson auxiliary tabs have consistent padding and persistence feedback',()=>{
+test('lesson tabs use full-panel insets and persistent save feedback',()=>{
   const page=read('src/pages/CurriculumManager.tsx');
   const css=read('src/pages/curriculum-structure.css');
-  assert.match(page,/editorTab === 'media'[\s\S]*vop-lesson-aux-tab/);
-  assert.match(page,/editorTab === 'bible'[\s\S]*vop-lesson-aux-tab/);
-  assert.match(page,/editorTab === 'notes'[\s\S]*vop-lesson-aux-tab/);
-  assert.match(page,/editorTab === 'settings'[\s\S]*vop-lesson-aux-tab/);
-  assert.match(css,/\.vop-lesson-aux-tab\{[\s\S]*padding:15px/);
+  for(const tab of ['content','image','media','bible','notes','settings']){
+    assert.match(page,new RegExp("editorTab === '"+tab+"'[\\s\\S]*vop-lesson-tab-panel"));
+  }
+  assert.match(css,/\.vop-lesson-content-card>\.vop-lesson-tab-panel\{[\s\S]*padding:20px 22px 22px!important/);
   assert.match(page,/vop-editor-save-status/);
+  assert.match(page,/vop-save-state-chip/);
   assert.match(page,/Saving changes…/);
   assert.match(page,/Unsaved changes/);
   assert.match(page,/All changes saved/);
   assert.match(page,/Not saved yet/);
+  assert.match(page,/tx\('curriculum\.saved','Saved'\)/);
   assert.match(page,/saving\?tx\('common\.saving','Saving…'\):tx\('curriculum\.saveDraft'/);
-  assert.match(css,/\.vop-editor-save-status\.saving/);
-  assert.match(css,/\.vop-editor-save-status\.saved/);
-  assert.match(css,/\.vop-editor-save-status\.dirty/);
+  assert.match(css,/\.vop-save-state-chip\.saving/);
+  assert.match(css,/\.vop-save-state-chip\.saved/);
+  assert.match(css,/\.vop-save-state-chip\.dirty/);
+  assert.match(css,/\.vop-lesson-settings-panel \.vop-setting-row/);
 });
 
 test('compact rails and certification controls preserve certificate artwork geometry',()=>{
