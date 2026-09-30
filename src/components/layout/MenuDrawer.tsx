@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { AppRoute, AppSettings, DiscoverGuide, LanguageCode, User } from '../../types';
-import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, Info, LibraryBig, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, X, type LucideIcon } from 'lucide-react';
+import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, Info, LibraryBig, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, UserPlus, X, type LucideIcon } from 'lucide-react';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
@@ -101,6 +101,8 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
       : []),
   ];
   const account: MenuItem[] = [
+    { route: 'notifications', label: t('navigation.notifications', 'Notifications'), detail: t('navigation.notifications_detail', 'Messages and workflow updates'), icon: Bell },
+    { route: 'invites', label: t('navigation.invites', 'Invitations'), detail: t('navigation.invites_detail', 'Received and sent invitations'), icon: UserPlus },
     { route: 'profile', label: t('navigation.profile', 'Profile'), detail: t('navigation.profile_detail', 'Your learner account'), icon: UserCheck },
     { route: 'personal-settings', label: t('navigation.personal_settings', 'Personal Settings'), detail: t('navigation.settings_detail', 'Language and preferences'), icon: UserCheck },
     ...(settings.features?.certification===false?[]:[{ route: 'certificates' as const, label: t('certificates.my_certificate', 'My Certificates'), detail: t('navigation.certificates_detail', 'Graduation and awards'), icon: Award }]),
