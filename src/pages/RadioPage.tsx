@@ -442,14 +442,13 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
             </div>
           </div>
 
-          {(source?.provider==='direct-audio'||source?.provider==='youtube')&&<div className="vop-yt-custom-controls">
+          {source?.provider==='direct-audio'&&<div className="vop-yt-custom-controls">
             <button type="button" onClick={()=>skip(-10)} disabled={!duration}><SkipBack size={17}/></button>
-            <button type="button" onClick={()=>void togglePlay()} disabled={!source||(source.provider==='youtube'&&!ytReady)}>{playing?<Pause size={18}/>:<Play size={18} fill="currentColor"/>}</button>
+            <button type="button" onClick={()=>void togglePlay()} disabled={!source}>{playing?<Pause size={18}/>:<Play size={18} fill="currentColor"/>}</button>
             <button type="button" onClick={()=>skip(10)} disabled={!duration}><SkipForward size={17}/></button>
             <span>{formatTime(current)}</span><input className="progress" type="range" min="0" max={duration||0} step=".1" value={Math.min(current,duration||0)} onChange={e=>seek(Number(e.target.value))} disabled={!duration}/><span>{duration?formatTime(duration):source?.live?'LIVE':'—'}</span>
             <button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input className="volume" type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/>
             <label><Gauge size={15}/><select value={rate} onChange={e=>changeRate(Number(e.target.value))}>{[.5,.75,1,1.25,1.5,1.75,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>
-            {source?.provider==='youtube'&&<button type="button" onClick={fullscreen}><Maximize2 size={17}/></button>}
           </div>}
 
           <div className="vop-yt-description">
