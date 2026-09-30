@@ -1,6 +1,6 @@
-# VOP curriculum authoring — review proposal
+# VOP curriculum authoring — approved implementation
 
-Status: **draft for product approval.** This is not a migration or an instruction to publish the prototype to production. The existing Firestore lessons and classic authoring path must stay intact until explicitly approved.
+Status: **approved for merge on 30 September 2026.** The continuous Plate authoring model and course/program navigation are approved for the application code. Historical instructor-note migration and any production data migration remain separate, explicit operations and are not performed by this merge.
 
 ## 1. Product model
 
@@ -71,6 +71,6 @@ The draft now writes instructor notes atomically to `guides/{guideId}/lessons/{l
 
 **Implemented in the draft:** A React/Vite Plate editing surface used as the sole structured-lesson editor, compact sticky toolbar, one continuous chapter document with editor-only section/page boundaries, stable block IDs when paragraphs become section starts, compact learner-page outline, approved media insertion, safe JSON-to-reader rendering, rich formatting, draft save through the existing lesson API, guarded transfers, first-class Course/Program CRUD, tenant-constrained ordered guide assignments, course-first learner catalogue, direct section-first admin/learner navigation, API-only program writes and rules tests, and segregated instructor notes for new/edited lessons.
 
-**Still requiring product approval and controlled follow-up:** Historical note migration, published immutable revision history and rollback, guide-to-program navigation from every older entry point, accessibility review, program-wide hierarchy scope if desired, and verified real-device authenticated editor interactions. The old guide-level navigation preference remains a fallback for legacy guides that are not opened through a program.
+**Controlled follow-up after merge:** Historical note migration, published immutable revision history and rollback, guide-to-program navigation from every older entry point, accessibility review, program-wide hierarchy scope if desired, and verified real-device authenticated editor interactions. The old guide-level navigation preference remains a fallback for legacy guides that are not opened through a program.
 
-Do not merge this PR or deploy it merely because CI passes. Approval should cover the canonical entity hierarchy, the program navigation mode, the continuous-authoring section-boundary behavior, the direct section-first learner navigation, and the staged migration boundaries.
+The approved merge covers the canonical entity hierarchy, program navigation mode, continuous-authoring section-boundary behavior, direct section-first learner navigation, and staged migration boundaries. Production data migrations remain separately gated.
