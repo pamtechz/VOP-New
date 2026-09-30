@@ -235,6 +235,17 @@ test('Plate authoring uses a continuous chapter document with explicit section b
   assert.match(studio,/Save your lesson changes before leaving the editor to manage a quiz/);
 });
 
+test('authoring outline and Plate toolbar remain visibly sticky below the admin header',()=>{
+  const toolbar=read('src/components/admin/plate-authoring.css');
+  const structure=read('src/components/admin/plate-structure.css');
+  assert.match(toolbar,/top:var\(--vop-plate-sticky-top,76px\)/);
+  assert.match(toolbar,/z-index:75/);
+  assert.match(structure,/--vop-plate-sticky-top:76px/);
+  assert.match(structure,/\.vop-plate-outline\{[\s\S]*position:sticky;top:var\(--vop-plate-sticky-top,76px\)/);
+  assert.match(structure,/max-height:calc\(100dvh - var\(--vop-plate-sticky-top,76px\) - 10px\)/);
+  assert.match(structure,/@media\(max-width:860px\)[\s\S]*\.vop-plate-outline\{position:static/);
+});
+
 test('Plate is the single structured editor while learner rendering remains validated',()=>{
   const manager=read('src/pages/CurriculumManager.tsx');
   const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
