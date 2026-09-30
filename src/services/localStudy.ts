@@ -55,9 +55,20 @@ export async function saveLessonResume(
   } catch { return queue(); }
 }
 
-export interface AssessmentSubmissionResult {
-  score: number;
-  passed: boolean;
+export interface AssessmentPolicyResult {
+  instructions: string;
+  timeLimitMinutes: number;
+  passingPercent: number;
+  maxAttempts: number | null;
+  retakeCooldownMinutes: number;
+  feedbackMode: 'after_submit' | 'after_pass' | 'none';
+}
+
+export interface AssessmentStartResult {
+  attemptId: string;
+  startedAt: string;
+  expiresAt: string | null;
+  policy: AssessmentPolicyResult;
   retakePolicy: {
     attemptsUsed: number;
     maxAttempts: number | null;
@@ -67,11 +78,46 @@ export interface AssessmentSubmissionResult {
   };
 }
 
+export interface AssessmentSubmissionResult {
+  score: number;
+  passed: boolean;
+  policy?: AssessmentPolicyResult;
+  feedback?: Array<{key:string;correct:boolean;explanation:string;correctAnswer:number|boolean|null}>;
+  retakePolicy: {
+    attemptsUsed: number;
+    maxAttempts: number | null;
+    remainingAttempts: number | null;
+    cooldownMinutes: number;
+    retryAt: string | null;
+  };
+}
+
+export async function startQuizAttempt(
+  guideId:string,
+  testId:string,
+  language:string=getActiveLanguage(),
+):Promise<AssessmentStartResult> {
+  const firebaseUser=auth?.currentUser;
+  if(!firebaseUser) throw new Error('Sign in before starting an assessment.');
+  const token=await firebaseUser.getIdToken();
+  const response=await fetch('/api/study/progress',{
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+    body:JSON.stringify({action:'startQuiz',language,guideId,lessonId:testId}),
+  });
+  const body=await response.json().catch(()=>null) as (AssessmentStartResult&{error?:unknown})|null;
+  if(!response.ok||!body?.attemptId){
+    throw new Error(typeof body?.error==='string'&&body.error.trim()?body.error:'The assessment attempt could not be started.');
+  }
+  return body;
+}
+
 export async function submitQuizAnswers(
   guideId: string,
   testId: string,
   answers: Record<number, number | boolean>,
   language: string = getActiveLanguage(),
+  attemptId = '',
 ): Promise<AssessmentSubmissionResult | null> {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return null;
@@ -88,12 +134,15 @@ export async function submitQuizAnswers(
       language,
       guideId,
       lessonId: testId,
+      ...(attemptId ? {attemptId} : {}),
       answers: Object.fromEntries(Object.entries(answers).map(([index, answer]) => [index, answer])),
     }),
   });
 
   const body = await response.json().catch(() => null) as {
     error?:unknown; score?:unknown; passed?:unknown;
+    policy?:Partial<AssessmentPolicyResult>;
+    feedback?:AssessmentSubmissionResult['feedback'];
     retakePolicy?:Partial<AssessmentSubmissionResult['retakePolicy']>;
   } | null;
   if (!response.ok) {
@@ -116,6 +165,15 @@ export async function submitQuizAnswers(
     return {
       score,
       passed: body?.passed === true,
+      policy: body?.policy && Number.isFinite(Number(body.policy.passingPercent)) ? {
+        instructions:String(body.policy.instructions||''),
+        timeLimitMinutes:Math.max(0,Math.trunc(Number(body.policy.timeLimitMinutes)||0)),
+        passingPercent:Number(body.policy.passingPercent),
+        maxAttempts:Number.isInteger(Number(body.policy.maxAttempts))&&Number(body.policy.maxAttempts)>0?Number(body.policy.maxAttempts):null,
+        retakeCooldownMinutes:Math.max(0,Math.trunc(Number(body.policy.retakeCooldownMinutes)||0)),
+        feedbackMode:body.policy.feedbackMode==='after_pass'||body.policy.feedbackMode==='none'?body.policy.feedbackMode:'after_submit',
+      } : undefined,
+      feedback:Array.isArray(body?.feedback)?body.feedback:undefined,
       retakePolicy: {
         attemptsUsed: Math.max(1, Math.trunc(Number(policy.attemptsUsed) || 1)),
         maxAttempts: Number.isInteger(Number(policy.maxAttempts)) && Number(policy.maxAttempts) > 0
