@@ -22,3 +22,7 @@
 @media(max-width:600px){.vop-study-plate{font-size:14px;gap:10px}.vop-study-plate .vop-study-plate-heading{font-size:18px}}
 
 .vop-study-plate-error{padding:12px 14px;border:1px solid #f5c4c9;border-radius:8px;background:#fff3f4;color:#8d3440;font-size:13px;line-height:1.5}
+
+.vop-study-plate-media{display:block;width:100%;margin:4px 0 8px}
+.vop-study-plate-media :is(video,iframe){max-width:100%}
+.vop-study-plate-media audio{display:block;width:100%}
