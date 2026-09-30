@@ -184,6 +184,7 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(editor,/StudyVideoPlugin/);
   assert.match(editor,/StudyAudioPlugin/);
   assert.match(editor,/ctrlKey\|\|event\.metaKey/);
+  assert.match(editor,/key\.toLowerCase\(\)==='k'/);
   assert.match(structure,/movePage=\(step:-1\|1\)/);
   assert.match(structure,/moveChapter=\(step:-1\|1\)/);
   assert.match(structure,/initialSectionId/);
