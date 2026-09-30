@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BookOpen, Globe, LockKeyhole, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import type { CustomLanguage } from '../../types';
+import { appConfirm } from '../layout/AppDialog';
 
 export type TenantLanguage = CustomLanguage & {
   id:string; ownerUid?:string; canEdit?:boolean; adoptedByPlatform?:boolean;
@@ -74,7 +75,7 @@ export function TenantLanguagesPanel({onChanged}:{onChanged?:(items:CustomLangua
     finally{setBusy(false);}
   };
   const remove=async(item:TenantLanguage)=>{
-    if(!window.confirm('Delete this organization language? A language used in a guide or by learners cannot be removed.'))return;
+    if(!await appConfirm('Delete this organization language? A language used in a guide or by learners cannot be removed.', {title:'Delete language',confirmLabel:'Delete',tone:'danger'}))return;
     setBusy(true);setError('');
     try{
       await languageAction('tenantdelete',{code:item.code});
@@ -83,7 +84,7 @@ export function TenantLanguagesPanel({onChanged}:{onChanged?:(items:CustomLangua
     finally{setBusy(false);}
   };
   const share=async(item:TenantLanguage)=>{
-    if(!window.confirm('Sharing transfers this language to VOP platform stewardship. Your organization will no longer be able to edit or delete the canonical language. Continue?'))return;
+    if(!await appConfirm('Sharing transfers this language to VOP platform stewardship. Your organization will no longer be able to edit or delete the canonical language. Continue?', {title:'Transfer language stewardship',confirmLabel:'Transfer'}))return;
     setBusy(true);setError('');
     try{
       await languageAction('tenantshare',{code:item.code});
