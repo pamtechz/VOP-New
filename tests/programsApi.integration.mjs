@@ -53,7 +53,9 @@ await db.doc('organizations/'+a).set({id:a,status:'active'});
 await db.doc('organizations/'+b).set({id:b,status:'active'});
 const author=await identity('program-test-author',a);
 const coAdmin=await identity('program-test-peer',a);
+const learner=await identity('program-test-learner',a,'learner');
 const outsider=await identity('program-test-outside',b);
+const outsideLearner=await identity('program-test-outside-learner',b,'learner');
 const superAdmin=await identity('program-test-platform','','super_admin');
 const guideA='program-test-guide-a',guideB='program-test-guide-b';
 for(const [id,org,uid] of [[guideA,a,author.uid],[guideB,b,outsider.uid]]){
@@ -75,6 +77,18 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.ok(programId.startsWith('program-'));
     assert.equal((await db.doc('programs/'+programId).get()).data()?.entryMode,'sections');
     assert.deepEqual((await db.doc('programs/'+programId).get()).data()?.guideIds,[guideA]);
+  });
+  await t.test('ordinary learners receive only their published organization catalogue without curriculum-admin permission',async()=>{
+    const own=await call(learner,{collection:'programs',action:'learnerList'});
+    assert.equal(own.status,200,JSON.stringify(own.value));
+    const row=own.value.items.find(item=>item.id===programId);
+    assert.ok(row,'organization learner should receive the published organization program');
+    assert.equal(row.title,base.title);
+    assert.equal(row.canEdit,undefined);
+    assert.equal(row.ownerUid,undefined);
+    const outside=await call(outsideLearner,{collection:'programs',action:'learnerList'});
+    assert.equal(outside.status,200,JSON.stringify(outside.value));
+    assert.equal(outside.value.items.some(item=>item.id===programId),false);
   });
   await t.test('another organization cannot claim a foreign guide',async()=>{
     const bad=await call(outsider,{collection:'programs',action:'upsert',data:{
@@ -126,6 +140,10 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal(approved.status,200,JSON.stringify(approved.value));
     const outside=await call(outsider,{collection:'programs',action:'list',organizationId:b});
     assert.equal(outside.value.items.find(item=>item.id===programId).canEdit,false);
+    const learnerCatalogue=await call(outsideLearner,{collection:'programs',action:'learnerList'});
+    assert.equal(learnerCatalogue.status,200,JSON.stringify(learnerCatalogue.value));
+    assert.equal(learnerCatalogue.value.items.find(item=>item.id===programId).entryMode,'sections');
+
     assert.equal(outside.value.items.find(item=>item.id===programId).entryMode,'sections');
     const contributor=await call(author,{collection:'programs',action:'upsert',
       id:programId,organizationId:a,data:base});
