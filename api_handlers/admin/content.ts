@@ -235,6 +235,8 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
+        certificateDocumentType: String(data.certificateDocumentType || 'course').trim().slice(0,80) || 'course',
+        certificateTypeName: String(data.certificateTypeName || '').trim().slice(0,160),
         // Presentation changes the learner's navigation, never the underlying
         // lesson/progress/certificate identity. Existing guides remain in
         // their familiar lesson-list mode until the author chooses otherwise.
