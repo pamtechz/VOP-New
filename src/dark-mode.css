@@ -1,0 +1,177 @@
+/* Platform-wide dark theme compatibility layer.
+   VOP's newer components already use semantic tokens; these selectors cover
+   legacy portal/admin surfaces that still carry light-only declarations. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --vop-surface-0: #071224;
+  --vop-surface-1: #0a1b35;
+  --vop-surface-2: #0f2447;
+  --vop-surface-3: #16325f;
+  --vop-text-strong: #f8fafc;
+  --vop-text: #d8e3f2;
+  --vop-text-muted: #9bb0cb;
+  --vop-line: #26456f;
+  --vop-input: #0b1f3d;
+  --vop-hover: #17355f;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] #root,
+[data-theme="dark"] .vop-page-shell,
+[data-theme="dark"] .vop-main,
+[data-theme="dark"] .vop-admin,
+[data-theme="dark"] .vop-learner-main {
+  background: var(--vop-surface-0) !important;
+  color: var(--vop-text);
+}
+
+[data-theme="dark"] :is(
+  .vop-card,.glass-panel,.vop-table-wrap,.vop-reference-table-wrap,.vop-candidate-list-card,
+  .vop-personal-card,.vop-cert-metric,.vop-cert-table-wrap,.vop-cert-candidate-card,
+  .vop-cert-action-card,.vop-cert-config-card,.vop-form-card,.vop-mentoring-card,
+  .vop-mentoring-stats>div,.vop-profile-menu,.vop-admin-chat,.vop-draft,
+  .vop-module-item,.vop-guide-first-card,.vop-reference-manager,.vop-studio-list,
+  .vop-candidate-modal,.vop-cert-issuer-modal
+) {
+  background: var(--vop-surface-2) !important;
+  border-color: var(--vop-line) !important;
+  color: var(--vop-text) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,.22) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-admin,.vop-learner-main,.vop-personal-settings,.vop-candidates-page,
+  .vop-reference-manager,.vop-mentoring,.vop-cert-page
+) :is(input,select,textarea) {
+  background: var(--vop-input) !important;
+  color: var(--vop-text-strong) !important;
+  border-color: var(--vop-line) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-admin,.vop-learner-main,.vop-personal-settings,.vop-candidates-page,
+  .vop-reference-manager,.vop-mentoring,.vop-cert-page
+) :is(input,textarea)::placeholder {
+  color: #7890ae !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-admin,.vop-learner-main,.vop-personal-settings,.vop-candidates-page,
+  .vop-reference-manager,.vop-mentoring,.vop-cert-page
+) :is(h1,h2,h3,h4,strong,label,dt) {
+  color: var(--vop-text-strong) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-admin,.vop-learner-main,.vop-personal-settings,.vop-candidates-page,
+  .vop-reference-manager,.vop-mentoring,.vop-cert-page
+) :is(p,small,span,dd,em) {
+  border-color: var(--vop-line);
+}
+
+[data-theme="dark"] :is(.vop-table,.vop-reference-table,.vop-candidate-table,.vop-cert-table) th {
+  background: var(--vop-surface-1) !important;
+  color: #b9cbea !important;
+  border-color: var(--vop-line) !important;
+}
+[data-theme="dark"] :is(.vop-table,.vop-reference-table,.vop-candidate-table,.vop-cert-table) td {
+  background: var(--vop-surface-2) !important;
+  color: var(--vop-text) !important;
+  border-color: var(--vop-line) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-secondary,.vop-page-btn,.vop-actions,.vop-cert-row-actions>button,
+  .vop-cert-small-button,.vop-cert-secondary-button,.vop-candidate-pager button,
+  .vop-mentoring-tabs button,.vop-candidate-modal-head button
+) {
+  background: var(--vop-surface-3) !important;
+  color: var(--vop-text-strong) !important;
+  border-color: var(--vop-line) !important;
+}
+[data-theme="dark"] :is(
+  .vop-secondary,.vop-page-btn,.vop-actions,.vop-cert-row-actions>button,
+  .vop-cert-small-button,.vop-cert-secondary-button,.vop-candidate-pager button,
+  .vop-mentoring-tabs button,.vop-candidate-modal-head button
+):hover {
+  background: var(--vop-hover) !important;
+}
+
+[data-theme="dark"] .vop-personal-settings {
+  --personal-text: var(--vop-text-strong);
+  --personal-muted: var(--vop-text-muted);
+}
+[data-theme="dark"] .vop-personal-settings .vop-personal-header {
+  background: linear-gradient(115deg,#0b1f3d,#102b52 68%) !important;
+  border-color: var(--vop-line) !important;
+}
+[data-theme="dark"] .vop-personal-settings .vop-personal-message,
+[data-theme="dark"] .vop-personal-settings .vop-personal-loading {
+  background: #102b52 !important;
+  color: #cfe3ff !important;
+  border-color: #315d94 !important;
+}
+
+[data-theme="dark"] .vop-candidate-metrics>div,
+[data-theme="dark"] .vop-candidate-person>span,
+[data-theme="dark"] .vop-candidate-ministry-status {
+  background: var(--vop-surface-2) !important;
+  border-color: var(--vop-line) !important;
+  color: #cfe3ff !important;
+}
+[data-theme="dark"] .vop-candidate-toolbar,
+[data-theme="dark"] .vop-candidate-pager {
+  border-color: var(--vop-line) !important;
+}
+[data-theme="dark"] .vop-candidate-alert {
+  background: #3a1820 !important;
+  border-color: #7f2f42 !important;
+  color: #ffd4dc !important;
+}
+
+[data-theme="dark"] .vop-profile-menu,
+[data-theme="dark"] .vop-cert-row-menu {
+  background: var(--vop-surface-2) !important;
+  border-color: var(--vop-line) !important;
+}
+[data-theme="dark"] .vop-profile-menu button,
+[data-theme="dark"] .vop-cert-row-menu button {
+  background: transparent !important;
+  color: var(--vop-text) !important;
+}
+[data-theme="dark"] .vop-profile-menu button:hover,
+[data-theme="dark"] .vop-cert-row-menu button:hover {
+  background: var(--vop-hover) !important;
+}
+
+[data-theme="dark"] .vop-quiz-modal>section {
+  background: var(--vop-surface-2) !important;
+  border: 1px solid var(--vop-line);
+}
+[data-theme="dark"] .vop-quiz-modal :is(h3,p,span) {
+  color: var(--vop-text) !important;
+}
+[data-theme="dark"] .vop-quiz-modal button:not([style*="linear-gradient"]) {
+  border-color: var(--vop-line) !important;
+}
+[data-theme="dark"] .vop-quiz-modal [style*="background: rgb(248, 250, 252)"],
+[data-theme="dark"] .vop-quiz-modal [style*="background: #f8fafc"] {
+  background: var(--vop-surface-1) !important;
+  border-color: var(--vop-line) !important;
+}
+
+[data-theme="dark"] .modal-overlay,
+[data-theme="dark"] .vop-candidate-modal-backdrop,
+[data-theme="dark"] .vop-cert-issuer-backdrop {
+  background: rgba(2,8,18,.78) !important;
+}
+
+[data-theme="dark"] :focus-visible {
+  outline-color: #75aaff;
+}
+
+/* Certificates intentionally remain white artwork for print/export. */
+[data-theme="dark"] .vop-certificate-artwork,
+[data-theme="dark"] .vop-certificate-artwork * {
+  color-scheme: light;
+}
