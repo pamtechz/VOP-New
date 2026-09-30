@@ -41,7 +41,7 @@ function normalizeFields(kind: CatalogKind, input: Record<string,unknown>, exist
     if (!Number.isInteger(requiredSignatures) || requiredSignatures < 1 || requiredSignatures > 20) {
       throw new Error('Required evaluator signatures must be a whole number from 1 to 20.');
     }
-    return {title, description, requiredSignatures};
+    return {title, description, requiredSignatures, evidenceRequired: input.evidenceRequired !== false};
   }
   if (kind === 'memoryDecks') {
     const list = input.verses;
