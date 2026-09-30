@@ -249,7 +249,7 @@ export async function loadFirestorePrograms(_user?:User):Promise<CurriculumProgr
     items?:Array<Record<string,unknown>>;
   };
   if(!response.ok)throw new Error(payload.error||'Programs are temporarily unavailable.');
-  return (payload.items||[]).map(item=>({
+  return (payload.items||[]).map((item):CurriculumProgram=>({
     id:String(item.id||''),
     title:String(item.title||''),
     description:String(item.description||''),
