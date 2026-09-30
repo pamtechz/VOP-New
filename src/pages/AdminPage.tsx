@@ -1129,8 +1129,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='userManagement'&&<UserManagement onBack={onBack} scope={{ isSuperAdmin: currentUser.role === 'super_admin', organizationId: currentUser.organizationId, role: currentUser.role }} />}
         {activeTab==='settings'&&renderSettings()}
-        {activeTab==='languages'&&(isSuperAdmin?renderLanguages():<TenantLanguagesPanel onChanged={setTenantLanguages}/>)}
-        {activeTab==='translations'&&!isSuperAdmin&&<TenantTranslationsPanel languages={scopedLanguages}/>}
+        {activeTab==='languages'&&isSuperAdmin&&renderLanguages()}
+        {activeTab==='translations'&&isSuperAdmin&&<LocalizationWorkspace currentUser={currentUser} adminMode/>}
         {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={scopedLanguages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={scopedLanguages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
         {activeTab==='candidates'&&<CandidateEnrollment currentUser={currentUser}/>}
         {activeTab==='certification'&&(
