@@ -19,6 +19,7 @@ import { getUiLocale, translationSourceLabel, getTranslation } from '../services
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { ModalLayer } from '../components/layout/ModalLayer';
+import { appConfirm } from '../components/layout/AppDialog';
 
 const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
 
@@ -206,7 +207,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
   };
   const reviewProposal=async(proposal:PendingTranslationProposal,decision:'approve'|'reject')=>{
     if(!isSuperAdmin||reviewingProposal)return;
-    if(!window.confirm((decision==='approve'?'Publish':'Reject')+' this proposed translation?'))return;
+    if(!await appConfirm((decision==='approve'?'Publish':'Reject')+' this proposed translation?', {title:'Translation review',confirmLabel:decision==='approve'?'Publish':'Reject',tone:decision==='approve'?'warning':'danger'}))return;
     setReviewingProposal(proposal.id);setError('');setMessage('');
     try{
       if(!auth?.currentUser)throw new Error('Sign in first.');
@@ -399,7 +400,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
       setError('This record is owned by another contributor and cannot be deleted. Only the contributor who added it or VOP Super Admin can delete it.');
       return;
     }
-    if (!window.confirm('Delete this record?')) return;
+    if (!await appConfirm('Delete this record?', {title:'Delete record',confirmLabel:'Delete',tone:'danger'})) return;
     try {
       if (!isRecordKind(kind)) return;
       await (kind === 'radio' ? deleteRadioAdminRecord(id) : deleteAdminRecord(COLLECTIONS[kind], id));
@@ -1000,7 +1001,7 @@ function RadioAdminDashboard({
   const removePlaylist = async (id: string) => {
     const item = playlists.find(record => record.id === id);
     if (item?.canEdit === false) { setError('This playlist belongs to another contributor and cannot be deleted.'); return; }
-    if (!window.confirm('Delete this playlist?')) return;
+    if (!await appConfirm('Delete this playlist?', {title:'Delete playlist',confirmLabel:'Delete',tone:'danger'})) return;
     try { await deleteAdminRecord('playlists', id); if (playlistEditingId === id) startPlaylist(); setMessage('Playlist deleted.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete playlist.'); }
   };
