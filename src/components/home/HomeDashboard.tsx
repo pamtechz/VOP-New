@@ -52,9 +52,9 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <p>{t('home.subtitle','Continue your Bible study journey and discover your next lesson.')}</p>
         </div>
         <div className="vop-home-actions">
-          {currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> {t('certificates.title','Certificates')}</button>}
+          {settings.features?.certification!==false&&currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> {t('certificates.title','Certificates')}</button>}
           <button type="button" className="secondary" onClick={onOpenBooks}><BookOpen size={16}/> Library</button>
-          <button type="button" className="secondary" onClick={onOpenRadio}><Radio size={16}/> Radio</button>
+          {settings.features?.radio!==false&&<button type="button" className="secondary" onClick={onOpenRadio}><Radio size={16}/> Radio</button>}
         </div>
       </section>
 
@@ -65,7 +65,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div><span><TrendingUp size={15}/> Current path</span><strong>{primaryPercent}%</strong><small>{primaryGuide?.title || 'Choose a guide to begin'}</small></div>
       </section>
 
-      {announcement && <section className="vop-home-announcement">
+      {settings.features?.announcements!==false&&announcement && <section className="vop-home-announcement">
         <div className="vop-home-announcement-copy">
           <span><Sparkles size={14}/> {announcement.tag || 'From VOP'}</span>
           <h2>{announcement.title}</h2>
@@ -101,7 +101,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10,marginTop:16}}>
           <button type="button" onClick={onOpenBooks} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><BookOpen size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.library','Study resources')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.library_desc','Books, guides and materials for deeper study.')}</span></button>
           <button type="button" onClick={onOpenPrayer} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><HeartHandshake size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.prayer','Prayer ministry')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.prayer_desc','Keep people and your outreach covered in prayer.')}</span></button>
-          <button type="button" onClick={onOpenRadio} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><Radio size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.radio','Radio & broadcasts')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.radio_desc','Listen, watch and discover messages of hope.')}</span></button>
+          {settings.features?.radio!==false&&<button type="button" onClick={onOpenRadio} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><Radio size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.radio','Radio & broadcasts')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.radio_desc','Listen, watch and discover messages of hope.')}</span></button>}
           <button type="button" onClick={onOpenSupport} style={{textAlign:'left',padding:15,borderRadius:14,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.09)',color:'#fff',cursor:'pointer'}}><Sparkles size={19}/><strong style={{display:'block',marginTop:9}}>{t('evangelism.mentor','Get help sharing')}</strong><span style={{display:'block',marginTop:4,fontSize:11,opacity:.72}}>{t('evangelism.mentor_desc','Connect with a mentor when you need guidance.')}</span></button>
         </div>
       </section>
