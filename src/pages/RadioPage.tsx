@@ -7,7 +7,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
-  ChevronRight, ListMusic, Clock3, Video, Headphones
+  ChevronRight, ListMusic, Clock3, Video, Headphones, Search, SlidersHorizontal
 } from 'lucide-react';
 
 interface RadioPageProps { broadcasts: RadioBroadcast[]; playlists?: RadioPlaylist[]; onBack: () => void; }
@@ -144,6 +144,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   const [ytReady, setYtReady] = useState(false);
   const [scheduleRange, setScheduleRange] = useState<'today' | 'tomorrow' | 'week'>('today');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+  const [search,setSearch]=useState('');
+  const [browseFilter,setBrowseFilter]=useState('all');
   const playlistIndexRef = useRef(-1);
   const playlistItemsRef = useRef<RadioBroadcast[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
@@ -282,8 +284,22 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   });
 
   const heroItem = selected || broadcasts[0], selectedPoster = heroItem?.posterUrl?.trim() || '';
-  const featured = broadcasts.slice(0, 4);
-  const latestAudio = broadcasts.filter(item => { const media = detectMedia(item); return media?.provider !== 'direct-video'; }).slice(0, 4);
+  const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
+  const filteredBroadcasts = useMemo(()=>{
+    const q=search.trim().toLowerCase();
+    return broadcasts.filter(item=>{
+      const media=detectMedia(item);
+      const matchesSearch=!q||[item.title,item.speaker,item.series,item.description,sourceLabel(media)].join(' ').toLowerCase().includes(q);
+      const matchesFilter=browseFilter==='all'
+        ||(browseFilter==='live'&&Boolean(media?.live))
+        ||(browseFilter==='video'&&(media?.provider==='youtube'||media?.provider==='direct-video'))
+        ||(browseFilter==='audio'&&(media?.provider==='direct-audio'||media?.provider==='audioverse'))
+        ||item.series===browseFilter;
+      return matchesSearch&&matchesFilter;
+    });
+  },[broadcasts,search,browseFilter]);
+  const featured = filteredBroadcasts.slice(0, 4);
+  const latestAudio = filteredBroadcasts.filter(item => { const media = detectMedia(item); return media?.provider !== 'direct-video' && media?.provider !== 'youtube'; }).slice(0, 6);
   const schedule = useMemo(() => {
     const nowDate = new Date();
     const startToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
@@ -312,7 +328,6 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       .map(entry => entry.item)
       .slice(0, 10);
   }, [broadcasts, scheduleRange]);
-  const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
   const publishedPlaylists = playlists.filter(item => item.published === true && item.itemIds.length).slice(0, 8);
   const selectedPlaylist = publishedPlaylists.find(item => item.id === selectedPlaylistId) || null;
   const playlistItems = selectedPlaylist
@@ -385,6 +400,35 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
         <div><span><BookOpen size={24}/></span><div><strong>{t('radio.materials','Bible Study Materials')}</strong><small>{t('radio.materials_desc','Guides, PDFs, eBooks')}</small></div></div>
         <div><span><Headphones size={24}/></span><div><strong>{t('radio.listen_anywhere','Listen Anywhere')}</strong><small>{t('radio.platforms','Web, Mobile, YouTube, AudioVerse')}</small></div></div>
         <div><span><Globe2 size={24}/></span><div><strong>{t('radio.languages','Multiple Languages')}</strong><small>{t('radio.reaching_everyone','Reaching Everyone')}</small></div></div>
+      </section>
+
+      <section className="vop-radio-discovery">
+        <div className="vop-radio-discovery-head">
+          <div><span>VOP MEDIA</span><h2>Watch, listen and explore</h2><p>Search every published programme, sermon, study, live stream and playlist from one place.</p></div>
+          <label className="vop-radio-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search VOP Radio & Media" aria-label="Search VOP media"/></label>
+        </div>
+        <div className="vop-radio-filter-row" aria-label="Media filters">
+          <SlidersHorizontal size={17}/>
+          {[
+            ['all','All'],['live','Live'],['video','Video'],['audio','Audio'],
+            ...categories.slice(0,8).map(category=>[category,category]),
+          ].map(([value,label])=><button type="button" key={value} className={browseFilter===value?'active':''} aria-pressed={browseFilter===value} onClick={()=>setBrowseFilter(value)}>{label}</button>)}
+        </div>
+        <div className="vop-radio-media-grid">
+          {filteredBroadcasts.slice(0,18).map(item=>{
+            const itemSource=detectMedia(item);
+            return <button type="button" className={'vop-radio-media-card'+(selected?.id===item.id?' selected':'')} key={item.id} onClick={()=>selectProgramme(item)}>
+              <div className="vop-radio-media-thumb" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}>
+                {!item.posterUrl&&<span className="fallback"><Radio size={30}/></span>}
+                <span className="provider">{sourceLabel(itemSource)}</span>
+                {itemSource?.live?<span className="live">LIVE</span>:item.durationMinutes?<span className="duration">{formatTime(item.durationMinutes*60)}</span>:null}
+                <span className="play"><Play size={20} fill="currentColor"/></span>
+              </div>
+              <div className="vop-radio-media-copy"><strong>{item.title}</strong><span>{item.speaker||'Voice of Prophecy'}</span><small>{item.series||sourceLabel(itemSource)}{item.broadcastTime?' · '+dateTime(item.broadcastTime):''}</small></div>
+            </button>;
+          })}
+          {!filteredBroadcasts.length&&<div className="vop-radio-media-empty"><Search size={28}/><strong>No programmes match this view.</strong><span>Try another search or filter.</span></div>}
+        </div>
       </section>
 
       <main className="vop-radio-audience-main">
