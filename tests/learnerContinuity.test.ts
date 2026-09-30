@@ -157,7 +157,8 @@ test('portal-wide dark contract eliminates light islands across every portal',()
   ]) assert.ok(theme.includes(selector),selector);
 
   // The previous regression forced black text onto blue primary buttons.
-  assert.ok(theme.lastIndexOf('color:#fff!important') > theme.indexOf('color:#111820!important'));
+  assert.doesNotMatch(theme,/\.vop-primary,\.btn-primary\)\{color:#111820!important/);
+  assert.match(theme,/\.vop-primary,\.btn-primary\)\{color:#fff!important/);
 
   const exactWhite=/background\s*:\s*#fff(?:fff)?\s*(?:;|})/i;
   for(const [name,css] of [
