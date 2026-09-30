@@ -358,11 +358,13 @@ test('global resource ownership is isolated across organization and hierarchy co
     await assertFails(orgAdmin.doc('books/stewarded').update({title:'cannot reclaim'}));
     await assertFails(unionAdmin.doc('books/stewarded').delete());
     await assertSucceeds(superAdmin.doc('books/stewarded').update({title:'platform steward'}));
-    await assertSucceeds(orgAdmin.doc('organizations/org-1/languages/abc').get());
+    await assertFails(orgAdmin.doc('organizations/org-1/languages/abc').get());
     await assertFails(foreignAdmin.doc('organizations/org-1/languages/abc').get());
+    await assertSucceeds(superAdmin.doc('organizations/org-1/languages/abc').get());
     await assertFails(orgAdmin.doc('organizations/org-1/languages/abc').update({name:'direct bypass'}));
-    await assertSucceeds(orgAdmin.doc('organizations/org-1/locales/abc/translations/common.save').get());
+    await assertFails(orgAdmin.doc('organizations/org-1/locales/abc/translations/common.save').get());
     await assertFails(foreignAdmin.doc('organizations/org-1/locales/abc/translations/common.save').get());
+    await assertSucceeds(superAdmin.doc('organizations/org-1/locales/abc/translations/common.save').get());
     await assertFails(orgAdmin.doc('organizations/org-1/locales/abc/translations/common.save').update({value:'direct bypass'}));
 
     // Organization contributors may create their own global contribution.
@@ -492,6 +494,33 @@ test('nested hierarchy fields remain authorized by Firestore rules', async () =>
   }
 });
 
+
+test('localization applications, collaborators and review votes are API-only',async()=>{
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST,'Firestore emulator required.');
+  const environment=await initializeTestEnvironment({
+    projectId,firestore:{rules,host:'127.0.0.1',port:8080},
+  });
+  try{
+    await environment.withSecurityRulesDisabled(async privileged=>{
+      const db=privileged.firestore();
+      await db.doc('users/localizer').set({uid:'localizer',role:'student',organizationId:'org-1'});
+      await db.doc('localizationApplications/localizer').set({uid:'localizer',status:'pending'});
+      await db.doc('localizationCollaborators/localizer').set({uid:'localizer',status:'active',roles:['translator']});
+      await db.doc('translations/bem/proposals/proposal-a').set({proposerUid:'localizer',status:'pending'});
+      await db.doc('translations/bem/proposals/proposal-a/recommendations/reviewer-a').set({decision:'recommend'});
+    });
+    const user=environment.authenticatedContext('localizer').firestore();
+    for(const path of [
+      'localizationApplications/localizer',
+      'localizationCollaborators/localizer',
+      'translations/bem/proposals/proposal-a',
+      'translations/bem/proposals/proposal-a/recommendations/reviewer-a',
+    ]){
+      await assertFails(user.doc(path).get());
+      await assertFails(user.doc(path).set({forged:true},{merge:true}));
+    }
+  }finally{await environment.cleanup();}
+});
 
 test('personal settings allow UI locale and study language but remain user-private', async () => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
