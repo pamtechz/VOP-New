@@ -1,6 +1,7 @@
 import React from 'react';
 import { normalizeStudyPlateDocument, type StudyPlateDocument, type StudyPlateLeaf, type StudyPlateNode } from '../../../shared/studyPlateDocument';
 import { isSafeHttpsMediaUrl } from '../../../shared/mediaSources';
+import { MediaPlayer } from '../media/MediaPlayer';
 import './study-plate.css';
 
 function leafContent(leaf:StudyPlateLeaf,key:string):React.ReactNode {
@@ -32,6 +33,8 @@ function renderNode(node:StudyPlateNode|StudyPlateLeaf,key:string):React.ReactNo
       ? <figure key={key}><img src={node.url} alt={node.children.map(item=>'text' in item?item.text:'').join('')}
           loading="lazy"/></figure>
       : null;
+    case 'video':return node.url?<div key={key} className="vop-study-plate-media"><MediaPlayer src={node.url} title="Study video" kind="video"/></div>:null;
+    case 'audio':return node.url?<div key={key} className="vop-study-plate-media"><MediaPlayer src={node.url} title="Study audio" kind="audio"/></div>:null;
     case 'code_block':return <pre key={key}><code>{node.children.map(item=>'text' in item?item.text:'').join('')}</code></pre>;
     default:return <p key={key}>{children}</p>;
   }
