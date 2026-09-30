@@ -12,7 +12,7 @@ export function applyThemePreference(theme:VopTheme){
   document.documentElement.setAttribute('data-theme',theme);
   document.documentElement.style.colorScheme=theme;
   const meta=document.querySelector('meta[name="theme-color"]');
-  if(meta)meta.setAttribute('content',theme==='dark'?'#071224':'#0c2d63');
+  if(meta)meta.setAttribute('content',theme==='dark'?'#0c1118':'#0c2d63');
 }
 export function persistThemePreference(theme:VopTheme){
   applyThemePreference(theme);
