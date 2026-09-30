@@ -95,7 +95,9 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
       ? 'final_exam' : item.assessmentKind === 'chapter_quiz' ? 'chapter_quiz' : 'practice',
     instructions: typeof item.instructions === 'string' ? item.instructions : undefined,
     timeLimitMinutes: Number.isFinite(Number(item.timeLimitMinutes)) ? Math.max(0,Math.trunc(Number(item.timeLimitMinutes))) : undefined,
-    passThresholdOverride: Number.isFinite(Number(item.passThresholdOverride)) ? Number(item.passThresholdOverride) : undefined,
+    passThresholdOverride: item.passThresholdOverride !== null && item.passThresholdOverride !== undefined
+      && Number(item.passThresholdOverride) >= 1 && Number(item.passThresholdOverride) <= 100
+      ? Number(item.passThresholdOverride) : undefined,
     maxAttemptsOverride: Number.isFinite(Number(item.maxAttemptsOverride)) ? Math.max(0,Math.trunc(Number(item.maxAttemptsOverride))) : undefined,
     retakeCooldownMinutesOverride: Number.isFinite(Number(item.retakeCooldownMinutesOverride)) ? Math.max(0,Math.trunc(Number(item.retakeCooldownMinutesOverride))) : undefined,
     feedbackMode: ['immediate','after_submission','score_only','none'].includes(String(item.feedbackMode||''))
