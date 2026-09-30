@@ -1,4 +1,4 @@
-import { isSafeHttpsMediaUrl } from './mediaSources.js';
+import { isSafeHttpsMediaUrl, resolveMediaSource } from './mediaSources.js';
 
 /** VOP's safe, portable subset of the Plate/Slate document schema.
  * This is a PUBLIC study document. Private quizzes/answer keys are never
@@ -12,14 +12,14 @@ export type StudyPlateLeaf = {
   code?:true;
 };
 export type StudyPlateNode = {
-  type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'lic'|'a'|'img'|'code_block';
+  type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'lic'|'a'|'img'|'video'|'audio'|'code_block';
   id?:string;
   url?:string;
   children:Array<StudyPlateNode|StudyPlateLeaf>;
 };
 export type StudyPlateDocument=StudyPlateNode[];
 
-const blockTypes=new Set(['p','h1','h2','h3','blockquote','ul','ol','li','lic','a','img','code_block']);
+const blockTypes=new Set(['p','h1','h2','h3','blockquote','ul','ol','li','lic','a','img','video','audio','code_block']);
 const idPattern=/^[A-Za-z0-9_-]{1,120}$/;
 const record=(value:unknown):Record<string,unknown>|null=>
   value!==null&&typeof value==='object'&&!Array.isArray(value)
@@ -69,6 +69,8 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
     if(!blockTypes.has(type))throw new Error('Unsupported study editor node: '+type);
     if(top&&['li','lic','a'].includes(type))
       throw new Error('Lists and links must be contained within a content block.');
+    if(!top&&['img','video','audio'].includes(type))
+      throw new Error('Media blocks must be top-level study blocks.');
     if(!Array.isArray(node.children)||!node.children.length||node.children.length>160)
       throw new Error('Every study block needs its content children.');
     const children=node.children.map(child=>normalize(child,depth+1,false));
@@ -92,6 +94,15 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
       if(!isSafeHttpsMediaUrl(url))
         throw new Error('Study images require a safe public HTTPS URL.');
       element.url=url;
+    }
+    if(type==='video'||type==='audio'){
+      const source=resolveMediaSource(node.url);
+      if(!source)throw new Error('Study media requires an approved public HTTPS source.');
+      if(type==='video'&&source.kind==='direct-audio')
+        throw new Error('Choose a video source for a video block.');
+      if(type==='audio'&&source.kind==='direct-video')
+        throw new Error('Choose an audio source for an audio block.');
+      element.url=source.originalUrl;
     }
     if((type==='ul'||type==='ol')&&children.some(child=>!('type' in child)||child.type!=='li'))
       throw new Error('List containers must contain list items.');
@@ -120,13 +131,13 @@ export function legacyBlocksToPlate(blocks:ReadonlyArray<{
   const items:StudyPlateDocument=[];
   for(const item of blocks){
     const type=item.type==='heading'?'h2':item.type==='quote'?'blockquote':
-      item.type==='image'?'img':'p';
+      item.type==='image'?'img':item.type==='video'?'video':item.type==='audio'?'audio':'p';
     const text=String(item.text||'');
     items.push({
       id:item.id,
       type,
-      ...(type==='img'&&item.src?{url:item.src}:{}),
-      children:[{text:type==='img'?'':text}],
+      ...(['img','video','audio'].includes(type)&&item.src?{url:item.src}:{}),
+      children:[{text:['img','video','audio'].includes(type)?'':text}],
     });
   }
   return items.length?items:[{
@@ -137,17 +148,18 @@ export function legacyBlocksToPlate(blocks:ReadonlyArray<{
 /** Legacy projection is a compatibility view, never the rich-text source
  * of truth. IDs are Plate node IDs, not array offsets. */
 export function studyPlateLegacyBlocks(value:StudyPlateDocument):Array<{
-  id:string;type:'image'|'heading'|'quote'|'paragraph';src?:string;text?:string;
+  id:string;type:'image'|'video'|'audio'|'heading'|'quote'|'paragraph';src?:string;text?:string;
 }>{
   return value.map(node=>{
     const text=studyPlateText(node).trim();
-    const type:'image'|'heading'|'quote'|'paragraph'=node.type==='img'?'image':
+    const type:'image'|'video'|'audio'|'heading'|'quote'|'paragraph'=node.type==='img'?'image':
+      node.type==='video'?'video':node.type==='audio'?'audio':
       ['h1','h2','h3'].includes(node.type)?'heading':
       node.type==='blockquote'?'quote':'paragraph';
     return {
       id:node.id||'',
       type,
-      ...(type==='image'?{src:node.url||''}:{text:text||' '}),
+      ...(['image','video','audio'].includes(type)?{src:node.url||''}:{text:text||' '}),
     };
   });
 }
