@@ -339,6 +339,17 @@ export const App: React.FC = () => {
   }, [settings.themeColor]);
 
   useEffect(() => {
+    const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
+      radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
+    };
+    const feature=routeFeature[currentRoute];
+    if(feature&&settings.features?.[feature]===false){
+      setCurrentRoute('home');
+      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+    }
+  }, [currentRoute,settings.features?.radio,settings.features?.announcements,settings.features?.certification]);
+
+  useEffect(() => {
     if (!currentUser.uid) return;
     const configured=Number(settings.security?.sessionTimeoutMinutes ?? 60);
     const minutes=Number.isFinite(configured)?Math.min(1440,Math.max(5,configured)):60;
