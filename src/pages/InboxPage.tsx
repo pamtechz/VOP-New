@@ -111,6 +111,16 @@ export default function InboxPage({onBack,onNavigate,initialTab='notifications',
     try{await organizationAction('cancelInvite',{token:invite.token});flash('Invitation cancelled.');await load();}
     catch(reason){setError(reason instanceof Error?reason.message:'Could not cancel invitation.');setBusy(false);}
   };
+  const dismissInvite=async(invite:InviteItem)=>{
+    setBusy(true);setError('');
+    try{await organizationAction('dismissInvite',{token:invite.token});flash('Invitation removed from your history.');await load();}
+    catch(reason){setError(reason instanceof Error?reason.message:'Could not remove invitation.');setBusy(false);}
+  };
+  const clearInviteHistory=async()=>{
+    setBusy(true);setError('');
+    try{await organizationAction('clearInviteHistory');flash('Completed invitation history cleared.');await load();}
+    catch(reason){setError(reason instanceof Error?reason.message:'Could not clear invitation history.');setBusy(false);}
+  };
 
   const unread=notifications.filter(item=>item.read!==true).length;
   const received=useMemo(()=>invites.filter(item=>item.direction==='received'),[invites]);
@@ -148,15 +158,16 @@ export default function InboxPage({onBack,onNavigate,initialTab='notifications',
           </div>
         </article>)}</div>}
       </section>:<section className="vop-inbox-panel">
-        <header><div><h2>Invitations</h2><p>Received invitations can be accepted or declined. Sent invitations can be reviewed or cancelled.</p></div></header>
+        <header><div><h2>Invitations</h2><p>Received invitations can be accepted or declined. Sent invitations can be reviewed or cancelled.</p></div>
+          <div className="vop-inbox-actions"><button type="button" onClick={()=>void clearInviteHistory()} disabled={busy||!invites.some(item=>item.status!=='pending')}><Trash2 size={15}/>Clear completed history</button></div></header>
         <div className="vop-invite-columns">
           <div><h3><Mail size={16}/>Received</h3>{!received.length?<div className="vop-inbox-empty compact">No received invitations.</div>:received.map(invite=><article key={'received:'+invite.token} className="vop-invite-card">
             <div><strong>{invite.organizationName||invite.organizationId}</strong><span>Role: {invite.role}</span><small>{invite.status} · expires {dateText(invite.expiresAt)}</small></div>
-            {invite.status==='pending'&&<footer><button type="button" className="vop-primary" disabled={busy} onClick={()=>void acceptInvite(invite)}><Check size={15}/>Accept</button><button type="button" className="vop-secondary" disabled={busy} onClick={()=>void declineInvite(invite)}><X size={15}/>Decline</button></footer>}
+            <footer>{invite.status==='pending'?<><button type="button" className="vop-primary" disabled={busy} onClick={()=>void acceptInvite(invite)}><Check size={15}/>Accept</button><button type="button" className="vop-secondary" disabled={busy} onClick={()=>void declineInvite(invite)}><X size={15}/>Decline</button></>:<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void dismissInvite(invite)}><Trash2 size={15}/>Delete</button>}</footer>
           </article>)}</div>
           <div><h3><Send size={16}/>Sent</h3>{!sent.length?<div className="vop-inbox-empty compact">No sent invitations.</div>:sent.map(invite=><article key={'sent:'+invite.token} className="vop-invite-card">
             <div><strong>{invite.email}</strong><span>{invite.organizationName||invite.organizationId} · {invite.role}</span><small>{invite.status} · expires {dateText(invite.expiresAt)}</small></div>
-            {invite.status==='pending'&&<footer><button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void cancelInvite(invite)}><Trash2 size={15}/>Cancel invite</button></footer>}
+            <footer>{invite.status==='pending'?<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void cancelInvite(invite)}><Trash2 size={15}/>Cancel invite</button>:<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void dismissInvite(invite)}><Trash2 size={15}/>Delete</button>}</footer>
           </article>)}</div>
         </div>
       </section>}
