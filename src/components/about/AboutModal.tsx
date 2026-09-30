@@ -40,6 +40,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({
 
   const t = (key: string) => getTranslation(key, getUiLocale(), settings.customTranslations);
   const details = settings.detailPages;
+  const tenantName=settings.organizationName||settings.schoolName||settings.appName||'Voice of Prophecy';
+  const leadership=details?.aboutUsLeadership?.trim()||[settings.directorTitle,settings.directorName].filter(Boolean).join(' — ');
+  const phones=(details?.contactPhoneNumbers?.length?details.contactPhoneNumbers:[settings.contactPhone]).filter(Boolean);
+  const emails=(details?.contactEmails?.length?details.contactEmails:[settings.contactEmail]).filter(Boolean);
+  const whatsApps=(details?.contactWhatsAppNumbers?.length?details.contactWhatsAppNumbers:[settings.whatsappNumber]).filter(Boolean);
 
   return (
     <ModalLayer><div className="modal-overlay" onClick={onClose}>
@@ -83,7 +88,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 {settings.appName}
               </h3>
               <p style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.75)' }}>
-                {settings.schoolName} • {settings.organizationName}
+                {[settings.schoolName,tenantName].filter((value,index,items)=>value&&items.indexOf(value)===index).join(' • ')}
               </p>
             </div>
           </div>
@@ -185,16 +190,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </p>
               </div>
 
-              {/* Leadership */}
-              <div style={{ padding: '1.25rem', background: '#ffffff', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
+              {leadership&&<div style={{ padding: '1.25rem', background: '#ffffff', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
                 <h5 style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--vop-navy-900)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <HelpCircle size={16} color="var(--vop-navy-700)" />
-                  Leadership & Oversight
+                  <HelpCircle size={16} color="var(--vop-navy-700)" /> Leadership & Oversight
                 </h5>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  {details?.aboutUsLeadership || `Directed by ${settings.directorName} (${settings.directorTitle}) in collaboration with conference leaders, district pastors, and church coordinators.`}
-                </p>
-              </div>
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{leadership}</p>
+              </div>}
             </div>
           )}
 
@@ -248,15 +249,15 @@ export const AboutModal: React.FC<AboutModalProps> = ({
               <div style={{ padding: '1.25rem', background: 'var(--vop-navy-50)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
                 <h5 style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--vop-navy-900)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <MapPin size={18} color="var(--vop-gold-600)" />
-                  Physical Ministry Headquarters
+                  Ministry Office
                 </h5>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '0.75rem' }}>
-                  {details?.contactOfficeAddress || 'Plot 9221, Corner of Burma & Independence Avenue, P.O. Box 31309, Lusaka, Zambia'}
+                  {details?.contactOfficeAddress || 'No office address has been configured for this ministry.'}
                 </p>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   <Clock size={15} />
-                  <span>{details?.contactOfficeHours || 'Mon–Thu: 08:00–17:00 | Fri: 08:00–12:30 | Closed Sabbath & Sunday'}</span>
+                  <span>{details?.contactOfficeHours || 'Office hours have not been configured.'}</span>
                 </div>
               </div>
 
@@ -267,7 +268,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                 </h5>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.88rem' }}>
-                  {(details?.contactPhoneNumbers || [settings.contactPhone]).map((ph, idx) => (
+                  {phones.map((ph, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                       <Phone size={16} color="var(--vop-navy-700)" />
                       <a href={`tel:${ph}`} style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600 }}>
@@ -276,7 +277,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                     </div>
                   ))}
 
-                  {(details?.contactEmails || [settings.contactEmail]).map((em, idx) => (
+                  {emails.map((em, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                       <Mail size={16} color="var(--vop-navy-700)" />
                       <a href={`mailto:${em}`} style={{ color: 'var(--vop-navy-800)', textDecoration: 'underline' }}>
@@ -288,25 +289,14 @@ export const AboutModal: React.FC<AboutModalProps> = ({
               </div>
 
               {/* WhatsApp Call to Action */}
-              <a
-                href={`https://api.whatsapp.com/send?phone=${settings.whatsappNumber}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-gold"
-                style={{
-                  width: '100%',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '0.75rem',
-                  fontSize: '0.95rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <MessageCircle size={18} />
-                <span>Chat Directly on WhatsApp (+{settings.whatsappNumber})</span>
-              </a>
+              {whatsApps.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {whatsApps.map((number,index)=><a key={number+index}
+                  href={`https://api.whatsapp.com/send?phone=${number.replace(/[^0-9]/g,'')}`}
+                  target="_blank" rel="noopener noreferrer" className="btn btn-gold"
+                  style={{flex:'1 1 220px',borderRadius:'var(--radius-full)',padding:'0.75rem',fontSize:'0.9rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'0.5rem'}}>
+                  <MessageCircle size={18}/><span>{whatsApps.length>1?`WhatsApp ${index+1}`:'Chat on WhatsApp'}</span>
+                </a>)}
+              </div>}
 
               {/* Social / External Links */}
               {details?.socialLinks && (
