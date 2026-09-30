@@ -635,7 +635,7 @@ export default async function handler(request: Request, response: Response) {
       const target = await authService.getUser(uid);
       if (!target.email) return response.status(400).json({ error: 'This user does not have an email address.' });
       const resetLink = await authService.generatePasswordResetLink(target.email);
-      return response.status(200).json({ ok: true, email: target.email, resetLink });
+      return response.status(200).json({ ok: true, item: { uid, email: target.email, resetLink } });
     }
 
     if (action === 'delete') {
@@ -749,8 +749,16 @@ export default async function handler(request: Request, response: Response) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'User management operation failed.';
     if (message === 'Sign in first.') return response.status(401).json({ error: message });
-    if (message.includes('Only the VOP super administrator')) return response.status(403).json({ error: message });
-    if (message.includes('Firebase Admin server configuration is missing')) return response.status(503).json({ error: 'Server-side Firebase administration is not configured.' });
+    if (message.includes('Firebase Admin server configuration is missing')) {
+      return response.status(503).json({ error: 'Server-side Firebase administration is not configured.' });
+    }
+    if (/permission|only |outside your|another organization|authorized tenant|cannot access|not a member|belongs to another/i.test(message)) {
+      return response.status(403).json({ error: message });
+    }
+    if (/not found|does not exist/i.test(message)) return response.status(404).json({ error: message });
+    if (/required|select |valid |password|name and email|cannot delete their own|transfer organization ownership|assign another administrator/i.test(message)) {
+      return response.status(400).json({ error: message });
+    }
     console.error('VOP user management failed', error);
     return response.status(500).json({ error: 'User management operation failed.' });
   }
