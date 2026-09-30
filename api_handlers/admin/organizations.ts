@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceQuota } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { createNotification } from '../../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -57,7 +58,7 @@ export default async function handler(req: Request, res: Response) {
     const bootstrapDb = getAdminDb();
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, action === 'acceptInvite');
+    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites'].includes(action));
     const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
     if (action === 'create') {
@@ -141,6 +142,58 @@ export default async function handler(req: Request, res: Response) {
         organizationRole: role,
       });
       return res.status(200).json({ok:true,organizationId,role});
+    }
+
+    if (action === 'listInvites') {
+      const email=String(ctx.auth.email||'').trim().toLowerCase();
+      const receivedSnap=email
+        ?await bootstrapDb.collection('organizationInvites').where('email','==',email).limit(200).get()
+        :null;
+      const sentSnap=await bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(200).get();
+      const rows=[
+        ...(receivedSnap?.docs||[]).map(doc=>({token:doc.id,...doc.data(),direction:'received' as const})),
+        ...sentSnap.docs.map(doc=>({token:doc.id,...doc.data(),direction:'sent' as const})),
+      ];
+      const organizationIds=[...new Set(rows.map(item=>String(item.organizationId||'')).filter(Boolean))];
+      const organizationSnaps=organizationIds.length?await bootstrapDb.getAll(...organizationIds.map(orgId=>bootstrapDb.doc('organizations/'+orgId))):[];
+      const names=new Map(organizationSnaps.map(doc=>[doc.id,String(doc.data()?.name||doc.id)]));
+      const origin=String(req.headers?.origin||'').trim()
+        || `${String(req.headers?.['x-forwarded-proto']||'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host']||req.headers?.host||'').split(',')[0]}`.replace(/\/$/,'');
+      const items=rows.map(item=>({
+        ...item,
+        organizationName:names.get(String(item.organizationId||''))||String(item.organizationId||''),
+        inviteUrl:origin?`${origin}/?invite=${item.token}`:'',
+      })).sort((a,b)=>Date.parse(String(b.createdAt||0))-Date.parse(String(a.createdAt||0)));
+      return res.status(200).json({ok:true,items});
+    }
+
+    if (action === 'declineInvite') {
+      const token=String(body.token||'').trim();
+      if(!token)throw new Error('Invitation token is required.');
+      const inviteRef=bootstrapDb.doc('organizationInvites/'+token);
+      const invite=await inviteRef.get();
+      if(!invite.exists)throw new Error('This invitation is not valid.');
+      const data=invite.data()||{};
+      if(String(data.email||'').trim().toLowerCase()!==String(ctx.auth.email||'').trim().toLowerCase())throw new Error('This invitation belongs to another account.');
+      if(String(data.status||'')!=='pending')throw new Error('This invitation is no longer pending.');
+      await inviteRef.set({status:'declined',declinedBy:ctx.auth.uid,declinedAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,status:'declined'});
+    }
+
+    if (action === 'cancelInvite') {
+      const token=String(body.token||'').trim();
+      if(!token)throw new Error('Invitation token is required.');
+      const inviteRef=bootstrapDb.doc('organizationInvites/'+token);
+      const invite=await inviteRef.get();
+      if(!invite.exists)throw new Error('Invitation was not found.');
+      const inviteData=invite.data()||{};
+      const inviteOrganizationId=String(inviteData.organizationId||'').trim();
+      const managed=await resolveManagedOrganization(ctx,inviteOrganizationId);
+      if(managed!==inviteOrganizationId)throw new Error('This invitation is outside your organization scope.');
+      if(!ctx.isSuperAdmin&&!hierarchyRole(String(ctx.profile.role||'')))requireOrgRole(ctx,['owner','admin']);
+      if(String(inviteData.status||'')!=='pending')throw new Error('Only a pending invitation can be cancelled.');
+      await inviteRef.set({status:'cancelled',cancelledBy:ctx.auth.uid,cancelledAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,status:'cancelled'});
     }
 
     if (action === 'delete') {
@@ -300,6 +353,21 @@ export default async function handler(req: Request, res: Response) {
         createdAt:now.toISOString(),expiresAt,status:'pending'
       });
       await writeTenantAudit(ctx,'membership.invite',`organizationInvites/${token}`,undefined,{email,role:inviteRole,expiresAt});
+      const organization=await ctx.db.doc('organizations/'+managedOrganizationId).get();
+      const organizationName=String(organization.data()?.name||managedOrganizationId);
+      const existingAccount=await ctx.db.collection('users').where('email','==',email).limit(1).get();
+      if(!existingAccount.empty){
+        await createNotification(ctx.db,{
+          organizationId:managedOrganizationId,
+          recipientId:existingAccount.docs[0].id,
+          type:'invitation',
+          title:'Organization invitation',
+          body:`You were invited to join ${organizationName} as ${inviteRole}. Review the invitation to accept or decline it.`,
+          actionUrl:'/invites',
+          metadata:{source:'organization-invite',inviteToken:token,organizationId:managedOrganizationId,role:inviteRole},
+          createdBy:ctx.auth.uid,
+        });
+      }
       const origin = String(req.headers?.origin || '').trim() || `${String(req.headers?.['x-forwarded-proto'] || 'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]}`.replace(/\/$/,'');
       const inviteUrl = `${origin}/?invite=${token}`;
       if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
