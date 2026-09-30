@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
-import { auth } from '../../lib/firebase';
+import { saveLessonResume } from '../../services/localStudy';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 import { MediaPlayer } from '../media/MediaPlayer';
@@ -86,25 +86,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   };
 
   const persistResume = async (pageIndex: number) => {
-    const account = auth?.currentUser;
-    if (!account || !configured || pages.length < 1) return;
-    try {
-      const token = await account.getIdToken();
-      await fetch('/api/study/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          action: 'saveLessonResume',
-          language: guide.language,
-          guideId: guide.id,
-          lessonId: lesson.id,
-          pageIndex,
-          pageCount: pages.length,
-        }),
-      });
-    } catch {
-      // Resume is an enhancement; failure must never interrupt reading or completion.
-    }
+    if (!configured || pages.length < 1) return;
+    const saved=await saveLessonResume(guide.id,lesson.id,pageIndex,guide.language);
+    if (saved === 'queued') setNotice('Reading position saved on this device and will synchronize when you reconnect.');
   };
 
   const handleNext = async () => {
