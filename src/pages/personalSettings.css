@@ -1,7 +1,7 @@
 /* Scoped learner/account styling: does not depend on AdminPage's stylesheet. */
 .vop-personal-settings {
-  --personal-text: #102e54;
-  --personal-muted: #5d708a;
+  --personal-text: var(--text-primary, #102e54);
+  --personal-muted: var(--text-muted, #5d708a);
   width: min(100%, 1040px);
   margin: 0 auto;
   padding: clamp(16px, 3vw, 32px);
@@ -15,14 +15,14 @@
   gap: 18px;
   padding: clamp(20px, 3vw, 30px);
   margin-bottom: 22px;
-  border: 1px solid #d7e4f3;
+  border: 1px solid var(--border-subtle, #d7e4f3);
   border-radius: 20px;
-  background: linear-gradient(115deg, #f0f6ff, #fff 68%);
+  background: linear-gradient(115deg, var(--bg-elevated, #f0f6ff), var(--bg-card, #fff) 68%);
   box-shadow: 0 8px 30px rgba(9, 39, 95, .05);
 }
 .vop-personal-settings .vop-personal-header h1 {
   margin: 4px 0 8px;
-  color: #0c3271;
+  color: var(--text-primary, #0c3271);
   font-size: clamp(1.65rem, 4vw, 2.3rem);
   line-height: 1.13;
   font-weight: 800;
@@ -49,7 +49,7 @@
   min-height: 44px;
   text-decoration: none;
 }
-.vop-personal-settings .vop-secondary { background: #fff; border: 1px solid #cbd9ed; color: #164783; }
+.vop-personal-settings .vop-secondary { background: var(--bg-card, #fff); border: 1px solid #cbd9ed; color: #164783; }
 .vop-personal-settings .vop-secondary:hover { border-color: #3f7cc3; background: #f4f9ff; }
 .vop-personal-settings .vop-primary { background: #0a438e; color: #fff; border: 1px solid #0a438e; }
 .vop-personal-settings .vop-primary:hover { background: #0b3370; }
@@ -63,9 +63,9 @@
   flex-direction: column;
   align-items: stretch;
   gap: 16px;
-  border: 1px solid #dce5f0;
+  border: 1px solid var(--border-subtle, #dce5f0);
   border-radius: 17px;
-  background: #fff;
+  background: var(--bg-card, #fff);
   box-shadow: 0 4px 22px rgba(15, 41, 79, .045);
 }
 .vop-personal-settings .vop-personal-card:first-child,
@@ -77,7 +77,7 @@
   margin: 0;
   font-size: 1.07rem;
   line-height: 1.4;
-  color: #113b74;
+  color: var(--text-primary, #113b74);
   font-weight: 800;
 }
 .vop-personal-settings .vop-personal-card h2 svg {
@@ -95,7 +95,7 @@
   display: grid;
   gap: 7px;
   font-size: .9rem;
-  color: #27496e;
+  color: var(--text-secondary, #27496e);
   font-weight: 700;
 }
 .vop-personal-settings .vop-personal-card :is(select, input:not([type="checkbox"]), textarea) {
@@ -103,9 +103,9 @@
   min-width: 0;
   min-height: 45px;
   padding: 10px 12px;
-  background: #fff;
-  color: #153657;
-  border: 1px solid #c9d8ea;
+  background: var(--bg-card, #fff);
+  color: var(--text-primary, #153657);
+  border: 1px solid var(--border-subtle, #c9d8ea);
   border-radius: 10px;
   font: inherit;
   font-size: .95rem;
