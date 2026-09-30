@@ -321,7 +321,11 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
         <PlateContent className="vop-plate-editable"
           aria-label="Edit study page" spellCheck
           onKeyDown={event=>{
-            if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key==='Enter'){
+            const modifier=event.ctrlKey||event.metaKey;
+            if(modifier&&event.key.toLowerCase()==='k'){
+              event.preventDefault();openInsert('link');return;
+            }
+            if(modifier&&event.shiftKey&&event.key==='Enter'){
               event.preventDefault();splitPage();
             }
           }}
