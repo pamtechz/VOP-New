@@ -193,3 +193,181 @@
 [data-theme="dark"] .vop-login-divider::before,[data-theme="dark"] .vop-login-divider::after{background:#2a3f59!important}
 [data-theme="dark"] .vop-login-divider span{background:#101f33!important;color:#8396aa!important}
 [data-theme="dark"] :is(.vop-auth-loading,.vop-error-page,.vop-not-found-page,.vop-bootstrap-page,.vop-portfolio-verification){background:#07111f!important;color:#eaf2fb!important}
+
+
+/* Semantic dark-mode completion: neutral surface hierarchy */
+[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-primary:#0c1118;
+  --bg-secondary:#111923;
+  --bg-card:#151e28;
+  --bg-elevated:#1c2835;
+  --bg-hover:#243344;
+  --bg-input:#0f1720;
+  --border-subtle:#314050;
+  --border-strong:#465a70;
+  --text-primary:#f6f8fa;
+  --text-secondary:#cbd5df;
+  --text-muted:#9dadbd;
+  --vop-bg:var(--bg-primary);
+  --vop-card:var(--bg-card);
+  --vop-text:var(--text-primary);
+  --vop-muted:var(--text-muted);
+  --vop-border:var(--border-subtle);
+  --vop-rail-bg:#101720;
+  --vop-rail-edge:var(--border-subtle);
+  scrollbar-color:#435466 transparent;
+}
+[data-theme="dark"] *::-webkit-scrollbar-track{background:transparent}
+[data-theme="dark"] *::-webkit-scrollbar-thumb{background:#435466;border-radius:999px}
+[data-theme="dark"] *::-webkit-scrollbar-corner{background:transparent}
+
+[data-theme="dark"] :is(
+  .vop-screen,.vop-screen-body,.vop-materials-page,.vop-materials-main,
+  .vop-home,.vop-reference-page,.vop-settings-page,.vop-personal-settings,
+  .vop-mentoring-page,.vop-localization-page,.vop-program-manager,
+  .vop-curriculum-page,.vop-user-management,.vop-candidate-page
+){background:var(--bg-primary)!important;color:var(--text-primary)!important}
+
+[data-theme="dark"] :is(
+  .vop-reference-tab,.vop-reference-table-wrap,.vop-reference-editor,
+  .vop-reference-guide-cell,.vop-reference-image-empty,
+  .vop-program-guide-options>label,.vop-program-guide-order>li,
+  .vop-program-catalog-intro,.vop-lessons-toolbar,.vop-standalone-lessons-head,
+  .vop-app-header-account-menu,.vop-account-workspace,.vop-account-overview,
+  .vop-account-menu,.vop-account-section,.vop-settings-about-card,
+  .vop-user-table-card,.vop-user-detail,.vop-user-filterbar,
+  .vop-plate-editor,.vop-plate-shell,.vop-plate-panel,.vop-plate-card,
+  .vop-plate-toolbar,.vop-plate-more>div,.vop-plate-more>div button,
+  .vop-plate-transfer>div button,.vop-plate-section,.vop-plate-block,
+  .vop-guide-section-group,.vop-guide-section-links>button,
+  .vop-app-dialog-card,.vop-dialog-card
+){
+  background:var(--bg-card)!important;
+  border-color:var(--border-subtle)!important;
+  color:var(--text-primary)!important;
+  box-shadow:0 10px 30px rgba(0,0,0,.22)!important;
+}
+
+[data-theme="dark"] :is(
+  .vop-admin-sidebar-head,.vop-admin-sidebar-footer,
+  .vop-learner-sidebar-head,.vop-learner-sidebar-foot,
+  .vop-app-header-account-overview,.vop-account-header,
+  .vop-plate-page-head,.vop-plate-statusbar
+){
+  background:#101720!important;
+  border-color:var(--border-subtle)!important;
+  color:var(--text-primary)!important
+}
+
+[data-theme="dark"] :is(
+  .vop-learner-sidebar-toggle,.vop-admin-sidebar-collapse,.vop-admin-sidebar-dismiss,
+  .vop-account-close,.vop-page-btn,.vop-actions,.vop-app-dialog-close,
+  .vop-program-back,.vop-lessons-refresh
+){
+  background:var(--bg-elevated)!important;
+  border-color:var(--border-subtle)!important;
+  color:#dbe7f3!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] :is(
+  .vop-learner-sidebar-toggle,.vop-admin-sidebar-collapse,.vop-admin-sidebar-dismiss,
+  .vop-account-close,.vop-page-btn,.vop-actions,.vop-app-dialog-close,
+  .vop-program-back,.vop-lessons-refresh
+):hover{
+  background:var(--bg-hover)!important;
+  border-color:var(--border-strong)!important;
+  color:#fff!important
+}
+
+[data-theme="dark"] :is(
+  .vop-admin-sidebar-brand,.vop-admin-sidebar-user,.vop-admin-sidebar-user-copy strong,
+  .vop-learner-sidebar-brand,.vop-learner-sidebar-user-details strong,
+  .vop-account-brand,.vop-app-header-account-menu>button,
+  .vop-step-copy,.vop-setting-name,.vop-reference-table strong
+){color:var(--text-primary)!important}
+[data-theme="dark"] :is(
+  .vop-admin-sidebar-brand-copy small,.vop-admin-sidebar-user-copy small,
+  .vop-learner-sidebar-brand small,.vop-learner-sidebar-user-details small,
+  .vop-app-header-account-overview small,.vop-reference-updated,
+  .vop-step-title,.vop-setting-help,.vop-cert-caption
+){color:var(--text-muted)!important}
+
+[data-theme="dark"] .vop-app-header-account-menu>button:hover,
+[data-theme="dark"] .vop-admin-sidebar-user:hover,
+[data-theme="dark"] .vop-admin-sidebar-logout:hover,
+[data-theme="dark"] .vop-admin .vop-sidebar .vop-back:hover{
+  background:var(--bg-hover)!important;color:#fff!important
+}
+
+[data-theme="dark"] :is(
+  .vop-plate-chapter-picker select,.vop-plate-chapter-picker input,
+  .vop-plate-page-head input,.vop-plate-page-head select,
+  .vop-reference-editor input,.vop-reference-editor select,.vop-reference-editor textarea
+){
+  background:var(--bg-input)!important;
+  color:var(--text-primary)!important;
+  border-color:var(--border-subtle)!important;
+  box-shadow:none!important
+}
+
+[data-theme="dark"] :is(
+  .vop-reference-table th,.vop-user-table th,.vop-table th,.vop-candidate-table th
+){
+  background:#111923!important;
+  color:#b9c6d4!important;
+  border-color:var(--border-subtle)!important
+}
+[data-theme="dark"] :is(
+  .vop-reference-table td,.vop-user-table td,.vop-table td,.vop-candidate-table td
+){
+  background:var(--bg-card)!important;
+  color:var(--text-secondary)!important;
+  border-color:var(--border-subtle)!important
+}
+[data-theme="dark"] :is(.vop-reference-table tr:hover td,.vop-user-table tr:hover td,.vop-table tr:hover td){
+  background:var(--bg-elevated)!important
+}
+
+[data-theme="dark"] .vop-reference-tab.active,
+[data-theme="dark"] .vop-page-btn.active{
+  background:#183a62!important;color:#e8f3ff!important;border-color:#3e6d9e!important
+}
+[data-theme="dark"] :is(.vop-chip,.vop-reference-season,.vop-language-pills span){
+  background:#1b2b3c!important;color:#c9daea!important;border-color:#3a4c60!important
+}
+
+[data-theme="dark"] .vop-user-role-pill.admin{background:#302242!important;color:#d9b9ff!important}
+[data-theme="dark"] .vop-user-role-pill.teacher{background:#172d45!important;color:#a9d2ff!important}
+[data-theme="dark"] .vop-user-role-pill.learner,
+[data-theme="dark"] .vop-user-status.active,
+[data-theme="dark"] .vop-status.published{background:#142f28!important;color:#9de0bd!important}
+[data-theme="dark"] .vop-user-role-pill.guest{background:#252d36!important;color:#b7c1cc!important}
+[data-theme="dark"] .vop-user-status.inactive,
+[data-theme="dark"] .vop-status.archived{background:#351d22!important;color:#ffb0ba!important}
+[data-theme="dark"] .vop-status.draft{background:#3a2c15!important;color:#f4cf84!important}
+
+[data-theme="dark"] .vop-save-state-chip.saved{background:#142f28!important;color:#9de0bd!important;border-color:#2e6a55!important}
+[data-theme="dark"] .vop-save-state-chip.dirty{background:#3a2c15!important;color:#f4cf84!important;border-color:#765c2f!important}
+[data-theme="dark"] .vop-save-state-chip.idle{background:#1b2733!important;color:#aebdca!important;border-color:#425366!important}
+
+[data-theme="dark"] .vop-cert-progress{background:#26323e!important}
+[data-theme="dark"] .vop-certificate-body{color:var(--text-primary)}
+[data-theme="dark"] .vop-certificate-card{box-shadow:0 10px 30px rgba(0,0,0,.3)}
+/* Certificate/template canvases are authored document previews, so their paper
+   colors remain intentional rather than being recolored by application chrome. */
+
+[data-theme="dark"] :is(.vop-radio-player-error,.vop-lessons-refresh-error,.vop-candidate-alert){
+  background:#381d22!important;color:#ffb6bf!important;border-color:#74333d!important
+}
+[data-theme="dark"] .vop-public-radio-empty{color:var(--text-muted)!important}
+[data-theme="dark"] .vop-public-radio-empty h1{color:var(--text-primary)!important}
+
+[data-theme="dark"] :is(.vop-primary,.btn-primary){color:#111820!important}
+[data-theme="dark"] :is(.vop-primary,.btn-primary):disabled{opacity:.55}
+
+@media print{
+  [data-theme="dark"] .vop-certificate-card{
+    background:#fff!important;color:#111!important;border-color:#dce3ea!important;box-shadow:none!important
+  }
+}
