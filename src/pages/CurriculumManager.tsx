@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, Book, BookOpen, CalendarDays, CheckCircle, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Clock, Edit3, Eye, FileText,
@@ -418,6 +418,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const savedEditorSignature=useRef('');
+  const [editorDirty,setEditorDirty]=useState(false);
   const [plateReview,setPlateReview] = useState(true);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
@@ -428,6 +430,23 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [organizationOptions, setOrganizationOptions] = useState<Array<{id:string;name:string}>>([]);
   const [organizationLoading, setOrganizationLoading] = useState(false);
   const [scopeOrganizationId, setScopeOrganizationId] = useState(currentUser?.role === 'super_admin' ? '' : String(currentUser?.organizationId || ''));
+
+  useEffect(()=>{
+    if(!editor){setEditorDirty(false);return;}
+    setEditorDirty(JSON.stringify(editor)!==savedEditorSignature.current);
+  },[editor]);
+  useEffect(()=>{
+    const warn=(event:BeforeUnloadEvent)=>{
+      if(!editorDirty)return;
+      event.preventDefault();event.returnValue='';
+    };
+    window.addEventListener('beforeunload',warn);
+    return()=>window.removeEventListener('beforeunload',warn);
+  },[editorDirty]);
+  const leaveEditor=()=>{
+    if(editorDirty&&!window.confirm('You have unsaved lesson changes. Leave without saving them?'))return;
+    savedEditorSignature.current='';setEditorDirty(false);setEditor(null);setRequestedSectionId('');
+  };
 
   const enabledLanguages = useMemo(() => languages.filter(item => item.enabled !== false), [languages]);
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -638,7 +657,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const source: RecordItem = row.raw || { id: row.key };
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
-    setEditor(editorFromLesson(row));
+    const nextEditor=editorFromLesson(row);
+    savedEditorSignature.current=JSON.stringify(nextEditor);
+    setEditor(nextEditor);
+    setEditorDirty(false);
     setPlateReview(true);
     setRequestedSectionId(sectionId);
     setPlateValidationErrors({});
@@ -653,7 +675,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const next = blankEditor(String(guide?.language || language).toLowerCase(), String(guide?.id || ''));
     next.guideTitle = String(guide?.title || '');
     next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
+    savedEditorSignature.current=JSON.stringify(next);
     setEditor(next);
+    setEditorDirty(false);
     setPlateReview(true);
     setRequestedSectionId('');
     setPlateValidationErrors({});
@@ -806,7 +830,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       await adminContent('upsertLesson', 'curriculum', id, payload, targetOrganizationId);
       if (publish) await adminContent('publishLesson', 'curriculum', id, payload, targetOrganizationId);
       await load();
-      setEditor({ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish });
+      const savedEditor={ ...editor, id, guideTitle: valueText(guide.title) || editor.guideTitle, published: publish };
+      savedEditorSignature.current=JSON.stringify(savedEditor);
+      setEditor(savedEditor);
+      setEditorDirty(false);
       setSelectedGuideId(editor.guideId);
       notify(publish ? tx('curriculum.lessonPublished', 'Lesson published.') : tx('curriculum.lessonDraftSaved', 'Lesson draft saved.'));
     } catch (reason) {
@@ -822,7 +849,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setSaving(true);
     try {
       await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, guideId: editor.guideId, lessonId: editor.id });
-      setEditor({ ...editor, published: false });
+      const unpublished={...editor,published:false};
+      savedEditorSignature.current=JSON.stringify(unpublished);
+      setEditor(unpublished);
+      setEditorDirty(false);
       await load();
       notify(tx('curriculum.lessonUnpublished', 'Lesson unpublished.'));
     } catch (reason) {
@@ -936,7 +966,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     return (
       <div className="vop-reference-editor-page vop-reference-lesson-editor">
         <div className="vop-breadcrumb">
-          <button type="button" className="vop-breadcrumb-button" onClick={() => setEditor(null)}><ArrowLeft size={15}/>{tx('curriculum.studio', 'Curriculum Studio')}</button>
+          <button type="button" className="vop-breadcrumb-button" onClick={leaveEditor}><ArrowLeft size={15}/>{tx('curriculum.studio', 'Curriculum Studio')}{editorDirty?' · Unsaved':''}</button>
           <span>›</span><span>{tx('curriculum.lessons', 'Lessons')}</span><span>›</span><span>{tx('curriculum.createEditLesson', 'Create / Edit Lesson')}</span>
         </div>
 
@@ -1037,6 +1067,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 }}
                 canAttachQuiz={Boolean(editor.id) && editor.published}
                 onQuiz={anchor=>{
+                  if(editorDirty){
+                    setError('Save your lesson changes before leaving the editor to manage a quiz.');
+                    return;
+                  }
                   if (!editor.id || !editor.published) {
                     setError('Save and publish this lesson before attaching a published quiz.');
                     return;
