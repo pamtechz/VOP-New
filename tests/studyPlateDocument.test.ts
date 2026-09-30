@@ -246,6 +246,48 @@ test('authoring outline and Plate toolbar remain visibly sticky below the admin 
   assert.match(structure,/@media\(max-width:860px\)[\s\S]*\.vop-plate-outline\{position:static/);
 });
 
+test('Plate workspace scrolls only the lesson paper and keeps outline and toolbar persistent',()=>{
+  const toolbar=read('src/components/admin/plate-authoring.css');
+  const structure=read('src/components/admin/plate-structure.css');
+  assert.match(structure,/@media\(min-width:861px\)[\s\S]*\.vop-plate-document-shell\{[\s\S]*position:sticky/);
+  assert.match(structure,/height:calc\(100dvh - var\(--vop-plate-sticky-top,76px\) - 10px\)/);
+  assert.match(structure,/\.vop-plate-outline\{[\s\S]*grid-template-rows:auto auto minmax\(0,1fr\)/);
+  assert.match(structure,/\.vop-plate-outline-list\{[\s\S]*overflow-y:auto/);
+  assert.match(toolbar,/\.vop-plate-document-pane \.vop-plate-page-editor\{[\s\S]*overflow-y:auto/);
+  assert.match(toolbar,/--vop-plate-toolbar-top:0px/);
+});
+
+test('Plate overflow menu preserves selection and every visible action invokes real editor behavior',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  assert.match(editor,/savedSelection=useRef/);
+  assert.match(editor,/editor\.tf\.select\(savedSelection\.current as never\)/);
+  assert.match(editor,/menuAction\(markSection\)/);
+  assert.match(editor,/openInsert\('link'\)/);
+  assert.match(editor,/openInsert\('image'\)/);
+  assert.match(editor,/openInsert\('media'\)/);
+  assert.match(editor,/editor\.tf\.blockquote\.toggle\(\)/);
+  assert.match(editor,/editor\.tf\.toggleMark\('code'\)/);
+  assert.match(editor,/insertParagraphAfter/);
+  assert.match(editor,/attachQuiz\('section'\)/);
+  assert.match(editor,/attachQuiz\('block'\)/);
+});
+
+test('modal dialogs use body-level activation-ordered layers',()=>{
+  const layer=read('src/components/layout/ModalLayer.tsx');
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const quiz=read('src/components/quiz/QuizModal.tsx');
+  const reader=read('src/components/reader/LessonReaderModal.tsx');
+  const users=read('src/pages/UserManagement.tsx');
+  assert.match(layer,/createPortal/);
+  assert.match(layer,/modalLayerSequence/);
+  assert.match(layer,/onPointerDownCapture/);
+  assert.match(editor,/<ModalLayer><div className="vop-plate-insert-backdrop"/);
+  assert.match(quiz,/<ModalLayer><div/);
+  assert.match(reader,/<ModalLayer><div/);
+  assert.match(users,/selected && <ModalLayer>/);
+  assert.match(users,/editor && <ModalLayer>/);
+});
+
 test('Plate is the single structured editor while learner rendering remains validated',()=>{
   const manager=read('src/pages/CurriculumManager.tsx');
   const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
