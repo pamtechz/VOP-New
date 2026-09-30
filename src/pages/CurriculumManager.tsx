@@ -20,7 +20,7 @@ import { newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
-import { appConfirm } from '../components/layout/AppDialog';
+import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
 
 export type CurriculumStudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -1374,7 +1374,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       )}
 
       {message && <div className="vop-toast">{message}</div>}
-      {error && <div className="vop-alert error vop-reference-alert">{error}</div>}
+      {error && <AppAlertDialog message={error} title="Curriculum Studio" onClose={() => setError('')}/>} 
     </div>
   );
 }
