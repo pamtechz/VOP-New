@@ -73,6 +73,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
   const isAdmin = ['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']
     .includes(String(currentUser.role || '')) || ['owner', 'admin'].includes(String(currentUser.organizationRole || ''));
+  const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const progress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
   const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
   const initial = name.charAt(0).toUpperCase();
@@ -94,6 +95,9 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
     ]),
     ...(currentUser.role === 'student'
       ? [{ route: 'support' as const, label: t('navigation.mentor', 'Talk to my mentor'), detail: t('navigation.mentor_detail', 'Get guidance and support'), icon: MessageCircle }]
+      : []),
+    ...(isMentor
+      ? [{ route:'mentor' as const,label:t('navigation.mentor_workspace','Mentor workspace'),detail:t('navigation.mentor_workspace_detail','Support assigned learners'),icon:UserCheck }]
       : []),
   ];
   const account: MenuItem[] = [
