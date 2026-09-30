@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { MoreVertical } from 'lucide-react';
 import { ModalLayer } from '../layout/ModalLayer';
+import './structure-actions-menu.css';
 
 type FloatingPosition={left:number;top?:number;bottom?:number;maxHeight:number;width:number};
 
