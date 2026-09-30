@@ -418,7 +418,7 @@ export default function UserManagement({ onBack, scope }: Props) {
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{t('common.all_statuses','All Statuses')}</option><option value="active">{t('common.active','Active')}</option><option value="inactive">{t('common.inactive','Inactive')}</option></select>
             <select value={conferenceFilter} onChange={e => setConferenceFilter(e.target.value)}><option value="all">{t('common.all_conferences','All Conferences')}</option>{conferences.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
             <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}><option value="all">{t('common.all_districts','All Districts')}</option>{districts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <button className="vop-primary vop-user-filter" type="button"><Filter size={17}/>{t('common.filter','Filter')}</button>
+            <button className="vop-secondary vop-user-filter" type="button" onClick={()=>{setSearch('');setRoleFilter('all');setStatusFilter('all');setConferenceFilter('all');setDistrictFilter('all')}}><Filter size={17}/>Clear filters</button>
           </div>
 
           <div className="vop-user-table-wrap">
@@ -471,9 +471,13 @@ export default function UserManagement({ onBack, scope }: Props) {
             <button type="button" onClick={openCreate}><Plus size={15}/>{t('admin.add_new_user','Add New User')}</button>
             <button type="button" onClick={() => { setBulkInput(true); setEditor(null); }}><Upload size={15}/>{t('admin.bulk_import_csv','Bulk Import (CSV)')}</button>
             <button type="button" onClick={exportUsers}><Download size={15}/>{t('admin.export_users','Export Users')}</button>
-            <button type="button" onClick={() => flash('Role options are derived from current account data and permissions.')}><ShieldCheck size={15}/>{t('admin.manage_roles','Manage Roles')}</button>
-            <button type="button" onClick={() => flash('Select a user and use Reset Password from the action menu.')}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
-            <button type="button" onClick={() => flash('Invitation is generated from the Add User workflow.')}><UserPlus size={15}/>{t('admin.send_invitation','Send Invitation')}</button>
+            <button type="button" onClick={()=>void Promise.all([load(),loadOrganizations(),loadHierarchyNodes()]).then(()=>flash('Roles and assignments refreshed.'))}><ShieldCheck size={15}/>Refresh roles & assignments</button>
+            <button type="button" onClick={()=>{
+              if(selectedRows.size!==1){setError('Select exactly one user in the table to generate a password reset link.');return;}
+              const user=users.find(item=>selectedRows.has(item.uid));
+              if(user)void resetPassword(user);
+            }}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+            <button type="button" onClick={openCreate}><UserPlus size={15}/>{t('admin.send_invitation','Create / Invite User')}</button>
           </section>
           <section className="vop-user-side-card">
             <h3><ShieldCheck size={16}/>{t('admin.user_roles','User Roles')}</h3>
