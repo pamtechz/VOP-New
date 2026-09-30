@@ -103,8 +103,11 @@ export default async function handler(req: Request, res: Response) {
       if (collection === 'certificationConfig') {
         throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
       }
-      if (collection === 'settings' && (ctx.organizationId || effectiveOrganizationId)) {
-        if (ctx.tenantType !== 'hierarchy') requireOrgRole(ctx, ['owner','admin']);
+      if (collection === 'settings' && ctx.tenantType === 'hierarchy') {
+        // Union, conference, district and church administrators own their
+        // hierarchy-level ministry profile even when no organization is selected.
+      } else if (collection === 'settings' && (ctx.organizationId || effectiveOrganizationId)) {
+        requireOrgRole(ctx, ['owner','admin']);
       } else {
         throw new Error('Only the VOP Super Admin can manage platform configuration.');
       }
@@ -577,13 +580,15 @@ export default async function handler(req: Request, res: Response) {
       await requirePermission(ctx, 'settings', 'update');
       const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
       if (!targetOrganizationId) {
-        if (!ctx.isSuperAdmin) throw new Error('An organization within your authorized scope is required for organization settings.');
         if (collection !== 'settings') throw new Error('Curriculum settings require an organization tenant.');
+        if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy') {
+          throw new Error('An organization within your authorized scope is required for organization settings.');
+        }
       }
       if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !['owner','admin'].includes(String(ctx.membership.role || ''))) {
         throw new Error('Only the organization owner or administrator can change organization settings.');
       }
-      if (!ctx.isSuperAdmin && ctx.tenantType === 'hierarchy' && !(await organizationInHierarchyScope(ctx, targetOrganizationId))) {
+      if (!ctx.isSuperAdmin && ctx.tenantType === 'hierarchy' && targetOrganizationId && !(await organizationInHierarchyScope(ctx, targetOrganizationId))) {
         throw new Error('The organization is outside your hierarchy scope.');
       }
 
