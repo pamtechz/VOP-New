@@ -18,7 +18,6 @@ export default function LocalizationGovernancePanel(){
   const [email,setEmail]=useState('');
   const [roles,setRoles]=useState<LocalizationRole[]>(['translator']);
   const [assignedLanguages,setAssignedLanguages]=useState<string[]>([]);
-  const [allLanguages,setAllLanguages]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
@@ -60,13 +59,13 @@ export default function LocalizationGovernancePanel(){
   const invite=async()=>{
     if(!email.trim())return setError('Enter an existing VOP account email.');
     if(!roles.length)return setError('Choose translator, reviewer, or both.');
-    if(!allLanguages&&!assignedLanguages.length)return setError('Assign at least one language.');
+    if(!assignedLanguages.length)return setError('Assign at least one explicit language.');
     setBusy(true);setError('');setMessage('');
     try{
       await localizationRequest('inviteCollaborator',{
-        email:email.trim(),roles,languages:allLanguages?['*']:assignedLanguages,
+        email:email.trim(),roles,languages:assignedLanguages,
       });
-      setEmail('');setAssignedLanguages([]);setAllLanguages(false);
+      setEmail('');setAssignedLanguages([]);
       setMessage('Localization invitation sent. Access remains inactive until the recipient accepts.');
       await refresh();
     }catch(reason){setError(reason instanceof Error?reason.message:'Collaborator could not be added.');}
@@ -156,8 +155,8 @@ export default function LocalizationGovernancePanel(){
         <div><strong>Roles</strong><div className="vop-localization-chips">
           {(['translator','reviewer'] as LocalizationRole[]).map(role=><label key={role}><input type="checkbox" checked={roles.includes(role)} onChange={()=>toggleRole(role)}/><span>{role}</span></label>)}
         </div></div>
-        <div><strong>Languages</strong><label className="vop-localization-all"><input type="checkbox" checked={allLanguages} onChange={event=>setAllLanguages(event.target.checked)}/>All current and future platform languages</label>
-          {!allLanguages&&<div className="vop-localization-chips">{languages.map(language=><label key={language.code}><input type="checkbox" checked={assignedLanguages.includes(language.code)} onChange={()=>toggleLanguage(language.code)}/><span>{language.name}</span></label>)}</div>}
+        <div><strong>Languages</strong><p className="vop-localization-help">Choose only the language(s) this invitation grants. Additional languages require a separate approved request.</p>
+          <div className="vop-localization-chips">{languages.map(language=><label key={language.code}><input type="checkbox" checked={assignedLanguages.includes(language.code)} onChange={()=>toggleLanguage(language.code)}/><span>{language.name}</span></label>)}</div>
         </div>
         <button type="button" className="vop-primary" disabled={busy} onClick={()=>void invite()}><UserPlus size={16}/>Invite collaborator</button>
       </div>
