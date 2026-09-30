@@ -1147,7 +1147,12 @@ export default async function handler(req: Request, res: Response) {
         const deliveryAudience = ['announcements','events'].includes(collection)
           ? normalizePublicationAudience(incoming.targetAudience ?? existing.data()?.targetAudience)
           : 'all';
+        const platformSettings = ['announcements','events'].includes(collection)
+          ? await ctx.db.doc('system/settings').get()
+          : null;
+        const publicationNotificationsEnabled = platformSettings?.data()?.notifications?.announcementNotifications !== false;
         const shouldDeliver = ['announcements','events'].includes(collection)
+          && publicationNotificationsEnabled
           && incoming.published === true
           && String(saved.data()?.notificationDeliveredAudience || '') !== deliveryAudience;
         if (shouldDeliver) {
