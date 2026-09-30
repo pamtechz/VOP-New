@@ -130,3 +130,32 @@
   .vop-plate-insert-backdrop{align-items:end;padding:0}
   .vop-plate-insert-dialog{width:100%;max-width:none;max-height:82vh;border-radius:13px 13px 0 0;padding:13px}
 }
+
+
+/* Continuous chapter authoring: section boundaries are editor-only Plate nodes.
+ * They visually separate learner pages without turning each page into another form/editor. */
+.vop-plate-continuous-editor{min-width:0}
+.vop-plate-continuous-editor .vop-plate-paper{max-width:980px;min-height:560px;padding-top:24px;padding-bottom:70px}
+.vop-plate-section-marker{
+  position:relative;display:block;margin:30px 0 18px;padding:0;border:0;
+  border-top:1px solid #b9cee5;min-height:64px;
+}
+.vop-plate-section-marker:first-child{margin-top:4px}
+.vop-plate-section-marker-copy{
+  display:grid;gap:3px;position:relative;top:-12px;width:min(100%,560px);
+  padding:7px 10px;border:1px solid #b9cee5;border-radius:8px;background:#f5f9ff;
+  box-shadow:0 3px 10px rgba(18,62,112,.05);color:#173e71;
+}
+.vop-plate-section-marker-copy>span{
+  display:flex;align-items:center;gap:5px;font-size:9px;font-weight:850;letter-spacing:.08em;color:#3972aa;
+}
+.vop-plate-section-marker-copy strong{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.vop-plate-section-marker-copy small{font-size:10px;line-height:1.4;color:#71839a}
+.vop-plate-section-marker-void{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.vop-plate-section-marker+[data-slate-node="element"]{margin-top:0}
+.vop-plate-editable>.vop-plate-section-marker:first-child+*{margin-top:0}
+@media(max-width:620px){
+  .vop-plate-continuous-editor .vop-plate-paper{min-height:430px;padding:18px 13px 52px}
+  .vop-plate-section-marker{margin-top:25px}
+  .vop-plate-section-marker-copy{width:100%}
+}
