@@ -270,7 +270,7 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
       </div>
     </Plate>
     <div className="vop-plate-editor-foot">
-      <span>{studyPlatePlainText(document).trim().split(/\s+/).filter(Boolean).length} words · Section content</span>
+      <span>{studyPlatePlainText(document).trim().split(/\s+/).filter(Boolean).length} words · {document.length} {document.length===1?'block':'blocks'}</span>
       <span>Section = one learner page</span>
     </div>
     {invalid&&<div role="alert" className="vop-plate-error"><AlertCircle size={15}/>{invalid}</div>}
