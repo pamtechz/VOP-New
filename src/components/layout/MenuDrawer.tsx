@@ -72,7 +72,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
     getTranslation(key, getUiLocale(), settings.customTranslations, english, 'MenuDrawer');
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
   const isAdmin = ['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']
-    .includes(String(currentUser.role || '')) || ['owner', 'admin'].includes(String(currentUser.organizationRole || ''));
+    .includes(String(currentUser.role || '')) || ['owner', 'admin', 'editor', 'teacher', 'mentor', 'staff'].includes(String(currentUser.organizationRole || ''));
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const progress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
   const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
