@@ -10,6 +10,7 @@ import CertificationConfigStudio from './CertificationConfigStudio';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
 import { ModalLayer } from '../components/layout/ModalLayer';
 import './certification-compact.css';
+import { appPrompt } from '../components/layout/AppDialog';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Replaced' | 'Pending';
 
@@ -278,9 +279,14 @@ export const CertificationManager: React.FC<Props> = ({
 
   const changeCertificateLifecycle = async (certificate:CertificateRecord, action:'revoke'|'replace') => {
     if(!auth?.currentUser||certificate.status!=='Certified')return;
-    const reason=window.prompt(action==='revoke'
+    const reason=await appPrompt(action==='revoke'
       ?'Why is this certificate being revoked? This will be recorded in the audit history.'
-      :'Why is this certificate being replaced? The old number will remain publicly traceable as replaced.');
+      :'Why is this certificate being replaced? The old number will remain publicly traceable as replaced.', {
+        title:action==='revoke'?'Revoke certificate':'Replace certificate',
+        confirmLabel:action==='revoke'?'Revoke':'Replace',
+        tone:action==='revoke'?'danger':'warning',
+        placeholder:'Enter the audit reason',
+      });
     if(!reason?.trim())return;
     try{
       const token=await auth.currentUser.getIdToken();
