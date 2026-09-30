@@ -106,6 +106,7 @@ export default function UserManagement({ onBack, scope }: Props) {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saving, setSaving] = useState(false);
   const [menuUid, setMenuUid] = useState<string | null>(null);
+  const [menuPosition,setMenuPosition]=useState<{top:number;left:number}|null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [bulkInput, setBulkInput] = useState(false);
   const [resetLink, setResetLink] = useState('');
@@ -158,7 +159,7 @@ export default function UserManagement({ onBack, scope }: Props) {
   useEffect(()=>{
     if(!menuUid)return;
     const close=(event:PointerEvent)=>{
-      if(!(event.target as HTMLElement|null)?.closest('.vop-user-actions'))setMenuUid(null);
+      if(!(event.target as HTMLElement|null)?.closest('.vop-user-actions,.vop-user-menu')){setMenuUid(null);setMenuPosition(null);}
     };
     const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setMenuUid(null);};
     document.addEventListener('pointerdown',close);
@@ -393,7 +394,7 @@ export default function UserManagement({ onBack, scope }: Props) {
           <div className="vop-user-heading-icon"><Users size={30}/></div>
           <div><h1>{t('admin.user_management','User Management')}</h1><p>{t('admin.user_management_desc','Manage system users, roles, permissions and access.')}</p></div>
         </div>
-        <button className="vop-primary" type="button" onClick={openCreate}><Plus size={18}/>{t('admin.add_user','Add User')}</button>
+        <button className="vop-primary" type="button" onClick={()=>openCreate()}><Plus size={18}/>{t('admin.add_user','Add User')}</button>
       </div>
 
       <div className="vop-user-layout">
@@ -414,7 +415,7 @@ export default function UserManagement({ onBack, scope }: Props) {
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{t('common.all_statuses','All Statuses')}</option><option value="active">{t('common.active','Active')}</option><option value="inactive">{t('common.inactive','Inactive')}</option></select>
             <select value={conferenceFilter} onChange={e => setConferenceFilter(e.target.value)}><option value="all">{t('common.all_conferences','All Conferences')}</option>{conferences.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
             <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}><option value="all">{t('common.all_districts','All Districts')}</option>{districts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <button className="vop-primary vop-user-filter" type="button"><Filter size={17}/>{t('common.filter','Filter')}</button>
+            <div className="vop-user-filter-state" aria-live="polite"><Filter size={15}/><span>{filtered.length} matching</span></div>
           </div>
 
           <div className="vop-user-table-wrap">
@@ -439,13 +440,12 @@ export default function UserManagement({ onBack, scope }: Props) {
                         <div className="vop-user-actions">
                           <button type="button" title={t('common.view','View')} onClick={() => { setSelected(user); setMenuUid(null); }}><Eye size={16}/></button>
                           <button type="button" title={t('common.edit','Edit')} onClick={() => openEdit(user)}><Edit3 size={16}/></button>
-                          <button type="button" title={t('common.more','More')} onClick={() => setMenuUid(current => current === user.uid ? null : user.uid)}><MoreVertical size={16}/></button>
-                          {menuUid === user.uid && <div className="vop-user-menu">
-                            <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>{t('admin.edit_user','Edit User')}</button>
-                            <button type="button" onClick={() => void setStatus(user, !user.disabled)}><Activity size={15}/>{user.disabled ? t('admin.activate_user','Activate User') : t('admin.disable_user','Disable User')}</button>
-                            <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
-                            <button type="button" className="danger" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
-                          </div>}
+                          <button type="button" title={t('common.more','More')} onClick={event => {
+                            const rect=event.currentTarget.getBoundingClientRect();
+                            if(menuUid===user.uid){setMenuUid(null);setMenuPosition(null);return;}
+                            setMenuUid(user.uid);
+                            setMenuPosition({top:Math.min(window.innerHeight-190,rect.bottom+6),left:Math.max(8,Math.min(window.innerWidth-184,rect.right-175))});
+                          }}><MoreVertical size={16}/></button>
                         </div>
                       </td>
                     </tr>
@@ -454,6 +454,13 @@ export default function UserManagement({ onBack, scope }: Props) {
               </table>
             )}
           </div>
+
+          {menuUid&&menuPosition&&(()=>{const user=users.find(item=>item.uid===menuUid);return user?<ModalLayer><div className="vop-user-menu vop-user-menu-fixed" style={{top:menuPosition.top,left:menuPosition.left}}>
+            <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>{t('admin.edit_user','Edit User')}</button>
+            <button type="button" onClick={() => void setStatus(user,!user.disabled)}><Activity size={15}/>{user.disabled?t('admin.activate_user','Activate User'):t('admin.disable_user','Disable User')}</button>
+            <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+            <button type="button" className="danger" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
+          </div></ModalLayer>:null})()}
 
           <div className="vop-user-pager">
             <span>Showing {filtered.length ? ((page - 1) * pageSize + 1) : 0}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} users</span>
