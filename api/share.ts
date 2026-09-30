@@ -167,14 +167,20 @@ export default async function handler(req: Request, res: Response) {
       const currentRole = String(profile.organizationRole || '').trim();
       const role = existingOrganizationId === organizationId && currentRole ? currentRole : 'learner';
       const now = new Date().toISOString();
-      await db.runTransaction(async transaction => {
+      const installerRef=shareRef.collection('installers').doc(decoded.uid);
+      const newlyEnrolled=await db.runTransaction(async transaction => {
+        const installer=await transaction.get(installerRef);
         transaction.set(profileRef, { organizationId, organizationRole:role, updatedAt:FieldValue.serverTimestamp() }, {merge:true});
         transaction.set(db.doc('organizations/' + organizationId + '/members/' + decoded.uid), {uid:decoded.uid,organizationId,role,active:true,joinedAt:now,updatedAt:now,joinedByShareCode:code},{merge:true});
         transaction.set(db.doc('courseEnrollments/' + organizationId + '_' + decoded.uid + '_' + guideId), {uid:decoded.uid,organizationId,guideId,lessonId,source:'share',shareCode:code,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),status:'active'},{merge:true});
+        if(!installer.exists){
+          transaction.create(installerRef,{uid:decoded.uid,organizationId,enrolledAt:FieldValue.serverTimestamp()});
+          transaction.set(shareRef,{installs:FieldValue.increment(1),lastInstallAt:FieldValue.serverTimestamp()},{merge:true});
+        }
+        return !installer.exists;
       });
       await getAuth(admin()).setCustomUserClaims(decoded.uid, { role:String(profile.role || 'student'), organizationId, organizationRole:role });
-      await shareRef.set({installs:FieldValue.increment(1),lastInstallAt:FieldValue.serverTimestamp()},{merge:true});
-      return res.status(200).json({ok:true,item:{organizationId,guideId,lessonId}});
+      return res.status(200).json({ok:true,item:{organizationId,guideId,lessonId,newlyEnrolled}});
     }
 
     if (action === 'markInstall') {
@@ -201,6 +207,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported share action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Share operation failed.';
+    if (message.includes('already belongs to another organization')) return res.status(409).json({error:message});
     if (message.includes('required') || message.includes('invalid') || message.includes('Administrator') || message.includes('not found')) return res.status(400).json({ error: message });
     console.error('VOP share operation failed', error);
     return res.status(500).json({ error: 'Share operation failed.' });
