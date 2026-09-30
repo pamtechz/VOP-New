@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
+import { appConfirm } from '../components/layout/AppDialog';
 
 type AttachmentType = 'lesson' | 'guide' | 'chapter' | 'section' | 'block';
 type Quiz = {
@@ -170,7 +171,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   };
   const addQuestion = () => setQuestions(previous => [...previous, { question: '', options: ['', '', '', ''], answer: 0, explanation: '' }]);
   const archiveQuiz = async (quiz: Quiz) => {
-    if (!quiz.canEdit || !window.confirm('Archive this quiz? Learners will no longer see the associated assessment. Historical scores will be retained.')) return;
+    if (!quiz.canEdit || !await appConfirm('Archive this quiz? Learners will no longer see the associated assessment. Historical scores will be retained.', {title:'Archive quiz',confirmLabel:'Archive'})) return;
     setError(''); setMessage('');
     try {
       await authorizedPost('/api/quizzes', {...scopePayload, action:'archive',id:quiz.id});
