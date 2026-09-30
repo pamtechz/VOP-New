@@ -9,7 +9,7 @@ import {
   getActiveLanguage, setActiveLanguage,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
-import { completeLesson, submitQuizAnswers } from './services/localStudy';
+import { completeLesson, startQuizAttempt, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, syncPendingLessonResumes } from './services/offlineStudyQueue';
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
@@ -514,8 +514,8 @@ export const App: React.FC = () => {
         if (!nextLesson) setActiveLesson(null);
         return true;
       }} />}
-      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
-        const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onStartAttempt={() => startQuizAttempt(activeGuide.id, activeLesson.id, activeGuide.language)} onSubmitScore={async (answers, attemptId) => {
+        const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language, attemptId);
         if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
