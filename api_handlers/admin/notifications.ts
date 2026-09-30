@@ -70,7 +70,7 @@ export default async function handler(req:Request,res:Response){
       if(!recipient.exists)throw new Error('The selected recipient does not exist.');
       if(organizationId&&!(await recipientInOrganization(ctx,recipientId,organizationId)))throw new Error('The selected recipient does not belong to this organization.');
       const type=String(input.type||'system') as NotificationType;
-      const allowedTypes=new Set<NotificationType>(['learning-support','assignment','mentor-feedback','certificate','announcement','event','prayer','system']);
+      const allowedTypes=new Set<NotificationType>(['learning-support','assignment','mentor-feedback','certificate','announcement','event','prayer','invitation','system']);
       if(!allowedTypes.has(type))throw new Error('Unsupported notification type.');
       const id=await createNotification(ctx.db,{
         organizationId,
@@ -107,6 +107,14 @@ export default async function handler(req:Request,res:Response){
       docs.forEach(doc=>batch.set(doc.ref,{read:true,readAt:FieldValue.serverTimestamp()},{merge:true}));
       if(docs.length)await batch.commit();
       return res.status(200).json({ok:true,updated:docs.length});
+    }
+
+    if(action==='clearAll'){
+      const docs=(await ownNotifications(ctx)).slice(0,200);
+      const batch=ctx.db.batch();
+      docs.forEach(doc=>batch.delete(doc.ref));
+      if(docs.length)await batch.commit();
+      return res.status(200).json({ok:true,deleted:docs.length});
     }
     return res.status(400).json({error:'Unsupported notification action.'});
   }catch(error){
