@@ -44,6 +44,7 @@ import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
+import InboxPage from './pages/InboxPage';
 import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
@@ -624,6 +625,14 @@ export const App: React.FC = () => {
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={goBack} />}
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
+          {(currentRoute === 'notifications' || currentRoute === 'invites') && <InboxPage
+            initialTab={currentRoute === 'invites' ? 'invites' : 'notifications'}
+            onBack={goBack} onNavigate={navigate}
+            onAccountChanged={async()=>{
+              if(!auth?.currentUser)return;
+              const refreshed=await loadFirestoreUser(auth.currentUser.uid);
+              if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
+            }}/>}
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
           {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack}/>}
 
