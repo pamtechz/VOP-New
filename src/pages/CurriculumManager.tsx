@@ -401,6 +401,8 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [quizPlacement, setQuizPlacement] = useState<{guideId:string;lessonId?:string;anchorType?:'chapter'|'section'|'block';anchorId?:string;kind?:'final_exam'|'practice'}|null>(null);
   const [guideRecords, setGuideRecords] = useState<RecordItem[]>([]);
   const [programCount,setProgramCount]=useState(0);
+  const [programContext,setProgramContext]=useState<null|{programId:string;programTitle:string;entryMode:'lessons'|'sections'}>(null);
+  const [requestedSectionId,setRequestedSectionId]=useState('');
   const [drafts, setDrafts] = useState<RecordItem[]>([]);
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [collectionCounts, setCollectionCounts] = useState({ paths: 0, topics: 0, seasons: 0 });
@@ -625,18 +627,19 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   };
 
   useEffect(() => { void load(); }, [tab, scopeOrganizationId, selectedGuideId]);
-  useEffect(() => { setSelectedGuideId(''); setModuleLessons([]); }, [scopeOrganizationId]);
+  useEffect(() => { setSelectedGuideId(''); setModuleLessons([]); setProgramContext(null); setRequestedSectionId(''); }, [scopeOrganizationId]);
 
   const guideCount = new Set(guideRecords.map(item => String(item.discoverNumber ?? '') + '|' + valueText(item.title).trim().toLowerCase())).size;
   const lessonCount = lessonRows.length;
   const quizCount = allQuizRows.length;
   const currentCollectionCount = tab === 'paths' ? collectionCounts.paths : tab === 'topics' ? collectionCounts.topics : tab === 'seasons' ? collectionCounts.seasons : 0;
 
-  const openLesson = (row: LessonRow) => {
+  const openLesson = (row: LessonRow,sectionId='') => {
     const source: RecordItem = row.raw || { id: row.key };
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     setEditor(editorFromLesson(row));
+    setRequestedSectionId(sectionId);
     setPlateValidationErrors({});
     setEditorTab('content');
     setPreviewOpen(false);
@@ -650,12 +653,13 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     next.guideTitle = String(guide?.title || '');
     next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
     setEditor(next);
+    setRequestedSectionId('');
     setPlateValidationErrors({});
     setEditorTab('content');
     setPreviewOpen(false);
   };
 
-  const openModuleLesson=(raw:RecordItem)=>{
+  const openModuleLesson=(raw:RecordItem,sectionId='')=>{
     if (raw.canEdit===false || raw.type==='Test') {
       setError('This assessment is managed in the private Quiz Library or belongs to another contributor.');
       return;
@@ -674,7 +678,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       guideTitle:String(raw.guideTitle||guideRecords.find(item=>item.id===selectedGuideId)?.title||''),
       season:String(raw.season||''),status:raw.archived===true?'Archived':raw.published===true?'Published':'Draft',
     };
-    openLesson(row);
+    openLesson(row,sectionId);
   };
 
   const moveBlock = (index: number, direction: -1 | 1) => {
@@ -990,7 +994,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   </button>
                 </div>
                 <EditorComponent
+                programTitle={programContext?.programTitle}
                 guideTitle={editor.guideTitle} lessonTitle={editor.title}
+                initialSectionId={requestedSectionId}
                 chapters={editor.chapters}
                 onPageError={(sectionId,error)=>setPlateValidationErrors(previous=>{
                   if(previous[sectionId]===error)return previous;
@@ -1166,7 +1172,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             published:(raw as RecordItem).published===true,
           })):[],
         }))} onCountChange={setProgramCount}
-        onOpenGuide={id=>{setSelectedGuideId(id);setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
+        onOpenGuide={(id,context)=>{setProgramContext(context);setSelectedGuideId(id);setRequestedSectionId('');setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
       : tab === 'quizzes' ? <QuizLibrary key={[scopeOrganizationId,quizPlacement?.guideId,quizPlacement?.anchorId].join(':')}
         organizationId={scopeOrganizationId} initialGuideId={quizPlacement?.guideId}
         initialLessonId={quizPlacement?.lessonId} initialAnchorType={quizPlacement?.anchorType}
@@ -1174,7 +1180,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         onSaved={()=>void load()}/> : tab === 'guides' ? (
         <GuideManager languages={languages} guides={guides} organizationId={scopeOrganizationId}
           onSaved={() => void load()} onOpenSettings={onOpenSettings}
-          onOpenGuide={id=>{setSelectedGuideId(id);setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
+          onOpenGuide={id=>{setProgramContext(null);setSelectedGuideId(id);setRequestedSectionId('');setQuizPlacement(null);setTab('lessons');onTabChange?.('lessons');}}/>
       ) : selectedGuideId ? (
         <section className="vop-module-workspace">
           <div className="vop-module-breadcrumb">
