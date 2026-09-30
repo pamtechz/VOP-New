@@ -38,6 +38,7 @@ type ManagedUser = {
 
 type OrganizationOption = { id: string; name: string; type?: string };
 type TenantOrganization = { id: string; name: string; status: string };
+type HierarchyOption = { id:string; name:string; type:'union'|'conference'|'district'|'church'; unionId?:string; conferenceId?:string; districtId?:string };
 
 type EditorState = {
   uid?: string;
@@ -46,6 +47,9 @@ type EditorState = {
   phoneNumber: string;
   userType: ManagedUser['userType'];
   organizationId: string;
+  assignmentMode:'organization'|'hierarchy'|'platform';
+  adminNodeType:'union'|'conference'|'district'|'church'|'';
+  adminNodeId:string;
   password: string;
 };
 
@@ -76,17 +80,18 @@ function initials(name: string) {
 }
 
 function roleLabel(type: ManagedUser['userType']) {
-  return type === 'super_admin' ? 'Super Admin' : type === 'admin' ? 'Admin' : type === 'teacher' ? 'Teacher' : type === 'guest' ? 'Guest' : 'Learner';
+  return type === 'super_admin' ? 'Super Admin' : type === 'admin' ? 'Admin' : type === 'teacher' ? 'Teacher' : type === 'mentor' ? 'Mentor' : type === 'guest' ? 'Guest' : 'Learner';
 }
 
 function emptyEditor(): EditorState {
-  return { displayName: '', email: '', phoneNumber: '', userType: 'learner', organizationId: '', password: '' };
+  return { displayName:'', email:'', phoneNumber:'', userType:'learner', organizationId:'', assignmentMode:'organization', adminNodeType:'', adminNodeId:'', password:'' };
 }
 
 export default function UserManagement({ onBack, scope }: Props) {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tenantOrganizations, setTenantOrganizations] = useState<TenantOrganization[]>([]);
+  const [hierarchyOptions,setHierarchyOptions]=useState<HierarchyOption[]>([]);
   const [tenantOrganizationsLoading, setTenantOrganizationsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,13 +115,20 @@ export default function UserManagement({ onBack, scope }: Props) {
   const loadOrganizations = async () => {
     setTenantOrganizationsLoading(true);
     try {
-      const body = await userApi<TenantOrganization>('listOrganizations');
-      setTenantOrganizations((body.items || []).filter((item: unknown): item is TenantOrganization => {
+      const [organizationsBody,hierarchyBody]=await Promise.all([
+        userApi<TenantOrganization>('listOrganizations'),
+        userApi<HierarchyOption>('listHierarchy').catch(()=>({items:[]})),
+      ]);
+      setTenantOrganizations((organizationsBody.items || []).filter((item: unknown): item is TenantOrganization => {
         const value = item as Partial<TenantOrganization>;
         return typeof value.id === 'string' && typeof value.name === 'string';
       }));
+      setHierarchyOptions((hierarchyBody.items||[]).filter((item:unknown):item is HierarchyOption=>{
+        const value=item as Partial<HierarchyOption>;
+        return typeof value.id==='string'&&typeof value.name==='string'&&['union','conference','district','church'].includes(String(value.type||''));
+      }));
     } catch (reason) {
-      setTenantOrganizations([]);
+      setTenantOrganizations([]);setHierarchyOptions([]);
       setError(reason instanceof Error ? reason.message : 'Could not load organizations.');
     } finally {
       setTenantOrganizationsLoading(false);
@@ -143,6 +155,16 @@ export default function UserManagement({ onBack, scope }: Props) {
     }
   }, [scope?.organizationId, scope?.isSuperAdmin]);
   useEffect(() => { setPage(1); }, [search, roleFilter, statusFilter, conferenceFilter, districtFilter]);
+  useEffect(()=>{
+    if(!menuUid)return;
+    const close=(event:PointerEvent)=>{
+      if(!(event.target as HTMLElement|null)?.closest('.vop-user-actions'))setMenuUid(null);
+    };
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setMenuUid(null);};
+    document.addEventListener('pointerdown',close);
+    document.addEventListener('keydown',escape);
+    return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',escape);};
+  },[menuUid]);
 
   const roles = useMemo(() => Array.from(new Set(users.map(user => user.roleLabel).filter(Boolean))).sort(), [users]);
   const conferences = useMemo(() => Array.from(new Map(users.filter(user => user.conferenceId).map(user => [user.conferenceId, user.conferenceName || user.conferenceId || ''])).entries()).map(([id, name]) => ({ id: id || '', name: name || id || '' })).sort((a,b) => a.name.localeCompare(b.name)), [users]);
@@ -179,8 +201,9 @@ export default function UserManagement({ onBack, scope }: Props) {
     const inactive = total - active;
     const admins = users.filter(user => user.roleLabel === 'Admin' || user.roleLabel === 'Super Admin').length;
     const teachers = users.filter(user => user.roleLabel === 'Teacher').length;
+    const mentors = users.filter(user => user.roleLabel === 'Mentor').length;
     const learners = users.filter(user => user.roleLabel === 'Learner').length;
-    return { total, active, inactive, admins, teachers, learners };
+    return { total, active, inactive, admins, teachers, mentors, learners };
   }, [users]);
 
   const flash = (value: string) => {
@@ -188,9 +211,13 @@ export default function UserManagement({ onBack, scope }: Props) {
     window.setTimeout(() => setMessage(''), 3500);
   };
 
-  const openCreate = () => {
+  const openCreate = (assignmentMode:EditorState['assignmentMode']='organization') => {
     setResetLink('');
-    setEditor(emptyEditor());
+    const next=emptyEditor();
+    next.assignmentMode=assignmentMode;
+    if(scope?.organizationId&&!scope.isSuperAdmin){next.organizationId=scope.organizationId;next.assignmentMode='organization';}
+    if(assignmentMode==='hierarchy')next.userType='admin';
+    setEditor(next);
     setSelected(null);
   };
 
@@ -203,6 +230,9 @@ export default function UserManagement({ onBack, scope }: Props) {
       phoneNumber: user.phoneNumber || '',
       userType: user.userType,
       organizationId: user.organizationId || '',
+      assignmentMode:user.userType==='super_admin'?'platform':user.organizationId?'organization':user.adminNodeType&&user.adminNodeId?'hierarchy':'organization',
+      adminNodeType:(['union','conference','district','church'].includes(String(user.adminNodeType||''))?user.adminNodeType:'') as EditorState['adminNodeType'],
+      adminNodeId:user.adminNodeId||'',
       password: '',
     });
     setMenuUid(null);
@@ -214,13 +244,22 @@ export default function UserManagement({ onBack, scope }: Props) {
       setError('Name and email are required.');
       return;
     }
+    if(editor.userType==='admin'&&editor.assignmentMode==='organization'&&!editor.organizationId){
+      setError('Choose the organization this administrator will manage.');return;
+    }
+    if(editor.userType==='admin'&&editor.assignmentMode==='hierarchy'&&(!editor.adminNodeType||!editor.adminNodeId)){
+      setError('Choose the hierarchy node this administrator will manage.');return;
+    }
     setSaving(true);
     setError('');
     try {
-      if (editor.uid) {
-        const existing = users.find(user => user.uid === editor.uid);
-        if (editor.organizationId !== (existing?.organizationId || '')) {
-          await userApi('assignOrganization', { uid: editor.uid, organizationId: editor.organizationId, organizationRole: editor.userType === 'admin' ? 'admin' : editor.userType === 'mentor' ? 'mentor' : editor.userType === 'teacher' ? 'teacher' : 'learner' });
+      const existing=editor.uid?users.find(user=>user.uid===editor.uid):undefined;
+      const targetOrganizationId=editor.userType==='super_admin'||editor.assignmentMode!=='organization'?'':editor.organizationId;
+      if(editor.uid){
+        if(targetOrganizationId&&targetOrganizationId!==(existing?.organizationId||'')){
+          await userApi('assignOrganization',{uid:editor.uid,organizationId:targetOrganizationId,organizationRole:editor.userType==='admin'?'admin':editor.userType==='mentor'?'mentor':editor.userType==='teacher'?'teacher':'learner'});
+        }else if(!targetOrganizationId&&existing?.organizationId&&(scope?.isSuperAdmin||['union_admin','conference_admin','district_admin','church_admin'].includes(String(scope?.role||'')))){
+          await userApi('removeOrganization',{uid:editor.uid});
         }
       }
       const body = await userApi(editor.uid ? 'update' : 'create', {
@@ -229,7 +268,8 @@ export default function UserManagement({ onBack, scope }: Props) {
         email: editor.email.trim(),
         phoneNumber: editor.phoneNumber.trim(),
         userType: editor.userType,
-        ...(!editor.uid && editor.organizationId ? { organizationId: editor.organizationId } : {}),
+        ...(targetOrganizationId ? { organizationId: targetOrganizationId } : {}),
+        ...(editor.userType==='admin'&&editor.assignmentMode==='hierarchy'?{adminNodeType:editor.adminNodeType,adminNodeId:editor.adminNodeId}:{}),
         ...(editor.password ? { password: editor.password } : {}),
       });
       if (body.item?.resetLink) setResetLink(body.item.resetLink);
@@ -364,6 +404,7 @@ export default function UserManagement({ onBack, scope }: Props) {
             <Metric icon={<UserCheck/>} tone="red" value={metrics.inactive} label={t('admin.inactive_users','Inactive Users')} note={metrics.total ? ((metrics.inactive / metrics.total) * 100).toFixed(1) + '%' : '0%'}/>
             <Metric icon={<ShieldCheck/>} tone="purple" value={metrics.admins} label={t('admin.admins','Admins')} note={metrics.total ? ((metrics.admins / metrics.total) * 100).toFixed(1) + '%' : '0%'}/>
             <Metric icon={<UserPlus/>} tone="orange" value={metrics.teachers} label={t('admin.teachers','Teachers')} note={metrics.total ? ((metrics.teachers / metrics.total) * 100).toFixed(1) + '%' : '0%'}/>
+            <Metric icon={<Shield/>} tone="purple" value={metrics.mentors} label="Mentors" note={metrics.total ? ((metrics.mentors / metrics.total) * 100).toFixed(1) + '%' : '0%'}/>
             <Metric icon={<Users/>} tone="blue" value={metrics.learners} label={t('admin.learners','Learners')} note={metrics.total ? ((metrics.learners / metrics.total) * 100).toFixed(1) + '%' : '0%'}/>
           </div>
 
@@ -423,12 +464,10 @@ export default function UserManagement({ onBack, scope }: Props) {
         <aside className="vop-user-side">
           <section className="vop-user-side-card">
             <h3><Shield size={16}/>{t('admin.quick_actions','Quick Actions')}</h3>
-            <button type="button" onClick={openCreate}><Plus size={15}/>{t('admin.add_new_user','Add New User')}</button>
+            <button type="button" onClick={()=>openCreate()}><Plus size={15}/>{t('admin.add_new_user','Add New User')}</button>
+            {(scope?.isSuperAdmin||['union_admin','conference_admin','district_admin'].includes(String(scope?.role||'')))&&<button type="button" onClick={()=>openCreate('hierarchy')}><ShieldCheck size={15}/>Assign hierarchy admin</button>}
             <button type="button" onClick={() => { setBulkInput(true); setEditor(null); }}><Upload size={15}/>{t('admin.bulk_import_csv','Bulk Import (CSV)')}</button>
             <button type="button" onClick={exportUsers}><Download size={15}/>{t('admin.export_users','Export Users')}</button>
-            <button type="button" onClick={() => flash('Role options are derived from current account data and permissions.')}><ShieldCheck size={15}/>{t('admin.manage_roles','Manage Roles')}</button>
-            <button type="button" onClick={() => flash('Select a user and use Reset Password from the action menu.')}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
-            <button type="button" onClick={() => flash('Invitation is generated from the Add User workflow.')}><UserPlus size={15}/>{t('admin.send_invitation','Send Invitation')}</button>
           </section>
           <section className="vop-user-side-card">
             <h3><ShieldCheck size={16}/>{t('admin.user_roles','User Roles')}</h3>
@@ -466,8 +505,22 @@ export default function UserManagement({ onBack, scope }: Props) {
             <label><span>{t('common.full_name','Full Name')} *</span><input value={editor.displayName} onChange={e => setEditor({...editor,displayName:e.target.value})}/></label>
             <label><span>{t('common.email','Email')} *</span><input type="email" value={editor.email} onChange={e => setEditor({...editor,email:e.target.value})}/></label>
             <label><span>{t('common.phone','Phone')}</span><input value={editor.phoneNumber} onChange={e => setEditor({...editor,phoneNumber:e.target.value})}/></label>
-            <label><span>{t('common.role','Role')}</span><select value={editor.userType} onChange={e => setEditor({...editor,userType:e.target.value as EditorState['userType']})}><option value="super_admin">Super Admin</option><option value="admin">Admin</option><option value="teacher">Teacher</option><option value="mentor">Mentor</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
-            <label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})} disabled={tenantOrganizationsLoading || (!scope?.isSuperAdmin && !!scope?.organizationId)}><option value="">{tenantOrganizationsLoading ? 'Loading organizations…' : 'Platform / no organization'}</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{!scope?.isSuperAdmin && scope?.organizationId && <small>Locked to your current organisation. Your organisation membership takes precedence over other role assignments.</small>}{tenantOrganizations.length === 0 && !tenantOrganizationsLoading && <small>No organization tenants are available to this administrator. Hierarchy administrators only see organizations assigned to their hierarchy scope.</small>}{editor.userType === 'admin' && <small>Choose the organization this administrator will manage.</small>}</label>
+            <label><span>{t('common.role','Role')}</span><select value={editor.userType} onChange={e => {
+              const userType=e.target.value as EditorState['userType'];
+              setEditor({...editor,userType,assignmentMode:userType==='super_admin'?'platform':editor.assignmentMode});
+            }}>{scope?.isSuperAdmin&&<option value="super_admin">Super Admin</option>}<option value="admin">Administrator</option><option value="teacher">Teacher</option><option value="mentor">Mentor</option><option value="learner">Learner</option><option value="guest">Guest</option></select></label>
+            {editor.userType==='admin'&&(scope?.isSuperAdmin||['union_admin','conference_admin','district_admin'].includes(String(scope?.role||'')))&&<label className="vop-user-assignment-mode"><span>Administrator scope</span><select value={editor.assignmentMode} onChange={e=>setEditor({...editor,assignmentMode:e.target.value as EditorState['assignmentMode'],organizationId:'',adminNodeType:'',adminNodeId:''})}>
+              <option value="organization">Organization administrator</option><option value="hierarchy">Union / Conference / District / Church administrator</option>
+            </select><small>Hierarchy administrators manage their node and authorized descendants. Organization administrators manage only their organization membership.</small></label>}
+            {editor.userType!=='super_admin'&&editor.assignmentMode==='organization'&&<label><span>Organization {editor.userType === 'admin' ? '*' : '(optional)'}</span><select value={editor.organizationId} onChange={e => setEditor({...editor,organizationId:e.target.value})} disabled={tenantOrganizationsLoading || (!scope?.isSuperAdmin && !!scope?.organizationId)}><option value="">{tenantOrganizationsLoading ? 'Loading organizations…' : 'Platform / no organization'}</option>{tenantOrganizations.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{!scope?.isSuperAdmin && scope?.organizationId && <small>Locked to your current organisation.</small>}{tenantOrganizations.length === 0 && !tenantOrganizationsLoading && <small>No organization tenants are available in your scope.</small>}</label>}
+            {editor.userType==='admin'&&editor.assignmentMode==='hierarchy'&&<label className="vop-user-hierarchy-assignment"><span>Hierarchy assignment *</span><select value={editor.adminNodeType&&editor.adminNodeId?editor.adminNodeType+':'+editor.adminNodeId:''} onChange={e=>{const [adminNodeType,adminNodeId]=e.target.value.split(':');setEditor({...editor,adminNodeType:adminNodeType as EditorState['adminNodeType'],adminNodeId});}}>
+              <option value="">Select authorized hierarchy node…</option>{hierarchyOptions.filter(item=>{
+                if(scope?.isSuperAdmin)return true;
+                const rank:Record<string,number>={union:1,conference:2,district:3,church:4};
+                const own=String(scope?.role||'').replace('_admin','');
+                return (rank[item.type]||0)>(rank[own]||0);
+              }).map(item=><option key={item.type+':'+item.id} value={item.type+':'+item.id}>{item.type.charAt(0).toUpperCase()+item.type.slice(1)} — {item.name}</option>)}
+            </select><small>The assignment is enforced by the server and custom claims, not only by this form.</small></label>}
             {!editor.uid && <label><span>Password <small>(optional)</small></span><input type="password" value={editor.password} onChange={e => setEditor({...editor,password:e.target.value})} placeholder="Leave blank to use reset link"/></label>}
           </div>
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
