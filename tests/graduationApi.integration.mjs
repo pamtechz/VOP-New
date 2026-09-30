@@ -71,6 +71,11 @@ test('graduation: learner self-submission and official issuance require verified
       id:guide,title:'VOP Graduation',organizationId:org,
       language:lang,published:true,archived:false,certificateEligible:true,
       certificateDocumentType:'course',certificateTypeName:'Bible Correspondence Certificate',
+      certificationRequirementIds:['cert-req'],
+    });
+    await db.doc('masterGuideRequirements/cert-req').set({
+      id:'cert-req',title:'Signed ministry evidence',organizationId:org,status:'published',
+      requiredSignatures:2,evidenceRequired:true,
     });
     await db.doc('guides/'+guide+'/lessons/lesson-one').set({
       id:'lesson-one',type:'Lesson',published:true,
@@ -138,6 +143,25 @@ test('graduation: learner self-submission and official issuance require verified
       assert.equal(approval.request.status,'approved');
       assert.equal(approval.request.averageScore,90,'Approval must recompute the authoritative average.');
       assert.equal((await api(certificates,candidate,{action:'issue',candidateId:candidate.uid})).status,403);
+      const missingPortfolio=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
+      assert.equal(missingPortfolio.status,409,JSON.stringify(missingPortfolio));
+      assert.match(String(missingPortfolio.error||''),/Signed ministry evidence: submit the required activity/i);
+
+      await db.doc('masterGuidePortfolios/'+candidate.uid).set({
+        learnerId:candidate.uid,organizationId:org,
+        activities:[{id:'activity-1',requirementId:'cert-req',status:'submitted',revision:1,requiredSignatures:2}],
+        evidence:[{id:'evidence-1',requirementId:'cert-req',title:'Signed log',url:'https://example.org/log',revision:1}],
+        signoffs:[{id:'approval-1',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-one'}],
+      });
+      const oneSignature=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
+      assert.equal(oneSignature.status,409,JSON.stringify(oneSignature));
+      assert.match(String(oneSignature.error||''),/1 more evaluator signature is required/i);
+      await db.doc('masterGuidePortfolios/'+candidate.uid).update({
+        signoffs:[
+          {id:'approval-1',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-one'},
+          {id:'approval-2',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-two'},
+        ],
+      });
       const issued=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
       assert.equal(issued.status,201,JSON.stringify(issued));
       assert.equal(issued.certificate.assessmentAverageScore,90);
@@ -148,6 +172,9 @@ test('graduation: learner self-submission and official issuance require verified
       assert.equal(issued.certificate.eligibilitySnapshot.passThreshold,80);
       assert.equal(issued.certificate.eligibilitySnapshot.assessmentAverageScore,90);
       assert.deepEqual(new Set(issued.certificate.eligibilitySnapshot.requiredAssessmentIds),new Set(['test-one','test-two']));
+      assert.equal(issued.certificate.eligibilitySnapshot.certificationRequirements[0].requirementId,'cert-req');
+      assert.equal(issued.certificate.eligibilitySnapshot.certificationRequirements[0].approvalCount,2);
+      assert.equal(issued.certificate.eligibilitySnapshot.certificationRequirements[0].evidenceCount,1);
       assert.equal(issued.certificate.issuer.name,'Voice of Prophecy');
       const valid=await verifyCertificate(issued.certificate.certificateNumber);
       assert.equal(valid.status,200,JSON.stringify(valid));
