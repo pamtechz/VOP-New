@@ -431,7 +431,7 @@ export const App: React.FC = () => {
         onNavigate={navigate} />}
       <div className={'vop-learner-main'+(isMobileShell?' mobile-device-frame':'')+(sidebarCollapsed?' sidebar-collapsed':' sidebar-expanded')} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {isMobileShell && <div className="device-notch" />}
-        {currentRoute !== 'admin' && (
+        {currentRoute !== 'admin' && currentRoute !== 'radio' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
