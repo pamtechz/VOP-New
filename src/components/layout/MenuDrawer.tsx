@@ -77,6 +77,12 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
   const initial = name.charAt(0).toUpperCase();
   const whatsapp = String(settings.whatsappNumber || '').replace(/\D/g, '');
+  const enabled=(route:AppRoute)=>{
+    if(route==='radio')return settings.features?.radio!==false;
+    if(route==='announcements'||route==='events')return settings.features?.announcements!==false;
+    if(route==='certificates'||route==='certificate-verification')return settings.features?.certification!==false;
+    return true;
+  };
 
   const learning: MenuItem[] = [
     { route: 'lessons', label: t('navigation.lessons', 'Lessons & assessments'), detail: t('navigation.lessons_detail', 'Published studies and tests'), icon: FileText },
@@ -102,7 +108,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
     ...(isAdmin ? [{ route: 'admin' as const, label: t('navigation.admin', 'Admin Panel'), detail: t('navigation.admin_detail', 'Manage authorized ministry content'), icon: ShieldCheck }] : []),
   ];
 
-  const renderLinks = (items: MenuItem[]) => items.map(item => {
+  const renderLinks = (items: MenuItem[]) => items.filter(item=>enabled(item.route)).map(item => {
     const Icon = item.icon;
     return <button type="button" key={item.route}
       className={'vop-account-link' + (currentRoute === item.route ? ' active' : '')}
@@ -162,7 +168,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
             </button>
           </section>
           <div className="vop-account-overview-footer">
-            <button type="button" onClick={() => navigate('certificates')}><Award size={19}/>{t('certificates.my_certificate', 'My Certificates')}</button>
+            {enabled('certificates')&&<button type="button" onClick={() => navigate('certificates')}><Award size={19}/>{t('certificates.my_certificate', 'My Certificates')}</button>}
             <button type="button" onClick={() => navigate('personal-settings')}><UserCheck size={19}/>{t('navigation.personal_settings', 'Personal Settings')}</button>
           </div>
         </aside>
