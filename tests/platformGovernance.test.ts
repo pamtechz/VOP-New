@@ -18,6 +18,10 @@ test('dark mode is applied before first paint and covers learner and admin porta
   assert.match(css,/\.vop-admin/);
   assert.match(css,/\.vop-candidate-list-card/);
   assert.match(css,/\.vop-study-modal section\[role="dialog"\]/);
+  assert.match(css,/Dark-mode regression shield/);
+  assert.match(css,/\.vop-account-link/);
+  assert.match(css,/\.vop-guide-first-card/);
+  assert.match(css,/\.vop-header-popover/);
 });
 
 test('organization administrators retain candidates while language governance stays Super Admin only',()=>{
@@ -26,7 +30,9 @@ test('organization administrators retain candidates while language governance st
   const languageApi=read('api_handlers/admin/languages.ts');
   const localization=read('api/localization.ts');
   assert.match(admin,/item\.id === 'candidates'/);
-  assert.match(admin,/isSuperAdmin \|\| isHierarchyAdmin \|\| organizationAdmin/);
+  assert.match(admin,/const coreTenantAdmin=isSuperAdmin\|\|isHierarchyAdmin\|\|organizationAdmin/);
+  assert.match(admin,/item\.id==='curriculum'/);
+  assert.match(admin,/curriculumContributor/);
   assert.match(admin,/\(item\.id === 'languages' \|\| item\.id === 'translations'\) && !isSuperAdmin/);
   assert.match(candidates,/\/api\/admin\/enrollCandidate/);
   assert.match(candidates,/organizationId/);
@@ -79,4 +85,52 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(modal,/beginQuizAttempt/);
   assert.match(modal,/instructions/);
   assert.match(modal,/remainingSeconds/);
+});
+
+
+test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
+  const app=read('src/App.tsx');
+  const types=read('src/types/index.ts');
+  const sidebar=read('src/components/layout/LearnerSidebar.tsx');
+  const drawer=read('src/components/layout/MenuDrawer.tsx');
+  const tools=read('src/components/layout/CommunicationTools.tsx');
+  const inbox=read('src/pages/InboxPage.tsx');
+  const notifications=read('api_handlers/admin/notifications.ts');
+  const organizations=read('api_handlers/admin/organizations.ts');
+  const mentoring=read('api/mentorship.ts');
+  const localization=read('api_handlers/admin/localization.ts');
+  const prayer=read('api/prayer.ts');
+  const graduation=read('api_handlers/admin/graduations.ts');
+  assert.match(types,/\| 'notifications'/);
+  assert.match(types,/\| 'invites'/);
+  assert.match(app,/currentRoute === 'notifications' \|\| currentRoute === 'invites'/);
+  assert.match(sidebar,/route:'notifications'/);
+  assert.match(sidebar,/route:'invites'/);
+  assert.match(drawer,/route: 'notifications'/);
+  assert.match(drawer,/route: 'invites'/);
+  assert.match(tools,/setInterval\(\(\)=>void loadNotifications\(true\),15000\)/);
+  assert.match(tools,/vop-notification-toast/);
+  assert.match(tools,/action:'clearAll'/);
+  assert.match(inbox,/acceptInvite/);
+  assert.match(inbox,/declineInvite/);
+  assert.match(inbox,/cancelInvite/);
+  assert.match(notifications,/action==='clearAll'/);
+  assert.match(organizations,/action === 'listInvites'/);
+  assert.match(organizations,/action === 'declineInvite'/);
+  assert.match(organizations,/action === 'cancelInvite'/);
+  assert.match(organizations,/type:'invitation'/);
+  assert.match(mentoring,/title:'New mentoring message'/);
+  assert.match(localization,/Localization application approved/);
+  assert.match(prayer,/title:'New prayer request'/);
+  assert.match(graduation,/Graduation approval required/);
+});
+
+test('notification actions preserve exact admin destinations',()=>{
+  const routing=read('src/services/notificationRouting.ts');
+  const admin=read('src/pages/AdminPage.tsx');
+  assert.match(routing,/vop_notification_admin_target/);
+  assert.match(routing,/localization:'translations'/);
+  assert.match(routing,/graduations:'certification'/);
+  assert.match(admin,/consumeNotificationAdminTarget/);
+  assert.match(admin,/setActiveTab\(target as AdminTab\)/);
 });
