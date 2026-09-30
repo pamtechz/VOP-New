@@ -14,16 +14,16 @@ type Item = {
   id: string; title: string; description?: string; status?: Status;
   sharingScope?: Sharing; canEdit?: boolean; organizationId?: string;
   verses?: Verse[]; question?: string; options?: string[]; answer?: string; scriptureRef?: string;
-  requiredSignatures?: number;
+  requiredSignatures?: number; evidenceRequired?: boolean;
 };
 type Editor = {
   id?: string; title: string; description: string; status: 'draft' | 'published';
   sharingScope: Sharing; verses: Verse[]; question: string; options: string[]; answer: string; scriptureRef: string;
-  requiredSignatures: number;
+  requiredSignatures: number; evidenceRequired:boolean;
 };
 const blank = (): Editor => ({
   title:'', description:'', status:'draft', sharingScope:'organization',
-  verses:[{reference:'',text:''}], question:'', options:['','','',''], answer:'', scriptureRef:'', requiredSignatures:1,
+  verses:[{reference:'',text:''}], question:'', options:['','','',''], answer:'', scriptureRef:'', requiredSignatures:1, evidenceRequired:true,
 });
 const options: Array<{ value:Kind; label:string; description:string; Icon:typeof BookOpen }> = [
   { value:'requirements',label:'Master Guide Requirements',description:'Activities and verified leadership achievements',Icon:GraduationCap },
@@ -169,6 +169,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       question:item.question || '', options:item.options?.length ? [...item.options] : ['','','',''],
       answer:item.answer || '', scriptureRef:item.scriptureRef || '',
       requiredSignatures:Math.max(1,Number(item.requiredSignatures || 1)),
+      evidenceRequired:item.evidenceRequired !== false,
     } : blank());
   };
   const save = async (event:React.FormEvent) => {
@@ -179,7 +180,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       const payload = {
         title:editor.title.trim(),description:editor.description.trim(),status:editor.status,
         sharingScope:editor.sharingScope,
-        ...(kind==='requirements' ? {requiredSignatures:editor.requiredSignatures}
+        ...(kind==='requirements' ? {requiredSignatures:editor.requiredSignatures,evidenceRequired:editor.evidenceRequired}
           : kind==='memoryDecks' ? {verses:editor.verses.map(verse=>({reference:verse.reference.trim(),text:verse.text.trim()}))}
           : kind==='duelQuestions' ? {question:editor.question.trim(),options:editor.options.map(x=>x.trim()).filter(Boolean),answer:editor.answer,scriptureRef:editor.scriptureRef.trim()} : {}),
       };
@@ -265,6 +266,11 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
         <input id="engagement-required-signatures" type="number" min="1" max="20" step="1" required value={editor.requiredSignatures}
           onChange={e=>setEditor({...editor,requiredSignatures:Math.max(1,Math.min(20,Math.trunc(Number(e.target.value)||1)))})}/>
         <small>A requirement is approved only after this many distinct authorized evaluators sign the current submission revision.</small>
+        <label style={{display:'flex',alignItems:'center',gap:8,marginTop:10}}>
+          <input type="checkbox" checked={editor.evidenceRequired}
+            onChange={e=>setEditor({...editor,evidenceRequired:e.target.checked})}/>
+          Supporting evidence is required for certification
+        </label>
       </div>}
       {kind==='memoryDecks' && <div style={{display:'grid',gap:12,marginTop:18}}>
         <h3>Scripture memory cards</h3>
