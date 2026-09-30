@@ -440,11 +440,11 @@ export const App: React.FC = () => {
         return true;
       }} />}
       {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
-        const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
-        if (score === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
+        const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
+        if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
-        return score;
+        return result;
       }} onOpenCertificate={() => navigate('certificates')} />}
     </div>
   );
