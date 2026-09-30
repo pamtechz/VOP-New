@@ -526,7 +526,6 @@ export const App: React.FC = () => {
     setCurrentRoute(route);
     rememberLocation({route});
   };
-  const returnHome = () => navigate('home');
   const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson) =>
     openStudyItem(guide,lesson,undefined,currentRoute);
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
