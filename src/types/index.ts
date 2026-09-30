@@ -277,7 +277,13 @@ export interface Lesson {
   attachedLessonId?: string;
   anchorId?: string;
   attachmentType?: 'guide' | 'lesson' | 'chapter' | 'section' | 'block';
-  assessmentKind?: 'final_exam' | 'practice';
+  assessmentKind?: 'chapter_quiz' | 'practice' | 'final_exam';
+  assessmentInstructions?: string;
+  assessmentTimeLimitMinutes?: number;
+  assessmentPassThreshold?: number;
+  assessmentMaxAttempts?: number;
+  assessmentRetakeCooldownMinutes?: number;
+  assessmentFeedbackMode?: 'score_only' | 'after_submit' | 'none';
   ownerOrganizationId?: string;
   ownerUid?: string;
   sharingScope?: 'private' | 'organization' | 'shared';
