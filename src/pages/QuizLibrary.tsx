@@ -9,7 +9,10 @@ type Quiz = {
   id: string; title: string; description?: string; language: string; archived?: boolean;
   questions: Array<Record<string, unknown>>; published?: boolean;
   sharingScope?: 'private' | 'organization' | 'shared';
-  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'final_exam'|'practice';
+  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'final_exam'|'chapter_quiz'|'practice';
+  assessmentInstructions?: string; assessmentTimeLimitMinutes?: number; assessmentPassThreshold?: number;
+  assessmentMaxAttempts?: number; assessmentRetakeCooldownMinutes?: number;
+  assessmentFeedbackMode?: 'score_only'|'after_submit'|'none';
   ownerOrganizationId?: string; ownerUid?: string; canEdit?: boolean;
 };
 type Guide = {
@@ -55,6 +58,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   const [guideId, setGuideId] = useState('');
   const [lessonId, setLessonId] = useState('');
   const [anchorId,setAnchorId] = useState('');
+  const [assessmentInstructions,setAssessmentInstructions]=useState('');
+  const [assessmentTimeLimitMinutes,setAssessmentTimeLimitMinutes]=useState(0);
+  const [assessmentPassThreshold,setAssessmentPassThreshold]=useState(0);
+  const [assessmentMaxAttempts,setAssessmentMaxAttempts]=useState(0);
+  const [assessmentRetakeCooldownMinutes,setAssessmentRetakeCooldownMinutes]=useState(0);
+  const [assessmentFeedbackMode,setAssessmentFeedbackMode]=useState<'score_only'|'after_submit'|'none'>('score_only');
   const [lessonDetails,setLessonDetails] = useState<LessonDetails[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -87,6 +96,8 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setAnchorId(initialAnchorId || '');
     setTitle(initialExam ? 'Final guide examination' : '');
     setDescription('');setQuestions([]);setPublished(false);
+    setAssessmentInstructions('');setAssessmentTimeLimitMinutes(0);setAssessmentPassThreshold(0);
+    setAssessmentMaxAttempts(0);setAssessmentRetakeCooldownMinutes(0);setAssessmentFeedbackMode('score_only');
   }, [initialGuideId,initialLessonId,initialAnchorType,initialAnchorId,initialExam,organizationId]);
   useEffect(() => {
     if (!guideId) {setLessonDetails([]);return;}
@@ -133,6 +144,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setGuideId(copy ? '' : quiz?.guideId || '');
     setLessonId(copy ? '' : quiz?.lessonId || '');
     setAnchorId(copy ? '' : quiz?.anchorId || '');
+    setAssessmentInstructions(copy?'':quiz?.assessmentInstructions||'');
+    setAssessmentTimeLimitMinutes(copy?0:Number(quiz?.assessmentTimeLimitMinutes||0));
+    setAssessmentPassThreshold(copy?0:Number(quiz?.assessmentPassThreshold||0));
+    setAssessmentMaxAttempts(copy?0:Number(quiz?.assessmentMaxAttempts||0));
+    setAssessmentRetakeCooldownMinutes(copy?0:Number(quiz?.assessmentRetakeCooldownMinutes||0));
+    setAssessmentFeedbackMode(copy?'score_only':quiz?.assessmentFeedbackMode||'score_only');
     setQuestions(quiz ? normalize(quiz.questions || []) : []);
   };
   const save = async () => {
@@ -154,6 +171,9 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
           language: currentGuide.language, sharingScope: scope, published,
           attachmentType, guideId, lessonId: attachmentType === 'guide' ? '' : lessonId,
           anchorId: ['chapter','section','block'].includes(attachmentType) ? anchorId : '',
+          assessmentInstructions:assessmentInstructions.trim(),
+          assessmentTimeLimitMinutes,assessmentPassThreshold,assessmentMaxAttempts,
+          assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
           ...(sourceId ? { sourceContentId: sourceId } : {}),
           questions: questions.map(question => ({
             question: question.question, options: question.options,
@@ -242,6 +262,22 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         </div>
       </div>
       <div className="vop-field"><label>{t('common.description','Description')}</label><textarea value={description} onChange={e => setDescription(e.target.value)}/></div>
+      <div className="vop-card vop-form-card vop-assessment-policy-editor">
+        <div className="vop-section-title"><div><h3>Assessment policy</h3><p>Instructions are shown before the learner starts. Zero uses the organization default or means no limit where stated.</p></div></div>
+        <div className="vop-field"><label>Instructions before attempt</label><textarea value={assessmentInstructions} maxLength={5000} onChange={e=>setAssessmentInstructions(e.target.value)} placeholder="Explain the purpose, rules, permitted resources and what happens after submission."/></div>
+        <div className="vop-form-grid">
+          <div className="vop-field"><label>Time limit (minutes)</label><input type="number" min="0" max="1440" step="1" value={assessmentTimeLimitMinutes} onChange={e=>setAssessmentTimeLimitMinutes(Math.max(0,Math.min(1440,Math.trunc(Number(e.target.value)||0))))}/><small>0 = untimed.</small></div>
+          <div className="vop-field"><label>Pass mark override (%)</label><input type="number" min="0" max="100" step="1" value={assessmentPassThreshold} onChange={e=>setAssessmentPassThreshold(Math.max(0,Math.min(100,Number(e.target.value)||0)))}/><small>0 = use organization pass mark.</small></div>
+          <div className="vop-field"><label>Maximum attempts</label><input type="number" min="0" max="100" step="1" value={assessmentMaxAttempts} onChange={e=>setAssessmentMaxAttempts(Math.max(0,Math.min(100,Math.trunc(Number(e.target.value)||0))))}/><small>0 = use organization policy.</small></div>
+          <div className="vop-field"><label>Retake wait (minutes)</label><input type="number" min="0" max="10080" step="1" value={assessmentRetakeCooldownMinutes} onChange={e=>setAssessmentRetakeCooldownMinutes(Math.max(0,Math.min(10080,Math.trunc(Number(e.target.value)||0))))}/><small>0 = use organization policy.</small></div>
+          <div className="vop-field"><label>Feedback after submission</label><select value={assessmentFeedbackMode} onChange={e=>setAssessmentFeedbackMode(e.target.value as typeof assessmentFeedbackMode)}>
+            <option value="score_only">Score and pass/fail only</option>
+            <option value="after_submit">Score plus configured explanations</option>
+            <option value="none">Completion only — hide score from learner</option>
+          </select></div>
+          <div className="vop-field"><label>Assessment classification</label><input readOnly value={attachmentType==='guide'?'Final examination':attachmentType==='chapter'?'Chapter quiz':'Practice assessment'}/><small>Classification follows where the assessment is attached.</small></div>
+        </div>
+      </div>
       <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
         {questions.map((question, index) => <div className="vop-card vop-form-card" key={index}>
           <div className="vop-section-title"><div><h3>Question {index + 1}</h3></div>
@@ -266,10 +302,11 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     </div>}
     <div className="vop-reference-table-wrap">
       {loading ? <div className="vop-empty">Loading quizzes…</div> : <table className="vop-reference-table">
-        <thead><tr><th>Quiz</th><th>Attached to</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Assessment</th><th>Attached to</th><th>Policy</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{items.map(item => <tr key={item.id}>
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
           <td>{item.attachmentType === 'guide' ? 'Final guide exam: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
+          <td><strong>{item.assessmentKind==='final_exam'?'Final exam':item.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice'}</strong><div>{item.assessmentTimeLimitMinutes?item.assessmentTimeLimitMinutes+' min':'Untimed'} · {item.assessmentPassThreshold?item.assessmentPassThreshold+'% pass':'Default pass mark'}</div></td>
           <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.archived ? 'Archived' : item.published ? 'Published' : 'Draft'}</td>
           <td><div className="vop-reference-action-cell">

@@ -265,8 +265,9 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || '').trim();
     const permissionAction =
       ['listStudents','listMentors','listAssignments','getAutomationSettings'].includes(action) ? 'view' :
-      ['assign','saveAutomationSettings','sendMessage','createDraft','sendDraft'].includes(action) ? 'manage' :
-      ['performance','questionFailures','listConversations','listMyConversations','messages'].includes(action) ? 'read' : '';
+      ['assign','saveAutomationSettings','createDraft','sendDraft'].includes(action) ? 'manage' :
+      action === 'sendMessage' ? 'create' :
+      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages'].includes(action) ? 'read' : '';
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
@@ -285,6 +286,40 @@ export default async function handler(req: Request, res: Response) {
       const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
       const mentors = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => isMentor(item) && sameTenant(actor, item, organizationId));
       return res.status(200).json({ ok: true, items: mentors });
+    }
+
+    if (action === 'listMyAssignments') {
+      if (!isMentor(actor)) throw new Error('This workspace is available to configured mentors.');
+      organizationId = String(actor.organizationId || '').trim();
+      if (!organizationId) throw new Error('Your mentor account is not linked to an organization.');
+      const snapshot = await db.collection('mentorAssignments').where('mentorId','==',decoded.uid).get();
+      const active = snapshot.docs.filter(doc =>
+        String(doc.data()?.organizationId || '') === organizationId
+        && doc.data()?.status !== 'inactive'
+      );
+      const studentSnapshots = await Promise.all(active.map(doc =>
+        db.doc('users/' + String(doc.data()?.studentId || doc.id)).get()));
+      const students = new Map(studentSnapshots.filter(item=>item.exists
+        && String(item.data()?.organizationId || '') === organizationId)
+        .map(item=>[item.id,item.data()||{}]));
+      const items = active.filter(doc=>students.has(String(doc.data()?.studentId || doc.id))).map(doc=>{
+        const data=doc.data()||{};
+        const studentId=String(data.studentId||doc.id);
+        const student=students.get(studentId)||{};
+        return {
+          id:doc.id,studentId,mentorId:decoded.uid,
+          status:String(data.status||'active'),
+          assignedAt:iso(data.assignedAt),
+          notes:String(data.notes||''),
+          student:{
+            uid:studentId,
+            displayName:String(student.displayName||student.email||'Learner'),
+            email:String(student.email||''),
+            photoURL:String(student.photoURL||''),
+          },
+        };
+      });
+      return res.status(200).json({ok:true,items});
     }
 
     if (action === 'listAssignments') {
@@ -330,7 +365,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'performance') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
-      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       if (!isAdmin(actor)) {
         const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
@@ -413,7 +448,7 @@ export default async function handler(req: Request, res: Response) {
       const mentorId = id(body.mentorId);
       const student = await profile(db, studentId);
       const mentor = await profile(db, mentorId);
-      if (!sameTenant(actor, student, organizationId) || !sameTenant(actor, mentor, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId) || !sameTenant(actor, mentor, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const message = String(body.message || '').trim();
       if (!message || message.length > 10000) throw new Error('A message is required.');
@@ -487,7 +522,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'createDraft') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
-      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const performance = await performanceFor(db, studentId);
       const draft = draftFor(student, performance);
@@ -517,7 +552,7 @@ export default async function handler(req: Request, res: Response) {
       if (!draftOrganizationId) throw new Error('The message draft is missing its organization.');
       if (draftOrganizationId !== organizationId) throw new Error('This draft belongs to another organization.');
       const student = await profile(db, String(draft.studentId || ''));
-      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const channel = String(draft.channel || 'in_app');
       let delivery = 'in_app';

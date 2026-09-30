@@ -8,6 +8,8 @@ import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
+import { persistThemePreference } from '../services/themePreference';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -38,7 +40,7 @@ async function callPersonalSettings(operation: 'get' | 'save', settings?: Person
 
 export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange }) => {
   const [settings, setSettings] = useState<PersonalSettings>({
-    theme: 'system', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
+    theme: 'dark', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
     accessibility: { reducedMotion: false, largeText: false, highContrast: false },
     privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
   });
@@ -91,6 +93,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     setSaving(true); setMessage('');
     try {
       await callPersonalSettings('save', settings);
+      if (settings.theme) persistThemePreference(settings.theme==='light'?'light':'dark');
       if (settings.uiLocale) setUiLocale(settings.uiLocale);
       if (settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
       setMessage(t('settings.saved', 'Your personal settings have been saved.'));
@@ -113,7 +116,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-personal-card vop-card">
         <h2><Globe2 size={19}/> Interface</h2>
-        <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label>Theme<select value={settings.theme === 'light' ? 'light' : 'dark'} onChange={e => { const theme=e.target.value as 'light'|'dark'; patch('theme',theme); persistThemePreference(theme); }}><option value="dark">Dark (default)</option><option value="light">Light</option></select></label>
         <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
           {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
         </select></label>
@@ -145,6 +148,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>
+      <LocalizationParticipation/>
       <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
     </div>}
   </div>;

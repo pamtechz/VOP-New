@@ -33,7 +33,15 @@ export function quizManagementItem(
     attachmentType: ['guide','lesson','chapter','section','block'].includes(String(data.attachmentType || ''))
       ? String(data.attachmentType) : 'guide',
     anchorId: String(data.anchorId || ''),
-    assessmentKind: data.assessmentKind === 'final_exam' ? 'final_exam' : 'practice',
+    assessmentKind: data.assessmentKind === 'final_exam' ? 'final_exam'
+      : data.assessmentKind === 'chapter_quiz' ? 'chapter_quiz' : 'practice',
+    assessmentInstructions: String(data.assessmentInstructions || ''),
+    assessmentTimeLimitMinutes: Number(data.assessmentTimeLimitMinutes || 0),
+    assessmentPassThreshold: Number(data.assessmentPassThreshold || 0),
+    assessmentMaxAttempts: Number(data.assessmentMaxAttempts || 0),
+    assessmentRetakeCooldownMinutes: Number(data.assessmentRetakeCooldownMinutes || 0),
+    assessmentFeedbackMode: ['score_only','after_submit','none'].includes(String(data.assessmentFeedbackMode || ''))
+      ? String(data.assessmentFeedbackMode) : 'score_only',
     lessonId: String(data.lessonId || ''),
     organizationId: String(data.organizationId || ''),
     ownerOrganizationId: String(data.ownerOrganizationId || ''),

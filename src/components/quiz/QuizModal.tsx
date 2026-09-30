@@ -3,14 +3,14 @@ import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
-import type { AssessmentSubmissionResult } from '../../services/localStudy';
+import { beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
 import { ModalLayer } from '../layout/ModalLayer';
 
 interface QuizModalProps {
   lesson: Lesson;
   guide: DiscoverGuide;
   onClose: () => void;
-  onSubmitScore: (answers: Record<number, number | boolean>) => Promise<AssessmentSubmissionResult | null>;
+  onSubmitScore: (answers: Record<number, number | boolean>, sessionId: string) => Promise<AssessmentSubmissionResult | null>;
   onOpenCertificate: () => void;
   onContinue?: () => void;
   hasNextLesson?: boolean;
@@ -24,8 +24,14 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   maxAttempts = 0, retakeCooldownMinutes = 0,
 }) => {
   const questions = lesson.questions ?? [];
-  const threshold = passThreshold;
+  const previewThreshold = Number(lesson.assessmentPassThreshold || 0) || passThreshold;
+  const [attempt,setAttempt]=useState<AssessmentPolicyResult|null>(null);
+  const threshold=attempt?.assessmentPolicy.threshold||previewThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 1 && threshold <= 100;
+  const previewMaxAttempts=Number(lesson.assessmentMaxAttempts||0)||maxAttempts;
+  const previewCooldown=Number(lesson.assessmentRetakeCooldownMinutes||0)||retakeCooldownMinutes;
+  const previewTimeLimit=Math.max(0,Math.trunc(Number(lesson.assessmentTimeLimitMinutes||0)));
+  const [remainingSeconds,setRemainingSeconds]=useState<number|null>(null);
   const validQuiz = isPlayableQuizConfigured(questions);
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
@@ -36,6 +42,19 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const question = questions[index];
+
+  useEffect(()=>{
+    const expiresAt=attempt?.expiresAt;
+    if(!expiresAt){setRemainingSeconds(null);return;}
+    const update=()=>{
+      const seconds=Math.max(0,Math.ceil((new Date(expiresAt).getTime()-Date.now())/1000));
+      setRemainingSeconds(seconds);
+      if(seconds===0)setError('The assessment time limit has expired. Close this attempt and start a permitted retake.');
+    };
+    update();
+    const timer=window.setInterval(update,1000);
+    return()=>window.clearInterval(timer);
+  },[attempt?.expiresAt]);
 
   useEffect(() => {
     const retryAt = submission?.retakePolicy.retryAt;
@@ -63,7 +82,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setSubmitting(true);
     setError('');
     try {
-      const result = await onSubmitScore(answers);
+      if(!attempt?.sessionId){setError('Start the assessment after reviewing its instructions.');return;}
+      if(remainingSeconds===0){setError('The assessment time limit has expired.');return;}
+      const result = await onSubmitScore(answers,attempt.sessionId);
       if (result === null) {
         setError('Your assessment could not be verified and saved. Check your connection and sign-in status, then try again.');
         return;
@@ -81,8 +102,23 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
   const restart = () => {
     if (!retakeReady || submission?.retakePolicy.remainingAttempts === 0) return;
-    setAnswers({}); setScore(null); setSubmission(null); setIndex(0); setError(''); setStage('quiz');
+    setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setStage('intro');
   };
+  const startAttempt=async()=>{
+    if(!validQuiz||!validThreshold||submitting)return;
+    setSubmitting(true);setError('');
+    try{
+      const started=await beginQuizAttempt(guide.id,lesson.id,guide.language);
+      setAttempt(started);
+      setStage('quiz');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:'The assessment could not be started.');
+    }finally{setSubmitting(false);}
+  };
+  const assessmentLabel=lesson.assessmentKind==='final_exam'
+    ?'Final examination':lesson.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice assessment';
+  const instructions=lesson.assessmentInstructions?.trim()
+    ||'Answer every question before submitting. Your attempt is recorded when you select Begin Test below.';
 
   const progressPercent = questions.length > 0 ? Math.round((Object.keys(answers).length / questions.length) * 100) : 0;
 
@@ -129,7 +165,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: '0.7rem', color: '#bfdbfe', fontWeight: 700, marginBottom: '0.1rem' }}>
-              {guide.subtitle} · Assessment
+              {guide.subtitle} · {assessmentLabel}
             </p>
             <h2 style={{ color: '#fff', fontSize: '1rem', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {lesson.title}
@@ -156,7 +192,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
                 Question {index + 1} of {questions.length}
               </span>
-              <span style={{ fontSize: '0.75rem', color: '#002d72', fontWeight: 700 }}>{progressPercent}% done</span>
+              <span style={{ fontSize: '0.75rem', color: '#002d72', fontWeight: 700 }}>
+                {remainingSeconds!==null?`${Math.floor(remainingSeconds/60)}:${String(remainingSeconds%60).padStart(2,'0')} remaining · `:''}{progressPercent}% done
+              </span>
             </div>
             <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
               <div style={{
@@ -187,16 +225,20 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               Ready for the Assessment?
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-              This test has{' '}
+              {instructions}
+            </p>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              This {assessmentLabel.toLowerCase()} has{' '}
               <strong style={{ color: '#0f172a' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.
               {' '}Pass mark:{' '}
               <strong style={{ color: '#0f172a' }}>
                 {validThreshold ? `${threshold}%` : 'Not configured'}
               </strong>
             </p>
-            {(maxAttempts > 0 || retakeCooldownMinutes > 0) && <p style={{color:'#64748b',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
-              Retake policy: {maxAttempts > 0 ? `maximum ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}` : 'unlimited attempts'}
-              {retakeCooldownMinutes > 0 ? ` · ${retakeCooldownMinutes} minute waiting period` : ' · no waiting period'}.
+            {(previewMaxAttempts > 0 || previewCooldown > 0 || previewTimeLimit > 0) && <p style={{color:'#64748b',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
+              {previewTimeLimit>0?`Time limit: ${previewTimeLimit} min · `:''}
+              Retake policy: {previewMaxAttempts > 0 ? `maximum ${previewMaxAttempts} attempt${previewMaxAttempts === 1 ? '' : 's'}` : 'unlimited attempts'}
+              {previewCooldown > 0 ? ` · ${previewCooldown} minute waiting period` : ' · no waiting period'}.
             </p>}
 
             <div style={{
@@ -245,7 +287,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <button
               type="button"
               disabled={!validQuiz || !validThreshold}
-              onClick={() => setStage('quiz')}
+              onClick={() => void startAttempt()}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.85rem 2rem',
@@ -258,7 +300,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 transition: 'all 0.2s',
               }}
             >
-              Begin Test
+              {submitting?'Starting…':'Begin Test'}
               <ChevronRight size={18} />
             </button>
           </div>
@@ -338,7 +380,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="button"
-                disabled={submitting || !Object.hasOwn(answers, index)}
+                disabled={submitting || remainingSeconds===0 || !Object.hasOwn(answers, index)}
                 onClick={() => void next()}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
@@ -360,52 +402,60 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         )}
 
         {/* RESULT STAGE */}
-        {stage === 'result' && score !== null && (
+        {stage === 'result' && submission && (
           <div style={{ padding: '2.5rem 2rem', textAlign: 'center', flex: 1 }}>
             <div style={{
               width: '6rem', height: '6rem',
               borderRadius: '50%',
-              background: score >= threshold
-                ? 'linear-gradient(135deg, #d1fae5, #6ee7b7)'
-                : 'linear-gradient(135deg, #fef3c7, #fde68a)',
+              background: submission.feedbackMode==='none'
+                ? 'linear-gradient(135deg,#dbeafe,#bfdbfe)'
+                : Number(score) >= threshold
+                  ? 'linear-gradient(135deg, #d1fae5, #6ee7b7)'
+                  : 'linear-gradient(135deg, #fef3c7, #fde68a)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 1.25rem',
-              boxShadow: score >= threshold
-                ? '0 8px 20px rgba(16,185,129,0.3)'
-                : '0 8px 20px rgba(245,158,11,0.3)',
+              boxShadow: submission.feedbackMode==='none'
+                ? '0 8px 20px rgba(59,130,246,0.22)'
+                : Number(score) >= threshold
+                  ? '0 8px 20px rgba(16,185,129,0.3)'
+                  : '0 8px 20px rgba(245,158,11,0.3)',
             }}>
-              {score >= threshold
-                ? <CheckCircle2 size={44} color="#059669" />
-                : <XCircle size={44} color="#d97706" />
-              }
+              {submission.feedbackMode==='none'
+                ? <CheckCircle2 size={44} color="#2563eb"/>
+                : Number(score) >= threshold
+                  ? <CheckCircle2 size={44} color="#059669" />
+                  : <XCircle size={44} color="#d97706" />}
             </div>
 
             <h3 style={{
               fontSize: '1.5rem', fontWeight: 800,
-              color: score >= threshold ? '#065f46' : '#92400e',
+              color: submission.feedbackMode==='none'?'#1d4ed8':Number(score) >= threshold ? '#065f46' : '#92400e',
               marginBottom: '0.35rem',
             }}>
-              {score >= threshold ? '🎉 Test Passed!' : 'Not Passed Yet'}
+              {submission.feedbackMode==='none'?'Attempt Submitted':Number(score) >= threshold ? '🎉 Test Passed!' : 'Not Passed Yet'}
             </h3>
 
-            <div style={{
-              fontSize: '3rem', fontWeight: 900,
-              color: score >= threshold ? '#059669' : '#d97706',
-              lineHeight: 1, marginBottom: '0.5rem',
-            }}>
-              {Math.round(score * 10) / 10}%
-            </div>
+            {submission.feedbackMode!=='none'&&score!==null&&<div style={{
+              fontSize:'3rem',fontWeight:900,color:Number(score)>=threshold?'#059669':'#d97706',
+              lineHeight:1,marginBottom:'0.5rem',
+            }}>{Math.round(Number(score)*10)/10}%</div>}
 
-            <p role="status" style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              {score >= threshold
-                ? `You met the required ${threshold}% pass mark.`
-                : submission?.retakePolicy.remainingAttempts === 0
-                  ? `The pass mark is ${threshold}%. Your configured attempt limit has been reached.`
-                  : submission?.retakePolicy.retryAt && !retakeReady
-                    ? `The pass mark is ${threshold}%. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
-                    : `The pass mark is ${threshold}%. A retake is available under your organization's policy.`}
+            <p role="status" style={{ color:'#64748b',fontSize:'0.9rem',marginBottom:'1.5rem' }}>
+              {submission.feedbackMode==='none'
+                ?'Your attempt has been securely recorded. Results are not shown under this assessment\'s feedback policy.'
+                :Number(score)>=threshold
+                  ?`You met the required ${threshold}% pass mark.`
+                  :submission.retakePolicy.remainingAttempts===0
+                    ?`The pass mark is ${threshold}%. Your configured attempt limit has been reached.`
+                    :submission.retakePolicy.retryAt&&!retakeReady
+                      ?`The pass mark is ${threshold}%. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
+                      :`The pass mark is ${threshold}%. A retake is available under your organization's policy.`}
             </p>
-            {!score || score < threshold ? <p style={{color:'#64748b',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
+            {submission.feedbackMode==='after_submit'&&submission.explanations?.some(Boolean)&&<div className="vop-assessment-explanations">
+              <strong>Review notes</strong>
+              {submission.explanations.map((text,index)=>text?<p key={index}><b>Question {index+1}:</b> {text}</p>:null)}
+            </div>}
+            {submission.feedbackMode!=='none' && (score===null || Number(score)<threshold) ? <p style={{color:'#64748b',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
               Attempt {submission?.retakePolicy.attemptsUsed || 1}
               {submission?.retakePolicy.maxAttempts ? ` of ${submission.retakePolicy.maxAttempts}` : ''}
               {submission?.retakePolicy.remainingAttempts !== null && submission?.retakePolicy.remainingAttempts !== undefined
@@ -415,7 +465,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             </p> : null}
 
             <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '320px', margin: '0 auto' }}>
-              {score < threshold && <button
+              {submission.feedbackMode!=='none' && score!==null && Number(score)<threshold && <button
                 type="button"
                 onClick={restart}
                 disabled={!retakeReady || submission?.retakePolicy.remainingAttempts === 0}
@@ -431,7 +481,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 <RotateCcw size={16} /> {submission?.retakePolicy.remainingAttempts === 0 ? 'Attempt Limit Reached' : retakeReady ? 'Retake Test' : 'Retake Waiting Period'}
               </button>}
 
-              {score >= threshold && hasNextLesson && onContinue && (
+              {submission.feedbackMode!=='none' && score!==null && Number(score)>=threshold && hasNextLesson && onContinue && (
                 <button
                   type="button"
                   onClick={onContinue}
@@ -449,7 +499,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 </button>
               )}
 
-              {score >= threshold && !hasNextLesson && (
+              {submission.feedbackMode!=='none' && score!==null && Number(score)>=threshold && !hasNextLesson && (
                 <button
                   type="button"
                   onClick={onOpenCertificate}

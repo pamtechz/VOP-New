@@ -91,7 +91,15 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     anchorId: typeof item.anchorId === 'string' ? item.anchorId : undefined,
     attachmentType: ['guide','lesson','chapter','section','block'].includes(String(item.attachmentType || ''))
       ? item.attachmentType as Lesson['attachmentType'] : undefined,
-    assessmentKind: item.assessmentKind === 'final_exam' ? 'final_exam' : 'practice',
+    assessmentKind: item.assessmentKind === 'final_exam' ? 'final_exam'
+      : item.assessmentKind === 'chapter_quiz' ? 'chapter_quiz' : 'practice',
+    assessmentInstructions: typeof item.assessmentInstructions === 'string' ? item.assessmentInstructions : undefined,
+    assessmentTimeLimitMinutes: Number.isFinite(Number(item.assessmentTimeLimitMinutes)) ? Math.max(0,Math.trunc(Number(item.assessmentTimeLimitMinutes))) : 0,
+    assessmentPassThreshold: Number.isFinite(Number(item.assessmentPassThreshold)) ? Number(item.assessmentPassThreshold) : 0,
+    assessmentMaxAttempts: Number.isFinite(Number(item.assessmentMaxAttempts)) ? Math.max(0,Math.trunc(Number(item.assessmentMaxAttempts))) : 0,
+    assessmentRetakeCooldownMinutes: Number.isFinite(Number(item.assessmentRetakeCooldownMinutes)) ? Math.max(0,Math.trunc(Number(item.assessmentRetakeCooldownMinutes))) : 0,
+    assessmentFeedbackMode: ['score_only','after_submit','none'].includes(String(item.assessmentFeedbackMode||''))
+      ? item.assessmentFeedbackMode as Lesson['assessmentFeedbackMode'] : 'score_only',
     questions,
     media: item.media && typeof item.media === 'object' && !Array.isArray(item.media)
       ? { audioUrl: String((item.media as Record<string, unknown>).audioUrl || ''), videoUrl: String((item.media as Record<string, unknown>).videoUrl || ''), imageUrl: String((item.media as Record<string, unknown>).imageUrl || '') }

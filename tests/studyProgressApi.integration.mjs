@@ -48,6 +48,17 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.ok(output && typeof output==='object','Study API must return JSON');
       return {status,...output};
     }
+    async function startQuiz(user){
+      return api(user,{action:'startQuiz',language:'en',guideId,lessonId:testId});
+    }
+    async function submitStarted(user,answers){
+      const started=await startQuiz(user);
+      if(started.status!==200)return started;
+      return api(user,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers,
+      });
+    }
     await db.doc('guides/'+guideId).set({
       id:guideId,organizationId:orgA,language:'en',
       published:true,archived:false,sharingScope:'organization',
@@ -57,6 +68,10 @@ test('study progress: server grades and guide paths stay within authorized tenan
       id:testId,guideId,organizationId:orgA,language:'en',
       type:'Test',sourceQuizId:quizId,answerVisibility:'public_redacted',
       sharingScope:'organization',questions:publicQuestions,published:true,archived:false,
+      assessmentKind:'practice',assessmentInstructions:'Read every question before submitting.',
+      assessmentTimeLimitMinutes:0,assessmentPassThreshold:0,
+      assessmentMaxAttempts:0,assessmentRetakeCooldownMinutes:0,
+      assessmentFeedbackMode:'score_only',
     });
     await db.doc('quizzes/'+quizId).set({
       id:quizId,guideId,organizationId:orgA,language:'en',
@@ -76,9 +91,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     });
 
     await t.test('a learner is graded from a private bank with an organization-bound score',async()=>{
-      const response=await api(learner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
-      });
+      const response=await submitStarted(learner,{0:1});
       assert.equal(response.status,200,JSON.stringify(response));
       assert.equal(response.score,100);
       assert.equal(response.passed,true);
@@ -88,9 +101,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     });
 
     await t.test('a foreign member cannot grade against another organization private guide',async()=>{
-      const response=await api(outsider,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
-      });
+      const response=await submitStarted(outsider,{0:1});
       assert.equal(response.status,403,JSON.stringify(response));
       assert.equal((await db.doc('users/'+outsider.uid).get()).data()?.progress?.guideScores,undefined);
     });
@@ -99,23 +110,17 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:2,quizRetakeCooldownMinutes:0,
       },{merge:true});
-      const first=await api(retakeLearner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:0},
-      });
+      const first=await submitStarted(retakeLearner,{0:0});
       assert.equal(first.status,200,JSON.stringify(first));
       assert.equal(first.passed,false);
       assert.equal(first.retakePolicy.attemptsUsed,1);
       assert.equal(first.retakePolicy.remainingAttempts,1);
-      const second=await api(retakeLearner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
-      });
+      const second=await submitStarted(retakeLearner,{0:1});
       assert.equal(second.status,200,JSON.stringify(second));
       assert.equal(second.passed,true);
       assert.equal(second.retakePolicy.attemptsUsed,2);
       assert.equal(second.retakePolicy.remainingAttempts,0);
-      const blocked=await api(retakeLearner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:0},
-      });
+      const blocked=await submitStarted(retakeLearner,{0:0});
       assert.equal(blocked.status,429,JSON.stringify(blocked));
       assert.match(String(blocked.error||''),/attempt limit/i);
       assert.equal((await db.collection('users/'+retakeLearner.uid+'/assessmentAttempts').get()).size,2);
@@ -123,20 +128,82 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:3,quizRetakeCooldownMinutes:30,
       },{merge:true});
-      const cooldownFirst=await api(cooldownLearner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:0},
-      });
+      const cooldownFirst=await submitStarted(cooldownLearner,{0:0});
       assert.equal(cooldownFirst.status,200,JSON.stringify(cooldownFirst));
       assert.equal(cooldownFirst.passed,false);
       assert.ok(Date.parse(cooldownFirst.retakePolicy.retryAt)>Date.now());
-      const cooldownBlocked=await api(cooldownLearner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
-      });
+      const cooldownBlocked=await submitStarted(cooldownLearner,{0:1});
       assert.equal(cooldownBlocked.status,429,JSON.stringify(cooldownBlocked));
       assert.match(String(cooldownBlocked.error||''),/available after/i);
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
       },{merge:true});
+    });
+
+    await t.test('submission requires a server-started single-use attempt session',async()=>{
+      const direct=await api(learner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
+      });
+      assert.equal(direct.status,409,JSON.stringify(direct));
+      assert.match(String(direct.error||''),/start|instructions/i);
+
+      const started=await startQuiz(learner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      const accepted=await api(learner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(accepted.status,200,JSON.stringify(accepted));
+      const replay=await api(learner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(replay.status,409,JSON.stringify(replay));
+      assert.match(String(replay.error||''),/already|valid/i);
+    });
+
+    await t.test('per-assessment policy overrides organization defaults and hidden feedback does not leak score',async()=>{
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentPassThreshold:75,
+        assessmentMaxAttempts:4,
+        assessmentRetakeCooldownMinutes:0,
+        assessmentTimeLimitMinutes:10,
+        assessmentFeedbackMode:'none',
+      });
+      const started=await startQuiz(learner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.assessmentPolicy.threshold,75);
+      assert.equal(started.assessmentPolicy.maxAttempts,4);
+      assert.equal(started.assessmentPolicy.timeLimitMinutes,10);
+      assert.equal(started.assessmentPolicy.feedbackMode,'none');
+      assert.ok(Date.parse(started.expiresAt)>Date.now());
+      const submitted=await api(learner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+      assert.equal(submitted.score,null);
+      assert.equal(submitted.passed,null);
+      assert.equal(submitted.feedbackMode,'none');
+      const profile=(await db.doc('users/'+learner.uid).get()).data();
+      assert.equal(profile.progress.guideScores[orgA+':en:'+guideId+':'+testId],100);
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentPassThreshold:0,assessmentMaxAttempts:0,
+        assessmentRetakeCooldownMinutes:0,assessmentTimeLimitMinutes:0,
+        assessmentFeedbackMode:'score_only',
+      });
+    });
+
+    await t.test('expired timed attempt is rejected by the server',async()=>{
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({assessmentTimeLimitMinutes:5});
+      const started=await startQuiz(learner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      await db.doc('users/'+learner.uid+'/assessmentSessions/'+started.sessionId).update({
+        expiresAt:new Date(Date.now()-60_000).toISOString(),
+      });
+      const expired=await api(learner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(expired.status,409,JSON.stringify(expired));
+      assert.match(String(expired.error||''),/time limit|expired/i);
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({assessmentTimeLimitMinutes:0});
     });
 
     await t.test('resume positions use the published lesson page count, not client claims',async()=>{
@@ -174,17 +241,17 @@ test('study progress: server grades and guide paths stay within authorized tenan
 
     await t.test('inactive members cannot submit new results',async()=>{
       await db.doc('organizations/'+orgA+'/members/'+learner.uid).update({active:false});
-      const response=await api(learner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
-      });
+      const response=await submitStarted(learner,{0:1});
       assert.equal(response.status,403,JSON.stringify(response));
       await db.doc('organizations/'+orgA+'/members/'+learner.uid).update({active:true});
     });
 
     await t.test('quiz-bank path mismatch fails without changing an existing mark',async()=>{
       await db.doc('quizzes/'+quizId).update({assessmentPath:'guides/another/lessons/quiz-'+quizId});
+      const started=await startQuiz(learner);
+      assert.equal(started.status,200,JSON.stringify(started));
       const response=await api(learner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:0},
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:0},
       });
       assert.equal(response.status,409,JSON.stringify(response));
       const profile=(await db.doc('users/'+learner.uid).get()).data();

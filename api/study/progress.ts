@@ -50,6 +50,23 @@ function nonNegativeWhole(value: unknown, max: number) {
   const parsed = Number(value ?? 0);
   return Number.isInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : 0;
 }
+function positiveOverride(value:unknown,fallback:number,max:number){
+  const parsed=Number(value??0);
+  return Number.isInteger(parsed)&&parsed>0&&parsed<=max?parsed:fallback;
+}
+function assessmentPolicy(lesson:Record<string,unknown>,settings:Record<string,unknown>){
+  const configured=configuredPassThreshold(lesson.assessmentPassThreshold)
+    ?? configuredPassThreshold(settings.quizPassThreshold);
+  return {
+    threshold:configured,
+    maxAttempts:positiveOverride(lesson.assessmentMaxAttempts,nonNegativeWhole(settings.quizMaxAttempts,100),100),
+    retakeCooldownMinutes:positiveOverride(lesson.assessmentRetakeCooldownMinutes,nonNegativeWhole(settings.quizRetakeCooldownMinutes,10080),10080),
+    timeLimitMinutes:nonNegativeWhole(lesson.assessmentTimeLimitMinutes,1440),
+    feedbackMode:['score_only','after_submit','none'].includes(String(lesson.assessmentFeedbackMode||''))
+      ?String(lesson.assessmentFeedbackMode):'score_only',
+    instructions:String(lesson.assessmentInstructions||'').trim().slice(0,5000),
+  };
+}
 
 function gradeServerQuiz(questions: QuestionRecord[], answers: Record<string, unknown>): number | null {
   if (!Array.isArray(questions) || questions.length === 0) return null;
@@ -107,7 +124,7 @@ export default async function handler(
     const guideId = String(body.guideId ?? '').trim();
     const lessonId = String(body.lessonId ?? '').trim();
 
-    if (!validStudyLanguage(language) || !validStudyId(guideId) || !validStudyId(lessonId) || !['completeLesson', 'submitQuiz', 'saveLessonResume'].includes(action)) {
+    if (!validStudyLanguage(language) || !validStudyId(guideId) || !validStudyId(lessonId) || !['completeLesson', 'submitQuiz', 'saveLessonResume', 'startQuiz'].includes(action)) {
       return res.status(400).json({ error: 'A valid study progress request is required.' });
     }
 
@@ -182,6 +199,71 @@ export default async function handler(
     if (useTenantGuide && candidateGuideOrganizationId !== organizationId && !enrolledForGuide
         && (lessonData.sharingScope !== 'shared' || lessonData.archived === true)) {
       return res.status(403).json({ error: 'This lesson is not shared with your organization.' });
+    }
+
+    if (action === 'startQuiz') {
+      if (String(lessonData.type ?? '') !== 'Test') {
+        return res.status(409).json({ error:'The selected item is not an assessment.' });
+      }
+      const policyOrganizationId=candidateGuideOrganizationId||organizationId;
+      const settingsRef=policyOrganizationId
+        ?db.doc(`organizations/${policyOrganizationId}/settings/settings`)
+        :db.doc('system/settings');
+      const settingsData=(await settingsRef.get()).data()||{};
+      const policy=assessmentPolicy(lessonData,settingsData);
+      if(policy.threshold===null)return res.status(503).json({error:'The assessment pass mark is not configured.'});
+      const effectiveGuideId=legacyStudyGuide?'discover':guideId;
+      const policyRef=userRef.collection('assessmentAttemptPolicy').doc(
+        retakePolicyKey(policyOrganizationId,language,effectiveGuideId,lessonId));
+      const historical=await userRef.collection('assessmentAttempts').where('lessonId','==',lessonId).limit(500).get();
+      const relevant=historical.docs.filter(doc=>{
+        const row=doc.data()||{};
+        return String(row.organizationId||'')===policyOrganizationId
+          &&String(row.language||'')===language&&String(row.guideId||'')===effectiveGuideId;
+      });
+      const sessionId=randomUUID();
+      const sessionRef=userRef.collection('assessmentSessions').doc(sessionId);
+      const startedAt=Date.now();
+      const startedAtIso=new Date(startedAt).toISOString();
+      const expiresAt=policy.timeLimitMinutes>0?startedAt+policy.timeLimitMinutes*60_000:0;
+      const historicalLastAttemptMs=relevant.reduce((latest,doc)=>Math.max(latest,timestampMs(doc.data()?.createdAt)),0);
+      const reserved=await db.runTransaction(async transaction=>{
+        const currentPolicy=await transaction.get(policyRef);
+        const policyData=currentPolicy.data()||{};
+        const priorAttempts=currentPolicy.exists
+          ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
+        const lastAttemptMs=currentPolicy.exists?timestampMs(policyData.lastAttemptAt):historicalLastAttemptMs;
+        if(policy.maxAttempts>0&&priorAttempts>=policy.maxAttempts){
+          throw new Error(`Assessment attempt limit reached (${policy.maxAttempts} attempt${policy.maxAttempts===1?'':'s'}).`);
+        }
+        const retryAtMs=lastAttemptMs+policy.retakeCooldownMinutes*60_000;
+        if(policy.retakeCooldownMinutes>0&&priorAttempts>0&&retryAtMs>startedAt){
+          throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
+        }
+        const attemptNumber=priorAttempts+1;
+        transaction.set(policyRef,{
+          organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+          attemptCount:attemptNumber,lastAttemptAt:startedAtIso,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        transaction.set(sessionRef,{
+          sessionId,organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+          attemptNumber,startedAt:startedAtIso,
+          expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+          consumed:false,createdAt:FieldValue.serverTimestamp(),
+        });
+        return {attemptNumber,priorAttempts};
+      });
+      return res.status(200).json({
+        ok:true,sessionId,startedAt:startedAtIso,
+        expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+        assessmentPolicy:{
+          threshold:policy.threshold,maxAttempts:policy.maxAttempts||null,
+          remainingAttempts:policy.maxAttempts>0?Math.max(0,policy.maxAttempts-reserved.attemptNumber):null,
+          cooldownMinutes:policy.retakeCooldownMinutes,timeLimitMinutes:policy.timeLimitMinutes,
+          feedbackMode:policy.feedbackMode,instructions:policy.instructions,
+          attemptsUsed:reserved.attemptNumber,
+        },
+      });
     }
 
     if (action === 'saveLessonResume') {
@@ -325,15 +407,38 @@ export default async function handler(
       return res.status(400).json({ error: 'The assessment answers or question configuration are invalid.' });
     }
 
-    const settingsRef = organizationId ? db.doc(`organizations/${organizationId}/settings/settings`) : db.doc('system/settings');
+    const policyOrganizationId=candidateGuideOrganizationId||organizationId;
+    const settingsRef = policyOrganizationId ? db.doc(`organizations/${policyOrganizationId}/settings/settings`) : db.doc('system/settings');
     const settingsSnapshot = await settingsRef.get();
     const settingsData = settingsSnapshot.data() || {};
-    const threshold = configuredPassThreshold(settingsData.quizPassThreshold);
+    const policy=assessmentPolicy(lessonData,settingsData);
+    const threshold=policy.threshold;
     if (threshold === null) {
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
-    const maxAttempts = nonNegativeWhole(settingsData.quizMaxAttempts, 100);
-    const retakeCooldownMinutes = nonNegativeWhole(settingsData.quizRetakeCooldownMinutes, 10080);
+    const maxAttempts=policy.maxAttempts;
+    const retakeCooldownMinutes=policy.retakeCooldownMinutes;
+    const timeLimitMinutes=policy.timeLimitMinutes;
+    const sessionId=String(body.sessionId||'').trim();
+    const sessionRef=sessionId?userRef.collection('assessmentSessions').doc(sessionId):null;
+    let sessionSnapshot=sessionRef?await sessionRef.get():null;
+    if(!sessionSnapshot?.exists){
+      return res.status(409).json({error:'Review the assessment instructions and start the attempt before submitting answers.'});
+    }
+    if(sessionSnapshot?.exists){
+      const session=sessionSnapshot.data()||{};
+      if(session.consumed===true
+        ||String(session.organizationId||'')!==policyOrganizationId
+        ||String(session.language||'')!==language
+        ||String(session.guideId||'')!==(legacyStudyGuide?'discover':guideId)
+        ||String(session.lessonId||'')!==lessonId){
+        return res.status(409).json({error:'This assessment attempt session is not valid.'});
+      }
+      const expires=timestampMs(session.expiresAt);
+      if(expires>0&&Date.now()>expires){
+        return res.status(409).json({error:'The assessment time limit has expired. Start a permitted retake to try again.'});
+      }
+    }
 
     const finalExam = lessonData.assessmentKind === 'final_exam' && lessonData.attachmentType === 'guide';
     const finalRequirements = finalExam ? (await guideRef.collection('lessons').get()).docs
@@ -344,12 +449,12 @@ export default async function handler(
       return res.status(409).json({ error:'Complete all published study lessons before taking the final guide examination.' });
     }
     const effectiveGuideId = legacyStudyGuide ? 'discover' : guideId;
-    const scoreKey = `${organizationId || 'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
+    const scoreKey = `${policyOrganizationId || 'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
     const passed = score >= threshold;
     const attemptId = randomUUID();
     const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
     const policyRef = userRef.collection('assessmentAttemptPolicy').doc(
-      retakePolicyKey(organizationId, language, effectiveGuideId, lessonId),
+      retakePolicyKey(policyOrganizationId, language, effectiveGuideId, lessonId),
     );
     // Bootstrap from historical attempts so introducing a policy does not reset
     // a learner's prior assessment history.
@@ -357,7 +462,7 @@ export default async function handler(
       .where('lessonId','==',lessonId).limit(500).get();
     const relevantHistorical = historical.docs.filter(doc => {
       const row = doc.data() || {};
-      return String(row.organizationId || '') === organizationId
+      return String(row.organizationId || '') === policyOrganizationId
         && String(row.language || '') === language
         && String(row.guideId || '') === effectiveGuideId;
     });
@@ -385,28 +490,18 @@ export default async function handler(
     });
     const failedQuestions = questionResults.filter(item => !item.correct);
     const failureRefs = failedQuestions.map(item => db.collection('questionPerformance').doc(
-      `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+      `${policyOrganizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
     ));
 
     const policyResult = await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(userRef);
-      const policySnapshot = await transaction.get(policyRef);
+      const transactionalSession = sessionRef ? await transaction.get(sessionRef) : null;
       if (!snapshot.exists) throw new Error('VOP account profile was not found.');
-
-      const policy = policySnapshot.data() || {};
-      const priorAttempts = policySnapshot.exists
-        ? Math.max(0, Number(policy.attemptCount || 0))
-        : historicalAttemptCount;
-      const lastAttemptMs = policySnapshot.exists
-        ? timestampMs(policy.lastAttemptAt)
-        : historicalLastAttemptMs;
-      if (maxAttempts > 0 && priorAttempts >= maxAttempts) {
-        throw new Error(`Assessment attempt limit reached (${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}).`);
+      if(!transactionalSession?.exists||transactionalSession.data()?.consumed===true){
+        throw new Error('This assessment attempt has already been submitted or is no longer valid.');
       }
-      const retryAtMs = lastAttemptMs + retakeCooldownMinutes * 60_000;
-      if (retakeCooldownMinutes > 0 && priorAttempts > 0 && retryAtMs > attemptTimeMs) {
-        throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
-      }
+      const session=transactionalSession.data()||{};
+      const attemptsUsed=Math.max(1,Math.trunc(Number(session.attemptNumber)||1));
 
       const data = snapshot.data() ?? {};
       const progress = data.progress && typeof data.progress === 'object'
@@ -432,27 +527,19 @@ export default async function handler(
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      const attemptsUsed = priorAttempts + 1;
-      transaction.set(policyRef, {
-        organizationId,
-        language,
-        guideId: effectiveGuideId,
-        lessonId,
-        attemptCount: attemptsUsed,
-        lastAttemptAt: attemptTimeIso,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge:true });
-
       transaction.set(attemptRef, {
         candidateId: decoded.uid,
         userId: decoded.uid,
         score,
         passed,
         threshold,
-        organizationId,
+        organizationId:policyOrganizationId,
         language,
         guideId: effectiveGuideId,
         lessonId,
+        assessmentKind:String(lessonData.assessmentKind||'practice'),
+        timeLimitMinutes,
+        feedbackMode:policy.feedbackMode,
         questionResults,
         failedQuestionKeys: failedQuestions.map(item => item.key),
         attemptNumber: attemptsUsed,
@@ -465,7 +552,7 @@ export default async function handler(
         transaction.set(ref, {
           key: failure.key,
           question: failure.question,
-          organizationId,
+          organizationId:policyOrganizationId,
           language,
           guideId,
           lessonId,
@@ -478,12 +565,13 @@ export default async function handler(
 
       const successRefs = questionResults.filter(item => item.correct).map(item =>
         db.collection('questionPerformance').doc(
-          `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+          `${policyOrganizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
         )
       );
       for (const ref of successRefs) {
-        transaction.set(ref, { organizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(ref, { organizationId:policyOrganizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
+      transaction.set(sessionRef!,{consumed:true,consumedAt:FieldValue.serverTimestamp()},{merge:true});
       return { attemptsUsed };
     });
 
@@ -494,7 +582,13 @@ export default async function handler(
       ? new Date(attemptTimeMs + retakeCooldownMinutes * 60_000).toISOString()
       : null;
     return res.status(200).json({
-      ok: true, score, passed, scoreKey, threshold,
+      ok: true,
+      score:policy.feedbackMode==='none'?null:score,
+      passed:policy.feedbackMode==='none'?null:passed,
+      scoreKey,threshold,timeLimitMinutes,feedbackMode:policy.feedbackMode,
+      explanations:policy.feedbackMode==='after_submit'
+        ?questions.map(question=>String((question as Record<string,unknown>).explanation||''))
+        :undefined,
       retakePolicy: {
         attemptsUsed: policyResult.attemptsUsed,
         maxAttempts: maxAttempts || null,
@@ -507,7 +601,9 @@ export default async function handler(
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
     if (message.includes('not configured')) return res.status(503).json({ error: message });
-    if (message.includes('Complete all published study lessons')) return res.status(409).json({error:message});
+    if (message.includes('Complete all published study lessons')
+        || message.includes('already been submitted')
+        || message.includes('attempt session')) return res.status(409).json({error:message});
     if (message.includes('Assessment attempt limit reached') || message.includes('Assessment retake is available after')) {
       return res.status(429).json({error:message});
     }

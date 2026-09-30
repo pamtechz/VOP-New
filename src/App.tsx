@@ -44,7 +44,9 @@ import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
+import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
+import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -91,7 +93,7 @@ export const App: React.FC = () => {
   const [studyError, setStudyError] = useState('');
   const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => readThemePreference()==='dark');
   const [isMobileShell, setIsMobileShell] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
@@ -356,9 +358,17 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
-    else document.documentElement.removeAttribute('data-theme');
+    persistThemePreference(isDarkMode?'dark':'light');
   }, [isDarkMode]);
+  useEffect(() => {
+    applyThemePreference(readThemePreference());
+    const sync=(event:Event)=>{
+      const theme=(event as CustomEvent<{theme?:string}>).detail?.theme;
+      if(theme==='dark'||theme==='light')setIsDarkMode(theme==='dark');
+    };
+    window.addEventListener('vop_theme_changed',sync);
+    return()=>window.removeEventListener('vop_theme_changed',sync);
+  }, []);
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
@@ -393,6 +403,8 @@ export const App: React.FC = () => {
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin']
       .includes(String(currentUser.role||''))||['owner','admin'].includes(String(currentUser.organizationRole||''));
     if(location.route==='admin'&&!privileged)return false;
+    const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+    if(location.route==='mentor'&&!mentorAccess)return false;
     const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
         && (!location.guideLanguage||item.language===location.guideLanguage))
@@ -521,6 +533,8 @@ export const App: React.FC = () => {
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
       || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
     if (route === 'admin' && !privileged) return;
+    const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+    if (route === 'mentor' && !mentorAccess) return;
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -595,6 +609,8 @@ export const App: React.FC = () => {
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
+          {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack}/>}
+
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
           {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
@@ -630,8 +646,8 @@ export const App: React.FC = () => {
         if (!nextLesson) goBack();
         return true;
       }} />}
-      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onSubmitScore={async answers => {
-        const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onSubmitScore={async (answers,sessionId) => {
+        const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId);
         if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
