@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
+import { ModalLayer } from '../components/layout/ModalLayer';
 import './userManagement.css';
 
 type ManagedUser = {
@@ -444,7 +445,7 @@ export default function UserManagement({ onBack, scope }: Props) {
       {message && <div className="vop-toast vop-user-toast">{message}</div>}
       {error && <div className="vop-user-alert"><X size={16}/><span>{error}</span><button type="button" onClick={() => setError('')}><X size={15}/></button></div>}
 
-      {selected && <div className="vop-user-modal-backdrop" onMouseDown={() => setSelected(null)}>
+      {selected && <ModalLayer><div className="vop-user-modal-backdrop" onMouseDown={() => setSelected(null)}>
         <div className="vop-user-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
           <div className="vop-user-modal-head"><div><h2>{t('admin.user_details','User Details')}</h2><p>{selected.displayName}</p></div><button type="button" onClick={() => setSelected(null)}><X size={19}/></button></div>
           <div className="vop-user-profile-summary"><Avatar user={selected} large/><div><h3>{selected.displayName}</h3><span>{selected.email}</span><div className="vop-user-modal-pills"><span className={'vop-user-role-pill ' + selected.roleColor}>{selected.roleLabel}</span><span className={'vop-user-status ' + (selected.disabled ? 'inactive' : 'active')}>{selected.disabled ? 'Inactive' : 'Active'}</span></div></div></div>
@@ -456,9 +457,9 @@ export default function UserManagement({ onBack, scope }: Props) {
           {resetLink && <div className="vop-reset-link"><strong>Password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
           <div className="vop-user-modal-actions"><button className="vop-secondary" type="button" onClick={() => setSelected(null)}>{t('common.close','Close')}</button><button className="vop-primary" type="button" onClick={() => openEdit(selected)}><Edit3 size={16}/>{t('admin.edit_user','Edit User')}</button></div>
         </div>
-      </div>}
+      </div></ModalLayer>}
 
-      {editor && <div className="vop-user-modal-backdrop" onMouseDown={() => !saving && setEditor(null)}>
+      {editor && <ModalLayer><div className="vop-user-modal-backdrop" onMouseDown={() => !saving && setEditor(null)}>
         <div className="vop-user-modal vop-user-editor-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
           <div className="vop-user-modal-head"><div><h2>{editor.uid ? t('admin.edit_user','Edit User') : t('admin.add_user','Add User')}</h2><p>{t('admin.user_identity_access','Manage account identity, role and access.')}</p></div><button type="button" onClick={() => !saving && setEditor(null)}><X size={19}/></button></div>
           <div className="vop-user-form-grid">
@@ -472,14 +473,14 @@ export default function UserManagement({ onBack, scope }: Props) {
           {resetLink && <div className="vop-reset-link"><strong>Invitation / password reset link</strong><input readOnly value={resetLink}/><button type="button" onClick={() => void copyResetLink()}>Copy</button></div>}
           <div className="vop-user-modal-actions"><button className="vop-secondary" type="button" onClick={() => setEditor(null)} disabled={saving}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="button" onClick={() => void saveUser()} disabled={saving}>{saving ? t('common.saving','Saving…') : t('admin.save_user','Save User')}</button></div>
         </div>
-      </div>}
+      </div></ModalLayer>}
 
-      {bulkInput && <div className="vop-user-modal-backdrop" onMouseDown={() => setBulkInput(false)}>
+      {bulkInput && <ModalLayer><div className="vop-user-modal-backdrop" onMouseDown={() => setBulkInput(false)}>
         <div className="vop-user-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
           <div className="vop-user-modal-head"><div><h2>{t('admin.bulk_import_users','Bulk Import Users')}</h2><p>Import account records from a CSV file.</p></div><button type="button" onClick={() => setBulkInput(false)}><X size={19}/></button></div>
           <div className="vop-bulk-drop"><Upload size={28}/><strong>Select a CSV file</strong><span>Bulk import is available for operational migration; normal user assignment should use the visual organization and member controls.</span><button className="vop-secondary" type="button" onClick={() => fileRef.current?.click()}>{t('admin.choose_csv','Choose CSV')}</button><input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={async event => { const file = event.target.files?.[0]; if (!file) return; try { await importCsv(file); setBulkInput(false); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import CSV.'); } finally { event.target.value = ''; } }}/><button type="button" className="vop-link-button" onClick={downloadTemplate}>{t('admin.download_template','Download template')}</button></div>
         </div>
-      </div>}
+      </div></ModalLayer>}
     </div>
   );
 }
