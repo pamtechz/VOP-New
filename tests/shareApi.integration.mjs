@@ -100,7 +100,7 @@ test('share enrollment: account onboarding is tenant-safe, role-preserving and i
 
     const blocked=await api(foreign,{action:'enroll',code});
     assert.equal(blocked.status,409,JSON.stringify(blocked));
-    assert.match(String(blocked.error||''),/already belongs to another organization/i);
+    assert.match(String(blocked.error||''),/organization-only/i);
     assert.equal((await db.doc('courseEnrollments/'+orgA+'_'+foreign.uid+'_'+guideId).get()).exists,false);
     assert.equal((await db.doc('organizations/'+orgA+'/members/'+foreign.uid).get()).exists,false);
   } finally {
