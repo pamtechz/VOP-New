@@ -437,7 +437,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const canSee = (id: AdminTab) => id === 'engagement'
       ? ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'))
       : permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
+    const featureEnabled=(id:AdminTab)=>{
+      if(id==='candidates')return settings?.features?.candidatesModule!==false;
+      if(id==='curriculum')return settings?.features?.curriculumStudio!==false;
+      if(id==='translations')return settings?.features?.translations!==false;
+      if(id==='radio')return settings?.features?.radio!==false;
+      if(id==='announcements'||id==='events')return settings?.features?.announcements!==false;
+      if(id==='certification')return settings?.features?.certification!==false;
+      return true;
+    };
     return NAV.filter(item => {
+      if (!featureEnabled(item.id)) return false;
       if (!canSee(item.id)) return false;
       if (item.id === 'languages' && !isSuperAdmin && !(['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId))) return false;
       const role = String(currentUser.role || '');
@@ -843,12 +853,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             <div className="vop-section-title"><div><h3>System Information</h3><p>Current application configuration state.</p></div></div>
             <div className="vop-setting-list"><div className="vop-setting-row"><span className="vop-setting-name">Languages</span><strong>{languages.length}</strong></div><div className="vop-setting-row"><span className="vop-setting-name">Lessons</span><strong>{totalLessons}</strong></div><div className="vop-setting-row"><span className="vop-setting-name">Candidates</span><strong>{candidates.length}</strong></div></div>
           </div>
-          <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>Use configuration controls carefully. Destructive data operations are intentionally not exposed by this screen.</p><button type="button" onClick={()=>showMessage('No destructive reset was performed.')}>Reset to Defaults</button></div>
+          <div className="vop-card vop-section-card"><div className="vop-section-title"><div><h3>Configuration safety</h3><p>Destructive resets are intentionally not exposed here. Settings changes are explicit and tenant-scoped.</p></div></div></div>
         </div>
       </div>}
       {isSuperAdmin && settingsSubtab === 'features' && <div className="vop-grid-2">
-        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
-        <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
+        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable modules in both administration and the learner experience. Existing data is preserved while a module is disabled.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=settings.features?.[item.key]!==false;return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Changes take effect in navigation and direct route access after the setting is saved.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
+        <div className="vop-card vop-section-card"><div className="vop-section-title"><div><h3>Feature data is retained</h3><p>Turning a module off hides access but does not delete its records. Re-enable it to restore access.</p></div></div></div>
       </div>}
       {settingsSubtab === 'aboutContact' && <form className="vop-card vop-form-card vop-about-settings-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>About Ministry & Mission</h2><p>This information belongs only to {isSuperAdmin?'the platform ministry':isHierarchyAdmin?'this hierarchy tenant':'this organisation'} and is what its members see on About.</p></div></div>
@@ -886,12 +896,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className="vop-field"><label>About app description</label><textarea value={settings.detailPages?.aboutAppDescription || ''} onChange={e=>setSettings({...settings,detailPages:{aboutUsMission:settings.detailPages?.aboutUsMission || '',aboutUsHistory:settings.detailPages?.aboutUsHistory || '',aboutUsLeadership:settings.detailPages?.aboutUsLeadership || '',aboutAppDescription:e.target.value,aboutAppVersion:settings.detailPages?.aboutAppVersion || '',aboutAppCredits:settings.detailPages?.aboutAppCredits || '',contactOfficeAddress:settings.detailPages?.contactOfficeAddress || '',contactOfficeHours:settings.detailPages?.contactOfficeHours || '',contactPhoneNumbers:settings.detailPages?.contactPhoneNumbers || [],contactEmails:settings.detailPages?.contactEmails || [],contactWhatsAppNumbers:settings.detailPages?.contactWhatsAppNumbers || [],socialLinks:settings.detailPages?.socialLinks}})}/></div>
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>{settingsSaving?'Saving…':'Save App Information'}</button></div>
       </form>}
-
-      {isSuperAdmin && settingsSubtab === 'services' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
-        <div className="vop-section-title"><div><h2>Services</h2><p>Operational services are configured securely outside the administrator interface.</p></div></div>
-           <div className="vop-setting-list">
-             
-           </div></form>}
 
       {isSuperAdmin && settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>Session Security</h2><p>The inactivity timeout is enforced in the signed-in application. Deployment TLS, Firebase session revocation and provider policy remain server/deployment controls and are not represented as fake switches here.</p></div></div>
