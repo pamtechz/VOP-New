@@ -598,7 +598,6 @@ export default async function handler(
       ok: true,
       score:policy.feedbackMode==='none'?null:score,
       passed:policy.feedbackMode==='none'?null:passed,
-      recordedScore:score,recordedPassed:passed,
       scoreKey,threshold,timeLimitMinutes,feedbackMode:policy.feedbackMode,
       explanations:policy.feedbackMode==='after_submit'
         ?questions.map(question=>String((question as Record<string,unknown>).explanation||''))
