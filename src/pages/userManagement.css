@@ -6,7 +6,7 @@
 .vop-user-heading p{margin:5px 0 0;color:#5f78a2;font-size:13px}
 .vop-user-layout{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:12px;align-items:start}
 .vop-user-main{min-width:0}
-.vop-user-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:11px}
+.vop-user-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:11px}
 .vop-user-metric{min-height:72px;background:#fff;border:1px solid #e1e9f4;border-radius:10px;padding:9px;display:flex;align-items:center;gap:8px;box-shadow:0 2px 7px rgba(21,55,101,.035)}
 .vop-user-metric-icon{width:43px;height:43px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto}
 .vop-user-metric-icon svg{width:21px;height:21px}
@@ -34,7 +34,7 @@
 .vop-user-avatar.large{width:56px;height:56px}
 .vop-user-avatar-fallback{display:grid;place-items:center;background:#eaf2ff;color:#1c63bb;font-weight:800}
 .vop-user-role-pill,.vop-user-status{display:inline-flex;align-items:center;justify-content:center;border-radius:6px;padding:5px 10px;white-space:nowrap;font-weight:800;font-size:9.5px}
-.vop-user-role-pill.admin{background:#eadbff;color:#7a24e7}.vop-user-role-pill.teacher{background:#dcecff;color:#1670e8}.vop-user-role-pill.learner{background:#dff6e7;color:#148b4a}.vop-user-role-pill.guest{background:#edf1f5;color:#65788f}
+.vop-user-role-pill.admin{background:#eadbff;color:#7a24e7}.vop-user-role-pill.teacher{background:#dcecff;color:#1670e8}.vop-user-role-pill.mentor{background:#e9e5ff;color:#5d3cc8}.vop-user-role-pill.learner{background:#dff6e7;color:#148b4a}.vop-user-role-pill.guest{background:#edf1f5;color:#65788f}
 .vop-user-status.active{background:#dff6e9;color:#15904b}.vop-user-status.inactive{background:#ffe1e4;color:#e3243b}
 .vop-org-cell span,.vop-org-cell small{display:block}.vop-org-cell span{color:#365883}.vop-org-cell small{color:#7186a7;font-size:9px;margin-top:2px}
 .vop-user-actions{display:flex;position:relative;gap:4px}
@@ -66,3 +66,27 @@
 @media(max-width:1250px){.vop-user-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.vop-user-toolbar{grid-template-columns:minmax(200px,1.6fr) repeat(2,minmax(130px,1fr)) 100px}.vop-user-toolbar select:nth-of-type(3),.vop-user-toolbar select:nth-of-type(4){display:none}.vop-user-layout{grid-template-columns:minmax(0,1fr) 180px}}
 @media(max-width:900px){.vop-user-layout{grid-template-columns:1fr}.vop-user-side{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.vop-user-toolbar{grid-template-columns:1fr 1fr}.vop-user-search{grid-column:1/-1}.vop-user-filter{grid-column:auto}.vop-user-table{min-width:970px}}
 @media(max-width:640px){.vop-user-page-head{align-items:stretch;flex-direction:column}.vop-user-heading h1{font-size:23px}.vop-user-heading p{font-size:12px}.vop-user-heading-icon{width:50px;height:50px}.vop-user-metrics{grid-template-columns:1fr 1fr}.vop-user-side{grid-template-columns:1fr}.vop-user-toolbar{grid-template-columns:1fr}.vop-user-detail-grid,.vop-user-form-grid{grid-template-columns:1fr}.vop-reset-link{grid-template-columns:1fr}.vop-user-pager{align-items:flex-start;gap:8px;flex-direction:column}.vop-user-pager>div{width:100%;overflow:auto}.vop-user-page-head>.vop-primary{width:100%;justify-content:center}.vop-user-table{min-width:970px}}
+
+
+/* User management operational polish */
+.vop-user-filter-state{
+  height:38px;display:flex;align-items:center;justify-content:center;gap:6px;
+  border:1px solid #dce6f2;border-radius:8px;background:#f7faff;color:#355b86;
+  font-size:10px;font-weight:800;white-space:nowrap;
+}
+.vop-user-menu-fixed{
+  position:fixed!important;right:auto!important;top:auto;z-index:1!important;
+  width:175px;
+}
+.vop-user-assignment-mode,.vop-user-hierarchy-assignment{grid-column:1/-1}
+.vop-user-form-grid label>small{
+  display:block;margin-top:5px;color:#7488a6;font-size:9px;line-height:1.4;
+}
+.vop-user-form-grid .vop-user-assignment-mode select,
+.vop-user-form-grid .vop-user-hierarchy-assignment select{height:40px}
+.vop-user-actions>button:focus-visible,.vop-user-menu button:focus-visible{
+  outline:2px solid #2a75d4;outline-offset:2px;
+}
+@media(max-width:900px){
+  .vop-user-filter-state{min-height:38px}
+}
