@@ -434,9 +434,6 @@ export default async function handler(
       });
     }
 
-    const score = gradeServerQuiz(questions, answers);
-    if (score === null) return res.status(400).json({ error: 'The assessment answers or question configuration are invalid.' });
-    const passed = score >= threshold;
     const requestedAttemptId=typeof body.attemptId==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(body.attemptId) ? body.attemptId : '';
     const attemptId=requestedAttemptId||randomUUID();
     const attemptRef=userRef.collection('assessmentAttempts').doc(attemptId);
@@ -455,6 +452,9 @@ export default async function handler(
         return res.status(409).json({error:'Time expired for this assessment attempt. Start a new attempt when the retake policy allows.'});
       }
     }
+    const score = gradeServerQuiz(questions, answers);
+    if (score === null) return res.status(400).json({ error: 'The assessment answers or question configuration are invalid.' });
+    const passed = score >= threshold;
     const questionResults = questions.map((question, index) => {
       const answer = answers[String(index)];
       const correct = Array.isArray(question.options)
