@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Value } from 'platejs';
 import { Plate, PlateContent, PlateElement, createPlatePlugin, usePlateEditor, type PlateElementProps } from 'platejs/react';
 import {
@@ -28,6 +28,7 @@ import { studyPlatePlainText, type StudyPlateDocument } from '../../../shared/st
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../../shared/mediaSources';
 import { auth } from '../../lib/firebase';
 import { MediaPlayer } from '../media/MediaPlayer';
+import { ModalLayer } from '../layout/ModalLayer';
 import './plate-authoring.css';
 
 function ImageElement({element,children,...props}:PlateElementProps){
@@ -141,6 +142,18 @@ export function StudyPlatePageEditor({
     maxLength:120000,
     nodeId:{initialValueIds:'always',filter:([,path])=>path.length===1},
   });
+  const savedSelection=useRef<typeof editor.selection>(editor.selection);
+  const moreRef=useRef<HTMLDetailsElement>(null);
+
+  const rememberSelection=()=>{
+    if(editor.selection)savedSelection.current=JSON.parse(JSON.stringify(editor.selection)) as typeof editor.selection;
+  };
+  const restoreSelection=()=>{
+    if(savedSelection.current)editor.tf.select(savedSelection.current as never);
+  };
+  const closeMore=()=>{
+    if(moreRef.current)moreRef.current.open=false;
+  };
 
   useEffect(()=>{
     if(!focusSectionId)return;
@@ -151,8 +164,9 @@ export function StudyPlatePageEditor({
   },[focusSectionId]);
 
   const nodes=()=>editor.children as unknown as StudyPlateAuthoringDocument;
-  const selectedIndex=()=>typeof editor.selection?.anchor.path[0]==='number'
-    ?editor.selection.anchor.path[0]:-1;
+  const activeSelection=()=>editor.selection||savedSelection.current;
+  const selectedIndex=()=>typeof activeSelection()?.anchor.path[0]==='number'
+    ?activeSelection()!.anchor.path[0]:-1;
   const contentSelection=()=>{
     const index=selectedIndex();
     if(index<0)return false;
@@ -164,19 +178,33 @@ export function StudyPlatePageEditor({
     editor.tf.focus();
   };
   const contentCommand=(run:()=>void)=>{
+    if(!editor.selection)restoreSelection();
     if(!contentSelection()){
       onNotify?.('Place the cursor in a content paragraph or block first.');
       return;
     }
     command(run);
+    rememberSelection();
+  };
+  const menuAction=(run:()=>void)=>{
+    restoreSelection();
+    run();
+    closeMore();
+  };
+  const menuMouseDown=(event:React.MouseEvent)=>{
+    event.preventDefault();
+    restoreSelection();
   };
   const openInsert=(kind:'link'|'image'|'media')=>{
+    if(editor.selection)rememberSelection();
+    else restoreSelection();
     if(!contentSelection()){
       onNotify?.('Place the cursor in the study content before inserting media or links.');
       return;
     }
     setInsertKind(kind);setInsertUrl('');setInsertAlt('');setInsertError('');
-    setInsertText(kind==='link'&&editor.selection?editor.api.string(editor.selection):'');
+    const selection=activeSelection();
+    setInsertText(kind==='link'&&selection?editor.api.string(selection):'');
   };
   const closeInsert=()=>{
     if(mediaResolving)return;
@@ -190,6 +218,7 @@ export function StudyPlatePageEditor({
     try{
       if(insertKind==='link'){
         if(!isSafeHttpsMediaUrl(raw))throw new Error('Choose a safe public HTTPS link.');
+        restoreSelection();
         command(()=>upsertLink(editor,{url:raw,text:insertText.trim()||raw,target:'_blank'}));
         closeInsert();return;
       }
@@ -197,6 +226,7 @@ export function StudyPlatePageEditor({
         if(!isSafeHttpsMediaUrl(raw))throw new Error('Choose a safe public HTTPS image URL.');
         const alt=insertAlt.trim();
         if(alt.length>300)throw new Error('Image alternative text cannot exceed 300 characters.');
+        restoreSelection();
         command(()=>editor.tf.insertNodes({type:'img',url:raw,alt,children:[{text:''}]}));
         closeInsert();return;
       }
@@ -218,6 +248,7 @@ export function StudyPlatePageEditor({
         const resolved=resolveMediaSource(stored);
         if(!resolved)throw new Error('The resolved media URL is not safe for playback.');
         if(resolved.kind==='external'){
+          restoreSelection();
           command(()=>editor.tf.insertNodes({
             type:'p',
             children:[{type:'a',url:stored,children:[{text:'Open '+resolved.provider+' content'}]}],
@@ -227,6 +258,7 @@ export function StudyPlatePageEditor({
         }
         const type=resolved.kind==='direct-audio'||['AudioVerse','SoundCloud'].includes(resolved.provider)
           ?'audio':'video';
+        restoreSelection();
         command(()=>editor.tf.insertNodes({type,url:stored,children:[{text:''}]}));
         onNotify?.(source.provider+' media added to this section.');
         setMediaResolving(false);closeInsert();return;
@@ -239,6 +271,7 @@ export function StudyPlatePageEditor({
   };
 
   const markSection=()=>{
+    if(!editor.selection)restoreSelection();
     const index=selectedIndex();
     const value=nodes();
     const selected=index>=0?value[index]:undefined;
@@ -282,6 +315,7 @@ export function StudyPlatePageEditor({
   };
   const attachQuiz=(kind:'section'|'block')=>{
     if(!canAttachQuiz||!onQuiz)return;
+    if(!editor.selection)restoreSelection();
     const anchor=currentAnchor(kind);
     if(!anchor){
       onNotify?.('Place the cursor in the section content before attaching this quiz.');
@@ -290,9 +324,21 @@ export function StudyPlatePageEditor({
     onQuiz(anchor);
   };
 
+  const insertParagraphAfter=()=>{
+    if(!editor.selection)restoreSelection();
+    const index=selectedIndex();
+    if(index<0||isStudyPlateSectionMarker(nodes()[index])){
+      onNotify?.('Place the cursor in a content block before inserting a paragraph.');
+      return;
+    }
+    command(()=>editor.tf.insertNodes({type:'p',children:[{text:''}]},{at:[index+1]}));
+    onNotify?.('Paragraph inserted after the current block.');
+  };
+
   const toolbarButton=(label:string,icon:React.ReactNode,handler:()=>void,disabled=false)=>
     <button type="button" title={label} aria-label={label} disabled={disabled}
-      onMouseDown={event=>event.preventDefault()} onClick={()=>contentCommand(handler)}>
+      onMouseDown={event=>{event.preventDefault();rememberSelection();}}
+      onClick={()=>contentCommand(handler)}>
       {icon}
     </button>;
 
@@ -350,44 +396,50 @@ export function StudyPlatePageEditor({
         {toolbarButton('Numbered list',<ListOrdered size={17}/>,()=>editor.tf.ol.toggle())}
         {toolbarButton('Quotation',<Quote size={17}/>,()=>editor.tf.blockquote.toggle())}
         <button type="button" title="Link" aria-label="Link"
-          onMouseDown={event=>event.preventDefault()} onClick={()=>openInsert('link')}><Link2 size={17}/></button>
+          onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>openInsert('link')}><Link2 size={17}/></button>
         <button type="button" title="Image" aria-label="Image"
-          onMouseDown={event=>event.preventDefault()} onClick={()=>openInsert('image')}><ImagePlus size={17}/></button>
+          onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>openInsert('image')}><ImagePlus size={17}/></button>
         <button type="button" title="Insert approved audio or video" aria-label="Insert approved audio or video"
-          disabled={mediaResolving} onMouseDown={event=>event.preventDefault()} onClick={()=>openInsert('media')}>
+          disabled={mediaResolving} onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={()=>openInsert('media')}>
           {mediaResolving?<LoaderCircle className="vop-plate-spin" size={17}/>:<Film size={17}/>}</button>
       </div>
       <button type="button" className="vop-plate-section-break"
         title="Mark the current paragraph as the start of a learner section/page"
-        onMouseDown={event=>event.preventDefault()} onClick={markSection}>
+        onMouseDown={event=>{event.preventDefault();rememberSelection();}} onClick={markSection}>
         <Scissors size={16}/><span>Start section</span>
       </button>
-      <details className="vop-plate-more">
-        <summary title="More document actions" aria-label="More document actions">
+      <details ref={moreRef} className="vop-plate-more">
+        <summary title="More document actions" aria-label="More document actions"
+          onMouseDown={()=>rememberSelection()}>
           <MoreVertical size={17}/>
         </summary>
-        <div role="group" aria-label="Additional study editing actions">
-          <button type="button" onClick={markSection}><Scissors size={15}/> Mark paragraph as section</button>
-          <button type="button" onClick={()=>openInsert('link')}><Link2 size={15}/> Insert link</button>
-          <button type="button" onClick={()=>openInsert('image')}><ImagePlus size={15}/> Insert image</button>
-          <button type="button" disabled={mediaResolving} onClick={()=>openInsert('media')}><Film size={15}/> Insert audio / video</button>
-          <button type="button" onClick={()=>contentCommand(()=>editor.tf.blockquote.toggle())}>
+        <div role="menu" aria-label="Additional study editing actions">
+          <button type="button" role="menuitem" onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(markSection)}><Scissors size={15}/> Mark paragraph as section</button>
+          <button type="button" role="menuitem" onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>openInsert('link'))}><Link2 size={15}/> Insert link</button>
+          <button type="button" role="menuitem" onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>openInsert('image'))}><ImagePlus size={15}/> Insert image</button>
+          <button type="button" role="menuitem" disabled={mediaResolving} onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>openInsert('media'))}><Film size={15}/> Insert audio / video</button>
+          <button type="button" role="menuitem" onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>contentCommand(()=>editor.tf.blockquote.toggle()))}>
             <Quote size={15}/> Quotation block
           </button>
-          <button type="button" onClick={()=>contentCommand(()=>editor.tf.toggleMark('code'))}>
+          <button type="button" role="menuitem" onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>contentCommand(()=>editor.tf.toggleMark('code')))}>
             <Code2 size={15}/> Inline code
           </button>
-          <button type="button" onClick={()=>contentCommand(()=>editor.tf.insertNodes({
-            type:'p',children:[{text:''}],
-          }))}><FilePlus2 size={15}/> Insert paragraph</button>
-          <button type="button" disabled={!canAttachQuiz}
-            onClick={()=>attachQuiz('section')}><FileQuestion size={15}/> Quiz for current section</button>
-          <button type="button" disabled={!canAttachQuiz}
-            onClick={()=>attachQuiz('block')}><FileQuestion size={15}/> Quiz for current block</button>
+          <button type="button" role="menuitem" onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(insertParagraphAfter)}><FilePlus2 size={15}/> Insert paragraph</button>
+          <button type="button" role="menuitem" disabled={!canAttachQuiz} onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>attachQuiz('section'))}><FileQuestion size={15}/> Quiz for current section</button>
+          <button type="button" role="menuitem" disabled={!canAttachQuiz} onMouseDown={menuMouseDown}
+            onClick={()=>menuAction(()=>attachQuiz('block'))}><FileQuestion size={15}/> Quiz for current block</button>
         </div>
       </details>
     </div>
-    {insertKind&&<div className="vop-plate-insert-backdrop" role="presentation"
+    {insertKind&&<ModalLayer><div className="vop-plate-insert-backdrop" role="presentation"
       onMouseDown={event=>{if(event.target===event.currentTarget)closeInsert();}}>
       <form className="vop-plate-insert-dialog" role="dialog" aria-modal="true"
         aria-labelledby="vop-plate-insert-title" onSubmit={event=>{event.preventDefault();void submitInsert();}}>
@@ -424,7 +476,7 @@ export function StudyPlatePageEditor({
           </button>
         </div>
       </form>
-    </div>}
+    </div></ModalLayer>}
     <Plate editor={editor} onValueChange={({value})=>{
       const next=value as unknown as StudyPlateAuthoringDocument;
       setAuthoringValue(next);

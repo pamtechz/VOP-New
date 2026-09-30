@@ -23,6 +23,7 @@ import {
   getStoredDistricts,
   getStoredChurches
 } from '../../services/storage';
+import { ModalLayer } from '../layout/ModalLayer';
 
 interface AccountModalProps {
   isOpen: boolean;
@@ -110,7 +111,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <ModalLayer><div className="modal-overlay" onClick={onClose}>
       <div
         className="glass-panel animate-fade-in"
         onClick={(e) => e.stopPropagation()}
@@ -510,6 +511,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div></ModalLayer>
   );
 };

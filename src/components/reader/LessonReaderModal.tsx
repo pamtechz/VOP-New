@@ -7,6 +7,7 @@ import { getTranslation, getUiLocale } from '../../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 import { MediaPlayer } from '../media/MediaPlayer';
 import { StudyPlateContent } from './StudyPlateContent';
+import { ModalLayer } from '../layout/ModalLayer';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -138,7 +139,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     : 0;
 
   return (
-    <div
+    <ModalLayer><div
       className="modal-overlay vop-study-modal vop-lesson-modal"
       role="presentation"
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
@@ -456,6 +457,6 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
           </button>
         </footer>
       </section>
-    </div>
+    </div></ModalLayer>
   );
 };

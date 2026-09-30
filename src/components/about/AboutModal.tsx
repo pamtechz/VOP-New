@@ -17,6 +17,7 @@ import {
   Award
 } from 'lucide-react';
 import { getTranslation, getUiLocale } from '../../services/i18n';
+import { ModalLayer } from '../layout/ModalLayer';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   const details = settings.detailPages;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <ModalLayer><div className="modal-overlay" onClick={onClose}>
       <div
         className="glass-panel animate-fade-in"
         onClick={(e) => e.stopPropagation()}
@@ -331,6 +332,6 @@ export const AboutModal: React.FC<AboutModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div></ModalLayer>
   );
 };

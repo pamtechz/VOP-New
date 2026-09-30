@@ -4,6 +4,7 @@ import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, I
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
+import { ModalLayer } from './ModalLayer';
 
 interface MenuDrawerProps {
   isOpen: boolean;
@@ -112,7 +113,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
     </button>;
   });
 
-  return <div className="modal-overlay vop-account-overlay" role="presentation"
+  return <ModalLayer><div className="modal-overlay vop-account-overlay" role="presentation"
     onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <div ref={dialogRef} className="vop-account-dialog" role="dialog" aria-modal="true"
       aria-labelledby="vop-account-title">
@@ -189,5 +190,5 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
         </div>
       </div>
     </div>
-  </div>;
+  </div></ModalLayer>;
 };
