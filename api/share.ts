@@ -34,15 +34,10 @@ function value(req: Request, key: string) {
 function isSafeTarget(target: string) {
   return target.startsWith('/') && !target.startsWith('//') && !target.includes('\\n') && !target.includes('\\r');
 }
-const membershipRoles=['learner','mentor','teacher','editor','admin','owner'] as const;
-function strongerMembershipRole(...values:unknown[]) {
-  let selected='learner',rank=0;
-  for(const value of values){
-    const candidate=String(value||'');
-    const index=membershipRoles.indexOf(candidate as typeof membershipRoles[number]);
-    if(index>=0&&index>=rank){selected=candidate;rank=index;}
-  }
-  return selected;
+const membershipRoles=['learner','student','mentor','staff','teacher','editor','admin','owner'] as const;
+function membershipRole(value:unknown) {
+  const candidate=String(value||'');
+  return membershipRoles.includes(candidate as typeof membershipRoles[number]) ? candidate : '';
 }
 function preservesPlatformScope(role:unknown){
   return ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(role||''));
@@ -195,10 +190,11 @@ export default async function handler(req: Request, res: Response) {
         if(!preservePrimaryScope && membership.exists && membership.data()?.active===false){
           throw new Error('Your organization membership is inactive. An administrator must reactivate it before enrollment.');
         }
-        const role=strongerMembershipRole(
-          existingOrganizationId===organizationId?profile.organizationRole:'',
-          membership.exists&&membership.data()?.active===true?membership.data()?.role:'',
-        );
+        // Active membership is authoritative. Profile role is only a legacy fallback
+        // when a same-organization membership record has not yet been created.
+        const role=membershipRole(membership.exists&&membership.data()?.active===true?membership.data()?.role:'')
+          || membershipRole(existingOrganizationId===organizationId?profile.organizationRole:'')
+          || 'learner';
         if(!preservePrimaryScope){
           transaction.set(profileRef,{organizationId,organizationRole:role,updatedAt:FieldValue.serverTimestamp()},{merge:true});
           transaction.set(membershipRef,{uid:decoded.uid,organizationId,role,active:true,
