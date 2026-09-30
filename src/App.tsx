@@ -84,6 +84,7 @@ export const App: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+  const [activeProgramId,setActiveProgramId] = useState('');
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [deepLinkPageIndex, setDeepLinkPageIndex] = useState(0);
@@ -402,6 +403,7 @@ export const App: React.FC = () => {
       :null)||null;
     if(location.lessonId&&!lesson)return false;
     setCurrentRoute(location.route);
+    setActiveProgramId(location.programId||'');
     setActiveGuide(guide);
     setActiveLesson(lesson);
     setDeepLinkPageIndex(lesson
@@ -461,6 +463,7 @@ export const App: React.FC = () => {
 
   const openGuide=useCallback((guide:DiscoverGuide)=>{
     setStudyError('');
+    setActiveProgramId('');
     setActiveGuide(guide);
     setActiveLesson(null);
     setCurrentRoute('home');
@@ -474,22 +477,27 @@ export const App: React.FC = () => {
       :Math.max(0,Math.min((lesson.contentPages?.length||1)-1,Math.trunc(pageIndex)));
     const destination=route||currentRoute;
     setStudyError('');
+    if(destination!=='lessons')setActiveProgramId('');
     setActiveGuide(guide);
     setActiveLesson(lesson);
     setDeepLinkPageIndex(desired);
     rememberLocation({
-      route:destination,guideId:guide.id,guideLanguage:guide.language,
+      route:destination,
+      ...(destination==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
+      guideId:guide.id,guideLanguage:guide.language,
       lessonId:lesson.id,pageIndex:desired,
     });
-  },[currentRoute,currentUser.progress.lessonResume,rememberLocation]);
+  },[activeProgramId,currentRoute,currentUser.progress.lessonResume,rememberLocation]);
 
   const rememberStudyPage=useCallback((pageIndex:number)=>{
     if(!activeGuide||!activeLesson)return;
     rememberLocation({
-      route:currentRoute,guideId:activeGuide.id,guideLanguage:activeGuide.language,
+      route:currentRoute,
+      ...(currentRoute==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
+      guideId:activeGuide.id,guideLanguage:activeGuide.language,
       lessonId:activeLesson.id,pageIndex:Math.max(0,Math.trunc(pageIndex)),
     },true);
-  },[activeGuide,activeLesson,currentRoute,rememberLocation]);
+  },[activeGuide,activeLesson,activeProgramId,currentRoute,rememberLocation]);
 
   const orderedActiveLessons = useMemo(() => {
     if (!activeGuide) return [];
@@ -505,6 +513,7 @@ export const App: React.FC = () => {
   const nextLesson = activeLessonIndex >= 0 && activeLessonIndex < orderedActiveLessons.length - 1 ? orderedActiveLessons[activeLessonIndex + 1] : undefined;
 
   const navigate = (route: AppRoute) => {
+    setActiveProgramId('');
     setActiveGuide(null);
     setActiveLesson(null);
     setStudyError('');
@@ -528,6 +537,10 @@ export const App: React.FC = () => {
   };
   const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson) =>
     openStudyItem(guide,lesson,undefined,currentRoute);
+  const selectCatalogProgram=(programId:string)=>{
+    setActiveProgramId(programId);
+    rememberLocation({route:'lessons',...(programId?{programId}:{})});
+  };
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
   const showCourse = currentRoute === 'home' && activeGuide !== null;
   const privilegedUser=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
@@ -567,7 +580,8 @@ export const App: React.FC = () => {
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
-            onBack={goBack} onOpenGuide={openGuide}
+            onBack={goBack} selectedProgramId={activeProgramId} onSelectProgram={selectCatalogProgram}
+            onOpenGuide={openGuide}
             onOpenLesson={openCatalogLesson} onRefresh={async () => {
               const latest = await loadFirestoreGuides();
               setGuides(latest);
