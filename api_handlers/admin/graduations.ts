@@ -91,7 +91,7 @@ async function notifyStageApprovers(
     organizationId,recipientId,type:'certificate',
     title:'Graduation approval required',
     body:`${text(request.candidateName)||'A learner'} submitted ${text(request.guideTitle)||'a VOP course'} for ${stage.label||stage.id} review.`,
-    actionUrl:'/admin',
+    actionUrl:'/admin/certification',
     metadata:{source:'graduation-approval',requestId:text(request.id),stageId:stage.id},
     createdBy,
   })));
