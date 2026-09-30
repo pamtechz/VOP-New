@@ -392,14 +392,14 @@ export const App: React.FC = () => {
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin']
       .includes(String(currentUser.role||''))||['owner','admin'].includes(String(currentUser.organizationRole||''));
     if(location.route==='admin'&&!privileged)return false;
-    const guide=location.guideId
+    const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
         && (!location.guideLanguage||item.language===location.guideLanguage))
-      :null;
+      :null)||null;
     if(location.guideId&&!guide)return false;
-    const lesson=location.lessonId&&guide
+    const lesson=(location.lessonId&&guide
       ?guide.lessons.find(item=>item.id===location.lessonId)
-      :null;
+      :null)||null;
     if(location.lessonId&&!lesson)return false;
     setCurrentRoute(location.route);
     setActiveGuide(guide);
