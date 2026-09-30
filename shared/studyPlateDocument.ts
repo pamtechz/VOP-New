@@ -15,6 +15,7 @@ export type StudyPlateNode = {
   type:'p'|'h1'|'h2'|'h3'|'blockquote'|'ul'|'ol'|'li'|'lic'|'a'|'img'|'video'|'audio'|'code_block';
   id?:string;
   url?:string;
+  alt?:string;
   children:Array<StudyPlateNode|StudyPlateLeaf>;
 };
 export type StudyPlateDocument=StudyPlateNode[];
@@ -94,6 +95,9 @@ export function normalizeStudyPlateDocument(raw:unknown):StudyPlateDocument {
       if(!isSafeHttpsMediaUrl(url))
         throw new Error('Study images require a safe public HTTPS URL.');
       element.url=url;
+      const alt=String(node.alt||'').trim();
+      if(alt.length>300)throw new Error('Study image alternative text cannot exceed 300 characters.');
+      if(alt)element.alt=alt;
     }
     if(type==='video'||type==='audio'){
       const source=resolveMediaSource(node.url);
