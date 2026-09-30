@@ -23,6 +23,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
     || ['owner','admin'].includes(String(currentUser.organizationRole||''));
+  const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
@@ -40,6 +41,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
         {route:'events' as const,label:t('navigation.events','Events'),icon:CalendarDays},
       ]),
       ...(currentUser.role==='student'?[{route:'support' as const,label:t('navigation.support','Mentor support'),icon:MessageCircle}]:[]),
+      ...(isMentor?[{route:'mentor' as const,label:t('navigation.mentor_workspace','Mentor workspace'),icon:UserRound}]:[]),
     ]},
     {name:t('navigation.account','Account'),items:[
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
