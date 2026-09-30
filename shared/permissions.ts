@@ -33,7 +33,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   union_admin: {
     dashboard: read, organizations: ['view','read','create','update','delete','manage'], users: ['view','read','create','update','delete','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
-    materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
+    materials: contentManager, radio: contentManager, languages: read, translations: read,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
     certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
@@ -41,7 +41,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   conference_admin: {
     dashboard: read, organizations: ['view','read','create','update','delete','manage'], users: ['view','read','create','update','delete','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
-    materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
+    materials: contentManager, radio: contentManager, languages: read, translations: read,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
     certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
@@ -49,7 +49,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   district_admin: {
     dashboard: read, organizations: ['view','read','create','update','delete','manage'], users: ['view','read','create','update','delete','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
-    materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
+    materials: contentManager, radio: contentManager, languages: read, translations: read,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
     certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
@@ -57,7 +57,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   church_admin: {
     dashboard: read, organizations: ['view','read','create','update','delete','manage'], users: ['view','read','create','update','delete','assign','manage'],
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
-    materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
+    materials: contentManager, radio: contentManager, languages: read, translations: read,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
     certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
@@ -65,7 +65,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   owner: {
     dashboard: read, organizations: ['view','read','update'], hierarchy: read, users: ['view','read','create','update','delete','assign','manage'],
     curriculum: contentManager, lessons: contentManager, quizzes: contentManager, materials: contentManager, radio: contentManager,
-    languages: contentManager, translations: contributor, announcements: contentManager, prayer: ['view','read','create','update','delete','manage'],
+    languages: read, translations: read, announcements: contentManager, prayer: ['view','read','create','update','delete','manage'],
     mentoring: ['view','read','create','update','delete','assign','manage'], certificates: ['view','read','create','update','manage'], analytics: read, audit: read, billing: billingRead,
     settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
