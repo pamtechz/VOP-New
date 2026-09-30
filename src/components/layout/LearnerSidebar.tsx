@@ -22,7 +22,7 @@ type Props = {
 export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onToggle,onNavigate}:Props){
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
-    || ['owner','admin'].includes(String(currentUser.organizationRole||''));
+    || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole||''));
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
