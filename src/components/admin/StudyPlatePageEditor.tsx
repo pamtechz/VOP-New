@@ -97,6 +97,11 @@ type Props={
 export function StudyPlatePageEditor({sectionId,organizationId,document,onChange,onSplitPage,onNotify,onValidationError}:Props){
   const [invalid,setInvalid]=useState('');
   const [mediaResolving,setMediaResolving]=useState(false);
+  const [insertKind,setInsertKind]=useState<'link'|'image'|'media'|null>(null);
+  const [insertUrl,setInsertUrl]=useState('');
+  const [insertText,setInsertText]=useState('');
+  const [insertAlt,setInsertAlt]=useState('');
+  const [insertError,setInsertError]=useState('');
   const [initialValue]=useState(document);
   const editor=usePlateEditor({
     id:'vop-plate-'+sectionId,
@@ -110,64 +115,60 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
     run();
     editor.tf.focus();
   };
-  const insertImage=()=>{
-    const raw=window.prompt('Public HTTPS image URL');
-    if(raw===null)return;
-    if(!isSafeHttpsMediaUrl(raw)){
-      const message='Choose a safe public HTTPS image URL.';
-      setInvalid(message);onValidationError?.(message);return;
-    }
-    const description=window.prompt(
-      'Alternative text for learners using screen readers. Describe the purpose of the image briefly. Leave blank only if it is decorative.',
-      ''
-    );
-    if(description===null)return;
-    const alt=description.trim();
-    if(alt.length>300){
-      const message='Image alternative text cannot exceed 300 characters.';
-      setInvalid(message);onValidationError?.(message);return;
-    }
-    command(()=>editor.tf.insertNodes({type:'img',url:raw,alt,children:[{text:''}]}));
+  const openInsert=(kind:'link'|'image'|'media')=>{
+    setInsertKind(kind);setInsertUrl('');setInsertAlt('');setInsertError('');
+    setInsertText(kind==='link'&&editor.selection?editor.api.string(editor.selection):'');
   };
-  const insertMedia=async()=>{
-    const raw=window.prompt('Public media URL (YouTube, AudioVerse, Vimeo, Facebook, Instagram, TikTok, SoundCloud, or direct HTTPS media)');
-    if(raw===null)return;
-    if(!raw.trim())return setInvalid('Paste a public media URL first.');
-    setMediaResolving(true);setInvalid('');
+  const closeInsert=()=>{
+    if(mediaResolving)return;
+    setInsertKind(null);setInsertUrl('');setInsertText('');setInsertAlt('');setInsertError('');
+    editor.tf.focus();
+  };
+  const submitInsert=async()=>{
+    const raw=insertUrl.trim();
+    setInsertError('');
+    if(!raw)return setInsertError('Enter a public HTTPS URL.');
     try{
-      if(!auth?.currentUser)throw new Error('Sign in again before adding media.');
-      const token=await auth.currentUser.getIdToken();
-      const response=await fetch('/api/media',{
-        method:'POST',
-        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-        body:JSON.stringify({url:raw.trim(),organizationId:organizationId||undefined}),
-      });
-      const payload=await response.json().catch(()=>({})) as {
-        error?:string;media?:{kind:string;provider:string;url:string;originalUrl:string};
-      };
-      if(!response.ok||!payload.media)throw new Error(payload.error||'This media source is not approved.');
-      const source=payload.media;
-      const stored=source.kind==='embed'||source.kind==='external'
-        ?source.originalUrl:source.url;
-      const resolved=resolveMediaSource(stored);
-      if(!resolved)throw new Error('The resolved media URL is not safe for playback.');
-      const type=resolved.kind==='direct-audio'||['AudioVerse','SoundCloud'].includes(resolved.provider)
-        ?'audio':'video';
-      command(()=>editor.tf.insertNodes({type,url:stored,children:[{text:''}]}));
-      onNotify?.(source.provider+' media added to this section.');
+      if(insertKind==='link'){
+        if(!isSafeHttpsMediaUrl(raw))throw new Error('Choose a safe public HTTPS link.');
+        command(()=>upsertLink(editor,{url:raw,text:insertText.trim()||raw,target:'_blank'}));
+        closeInsert();return;
+      }
+      if(insertKind==='image'){
+        if(!isSafeHttpsMediaUrl(raw))throw new Error('Choose a safe public HTTPS image URL.');
+        const alt=insertAlt.trim();
+        if(alt.length>300)throw new Error('Image alternative text cannot exceed 300 characters.');
+        command(()=>editor.tf.insertNodes({type:'img',url:raw,alt,children:[{text:''}]}));
+        closeInsert();return;
+      }
+      if(insertKind==='media'){
+        setMediaResolving(true);
+        if(!auth?.currentUser)throw new Error('Sign in again before adding media.');
+        const token=await auth.currentUser.getIdToken();
+        const response=await fetch('/api/media',{
+          method:'POST',
+          headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+          body:JSON.stringify({url:raw,organizationId:organizationId||undefined}),
+        });
+        const payload=await response.json().catch(()=>({})) as {
+          error?:string;media?:{kind:string;provider:string;url:string;originalUrl:string};
+        };
+        if(!response.ok||!payload.media)throw new Error(payload.error||'This media source is not approved.');
+        const source=payload.media;
+        const stored=source.kind==='embed'||source.kind==='external'?source.originalUrl:source.url;
+        const resolved=resolveMediaSource(stored);
+        if(!resolved)throw new Error('The resolved media URL is not safe for playback.');
+        const type=resolved.kind==='direct-audio'||['AudioVerse','SoundCloud'].includes(resolved.provider)
+          ?'audio':'video';
+        command(()=>editor.tf.insertNodes({type,url:stored,children:[{text:''}]}));
+        onNotify?.(source.provider+' media added to this section.');
+        setMediaResolving(false);closeInsert();return;
+      }
     }catch(reason){
-      const message=reason instanceof Error?reason.message:'Could not add this media source.';
-      setInvalid(message);onValidationError?.(message);
-    }finally{setMediaResolving(false);}
-  };
-  const insertLink=()=>{
-    const raw=window.prompt('Public HTTPS link');
-    if(raw===null)return;
-    if(!isSafeHttpsMediaUrl(raw)){setInvalid('Choose a safe public HTTPS link.');return;}
-    command(()=>{
-      const selected=editor.selection?editor.api.string(editor.selection):'';
-      upsertLink(editor,{url:raw,text:selected||raw,target:'_blank'});
-    });
+      const message=reason instanceof Error?reason.message:'Could not insert this content.';
+      setInsertError(message);
+      if(insertKind==='media')setMediaResolving(false);
+    }
   };
   const splitPage=()=>{
     const selected=editor.selection?.anchor.path[0];
@@ -232,10 +233,10 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
         {toolbarButton('Bullet list',<List size={17}/>,()=>editor.tf.ul.toggle())}
         {toolbarButton('Numbered list',<ListOrdered size={17}/>,()=>editor.tf.ol.toggle())}
         {toolbarButton('Quotation',<Quote size={17}/>,()=>editor.tf.blockquote.toggle())}
-        {toolbarButton('Link',<Link2 size={17}/>,insertLink)}
-        {toolbarButton('Image',<ImagePlus size={17}/>,insertImage)}
+        {toolbarButton('Link',<Link2 size={17}/>,()=>openInsert('link'))}
+        {toolbarButton('Image',<ImagePlus size={17}/>,()=>openInsert('image'))}
         <button type="button" title="Insert approved audio or video" aria-label="Insert approved audio or video"
-          disabled={mediaResolving} onMouseDown={event=>event.preventDefault()} onClick={()=>void insertMedia()}>
+          disabled={mediaResolving} onMouseDown={event=>event.preventDefault()} onClick={()=>openInsert('media')}>
           {mediaResolving?<LoaderCircle className="vop-plate-spin" size={17}/>:<Film size={17}/>}</button>
       </div>
       <button type="button" className="vop-plate-section-break"
@@ -248,9 +249,9 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
           <MoreVertical size={17}/>
         </summary>
         <div role="group" aria-label="Additional study editing actions">
-          <button type="button" onClick={insertLink}><Link2 size={15}/> Insert link</button>
-          <button type="button" onClick={insertImage}><ImagePlus size={15}/> Insert image</button>
-          <button type="button" disabled={mediaResolving} onClick={()=>void insertMedia()}><Film size={15}/> Insert audio / video</button>
+          <button type="button" onClick={()=>openInsert('link')}><Link2 size={15}/> Insert link</button>
+          <button type="button" onClick={()=>openInsert('image')}><ImagePlus size={15}/> Insert image</button>
+          <button type="button" disabled={mediaResolving} onClick={()=>openInsert('media')}><Film size={15}/> Insert audio / video</button>
           <button type="button" onClick={()=>command(()=>editor.tf.blockquote.toggle())}>
             <Quote size={15}/> Quotation block
           </button>
@@ -266,6 +267,44 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
         </div>
       </details>
     </div>
+    {insertKind&&<div className="vop-plate-insert-backdrop" role="presentation"
+      onMouseDown={event=>{if(event.target===event.currentTarget)closeInsert();}}>
+      <form className="vop-plate-insert-dialog" role="dialog" aria-modal="true"
+        aria-labelledby="vop-plate-insert-title" onSubmit={event=>{event.preventDefault();void submitInsert();}}>
+        <div className="vop-plate-insert-head">
+          <div><small>INSERT CONTENT</small><h4 id="vop-plate-insert-title">
+            {insertKind==='link'?'Link':insertKind==='image'?'Image':'Audio / video'}
+          </h4></div>
+          <button type="button" aria-label="Close insert dialog" disabled={mediaResolving}
+            onClick={closeInsert}>×</button>
+        </div>
+        <label>Public HTTPS URL
+          <input autoFocus type="url" value={insertUrl} onChange={event=>setInsertUrl(event.target.value)}
+            placeholder={insertKind==='media'?'https://youtube.com/...':'https://...'}/>
+        </label>
+        {insertKind==='link'&&<label>Link text
+          <input value={insertText} onChange={event=>setInsertText(event.target.value)}
+            placeholder="Text learners will see"/>
+        </label>}
+        {insertKind==='image'&&<label>Alternative text
+          <textarea rows={2} maxLength={300} value={insertAlt}
+            onChange={event=>setInsertAlt(event.target.value)}
+            placeholder="Describe the image for screen-reader users. Leave blank only if decorative."/>
+          <small>{insertAlt.length}/300 characters</small>
+        </label>}
+        {insertKind==='media'&&<p className="vop-plate-insert-help">
+          Supported public sources include YouTube, AudioVerse, Vimeo, Facebook, Instagram,
+          TikTok, SoundCloud and approved direct HTTPS media. VOP validates the source before insertion.
+        </p>}
+        {insertError&&<p className="vop-plate-insert-error" role="alert">{insertError}</p>}
+        <div className="vop-plate-insert-actions">
+          <button type="button" className="vop-secondary" disabled={mediaResolving} onClick={closeInsert}>Cancel</button>
+          <button type="submit" className="vop-primary" disabled={mediaResolving||!insertUrl.trim()}>
+            {mediaResolving?<><LoaderCircle className="vop-plate-spin" size={15}/> Validating…</>:'Insert'}
+          </button>
+        </div>
+      </form>
+    </div>}
     <Plate editor={editor} onValueChange={({value})=>{
       try{
         const normalized=normalizeStudyPlateDocument(value);
