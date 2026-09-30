@@ -3,7 +3,7 @@ import {
   ArrowLeft, Book, BookOpen, CalendarDays, CheckCircle, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Clock, Edit3, Eye, FileText,
   Filter, Globe, Image as ImageIcon, Layers, Link as LinkIcon, List, ListOrdered,
-  MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings,
+  LoaderCircle, MoreVertical, Plus, Quote, Redo2, RefreshCw, Save, Search, Send, Settings,
   Table2, Trash2, Underline, Undo2, Video, Volume2, X
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide, Lesson, User } from '../types';
@@ -973,10 +973,29 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               }
               setPreviewOpen(true);
             }}><Eye size={17}/>{tx('common.preview', 'Preview')}</button>
-            <button className="vop-secondary" type="button" onClick={() => void saveLesson(false)} disabled={saving}><Save size={17}/>{tx('curriculum.saveDraft', 'Save Draft')}</button>
-            {editor.published && <button className="vop-secondary vop-danger-button" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>{tx('curriculum.unpublish', 'Unpublish')}</button>}
-            <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}><Send size={17}/>{editor.published ? 'Update & Publish' : 'Publish'}</button>
+            <button className="vop-secondary" type="button" onClick={() => void saveLesson(false)} disabled={saving}>
+              {saving?<LoaderCircle className="vop-save-spin" size={17}/>:<Save size={17}/>}
+              {saving?tx('common.saving','Saving…'):tx('curriculum.saveDraft', 'Save Draft')}
+            </button>
+            {editor.published && <button className="vop-secondary vop-danger-button" type="button" onClick={() => void unpublishLesson()} disabled={saving}><X size={17}/>{saving?tx('common.saving','Saving…'):tx('curriculum.unpublish', 'Unpublish')}</button>}
+            <button className="vop-primary" type="button" onClick={() => void saveLesson(true)} disabled={saving}>
+              {saving?<LoaderCircle className="vop-save-spin" size={17}/>:<Send size={17}/>}
+              {saving?tx('common.saving','Saving…'):(editor.published ? 'Update & Publish' : 'Publish')}
+            </button>
           </div>
+        </div>
+
+        <div className={'vop-editor-save-status '+(saving?'saving':message?'saved':editorDirty?'dirty':editor.id?'saved':'idle')}
+          role="status" aria-live="polite">
+          {saving
+            ? <><LoaderCircle className="vop-save-spin" size={15}/><span>{tx('common.saving','Saving changes…')}</span></>
+            : message
+              ? <><CheckCircle size={15}/><span>{message}</span></>
+              : editorDirty
+                ? <><Save size={15}/><span>{tx('curriculum.unsavedChanges','Unsaved changes')}</span></>
+                : editor.id
+                  ? <><CheckCircle size={15}/><span>{tx('curriculum.allChangesSaved','All changes saved')}</span></>
+                  : <><Save size={15}/><span>{tx('curriculum.notSavedYet','Not saved yet')}</span></>}
         </div>
 
         <div className="vop-reference-editor-fields">
@@ -1099,7 +1118,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 {tx('common.remove','Remove image')}</button>}
             </section>}
 
-            {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column">
+            {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column vop-lesson-aux-tab">
               <div className="vop-field"><label>Import public media from a trusted source</label>
                 <input type="url" placeholder="Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link" value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
                 <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving?'Checking source…':'Add media'}</button>
@@ -1109,12 +1128,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               <div className="vop-field"><label>{tx('curriculum.videoUrl', 'Video URL')}</label><div className="vop-input-with-icon"><Video size={18}/><input value={editor.videoUrl} onChange={e => setEditor({...editor,videoUrl:e.target.value})}/></div></div>
             </div>}
 
-            {editorTab === 'bible' && <div className="vop-field"><label>{tx('curriculum.bibleReferences', 'Bible References')}</label><textarea value={editor.bibleReferences} onChange={e => setEditor({...editor,bibleReferences:e.target.value})}/></div>}
+            {editorTab === 'bible' && <div className="vop-lesson-aux-tab"><div className="vop-field"><label>{tx('curriculum.bibleReferences', 'Bible References')}</label><textarea value={editor.bibleReferences} onChange={e => setEditor({...editor,bibleReferences:e.target.value})}/></div></div>}
 
 
-            {editorTab === 'notes' && <div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div>}
+            {editorTab === 'notes' && <div className="vop-lesson-aux-tab"><div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div></div>}
 
-            {editorTab === 'settings' && <div className="vop-form-grid vop-reference-single-column">
+            {editorTab === 'settings' && <div className="vop-form-grid vop-reference-single-column vop-lesson-aux-tab">
               <div className="vop-field"><label>{tx('common.sharing', 'Sharing')}</label><select value={editor.sharingScope} onChange={e => setEditor({...editor,sharingScope:e.target.value as EditorState['sharingScope']})}><option value="private">{tx('common.private', 'Private')}</option><option value="organization">{tx('curriculum.organizationOnly', 'Organization only')}</option><option value="shared">{tx('common.shared', 'Shared')}</option></select><small>Shared lessons can be consumed by other organizations. Canonical editing remains restricted to the owning organization and VOP Super Admin.</small></div>
               <div className="vop-field"><label>{tx('curriculum.estimatedMinutes', 'Estimated Minutes')}</label><input type="number" min="1" value={editor.estimatedMinutes} onChange={e => setEditor({...editor,estimatedMinutes:Number(e.target.value)})}/></div>
               <div className="vop-field"><label>{tx('common.tags', 'Tags')}</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/></div>
@@ -1140,7 +1159,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-toolbar"><div className="vop-search vop-reference-search"><Search size={19}/><input value={search} onChange={e => setSearch(e.target.value)} aria-label={'Search '+config[0]}/></div><button className="vop-secondary" type="button" onClick={() => void load()}><RefreshCw size={16}/>{tx('common.refresh', 'Refresh')}</button></div>
         <div className="vop-admin-record-layout">
           <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>#</th><th>{tx('common.name', 'Name')}</th><th>{tx('common.description', 'Description')}</th><th>{tx('common.status', 'Status')}</th><th>{tx('common.actions', 'Actions')}</th></tr></thead><tbody>{filteredRecords.map((record,index)=><tr key={record.id}><td>{index+1}</td><td><strong>{valueText(record.name)}</strong></td><td>{valueText(record.description)}</td><td><span className={'vop-status '+(record.published?'published':'draft')}>{record.published?'Published':'Draft'}</span></td><td><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Edit'} onClick={() => setEditingRecord(record)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={record.canEdit === false} title={record.canEdit === false ? 'Owned by another contributor' : 'Delete'} onClick={() => void deleteRecord(kind,record.id)}><Trash2 size={15}/></button></td></tr>)}</tbody></table>{filteredRecords.length===0&&<div className="vop-empty">{tx('curriculum.noRecords', 'No records are configured.')}</div>}</div>
-          {editingRecord && <form className="vop-card vop-form-card" onSubmit={e => {e.preventDefault();void saveRecord(kind);}}><div className="vop-section-title"><div><h2>{editingRecord.id?'Edit':'New'} {config[1]}</h2></div><button className="vop-actions" type="button" onClick={() => setEditingRecord(null)}><X size={16}/></button></div><div className="vop-field"><label>{tx('common.nameRequired', 'Name *')}</label><input value={valueText(editingRecord.name)} onChange={e => setEditingRecord({...editingRecord,name:e.target.value})}/></div><div className="vop-field"><label>{tx('common.description', 'Description')}</label><textarea value={valueText(editingRecord.description)} onChange={e => setEditingRecord({...editingRecord,description:e.target.value})}/></div><div className="vop-setting-row"><div><div className="vop-setting-name">{tx('common.published', 'Published')}</div></div><input type="checkbox" checked={editingRecord.published===true} onChange={e => setEditingRecord({...editingRecord,published:e.target.checked})}/></div><div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={() => setEditingRecord(null)}>{tx('common.cancel', 'Cancel')}</button><button className="vop-primary" type="submit" disabled={saving}><Save size={16}/>{tx('common.save', 'Save')}</button></div></form>}
+          {editingRecord && <form className="vop-card vop-form-card" onSubmit={e => {e.preventDefault();void saveRecord(kind);}}><div className="vop-section-title"><div><h2>{editingRecord.id?'Edit':'New'} {config[1]}</h2></div><button className="vop-actions" type="button" onClick={() => setEditingRecord(null)}><X size={16}/></button></div><div className="vop-field"><label>{tx('common.nameRequired', 'Name *')}</label><input value={valueText(editingRecord.name)} onChange={e => setEditingRecord({...editingRecord,name:e.target.value})}/></div><div className="vop-field"><label>{tx('common.description', 'Description')}</label><textarea value={valueText(editingRecord.description)} onChange={e => setEditingRecord({...editingRecord,description:e.target.value})}/></div><div className="vop-setting-row"><div><div className="vop-setting-name">{tx('common.published', 'Published')}</div></div><input type="checkbox" checked={editingRecord.published===true} onChange={e => setEditingRecord({...editingRecord,published:e.target.checked})}/></div><div className="vop-reference-editor-actions"><button className="vop-secondary" type="button" onClick={() => setEditingRecord(null)}>{tx('common.cancel', 'Cancel')}</button><button className="vop-primary" type="submit" disabled={saving}>{saving?<LoaderCircle className="vop-save-spin" size={16}/>:<Save size={16}/>}<span>{saving?tx('common.saving','Saving…'):tx('common.save', 'Save')}</span></button></div></form>}
         </div>
       </div>
     );
