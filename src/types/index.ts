@@ -294,6 +294,7 @@ export interface DiscoverGuide {
   certificateEligible: boolean;
   certificateDocumentType?: string;
   certificateTypeName?: string;
+  certificationRequirementIds?: string[];
 }
 
 export interface Announcement {
