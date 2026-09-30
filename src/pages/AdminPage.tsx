@@ -1094,7 +1094,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       </button>
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
-        <CommunicationTools onNavigate={onNavigate} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
+        <CommunicationTools onNavigate={route=>{
+          if(route==='admin'){
+            const target=consumeNotificationAdminTarget();
+            if(target){setActiveTab(target as AdminTab);setSidebarOpen(false);return;}
+          }
+          onNavigate(route);
+        }} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
           <button className="vop-user" type="button" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>{setProfileOpen(value=>!value);setSidebarOpen(false)}} title="Open profile menu">
             {currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}
