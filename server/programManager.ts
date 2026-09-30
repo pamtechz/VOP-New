@@ -3,7 +3,7 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {normalizeProgramDraft} from '../shared/programModel.js';
 import {assertMutableTenantResource,platformStewardedResource} from '../shared/platformStewardship.js';
 import {canEditCanonicalContent,canManageOrganizationContent,
-  accessibleOrganizationIds,organizationInHierarchyScope,writeTenantAudit,
+  accessibleOrganizationIds,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
   type TenantContext} from './tenant.js';
 import {requirePermission} from './permissions.js';
 
@@ -134,7 +134,7 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
     ownerOrganizationId:previous.exists
       ?String(current.ownerOrganizationId||''):targetOrganizationId,
     ownerTenantId:previous.exists
-      ?String(current.ownerTenantId||''):targetOrganizationId,
+      ?String(current.ownerTenantId||''):tenantOwnerKey(ctx),
     ownerUid:previous.exists
       ?String(current.ownerUid||''):ctx.auth.uid,
     scope:targetOrganizationId?'organization':'platform',
