@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
+import type { ThemePreference } from '../services/theme';
 import { loadPublicContent } from '../services/publicFirestore';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
@@ -20,7 +21,12 @@ type PersonalSettings = {
   studyPreferences?: { reminders?: boolean; preferredStudyTime?: string };
 };
 
-interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; }
+interface Props {
+  currentUser: User;
+  onBack: () => void;
+  onStudyLanguageChange: (language: string) => void;
+  onThemeChange: (theme: ThemePreference) => void;
+}
 
 async function callPersonalSettings(operation: 'get' | 'save', settings?: PersonalSettings) {
   const user = auth?.currentUser;
@@ -36,9 +42,9 @@ async function callPersonalSettings(operation: 'get' | 'save', settings?: Person
   return payload.settings as PersonalSettings;
 }
 
-export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange }) => {
+export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, onThemeChange }) => {
   const [settings, setSettings] = useState<PersonalSettings>({
-    theme: 'system', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
+    theme: 'dark', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
     accessibility: { reducedMotion: false, largeText: false, highContrast: false },
     privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
   });
@@ -68,7 +74,12 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   useEffect(() => {
     let active = true;
     const loadSettings = callPersonalSettings('get')
-      .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
+      .then(value => {
+        if(active&&value){
+          setSettings(previous=>({...previous,...value}));
+          if(value.theme)onThemeChange(value.theme);
+        }
+      })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
     void loadUiLocaleRegistry().then(setUiLocales).catch(() => undefined);
     const loadLanguages = loadPublicContent()
@@ -91,6 +102,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     setSaving(true); setMessage('');
     try {
       await callPersonalSettings('save', settings);
+      onThemeChange(settings.theme || 'dark');
       if (settings.uiLocale) setUiLocale(settings.uiLocale);
       if (settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
       setMessage(t('settings.saved', 'Your personal settings have been saved.'));
@@ -113,7 +125,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-personal-card vop-card">
         <h2><Globe2 size={19}/> Interface</h2>
-        <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label>Theme<select value={settings.theme || 'dark'} onChange={e => {
+          const value=e.target.value as ThemePreference;
+          patch('theme',value);
+          onThemeChange(value);
+        }}><option value="dark">Dark (default)</option><option value="light">Light</option><option value="system">Follow device</option></select></label>
         <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
           {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
         </select></label>
