@@ -1,6 +1,6 @@
 import { getActiveLanguage } from './storage';
 import { auth } from '../lib/firebase';
-import { queueCompletion, dropCompletion, type PendingCompletion } from './offlineStudyQueue';
+import { queueCompletion, dropCompletion, queueResume, dropResume, type PendingCompletion, type PendingResume } from './offlineStudyQueue';
 
 /**
  * Offline completion is ONLY a pending request. It never awards credit before
@@ -31,6 +31,26 @@ export async function completeLesson(
       dropCompletion(item);
       return 'synced';
     }
+    return response.status >= 500 ? queue() : 'failed';
+  } catch { return queue(); }
+}
+
+export async function saveLessonResume(
+  guideId:string, lessonId:string, pageIndex:number, language:string=getActiveLanguage(),
+):Promise<'synced'|'queued'|'failed'> {
+  const firebaseUser=auth?.currentUser;
+  if (!firebaseUser || !Number.isInteger(pageIndex) || pageIndex < 0) return 'failed';
+  const item:PendingResume={uid:firebaseUser.uid,language,guideId,lessonId,pageIndex,queuedAt:Date.now()};
+  const queue=()=>queueResume(item)?'queued' as const:'failed' as const;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return queue();
+  try {
+    const token=await firebaseUser.getIdToken();
+    const response=await fetch('/api/study/progress',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      body:JSON.stringify({action:'saveLessonResume',language,guideId,lessonId,pageIndex}),
+    });
+    if (response.ok) { dropResume(item); return 'synced'; }
     return response.status >= 500 ? queue() : 'failed';
   } catch { return queue(); }
 }
