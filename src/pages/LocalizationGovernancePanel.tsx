@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import { CheckCircle2, Globe2, RefreshCw, ShieldCheck, UserPlus, Users, XCircle } from 'lucide-react';
 import {
-  localizationRequest,type LocalizationApplication,type LocalizationCollaborator,
+  localizationRequest,type LocalizationAccessRequest,type LocalizationApplication,type LocalizationCollaborator,
   type LocalizationLanguage,type LocalizationProposal,type LocalizationRole,
 } from '../services/localizationWorkflow';
 import '../components/localization/localization-workflow.css';
@@ -13,6 +13,7 @@ export default function LocalizationGovernancePanel(){
   const [languages,setLanguages]=useState<LocalizationLanguage[]>([]);
   const [applications,setApplications]=useState<LocalizationApplication[]>([]);
   const [collaborators,setCollaborators]=useState<LocalizationCollaborator[]>([]);
+  const [accessRequests,setAccessRequests]=useState<LocalizationAccessRequest[]>([]);
   const [proposals,setProposals]=useState<LocalizationProposal[]>([]);
   const [email,setEmail]=useState('');
   const [roles,setRoles]=useState<LocalizationRole[]>(['translator']);
@@ -27,15 +28,17 @@ export default function LocalizationGovernancePanel(){
   const refresh=async()=>{
     setBusy(true);setError('');
     try{
-      const [status,applicants,people,queue]=await Promise.all([
+      const [status,applicants,people,requests,queue]=await Promise.all([
         localizationRequest<StatusResponse>('status'),
         localizationRequest<ListResponse<LocalizationApplication>>('listApplications'),
         localizationRequest<ListResponse<LocalizationCollaborator>>('listCollaborators'),
+        localizationRequest<ListResponse<LocalizationAccessRequest>>('listAccessRequests'),
         localizationRequest<ListResponse<LocalizationProposal>>('listProposals'),
       ]);
       setLanguages(status.languages||[]);
       setApplications(applicants.items||[]);
       setCollaborators(people.items||[]);
+      setAccessRequests(requests.items||[]);
       setProposals(queue.items||[]);
     }catch(reason){setError(reason instanceof Error?reason.message:'Localization governance could not be loaded.');}
     finally{setBusy(false);}
@@ -60,11 +63,11 @@ export default function LocalizationGovernancePanel(){
     if(!allLanguages&&!assignedLanguages.length)return setError('Assign at least one language.');
     setBusy(true);setError('');setMessage('');
     try{
-      await localizationRequest('setCollaborator',{
-        email:email.trim(),roles,languages:allLanguages?['*']:assignedLanguages,status:'active',
+      await localizationRequest('inviteCollaborator',{
+        email:email.trim(),roles,languages:allLanguages?['*']:assignedLanguages,
       });
       setEmail('');setAssignedLanguages([]);setAllLanguages(false);
-      setMessage('Localization collaborator invited and activated.');
+      setMessage('Localization invitation sent. Access remains inactive until the recipient accepts.');
       await refresh();
     }catch(reason){setError(reason instanceof Error?reason.message:'Collaborator could not be added.');}
     finally{setBusy(false);}
@@ -81,6 +84,30 @@ export default function LocalizationGovernancePanel(){
     }catch(reason){setError(reason instanceof Error?reason.message:'Collaborator status could not be changed.');}
     finally{setBusy(false);}
   };
+  const reviewAccess=async(item:LocalizationAccessRequest,decision:'approve'|'reject')=>{
+    setBusy(true);setError('');setMessage('');
+    try{
+      await localizationRequest('reviewAccessRequest',{requestId:item.id,decision});
+      setMessage(decision==='approve'
+        ?'Language request approved. The language is now available to that translator.'
+        :'Language request rejected.');
+      await refresh();
+    }catch(reason){setError(reason instanceof Error?reason.message:'Language access request could not be reviewed.');}
+    finally{setBusy(false);}
+  };
+
+  const reinvite=async(item:LocalizationCollaborator)=>{
+    setBusy(true);setError('');setMessage('');
+    try{
+      await localizationRequest('inviteCollaborator',{
+        uid:item.uid||item.id,email:item.email,roles:item.roles||['translator'],languages:item.languages||[],
+      });
+      setMessage('Localization invitation sent again. The recipient must accept before access becomes active.');
+      await refresh();
+    }catch(reason){setError(reason instanceof Error?reason.message:'Localization invitation could not be sent.');}
+    finally{setBusy(false);}
+  };
+
   const approve=async(item:LocalizationProposal)=>{
     setBusy(true);setError('');setMessage('');
     try{
@@ -105,6 +132,7 @@ export default function LocalizationGovernancePanel(){
     <div className="vop-localization-metrics">
       <div><Users size={18}/><span>Pending applications</span><strong>{pending.length}</strong></div>
       <div><UserPlus size={18}/><span>Active collaborators</span><strong>{collaborators.filter(item=>item.status==='active').length}</strong></div>
+      <div><UserCheck size={18}/><span>Pending language requests</span><strong>{accessRequests.filter(item=>item.status==='pending').length}</strong></div>
       <div><ShieldCheck size={18}/><span>Open proposals</span><strong>{proposals.length}</strong></div>
       <div><Globe2 size={18}/><span>Platform languages</span><strong>{languages.length}</strong></div>
     </div>
@@ -122,7 +150,7 @@ export default function LocalizationGovernancePanel(){
     </section>
 
     <section className="vop-card vop-localization-section">
-      <header><div><h2>Invite translator or reviewer</h2><p>Invites use an existing VOP account. Assign only the languages and responsibilities the person needs.</p></div></header>
+      <header><div><h2>Invite translator or reviewer</h2><p>Invites use an existing VOP account. The assigned language remains unavailable until the recipient explicitly accepts the invitation.</p></div></header>
       <div className="vop-localization-invite">
         <label>Account email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} placeholder="translator@example.org"/></label>
         <div><strong>Roles</strong><div className="vop-localization-chips">
@@ -140,8 +168,24 @@ export default function LocalizationGovernancePanel(){
       {!collaborators.length?<div className="vop-empty">No localization collaborators configured.</div>:<div className="vop-localization-list">
         {collaborators.map(item=><article key={item.uid||item.id}>
           <div><strong>{item.displayName||item.email||item.uid}</strong><span>{item.email}</span><small>{(item.roles||[]).join(' + ')} · {(item.languages||[]).join(', ')}</small></div>
-          <footer><span className={'vop-status '+(item.status==='active'?'enabled':'disabled')}>{item.status||'inactive'}</span>
-            <button className="vop-secondary" disabled={busy} onClick={()=>void setStatus(item,item.status==='active'?'inactive':'active')}>{item.status==='active'?'Suspend':'Reactivate'}</button></footer>
+          <footer><span className={'vop-status '+(item.status==='active'?'enabled':item.status==='invited'?'review':'disabled')}>{item.status||'inactive'}</span>
+            {item.status==='invited'?<span className="vop-localization-awaiting">Awaiting recipient acceptance</span>
+              :item.status==='declined'?<button className="vop-secondary" disabled={busy} onClick={()=>void reinvite(item)}>Re-invite</button>
+              :<button className="vop-secondary" disabled={busy} onClick={()=>void setStatus(item,item.status==='active'?'inactive':'active')}>{item.status==='active'?'Suspend':'Reactivate'}</button>}</footer>
+        </article>)}
+      </div>}
+    </section>
+
+    <section className="vop-card vop-localization-section">
+      <header><div><h2>Language access requests</h2><p>Translators may request another existing translation or propose a new platform language. Nothing is exposed until you approve the request.</p></div></header>
+      {!accessRequests.filter(item=>item.status==='pending').length?<div className="vop-empty">No language access requests are waiting for review.</div>:<div className="vop-localization-list">
+        {accessRequests.filter(item=>item.status==='pending').map(item=><article key={item.id}>
+          <div><strong>{item.requesterName||item.requesterEmail||item.requesterUid}</strong><span>{item.requesterEmail}</span>
+            <small>{item.kind==='new_language'?'NEW LANGUAGE':'EXISTING TRANSLATION'} · {item.name||item.languageCode.toUpperCase()} ({item.languageCode.toUpperCase()})</small>
+            {item.nativeName&&item.nativeName!==item.name&&<p><b>Native name:</b> {item.nativeName}</p>}
+            {item.reason&&<p>{item.reason}</p>}</div>
+          <footer><button className="vop-secondary" disabled={busy} onClick={()=>void reviewAccess(item,'reject')}><XCircle size={15}/>Reject</button>
+            <button className="vop-primary" disabled={busy} onClick={()=>void reviewAccess(item,'approve')}><CheckCircle2 size={15}/>Approve access</button></footer>
         </article>)}
       </div>}
     </section>
