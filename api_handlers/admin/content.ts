@@ -81,7 +81,12 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || 'list');
     if (!COLLECTIONS.has(collection)) return res.status(400).json({ error: 'Unsupported content collection.' });
 
-    const ctx = await authenticateTenant(req, typeof body.organizationId === 'string' ? body.organizationId : undefined);
+    const learnerProgramRead = collection === 'programs' && action === 'learnerList';
+    const ctx = await authenticateTenant(
+      req,
+      typeof body.organizationId === 'string' ? body.organizationId : undefined,
+      learnerProgramRead,
+    );
     const requestedOrganizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
     // Platform locale records are not organization-owned. Only Super Admin may mutate them;
     // other tenants contribute translation proposals through the reviewed workflow.
@@ -98,7 +103,7 @@ export default async function handler(req: Request, res: Response) {
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
-    if (action !== 'list' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
+    if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
         throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
