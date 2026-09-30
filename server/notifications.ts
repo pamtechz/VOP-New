@@ -3,7 +3,7 @@ import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 export type NotificationChannel = 'in_app' | 'email';
 export type NotificationType =
   | 'learning-support' | 'assignment' | 'mentor-feedback' | 'certificate'
-  | 'announcement' | 'event' | 'prayer' | 'system';
+  | 'announcement' | 'event' | 'prayer' | 'invitation' | 'system';
 
 export interface CreateNotificationInput {
   organizationId?: string;
