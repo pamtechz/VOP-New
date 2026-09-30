@@ -91,7 +91,9 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     anchorId: typeof item.anchorId === 'string' ? item.anchorId : undefined,
     attachmentType: ['guide','lesson','chapter','section','block'].includes(String(item.attachmentType || ''))
       ? item.attachmentType as Lesson['attachmentType'] : undefined,
-    assessmentKind: item.assessmentKind === 'final_exam' ? 'final_exam' : 'practice',
+    assessmentKind: item.assessmentKind === 'final_exam' ? 'final_exam' : item.assessmentKind === 'chapter_quiz' ? 'chapter_quiz' : 'practice',
+    assessmentPolicy: item.assessmentPolicy && typeof item.assessmentPolicy === 'object' && !Array.isArray(item.assessmentPolicy)
+      ? item.assessmentPolicy as Lesson['assessmentPolicy'] : undefined,
     questions,
     media: item.media && typeof item.media === 'object' && !Array.isArray(item.media)
       ? { audioUrl: String((item.media as Record<string, unknown>).audioUrl || ''), videoUrl: String((item.media as Record<string, unknown>).videoUrl || ''), imageUrl: String((item.media as Record<string, unknown>).imageUrl || '') }
