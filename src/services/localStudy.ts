@@ -55,9 +55,27 @@ export async function saveLessonResume(
   } catch { return queue(); }
 }
 
+export interface AssessmentPolicyResult {
+  sessionId:string;
+  startedAt:string;
+  expiresAt:string|null;
+  assessmentPolicy:{
+    threshold:number;
+    maxAttempts:number|null;
+    remainingAttempts:number|null;
+    cooldownMinutes:number;
+    timeLimitMinutes:number;
+    feedbackMode:'score_only'|'after_submit'|'none';
+    instructions:string;
+  };
+}
+
 export interface AssessmentSubmissionResult {
-  score: number;
-  passed: boolean;
+  score: number | null;
+  passed: boolean | null;
+  threshold:number;
+  feedbackMode:'score_only'|'after_submit'|'none';
+  explanations?:string[];
   retakePolicy: {
     attemptsUsed: number;
     maxAttempts: number | null;
@@ -67,11 +85,29 @@ export interface AssessmentSubmissionResult {
   };
 }
 
+export async function beginQuizAttempt(
+  guideId:string,testId:string,language:string=getActiveLanguage(),
+):Promise<AssessmentPolicyResult>{
+  const firebaseUser=auth?.currentUser;
+  if(!firebaseUser)throw new Error('Sign in before starting an assessment.');
+  const token=await firebaseUser.getIdToken();
+  const response=await fetch('/api/study/progress',{
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+    body:JSON.stringify({action:'startQuiz',language,guideId,lessonId:testId}),
+  });
+  const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{error?:unknown};
+  if(!response.ok)throw new Error(typeof body.error==='string'?body.error:'The assessment could not be started.');
+  if(!body.sessionId||!body.assessmentPolicy)throw new Error('The assessment policy could not be loaded.');
+  return body as AssessmentPolicyResult;
+}
+
 export async function submitQuizAnswers(
   guideId: string,
   testId: string,
   answers: Record<number, number | boolean>,
   language: string = getActiveLanguage(),
+  sessionId = '',
 ): Promise<AssessmentSubmissionResult | null> {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return null;
@@ -88,26 +124,31 @@ export async function submitQuizAnswers(
       language,
       guideId,
       lessonId: testId,
+      sessionId,
       answers: Object.fromEntries(Object.entries(answers).map(([index, answer]) => [index, answer])),
     }),
   });
 
   const body = await response.json().catch(() => null) as {
-    error?:unknown; score?:unknown; passed?:unknown;
+    error?:unknown; score?:unknown; passed?:unknown; threshold?:unknown;
+    feedbackMode?:unknown; explanations?:unknown;
     retakePolicy?:Partial<AssessmentSubmissionResult['retakePolicy']>;
   } | null;
   if (!response.ok) {
     throw new Error(typeof body?.error === 'string' && body.error.trim()
       ? body.error : 'The assessment could not be verified and saved.');
   }
-  const score = Number(body?.score);
-  if (Number.isFinite(score) && score >= 0 && score <= 100) {
+  const feedbackMode=['score_only','after_submit','none'].includes(String(body?.feedbackMode||''))
+    ?String(body?.feedbackMode) as AssessmentSubmissionResult['feedbackMode']:'score_only';
+  const hidden=feedbackMode==='none';
+  const score=hidden?null:Number(body?.score);
+  if (hidden || (Number.isFinite(score) && Number(score) >= 0 && Number(score) <= 100)) {
     // Graduation eligibility is re-evaluated server-side; a 409 simply means the learner has not completed every requirement yet.
     try {
       await fetch('/api/admin/graduations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'submit', guideId, averageScore: score }),
+        body: JSON.stringify({ action: 'submit', guideId, ...(score===null?{}:{averageScore:score}) }),
       });
     } catch {
       // Quiz results remain authoritative even when graduation submission is not yet eligible or temporarily unavailable.
@@ -115,7 +156,10 @@ export async function submitQuizAnswers(
     const policy = body?.retakePolicy || {};
     return {
       score,
-      passed: body?.passed === true,
+      passed:hidden?null:body?.passed === true,
+      threshold:Number(body?.threshold)||0,
+      feedbackMode,
+      explanations:Array.isArray(body?.explanations)?body!.explanations.map(String):undefined,
       retakePolicy: {
         attemptsUsed: Math.max(1, Math.trunc(Number(policy.attemptsUsed) || 1)),
         maxAttempts: Number.isInteger(Number(policy.maxAttempts)) && Number(policy.maxAttempts) > 0
