@@ -125,6 +125,25 @@ service cloud.firestore {
       return role() + ':' + userDoc().data.get('adminNodeId', '');
     }
 
+    function canReadAssignedHierarchySettings(tenantId) {
+      return signedIn() && (
+        (userDoc().data.get('churchId', '') != ''
+          && tenantId == 'church_admin:' + userDoc().data.get('churchId', ''))
+        || (userDoc().data.get('churchId', '') == ''
+          && userDoc().data.get('districtId', '') != ''
+          && tenantId == 'district_admin:' + userDoc().data.get('districtId', ''))
+        || (userDoc().data.get('churchId', '') == ''
+          && userDoc().data.get('districtId', '') == ''
+          && userDoc().data.get('conferenceId', '') != ''
+          && tenantId == 'conference_admin:' + userDoc().data.get('conferenceId', ''))
+        || (userDoc().data.get('churchId', '') == ''
+          && userDoc().data.get('districtId', '') == ''
+          && userDoc().data.get('conferenceId', '') == ''
+          && userDoc().data.get('unionId', '') != ''
+          && tenantId == 'union_admin:' + userDoc().data.get('unionId', ''))
+      );
+    }
+
     function hierarchyOrganizationScope(organizationId) {
       return isHierarchyTenant()
         && organizationId != ''
@@ -441,7 +460,9 @@ service cloud.firestore {
 
     // Platform configuration remains controlled by the VOP Super Admin.
     match /system/settings {
-      allow get: if isSuperAdmin();
+      // This document contains non-secret runtime/product configuration used by
+      // the signed-in application. Provider credentials remain server-side.
+      allow get: if signedIn();
       allow list: if false;
       allow create, update, delete: if isSuperAdmin();
     }
@@ -453,7 +474,8 @@ service cloud.firestore {
     }
 
     match /tenantSettings/{tenantId}/settings/{settingId} {
-      allow get: if isHierarchyTenant() && tenantId == hierarchyTenantId();
+      allow get: if (isHierarchyTenant() && tenantId == hierarchyTenantId())
+        || canReadAssignedHierarchySettings(tenantId);
       allow list: if false;
       allow create, update, delete: if isHierarchyTenant() && tenantId == hierarchyTenantId();
     }
