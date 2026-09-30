@@ -357,7 +357,7 @@ export const subscribeSettings = (
         contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'',
         appTagline:'', timezone:'', website:'', welcomeMessage:'',
         systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
-        features:{candidatesModule:false,curriculumStudio:false,translations:false,radio:false,announcements:false,certification:false},
+        features:{candidatesModule:true,curriculumStudio:true,translations:true,radio:true,announcements:true,certification:true},
       });
       return;
     }
