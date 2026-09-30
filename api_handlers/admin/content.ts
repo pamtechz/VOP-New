@@ -673,6 +673,13 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'list') {
+      if (HIERARCHY_COLLECTIONS.has(collection) && ctx.isSuperAdmin) {
+        const snap = await ctx.db.collection(collection).get();
+        return res.status(200).json({
+          ok:true,
+          items:snap.docs.map(d=>({id:d.id,...d.data(),canEdit:true})),
+        });
+      }
       if (HIERARCHY_COLLECTIONS.has(collection) && !ctx.isSuperAdmin) {
         const role = String(ctx.profile.role || '');
         const nodeId = String(ctx.profile.adminNodeId || '');
