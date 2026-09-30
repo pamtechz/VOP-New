@@ -44,6 +44,15 @@ test('graduation: learner self-submission and official issuance require verified
       assert.ok(output && typeof output==='object','API should return JSON');
       return {status,...output};
     }
+    async function verifyCertificate(certificateNumber) {
+      let status=200,output;
+      await certificates({method:'GET',headers:{},query:{certificateNumber}},{
+        status(code){status=code;return this;},
+        json(data){output=data;return this;},
+      });
+      assert.ok(output && typeof output==='object','Certificate verification should return JSON');
+      return {status,...output};
+    }
 
     const org='org-graduation-a',guide='guide-graduation-a',lang='en';
     const scores={
@@ -53,13 +62,15 @@ test('graduation: learner self-submission and official issuance require verified
     await db.doc('organizations/'+org).set({id:org,status:'active'});
     await db.doc('organizations/org-graduation-b').set({id:'org-graduation-b',status:'active'});
     await db.doc('system/certification').set({
-      enabled:true,minimumScore:80,
+      enabled:true,verificationEnabled:true,minimumScore:80,
+      certificateTitle:'Platform default certificate',issuerName:'Voice of Prophecy',
       approvalStages:[{id:'church',label:'Church',approverRoles:['admin'],enabled:true}],
     });
     await db.doc('organizations/'+org+'/settings/settings').set({quizPassThreshold:80});
     await db.doc('guides/'+guide).set({
       id:guide,title:'VOP Graduation',organizationId:org,
       language:lang,published:true,archived:false,certificateEligible:true,
+      certificateDocumentType:'course',certificateTypeName:'Bible Correspondence Certificate',
     });
     await db.doc('guides/'+guide+'/lessons/lesson-one').set({
       id:'lesson-one',type:'Lesson',published:true,
@@ -131,9 +142,66 @@ test('graduation: learner self-submission and official issuance require verified
       assert.equal(issued.status,201,JSON.stringify(issued));
       assert.equal(issued.certificate.assessmentAverageScore,90);
       assert.equal(issued.certificate.organizationId,org);
+      assert.equal(issued.certificate.documentType,'course');
+      assert.equal(issued.certificate.certificateTypeName,'Bible Correspondence Certificate');
+      assert.equal(issued.certificate.courseName,'VOP Graduation');
+      assert.equal(issued.certificate.eligibilitySnapshot.passThreshold,80);
+      assert.equal(issued.certificate.eligibilitySnapshot.assessmentAverageScore,90);
+      assert.deepEqual(new Set(issued.certificate.eligibilitySnapshot.requiredAssessmentIds),new Set(['test-one','test-two']));
+      assert.equal(issued.certificate.issuer.name,'Voice of Prophecy');
+      const valid=await verifyCertificate(issued.certificate.certificateNumber);
+      assert.equal(valid.status,200,JSON.stringify(valid));
+      assert.equal(valid.verified,true);
+      assert.equal(valid.state,'valid');
+      assert.equal(valid.certificate.certificateTypeName,'Bible Correspondence Certificate');
       const duplicate=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
       assert.equal(duplicate.status,200,JSON.stringify(duplicate));
       assert.equal(duplicate.created,false);
+    });
+
+    await t.test('certificate lifecycle exposes valid, replaced, revoked and unknown states without cross-tenant mutation',async()=>{
+      const existing=(await db.collection('certificates').where('candidateId','==',candidate.uid).limit(1).get()).docs[0];
+      assert.ok(existing);
+      const originalNumber=String(existing.data().certificateNumber);
+      const foreignReplace=await api(certificates,outsider,{
+        action:'replace',certificateId:existing.id,reason:'Foreign tenant attempt',
+      });
+      assert.equal(foreignReplace.status,403,JSON.stringify(foreignReplace));
+      assert.equal((await existing.ref.get()).data().status,'Certified');
+
+      const replaced=await api(certificates,admin,{
+        action:'replace',certificateId:existing.id,reason:'Corrected official issue date',
+      });
+      assert.equal(replaced.status,201,JSON.stringify(replaced));
+      assert.equal(replaced.certificate.status,'Certified');
+      assert.equal(replaced.certificate.replacesCertificateNumber,originalNumber);
+      assert.equal(replaced.certificate.eligibilitySnapshot.assessmentAverageScore,90,
+        'Replacement preserves the immutable eligibility snapshot.');
+
+      const oldPublic=await verifyCertificate(originalNumber);
+      assert.equal(oldPublic.status,200,JSON.stringify(oldPublic));
+      assert.equal(oldPublic.verified,false);
+      assert.equal(oldPublic.state,'replaced');
+      assert.equal(oldPublic.replacement.certificateNumber,replaced.certificate.certificateNumber);
+
+      const replacementPublic=await verifyCertificate(replaced.certificate.certificateNumber);
+      assert.equal(replacementPublic.verified,true,JSON.stringify(replacementPublic));
+      assert.equal(replacementPublic.state,'valid');
+
+      const revoked=await api(certificates,admin,{
+        action:'revoke',certificateId:replaced.certificate.id,reason:'Credential withdrawn after formal review',
+      });
+      assert.equal(revoked.status,200,JSON.stringify(revoked));
+      assert.equal(revoked.certificate.status,'Revoked');
+      const revokedPublic=await verifyCertificate(replaced.certificate.certificateNumber);
+      assert.equal(revokedPublic.status,200,JSON.stringify(revokedPublic));
+      assert.equal(revokedPublic.verified,false);
+      assert.equal(revokedPublic.state,'revoked');
+
+      const unknown=await verifyCertificate('VOP-2099-DOES-NOT-EXIST');
+      assert.equal(unknown.status,404,JSON.stringify(unknown));
+      assert.equal(unknown.verified,false);
+      assert.equal(unknown.state,'unknown');
     });
 
     await t.test('a fraudulent foreign-tenant or malformed score cannot submit',async()=>{
