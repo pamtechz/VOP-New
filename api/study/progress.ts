@@ -473,7 +473,7 @@ export default async function handler(
     });
     const failedQuestions = questionResults.filter(item => !item.correct);
     const failureRefs = failedQuestions.map(item => db.collection('questionPerformance').doc(
-      `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+      `${policyOrganizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
     ));
 
     const policyResult = await db.runTransaction(async transaction => {
@@ -565,7 +565,7 @@ export default async function handler(
           question: failure.question,
           organizationId:policyOrganizationId,
           language,
-          guideId:
+          guideId,
           lessonId,
           failedCount: FieldValue.increment(1),
           answeredCount: FieldValue.increment(1),
@@ -576,11 +576,11 @@ export default async function handler(
 
       const successRefs = questionResults.filter(item => item.correct).map(item =>
         db.collection('questionPerformance').doc(
-          `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
+          `${policyOrganizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
         )
       );
       for (const ref of successRefs) {
-        transaction.set(ref, { organizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(ref, { organizationId:policyOrganizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
       return { attemptsUsed };
     });
