@@ -995,6 +995,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 </div>
                 <EditorComponent
                 programTitle={programContext?.programTitle}
+                organizationId={scopeOrganizationId}
                 guideTitle={editor.guideTitle} lessonTitle={editor.title}
                 initialSectionId={requestedSectionId}
                 chapters={editor.chapters}
