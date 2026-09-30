@@ -4,14 +4,19 @@ on:
   push:
     branches:
       - fix/reference-design-and-certification-integrity
+      - feat/plate-curriculum-authoring-review-20260929
 
 permissions:
   contents: write
 
+concurrency:
+  group: lockfile-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lockfile:
     if: "!contains(github.event.head_commit.message, '[skip lockfile]')"
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

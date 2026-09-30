@@ -1,4 +1,5 @@
 import { isSafeHttpsMediaUrl } from './mediaSources.js';
+import { normalizeStudyPlateDocument, studyPlateLegacyBlocks, studyPlatePlainText, type StudyPlateDocument } from './studyPlateDocument.js';
 
 /**
  * Published content hierarchy:
@@ -8,12 +9,12 @@ import { isSafeHttpsMediaUrl } from './mediaSources.js';
  */
 export type CurriculumBlockType = 'paragraph' | 'heading' | 'quote' | 'image' | 'video' | 'audio';
 export type CurriculumBlock = { id:string; type:CurriculumBlockType; text?:string; src?:string };
-export type CurriculumSection = { id:string; title:string; blocks:CurriculumBlock[] };
+export type CurriculumSection = { id:string; title:string; blocks:CurriculumBlock[]; document?:StudyPlateDocument };
 export type CurriculumChapter = { id:string; title:string; sections:CurriculumSection[] };
 export type CurriculumPage = {
   pageNumber:number; title:string; chapterId:string; chapterTitle:string;
   sectionId:string; sectionTitle:string; content:string; imageUrl?:string;
-  blocks:CurriculumBlock[];
+  blocks:CurriculumBlock[];document?:StudyPlateDocument;
 };
 
 const allowed=new Set<CurriculumBlockType>(['paragraph','heading','quote','image','video','audio']);
@@ -58,8 +59,11 @@ export function normalizeCurriculumStructure(value:unknown):CurriculumChapter[] 
       if(!section)throw new Error('Invalid section '+(sectionIndex+1)+'.');
       const id=validId(section.id,'section',seen);
       const title=validTitle(section.title,'Section');
-      if(!Array.isArray(section.blocks)||!section.blocks.length||section.blocks.length>50)throw new Error('Every section needs 1–50 content blocks.');
-      const blocks=section.blocks.map((blockRaw:unknown)=>{
+      const document=section.document===undefined?undefined:normalizeStudyPlateDocument(section.document);
+      const blockInput=document?studyPlateLegacyBlocks(document):section.blocks;
+      if(!Array.isArray(blockInput)||!blockInput.length||blockInput.length>50)
+        throw new Error('Every section needs 1–50 content blocks.');
+      const blocks=blockInput.map((blockRaw:unknown)=>{
         const block=record(blockRaw);
         if(!block||!allowed.has(block.type as CurriculumBlockType))throw new Error('Unsupported lesson block type.');
         if(++blockTotal>600)throw new Error('A lesson supports at most 600 blocks.');
@@ -70,7 +74,7 @@ export function normalizeCurriculumStructure(value:unknown):CurriculumChapter[] 
         if(!text||text.length>8000)throw new Error('Text blocks require 1–8000 characters.');
         return {id,type,text};
       });
-      return {id,title,blocks};
+      return {id,title,blocks,...(document?{document}:{})};
     });
     return {id,title,sections};
   });
@@ -81,16 +85,17 @@ export function normalizeCurriculumStructure(value:unknown):CurriculumChapter[] 
 export function curriculumPages(chapters:CurriculumChapter[]):CurriculumPage[] {
   const pages:CurriculumPage[]=[];
   chapters.forEach(chapter=>chapter.sections.forEach(section=>{
-    const content=[
-      chapter.title,section.title,
-      ...section.blocks.filter(block=>['paragraph','heading','quote'].includes(block.type)).map(block=>block.text||''),
-    ].filter(Boolean).join('\n\n');
+    const content=section.document
+      ? studyPlatePlainText(section.document)
+      : [chapter.title,section.title,
+        ...section.blocks.filter(block=>['paragraph','heading','quote'].includes(block.type)).map(block=>block.text||''),
+      ].filter(Boolean).join('\n\n');
     pages.push({
       pageNumber:pages.length+1,
       title:section.title,chapterId:chapter.id,chapterTitle:chapter.title,
       sectionId:section.id,sectionTitle:section.title,content,
       imageUrl:section.blocks.find(block=>block.type==='image')?.src||'',
-      blocks:section.blocks,
+      blocks:section.blocks,...(section.document?{document:section.document}:{}),
     });
   }));
   return pages;

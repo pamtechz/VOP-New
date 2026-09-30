@@ -611,3 +611,79 @@ test('events respect organization visibility and notifications remain recipient-
     await environment.cleanup();
   }
 });
+
+
+test('courses obey tenant reads, API-only writes and private instructor note isolation',async()=>{
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST,'Firestore emulator required.');
+  const environment=await initializeTestEnvironment({
+    projectId,firestore:{rules,host:'127.0.0.1',port:8080},
+  });
+  try{
+    await environment.withSecurityRulesDisabled(async adminContext=>{
+      const db=adminContext.firestore();
+      await db.doc('organizations/programs-org-a').set({id:'programs-org-a',status:'active'});
+      await db.doc('organizations/programs-org-b').set({id:'programs-org-b',status:'active'});
+      for(const [id,organizationId,role] of [
+        ['programs-owner','programs-org-a','owner'],
+        ['programs-student','programs-org-a','learner'],
+        ['programs-outsider','programs-org-b','learner'],
+      ]){
+        await db.doc('users/'+id).set({uid:id,organizationId,organizationRole:role,role:'student'});
+        await db.doc('organizations/'+organizationId+'/members/'+id).set({
+          uid:id,organizationId,role,active:true,
+        });
+      }
+      await db.doc('users/programs-super').set({uid:'programs-super',role:'super_admin'});
+      await db.doc('programs/course-org-a').set({
+        id:'course-org-a',title:'Private course',organizationId:'programs-org-a',
+        ownerOrganizationId:'programs-org-a',ownerUid:'programs-owner',
+        sharingScope:'organization',published:true,archived:false,
+        guideIds:['guide-programs-a'],entryMode:'sections',
+      });
+      await db.doc('programs/course-shared').set({
+        id:'course-shared',title:'Shared course',organizationId:'programs-org-a',
+        sharingScope:'shared',published:true,archived:false,
+        guideIds:['guide-programs-a'],entryMode:'lessons',
+      });
+      await db.doc('programs/course-draft').set({
+        id:'course-draft',title:'Draft course',organizationId:'programs-org-a',
+        sharingScope:'shared',published:false,archived:false,guideIds:[],
+      });
+      await db.doc('guides/guide-programs-a').set({
+        id:'guide-programs-a',organizationId:'programs-org-a',sharingScope:'organization',
+        published:true,
+      });
+      await db.doc('guides/guide-programs-a/lessons/lesson-programs-a').set({
+        id:'lesson-programs-a',title:'Safe public lesson',organizationId:'programs-org-a',
+        published:true,sharingScope:'organization',
+      });
+      await db.doc('guides/guide-programs-a/lessons/lesson-programs-a/private/instructorNotes').set({
+        text:'PRIVATE INSTRUCTOR ONLY',
+      });
+    });
+    const owner=environment.authenticatedContext('programs-owner').firestore();
+    const learner=environment.authenticatedContext('programs-student').firestore();
+    const outsider=environment.authenticatedContext('programs-outsider').firestore();
+    const superAdmin=environment.authenticatedContext('programs-super').firestore();
+    const anonymous=environment.unauthenticatedContext().firestore();
+    await assertSucceeds(learner.doc('programs/course-org-a').get());
+    await assertFails(outsider.doc('programs/course-org-a').get());
+    await assertFails(anonymous.doc('programs/course-org-a').get());
+    await assertSucceeds(outsider.doc('programs/course-shared').get());
+    await assertSucceeds(anonymous.doc('programs/course-shared').get());
+    await assertFails(outsider.doc('programs/course-draft').get());
+    await assertSucceeds(superAdmin.doc('programs/course-draft').get());
+    await assertFails(owner.doc('programs/course-org-a').update({title:'Unverified change'}));
+    await assertFails(superAdmin.doc('programs/course-org-a').update({title:'Direct edit'}));
+    await assertFails(owner.doc('programs/forged').set({published:true}));
+    const notes='guides/guide-programs-a/lessons/lesson-programs-a/private/instructorNotes';
+    await assertSucceeds(learner.doc('guides/guide-programs-a/lessons/lesson-programs-a').get());
+    for(const client of [owner,learner,outsider,superAdmin,anonymous]){
+      await assertFails(client.doc(notes).get());
+      await assertFails(client.doc(notes).set({text:'Tampered'}));
+      await assertFails(client.collection('guides/guide-programs-a/lessons/lesson-programs-a/private').get());
+    }
+  }finally{
+    await environment.cleanup();
+  }
+});

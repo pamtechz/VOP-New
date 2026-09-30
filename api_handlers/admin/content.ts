@@ -9,6 +9,7 @@ import { notifyOrganizationMembers, normalizePublicationAudience } from '../../s
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { normalizeCurriculumStructure, curriculumPages, containsPublicQuizAnswer } from '../../shared/curriculumStructure.js';
 import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
+import { handleCurriculumPrograms } from '../../server/programManager.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 import { translationKey } from '../../server/localization.js';
 
@@ -17,14 +18,14 @@ type Response = { status: (code: number) => Response; json: (body: unknown) => v
 
 const COLLECTIONS = new Set([
   'languages','translations','announcements','events','books','radioBroadcasts','playlists','unions','conferences','districts','churches',
-  'users','curriculum','guides','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
+  'users','curriculum','guides','programs','learningPaths','bibleTopics','seasons','certificationConfig','certificates',
   'graduationRequests','candidates','settings','curriculumSettings'
 ]);
 
 const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBroadcasts','playlists']);
 
 const ORG_COLLECTIONS = new Set([
-  'announcements','events','learningPaths','bibleTopics','seasons',
+  'announcements','events','programs','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
 ]);
 
@@ -93,7 +94,7 @@ export default async function handler(req: Request, res: Response) {
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
-    const curriculum = ['curriculum','guides','learningPaths','bibleTopics','seasons'].includes(collection);
+    const curriculum = ['curriculum','guides','programs','learningPaths','bibleTopics','seasons'].includes(collection);
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
       : ['owner','admin'];
@@ -109,6 +110,10 @@ export default async function handler(req: Request, res: Response) {
       }
     }
 
+    if(collection==='programs'){
+      return await handleCurriculumPrograms(ctx,action,body,effectiveOrganizationId,res);
+    }
+
     if (action === 'listGuideLessons') {
       if (collection !== 'curriculum') throw new Error('Lesson listing requires the curriculum collection.');
       const selectedGuideId = safeId(body.guideId || body.id);
@@ -121,7 +126,7 @@ export default async function handler(req: Request, res: Response) {
           : ownerOrganizationId === ctx.organizationId);
       if (!permitted) throw new Error('This guide is outside your authorized curriculum scope.');
       const snap = await guide.ref.collection('lessons').get();
-      const items = snap.docs.map(doc => {
+      const items = await Promise.all(snap.docs.map(async doc => {
         const row = doc.data();
         const canEdit = ctx.isSuperAdmin || (String(row.ownerUid || '') === ctx.auth.uid && !platformStewardedResource(row));
         if (!canEdit) return {
@@ -134,9 +139,18 @@ export default async function handler(req: Request, res: Response) {
         // Private quiz-bank answers never enter curriculum selector responses.
         // Historical inline quizzes are not returned in this API even to their
         // authors; those must be audited and migrated to the Quiz Library.
-        const { questions: _answers, quiz: _legacyQuiz, ...safe } = row;
-        return { ...safe, id:doc.id, guideId:selectedGuideId, canEdit:true };
-      });
+        const { questions: _answers, quiz: _legacyQuiz, teacherNotes: _oldInstructorNotes, ...safe } = row;
+        const privateNotes=await doc.ref.collection('private').doc('instructorNotes').get();
+        return {
+          ...safe, id:doc.id, guideId:selectedGuideId, canEdit:true,
+          // Historical public notes remain visible to an authorized author
+          // until the separate idempotent migration is run. Once moved they
+          // never appear in the learner-readable lesson document.
+          teacherNotes: String(privateNotes.exists
+            ? privateNotes.data()?.text || ''
+            : typeof _oldInstructorNotes === 'string' ? _oldInstructorNotes : ''),
+        };
+      }));
       return res.status(200).json({ok:true, items});
     }
 
@@ -221,6 +235,12 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
+        // Presentation changes the learner's navigation, never the underlying
+        // lesson/progress/certificate identity. Existing guides remain in
+        // their familiar lesson-list mode until the author chooses otherwise.
+        learnerEntryMode: data.learnerEntryMode === 'sections' ? 'sections'
+          : data.learnerEntryMode === 'lessons' ? 'lessons'
+          : current.learnerEntryMode === 'sections' ? 'sections':'lessons',
         // Structured guides always require a final exam; existing legacy guides
         // can opt in, but their configured requirement cannot be disabled.
         requiresFinalExam: !existing.exists || current.requiresFinalExam === true || data.requiresFinalExam === true,
@@ -315,6 +335,7 @@ export default async function handler(req: Request, res: Response) {
       const sourceData = source.data() || {};
       if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared lessons can be copied.');
       if (!targetGuide.exists || String(targetGuide.data()?.organizationId || '') !== effectiveOrganizationId) throw new Error('Choose a guide owned by your organization.');
+      assertMutableTenantResource(ctx.isSuperAdmin,targetGuide.data(),'edit');
       const id = safeId(body.targetId || `${sourceLessonId}-copy-${Date.now().toString(36)}`);
       const now = new Date().toISOString();
       await targetGuide.ref.collection('lessons').doc(id).set({
@@ -354,6 +375,7 @@ export default async function handler(req: Request, res: Response) {
             String(guideSnapshot.data()?.organizationId || '') !== effectiveOrganizationId) {
           throw new Error('The source guide is not available in the selected tenant.');
         }
+        assertMutableTenantResource(ctx.isSuperAdmin,guideSnapshot.data(),'edit');
         if (!sourceSnapshot.exists || !destinationSnapshot.exists) throw new Error('Both lessons must exist before transfer.');
         const source = sourceSnapshot.data() || {};
         const destination = destinationSnapshot.data() || {};
@@ -413,6 +435,7 @@ export default async function handler(req: Request, res: Response) {
       const guide = await guideRef.get();
       if (!guide.exists || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || guide.data()?.archived === true) throw new Error('The selected guide does not belong to this organization or is archived.');
       if (String(guide.data()?.language || '').toLowerCase() !== language.toLowerCase()) throw new Error('The lesson language must match its guide.');
+      assertMutableTenantResource(ctx.isSuperAdmin,guide.data(),'edit');
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
@@ -453,8 +476,23 @@ export default async function handler(req: Request, res: Response) {
       }
       if (existing.exists && !(ctx.tenantType === 'hierarchy' ? await canManageOrganizationContent(ctx, existing.data()) : canEditCanonicalContent(ctx, existing.data()))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this lesson.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
-      await ref.set({
-        ...data,
+      const { teacherNotes: _incomingNotes, ...publicData }=data;
+      const notesIncluded=Object.prototype.hasOwnProperty.call(data,'teacherNotes');
+      if(notesIncluded && typeof _incomingNotes!=='string') {
+        throw new Error('Instructor notes must be text.');
+      }
+      if(notesIncluded && String(_incomingNotes).length>20000) {
+        throw new Error('Instructor notes cannot exceed 20,000 characters.');
+      }
+      const historicalNotes=String(existing.data()?.teacherNotes || '');
+      const savedNotes=notesIncluded?String(_incomingNotes):historicalNotes;
+      const privateNotesRef=ref.collection('private').doc('instructorNotes');
+      const batch=ctx.db.batch();
+      batch.set(ref,{
+        ...publicData,
+        // Learner-readable Firestore records must never contain instructor-only
+        // notes. A delete sentinel also cleans up an old public notes field.
+        teacherNotes:FieldValue.delete(),
         // Derive learner pages on the server, not from potentially forged
         // client-side page or block payloads.
         ...(structured ? {
@@ -475,9 +513,20 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: ctx.auth.uid,
       }, { merge:true });
+      if(notesIncluded||historicalNotes){
+        batch.set(privateNotesRef,{
+          text:savedNotes,guideId,lessonId,
+          ownerOrganizationId:existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          ownerUid:existing.data()?.ownerUid || ctx.auth.uid,
+          updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
+        },{merge:true});
+      }
+      // One atomic commit ensures a lesson update cannot expose a new public
+      // note or delete the old public note without saving its private copy.
+      await batch.commit();
       const saved = await ref.get();
       await writeTenantAudit(ctx, existing.exists ? 'lesson.update' : 'lesson.create', `guides/${guideId}/lessons/${lessonId}`, existing.exists ? existing.data() : undefined, saved.data());
-      return res.status(200).json({ ok:true, item:{id:lessonId,...saved.data()} });
+      return res.status(200).json({ ok:true, item:{id:lessonId,...saved.data(),teacherNotes:savedNotes} });
     }
 
     if (action === 'publishLesson' || action === 'unpublishLesson') {
@@ -490,6 +539,7 @@ export default async function handler(req: Request, res: Response) {
       const requestedGuideId = safeId(data.guideId);
       const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
       if (!guide.exists || guide.data()?.archived === true || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || String(guide.data()?.language || '').toLowerCase() !== lang) throw new Error('A valid guide in this tenant and language is required.');
+      assertMutableTenantResource(ctx.isSuperAdmin,guide.data(),'edit');
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
       if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');

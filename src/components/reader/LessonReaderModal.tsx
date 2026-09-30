@@ -6,6 +6,7 @@ import { auth } from '../../lib/firebase';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 import { MediaPlayer } from '../media/MediaPlayer';
+import { StudyPlateContent } from './StudyPlateContent';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -288,7 +289,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                 <h3>{currentSection.title}</h3>
                 {currentPageIndex===0&&lesson.media?.videoUrl&&<MediaPlayer src={lesson.media.videoUrl} title={lesson.title+' video'} kind="video"/>}
                 {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
-                {currentSection.blocks.map(block=><React.Fragment key={block.id}>
+                {currentSection.document
+                  ? <StudyPlateContent document={currentSection.document}
+                      afterBlock={blockId=>assessmentLinks('block',blockId)}/>
+                  : currentSection.blocks.map(block=><React.Fragment key={block.id}>
                   {block.type==='heading'&&<h4 className="vop-structured-reader-heading">{block.text}</h4>}
                   {block.type==='paragraph'&&<p className="vop-structured-reader-text">{block.text}</p>}
                   {block.type==='quote'&&<blockquote className="vop-structured-reader-quote">{block.text}</blockquote>}

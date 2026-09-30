@@ -18,6 +18,7 @@ type GuideRecord = {
   season: string;
   quarter: string;
   certificateEligible: boolean;
+  learnerEntryMode:'lessons'|'sections';
   requiresFinalExam: boolean;
   published: boolean;
   archived: boolean;
@@ -105,6 +106,7 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     season: valueText(value.season),
     quarter: valueText(value.quarter),
     certificateEligible: value.certificateEligible === true,
+    learnerEntryMode:value.learnerEntryMode==='sections'?'sections':'lessons',
     requiresFinalExam: value.requiresFinalExam === true,
     published: value.published === true,
     archived: value.archived === true,
@@ -240,6 +242,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       season: '',
       quarter: '',
       certificateEligible: false,
+      learnerEntryMode:'lessons',
       requiresFinalExam: true,
       published: false,
       archived: false,
@@ -284,6 +287,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         season: editing.season.trim(),
         quarter: editing.quarter.trim(),
         certificateEligible: editing.certificateEligible,
+        learnerEntryMode:editing.learnerEntryMode,
         requiresFinalExam: editing.requiresFinalExam,
         published: editing.published,
         archived: false,
@@ -377,6 +381,19 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Certificate eligibility</div><div className="vop-setting-help">Available to the configured certification workflow.</div></div>
             <input type="checkbox" checked={editing.certificateEligible} onChange={e => setEditing({...editing,certificateEligible:e.target.checked})}/>
+          </div>
+          <div className="vop-setting-row">
+            <div><div className="vop-setting-name">Student guide navigation</div>
+              <div className="vop-setting-help">
+                Choose whether learners enter through lessons or directly through their section pages.
+                Underlying lesson progress, quizzes and certificates stay unchanged.
+              </div>
+            </div>
+            <select aria-label="Student guide navigation" value={editing.learnerEntryMode}
+              onChange={event=>setEditing({...editing,learnerEntryMode:event.target.value as GuideRecord['learnerEntryMode']})}>
+              <option value="lessons">Lessons (default)</option>
+              <option value="sections">Sections / pages</option>
+            </select>
           </div>
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Final guide examination</div><div className="vop-setting-help">A guide-level final examination is required for newly created structured modules.</div></div>

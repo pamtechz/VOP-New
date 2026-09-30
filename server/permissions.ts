@@ -52,7 +52,7 @@ export function resourceForCollection(collection: string): PermissionResource | 
   const map: Record<string, PermissionResource> = {
     users: 'users', candidates: 'users', organizations: 'organizations',
     unions: 'hierarchy', conferences: 'hierarchy', districts: 'hierarchy', churches: 'hierarchy',
-    curriculum: 'curriculum', guides: 'curriculum', learningPaths: 'curriculum',
+    curriculum: 'curriculum', guides: 'curriculum', programs: 'curriculum', learningPaths: 'curriculum',
     bibleTopics: 'curriculum', seasons: 'curriculum',
     books: 'materials', radioBroadcasts: 'radio', playlists: 'radio',
     languages: 'languages', translations: 'translations',

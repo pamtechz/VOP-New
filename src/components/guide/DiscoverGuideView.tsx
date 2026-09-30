@@ -5,12 +5,13 @@ import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { lessonIsComplete, lessonScoreForDisplay } from '../../services/lessonProgress';
+import './guide-sections.css';
 
 interface DiscoverGuideViewProps {
   guide: DiscoverGuide;
   currentUser: User;
   onBack: () => void;
-  onSelectLesson: (lesson: Lesson) => void;
+  onSelectLesson: (lesson: Lesson, initialPageIndex?: number) => void;
   onOpenCertificate: () => void;
 }
 
@@ -137,7 +138,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         ) : (
           <div className="space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4 px-1">
-              Curriculum Modules
+              {guide.learnerEntryMode==='sections' ? 'Study sections' : 'Curriculum modules'}
             </h2>
             {orderedLessons.map((lesson, index) => {
               const isCompleted = lessonIsComplete(guide, lesson, currentUser, threshold);
@@ -148,6 +149,40 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
               const hasScore = typeof score === 'number' && Number.isFinite(score);
               const passed = hasScore && Number.isFinite(threshold) && threshold >= 1 && threshold <= 100 && score! >= threshold;
 
+              // Section-first programs flatten authored pages directly under
+              // the guide. The lesson remains the hidden progress/certificate
+              // owner and is shown only as context, never as another click.
+              if(guide.learnerEntryMode==='sections' && !isTest && lesson.chapters?.length){
+                const sectionPages=(lesson.contentPages||[]).filter(item=>
+                  Boolean(item.sectionId) &&
+                  lesson.chapters?.some(chapter=>chapter.sections.some(section=>section.id===item.sectionId)));
+                if(sectionPages.length){
+                  return <React.Fragment key={lesson.id}>
+                    {sectionPages.map((sectionPage,pageIndex)=>{
+                      const chapter=lesson.chapters!.find(item=>item.id===sectionPage.chapterId
+                        || item.sections.some(section=>section.id===sectionPage.sectionId));
+                      const actualIndex=lesson.contentPages?.findIndex(item=>
+                        item.sectionId===sectionPage.sectionId)??pageIndex;
+                      return <button type="button" key={sectionPage.sectionId}
+                        className={'vop-guide-direct-section '+(isCompleted?'completed':'')}
+                        onClick={()=>onSelectLesson(lesson,actualIndex)}
+                        aria-label={'Open section '+sectionPage.title+(chapter?' in '+chapter.title:'')}>
+                        <span className="vop-guide-direct-section-number">
+                          {lesson.lessonNumber}.{pageIndex+1}
+                        </span>
+                        <span className="vop-guide-direct-section-copy">
+                          <small>{chapter?.title||'Study chapter'} · Lesson {lesson.lessonNumber}</small>
+                          <strong>{sectionPage.title}</strong>
+                          <em>{lesson.title}</em>
+                        </span>
+                        {isCompleted
+                          ?<CheckCircle2 size={18} className="text-emerald-600" aria-label="Owning lesson completed"/>
+                          :<ChevronRight size={17} aria-hidden="true"/>}
+                      </button>;
+                    })}
+                  </React.Fragment>;
+                }
+              }
               return (
                 <button
                   key={lesson.id}

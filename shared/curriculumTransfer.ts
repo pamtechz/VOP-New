@@ -5,6 +5,7 @@ import {
   type CurriculumSection,
   type CurriculumBlock,
 } from './curriculumStructure.ts';
+import {studyPlateLegacyBlocks, type StudyPlateDocument} from './studyPlateDocument.js';
 
 export type TransferKind = 'chapter' | 'section' | 'block';
 export type TransferMode = 'move' | 'copy';
@@ -12,6 +13,18 @@ export type TransferResult = {
   source: CurriculumChapter[];
   destination: CurriculumChapter[];
   movedAnchorIds: string[];
+};
+
+const freshId=(kind:string)=>kind+'-'+randomUUID().replace(/-/g,'');
+const duplicateSectionContent=(section:CurriculumSection):CurriculumSection=>{
+  if(section.document){
+    const document:StudyPlateDocument=section.document.map(node=>({
+      ...node,id:freshId('block'),children:structuredClone(node.children),
+    }));
+    return {...section,id:freshId('section'),document,blocks:studyPlateLegacyBlocks(document)};
+  }
+  return {...section,id:freshId('section'),
+    blocks:section.blocks.map(block=>({...block,id:freshId('block')}))};
 };
 
 /** Changes only draft study content. The API separately validates ownership,
@@ -45,13 +58,8 @@ export function transferCurriculumNode(
       ]),
     ];
     const copy:CurriculumChapter = mode === 'move' ? origin : {
-      ...origin,id:'chapter-'+randomUUID().replace(/-/g,''),
-      sections:origin.sections.map(section => ({
-        ...section,id:'section-'+randomUUID().replace(/-/g,''),
-        blocks:section.blocks.map(block => ({
-          ...block,id:'block-'+randomUUID().replace(/-/g,''),
-        })),
-      })),
+      ...origin,id:freshId('chapter'),
+      sections:origin.sections.map(duplicateSectionContent),
     };
     return {
       source:normalizeCurriculumStructure(mode === 'move'
@@ -85,21 +93,36 @@ export function transferCurriculumNode(
   const movedAnchorIds: string[] = [];
   if (kind === 'section') {
     movedAnchorIds.push(originSection.id, ...originSection.blocks.map(block => block.id));
-    const copy: CurriculumSection = {
-      ...originSection, id:mode === 'copy' ? 'section-'+randomUUID().replace(/-/g,'') : originSection.id,
-      blocks:originSection.blocks.map(block=>({
-        ...block,id:mode === 'copy' ? 'block-'+randomUUID().replace(/-/g,'') : block.id,
-      })),
-    };
+    const copy: CurriculumSection = mode === 'copy'
+      ? duplicateSectionContent(originSection):originSection;
     if (mode === 'move') originChapter.sections=originChapter.sections.filter(section=>section.id!==anchorId);
     destinationChapter.sections.push(copy);
   } else {
     const originBlock=originSection.blocks.find(block=>block.id===anchorId);
     if (!originBlock) throw new Error('The source block no longer exists.');
     movedAnchorIds.push(originBlock.id);
-    const copy: CurriculumBlock = {...originBlock,id:mode === 'copy' ? 'block-'+randomUUID().replace(/-/g,'') : originBlock.id};
-    if(mode==='move')originSection.blocks=originSection.blocks.filter(block=>block.id!==anchorId);
-    destinationSection!.blocks.push(copy);
+    const destinationSectionValue=destinationSection!;
+    const hasRichSource=Boolean(originSection.document);
+    if(hasRichSource!==Boolean(destinationSectionValue.document)){
+      throw new Error('Both sections must use the same document format before transferring individual blocks.');
+    }
+    const copy:CurriculumBlock = {...originBlock,
+      id:mode === 'copy' ? freshId('block') : originBlock.id};
+    if(hasRichSource){
+      const existingNode=originSection.document!.find(node=>node.id===anchorId);
+      if(!existingNode)throw new Error('The source Plate block is unavailable.');
+      const node={...existingNode,id:copy.id,
+        children:structuredClone(existingNode.children)};
+      if(mode==='move'){
+        originSection.document=originSection.document!.filter(item=>item.id!==anchorId);
+        originSection.blocks=studyPlateLegacyBlocks(originSection.document);
+      }
+      destinationSectionValue.document=[...destinationSectionValue.document!,node];
+      destinationSectionValue.blocks=studyPlateLegacyBlocks(destinationSectionValue.document);
+    }else{
+      if(mode==='move')originSection.blocks=originSection.blocks.filter(block=>block.id!==anchorId);
+      destinationSectionValue.blocks.push(copy);
+    }
   }
   // Revalidate both complete trees. This also enforces unique IDs, media
   // constraints, content bounds and the 600-block aggregate limit.

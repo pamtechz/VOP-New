@@ -22,13 +22,17 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
+    "@platejs/basic-nodes": "53.0.0",
+    "@platejs/link": "53.0.0",
+    "@platejs/list-classic": "53.0.0",
     "canvas-confetti": "^1.9.4",
     "firebase": "12.19.0",
+    "firebase-admin": "14.5.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "^1.47.0",
+    "platejs": "53.0.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "firebase-admin": "14.5.0"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",
