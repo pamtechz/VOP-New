@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -26,6 +26,30 @@ type QuestionRecord = {
   options?: unknown;
   correctOptionIndex?: unknown;
 };
+
+function timestampMs(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+  if (typeof value === 'object') {
+    const stamp = value as { toDate?:()=>Date; seconds?:number; _seconds?:number };
+    if (typeof stamp.toDate === 'function') return stamp.toDate().getTime();
+    const seconds = Number(stamp.seconds ?? stamp._seconds);
+    if (Number.isFinite(seconds)) return seconds * 1000;
+  }
+  return 0;
+}
+
+function retakePolicyKey(organizationId:string, language:string, guideId:string, lessonId:string) {
+  return createHash('sha256').update([organizationId || 'platform',language,guideId,lessonId].join(':')).digest('hex');
+}
+
+function nonNegativeWhole(value: unknown, max: number) {
+  const parsed = Number(value ?? 0);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : 0;
+}
 
 function gradeServerQuiz(questions: QuestionRecord[], answers: Record<string, unknown>): number | null {
   if (!Array.isArray(questions) || questions.length === 0) return null;
@@ -290,10 +314,13 @@ export default async function handler(
 
     const settingsRef = organizationId ? db.doc(`organizations/${organizationId}/settings/settings`) : db.doc('system/settings');
     const settingsSnapshot = await settingsRef.get();
-    const threshold = configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
+    const settingsData = settingsSnapshot.data() || {};
+    const threshold = configuredPassThreshold(settingsData.quizPassThreshold);
     if (threshold === null) {
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
+    const maxAttempts = nonNegativeWhole(settingsData.quizMaxAttempts, 100);
+    const retakeCooldownMinutes = nonNegativeWhole(settingsData.quizRetakeCooldownMinutes, 10080);
 
     const finalExam = lessonData.assessmentKind === 'final_exam' && lessonData.attachmentType === 'guide';
     const finalRequirements = finalExam ? (await guideRef.collection('lessons').get()).docs
@@ -329,9 +356,27 @@ export default async function handler(
       `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
     ));
 
-    await db.runTransaction(async transaction => {
-      const snapshot = await transaction.get(userRef);
+    const policyResult = await db.runTransaction(async transaction => {
+      const [snapshot, policySnapshot] = await Promise.all([
+        transaction.get(userRef),
+        transaction.get(policyRef),
+      ]);
       if (!snapshot.exists) throw new Error('VOP account profile was not found.');
+
+      const policy = policySnapshot.data() || {};
+      const priorAttempts = policySnapshot.exists
+        ? Math.max(0, Number(policy.attemptCount || 0))
+        : historicalAttemptCount;
+      const lastAttemptMs = policySnapshot.exists
+        ? timestampMs(policy.lastAttemptAt)
+        : historicalLastAttemptMs;
+      if (maxAttempts > 0 && priorAttempts >= maxAttempts) {
+        throw new Error(`Assessment attempt limit reached (${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}).`);
+      }
+      const retryAtMs = lastAttemptMs + retakeCooldownMinutes * 60_000;
+      if (retakeCooldownMinutes > 0 && priorAttempts > 0 && retryAtMs > attemptTimeMs) {
+        throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
+      }
 
       const data = snapshot.data() ?? {};
       const progress = data.progress && typeof data.progress === 'object'
@@ -357,6 +402,17 @@ export default async function handler(
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
+      const attemptsUsed = priorAttempts + 1;
+      transaction.set(policyRef, {
+        organizationId,
+        language,
+        guideId: effectiveGuideId,
+        lessonId,
+        attemptCount: attemptsUsed,
+        lastAttemptAt: attemptTimeIso,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge:true });
+
       transaction.set(attemptRef, {
         candidateId: decoded.uid,
         userId: decoded.uid,
@@ -369,6 +425,7 @@ export default async function handler(
         lessonId,
         questionResults,
         failedQuestionKeys: failedQuestions.map(item => item.key),
+        attemptNumber: attemptsUsed,
         createdAt: FieldValue.serverTimestamp(),
       });
 
@@ -397,16 +454,33 @@ export default async function handler(
       for (const ref of successRefs) {
         transaction.set(ref, { organizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
+      return { attemptsUsed };
     });
 
     // Per-question correctness is retained for authorized mentor analytics only.
     // Exposing failed keys lets clients reconstruct the answer bank by probing.
-    return res.status(200).json({ ok: true, score, passed, scoreKey, threshold });
+    const remainingAttempts = maxAttempts > 0 ? Math.max(0, maxAttempts - policyResult.attemptsUsed) : null;
+    const retryAt = !passed && retakeCooldownMinutes > 0 && remainingAttempts !== 0
+      ? new Date(attemptTimeMs + retakeCooldownMinutes * 60_000).toISOString()
+      : null;
+    return res.status(200).json({
+      ok: true, score, passed, scoreKey, threshold,
+      retakePolicy: {
+        attemptsUsed: policyResult.attemptsUsed,
+        maxAttempts: maxAttempts || null,
+        remainingAttempts,
+        cooldownMinutes: retakeCooldownMinutes,
+        retryAt,
+      },
+    });
   } catch (error) {
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
     if (message.includes('not configured')) return res.status(503).json({ error: message });
     if (message.includes('Complete all published study lessons')) return res.status(409).json({error:message});
+    if (message.includes('Assessment attempt limit reached') || message.includes('Assessment retake is available after')) {
+      return res.status(429).json({error:message});
+    }
     if (message.includes('profile was not found')) return res.status(404).json({ error: message });
     return res.status(500).json({ error: 'Study progress could not be saved.' });
   }
