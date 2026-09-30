@@ -273,7 +273,7 @@ export default function UserManagement({ onBack, scope }: Props) {
         phoneNumber: editor.phoneNumber.trim(),
         userType: editor.userType,
         assignmentMode:editor.userType==='super_admin'?'platform':editor.assignmentMode,
-        ...(editor.assignmentMode==='organization'&&editor.organizationId ? { organizationId: editor.organizationId } : {}),
+        ...(editor.assignmentMode==='organization' ? { organizationId: editor.organizationId } : {}),
         ...(editor.userType==='admin'&&editor.assignmentMode==='hierarchy' ? {adminNodeType:editor.adminNodeType,adminNodeId:editor.adminNodeId} : {}),
         ...(editor.password ? { password: editor.password } : {}),
       });
