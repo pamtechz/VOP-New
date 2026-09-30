@@ -62,6 +62,7 @@ const STORAGE_KEYS = {
 export const DEFAULT_SETTINGS: AppSettings = {
   appName: '', organizationName: '', schoolName: '', directorName: '', directorTitle: '',
   contactPhone: '', whatsappNumber: '', contactEmail: '', quizPassThreshold: 0,
+  quizMaxAttempts: 0, quizRetakeCooldownMinutes: 0,
   defaultLanguage: '', customLanguages: [], customTranslations: {}, themeColor: '',
   certificateTitle: '', certificateBodyText: '',
   detailPages: {
