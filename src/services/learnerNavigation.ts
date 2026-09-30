@@ -2,6 +2,7 @@ import type { AppRoute } from '../types';
 
 export interface LearnerLocation {
   route: AppRoute;
+  programId?: string;
   guideId?: string;
   guideLanguage?: string;
   lessonId?: string;
@@ -28,12 +29,14 @@ export function normalizeLearnerLocation(value:unknown):LearnerLocation|null{
   const raw=value as Record<string,unknown>;
   const route=text(raw.route) as AppRoute;
   if(!routes.has(route))return null;
+  const programId=text(raw.programId);
   const guideId=text(raw.guideId);
   const guideLanguage=text(raw.guideLanguage);
   const lessonId=text(raw.lessonId);
   const pageIndex=Math.max(0,Math.trunc(Number(raw.pageIndex)||0));
   return {
     route,
+    ...(programId?{programId}:{}),
     ...(guideId?{guideId}:{}),
     ...(guideLanguage?{guideLanguage}:{}),
     ...(lessonId?{lessonId}:{}),
@@ -44,6 +47,7 @@ export function normalizeLearnerLocation(value:unknown):LearnerLocation|null{
 export function sameLearnerLocation(a:LearnerLocation|null,b:LearnerLocation|null){
   if(!a||!b)return a===b;
   return a.route===b.route&&
+    (a.programId||'')===(b.programId||'')&&
     (a.guideId||'')===(b.guideId||'')&&
     (a.guideLanguage||'')===(b.guideLanguage||'')&&
     (a.lessonId||'')===(b.lessonId||'')&&
