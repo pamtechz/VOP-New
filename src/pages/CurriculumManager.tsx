@@ -418,7 +418,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState | null>(null);
-  const [plateReview,setPlateReview] = useState(false);
+  const [plateReview,setPlateReview] = useState(true);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
@@ -639,6 +639,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     const organizationId = valueText(source.organizationId || source.ownerOrganizationId);
     if (isSuperAdmin && organizationId && organizationId !== scopeOrganizationId) setScopeOrganizationId(organizationId);
     setEditor(editorFromLesson(row));
+    setPlateReview(true);
     setRequestedSectionId(sectionId);
     setPlateValidationErrors({});
     setEditorTab('content');
@@ -653,6 +654,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     next.guideTitle = String(guide?.title || '');
     next.lessonNumber = String(moduleLessons.filter(item=>item.type!=='Test').length+1);
     setEditor(next);
+    setPlateReview(true);
     setRequestedSectionId('');
     setPlateValidationErrors({});
     setEditorTab('content');
@@ -979,18 +981,18 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             {editorTab === 'content' && <div className="vop-lesson-rich-editor">
               {editor.chapters.length ? <>
                 <div className="vop-plate-review-mode">
-                  <div><strong>{plateReview?'Plate document authoring preview':'Classic structured lesson editor'}</strong>
+                  <div><strong>{plateReview||hasRichSections?'Plate document authoring':'Legacy structured editor'}</strong>
                     <span>{hasRichSections
-                      ? 'This lesson contains rich Plate pages. The classic text-only editor is locked to prevent loss of formatting and quiz anchors.'
+                      ? 'This lesson contains canonical rich pages. Plate is required so formatting, media and quiz anchors are preserved.'
                       : plateReview
-                        ? 'Review the new paragraph-first writing and section-as-page flow. Drafts save to the same Firestore lesson.'
-                        : 'The original editor is retained during the Plate review.'}</span>
+                        ? 'Plate is the primary authoring experience. Each section is one learner page containing multiple rich content blocks.'
+                        : 'Compatibility mode for older structured lessons. Return to Plate before adding rich formatting or media.'}</span>
                   </div>
                   <button className="vop-secondary" type="button"
                     disabled={hasRichSections}
                     title={hasRichSections?'Rich pages can only be edited in Plate without destructive conversion.':''}
                     onClick={()=>setPlateReview(value=>!value)}>
-                    {hasRichSections?'Plate document mode':plateReview?'Use classic editor':'Try Plate editor'}
+                    {hasRichSections?'Plate document mode':plateReview?'Legacy editor':'Return to Plate'}
                   </button>
                 </div>
                 <EditorComponent
