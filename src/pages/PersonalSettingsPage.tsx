@@ -9,6 +9,7 @@ import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { LocalizationContributorPanel } from '../components/localization/LocalizationContributorPanel';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -161,7 +162,8 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         <h2><ShieldCheck size={19}/> Privacy</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
       </section>
-      <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
+      <LocalizationContributorPanel languages={languages}/>
+            <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
     </div>}
   </div>;
 };
