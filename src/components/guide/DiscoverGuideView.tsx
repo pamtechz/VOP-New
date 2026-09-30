@@ -169,51 +169,80 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
               <h2>{guide.learnerEntryMode==='sections'
                 ?t('guide.sections','Study sections')
                 :t('guide.lessons','Lessons')}</h2></div>
-            <span>{studyLessons.length} {studyLessons.length===1?'lesson':'lessons'}</span>
+            <span>{guide.learnerEntryMode==='sections'
+              ?totalSections+' '+(totalSections===1?'section':'sections')
+              :studyLessons.length+' '+(studyLessons.length===1?'lesson':'lessons')}</span>
           </div>
 
           {studyLessons.flatMap((lesson,lessonIndex)=>{
             const completed=lessonIsComplete(guide,lesson,currentUser,threshold);
+            const pages=lesson.contentPages||[];
             if(guide.learnerEntryMode==='sections'&&lesson.chapters?.length){
-              const sectionPages=(lesson.contentPages||[]).filter(item=>
-                Boolean(item.sectionId)&&lesson.chapters?.some(chapter=>
-                  chapter.sections.some(section=>section.id===item.sectionId)));
-              if(sectionPages.length)return sectionPages.map((page,pageIndex)=>{
-                const chapter=lesson.chapters!.find(item=>
-                  item.id===page.chapterId||item.sections.some(section=>section.id===page.sectionId));
-                const actualIndex=lesson.contentPages?.findIndex(item=>item.sectionId===page.sectionId)??pageIndex;
-                return <button type="button" key={lesson.id+':'+page.sectionId}
-                  className={'vop-guide-direct-section '+(completed?'completed':'')}
-                  onClick={()=>onSelectLesson(lesson,actualIndex)}>
-                  <span className="vop-guide-direct-section-number">{lessonIndex+1}.{pageIndex+1}</span>
-                  <span className="vop-guide-direct-section-copy">
-                    <small>{chapter?.title||t('guide.study_chapter','Study chapter')} · {t('guide.lesson','Lesson')} {lesson.lessonNumber}</small>
-                    <strong>{page.title}</strong><em>{lesson.title}</em>
-                  </span>
-                  {completed?<CheckCircle2 size={18} className="text-emerald-600"/>:<ChevronRight size={17}/>}
-                </button>;
-              });
+              const chapters=lesson.chapters;
+              const previousSectionCount=studyLessons.slice(0,lessonIndex).reduce((sum,item)=>
+                sum+(item.chapters||[]).reduce((chapterTotal,chapter)=>chapterTotal+chapter.sections.length,0),0);
+              return chapters.flatMap((chapter,chapterIndex)=>chapter.sections.map((section,sectionIndex)=>{
+                const sectionPages=pages.filter(page=>page.sectionId===section.id);
+                const actualIndex=Math.max(0,pages.findIndex(page=>page.sectionId===section.id));
+                const sectionCount=Math.max(1,chapters.reduce((sum,item)=>sum+item.sections.length,0));
+                const fallbackMinutes=Math.max(1,Math.ceil((lesson.estimatedMinutes||15)/sectionCount));
+                const sectionNumber=previousSectionCount
+                  +chapters.slice(0,chapterIndex).reduce((sum,item)=>sum+item.sections.length,0)
+                  +sectionIndex+1;
+                const sectionTests=attachedAssessments(lesson,'section',section.id);
+                const chapterTests=sectionIndex===chapter.sections.length-1
+                  ?attachedAssessments(lesson,'chapter',chapter.id):[];
+                const lessonTests=chapterIndex===chapters.length-1&&sectionIndex===chapter.sections.length-1
+                  ?attachedAssessments(lesson,'lesson'):[];
+                return <article className={'vop-section-study-card '+(completed?'completed':'')} key={lesson.id+':'+section.id}>
+                  <button type="button" className="vop-section-study-main" onClick={()=>onSelectLesson(lesson,actualIndex)}>
+                    <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:sectionNumber}</span>
+                    <span className="vop-section-study-copy">
+                      <small>{t('guide.section','Section')} {sectionNumber}</small>
+                      <strong>{section.title}</strong>
+                      <em>{chapter.title}{lesson.title?' · '+lesson.title:''}</em>
+                    </span>
+                    <ChevronRight size={19}/>
+                  </button>
+                  <div className="vop-section-study-meta">
+                    <span><BookOpen size={14}/>{Math.max(1,sectionPages.length)} {sectionPages.length===1?'page':'pages'}</span>
+                    <span><Clock size={14}/>~{readMinutes(sectionPages,fallbackMinutes)} min read</span>
+                    <div className="vop-section-study-tests">
+                      {sectionTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
+                      {chapterTests.map(item=>inlineAssessment(item,t('guide.chapter_test','Chapter test')))}
+                      {lessonTests.map(item=>inlineAssessment(item,t('guide.lesson_test','Lesson test')))}
+                    </div>
+                  </div>
+                </article>;
+              }));
             }
-            return [<button type="button" key={lesson.id}
-              onClick={()=>onSelectLesson(lesson)}
-              className={'vop-guide-lesson '+(completed?'completed':'')}>
-              <span className="vop-guide-lesson-number">{completed?<CheckCircle2 size={18}/>:lessonIndex+1}</span>
-              <span className="vop-guide-lesson-copy">
-                <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}</small>
-                <strong>{lesson.title}</strong>
-                {lesson.description&&<em>{lesson.description}</em>}
-                {lesson.estimatedMinutes>0&&<span><Clock size={12}/>{lesson.estimatedMinutes} min</span>}
-              </span>
-              <ChevronRight size={17}/>
-            </button>];
+            const lessonTests=attachedAssessments(lesson,'lesson');
+            return [<article className={'vop-section-study-card vop-lesson-study-card '+(completed?'completed':'')} key={lesson.id}>
+              <button type="button" className="vop-section-study-main" onClick={()=>onSelectLesson(lesson)}>
+                <span className="vop-section-study-marker">{completed?<CheckCircle2 size={24}/>:lessonIndex+1}</span>
+                <span className="vop-section-study-copy">
+                  <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}</small>
+                  <strong>{lesson.title}</strong>
+                  {lesson.description&&<em>{lesson.description}</em>}
+                </span>
+                <ChevronRight size={19}/>
+              </button>
+              <div className="vop-section-study-meta">
+                <span><BookOpen size={14}/>{Math.max(1,pages.length)} {pages.length===1?'page':'pages'}</span>
+                <span><Clock size={14}/>~{readMinutes(pages,lesson.estimatedMinutes||15)} min read</span>
+                <div className="vop-section-study-tests">
+                  {lessonTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
+                </div>
+              </div>
+            </article>];
           })}
         </div>}
 
       {guideAssessments.length>0&&<section className="vop-guide-assessment-section">
         <header><div><span><FileQuestion size={18}/></span>
           <div><small>{t('guide.check_knowledge','Check your knowledge')}</small>
-            <h2>{t('guide.assessments','Assessments')}</h2>
-            <p>{t('guide.assessment_help','Assessments are attached to this module; they are not lessons or modules themselves.')}</p></div>
+            <h2>{t('guide.assessments','Final assessment')}</h2>
+            <p>{t('guide.assessment_help','Guide assessments are completion actions. They are never counted as lessons, sections or curriculum modules.')}</p></div>
         </div><strong>{guideAssessments.length}</strong></header>
         <div>{guideAssessments.map(assessmentCard)}</div>
       </section>}
