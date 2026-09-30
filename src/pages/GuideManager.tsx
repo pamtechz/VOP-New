@@ -213,7 +213,9 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
     try {
       const response = await guideAdmin('listGuides', undefined, organizationId);
       const apiRecords = (response.items || []) as Array<Record<string, unknown>>;
-      const lessonCounts = new Map(guides.map(guide => [guide.id, guide.lessons.length]));
+      const lessonCounts = new Map(guides.map(guide => [
+        guide.id, guide.lessons.filter(lesson => lesson.type === 'Lesson').length,
+      ]));
       setRecords(apiRecords.map(item => makeRecord(item, lessonCounts.get(valueText(item.id)) || 0)));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not load guides.');
