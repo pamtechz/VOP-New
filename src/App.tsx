@@ -548,7 +548,7 @@ export const App: React.FC = () => {
     setStudyError('');
     setIsMenuOpen(false);
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
-      || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+      || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
     if (route === 'admin' && !privileged) return;
     const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
     if (route === 'mentor' && !mentorAccess) return;
@@ -575,7 +575,7 @@ export const App: React.FC = () => {
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
   const showCourse = currentRoute === 'home' && activeGuide !== null;
   const privilegedUser=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
-    || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+    || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
   const maintenanceActive=settings.systemOptions?.maintenanceMode===true&&!privilegedUser;
 
   if(maintenanceActive){
@@ -638,7 +638,7 @@ export const App: React.FC = () => {
 
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
-          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
+          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
               onLogout={() => void firebaseSignOut()} />}
