@@ -46,7 +46,7 @@ export default async function handler(req: Request, res: Response) {
       // Language creation and registry governance are platform-wide. Tenant
       // administrators consume published platform languages and contribute
       // through the localization application/review workflow instead.
-      throw new Error('Language registry management is platform-wide. Apply for localization access or ask VOP Super Admin to invite you as a translator.');
+      return res.status(403).json({ error: 'Language registry management is platform-wide. Apply for localization access or ask VOP Super Admin to invite you as a translator.' });
     }
 
     // This endpoint writes the canonical, system-wide registry and locales.

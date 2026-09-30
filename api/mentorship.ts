@@ -365,7 +365,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'performance') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
-      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       if (!isAdmin(actor)) {
         const assignment = await db.doc(`mentorAssignments/${studentId}`).get();
@@ -448,7 +448,7 @@ export default async function handler(req: Request, res: Response) {
       const mentorId = id(body.mentorId);
       const student = await profile(db, studentId);
       const mentor = await profile(db, mentorId);
-      if (!sameTenant(actor, student, organizationId) || !sameTenant(actor, mentor, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId) || !sameTenant(actor, mentor, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (isAdmin(actor) && !sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const message = String(body.message || '').trim();
       if (!message || message.length > 10000) throw new Error('A message is required.');
@@ -522,7 +522,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'createDraft') {
       const studentId = id(body.studentId);
       const student = await profile(db, studentId);
-      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const performance = await performanceFor(db, studentId);
       const draft = draftFor(student, performance);
@@ -552,7 +552,7 @@ export default async function handler(req: Request, res: Response) {
       if (!draftOrganizationId) throw new Error('The message draft is missing its organization.');
       if (draftOrganizationId !== organizationId) throw new Error('This draft belongs to another organization.');
       const student = await profile(db, String(draft.studentId || ''));
-      if (!sameTenant(actor, student, organizationId)) throw new Error('You cannot access this learner.');
+      if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const channel = String(draft.channel || 'in_app');
       let delivery = 'in_app';
