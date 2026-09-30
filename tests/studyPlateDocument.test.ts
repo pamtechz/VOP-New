@@ -123,6 +123,23 @@ test('public document rejects private quiz payloads, even when nested in Plate n
   const normalized=normalizeStudyPlateDocument(leaked);
   assert.equal(JSON.stringify(normalized).includes('answer'),false);
 });
+test('Plate authoring uses a compact document toolbar and explicit section/page controls',()=>{
+  const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
+  const structure=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
+  const studio=read('src/pages/CurriculumManager.tsx');
+  assert.match(editor,/CodePlugin/);
+  assert.match(editor,/editor\.tf\.undo\(\)/);
+  assert.match(editor,/editor\.tf\.redo\(\)/);
+  assert.match(editor,/Paragraph style/);
+  assert.match(editor,/New section/);
+  assert.match(editor,/ctrlKey\|\|event\.metaKey/);
+  assert.match(structure,/movePage=\(step:-1\|1\)/);
+  assert.match(structure,/moveChapter=\(step:-1\|1\)/);
+  assert.match(structure,/initialSectionId/);
+  assert.match(studio,/programContext\?\.entryMode==='sections'/);
+  assert.match(studio,/openModuleLesson\(item,section\.id\)/);
+});
+
 test('Plate review remains opt-in and does not replace the existing editor',()=>{
   const manager=read('src/pages/CurriculumManager.tsx');
   const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
