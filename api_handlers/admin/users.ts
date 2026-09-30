@@ -570,7 +570,7 @@ export default async function handler(request: Request, response: Response) {
       const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
       const explicitAdminScopeChange = tenant.isSuperAdmin && type === 'admin'
         && (assignmentMode === 'hierarchy' || assignmentMode === 'organization');
-      const profile = explicitAdminScopeChange
+      const profile = tenant.isSuperAdmin
         ? baseProfile
         : existingPlatformRole
           ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
