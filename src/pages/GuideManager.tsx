@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
+import { appConfirm } from '../components/layout/AppDialog';
 
 type GuideRecord = {
   id: string;
@@ -351,7 +352,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
   };
 
   const archive = async (record: GuideRecord) => {
-    if (!window.confirm('Archive this guide for the selected language?')) return;
+    if (!await appConfirm('Archive this guide for the selected language?', {title:'Archive guide',confirmLabel:'Archive'})) return;
     setSaving(true);
     setError('');
     try {
