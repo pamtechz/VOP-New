@@ -419,7 +419,9 @@ async function main(){
   if(!process.env.FIRESTORE_EMULATOR_HOST&&!process.env.GOOGLE_APPLICATION_CREDENTIALS)
     throw new Error('Provide GOOGLE_APPLICATION_CREDENTIALS outside the Firestore emulator.');
   if(getApps().length)throw new Error('Run the migration in a dedicated process.');
-  const app=initializeApp({credential:applicationDefault(),projectId:project});
+  const app=process.env.FIRESTORE_EMULATOR_HOST
+    ? initializeApp({projectId:project})
+    : initializeApp({credential:applicationDefault(),projectId:project});
   const db=getFirestore(app);
 
   if(rollbackFile){
