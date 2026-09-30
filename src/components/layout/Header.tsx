@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
   const t = (key: string, fallback?: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback);
   useLocalization(settings);
   const availableLanguages = getAvailableLanguages(settings);
-  const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+  const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
   const nav = (route: AppRoute) => { if (onNavigate) onNavigate(route); };
   const [accountOpen,setAccountOpen]=useState(false);
   const accountRef=useRef<HTMLDivElement>(null);
