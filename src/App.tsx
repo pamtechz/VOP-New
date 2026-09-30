@@ -10,7 +10,7 @@ import {
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
-import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
+import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, syncPendingLessonResumes } from './services/offlineStudyQueue';
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
@@ -194,7 +194,7 @@ export const App: React.FC = () => {
     if (!uid) return;
     let cancelled = false;
     const replay = () => {
-      void syncPendingLessonCompletions().then(async result => {
+      void Promise.all([syncPendingLessonCompletions(),syncPendingLessonResumes()]).then(async ([result,resumeResult]) => {
         if (cancelled || auth?.currentUser?.uid !== uid) return;
         if (result.synced) {
           const refreshed = await loadFirestoreUser(uid).catch(() => null);
@@ -202,10 +202,11 @@ export const App: React.FC = () => {
           if (refreshed) { setCurrentUser(refreshed); setAllUsers([refreshed]); }
         }
         const remaining = pendingForUser(uid).length;
-        if (remaining) {
-          setStudyNotice(`${remaining} lesson completion${remaining === 1 ? '' : 's'} saved on this device, awaiting server confirmation.${result.rejected ? ' Some need administrator review.' : ''}`);
-        } else if (result.synced) {
-          setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} verified and synchronized.`);
+        const resumeRemaining = pendingResumesForUser(uid).length;
+        if (remaining || resumeRemaining) {
+          setStudyNotice(`${remaining} lesson completion${remaining === 1 ? '' : 's'} and ${resumeRemaining} reading position${resumeRemaining === 1 ? '' : 's'} saved on this device, awaiting server confirmation.${result.rejected || resumeResult.rejected ? ' Some need administrator review.' : ''}`);
+        } else if (result.synced || resumeResult.synced) {
+          setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} and ${resumeResult.synced} reading position${resumeResult.synced === 1 ? '' : 's'} verified and synchronized.`);
         }
       }).catch(() => {
         if (!cancelled) setStudyNotice('Offline lesson progress is saved on this device and will be retried when connectivity returns.');
