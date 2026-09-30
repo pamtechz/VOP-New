@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Value } from 'platejs';
 import { Plate, PlateContent, PlateElement, createPlatePlugin, usePlateEditor, type PlateElementProps } from 'platejs/react';
 import {
-  BoldPlugin, ItalicPlugin, UnderlinePlugin, StrikethroughPlugin,
+  BoldPlugin, ItalicPlugin, UnderlinePlugin, StrikethroughPlugin, CodePlugin,
   H1Plugin, H2Plugin, H3Plugin, BlockquotePlugin,
 } from '@platejs/basic-nodes/react';
 import { LinkPlugin } from '@platejs/link/react';
@@ -13,7 +13,7 @@ import {
 import {
   Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Link2, ImagePlus, MoreVertical, Quote,
-  Scissors, FilePlus2, Type, AlertCircle,
+  Scissors, FilePlus2, Type, AlertCircle, Undo2, Redo2, Code2, ChevronDown,
 } from 'lucide-react';
 import {
   normalizeStudyPlateDocument, studyPlatePlainText,
@@ -39,7 +39,7 @@ const StudyImagePlugin=createPlatePlugin({
 }).withComponent(ImageElement);
 
 const plugins=[
-  BoldPlugin,ItalicPlugin,UnderlinePlugin,StrikethroughPlugin,
+  BoldPlugin,ItalicPlugin,UnderlinePlugin,StrikethroughPlugin,CodePlugin,
   H1Plugin.configure({render:{as:'h1'}}),
   H2Plugin.configure({render:{as:'h2'}}),
   H3Plugin.configure({render:{as:'h3'}}),
@@ -118,21 +118,54 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
 
   return <div className="vop-plate-page-editor" data-section={sectionId}>
     <div className="vop-plate-toolbar" role="toolbar" aria-label="Study page formatting">
-      {toolbarButton('Bold',<Bold size={16}/>,()=>editor.tf.toggleMark('bold'))}
-      {toolbarButton('Italic',<Italic size={16}/>,()=>editor.tf.toggleMark('italic'))}
-      {toolbarButton('Underline',<Underline size={16}/>,()=>editor.tf.toggleMark('underline'))}
-      {toolbarButton('Strikethrough',<Strikethrough size={16}/>,()=>editor.tf.toggleMark('strikethrough'))}
+      <div className="vop-plate-toolbar-group" aria-label="History">
+        {toolbarButton('Undo',<Undo2 size={16}/>,()=>editor.tf.undo())}
+        {toolbarButton('Redo',<Redo2 size={16}/>,()=>editor.tf.redo())}
+      </div>
       <span className="vop-plate-divider"/>
-      {toolbarButton('Paragraph',<Type size={17}/>,()=>editor.tf.toggleBlock('p'))}
-      {toolbarButton('Heading 1',<Heading1 size={17}/>,()=>editor.tf.h1.toggle())}
-      {toolbarButton('Heading 2',<Heading2 size={17}/>,()=>editor.tf.h2.toggle())}
-      {toolbarButton('Heading 3',<Heading3 size={17}/>,()=>editor.tf.h3.toggle())}
+      <label className="vop-plate-block-style" title="Paragraph style">
+        <Type size={16} aria-hidden="true"/>
+        <select aria-label="Paragraph style" defaultValue="" onChange={event=>{
+          const value=event.target.value;
+          command(()=>{
+            if(value==='p')editor.tf.toggleBlock('p');
+            else if(value==='h1')editor.tf.h1.toggle();
+            else if(value==='h2')editor.tf.h2.toggle();
+            else if(value==='h3')editor.tf.h3.toggle();
+            else if(value==='blockquote')editor.tf.blockquote.toggle();
+          });
+          event.currentTarget.value='';
+        }}>
+          <option value="">Text</option>
+          <option value="p">Paragraph</option>
+          <option value="h1">Heading 1</option>
+          <option value="h2">Heading 2</option>
+          <option value="h3">Heading 3</option>
+          <option value="blockquote">Quote</option>
+        </select>
+        <ChevronDown size={14} aria-hidden="true"/>
+      </label>
       <span className="vop-plate-divider"/>
-      {toolbarButton('Bullet list',<List size={17}/>,()=>editor.tf.ul.toggle())}
-      {toolbarButton('Numbered list',<ListOrdered size={17}/>,()=>editor.tf.ol.toggle())}
-      {toolbarButton('Quotation',<Quote size={17}/>,()=>editor.tf.blockquote.toggle())}
-      {toolbarButton('Link',<Link2 size={17}/>,insertLink)}
-      {toolbarButton('Image',<ImagePlus size={17}/>,insertImage)}
+      <div className="vop-plate-toolbar-group" aria-label="Text formatting">
+        {toolbarButton('Bold',<Bold size={16}/>,()=>editor.tf.toggleMark('bold'))}
+        {toolbarButton('Italic',<Italic size={16}/>,()=>editor.tf.toggleMark('italic'))}
+        {toolbarButton('Underline',<Underline size={16}/>,()=>editor.tf.toggleMark('underline'))}
+        {toolbarButton('Strikethrough',<Strikethrough size={16}/>,()=>editor.tf.toggleMark('strikethrough'))}
+        {toolbarButton('Inline code',<Code2 size={16}/>,()=>editor.tf.toggleMark('code'))}
+      </div>
+      <span className="vop-plate-divider"/>
+      <div className="vop-plate-toolbar-group" aria-label="Lists and inserts">
+        {toolbarButton('Bullet list',<List size={17}/>,()=>editor.tf.ul.toggle())}
+        {toolbarButton('Numbered list',<ListOrdered size={17}/>,()=>editor.tf.ol.toggle())}
+        {toolbarButton('Quotation',<Quote size={17}/>,()=>editor.tf.blockquote.toggle())}
+        {toolbarButton('Link',<Link2 size={17}/>,insertLink)}
+        {toolbarButton('Image',<ImagePlus size={17}/>,insertImage)}
+      </div>
+      <button type="button" className="vop-plate-section-break"
+        title="Start a new student section/page at this paragraph"
+        onMouseDown={event=>event.preventDefault()} onClick={splitPage}>
+        <Scissors size={16}/><span>New section</span>
+      </button>
       <details className="vop-plate-more">
         <summary title="More insert and page actions" aria-label="More insert and page actions">
           <MoreVertical size={17}/>
@@ -142,6 +175,9 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
           <button type="button" onClick={insertImage}><ImagePlus size={15}/> Insert image</button>
           <button type="button" onClick={()=>command(()=>editor.tf.blockquote.toggle())}>
             <Quote size={15}/> Quotation block
+          </button>
+          <button type="button" onClick={()=>command(()=>editor.tf.toggleMark('code'))}>
+            <Code2 size={15}/> Inline code
           </button>
           <button type="button" onClick={splitPage}>
             <Scissors size={15}/> Start a new section here
@@ -167,7 +203,12 @@ export function StudyPlatePageEditor({sectionId,document,onChange,onSplitPage,on
       <div className="vop-plate-paper">
         <PlateContent className="vop-plate-editable"
           aria-label="Edit study page" spellCheck
-          placeholder="Write your study content here. Use headings to organize ideas, or start a new section from the three-dot menu."/>
+          onKeyDown={event=>{
+            if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key==='Enter'){
+              event.preventDefault();splitPage();
+            }
+          }}
+          placeholder="Write your study content here. Use headings to organize ideas. Start a new section when the next paragraph should become another learner page."/>
       </div>
     </Plate>
     <div className="vop-plate-editor-foot">
