@@ -1,0 +1,23 @@
+/* Candidate administration — list-first management with explicit enrollment workflow. */
+.vop-candidate-management{display:grid;gap:14px;min-width:0}
+.vop-candidate-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.vop-candidate-metrics>.vop-card{display:grid;gap:4px;min-height:76px;padding:13px 15px}
+.vop-candidate-metrics span{font-size:10px;font-weight:750;color:#7085a3}
+.vop-candidate-metrics strong{font-size:24px;line-height:1;color:#103a78}
+.vop-candidate-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px 190px;gap:9px}
+.vop-candidate-toolbar select{height:40px;border:1px solid #d7e2ee;border-radius:9px;background:#fff;padding:0 10px;color:#294e7a;font:inherit;font-size:11px}
+.vop-candidate-table-wrap{border-radius:11px;overflow:auto;background:#fff}
+.vop-candidate-table{min-width:980px}
+.vop-candidate-person{display:flex;align-items:center;gap:9px;min-width:190px}
+.vop-candidate-person>span{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#e9f2ff;color:#195fae;font-weight:900}
+.vop-candidate-person>div{display:grid;gap:2px}.vop-candidate-person strong{font-size:11px;color:#143c74}.vop-candidate-person small{font-size:9px;color:#7489a4}
+.vop-candidate-progress{display:grid;gap:3px}.vop-candidate-progress strong{font-size:12px;color:#175698}.vop-candidate-progress span{font-size:9px;color:#7a8da3}
+.vop-candidate-modal-backdrop{position:fixed;inset:0;display:grid;place-items:center;padding:18px;background:rgba(5,27,59,.48)}
+.vop-candidate-modal{width:min(720px,100%);max-height:min(90vh,760px);overflow:auto;padding:18px;border-radius:14px}
+.vop-candidate-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:10px}
+.vop-candidate-detail-grid>div{padding:10px;border:1px solid #e2eaf3;border-radius:9px;background:#fbfdff;min-width:0}
+.vop-candidate-detail-grid small,.vop-candidate-detail-grid strong{display:block}.vop-candidate-detail-grid small{font-size:9px;color:#798ca5}.vop-candidate-detail-grid strong{margin-top:4px;font-size:11px;color:#244e7d;overflow-wrap:anywhere}
+.vop-candidate-baptism-editor{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0;padding:12px;border:1px solid #dce8f4;border-radius:10px;background:#f6faff}
+.vop-about-settings-card textarea{min-height:105px}
+@media(max-width:900px){.vop-candidate-metrics{grid-template-columns:1fr 1fr}.vop-candidate-toolbar{grid-template-columns:1fr 1fr}.vop-candidate-toolbar .vop-search{grid-column:1/-1}}
+@media(max-width:620px){.vop-candidate-metrics,.vop-candidate-toolbar,.vop-candidate-detail-grid,.vop-candidate-baptism-editor{grid-template-columns:1fr}.vop-candidate-toolbar .vop-search{grid-column:auto}.vop-candidate-modal{padding:13px}}
