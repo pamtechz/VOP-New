@@ -342,6 +342,33 @@ export const deleteLanguageFromFirestore = async (code: string): Promise<void> =
   if (!response.ok) throw new Error(payload.error || 'Could not delete the language.');
 };
 
+function normalizedDetailPages(value:unknown):NonNullable<AppSettings['detailPages']>{
+  const data=value&&typeof value==='object'&&!Array.isArray(value)
+    ?value as Record<string,unknown>:{};
+  const lines=(entry:unknown)=>Array.isArray(entry)
+    ?entry.map(item=>String(item||'').trim()).filter(Boolean):[];
+  const links=data.socialLinks&&typeof data.socialLinks==='object'&&!Array.isArray(data.socialLinks)
+    ?data.socialLinks as Record<string,unknown>:{};
+  return {
+    aboutUsMission:String(data.aboutUsMission||''),
+    aboutUsHistory:String(data.aboutUsHistory||''),
+    aboutUsLeadership:String(data.aboutUsLeadership||''),
+    aboutAppDescription:String(data.aboutAppDescription||''),
+    aboutAppVersion:String(data.aboutAppVersion||''),
+    aboutAppCredits:String(data.aboutAppCredits||''),
+    contactOfficeAddress:String(data.contactOfficeAddress||''),
+    contactOfficeHours:String(data.contactOfficeHours||''),
+    contactPhoneNumbers:lines(data.contactPhoneNumbers),
+    contactEmails:lines(data.contactEmails),
+    contactWhatsAppNumbers:lines(data.contactWhatsAppNumbers),
+    socialLinks:{
+      facebook:String(links.facebook||'')||undefined,
+      youtube:String(links.youtube||'')||undefined,
+      website:String(links.website||'')||undefined,
+    },
+  };
+}
+
 export const subscribeSettings = (
   callback: (settings: ExtendedAppSettings) => void,
   onError?: (error: Error) => void
@@ -358,6 +385,7 @@ export const subscribeSettings = (
         appTagline:'', timezone:'', website:'', welcomeMessage:'',
         systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
         features:{candidatesModule:true,curriculumStudio:true,translations:true,radio:true,announcements:true,certification:true},
+        detailPages: normalizedDetailPages(undefined),
       });
       return;
     }
@@ -415,6 +443,7 @@ export const subscribeSettings = (
             certificateNotifications: data.notifications?.certificateNotifications ?? false,
           },
           themeColor: data.themeColor || '',
+          detailPages: normalizedDetailPages(data.detailPages),
         });
       } else {
         // Provide default baseline if doc does not exist yet
@@ -451,6 +480,7 @@ export const subscribeSettings = (
             announcements: false,
             certification: false,
           },
+          detailPages: normalizedDetailPages(undefined),
         });
       }
     },
