@@ -883,7 +883,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className="vop-form-grid">
           <div className="vop-field"><label>School name</label><input value={settings.schoolName} onChange={e=>setSettings({...settings,schoolName:e.target.value})}/></div>
           <div className="vop-field"><label>Version label</label><input value={settings.versionLabel || ''} onChange={e=>setSettings({...settings,versionLabel:e.target.value})}/></div>
-          <div className="vop-field"><label>Ministry leadership title</label><input value={settings.directorTitle} onChange={e=>setSettings({...settings,directorTitle:e.target.value})} placeholder="Optional platform-level ministry title"/></div>
           <div className="vop-field"><label>Contact phone</label><input value={settings.contactPhone} onChange={e=>setSettings({...settings,contactPhone:e.target.value})}/></div>
           <div className="vop-field"><label>WhatsApp number</label><input value={settings.whatsappNumber} onChange={e=>setSettings({...settings,whatsappNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Theme color</label><input type="text" value={settings.themeColor || ''} onChange={e=>setSettings({...settings,themeColor:e.target.value})} placeholder="CSS color"/></div>
