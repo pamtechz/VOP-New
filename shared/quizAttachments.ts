@@ -3,6 +3,42 @@
  * Reused by API writes and regression tests. Never trust client-supplied answer keys.
  */
 export type QuizAttachmentType = 'guide' | 'lesson' | 'chapter' | 'section' | 'block';
+export type AssessmentKind = 'practice' | 'chapter_quiz' | 'final_exam';
+export type AssessmentFeedbackMode = 'after_submit' | 'after_pass' | 'none';
+export type AssessmentPolicy = {
+  instructions: string;
+  timeLimitMinutes: number;
+  passingPercent: number | null;
+  maxAttempts: number | null;
+  retakeCooldownMinutes: number | null;
+  feedbackMode: AssessmentFeedbackMode;
+};
+
+function optionalWhole(value: unknown, min: number, max: number, label: string): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) throw new Error(label);
+  return parsed;
+}
+
+export function assessmentKindForAttachment(type: QuizAttachmentType): AssessmentKind {
+  if (type === 'guide') return 'final_exam';
+  if (type === 'chapter') return 'chapter_quiz';
+  return 'practice';
+}
+
+export function normalizeAssessmentPolicy(value: unknown): AssessmentPolicy {
+  const input=value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
+  const instructions=String(input.instructions||'').trim();
+  if(instructions.length>4000)throw new Error('Assessment instructions must not exceed 4,000 characters.');
+  const timeLimitMinutes=optionalWhole(input.timeLimitMinutes,0,480,'Time limit must be a whole number from 0 to 480 minutes.') ?? 0;
+  const passingPercent=optionalWhole(input.passingPercent,1,100,'Passing percentage must be a whole number from 1 to 100.');
+  const maxAttempts=optionalWhole(input.maxAttempts,0,100,'Maximum attempts must be a whole number from 0 to 100.');
+  const retakeCooldownMinutes=optionalWhole(input.retakeCooldownMinutes,0,10080,'Retake delay must be a whole number from 0 to 10,080 minutes.');
+  const feedbackMode:AssessmentFeedbackMode=input.feedbackMode==='after_pass'||input.feedbackMode==='none'?'after_pass'===input.feedbackMode?'after_pass':'none':'after_submit';
+  return {instructions,timeLimitMinutes,passingPercent,maxAttempts,retakeCooldownMinutes,feedbackMode};
+}
+
 export type QuizQuestion = {
   key: string;
   question: string;
