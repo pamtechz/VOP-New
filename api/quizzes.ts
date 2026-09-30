@@ -19,6 +19,21 @@ function safeId(value: unknown) {
 function canManageQuizTenant(ctx: Context) {
   return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor','teacher'].includes(String(ctx.membership.role || ''));
 }
+function whole(value:unknown,min:number,max:number,field:string){
+  const parsed=Number(value??0);
+  if(!Number.isInteger(parsed)||parsed<min||parsed>max)throw new Error(field+' must be a whole number from '+min+' to '+max+'.');
+  return parsed;
+}
+function passMark(value:unknown){
+  const parsed=Number(value??0);
+  if(parsed===0)return 0;
+  if(!Number.isFinite(parsed)||parsed<1||parsed>100)throw new Error('Assessment pass mark must be 0 (use organization default) or 1–100.');
+  return parsed;
+}
+function assessmentKindFor(attachment:string){
+  return attachment==='guide'?'final_exam':attachment==='chapter'?'chapter_quiz':'practice';
+}
+
 function quizVisible(ctx: Context, data: Record<string, unknown>) {
   return ctx.isSuperAdmin
     || (ctx.tenantType === 'hierarchy' ? String(data.ownerTenantId || '') === tenantOwnerKey(ctx) : String(data.organizationId || '') === ctx.organizationId)
@@ -181,6 +196,14 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && String(current.organizationId || '') !== target.organizationId) throw new Error('Moving a quiz between organizations is not allowed. Copy the quiz into the destination tenant instead.');
       const questions = normalizeQuizQuestions(data.questions, id);
       const learnerQuestions = publicQuizQuestions(questions);
+      const assessmentKind=assessmentKindFor(String(target.attachmentType));
+      const assessmentInstructions=String(data.assessmentInstructions||'').trim().slice(0,5000);
+      const assessmentTimeLimitMinutes=whole(data.assessmentTimeLimitMinutes??0,0,1440,'Assessment time limit');
+      const assessmentPassThreshold=passMark(data.assessmentPassThreshold);
+      const assessmentMaxAttempts=whole(data.assessmentMaxAttempts??0,0,100,'Assessment maximum attempts');
+      const assessmentRetakeCooldownMinutes=whole(data.assessmentRetakeCooldownMinutes??0,0,10080,'Assessment retake waiting period');
+      const assessmentFeedbackMode=['score_only','after_submit','none'].includes(String(data.assessmentFeedbackMode||''))
+        ?String(data.assessmentFeedbackMode):'score_only';
       if (published && questions.length === 0) throw new Error('Add at least one valid question before publishing.');
       const sourceContentId = String(current.sourceContentId || data.sourceContentId || '').trim();
       if (sourceContentId && !existing.exists) {
@@ -201,7 +224,9 @@ export default async function handler(req: Request, res: Response) {
       const quizDocument = {
         id, title, description, language, guideId:target.guideId,
         attachmentType:target.attachmentType, lessonId:target.lessonId,
-        anchorId:target.anchorId, assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        anchorId:target.anchorId, assessmentKind,
+        assessmentInstructions,assessmentTimeLimitMinutes,assessmentPassThreshold,
+        assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
         organizationId:current.organizationId || target.organizationId,
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
@@ -215,7 +240,9 @@ export default async function handler(req: Request, res: Response) {
         lessonNumber:quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
         attachedLessonId:target.lessonId, anchorId:target.anchorId,
-        assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        assessmentKind,
+        assessmentInstructions,assessmentTimeLimitMinutes,assessmentPassThreshold,
+        assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
         questions:learnerQuestions, quiz:learnerQuestions,
         answerVisibility:'public_redacted',
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,
