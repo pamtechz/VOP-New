@@ -55,11 +55,16 @@ function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = Math.floor(seconds % 60);
   return h ? h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') : m + ':' + String(s).padStart(2, '0');
 }
-function localTime(date: Date) { return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date); }
-function dateTime(value?: string) {
+function localTime(date: Date, timeZone?: string) {
+  try { return new Intl.DateTimeFormat(undefined, { hour:'2-digit', minute:'2-digit', ...(timeZone ? {timeZone} : {}) }).format(date); }
+  catch { return new Intl.DateTimeFormat(undefined, { hour:'2-digit', minute:'2-digit' }).format(date); }
+}
+function dateTime(value?: string, timeZone?: string) {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  if (Number.isNaN(date.getTime())) return '';
+  try { return new Intl.DateTimeFormat(undefined, { dateStyle:'medium', timeStyle:'short', ...(timeZone ? {timeZone} : {}) }).format(date); }
+  catch { return new Intl.DateTimeFormat(undefined, { dateStyle:'medium', timeStyle:'short' }).format(date); }
 }
 function youtubeSource(value?: string) {
   if (!value) return null;
@@ -375,7 +380,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
             </div>
           </div>
           <div className="vop-radio-live-card">
-            <div className="vop-radio-live-head"><span><i/> {source?.live ? 'LIVE ON VOP RADIO' : sourceLabel(source)}</span><small>{live.length ? live.length + ' live source' + (live.length === 1 ? '' : 's') : localTime(now)}</small></div>
+            <div className="vop-radio-live-head"><span><i/> {source?.live ? 'LIVE ON VOP RADIO' : sourceLabel(source)}</span><small>{live.length ? live.length + ' live source' + (live.length === 1 ? '' : 's') : localTime(now, settings.timezone)}</small></div>
             <div className="vop-radio-provider-stage">
               {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-radio-youtube-stage"/>}
               {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="autoplay; encrypted-media; picture-in-picture" />}
@@ -386,7 +391,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
             </div>
             <div className="vop-radio-live-body">
               <div className="vop-radio-cover" style={selectedPoster ? {backgroundImage: 'url("' + selectedPoster + '" )'} : undefined}><Radio size={28}/></div>
-              <div><strong>{heroItem?.title}</strong><span>{heroItem?.speaker || 'Voice of Prophecy'}</span><span>{heroItem?.broadcastTime ? dateTime(heroItem.broadcastTime) : localTime(now)}</span></div>
+              <div><strong>{heroItem?.title}</strong><span>{heroItem?.speaker || 'Voice of Prophecy'}</span><span>{heroItem?.broadcastTime ? dateTime(heroItem.broadcastTime, settings.timezone) : localTime(now, settings.timezone)}</span></div>
             </div>
             <div className="vop-radio-wave">{Array.from({length:24},(_,i)=><b key={i} style={{height: (12 + ((i*17)%30)) + 'px'}}/>)}</div>
             {source?.provider === 'audioverse' || source?.provider === 'embed' ? <div className="vop-radio-provider-note">{t('radio.audioverse_controls','Controls are provided by the embedded media player.')}</div> : <div className="vop-radio-mini-controls"><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/><button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button type="button" onClick={fullscreen}><Maximize2 size={16}/></button></div>}
@@ -424,7 +429,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
                 {itemSource?.live?<span className="live">LIVE</span>:item.durationMinutes?<span className="duration">{formatTime(item.durationMinutes*60)}</span>:null}
                 <span className="play"><Play size={20} fill="currentColor"/></span>
               </div>
-              <div className="vop-radio-media-copy"><strong>{item.title}</strong><span>{item.speaker||'Voice of Prophecy'}</span><small>{item.series||sourceLabel(itemSource)}{item.broadcastTime?' · '+dateTime(item.broadcastTime):''}</small></div>
+              <div className="vop-radio-media-copy"><strong>{item.title}</strong><span>{item.speaker||'Voice of Prophecy'}</span><small>{item.series||sourceLabel(itemSource)}{item.broadcastTime?' · '+dateTime(item.broadcastTime, settings.timezone):''}</small></div>
             </button>;
           })}
           {!filteredBroadcasts.length&&<div className="vop-radio-media-empty"><Search size={28}/><strong>No programmes match this view.</strong><span>Try another search or filter.</span></div>}
@@ -443,14 +448,14 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
               ))}
             </div>
             <div className="vop-radio-schedule-list">
-              {schedule.map(item=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime ? localTime(new Date(item.broadcastTime)) : '—'}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{detectMedia(item)?.live && <em>{t('radio.live','LIVE')}</em>}</button>)}
+              {schedule.map(item=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime ? localTime(new Date(item.broadcastTime), settings.timezone) : '—'}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{detectMedia(item)?.live && <em>{t('radio.live','LIVE')}</em>}</button>)}
               {!schedule.length && <div className="vop-radio-muted">{t('radio.no_schedule','No scheduled programmes configured.')}</div>}
             </div>
           </div>
           <div className="vop-radio-featured-card">
             <div className="vop-radio-section-head"><h2><Radio size={19}/> Featured Programs</h2><span>{broadcasts.length} available</span></div>
             <div className="vop-radio-featured-grid">
-              {featured.map(item=>{const itemSource=detectMedia(item);return <button key={item.id} type="button" onClick={()=>selectProgramme(item)}><div className="vop-radio-feature-image" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}><span>{itemSource?.provider==='audioverse'?<Headphones/>:itemSource?.provider==='youtube'||itemSource?.provider==='direct-video'?<Video/>:<Play fill="currentColor"/>}</span><small>{item.durationMinutes?formatTime(item.durationMinutes*60):sourceLabel(itemSource)}</small></div><strong>{item.title}</strong><span>{item.speaker||item.series||'Voice of Prophecy'}</span><small>{dateTime(item.createdAt||item.updatedAt)}</small></button>;})}
+              {featured.map(item=>{const itemSource=detectMedia(item);return <button key={item.id} type="button" onClick={()=>selectProgramme(item)}><div className="vop-radio-feature-image" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}><span>{itemSource?.provider==='audioverse'?<Headphones/>:itemSource?.provider==='youtube'||itemSource?.provider==='direct-video'?<Video/>:<Play fill="currentColor"/>}</span><small>{item.durationMinutes?formatTime(item.durationMinutes*60):sourceLabel(itemSource)}</small></div><strong>{item.title}</strong><span>{item.speaker||item.series||'Voice of Prophecy'}</span><small>{dateTime(item.createdAt||item.updatedAt, settings.timezone)}</small></button>;})}
             </div>
           </div>
         </section>
