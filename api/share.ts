@@ -34,6 +34,19 @@ function value(req: Request, key: string) {
 function isSafeTarget(target: string) {
   return target.startsWith('/') && !target.startsWith('//') && !target.includes('\\n') && !target.includes('\\r');
 }
+const membershipRoles=['learner','mentor','teacher','editor','admin','owner'] as const;
+function strongerMembershipRole(...values:unknown[]) {
+  let selected='learner',rank=0;
+  for(const value of values){
+    const candidate=String(value||'');
+    const index=membershipRoles.indexOf(candidate as typeof membershipRoles[number]);
+    if(index>=0&&index>=rank){selected=candidate;rank=index;}
+  }
+  return selected;
+}
+function preservesPlatformScope(role:unknown){
+  return ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(role||''));
+}
 
 export default async function handler(req: Request, res: Response) {
   try {
@@ -163,24 +176,52 @@ export default async function handler(req: Request, res: Response) {
       const profileSnap = await profileRef.get();
       const profile = profileSnap.data() || {};
       const existingOrganizationId = String(profile.organizationId || '').trim();
-      if (existingOrganizationId && existingOrganizationId !== organizationId) throw new Error('Your account already belongs to another organization.');
-      const currentRole = String(profile.organizationRole || '').trim();
-      const role = existingOrganizationId === organizationId && currentRole ? currentRole : 'learner';
-      const now = new Date().toISOString();
+      const platformScoped=preservesPlatformScope(profile.role);
+      const crossOrganization=Boolean(existingOrganizationId && existingOrganizationId !== organizationId);
+      if (crossOrganization && shareData.sharingScope !== 'shared') {
+        throw new Error('Your account belongs to another organization; this course link is organization-only.');
+      }
+      if (shareData.sharingScope === 'shared' && guideData.sharingScope !== 'shared') {
+        throw new Error('This shared course is not available.');
+      }
+      const membershipRef=db.doc('organizations/' + organizationId + '/members/' + decoded.uid);
+      const enrollmentRef=db.doc('courseEnrollments/' + organizationId + '_' + decoded.uid + '_' + guideId);
       const installerRef=shareRef.collection('installers').doc(decoded.uid);
-      const newlyEnrolled=await db.runTransaction(async transaction => {
+      const now = new Date().toISOString();
+      const preservePrimaryScope=crossOrganization||platformScoped;
+      const result=await db.runTransaction(async transaction => {
+        const membership=await transaction.get(membershipRef);
         const installer=await transaction.get(installerRef);
-        transaction.set(profileRef, { organizationId, organizationRole:role, updatedAt:FieldValue.serverTimestamp() }, {merge:true});
-        transaction.set(db.doc('organizations/' + organizationId + '/members/' + decoded.uid), {uid:decoded.uid,organizationId,role,active:true,joinedAt:now,updatedAt:now,joinedByShareCode:code},{merge:true});
-        transaction.set(db.doc('courseEnrollments/' + organizationId + '_' + decoded.uid + '_' + guideId), {uid:decoded.uid,organizationId,guideId,lessonId,source:'share',shareCode:code,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),status:'active'},{merge:true});
+        if(!preservePrimaryScope && membership.exists && membership.data()?.active===false){
+          throw new Error('Your organization membership is inactive. An administrator must reactivate it before enrollment.');
+        }
+        const role=strongerMembershipRole(
+          existingOrganizationId===organizationId?profile.organizationRole:'',
+          membership.exists&&membership.data()?.active===true?membership.data()?.role:'',
+        );
+        if(!preservePrimaryScope){
+          transaction.set(profileRef,{organizationId,organizationRole:role,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+          transaction.set(membershipRef,{uid:decoded.uid,organizationId,role,active:true,
+            joinedAt:String(membership.data()?.joinedAt||now),updatedAt:now,joinedByShareCode:code},{merge:true});
+        }
+        transaction.set(enrollmentRef,{uid:decoded.uid,organizationId,guideId,lessonId,source:'share',
+          shareCode:code,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+          status:'active',preservedPrimaryScope:preservePrimaryScope||false},{merge:true});
         if(!installer.exists){
           transaction.create(installerRef,{uid:decoded.uid,organizationId,enrolledAt:FieldValue.serverTimestamp()});
           transaction.set(shareRef,{installs:FieldValue.increment(1),lastInstallAt:FieldValue.serverTimestamp()},{merge:true});
         }
-        return !installer.exists;
+        return {newlyEnrolled:!installer.exists,role,preservePrimaryScope};
       });
-      await getAuth(admin()).setCustomUserClaims(decoded.uid, { role:String(profile.role || 'student'), organizationId, organizationRole:role });
-      return res.status(200).json({ok:true,item:{organizationId,guideId,lessonId,newlyEnrolled}});
+      if(!result.preservePrimaryScope){
+        await getAuth(admin()).setCustomUserClaims(decoded.uid,{
+          role:String(profile.role||'student'),organizationId,organizationRole:result.role,
+        });
+      }
+      return res.status(200).json({ok:true,item:{
+        organizationId,guideId,lessonId,newlyEnrolled:result.newlyEnrolled,
+        primaryScopePreserved:result.preservePrimaryScope,
+      }});
     }
 
     if (action === 'markInstall') {
@@ -207,7 +248,8 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported share action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Share operation failed.';
-    if (message.includes('already belongs to another organization')) return res.status(409).json({error:message});
+    if (message.includes('organization-only')) return res.status(409).json({error:message});
+    if (message.includes('membership is inactive')) return res.status(403).json({error:message});
     if (message.includes('required') || message.includes('invalid') || message.includes('Administrator') || message.includes('not found')) return res.status(400).json({ error: message });
     console.error('VOP share operation failed', error);
     return res.status(500).json({ error: 'Share operation failed.' });
