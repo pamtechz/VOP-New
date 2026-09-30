@@ -16,6 +16,7 @@ import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import { auth, db } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
+import { applyThemePreference, normalizeThemePreference, readThemePreference, resolvedTheme, themeChangeEventName, type ThemePreference } from './services/theme';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
 import { LearnerSidebar } from './components/layout/LearnerSidebar';
@@ -41,6 +42,7 @@ import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
 import './components/layout/navigation-header.css';
+import './dark-mode.css';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -83,7 +85,8 @@ export const App: React.FC = () => {
   const [studyError, setStudyError] = useState('');
   const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
+  const [isDarkMode, setIsDarkMode] = useState(() => resolvedTheme(readThemePreference()) === 'dark');
   const [isMobileShell, setIsMobileShell] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
@@ -155,6 +158,8 @@ export const App: React.FC = () => {
           setActiveLang(profile.preferences.studyLanguage);
           setActiveLanguage(profile.preferences.studyLanguage);
         }
+        const accountTheme = normalizeThemePreference(profile.preferences?.theme);
+        if (accountTheme) setThemePreference(accountTheme);
         // Reload the authenticated tenant language registry and overlays.
         void initializeLocalization(settings);
         setAllUsers([profile]);
@@ -332,9 +337,25 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
-    else document.documentElement.removeAttribute('data-theme');
-  }, [isDarkMode]);
+    const update = (preference: ThemePreference) => {
+      setIsDarkMode(applyThemePreference(preference, false) === 'dark');
+    };
+    update(themePreference);
+    try { window.localStorage.setItem('vop:theme-preference', themePreference); } catch { /* storage may be blocked */ }
+
+    const media = window.matchMedia?.('(prefers-color-scheme: light)');
+    const onSystemChange = () => { if (themePreference === 'system') update(themePreference); };
+    const onThemeEvent = (event: Event) => {
+      const next = normalizeThemePreference((event as CustomEvent<{preference?:unknown}>).detail?.preference);
+      if (next && next !== themePreference) setThemePreference(next);
+    };
+    media?.addEventListener?.('change', onSystemChange);
+    window.addEventListener(themeChangeEventName(), onThemeEvent);
+    return () => {
+      media?.removeEventListener?.('change', onSystemChange);
+      window.removeEventListener(themeChangeEventName(), onThemeEvent);
+    };
+  }, [themePreference]);
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
@@ -434,7 +455,7 @@ export const App: React.FC = () => {
         {currentRoute !== 'admin' && currentRoute !== 'radio' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
-            isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
+            isDarkMode={isDarkMode} onToggleDarkMode={() => setThemePreference(isDarkMode ? 'light' : 'dark')} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} onLogout={() => void firebaseSignOut()} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
