@@ -3,7 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronRight,
   Copy, FilePlus2, FileQuestion, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import type {CurriculumChapter,CurriculumSection} from '../../../shared/curriculumStructure';
 import {
-  legacyBlocksToPlate,studyPlateLegacyBlocks,
+  legacyBlocksToPlate,studyPlateLegacyBlocks,studyPlateText,
   type StudyPlateDocument,
 } from '../../../shared/studyPlateDocument';
 import { StructureActionsMenu } from './StructureActionsMenu';
@@ -103,9 +103,8 @@ export function PlateCurriculumAuthoringReview({
     if(!canLeavePage())return;
     if(!page||chapter.sections.length>=40)return setMessage('This chapter already has 40 sections.');
     const next=freshPage(chapter.sections.length+1);
-    next.title=after[0] && 'children' in after[0]
-      ? after[0].children.map(item=>'text' in item?item.text:'').join('').trim().slice(0,60)||next.title
-      : next.title;
+    const firstText=after[0]?studyPlateText(after[0]).trim():'';
+    next.title=firstText.slice(0,60)||next.title;
     onChange(chapters.map((item,i)=>i===chapterIndex?{
       ...item,
       sections:[
