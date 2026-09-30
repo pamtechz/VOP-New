@@ -89,7 +89,10 @@ test('learner hierarchy counts lessons separately and keeps quizzes in their own
   assert.doesNotMatch(reader,/modules completed/);
   assert.match(lessonReader,/item\.attachedLessonId===lesson\.id/);
   assert.match(lessonReader,/assessmentLinks\('section',currentSection\.id\)/);
-  assert.match(catalogue,/program\.guideIds\.length===1\?'module':'modules'/);
+  assert.match(catalogue,/availableProgramGuideIds/);
+  assert.match(catalogue,/guide\.lessons\.some\(lesson=>lesson\.type==='Lesson'\)/);
+  assert.match(catalogue,/moduleCount===1\?'module':'modules'/);
+  assert.doesNotMatch(catalogue,/program\.guideIds\.length===1\?'module':'modules'/);
 });
 
 test('App restores route, guide, lesson and page and uses browser history for previous learner pages',()=>{
@@ -100,8 +103,38 @@ test('App restores route, guide, lesson and page and uses browser history for pr
   assert.match(app,/pushLearnerLocation\(currentUser\.uid,location\)/);
   assert.match(app,/replaceLearnerLocation\(currentUser\.uid,location\)/);
   assert.match(app,/window\.history\.back\(\)/);
+  assert.match(app,/clearLearnerLocation\(uid\)/);
+  assert.match(app,/event\.shiftKey&&key==='r'/);
   assert.match(app,/onPageChange=\{rememberStudyPage\}/);
   assert.match(app,/selectedProgramId=\{activeProgramId\}/);
   assert.match(app,/rememberLocation\(\{route:'lessons',\.\.\.\(programId\?\{programId\}:\{\}\)\}\)/);
   assert.match(reader,/onPageChange\?\.\(currentPageIndex\)/);
+});
+
+
+test('guide selectors and dashboards exclude assessment records from lesson and module totals',()=>{
+  const contentApi=read('api_handlers/admin/content.ts');
+  const admin=read('src/pages/AdminPage.tsx');
+  const guideManager=read('src/pages/GuideManager.tsx');
+  const home=read('src/components/home/HomeDashboard.tsx');
+  assert.match(contentApi,/lessonCount: studyLessons\.length/);
+  assert.match(contentApi,/type \|\| 'Lesson'\) !== 'Test'/);
+  assert.match(admin,/lesson\.type === 'Lesson'/);
+  assert.match(admin,/lesson\.type === 'Test'/);
+  assert.match(guideManager,/lesson\.type === 'Lesson'/);
+  assert.match(home,/primaryStudyLessons/);
+});
+
+test('dark theme defines semantic surfaces and covers late legacy UI islands',()=>{
+  const theme=read('src/theme-dark.css');
+  const preference=read('src/services/themePreference.ts');
+  const html=read('index.html');
+  for(const token of ['--bg-primary:#0c1118','--bg-card:#151e28','--bg-elevated:#1c2835','--text-primary:#f6f8fa','--border-subtle:#314050']){
+    assert.ok(theme.includes(token),token);
+  }
+  for(const selector of ['vop-app-header-account-menu','vop-admin-sidebar-footer','vop-plate-more>div','vop-reference-table th','vop-save-state-chip.saved']){
+    assert.ok(theme.includes(selector),selector);
+  }
+  assert.match(preference,/#0c1118/);
+  assert.match(html,/meta name="theme-color" content="#0c1118"/);
 });

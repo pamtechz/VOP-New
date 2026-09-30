@@ -37,9 +37,15 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     lessonIsComplete(guide, lesson, currentUser, settings.quizPassThreshold);
   const completedLessons = guides.reduce((total,guide)=>
     total + guide.lessons.filter(lesson=>lesson.type==='Lesson'&&isCompleted(guide,lesson)).length,0);
-  const primaryGuide = filteredGuides.find(guide=>guide.lessons.some(lesson=>!isCompleted(guide,lesson))) || filteredGuides[0];
-  const primaryCompleted = primaryGuide ? primaryGuide.lessons.filter(lesson=>isCompleted(primaryGuide,lesson)).length : 0;
-  const primaryPercent = primaryGuide?.lessons.length ? Math.round((primaryCompleted / primaryGuide.lessons.length) * 100) : 0;
+  const primaryGuide = filteredGuides.find(guide=>
+    guide.lessons.some(lesson=>lesson.type==='Lesson'&&!isCompleted(guide,lesson)))
+    || filteredGuides.find(guide=>guide.lessons.some(lesson=>lesson.type==='Lesson'))
+    || filteredGuides[0];
+  const primaryStudyLessons = primaryGuide?.lessons.filter(lesson=>lesson.type==='Lesson') || [];
+  const primaryCompleted = primaryGuide
+    ?primaryStudyLessons.filter(lesson=>isCompleted(primaryGuide,lesson)).length:0;
+  const primaryPercent = primaryStudyLessons.length
+    ?Math.round((primaryCompleted / primaryStudyLessons.length) * 100):0;
   const announcement = announcements[announcementIndex % Math.max(announcements.length, 1)];
   const firstName = currentUser.displayName?.split(' ')[0] || t('common.learner','Learner');
 
@@ -84,7 +90,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         {primaryGuide ? <button type="button" className="vop-home-resume-card" onClick={() => onSelectGuide(primaryGuide)}>
           <div className="vop-home-book-icon"><BookOpen size={30}/></div>
           <div className="vop-home-resume-copy">
-            <div><span>{primaryGuide.subtitle || 'Bible Study'}</span><small>{primaryCompleted}/{primaryGuide.lessons.length} lessons</small></div>
+            <div><span>{primaryGuide.subtitle || 'Bible Study'}</span><small>{primaryCompleted}/{primaryStudyLessons.length} lessons</small></div>
             <h3>{primaryGuide.title}</h3><p>{primaryGuide.description}</p>
             <div className="vop-home-progress"><div><span>Guide progress</span><b>{primaryPercent}%</b></div><i><em style={{width: primaryPercent + '%'}}/></i></div>
           </div>

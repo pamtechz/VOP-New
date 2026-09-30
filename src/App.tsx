@@ -15,7 +15,7 @@ import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, 
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import {
-  learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
+  clearLearnerLocation, learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
   readLearnerLocation, replaceLearnerLocation, type LearnerLocation,
 } from './services/learnerNavigation';
 import { auth, db } from './lib/firebase';
@@ -454,6 +454,22 @@ export const App: React.FC = () => {
     window.addEventListener('popstate',pop);
     return()=>window.removeEventListener('popstate',pop);
   },[currentUser.uid,applyLearnerLocation]);
+
+  // Standard refreshes keep the learner location. Web browsers do not expose a
+  // reliable API that distinguishes toolbar/menu cache-bypass reloads from F5,
+  // so reset only when the page receives the common explicit hard-refresh keys.
+  useEffect(()=>{
+    const uid=currentUser.uid;
+    if(!uid)return;
+    const hardRefresh=(event:KeyboardEvent)=>{
+      const key=event.key.toLowerCase();
+      const modifiedR=(event.ctrlKey||event.metaKey)&&event.shiftKey&&key==='r';
+      const modifiedF5=(event.ctrlKey||event.metaKey)&&event.key==='F5';
+      if(modifiedR||modifiedF5)clearLearnerLocation(uid);
+    };
+    window.addEventListener('keydown',hardRefresh,{capture:true});
+    return()=>window.removeEventListener('keydown',hardRefresh,{capture:true});
+  },[currentUser.uid]);
 
   const rememberLocation=useCallback((location:LearnerLocation,replace=false)=>{
     if(!currentUser.uid)return;

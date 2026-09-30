@@ -253,9 +253,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     [languages],
   );
   const activeLanguages = useMemo(() => scopedLanguages.filter(item => item.enabled !== false), [scopedLanguages]);
-  const totalLessons = useMemo(() => guides.reduce((sum, guide) => sum + guide.lessons.length, 0), [guides]);
-  const totalQuestions = useMemo(() => guides.reduce((sum, guide) => sum + guide.lessons.reduce((n, lesson) => n + (lesson.questions?.length || 0), 0), 0), [guides]);
-  const quizCount = useMemo(() => guides.reduce((sum, guide) => sum + guide.lessons.filter(lesson => (lesson.questions?.length || 0) > 0).length, 0), [guides]);
+  const totalLessons = useMemo(() => guides.reduce((sum, guide) =>
+    sum + guide.lessons.filter(lesson => lesson.type === 'Lesson').length, 0), [guides]);
+  const assessmentRows = useMemo(() => guides.flatMap(guide =>
+    guide.lessons.filter(lesson => lesson.type === 'Test').map(lesson => ({guide,lesson}))), [guides]);
+  const totalQuestions = useMemo(() => assessmentRows.reduce((sum,row) =>
+    sum + (row.lesson.questions?.length || 0), 0), [assessmentRows]);
+  const quizCount = assessmentRows.length;
 
   const filteredLanguages = useMemo(() => languages.filter(language => {
     const q = langSearch.trim().toLowerCase();
@@ -264,7 +268,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     return matchText && matchStatus;
   }), [languages, langSearch, langFilter]);
 
-  const lessonRows = useMemo(() => guides.flatMap(guide => guide.lessons.map(lesson => ({ guide, lesson }))), [guides]);
+  const lessonRows = useMemo(() => guides.flatMap(guide =>
+    guide.lessons.filter(lesson => lesson.type === 'Lesson').map(lesson => ({ guide, lesson }))), [guides]);
 
   const filteredLessons = useMemo(() => lessonRows.filter(row => {
     const q = lessonSearch.trim().toLowerCase();
@@ -1008,8 +1013,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         </div>
         <div className="vop-pager"><span>Showing {filteredLessons.length} of {totalLessons} lessons</span><div className="vop-pager-controls"><button className="vop-page-btn"><ChevronLeft size={17}/></button><button className="vop-page-btn active">1</button><button className="vop-page-btn"><ChevronRight size={17}/></button></div></div>
       </div>}
-      {studioTab==='guides' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Guide</th><th>Languages</th><th>Lessons</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{guides.map((guide,index)=><tr key={guide.id}><td>{index+1}</td><td><div style={{display:'flex',alignItems:'center',gap:12}}>{guide.image ? <img className="vop-thumb" style={{width:72,height:48}} src={guide.image} alt="" />:<div className="vop-avatar-code"><BookOpen size={18}/></div>}<div><strong>{guide.title}</strong><div style={{fontSize:12,color:'#7183a4'}}>{guide.description || guide.subtitle || 'No description configured.'}</div></div></div></td><td><span className="vop-chip">{guide.language.toUpperCase()}</span></td><td>{guide.lessons.length}</td><td><span className="vop-status published">Published</span></td><td>Not recorded</td><td><button className="vop-actions" type="button" onClick={()=>{setStudioTab('lessons');setLessonLanguage(guide.language)}}><MoreVertical size={16}/></button></td></tr>)}</tbody></table>{guides.length===0&&<div className="vop-empty">No guides are currently configured.</div>}</div>}
-      {studioTab==='quizzes' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Quiz / Lesson</th><th>Guide</th><th>Questions</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>{lessonRows.filter(row=>(row.lesson.questions?.length||0)>0).map((row,index)=><tr key={row.guide.id+'-'+row.lesson.id}><td>{index+1}</td><td><strong>{row.lesson.title}</strong><div style={{fontSize:12,color:'#7183a4'}}>{row.lesson.lessonNumber}</div></td><td>{row.guide.title}</td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-chip">Configured</span></td><td><span className="vop-status published">Published</span></td><td><button className="vop-actions" type="button" onClick={()=>openLessonEditor(row.guide,row.lesson)}><Edit3 size={16}/></button></td></tr>)}</tbody></table>{quizCount===0&&<div className="vop-empty">No quiz-bearing lessons are configured.</div>}</div>}
+      {studioTab==='guides' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Guide</th><th>Languages</th><th>Lessons</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{guides.map((guide,index)=><tr key={guide.id}><td>{index+1}</td><td><div style={{display:'flex',alignItems:'center',gap:12}}>{guide.image ? <img className="vop-thumb" style={{width:72,height:48}} src={guide.image} alt="" />:<div className="vop-avatar-code"><BookOpen size={18}/></div>}<div><strong>{guide.title}</strong><div style={{fontSize:12,color:'#7183a4'}}>{guide.description || guide.subtitle || 'No description configured.'}</div></div></div></td><td><span className="vop-chip">{guide.language.toUpperCase()}</span></td><td>{guide.lessons.filter(lesson=>lesson.type==='Lesson').length}</td><td><span className="vop-status published">Published</span></td><td>Not recorded</td><td><button className="vop-actions" type="button" onClick={()=>{setStudioTab('lessons');setLessonLanguage(guide.language)}}><MoreVertical size={16}/></button></td></tr>)}</tbody></table>{guides.length===0&&<div className="vop-empty">No guides are currently configured.</div>}</div>}
+      {studioTab==='quizzes' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Quiz / Lesson</th><th>Guide</th><th>Questions</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>{assessmentRows.map((row,index)=><tr key={row.guide.id+'-'+row.lesson.id}><td>{index+1}</td><td><strong>{row.lesson.title}</strong><div style={{fontSize:12,color:'#7183a4'}}>{row.lesson.lessonNumber}</div></td><td>{row.guide.title}</td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-chip">Configured</span></td><td><span className="vop-status published">Published</span></td><td><button className="vop-actions" type="button" onClick={()=>openLessonEditor(row.guide,row.lesson)}><Edit3 size={16}/></button></td></tr>)}</tbody></table>{quizCount===0&&<div className="vop-empty">No quiz-bearing lessons are configured.</div>}</div>}
       {studioTab!=='lessons' && studioTab!=='guides' && studioTab!=='quizzes' && <div className="vop-empty"><Layers size={32}/><h2 style={{color:'#09275f'}}>No {tabs.find(tab=>tab.id===studioTab)?.label.toLowerCase()} configured</h2><p>These records are intentionally data-driven and will appear here when configured by an administrator.</p><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={17}/>Create Content</button></div>}
     </div>;
   };

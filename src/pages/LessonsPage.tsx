@@ -57,16 +57,22 @@ export const LessonsPage: React.FC<Props> = ({
     return !needle||[guide.title,guide.subtitle,lesson.title,lesson.description,lesson.lessonNumber]
       .join(' ').toLowerCase().includes(needle);
   }),[guides,query,language,kind]);
+  const availableProgramGuideIds=useMemo(()=>new Map(programs.map(program=>[
+    program.id,
+    [...new Set(program.guideIds)].filter(id=>guides.some(guide=>
+      guide.id===id&&guide.lessons.some(lesson=>lesson.type==='Lesson'))),
+  ])),[programs,guides]);
   const availablePrograms=useMemo(()=>programs.filter(program=>
-    program.guideIds.some(id=>guides.some(guide=>guide.id===id&&guide.lessons.length>0))),
-  [programs,guides]);
+    (availableProgramGuideIds.get(program.id)?.length||0)>0),
+  [programs,availableProgramGuideIds]);
   const activeProgram=availablePrograms.find(program=>program.id===selectedProgramId);
-  const assignedGuideIds=useMemo(()=>new Set(availablePrograms.flatMap(program=>program.guideIds)),[availablePrograms]);
+  const assignedGuideIds=useMemo(()=>new Set(availablePrograms.flatMap(program=>
+    availableProgramGuideIds.get(program.id)||[])),[availablePrograms,availableProgramGuideIds]);
   const standaloneEntries=availablePrograms.length
     ?entries.filter(({guide})=>!assignedGuideIds.has(guide.id))
     :entries;
   const programGuides=activeProgram
-    ?activeProgram.guideIds.flatMap(id=>guides.filter(guide=>guide.id===id))
+    ?(availableProgramGuideIds.get(activeProgram.id)||[]).flatMap(id=>guides.filter(guide=>guide.id===id))
     :[];
   const status=(guide:DiscoverGuide,lesson:Lesson)=>{
     const done=lessonIsComplete(guide,lesson,currentUser,settings.quizPassThreshold);
@@ -125,7 +131,7 @@ export const LessonsPage: React.FC<Props> = ({
               [program.title,program.description,...program.guideIds.flatMap(id=>
                 guides.filter(guide=>guide.id===id).map(guide=>guide.title))].join(' ')
                 .toLowerCase().includes(query.trim().toLowerCase()))
-              .map(program=><button type="button" key={program.id}
+              .map(program=>{const moduleCount=availableProgramGuideIds.get(program.id)?.length||0;return <button type="button" key={program.id}
                 className="vop-program-catalog-card"
                 onClick={()=>onSelectProgram(program.id)}>
                 <span className="vop-program-catalog-cover">
@@ -134,9 +140,9 @@ export const LessonsPage: React.FC<Props> = ({
                   <small>{program.entryMode==='sections'?'STUDY BY SECTION':'STUDY BY LESSON'}</small>
                   <strong>{program.title}</strong>
                   <span>{program.description||'Explore this course.'}</span>
-                  <em>{program.guideIds.length} {program.guideIds.length===1?'module':'modules'} <ChevronRight size={14}/></em>
+                  <em>{moduleCount} {moduleCount===1?'module':'modules'} <ChevronRight size={14}/></em>
                 </span>
-              </button>)}
+              </button>})}
           </div>
         </>}
       </section>}
