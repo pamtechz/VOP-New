@@ -20,8 +20,8 @@ export const BottomNav: React.FC<Props> = ({currentRoute,onNavigate}) => {
     {route:'lessons',label:t('navigation.lessons','Lessons'),icon:BookOpen},
     {route:'resources',label:t('navigation.library','Library'),icon:LibraryBig},
     {route:'prayer',label:t('navigation.prayer','Prayer'),icon:HeartHandshake},
-    {route:'radio',label:t('navigation.radio','Radio'),icon:Radio},
-  ] as const;
+    ...(settings.features?.radio!==false?[{route:'radio' as const,label:t('navigation.radio','Radio'),icon:Radio}]:[]),
+  ];
   return <nav className="vop-bottom-nav md:hidden" aria-label="Primary mobile navigation">
     {items.map(item=>{
       const Icon=item.icon;
