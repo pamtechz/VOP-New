@@ -61,7 +61,12 @@ test('lesson reader, grading and offline completion follow each guide language',
   const app=source('src/App.tsx');
   const study=source('src/services/localStudy.ts');
   assert.ok(app.includes('completeLesson(activeGuide.id, activeLesson.id, activeGuide.language)'));
-  assert.ok(app.includes('submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language)'));
+  assert.ok(app.includes('submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId)'));
+  const quizModal=source('src/components/quiz/QuizModal.tsx');
+  const localStudy=source('src/services/localStudy.ts');
+  assert.match(quizModal,/beginQuizAttempt\(guide\.id,lesson\.id,guide\.language\)/);
+  assert.match(localStudy,/action:'startQuiz'/);
+  assert.match(localStudy,/sessionId/);
   assert.ok(study.includes('uid:firebaseUser.uid, language, guideId, lessonId'));
   assert.ok(app.includes('${guide.language}:${guide.id}:${lesson.id}'));
   assert.match(app,/openStudyItem\(activeGuide,lesson/);
