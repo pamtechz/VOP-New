@@ -274,3 +274,33 @@
   .vop-admin-direct-section{grid-template-columns:28px minmax(0,1fr) 16px}
   .vop-admin-direct-section>.vop-status{grid-column:2;justify-self:start}
 }
+
+
+/* Lesson editor auxiliary tabs use the same inner spacing as the featured-image
+ * and content surfaces instead of allowing form controls to touch the card edge. */
+.vop-lesson-aux-tab{
+  box-sizing:border-box;width:100%;padding:15px;min-width:0;
+}
+.vop-lesson-aux-tab>.vop-field,
+.vop-lesson-aux-tab>.vop-setting-row{min-width:0}
+.vop-lesson-aux-tab textarea{min-height:180px}
+
+/* Explicit persistence feedback. This remains visible while the lesson editor is
+ * open, where the manager-level toast is otherwise outside the early-return tree. */
+.vop-editor-save-status{
+  display:flex;align-items:center;gap:7px;min-height:34px;margin:0 0 11px;
+  padding:7px 10px;border:1px solid #dce6f1;border-radius:8px;
+  background:#f7faff;color:#607894;font-size:11px;font-weight:700;
+}
+.vop-editor-save-status.saving{border-color:#bcd7f2;background:#eef6ff;color:#1d5d9c}
+.vop-editor-save-status.saved{border-color:#bee7cf;background:#f0fbf5;color:#24714a}
+.vop-editor-save-status.dirty{border-color:#f0d7a8;background:#fff9eb;color:#825d1e}
+.vop-editor-save-status.idle{border-style:dashed}
+.vop-editor-save-status svg{flex:none}
+.vop-save-spin{animation:vop-curriculum-save-spin .8s linear infinite}
+@keyframes vop-curriculum-save-spin{to{transform:rotate(360deg)}}
+
+@media(max-width:620px){
+  .vop-lesson-aux-tab{padding:11px}
+  .vop-editor-save-status{margin-bottom:9px}
+}
