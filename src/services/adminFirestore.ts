@@ -43,6 +43,79 @@ export interface ExtendedAppSettings extends AppSettings {
   };
 }
 
+const emptyDetailPages = (): NonNullable<AppSettings['detailPages']> => ({
+  aboutUsMission:'', aboutUsHistory:'', aboutUsLeadership:'',
+  aboutAppDescription:'', aboutAppVersion:'', aboutAppCredits:'',
+  contactOfficeAddress:'', contactOfficeHours:'',
+  contactPhoneNumbers:[], contactEmails:[], contactWhatsAppNumbers:[],
+  socialLinks:{},
+});
+
+function normalizeAdminSettings(raw: unknown): ExtendedAppSettings {
+  const data = raw && typeof raw === 'object' ? raw as Partial<ExtendedAppSettings> : {};
+  const detail = data.detailPages || emptyDetailPages();
+  return {
+    appName:data.appName || '',
+    organizationName:data.organizationName || '',
+    schoolName:data.schoolName || '',
+    copyrightText:data.copyrightText || '',
+    versionLabel:data.versionLabel || '',
+    directorName:data.directorName || '',
+    directorTitle:data.directorTitle || '',
+    contactPhone:data.contactPhone || '',
+    whatsappNumber:data.whatsappNumber || '',
+    contactEmail:data.contactEmail || '',
+    quizPassThreshold:Number(data.quizPassThreshold ?? 0),
+    defaultLanguage:data.defaultLanguage || '',
+    customLanguages:data.customLanguages || [],
+    customTranslations:data.customTranslations || {},
+    themeColor:data.themeColor || '',
+    certificateTitle:data.certificateTitle || '',
+    certificateBodyText:data.certificateBodyText || '',
+    detailPages:{
+      ...emptyDetailPages(),
+      ...detail,
+      contactPhoneNumbers:Array.isArray(detail.contactPhoneNumbers)?detail.contactPhoneNumbers:[],
+      contactEmails:Array.isArray(detail.contactEmails)?detail.contactEmails:[],
+      contactWhatsAppNumbers:Array.isArray(detail.contactWhatsAppNumbers)?detail.contactWhatsAppNumbers:[],
+      socialLinks:{...(detail.socialLinks || {})},
+    },
+    appTagline:data.appTagline || '',
+    timezone:data.timezone || '',
+    website:data.website || '',
+    welcomeMessage:data.welcomeMessage || '',
+    systemOptions:{
+      allowRegistrations:data.systemOptions?.allowRegistrations ?? false,
+      requireApproval:data.systemOptions?.requireApproval ?? false,
+      enableEmailNotifications:data.systemOptions?.enableEmailNotifications ?? false,
+      showChurchInfo:data.systemOptions?.showChurchInfo ?? true,
+      enablePwa:data.systemOptions?.enablePwa ?? true,
+      maintenanceMode:data.systemOptions?.maintenanceMode ?? false,
+    },
+    // Missing historical flags mean enabled. Feature controls should never make
+    // an existing installation disappear merely because it predates the flags.
+    features:{
+      candidatesModule:data.features?.candidatesModule ?? true,
+      curriculumStudio:data.features?.curriculumStudio ?? true,
+      translations:data.features?.translations ?? true,
+      radio:data.features?.radio ?? true,
+      announcements:data.features?.announcements ?? true,
+      certification:data.features?.certification ?? true,
+    },
+    security:{
+      sessionTimeoutMinutes:Number(data.security?.sessionTimeoutMinutes ?? 60),
+      allowMultipleSessions:data.security?.allowMultipleSessions ?? false,
+      enforceSecureConnections:data.security?.enforceSecureConnections ?? true,
+    },
+    notifications:{
+      emailEnabled:data.notifications?.emailEnabled ?? false,
+      enrollmentNotifications:data.notifications?.enrollmentNotifications ?? false,
+      announcementNotifications:data.notifications?.announcementNotifications ?? false,
+      certificateNotifications:data.notifications?.certificateNotifications ?? false,
+    },
+  };
+}
+
 function getDb(): Firestore {
   if (!db) throw new Error('The application data service is not initialized.');
   return db;
@@ -352,13 +425,7 @@ export const subscribeSettings = (
   void currentTenantScope().then(scope => {
     if (cancelled) return;
     if (!scope.superAdmin && !scope.organizationId && !['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
-      callback({
-        appName:'', organizationName:'', schoolName:'', directorName:'', directorTitle:'',
-        contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'',
-        appTagline:'', timezone:'', website:'', welcomeMessage:'',
-        systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
-        features:{candidatesModule:false,curriculumStudio:false,translations:false,radio:false,announcements:false,certification:false},
-      });
+      callback(normalizeAdminSettings({}));
       return;
     }
     const ref = scope.superAdmin
@@ -367,93 +434,12 @@ export const subscribeSettings = (
         ? doc(firestore, 'organizations', scope.organizationId, 'settings', 'settings')
         : doc(firestore, 'tenantSettings', scope.role + ':' + scope.nodeId, 'settings', 'settings');
     stop = onSnapshot(ref,
-    (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as ExtendedAppSettings;
-        callback({
-          appName: data.appName || '',
-          organizationName: data.organizationName || '',
-          schoolName: data.schoolName || '',
-          directorName: data.directorName || '',
-          directorTitle: data.directorTitle || '',
-          contactPhone: data.contactPhone || '',
-          whatsappNumber: data.whatsappNumber || '',
-          contactEmail: data.contactEmail || '',
-          quizPassThreshold: Number(data.quizPassThreshold ?? 0),
-          defaultLanguage: data.defaultLanguage || '',
-          appTagline: data.appTagline || '',
-          timezone: data.timezone || '',
-          website: data.website || '',
-          welcomeMessage: data.welcomeMessage || '',
-          systemOptions: {
-            allowRegistrations: data.systemOptions?.allowRegistrations ?? false,
-            requireApproval: data.systemOptions?.requireApproval ?? false,
-            enableEmailNotifications: data.systemOptions?.enableEmailNotifications ?? false,
-            showChurchInfo: data.systemOptions?.showChurchInfo ?? false,
-            enablePwa: data.systemOptions?.enablePwa ?? false,
-            maintenanceMode: data.systemOptions?.maintenanceMode ?? false,
-          },
-          features: {
-            candidatesModule: data.features?.candidatesModule ?? false,
-            curriculumStudio: data.features?.curriculumStudio ?? false,
-            translations: data.features?.translations ?? false,
-            radio: data.features?.radio ?? false,
-            announcements: data.features?.announcements ?? false,
-            certification: data.features?.certification ?? false,
-          },
-          security: {
-            sessionTimeoutMinutes: Number(data.security?.sessionTimeoutMinutes ?? 60),
-            allowMultipleSessions: data.security?.allowMultipleSessions ?? false,
-            enforceSecureConnections: data.security?.enforceSecureConnections ?? true,
-          },
-          notifications: {
-            emailEnabled: data.notifications?.emailEnabled ?? false,
-            enrollmentNotifications: data.notifications?.enrollmentNotifications ?? false,
-            announcementNotifications: data.notifications?.announcementNotifications ?? false,
-            certificateNotifications: data.notifications?.certificateNotifications ?? false,
-          },
-          themeColor: data.themeColor || '',
-        });
-      } else {
-        // Provide default baseline if doc does not exist yet
-        callback({
-          appName: '',
-          organizationName: '',
-          schoolName: '',
-          directorName: '',
-          directorTitle: '',
-          contactPhone: '',
-          whatsappNumber: '',
-          contactEmail: '',
-          quizPassThreshold: 0,
-          defaultLanguage: '',
-          appTagline: '',
-          timezone: '',
-          website: '',
-          welcomeMessage: '',
-          systemOptions: {
-            allowRegistrations: false,
-            requireApproval: false,
-            enableEmailNotifications: false,
-            showChurchInfo: false,
-            enablePwa: false,
-            maintenanceMode: false,
-          },
-          features: {
-            candidatesModule: false,
-            curriculumStudio: false,
-            translations: false,
-            radio: false,
-            announcements: false,
-            certification: false,
-          },
-        });
-      }
-    },
-    (err) => {
-      console.error('Firestore settings subscription error:', err);
-      if (onError) onError(err);
-    });
+      snap => callback(normalizeAdminSettings(snap.exists() ? snap.data() : {})),
+      err => {
+        console.error('Firestore settings subscription error:', err);
+        onError?.(err);
+      },
+    );
   }).catch(error => onError?.(error instanceof Error ? error : new Error('Settings could not be loaded.')));
   return () => { cancelled = true; stop(); };
 };
