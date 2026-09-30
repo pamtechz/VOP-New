@@ -3,8 +3,8 @@
   --vop-plate-line:#dbe5f1;min-width:0;border:1px solid var(--vop-plate-line);
   border-radius:10px;background:#fff;box-shadow:0 4px 15px rgba(15,46,90,.05);
 }
-.vop-plate-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:6px 8px;
-  background:#fcfdff;border-bottom:1px solid var(--vop-plate-line);border-radius:10px 10px 0 0;min-height:43px;}
+.vop-plate-toolbar{position:sticky;top:0;z-index:24;display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:6px 8px;
+  background:rgba(252,253,255,.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--vop-plate-line);border-radius:10px 10px 0 0;min-height:43px;}
 .vop-plate-toolbar>button,.vop-plate-more>summary{
   display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;
   border-radius:7px;background:transparent;color:#26446e;cursor:pointer;list-style:none;
