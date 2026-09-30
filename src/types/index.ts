@@ -42,6 +42,10 @@ export interface AppSettings {
   whatsappNumber: string;
   contactEmail: string;
   quizPassThreshold: number; // e.g. 80
+  /** 0 means unlimited attempts. */
+  quizMaxAttempts?: number;
+  /** Waiting period after an attempt before another submission is accepted. */
+  quizRetakeCooldownMinutes?: number;
   defaultLanguage: LanguageCode;
   customLanguages?: CustomLanguage[];
   customTranslations?: Record<string, Record<string, string>>;
