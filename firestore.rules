@@ -536,18 +536,19 @@ service cloud.firestore {
       // Organization language records are private until the trusted server
       // promotes them into the global registry. No direct-client privilege
       // can forge adoption, break a usage lock or publish a system locale.
+      // Legacy tenant language/locale records may remain after migration but
+      // are no longer an organization feature. Only Super Admin may inspect
+      // them; all active localization flows use the platform registry/API.
       match /languages/{languageId} {
-        allow get, list: if isSuperAdmin() || isOrgMember(organizationId);
+        allow get, list: if isSuperAdmin();
         allow create, update, delete: if false;
       }
 
-      // Locale overrides stay confined to this organization's authenticated
-      // users. Canonical /locales paths have no client-side write grant.
       match /locales/{locale} {
-        allow get: if isSuperAdmin() || isOrgMember(organizationId);
-        allow list, create, update, delete: if false;
+        allow get, list: if isSuperAdmin();
+        allow create, update, delete: if false;
         match /translations/{key} {
-          allow get, list: if isSuperAdmin() || isOrgMember(organizationId);
+          allow get, list: if isSuperAdmin();
           allow create, update, delete: if false;
         }
       }
@@ -803,21 +804,21 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
-    // Platform certification configuration.
-    // Canonical translations remain immutable to non-owners. Contributors who
-    // do not own a translation submit a proposal for review instead of overwriting it.
+    // Translation proposals/recommendations contain contributor identity,
+    // review state and publication decisions. They are API-only so direct
+    // Firestore clients cannot forge recommendation percentages or approval.
     match /translations/{languageId}/proposals/{proposalId} {
-      allow get, list: if isSuperAdmin()
-        || (signedIn() && resource.data.get('proposerUid', '') == request.auth.uid)
-        || (isAdmin() && resource.data.get('organizationId', '') == organizationIdForUser());
-      allow create: if isAdmin()
-        && isOrgMember(organizationIdForUser())
-        && request.resource.data.get('proposerUid', '') == request.auth.uid
-        && request.resource.data.get('proposerOrganizationId', '') == organizationIdForUser()
-        && request.resource.data.get('organizationId', '') == organizationIdForUser()
-        && request.resource.data.get('status', 'pending') == 'pending';
-      allow update: if isSuperAdmin();
-      allow delete: if isSuperAdmin();
+      allow read, write: if false;
+      match /recommendations/{reviewerId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /localizationApplications/{uid} {
+      allow read, write: if false;
+    }
+    match /localizationCollaborators/{uid} {
+      allow read, write: if false;
     }
 
     match /system/certification {
@@ -930,6 +931,10 @@ service cloud.firestore {
       }
 
       match /assessmentAttemptPolicy/{policyId} {
+        allow read, write: if false;
+      }
+
+      match /assessmentSessions/{sessionId} {
         allow read, write: if false;
       }
 
