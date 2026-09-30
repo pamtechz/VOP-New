@@ -589,6 +589,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     });
   };
 
+  const updateDetailPages = (patch: Partial<NonNullable<ExtendedAppSettings['detailPages']>>) => {
+    if (!settings) return;
+    const current = settings.detailPages || {
+      aboutUsMission:'', aboutUsHistory:'', aboutUsLeadership:'',
+      aboutAppDescription:'', aboutAppVersion:'', aboutAppCredits:'',
+      contactOfficeAddress:'', contactOfficeHours:'',
+      contactPhoneNumbers:[], contactEmails:[], contactWhatsAppNumbers:[], socialLinks:{},
+    };
+    setSettings({...settings, detailPages:{...current,...patch}});
+  };
+  const splitSettingLines = (value:string) => value.split(/\r?\n/).map(item=>item.trim()).filter(Boolean);
+
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!settings) return;
@@ -818,6 +830,23 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             <div className="vop-field"><label>Website</label><input value={settings.website || ''} onChange={e=>setSettings({...settings,website:e.target.value})}/></div>
             <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>
           </div>
+
+          <div className="vop-settings-about-grid">
+            <section className="vop-settings-about-card">
+              <div className="vop-section-title"><div><h3>About Ministry & Mission</h3><p>This content belongs to the current platform, union, conference, district, church or organisation scope.</p></div></div>
+              <div className="vop-field"><label>Mission & purpose</label><textarea rows={5} value={settings.detailPages?.aboutUsMission || ''} onChange={e=>updateDetailPages({aboutUsMission:e.target.value})} placeholder="Describe this ministry's mission and purpose."/></div>
+              <div className="vop-field"><label>Heritage & history</label><textarea rows={4} value={settings.detailPages?.aboutUsHistory || ''} onChange={e=>updateDetailPages({aboutUsHistory:e.target.value})} placeholder="Describe the history of this ministry in your local scope."/></div>
+              <div className="vop-field"><label>Ministry leadership</label><textarea rows={4} value={settings.detailPages?.aboutUsLeadership || ''} onChange={e=>updateDetailPages({aboutUsLeadership:e.target.value})} placeholder="Describe the responsible ministry team or leadership. A named director is optional."/></div>
+            </section>
+            <section className="vop-settings-about-card">
+              <div className="vop-section-title"><div><h3>Offices & Contact</h3><p>Learners in this scope see these local office and contact details on the About page.</p></div></div>
+              <div className="vop-field"><label>Office / ministry address</label><textarea rows={3} value={settings.detailPages?.contactOfficeAddress || ''} onChange={e=>updateDetailPages({contactOfficeAddress:e.target.value})} placeholder="Physical or postal address"/></div>
+              <div className="vop-field"><label>Office hours</label><textarea rows={2} value={settings.detailPages?.contactOfficeHours || ''} onChange={e=>updateDetailPages({contactOfficeHours:e.target.value})} placeholder="e.g. Monday–Thursday 08:00–17:00"/></div>
+              <div className="vop-field"><label>Phone numbers <small>(one per line)</small></label><textarea rows={3} value={(settings.detailPages?.contactPhoneNumbers || []).join('\n')} onChange={e=>updateDetailPages({contactPhoneNumbers:splitSettingLines(e.target.value)})}/></div>
+              <div className="vop-field"><label>Email addresses <small>(one per line)</small></label><textarea rows={3} value={(settings.detailPages?.contactEmails || []).join('\n')} onChange={e=>updateDetailPages({contactEmails:splitSettingLines(e.target.value)})}/></div>
+              <div className="vop-field"><label>WhatsApp numbers <small>(one per line)</small></label><textarea rows={3} value={(settings.detailPages?.contactWhatsAppNumbers || []).join('\n')} onChange={e=>updateDetailPages({contactWhatsAppNumbers:splitSettingLines(e.target.value)})}/></div>
+            </section>
+          </div>
 {isSuperAdmin && <>          <div style={{height:18}} />
           <div className="vop-section-title"><div><h3>System Options</h3><p>Configuration is securely managed.</p></div></div>
           <div className="vop-setting-list">
@@ -853,8 +882,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className="vop-form-grid">
           <div className="vop-field"><label>School name</label><input value={settings.schoolName} onChange={e=>setSettings({...settings,schoolName:e.target.value})}/></div>
           <div className="vop-field"><label>Version label</label><input value={settings.versionLabel || ''} onChange={e=>setSettings({...settings,versionLabel:e.target.value})}/></div>
-          <div className="vop-field"><label>Director name</label><input value={settings.directorName} onChange={e=>setSettings({...settings,directorName:e.target.value})}/></div>
-          <div className="vop-field"><label>Director title</label><input value={settings.directorTitle} onChange={e=>setSettings({...settings,directorTitle:e.target.value})}/></div>
+          <div className="vop-field"><label>Ministry leadership title</label><input value={settings.directorTitle} onChange={e=>setSettings({...settings,directorTitle:e.target.value})} placeholder="Optional platform-level ministry title"/></div>
           <div className="vop-field"><label>Contact phone</label><input value={settings.contactPhone} onChange={e=>setSettings({...settings,contactPhone:e.target.value})}/></div>
           <div className="vop-field"><label>WhatsApp number</label><input value={settings.whatsappNumber} onChange={e=>setSettings({...settings,whatsappNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Theme color</label><input type="text" value={settings.themeColor || ''} onChange={e=>setSettings({...settings,themeColor:e.target.value})} placeholder="CSS color"/></div>
