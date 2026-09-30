@@ -35,7 +35,14 @@ function normalizeFields(kind: CatalogKind, input: Record<string,unknown>, exist
   const title = bounded(input.title, 200);
   const description = bounded(input.description, 2500);
   if (!title) throw new Error('A title is required.');
-  if (kind === 'requirements') return {title, description};
+  if (kind === 'requirements') {
+    const raw = input.requiredSignatures ?? existing.requiredSignatures ?? 1;
+    const requiredSignatures = Number(raw);
+    if (!Number.isInteger(requiredSignatures) || requiredSignatures < 1 || requiredSignatures > 20) {
+      throw new Error('Required evaluator signatures must be a whole number from 1 to 20.');
+    }
+    return {title, description, requiredSignatures};
+  }
   if (kind === 'memoryDecks') {
     const list = input.verses;
     if (!Array.isArray(list) || list.length === 0 || list.length > 200) {
