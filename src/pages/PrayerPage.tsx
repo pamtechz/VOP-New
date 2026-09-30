@@ -5,6 +5,7 @@ import type { PrayerRequest, User } from '../types';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { ModalLayer } from '../components/layout/ModalLayer';
+import { appConfirm } from '../components/layout/AppDialog';
 
 interface PrayerPageProps {
   currentUser: User;
@@ -103,7 +104,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('Delete this prayer request?')) return;
+    if (!await appConfirm('Delete this prayer request?', {title:'Delete prayer request',confirmLabel:'Delete',tone:'danger'})) return;
     try {
       await prayerApi('delete', { id });
       setRequests(current => current.filter(item => item.id !== id));
