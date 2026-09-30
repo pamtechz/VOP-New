@@ -16,6 +16,30 @@ function safeId(value: unknown) {
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) throw new Error('A valid quiz or content ID is required.');
   return id;
 }
+function whole(value:unknown,min:number,max:number,fallback:number){
+  const number=Number(value);
+  return Number.isFinite(number)?Math.min(max,Math.max(min,Math.trunc(number))):fallback;
+}
+function optionalPercent(value:unknown){
+  if(value===undefined||value===null||value==='')return null;
+  const number=Number(value);
+  if(!Number.isFinite(number)||number<1||number>100)throw new Error('Assessment pass mark must be between 1 and 100, or left blank to inherit the platform setting.');
+  return number;
+}
+function assessmentPolicy(data:Record<string,unknown>,attachmentType:QuizAttachmentType){
+  const assessmentKind=attachmentType==='guide'?'final_exam':attachmentType==='chapter'?'chapter_quiz':'practice';
+  const instructions=String(data.instructions||'').trim().slice(0,8000);
+  const timeLimitMinutes=whole(data.timeLimitMinutes,0,1440,0);
+  const passThresholdOverride=optionalPercent(data.passThresholdOverride);
+  const maxAttemptsOverride=data.maxAttemptsOverride===undefined||data.maxAttemptsOverride===null||data.maxAttemptsOverride===''
+    ?null:whole(data.maxAttemptsOverride,0,100,0);
+  const retakeCooldownMinutesOverride=data.retakeCooldownMinutesOverride===undefined||data.retakeCooldownMinutesOverride===null||data.retakeCooldownMinutesOverride===''
+    ?null:whole(data.retakeCooldownMinutesOverride,0,10080,0);
+  const feedbackMode=['immediate','after_submission','score_only','none'].includes(String(data.feedbackMode||''))
+    ?String(data.feedbackMode) as 'immediate'|'after_submission'|'score_only'|'none'
+    :'after_submission';
+  return {assessmentKind,instructions,timeLimitMinutes,passThresholdOverride,maxAttemptsOverride,retakeCooldownMinutesOverride,feedbackMode,attemptStartRequired:true};
+}
 function canManageQuizTenant(ctx: Context) {
   return ctx.isSuperAdmin || ctx.tenantType === 'hierarchy' || ['owner','admin','editor','teacher'].includes(String(ctx.membership.role || ''));
 }
@@ -198,10 +222,11 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('The assessment ID conflicts with an existing lesson.');
       }
       const ownerUid = String(current.ownerUid || ctx.auth.uid);
+      const policy=assessmentPolicy(data,target.attachmentType);
       const quizDocument = {
         id, title, description, language, guideId:target.guideId,
         attachmentType:target.attachmentType, lessonId:target.lessonId,
-        anchorId:target.anchorId, assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        anchorId:target.anchorId, ...policy,
         organizationId:current.organizationId || target.organizationId,
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
@@ -215,12 +240,13 @@ export default async function handler(req: Request, res: Response) {
         lessonNumber:quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
         attachedLessonId:target.lessonId, anchorId:target.anchorId,
-        assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        ...policy,
         questions:learnerQuestions, quiz:learnerQuestions,
         answerVisibility:'public_redacted',
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,
         ownerUid, canonical:true, sharingScope, published, archived:false,
-        estimatedMinutes:Math.max(1, Math.ceil(questions.length * 1.5)),
+        estimatedMinutes:policy.timeLimitMinutes>0
+          ?policy.timeLimitMinutes:Math.max(1, Math.ceil(questions.length * 1.5)),
         createdAt:current.createdAt || now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid,
       };
       const batch = ctx.db.batch();
