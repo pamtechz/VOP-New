@@ -4,7 +4,7 @@
 }
 .vop-app-dialog{
   width:min(510px,calc(100vw - 28px));max-height:min(78vh,620px);overflow:auto;
-  border:1px solid #dce5ef;border-radius:15px;background:#fff;color:#1e3f68;
+  border:1px solid #dce5ef;border-radius:15px;background:var(--bg-card,#fff);color:#1e3f68;
   box-shadow:0 26px 80px rgba(5,25,55,.32);
 }
 .vop-app-dialog-head{
@@ -13,7 +13,7 @@
 .vop-app-dialog-icon{
   display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#eaf3ff;color:#195ca7;
 }
-.vop-app-dialog.tone-warning .vop-app-dialog-icon{background:#fff3dc;color:#b76700}
+.vop-app-dialog.tone-warning .vop-app-dialog-icon{background:var(--bg-card,#fff)3dc;color:#b76700}
 .vop-app-dialog.tone-danger .vop-app-dialog-icon{background:#ffe9ec;color:#c52239}
 .vop-app-dialog.tone-success .vop-app-dialog-icon{background:#e7f8ee;color:#178448}
 .vop-app-dialog-head h2{margin:1px 0 5px;color:#123d76;font-size:17px;line-height:1.25}
@@ -25,7 +25,7 @@
 .vop-app-dialog-prompt{display:grid;gap:6px;padding:0 18px 12px;color:#42617f;font-size:11px;font-weight:760}
 .vop-app-dialog-prompt input{
   width:100%;height:39px;box-sizing:border-box;border:1px solid #d7e2ee;border-radius:8px;
-  padding:0 10px;background:#fff;color:#1d416b;font:inherit;font-size:12px;outline:0;
+  padding:0 10px;background:var(--bg-card,#fff);color:#1d416b;font:inherit;font-size:12px;outline:0;
 }
 .vop-app-dialog-prompt input:focus{border-color:#4a8bd1;box-shadow:0 0 0 3px rgba(48,119,193,.12)}
 .vop-app-dialog-actions{
