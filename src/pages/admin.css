@@ -189,6 +189,14 @@
 
 
 .vop-admin-record-layout{display:block;min-width:0}
+@media(min-width:901px){
+  .vop-admin-record-layout>.vop-reference-table-wrap{
+    min-height:clamp(340px,46vh,620px);
+  }
+  .vop-candidate-table-wrap{
+    min-height:clamp(320px,42vh,580px);
+  }
+}
 .vop-admin-record-layout .vop-form-card{position:sticky;top:98px}
 .vop-translation-list{display:flex;flex-direction:column;gap:9px;max-height:620px;overflow:auto;padding-right:2px}
 .vop-translation-row{display:grid;grid-template-columns:minmax(150px,.85fr) minmax(180px,1.4fr) 40px;gap:8px;align-items:center}
