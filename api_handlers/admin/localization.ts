@@ -159,6 +159,16 @@ export default async function handler(req:Request,res:Response){
           invitedBy:uid,approvedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
         },{merge:true});
       }
+      await createNotification(db,{
+        recipientId:applicantUid,type:'invitation',
+        title:decision==='approved'?'Localization application approved':'Localization application update',
+        body:decision==='approved'
+          ?'Your localization application was approved. Open Personal Settings to access your assigned translation/review work.'
+          :'Your localization application was reviewed and was not approved at this time.',
+        actionUrl:'/personal-settings',
+        metadata:{source:'localization-application-decision',status:decision},
+        createdBy:uid,
+      });
       return res.status(200).json({ok:true,status:decision});
     }
 
@@ -188,6 +198,16 @@ export default async function handler(req:Request,res:Response){
         roles:assignedRoles,languages:assignedLanguages,status,source:'invite',
         invitedBy:uid,updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
+      if(status==='active'){
+        await createNotification(db,{
+          recipientId:collaboratorUid,type:'invitation',
+          title:'Localization role assigned',
+          body:`You were assigned as ${assignedRoles.join(' and ')} for ${assignedLanguages.includes('*')?'all enabled languages':assignedLanguages.join(', ').toUpperCase()}.`,
+          actionUrl:'/personal-settings',
+          metadata:{source:'localization-role',roles:assignedRoles,languages:assignedLanguages},
+          createdBy:uid,
+        });
+      }
       return res.status(200).json({ok:true,item:{uid:collaboratorUid,email:user.email,displayName:user.displayName,roles:assignedRoles,languages:assignedLanguages,status}});
     }
 
