@@ -43,6 +43,8 @@ export default async function handler(req: Request, res: Response) {
     const action = lower(body.action);
     const db = getAdminDb();
     if (action.startsWith('tenant')) {
+      throw new Error('Language governance is platform-wide. Only VOP Super Admin can create, edit, publish or remove languages.'); /*
+
       // These records are private organization drafts. The canonical registry
       // has a distinct, Super-Admin-only authorization boundary.
       const organizationId = ctx.organizationId;
