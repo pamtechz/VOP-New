@@ -19,6 +19,7 @@ type FirestoreGuide = Record<string, unknown> & {
   certificateEligible?: boolean;
   certificateDocumentType?: string;
   certificateTypeName?: string;
+  certificationRequirementIds?: string[];
   published?: boolean;
   archived?: boolean;
 };
@@ -183,6 +184,8 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
       certificateEligible: data.certificateEligible === true,
       certificateDocumentType: String(data.certificateDocumentType || 'course'),
       certificateTypeName: String(data.certificateTypeName || ''),
+      certificationRequirementIds: Array.isArray(data.certificationRequirementIds)
+        ? data.certificationRequirementIds.map(value=>String(value)).filter(Boolean) : [],
       learnerEntryMode: data.learnerEntryMode === 'sections' ? 'sections':'lessons',
       requiresFinalExam: data.requiresFinalExam === true,
     };
