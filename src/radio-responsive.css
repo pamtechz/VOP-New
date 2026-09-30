@@ -125,3 +125,31 @@
 .vop-radio-admin-dashboard input,
 .vop-radio-admin-dashboard select,
 .vop-radio-admin-dashboard textarea{max-width:100%;overflow-wrap:anywhere}
+
+
+/* YouTube-style VOP media discovery feed */
+.vop-radio-discovery{max-width:1440px;margin:0 auto;padding:26px 28px 10px}
+.vop-radio-discovery-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,480px);gap:24px;align-items:end}
+.vop-radio-discovery-head>div>span{display:block;color:#d69b14;font-size:11px;font-weight:900;letter-spacing:.18em}
+.vop-radio-discovery-head h2{margin:5px 0 4px;color:#0f2e52;font-size:clamp(24px,3vw,34px);line-height:1.05}
+.vop-radio-discovery-head p{margin:0;color:#71839a;font-size:13px;max-width:680px}
+.vop-radio-search{display:flex;align-items:center;gap:9px;height:44px;padding:0 14px;border:1px solid #d4dfeb;border-radius:999px;background:#fff;box-shadow:0 4px 16px rgba(20,53,86,.06)}
+.vop-radio-search svg{color:#637a94;flex:none}.vop-radio-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#163d68;font:inherit}
+.vop-radio-filter-row{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:18px 0 12px;scrollbar-width:none}.vop-radio-filter-row::-webkit-scrollbar{display:none}
+.vop-radio-filter-row>svg{flex:none;color:#70839b}.vop-radio-filter-row button{flex:none;border:1px solid #d9e4ee;border-radius:8px;background:#f4f6f8;color:#314f6b;padding:8px 13px;font-size:11px;font-weight:800;cursor:pointer;transition:.18s}
+.vop-radio-filter-row button:hover{background:#e9eef4}.vop-radio-filter-row button.active{border-color:#173f6d;background:#173f6d;color:#fff}
+.vop-radio-media-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 16px;padding:4px 0 24px}
+.vop-radio-media-card{display:block;min-width:0;padding:0;border:0;background:transparent;text-align:left;cursor:pointer}
+.vop-radio-media-thumb{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:12px;background:#173a63 center/cover no-repeat;box-shadow:0 8px 20px rgba(18,47,80,.12);transition:transform .18s ease,box-shadow .18s ease}
+.vop-radio-media-card:hover .vop-radio-media-thumb,.vop-radio-media-card.selected .vop-radio-media-thumb{transform:translateY(-2px);box-shadow:0 12px 26px rgba(18,47,80,.18)}
+.vop-radio-media-thumb:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,16,32,.02),rgba(3,16,32,.45))}
+.vop-radio-media-thumb .fallback{position:absolute;inset:0;display:grid;place-items:center;color:#fff9;z-index:1}
+.vop-radio-media-thumb .provider,.vop-radio-media-thumb .duration,.vop-radio-media-thumb .live{position:absolute;z-index:2;bottom:8px;padding:4px 6px;border-radius:5px;background:rgba(6,15,25,.88);color:#fff;font-size:8px;font-weight:900;letter-spacing:.04em}
+.vop-radio-media-thumb .provider{left:8px}.vop-radio-media-thumb .duration{right:8px}.vop-radio-media-thumb .live{right:8px;background:#d82424}
+.vop-radio-media-thumb .play{position:absolute;z-index:3;inset:0;display:grid;place-items:center;color:#fff;opacity:0;transition:.18s}.vop-radio-media-thumb .play:before{content:"";position:absolute;width:46px;height:46px;border-radius:50%;background:rgba(9,28,49,.72)}.vop-radio-media-thumb .play svg{position:relative}
+.vop-radio-media-card:hover .play,.vop-radio-media-card.selected .play{opacity:1}
+.vop-radio-media-copy{display:grid;gap:3px;padding:10px 2px 0}.vop-radio-media-copy strong{color:#142e4e;font-size:12px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.vop-radio-media-copy span{color:#57708d;font-size:10px}.vop-radio-media-copy small{color:#8a99aa;font-size:9px;line-height:1.35}
+.vop-radio-media-empty{grid-column:1/-1;display:grid;place-items:center;gap:5px;padding:42px 16px;border:1px dashed #cad7e4;border-radius:13px;color:#71839a;text-align:center}.vop-radio-media-empty strong{color:#284f76;font-size:14px}
+@media(max-width:1100px){.vop-radio-media-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:820px){.vop-radio-discovery{padding:20px 16px 8px}.vop-radio-discovery-head{grid-template-columns:1fr;gap:14px}.vop-radio-media-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}}
+@media(max-width:520px){.vop-radio-discovery{padding-inline:12px}.vop-radio-media-grid{grid-template-columns:1fr}.vop-radio-media-thumb{border-radius:10px}.vop-radio-filter-row{margin-inline:-2px}}

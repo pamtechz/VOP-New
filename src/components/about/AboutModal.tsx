@@ -192,7 +192,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   Leadership & Oversight
                 </h5>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  {details?.aboutUsLeadership || `Directed by ${settings.directorName} (${settings.directorTitle}) in collaboration with conference leaders, district pastors, and church coordinators.`}
+                  {details?.aboutUsLeadership || 'This ministry is led by the responsible Personal Ministries team and authorized church leadership for this local ministry scope.'}
                 </p>
               </div>
             </div>

@@ -87,9 +87,11 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   ];
   const community: MenuItem[] = [
     { route: 'prayer', label: t('navigation.prayer_requests', 'Prayer Requests'), detail: t('navigation.prayer_detail', 'Share and support prayer needs'), icon: HeartHandshake },
-    { route: 'radio', label: t('navigation.radio_broadcasts', 'Radio & Broadcasts'), detail: t('navigation.radio_detail', 'Listen to ministry programmes'), icon: Radio },
-    { route: 'announcements', label: t('navigation.announcements', 'Announcements'), detail: t('navigation.announcements_detail', 'News from your organization'), icon: Megaphone },
-    { route: 'events', label: t('navigation.events', 'Events & Programmes'), detail: t('navigation.events_detail', 'Upcoming activities'), icon: CalendarDays },
+    ...(settings.features?.radio===false?[]:[{ route: 'radio' as const, label: t('navigation.radio_broadcasts', 'Radio & Broadcasts'), detail: t('navigation.radio_detail', 'Listen to ministry programmes'), icon: Radio }]),
+    ...(settings.features?.announcements===false?[]:[
+      { route: 'announcements' as const, label: t('navigation.announcements', 'Announcements'), detail: t('navigation.announcements_detail', 'News from your organization'), icon: Megaphone },
+      { route: 'events' as const, label: t('navigation.events', 'Events & Programmes'), detail: t('navigation.events_detail', 'Upcoming activities'), icon: CalendarDays },
+    ]),
     ...(currentUser.role === 'student'
       ? [{ route: 'support' as const, label: t('navigation.mentor', 'Talk to my mentor'), detail: t('navigation.mentor_detail', 'Get guidance and support'), icon: MessageCircle }]
       : []),
@@ -97,7 +99,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const account: MenuItem[] = [
     { route: 'profile', label: t('navigation.profile', 'Profile'), detail: t('navigation.profile_detail', 'Your learner account'), icon: UserCheck },
     { route: 'personal-settings', label: t('navigation.personal_settings', 'Personal Settings'), detail: t('navigation.settings_detail', 'Language and preferences'), icon: UserCheck },
-    { route: 'certificates', label: t('certificates.my_certificate', 'My Certificates'), detail: t('navigation.certificates_detail', 'Graduation and awards'), icon: Award },
+    ...(settings.features?.certification===false?[]:[{ route: 'certificates' as const, label: t('certificates.my_certificate', 'My Certificates'), detail: t('navigation.certificates_detail', 'Graduation and awards'), icon: Award }]),
     { route: 'about', label: t('navigation.about', 'About'), detail: t('navigation.about_detail', 'About the Voice of Prophecy'), icon: Info },
     ...(isAdmin ? [{ route: 'admin' as const, label: t('navigation.admin', 'Admin Panel'), detail: t('navigation.admin_detail', 'Manage authorized ministry content'), icon: ShieldCheck }] : []),
   ];
@@ -162,7 +164,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
             </button>
           </section>
           <div className="vop-account-overview-footer">
-            <button type="button" onClick={() => navigate('certificates')}><Award size={19}/>{t('certificates.my_certificate', 'My Certificates')}</button>
+            {settings.features?.certification!==false&&<button type="button" onClick={() => navigate('certificates')}><Award size={19}/>{t('certificates.my_certificate', 'My Certificates')}</button>}
             <button type="button" onClick={() => navigate('personal-settings')}><UserCheck size={19}/>{t('navigation.personal_settings', 'Personal Settings')}</button>
           </div>
         </aside>

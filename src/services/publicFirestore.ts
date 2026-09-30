@@ -149,22 +149,60 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
 
   const hierarchyRole = String(profileData.role || '');
   const hierarchyNodeId = String(profileData.adminNodeId || '').trim();
-  const hierarchyTenantId = hierarchyRole && hierarchyNodeId
-    ? hierarchyRole + ':' + hierarchyNodeId
-    : '';
-
-  const settingsSnap = organizationId
-    ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
-    : hierarchyTenantId
-      ? await getDoc(doc(firestore, 'tenantSettings', hierarchyTenantId, 'settings', 'settings'))
-      : await getDoc(doc(firestore, 'system', 'settings'));
-
   const ownHierarchyIds = {
     unionId: String(profileData.unionId || '').trim(),
     conferenceId: String(profileData.conferenceId || '').trim(),
     districtId: String(profileData.districtId || '').trim(),
     churchId: String(profileData.churchId || '').trim(),
   };
+  const hierarchyTenantId = hierarchyRole && hierarchyNodeId
+    ? hierarchyRole + ':' + hierarchyNodeId
+    : ownHierarchyIds.churchId ? 'church_admin:' + ownHierarchyIds.churchId
+    : ownHierarchyIds.districtId ? 'district_admin:' + ownHierarchyIds.districtId
+    : ownHierarchyIds.conferenceId ? 'conference_admin:' + ownHierarchyIds.conferenceId
+    : ownHierarchyIds.unionId ? 'union_admin:' + ownHierarchyIds.unionId
+    : '';
+
+  const systemSettingsSnap = await getDoc(doc(firestore, 'system', 'settings'));
+  const scopedSettingsSnap = organizationId
+    ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
+    : hierarchyTenantId
+      ? await getDoc(doc(firestore, 'tenantSettings', hierarchyTenantId, 'settings', 'settings'))
+      : null;
+  const platformSettings = systemSettingsSnap.exists() ? normalizeSettings(systemSettingsSnap.data()) : emptySettings();
+  const scopedSettings = scopedSettingsSnap?.exists() ? normalizeSettings(scopedSettingsSnap.data()) : null;
+  const platformDetails = platformSettings.detailPages || emptySettings().detailPages!;
+  const scopedDetails = scopedSettings?.detailPages || emptySettings().detailPages!;
+  const effectiveSettings: AppSettings = scopedSettings ? {
+    ...platformSettings,
+    ...scopedSettings,
+    // Product availability and platform security remain authoritative at the
+    // platform layer; tenant settings customize identity, mission and contacts.
+    appName: platformSettings.appName || scopedSettings.appName,
+    appTagline: platformSettings.appTagline || scopedSettings.appTagline,
+    versionLabel: platformSettings.versionLabel || scopedSettings.versionLabel,
+    themeColor: platformSettings.themeColor || scopedSettings.themeColor,
+    systemOptions: platformSettings.systemOptions,
+    features: platformSettings.features,
+    security: platformSettings.security,
+    notifications: platformSettings.notifications,
+    detailPages: {
+      // Tenant scopes own Ministry & Mission plus Offices & Contact.
+      aboutUsMission: scopedDetails.aboutUsMission,
+      aboutUsHistory: scopedDetails.aboutUsHistory,
+      aboutUsLeadership: scopedDetails.aboutUsLeadership,
+      contactOfficeAddress: scopedDetails.contactOfficeAddress,
+      contactOfficeHours: scopedDetails.contactOfficeHours,
+      contactPhoneNumbers: scopedDetails.contactPhoneNumbers,
+      contactEmails: scopedDetails.contactEmails,
+      contactWhatsAppNumbers: scopedDetails.contactWhatsAppNumbers,
+      socialLinks: scopedDetails.socialLinks,
+      // About the VOP application itself remains platform-owned.
+      aboutAppDescription: platformDetails.aboutAppDescription,
+      aboutAppVersion: platformDetails.aboutAppVersion,
+      aboutAppCredits: platformDetails.aboutAppCredits,
+    },
+  } : platformSettings;
 
   const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
     const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;
@@ -272,14 +310,14 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const guides = await loadFirestoreGuides();
 
   return {
-    settings: settingsSnap.exists() ? normalizeSettings(settingsSnap.data()) : emptySettings(),
+    settings: effectiveSettings,
     languages,
     translations,
-    announcements,
-    events,
+    announcements: effectiveSettings.features?.announcements === false ? [] : announcements,
+    events: effectiveSettings.features?.announcements === false ? [] : events,
     books,
-    radioBroadcasts,
-    radioPlaylists,
+    radioBroadcasts: effectiveSettings.features?.radio === false ? [] : radioBroadcasts,
+    radioPlaylists: effectiveSettings.features?.radio === false ? [] : radioPlaylists,
     unions: unionsSnap?.docs.map(item => item.data() as Union) || [],
     conferences: conferencesSnap?.docs.map(item => item.data() as Conference) || [],
     districts: districtsSnap?.docs.map(item => item.data() as District) || [],

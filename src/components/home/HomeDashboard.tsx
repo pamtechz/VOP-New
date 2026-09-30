@@ -49,7 +49,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div>
           <span className="vop-home-kicker"><Sparkles size={14}/> {t('home.welcome_back','Welcome back')}</span>
           <h1>{t('home.greeting_prefix','Hello')}, {firstName}.</h1>
-          <p>{t('home.subtitle','Continue your Bible study journey and discover your next lesson.')}</p>
+          <p>{settings.welcomeMessage?.trim() || t('home.subtitle','Continue your Bible study journey and discover your next lesson.')}</p>
         </div>
         <div className="vop-home-actions">
           {currentUser.progress.completedGuidesCount > 0 && <button type="button" onClick={onOpenCertificate}><Award size={16}/> {t('certificates.title','Certificates')}</button>}
@@ -123,7 +123,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         })}</div> : <div className="vop-home-empty"><BookOpen size={30}/><h3>No guides match your language</h3><p>Try another language filter.</p></div>}
       </section>
 
-      <footer className="vop-home-footer"><img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/><div><strong>{settings.appName || 'Voice of Prophecy'}</strong><span>{settings.copyrightText || 'Bible study, discipleship and hope.'}</span></div></footer>
+      <footer className="vop-home-footer"><img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/><div><strong>{settings.appName || 'Voice of Prophecy'}</strong><span>{settings.appTagline?.trim() || settings.copyrightText || 'Bible study, discipleship and hope.'}</span></div></footer>
     </main>
   );
 };

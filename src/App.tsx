@@ -339,6 +339,32 @@ export const App: React.FC = () => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
 
+  useEffect(() => {
+    const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
+      radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
+    };
+    const feature=routeFeature[currentRoute];
+    if(feature&&settings.features?.[feature]===false){
+      setCurrentRoute('home');
+      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+    }
+  }, [currentRoute,settings.features?.radio,settings.features?.announcements,settings.features?.certification]);
+
+  useEffect(() => {
+    if (!currentUser.uid) return;
+    const configured=Number(settings.security?.sessionTimeoutMinutes ?? 60);
+    const minutes=Number.isFinite(configured)?Math.min(1440,Math.max(5,configured)):60;
+    let timer=0;
+    const reset=()=>{
+      window.clearTimeout(timer);
+      timer=window.setTimeout(()=>{void firebaseSignOut();},minutes*60*1000);
+    };
+    const events=['pointerdown','keydown','touchstart','scroll'] as const;
+    events.forEach(name=>window.addEventListener(name,reset,{passive:true}));
+    reset();
+    return()=>{window.clearTimeout(timer);events.forEach(name=>window.removeEventListener(name,reset));};
+  }, [currentUser.uid,settings.security?.sessionTimeoutMinutes]);
+
   const orderedActiveLessons = useMemo(() => {
     if (!activeGuide) return [];
     return [...activeGuide.lessons].sort((a, b) => {
@@ -357,7 +383,19 @@ export const App: React.FC = () => {
     setActiveLesson(null);
     setStudyError('');
     setIsMenuOpen(false);
-    if (route === 'admin' && !(['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || '')))) return;
+    const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
+      || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+    if (route === 'admin' && !privileged) return;
+    const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
+      radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
+    };
+    const feature=routeFeature[route];
+    if(feature&&settings.features?.[feature]===false){
+      setStudyNotice('This module is currently disabled by the VOP platform administrator.');
+      setCurrentRoute('home');
+      return;
+    }
+    setStudyNotice('');
     setCurrentRoute(route);
   };
   const returnHome = () => navigate('home');
@@ -370,6 +408,21 @@ export const App: React.FC = () => {
   };
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
   const showCourse = currentRoute === 'home' && activeGuide !== null;
+  const privilegedUser=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
+    || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
+  const maintenanceActive=settings.systemOptions?.maintenanceMode===true&&!privilegedUser;
+
+  if(maintenanceActive){
+    return <main className="vop-maintenance-screen">
+      <section>
+        <img src="/assets/vop_logo_2.png" alt="Voice of Prophecy"/>
+        <span>VOICE OF PROPHECY</span>
+        <h1>Scheduled maintenance is in progress</h1>
+        <p>The learning workspace is temporarily unavailable while the platform is being maintained. Your saved progress remains attached to your account.</p>
+        <button type="button" onClick={()=>void firebaseSignOut()}>Sign out</button>
+      </section>
+    </main>;
+  }
 
   return (
     <div className={'vop-learner-shell'+(isMobileShell?' vop-learner-simulated':'')} style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'row' }}>
