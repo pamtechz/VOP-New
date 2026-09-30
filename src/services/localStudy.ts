@@ -1,6 +1,6 @@
 import { getActiveLanguage } from './storage';
 import { auth } from '../lib/firebase';
-import { queueCompletion, dropCompletion, type PendingCompletion } from './offlineStudyQueue';
+import { queueCompletion, dropCompletion, queueResume, dropResume, type PendingCompletion, type PendingResume } from './offlineStudyQueue';
 
 /**
  * Offline completion is ONLY a pending request. It never awards credit before
@@ -35,12 +35,44 @@ export async function completeLesson(
   } catch { return queue(); }
 }
 
+export async function saveLessonResume(
+  guideId:string, lessonId:string, pageIndex:number, language:string=getActiveLanguage(),
+):Promise<'synced'|'queued'|'failed'> {
+  const firebaseUser=auth?.currentUser;
+  if (!firebaseUser || !Number.isInteger(pageIndex) || pageIndex < 0) return 'failed';
+  const item:PendingResume={uid:firebaseUser.uid,language,guideId,lessonId,pageIndex,queuedAt:Date.now()};
+  const queue=()=>queueResume(item)?'queued' as const:'failed' as const;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return queue();
+  try {
+    const token=await firebaseUser.getIdToken();
+    const response=await fetch('/api/study/progress',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      body:JSON.stringify({action:'saveLessonResume',language,guideId,lessonId,pageIndex}),
+    });
+    if (response.ok) { dropResume(item); return 'synced'; }
+    return response.status >= 500 ? queue() : 'failed';
+  } catch { return queue(); }
+}
+
+export interface AssessmentSubmissionResult {
+  score: number;
+  passed: boolean;
+  retakePolicy: {
+    attemptsUsed: number;
+    maxAttempts: number | null;
+    remainingAttempts: number | null;
+    cooldownMinutes: number;
+    retryAt: string | null;
+  };
+}
+
 export async function submitQuizAnswers(
   guideId: string,
   testId: string,
   answers: Record<number, number | boolean>,
   language: string = getActiveLanguage(),
-): Promise<number | null> {
+): Promise<AssessmentSubmissionResult | null> {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return null;
 
@@ -60,8 +92,14 @@ export async function submitQuizAnswers(
     }),
   });
 
-  if (!response.ok) return null;
-  const body = await response.json().catch(() => null) as { score?: unknown } | null;
+  const body = await response.json().catch(() => null) as {
+    error?:unknown; score?:unknown; passed?:unknown;
+    retakePolicy?:Partial<AssessmentSubmissionResult['retakePolicy']>;
+  } | null;
+  if (!response.ok) {
+    throw new Error(typeof body?.error === 'string' && body.error.trim()
+      ? body.error : 'The assessment could not be verified and saved.');
+  }
   const score = Number(body?.score);
   if (Number.isFinite(score) && score >= 0 && score <= 100) {
     // Graduation eligibility is re-evaluated server-side; a 409 simply means the learner has not completed every requirement yet.
@@ -74,7 +112,20 @@ export async function submitQuizAnswers(
     } catch {
       // Quiz results remain authoritative even when graduation submission is not yet eligible or temporarily unavailable.
     }
-    return score;
+    const policy = body?.retakePolicy || {};
+    return {
+      score,
+      passed: body?.passed === true,
+      retakePolicy: {
+        attemptsUsed: Math.max(1, Math.trunc(Number(policy.attemptsUsed) || 1)),
+        maxAttempts: Number.isInteger(Number(policy.maxAttempts)) && Number(policy.maxAttempts) > 0
+          ? Number(policy.maxAttempts) : null,
+        remainingAttempts: Number.isInteger(Number(policy.remainingAttempts)) && Number(policy.remainingAttempts) >= 0
+          ? Number(policy.remainingAttempts) : null,
+        cooldownMinutes: Math.max(0, Math.trunc(Number(policy.cooldownMinutes) || 0)),
+        retryAt: typeof policy.retryAt === 'string' && policy.retryAt ? policy.retryAt : null,
+      },
+    };
   }
   return null;
 }

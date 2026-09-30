@@ -217,6 +217,24 @@ export default async function handler(req: Request, res: Response) {
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, current, 'edit');
+      const certificationRequirementIds=Array.isArray(data.certificationRequirementIds)
+        ? data.certificationRequirementIds.map(value=>safeId(value)) : [];
+      if(certificationRequirementIds.length>50||new Set(certificationRequirementIds).size!==certificationRequirementIds.length){
+        throw new Error('Choose at most 50 distinct certification requirements.');
+      }
+      if(certificationRequirementIds.length){
+        const requirements=await ctx.db.getAll(...certificationRequirementIds.map(requirementId=>
+          ctx.db.doc('masterGuideRequirements/'+requirementId)));
+        for(const requirement of requirements){
+          const value=requirement.data()||{};
+          const requirementOrg=String(value.organizationId||'');
+          const platformRequirement=!requirementOrg&&String(value.scope||'')==='platform';
+          if(!requirement.exists||value.status!=='published'||
+            (!platformRequirement&&requirementOrg!==effectiveOrganizationId)){
+            throw new Error('Every certification requirement must be published and available to the guide organization.');
+          }
+        }
+      }
       const nextGuide = {
         id,
         organizationId: effectiveOrganizationId,
@@ -235,6 +253,9 @@ export default async function handler(req: Request, res: Response) {
         season: String(data.season || ''),
         quarter: String(data.quarter || ''),
         certificateEligible: data.certificateEligible === true,
+        certificateDocumentType: String(data.certificateDocumentType || 'course').trim().slice(0,80) || 'course',
+        certificateTypeName: String(data.certificateTypeName || '').trim().slice(0,160),
+        certificationRequirementIds,
         // Presentation changes the learner's navigation, never the underlying
         // lesson/progress/certificate identity. Existing guides remain in
         // their familiar lesson-list mode until the author chooses otherwise.
@@ -607,6 +628,20 @@ export default async function handler(req: Request, res: Response) {
           if (normalized === null) throw new Error('Assessment pass mark must be between 1 and 100 percent.');
           incoming.quizPassThreshold = normalized;
         }
+      }
+      if (collection === 'settings' && Object.hasOwn(incoming, 'quizMaxAttempts')) {
+        const attempts = Number(incoming.quizMaxAttempts);
+        if (!Number.isInteger(attempts) || attempts < 0 || attempts > 100) {
+          throw new Error('Maximum assessment attempts must be a whole number from 0 to 100.');
+        }
+        incoming.quizMaxAttempts = attempts;
+      }
+      if (collection === 'settings' && Object.hasOwn(incoming, 'quizRetakeCooldownMinutes')) {
+        const minutes = Number(incoming.quizRetakeCooldownMinutes);
+        if (!Number.isInteger(minutes) || minutes < 0 || minutes > 10080) {
+          throw new Error('Assessment retake waiting period must be a whole number from 0 to 10,080 minutes.');
+        }
+        incoming.quizRetakeCooldownMinutes = minutes;
       }
 
       if (collection === 'curriculumSettings' && !targetOrganizationId) {
@@ -1067,11 +1102,7 @@ export default async function handler(req: Request, res: Response) {
       // credential identity. Existing records expose only a monotonic download counter.
       if (collection === 'certificates') {
         if (action === 'delete') {
-          if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can delete certificate records.');
-          if (!existing.exists) return res.status(200).json({ ok:true, id });
-          await ref.delete();
-          await writeTenantAudit(ctx, 'certificate.delete', `certificates/${id}`, existing.data(), undefined);
-          return res.status(200).json({ ok:true, id });
+          throw new Error('Issued certificate records are immutable. Revoke or replace the credential through the certificate lifecycle workflow.');
         }
         if (action === 'upsert') {
           if (!existing.exists) {

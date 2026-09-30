@@ -11,7 +11,7 @@ import CertificateArtwork, { CertificateTemplateConfig } from '../components/cer
 import { ModalLayer } from '../components/layout/ModalLayer';
 import './certification-compact.css';
 
-type CertificateStatus = 'Certified' | 'Revoked' | 'Pending';
+type CertificateStatus = 'Certified' | 'Revoked' | 'Replaced' | 'Pending';
 
 export interface CertificateRecord {
   id: string;
@@ -21,6 +21,8 @@ export interface CertificateRecord {
   candidatePhotoURL?: string;
   courseName: string;
   courseCode?: string;
+  documentType?: string;
+  certificateTypeName?: string;
   certificateNumber: string;
   completionDate?: string;
   issuedAt?: string;
@@ -157,7 +159,7 @@ export const CertificationManager: React.FC<Props> = ({
         adminContent('list', 'graduationRequests'),
       ]);
       setCertificates(((certificateResponse.items || []) as CertificateRecord[])
-        .filter(item => item && typeof item.id === 'string' && item.status !== 'Revoked'));
+        .filter(item => item && typeof item.id === 'string'));
       setConfig(((configResponse.items || [])[0] || null) as CertificationConfig | null);
       const requests = ((requestResponse.items || []) as GraduationCandidate[]).filter(item => item && typeof item.candidateId === 'string');
       setGraduationRequests(requests);
@@ -191,13 +193,14 @@ export const CertificationManager: React.FC<Props> = ({
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
   const now = new Date();
-  const totalCertified = certificates.length;
-  const thisYear = certificates.filter(item => toDate(item.issuedAt || item.completionDate)?.getFullYear() === now.getFullYear()).length;
-  const thisMonth = certificates.filter(item => {
+  const activeCertificates = certificates.filter(item=>item.status==='Certified');
+  const totalCertified = activeCertificates.length;
+  const thisYear = activeCertificates.filter(item => toDate(item.issuedAt || item.completionDate)?.getFullYear() === now.getFullYear()).length;
+  const thisMonth = activeCertificates.filter(item => {
     const d = toDate(item.issuedAt || item.completionDate);
     return d?.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
-  const downloaded = certificates.reduce((sum, item) => sum + Math.max(0, Number(item.downloadCount || 0)), 0);
+  const downloaded = activeCertificates.reduce((sum, item) => sum + Math.max(0, Number(item.downloadCount || 0)), 0);
   const downloadRate = totalCertified ? Math.min(100, (downloaded / totalCertified) * 100) : 0;
 
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
@@ -271,6 +274,25 @@ export const CertificationManager: React.FC<Props> = ({
     } finally {
       setDecidingRequestId(null);
     }
+  };
+
+  const changeCertificateLifecycle = async (certificate:CertificateRecord, action:'revoke'|'replace') => {
+    if(!auth?.currentUser||certificate.status!=='Certified')return;
+    const reason=window.prompt(action==='revoke'
+      ?'Why is this certificate being revoked? This will be recorded in the audit history.'
+      :'Why is this certificate being replaced? The old number will remain publicly traceable as replaced.');
+    if(!reason?.trim())return;
+    try{
+      const token=await auth.currentUser.getIdToken();
+      const response=await fetch('/api/certificates',{method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({action,certificateId:certificate.id,reason:reason.trim()})});
+      const body=await response.json().catch(()=>({})) as {error?:string;certificate?:CertificateRecord};
+      if(!response.ok)throw new Error(body.error||'Certificate lifecycle update failed.');
+      await load();
+      if(action==='replace'&&body.certificate)openPreview(body.certificate);
+      showMessage(action==='revoke'?'Certificate revoked. Public verification now reports it as revoked.':'Replacement certificate issued and the previous number now resolves as replaced.');
+    }catch(error){showMessage(error instanceof Error?error.message:'Certificate lifecycle update failed.');}
   };
 
   const issueCertificate = async (candidateId: string) => {
@@ -449,10 +471,10 @@ export const CertificationManager: React.FC<Props> = ({
                 <tr key={item.id}>
                   <td>{(page - 1) * pageSize + index + 1}</td>
                   <td><div className="vop-cert-candidate-cell">{item.candidatePhotoURL ? <img src={item.candidatePhotoURL} alt="" /> : <EmptyAvatar />}<div><strong>{item.candidateName}</strong><span>{item.candidateEmail || ''}</span></div></div></td>
-                  <td><strong>{item.courseName}</strong></td><td>{item.certificateNumber}</td><td>{dateText(item.completionDate)}</td>
+                  <td><strong>{item.courseName}</strong>{item.certificateTypeName && <span>{item.certificateTypeName} · {item.documentType || 'course'}</span>}</td><td>{item.certificateNumber}</td><td>{dateText(item.completionDate)}</td>
                   <td><strong>{item.churchName || '—'}</strong><span>{item.districtName || ''}</span></td>
                   <td><span className="vop-cert-status">{item.status}</span></td>
-                  <td><div className="vop-cert-row-actions"><button type="button" onClick={() => openPreview(item)} aria-label="View"><Eye size={17} /></button><button type="button" onClick={() => openPreview(item)} aria-label="Download"><Download size={17} /></button><button type="button" onClick={() => setMenuId(menuId === item.id ? null : item.id)} aria-label="More"><MoreVertical size={17} /></button>{menuId === item.id && <div className="vop-cert-row-menu"><button type="button" onClick={() => openPreview(item)}>Open certificate</button></div>}</div></td>
+                  <td><div className="vop-cert-row-actions"><button type="button" onClick={() => openPreview(item)} aria-label="View"><Eye size={17} /></button><button type="button" onClick={() => openPreview(item)} aria-label="Download"><Download size={17} /></button><button type="button" onClick={() => setMenuId(menuId === item.id ? null : item.id)} aria-label="More"><MoreVertical size={17} /></button>{menuId === item.id && <div className="vop-cert-row-menu"><button type="button" onClick={() => openPreview(item)}>Open certificate</button>{item.status==='Certified'&&<><button type="button" onClick={() => void changeCertificateLifecycle(item,'replace')}>Replace certificate</button><button type="button" onClick={() => void changeCertificateLifecycle(item,'revoke')}>Revoke certificate</button></>}</div>}</div></td>
                 </tr>
               ))}</tbody>
             </table>

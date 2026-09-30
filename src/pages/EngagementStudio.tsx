@@ -14,14 +14,16 @@ type Item = {
   id: string; title: string; description?: string; status?: Status;
   sharingScope?: Sharing; canEdit?: boolean; organizationId?: string;
   verses?: Verse[]; question?: string; options?: string[]; answer?: string; scriptureRef?: string;
+  requiredSignatures?: number; evidenceRequired?: boolean;
 };
 type Editor = {
   id?: string; title: string; description: string; status: 'draft' | 'published';
   sharingScope: Sharing; verses: Verse[]; question: string; options: string[]; answer: string; scriptureRef: string;
+  requiredSignatures: number; evidenceRequired:boolean;
 };
 const blank = (): Editor => ({
   title:'', description:'', status:'draft', sharingScope:'organization',
-  verses:[{reference:'',text:''}], question:'', options:['','','',''], answer:'', scriptureRef:'',
+  verses:[{reference:'',text:''}], question:'', options:['','','',''], answer:'', scriptureRef:'', requiredSignatures:1, evidenceRequired:true,
 });
 const options: Array<{ value:Kind; label:string; description:string; Icon:typeof BookOpen }> = [
   { value:'requirements',label:'Master Guide Requirements',description:'Activities and verified leadership achievements',Icon:GraduationCap },
@@ -29,6 +31,18 @@ const options: Array<{ value:Kind; label:string; description:string; Icon:typeof
   { value:'duelQuestions',label:'Scripture Duel Questions',description:'Question bank for individual Scripture challenges',Icon:Swords },
 ];
 const labels = {requirements:'requirement',memoryDecks:'memory deck',duelQuestions:'duel question'};
+const revisionOf=(item:Record<string,unknown>)=>{
+  const value=Number(item.revision); return Number.isInteger(value)&&value>=1?value:1;
+};
+function reviewState(portfolio:Portfolio,requirementId:string,configuredRequired=1){
+  const activities=(portfolio.activities||[]).filter(item=>String(item.requirementId||'')===requirementId&&item.status==='submitted');
+  const revision=activities.length?Math.max(...activities.map(revisionOf)):0;
+  const decisions=(portfolio.signoffs||[]).filter(item=>String(item.requirementId||'')===requirementId&&revisionOf(item)===Math.max(1,revision));
+  const required=Math.max(1,configuredRequired,...activities.filter(item=>revisionOf(item)===revision).map(item=>Number(item.requiredSignatures)||1));
+  const approvals=new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||''))).size;
+  const changes=[...decisions].reverse().find(item=>item.decision==='changes_requested'||item.decision==='rejected');
+  return {revision,required,approvals,changes,approved:revision>0&&!changes&&approvals>=required,pending:revision>0&&!changes&&approvals<required};
+}
 async function engagementRequest(payload: Record<string,unknown>) {
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in again to manage your ministry content.');
@@ -121,7 +135,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       setError(reason instanceof Error?reason.message:'Could not load this learner portfolio.');
     } finally {setBusy(false);}
   };
-  const decideRequirement = async (requirementId:string,decision:'approved'|'rejected') => {
+  const decideRequirement = async (requirementId:string,decision:'approved'|'changes_requested') => {
     if (!reviewLearner || busy || !window.confirm('Record this '+decision+' decision for the learner?')) return;
     setBusy(true);setError('');setMessage('');
     try {
@@ -135,7 +149,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       setReviewRequirements(result.requirements || []);
       setReviewers(queue.learners || []);
       setReviewNotes('');
-      setMessage('The learner requirement was '+decision+'.');
+      setMessage(decision==='approved'?'Evaluator signature recorded.':'Changes requested from the learner.');
     } catch(reason) {
       setError(reason instanceof Error?reason.message:'Could not record this decision.');
     } finally {setBusy(false);}
@@ -154,6 +168,8 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       verses:item.verses?.map(verse=>({id:verse.id,reference:verse.reference,text:verse.text})) || [{reference:'',text:''}],
       question:item.question || '', options:item.options?.length ? [...item.options] : ['','','',''],
       answer:item.answer || '', scriptureRef:item.scriptureRef || '',
+      requiredSignatures:Math.max(1,Number(item.requiredSignatures || 1)),
+      evidenceRequired:item.evidenceRequired !== false,
     } : blank());
   };
   const save = async (event:React.FormEvent) => {
@@ -164,7 +180,8 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       const payload = {
         title:editor.title.trim(),description:editor.description.trim(),status:editor.status,
         sharingScope:editor.sharingScope,
-        ...(kind==='memoryDecks' ? {verses:editor.verses.map(verse=>({reference:verse.reference.trim(),text:verse.text.trim()}))}
+        ...(kind==='requirements' ? {requiredSignatures:editor.requiredSignatures,evidenceRequired:editor.evidenceRequired}
+          : kind==='memoryDecks' ? {verses:editor.verses.map(verse=>({reference:verse.reference.trim(),text:verse.text.trim()}))}
           : kind==='duelQuestions' ? {question:editor.question.trim(),options:editor.options.map(x=>x.trim()).filter(Boolean),answer:editor.answer,scriptureRef:editor.scriptureRef.trim()} : {}),
       };
       await engagementRequest({action:'catalogUpsert',kind,organizationId,id:editor.id,data:payload});
@@ -218,20 +235,18 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
           {!reviewers.length && <small>No portfolios are currently available in your authorized scope.</small>}
         </div>
         {reviewPortfolio && <div style={{display:'grid',gap:12}}>
-          {reviewRequirements.filter(item=>(reviewPortfolio.activities||[]).some(activity=>
-            activity.requirementId===item.id && activity.status==='submitted')).map(requirement=>{
-            const decisions=reviewPortfolio.signoffs || [];
-            const approved=decisions.some(item=>item.requirementId===requirement.id && item.decision==='approved');
-            const activityCount=(reviewPortfolio.activities||[]).filter(item=>item.requirementId===requirement.id&&item.status==='submitted').length;
-            const evidence=(reviewPortfolio.evidence||[]).filter(item=>item.requirementId===requirement.id);
+          {reviewRequirements.filter(item=>reviewState(reviewPortfolio,String(item.id),Number(item.requiredSignatures||1)).pending).map(requirement=>{
+            const state=reviewState(reviewPortfolio,String(requirement.id),Number(requirement.requiredSignatures||1));
+            const activityCount=(reviewPortfolio.activities||[]).filter(item=>item.requirementId===requirement.id&&item.status==='submitted'&&revisionOf(item)===state.revision).length;
+            const evidence=(reviewPortfolio.evidence||[]).filter(item=>item.requirementId===requirement.id&&revisionOf(item)===state.revision);
             return <article key={String(requirement.id)} className="vop-card vop-form-card">
               <h3>{String(requirement.title || 'Requirement')}</h3>
-              <p>{activityCount} submitted activities · {evidence.length} supporting evidence items · {approved?'Approved':'Awaiting evaluation'}</p>
+              <p>Submission revision {state.revision} · {activityCount} submitted activities · {evidence.length} supporting evidence items · {state.approvals}/{state.required} evaluator signatures</p>
               {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a>{item.note ? ' — '+String(item.note) : ''}</p>)}
-              {!approved && <div className="vop-reference-actions" style={{flexWrap:'wrap'}}>
-                <button type="button" className="vop-primary" disabled={busy} onClick={()=>void decideRequirement(String(requirement.id),'approved')}><CheckCircle2 size={15}/>Approve</button>
-                <button type="button" className="vop-secondary" disabled={busy} onClick={()=>void decideRequirement(String(requirement.id),'rejected')}>Request revision</button>
-              </div>}
+              <div className="vop-reference-actions" style={{flexWrap:'wrap'}}>
+                <button type="button" className="vop-primary" disabled={busy} onClick={()=>void decideRequirement(String(requirement.id),'approved')}><CheckCircle2 size={15}/>Add signature</button>
+                <button type="button" className="vop-secondary" disabled={busy||!reviewNotes.trim()} onClick={()=>void decideRequirement(String(requirement.id),'changes_requested')}>Request changes</button>
+              </div>
             </article>;
           })}
           <div className="vop-field"><label>Evaluator notes</label><textarea value={reviewNotes} onChange={event=>setReviewNotes(event.target.value)} placeholder="Assessment evidence, feedback or reason for revision"/></div>
@@ -247,6 +262,16 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
         <div className="vop-field"><label htmlFor="engagement-sharing">Visibility</label><select id="engagement-sharing" value={editor.sharingScope} onChange={e=>setEditor({...editor,sharingScope:e.target.value as Sharing})}><option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared with other organizations</option></select></div>
       </div>
       <div className="vop-field"><label htmlFor="engagement-description">Description</label><textarea id="engagement-description" value={editor.description} onChange={e=>setEditor({...editor,description:e.target.value})} maxLength={2500}/></div>
+      {kind==='requirements' && <div className="vop-field"><label htmlFor="engagement-required-signatures">Required evaluator signatures</label>
+        <input id="engagement-required-signatures" type="number" min="1" max="20" step="1" required value={editor.requiredSignatures}
+          onChange={e=>setEditor({...editor,requiredSignatures:Math.max(1,Math.min(20,Math.trunc(Number(e.target.value)||1)))})}/>
+        <small>A requirement is approved only after this many distinct authorized evaluators sign the current submission revision.</small>
+        <label style={{display:'flex',alignItems:'center',gap:8,marginTop:10}}>
+          <input type="checkbox" checked={editor.evidenceRequired}
+            onChange={e=>setEditor({...editor,evidenceRequired:e.target.checked})}/>
+          Supporting evidence is required for certification
+        </label>
+      </div>}
       {kind==='memoryDecks' && <div style={{display:'grid',gap:12,marginTop:18}}>
         <h3>Scripture memory cards</h3>
         {editor.verses.map((verse,index)=><div className="vop-card vop-form-card" key={verse.id || index}>

@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
-import { curriculumAnchorExists } from '../../shared/curriculumStructure.js';
+import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -26,6 +26,30 @@ type QuestionRecord = {
   options?: unknown;
   correctOptionIndex?: unknown;
 };
+
+function timestampMs(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+  if (typeof value === 'object') {
+    const stamp = value as { toDate?:()=>Date; seconds?:number; _seconds?:number };
+    if (typeof stamp.toDate === 'function') return stamp.toDate().getTime();
+    const seconds = Number(stamp.seconds ?? stamp._seconds);
+    if (Number.isFinite(seconds)) return seconds * 1000;
+  }
+  return 0;
+}
+
+function retakePolicyKey(organizationId:string, language:string, guideId:string, lessonId:string) {
+  return createHash('sha256').update([organizationId || 'platform',language,guideId,lessonId].join(':')).digest('hex');
+}
+
+function nonNegativeWhole(value: unknown, max: number) {
+  const parsed = Number(value ?? 0);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : 0;
+}
 
 function gradeServerQuiz(questions: QuestionRecord[], answers: Record<string, unknown>): number | null {
   if (!Array.isArray(questions) || questions.length === 0) return null;
@@ -112,9 +136,18 @@ export default async function handler(
     const candidateGuideData = candidateGuide?.exists ? candidateGuide.data() || {} : {};
     const candidateGuideOrganizationId = String(candidateGuideData.organizationId || '').trim();
     const candidateGuideShared = candidateGuideData.sharingScope === 'shared' && candidateGuideData.published === true;
+    const enrollmentId=candidateGuide?.exists&&candidateGuideOrganizationId
+      ? candidateGuideOrganizationId+'_'+decoded.uid+'_'+guideId : '';
+    const enrollment=enrollmentId?await db.doc('courseEnrollments/'+enrollmentId).get():null;
+    const enrolledForGuide=Boolean(enrollment?.exists
+      && enrollment.data()?.status==='active'
+      && String(enrollment.data()?.uid||'')===decoded.uid
+      && String(enrollment.data()?.organizationId||'')===candidateGuideOrganizationId
+      && String(enrollment.data()?.guideId||'')===guideId);
     const useTenantGuide = Boolean(candidateGuide?.exists && (
       (Boolean(organizationId) && candidateGuideOrganizationId === organizationId)
       || candidateGuideShared
+      || enrolledForGuide
     ));
     // Never resolve an unknown or forbidden canonical guide against the
     // legacy Discover collection. Only the literal "discover" ID is legacy.
@@ -131,7 +164,7 @@ export default async function handler(
     if (!guideSnapshot.exists || guideSnapshot.data()?.published !== true || guideSnapshot.data()?.archived === true) {
       return res.status(404).json({ error: 'The selected guide is not published.' });
     }
-    if (useTenantGuide && !candidateGuideShared && candidateGuideOrganizationId !== organizationId) {
+    if (useTenantGuide && !candidateGuideShared && !enrolledForGuide && candidateGuideOrganizationId !== organizationId) {
       return res.status(403).json({ error: 'The selected guide is outside your organization.' });
     }
     if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
@@ -146,16 +179,20 @@ export default async function handler(
     if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
-    if (useTenantGuide && candidateGuideOrganizationId !== organizationId
+    if (useTenantGuide && candidateGuideOrganizationId !== organizationId && !enrolledForGuide
         && (lessonData.sharingScope !== 'shared' || lessonData.archived === true)) {
       return res.status(403).json({ error: 'This lesson is not shared with your organization.' });
     }
 
     if (action === 'saveLessonResume') {
       const pageIndex = Number(body.pageIndex);
-      const maxPageIndex = Math.max(0, Number(body.pageCount) - 1);
-      if (!Number.isInteger(pageIndex) || pageIndex < 0 || !Number.isInteger(Number(body.pageCount)) || Number(body.pageCount) < 1 || pageIndex > maxPageIndex) {
-        return res.status(400).json({ error: 'A valid lesson page position is required.' });
+      const structuredPages = Array.isArray(lessonData.chapters)
+        ? curriculumPages(lessonData.chapters as Parameters<typeof curriculumPages>[0])
+        : [];
+      const canonicalPageCount = structuredPages.length || (Array.isArray(lessonData.contentPages) ? lessonData.contentPages.length : 0);
+      const maxPageIndex = canonicalPageCount - 1;
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || canonicalPageCount < 1 || pageIndex > maxPageIndex) {
+        return res.status(400).json({ error: 'A valid published lesson page position is required.' });
       }
       if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
         return res.status(409).json({ error: 'Only study lessons support resume positions.' });
@@ -290,10 +327,13 @@ export default async function handler(
 
     const settingsRef = organizationId ? db.doc(`organizations/${organizationId}/settings/settings`) : db.doc('system/settings');
     const settingsSnapshot = await settingsRef.get();
-    const threshold = configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
+    const settingsData = settingsSnapshot.data() || {};
+    const threshold = configuredPassThreshold(settingsData.quizPassThreshold);
     if (threshold === null) {
       return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
     }
+    const maxAttempts = nonNegativeWhole(settingsData.quizMaxAttempts, 100);
+    const retakeCooldownMinutes = nonNegativeWhole(settingsData.quizRetakeCooldownMinutes, 10080);
 
     const finalExam = lessonData.assessmentKind === 'final_exam' && lessonData.attachmentType === 'guide';
     const finalRequirements = finalExam ? (await guideRef.collection('lessons').get()).docs
@@ -306,8 +346,27 @@ export default async function handler(
     const effectiveGuideId = legacyStudyGuide ? 'discover' : guideId;
     const scoreKey = `${organizationId || 'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
     const passed = score >= threshold;
-    const attemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const attemptId = randomUUID();
     const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
+    const policyRef = userRef.collection('assessmentAttemptPolicy').doc(
+      retakePolicyKey(organizationId, language, effectiveGuideId, lessonId),
+    );
+    // Bootstrap from historical attempts so introducing a policy does not reset
+    // a learner's prior assessment history.
+    const historical = await userRef.collection('assessmentAttempts')
+      .where('lessonId','==',lessonId).limit(500).get();
+    const relevantHistorical = historical.docs.filter(doc => {
+      const row = doc.data() || {};
+      return String(row.organizationId || '') === organizationId
+        && String(row.language || '') === language
+        && String(row.guideId || '') === effectiveGuideId;
+    });
+    const historicalAttemptCount = relevantHistorical.length;
+    const historicalLastAttemptMs = relevantHistorical.reduce(
+      (latest, doc) => Math.max(latest, timestampMs(doc.data()?.createdAt)), 0,
+    );
+    const attemptTimeMs = Date.now();
+    const attemptTimeIso = new Date(attemptTimeMs).toISOString();
     const questionResults = questions.map((question, index) => {
       const answer = answers[String(index)];
       const correct = Array.isArray(question.options)
@@ -329,9 +388,25 @@ export default async function handler(
       `${organizationId || 'platform'}__${language}__${guideId}__${lessonId}__${item.key}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 150)
     ));
 
-    await db.runTransaction(async transaction => {
+    const policyResult = await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(userRef);
+      const policySnapshot = await transaction.get(policyRef);
       if (!snapshot.exists) throw new Error('VOP account profile was not found.');
+
+      const policy = policySnapshot.data() || {};
+      const priorAttempts = policySnapshot.exists
+        ? Math.max(0, Number(policy.attemptCount || 0))
+        : historicalAttemptCount;
+      const lastAttemptMs = policySnapshot.exists
+        ? timestampMs(policy.lastAttemptAt)
+        : historicalLastAttemptMs;
+      if (maxAttempts > 0 && priorAttempts >= maxAttempts) {
+        throw new Error(`Assessment attempt limit reached (${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}).`);
+      }
+      const retryAtMs = lastAttemptMs + retakeCooldownMinutes * 60_000;
+      if (retakeCooldownMinutes > 0 && priorAttempts > 0 && retryAtMs > attemptTimeMs) {
+        throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
+      }
 
       const data = snapshot.data() ?? {};
       const progress = data.progress && typeof data.progress === 'object'
@@ -357,6 +432,17 @@ export default async function handler(
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
+      const attemptsUsed = priorAttempts + 1;
+      transaction.set(policyRef, {
+        organizationId,
+        language,
+        guideId: effectiveGuideId,
+        lessonId,
+        attemptCount: attemptsUsed,
+        lastAttemptAt: attemptTimeIso,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge:true });
+
       transaction.set(attemptRef, {
         candidateId: decoded.uid,
         userId: decoded.uid,
@@ -369,6 +455,7 @@ export default async function handler(
         lessonId,
         questionResults,
         failedQuestionKeys: failedQuestions.map(item => item.key),
+        attemptNumber: attemptsUsed,
         createdAt: FieldValue.serverTimestamp(),
       });
 
@@ -397,16 +484,33 @@ export default async function handler(
       for (const ref of successRefs) {
         transaction.set(ref, { organizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
+      return { attemptsUsed };
     });
 
     // Per-question correctness is retained for authorized mentor analytics only.
     // Exposing failed keys lets clients reconstruct the answer bank by probing.
-    return res.status(200).json({ ok: true, score, passed, scoreKey, threshold });
+    const remainingAttempts = maxAttempts > 0 ? Math.max(0, maxAttempts - policyResult.attemptsUsed) : null;
+    const retryAt = !passed && retakeCooldownMinutes > 0 && remainingAttempts !== 0
+      ? new Date(attemptTimeMs + retakeCooldownMinutes * 60_000).toISOString()
+      : null;
+    return res.status(200).json({
+      ok: true, score, passed, scoreKey, threshold,
+      retakePolicy: {
+        attemptsUsed: policyResult.attemptsUsed,
+        maxAttempts: maxAttempts || null,
+        remainingAttempts,
+        cooldownMinutes: retakeCooldownMinutes,
+        retryAt,
+      },
+    });
   } catch (error) {
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
     if (message.includes('not configured')) return res.status(503).json({ error: message });
     if (message.includes('Complete all published study lessons')) return res.status(409).json({error:message});
+    if (message.includes('Assessment attempt limit reached') || message.includes('Assessment retake is available after')) {
+      return res.status(429).json({error:message});
+    }
     if (message.includes('profile was not found')) return res.status(404).json({ error: message });
     return res.status(500).json({ error: 'Study progress could not be saved.' });
   }

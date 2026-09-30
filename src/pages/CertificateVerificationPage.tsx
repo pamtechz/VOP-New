@@ -12,6 +12,9 @@ interface VerifiedCertificate {
   candidateName: string;
   courseName: string;
   courseCode?: string;
+  documentType?: string;
+  certificateTypeName?: string;
+  replacedByCertificateNumber?: string;
   completionDate?: string | null;
   issuedAt?: string | null;
   churchName?: string;
@@ -51,6 +54,8 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
   const [number, setNumber] = useState('');
   const [certificate, setCertificate] = useState<VerifiedCertificate | null>(null);
   const [error, setError] = useState('');
+  const [verificationState,setVerificationState]=useState<'valid'|'revoked'|'replaced'|'disabled'|'unavailable'|'unknown'|''>('');
+  const [replacementNumber,setReplacementNumber]=useState('');
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<PublicCertificateConfig | null>(null);
   const settings = getStoredSettings();
@@ -71,6 +76,8 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
     setError('');
     setCertificate(null);
     setConfig(null);
+    setVerificationState('');
+    setReplacementNumber('');
     if (!certificateNumber) {
       setError(t('enter_number','Enter a certificate number.'));
       return;
@@ -78,12 +85,16 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
     setLoading(true);
     try {
       const response = await fetch('/api/certificates?certificateNumber=' + encodeURIComponent(certificateNumber));
-      const body = await response.json().catch(() => ({})) as { verified?: boolean; certificate?: VerifiedCertificate; config?: PublicCertificateConfig; error?: string };
-      if (!response.ok || body.verified !== true || !body.certificate) {
-        throw new Error(body.error || t('verification_failed','Certificate could not be verified.'));
+      const body = await response.json().catch(() => ({})) as { verified?: boolean; state?:'valid'|'revoked'|'replaced'|'disabled'|'unavailable'|'unknown'; certificate?: VerifiedCertificate; config?: PublicCertificateConfig; replacement?:{certificateNumber?:string}; error?: string };
+      if (!response.ok && !body.certificate) throw new Error(body.error || t('verification_failed','Certificate could not be verified.'));
+      if(body.certificate)setCertificate(body.certificate);
+      setVerificationState(body.state || (body.verified===true?'valid':'unavailable'));
+      setReplacementNumber(String(body.replacement?.certificateNumber||body.certificate?.replacedByCertificateNumber||''));
+      if(body.verified!==true){
+        setError(body.error || t('verification_failed','Certificate could not be verified.'));
+      }else{
+        setConfig(body.config || null);
       }
-      setCertificate(body.certificate);
-      setConfig(body.config || null);
       const url = new URL(window.location.href);
       url.searchParams.set('certificate', certificateNumber);
       window.history.replaceState({}, '', url);
@@ -111,15 +122,22 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
           <button type="button" onClick={() => void verify()} disabled={loading}>{loading ? t('verifying','Verifying…') : t('verify_certificate','Verify Certificate')}</button>
         </div>
 
-        {error && <div className="vop-certificate-verification-result invalid"><XCircle size={25} /><div><strong>{t('certificate_not_verified','Certificate not verified')}</strong><span>{error}</span></div></div>}
+        {error && <div className="vop-certificate-verification-result invalid"><XCircle size={25} /><div><strong>{
+          verificationState==='revoked'?'Certificate revoked':
+          verificationState==='replaced'?'Certificate replaced':
+          verificationState==='disabled'?'Verification unavailable':
+          t('certificate_not_verified','Certificate not verified')
+        }</strong><span>{error}</span>{verificationState==='replaced'&&replacementNumber&&<span>Replacement certificate number: <strong>{replacementNumber}</strong></span>}</div></div>}
 
-        {certificate && (
+        {certificate && verificationState==='valid' && (
           <article className="vop-certificate-verification-result valid">
             <div className="vop-verification-status"><CheckCircle2 size={28} /><div><strong>{t('certificate_verified','Certificate Verified')}</strong><span>{t('official_credential','This certificate is recorded as an official VOP credential.')}</span></div></div>
             <div className="vop-verification-grid">
               <div><small>{t('certificate_number','Certificate Number')}</small><strong>{certificate.certificateNumber}</strong></div>
               <div><small>{t('candidate','Candidate')}</small><strong>{certificate.candidateName}</strong></div>
               <div><small>{t('course','Course')}</small><strong>{certificate.courseName}</strong></div>
+              {certificate.certificateTypeName && <div><small>Certificate type</small><strong>{certificate.certificateTypeName}</strong></div>}
+              {certificate.documentType && <div><small>Document type</small><strong>{certificate.documentType}</strong></div>}
               {certificate.courseCode && <div><small>{t('course_code','Course Code')}</small><strong>{certificate.courseCode}</strong></div>}
               <div><small>{t('completion_date','Completion Date')}</small><strong>{dateText(certificate.completionDate)}</strong></div>
               <div><small>{t('issue_date','Issue Date')}</small><strong>{dateText(certificate.issuedAt)}</strong></div>

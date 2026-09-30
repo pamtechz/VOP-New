@@ -5,6 +5,26 @@ import { ArrowLeft, Sparkles, Brain, Swords, ShieldCheck, Share2, CheckCircle2, 
 export type EngagementMode = 'master-guide' | 'memory' | 'duels';
 interface Props { mode: EngagementMode; onBack: () => void; }
 
+const revisionOf=(item:Record<string,unknown>)=>{
+  const value=Number(item.revision); return Number.isInteger(value)&&value>=1?value:1;
+};
+function requirementState(
+  requirement:Record<string,unknown>,
+  activities:Array<Record<string,unknown>>,
+  signoffs:Array<Record<string,unknown>>,
+){
+  const id=String(requirement.id||'');
+  const related=activities.filter(item=>String(item.requirementId||'')===id&&item.status==='submitted');
+  const revision=related.length?Math.max(...related.map(revisionOf)):0;
+  const decisions=signoffs.filter(item=>String(item.requirementId||'')===id&&revisionOf(item)===Math.max(1,revision));
+  const required=Math.max(1,Number(requirement.requiredSignatures||1),
+    ...related.filter(item=>revisionOf(item)===revision).map(item=>Number(item.requiredSignatures)||1));
+  const approvals=new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||''))).size;
+  const changes=[...decisions].reverse().find(item=>item.decision==='changes_requested'||item.decision==='rejected');
+  return {revision,required,approvals,changes,approved:revision>0&&!changes&&approvals>=required,
+    pending:revision>0&&!changes&&approvals<required};
+}
+
 async function engagement(body: Record<string, unknown>) {
   const user = auth?.currentUser;
   if (!user) throw new Error('Sign in first.');
@@ -90,7 +110,24 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
         {tab === 'master-guide' && <section style={{ display:'grid', gap:'1rem' }}>
           <article className="vop-material-card"><div className="vop-material-body"><div className="vop-material-meta"><span>Digital portfolio</span><b>{String(portfolio?.status || 'active')}</b></div><h2>Master Guide Portfolio</h2><p>Track requirements, activities, evidence and authorized sign-offs in one learner-owned portfolio.</p><div style={{ display:'flex', gap:'.7rem', flexWrap:'wrap' }}><strong>{activities.length} activities</strong><strong>{evidence.length} evidence records</strong><strong>{signoffs.filter(item => item.decision === 'approved').length} approved sign-offs</strong><button type="button" disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'portfolioShare' }); setShareUrl(String(result.url || '')); setMessage('Portfolio sharing link created.'); })}><Share2 size={15}/> Share portfolio</button></div>{shareUrl && <p><a href={shareUrl}>{shareUrl}</a></p>}</div></article>
-          <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => <div key={String(req.id)} style={{ padding:'.8rem', border:'1px solid var(--border-color,#ddd)', borderRadius:10 }}><strong>{String(req.title || req.name || req.id)}</strong><p>{String(req.description || '')}</p><button type="button" disabled={busy} onClick={() => void run(async () => { await engagement({ action:'portfolioSaveActivity', requirementId:String(req.id), title:String(req.title || req.name || 'Activity'), status:'submitted' }); const refreshed=await engagement({action:'portfolioGet'}); setPortfolio(refreshed.portfolio as Record<string, unknown>); setMessage('Activity submitted.'); })}>Submit activity</button><span>{signoffs.some(item=>item.requirementId===req.id && item.decision==='approved')?'Approved':activities.some(item=>item.requirementId===req.id && item.status==='submitted')?'Awaiting review':'Not submitted'}</span></div>)}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
+          <article className="vop-material-card"><div className="vop-material-body"><h2>Requirements</h2>{requirements.length ? <div style={{ display:'grid', gap:'.6rem' }}>{requirements.map(req => {
+            const state=requirementState(req,activities,signoffs);
+            const feedback=state.changes?String(state.changes.notes||'Please revise this submission and resubmit it.'):''; 
+            return <div key={String(req.id)} style={{ padding:'.8rem', border:'1px solid var(--border-color,#ddd)', borderRadius:10 }}>
+              <strong>{String(req.title || req.name || req.id)}</strong><p>{String(req.description || '')}</p>
+              <p>{state.approved?'Approved':state.changes?'Changes requested':state.pending?'Awaiting review':'Not submitted'}
+                {state.revision>0?` · revision ${state.revision}`:''}
+                {state.revision>0?` · signatures ${state.approvals}/${state.required}`:''}</p>
+              {feedback&&<div role="alert" style={{padding:'.65rem .75rem',borderRadius:8,background:'#fff7ed',color:'#9a3412',marginBottom:'.65rem'}}>
+                <strong>Evaluator feedback:</strong> {feedback}
+              </div>}
+              {!state.approved&&!state.pending&&<button type="button" disabled={busy} onClick={() => void run(async () => {
+                await engagement({ action:'portfolioSaveActivity', requirementId:String(req.id), title:String(req.title || req.name || 'Activity'), status:'submitted' });
+                const refreshed=await engagement({action:'portfolioGet'}); setPortfolio(refreshed.portfolio as Record<string, unknown>);
+                setMessage(state.changes?'Activity resubmitted as a new revision.':'Activity submitted.');
+              })}>{state.changes?'Resubmit activity':'Submit activity'}</button>}
+            </div>;
+          })}</div> : <p>No published Master Guide requirements are available for your organization yet.</p>}</div></article>
           <article className="vop-material-card"><div className="vop-material-body">
             <h2>Submit supporting evidence</h2><p>Choose the requirement, then attach a public HTTPS link to your work. A mentor or evaluator reviews it; submitting evidence does not award sign-off automatically.</p>
             {requirements.length ? <form onSubmit={event=>void submitEvidence(event)} style={{display:'grid',gap:'.75rem'}}>
@@ -102,7 +139,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
               <button type="submit" disabled={busy||!evidenceRequirement}>{busy?'Submitting…':'Submit evidence'}</button>
             </form>:<p>Requirements will appear here when your ministry publishes them.</p>}
             {evidence.length>0 && <div style={{marginTop:'1rem'}}><h3>Submitted evidence</h3>
-              {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a></p>)}
+              {evidence.map(item=><p key={String(item.id)}><a href={String(item.url || '#')} target="_blank" rel="noopener noreferrer">{String(item.title || 'Supporting evidence')}</a>{item.revision ? ` · revision ${item.revision}` : ''}</p>)}
             </div>}
           </div></article>
         </section>}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validCompletion, queueCompletion, pendingForUser, dropCompletion, readPendingCompletions, syncPendingLessonCompletions } from '../src/services/offlineStudyQueue.ts';
+import { validCompletion, validResume, queueCompletion, queueResume, pendingForUser, pendingResumesForUser, dropCompletion, readPendingCompletions, readPendingResumes, syncPendingLessonCompletions, syncPendingLessonResumes } from '../src/services/offlineStudyQueue.ts';
 
 test('offline completion queue deduplicates and cannot invent official progress', async () => {
   const data = new Map<string,string>();
@@ -21,8 +21,18 @@ test('offline completion queue deduplicates and cannot invent official progress'
     assert.equal(readPendingCompletions().length,2);
     assert.equal(pendingForUser('learner-alice').length,1);
     assert.equal(pendingForUser('learner-bob').length,1);
+    const resume={...alice,pageIndex:1};
+    assert.equal(validResume(resume),true);
+    assert.equal(validResume({...resume,pageIndex:-1}),false);
+    assert.equal(queueResume(resume),true);
+    assert.equal(queueResume({...resume,pageIndex:3,queuedAt:126}),true);
+    assert.equal(readPendingResumes().length,1,'Only the latest page for a lesson is retained.');
+    assert.equal(pendingResumesForUser('learner-alice')[0]?.pageIndex,3);
+    assert.equal(queueResume({...resume,uid:'learner-bob',pageIndex:2}),true);
+    assert.equal(readPendingResumes().length,2,'Resume state stays namespaced to each account.');
     // No account in a non-browser test runner: no network traffic or credits.
     assert.deepEqual(await syncPendingLessonCompletions(), {synced:0,remaining:0,rejected:0});
+    assert.deepEqual(await syncPendingLessonResumes(), {synced:0,remaining:0,rejected:0});
     assert.equal(dropCompletion(alice),true);
     assert.equal(pendingForUser('learner-alice').length,0);
     assert.equal(pendingForUser('learner-bob').length,1);

@@ -18,6 +18,9 @@ type GuideRecord = {
   season: string;
   quarter: string;
   certificateEligible: boolean;
+  certificateDocumentType:string;
+  certificateTypeName:string;
+  certificationRequirementIds:string[];
   learnerEntryMode:'lessons'|'sections';
   requiresFinalExam: boolean;
   published: boolean;
@@ -75,6 +78,18 @@ async function guideAdmin(
 }
 
 const valueText = (value: unknown) => value == null ? '' : String(value);
+type CertificationRequirement={id:string;title:string;description?:string;requiredSignatures?:number;evidenceRequired?:boolean;status?:string};
+async function loadCertificationRequirements(organizationId:string):Promise<CertificationRequirement[]>{
+  if(!auth?.currentUser)return [];
+  const token=await auth.currentUser.getIdToken();
+  const response=await fetch('/api/engagement',{
+    method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({action:'catalogList',kind:'requirements',organizationId:organizationId||undefined}),
+  });
+  const body=await response.json().catch(()=>({})) as {items?:CertificationRequirement[];error?:string};
+  if(!response.ok)throw new Error(body.error||'Could not load certification requirements.');
+  return (body.items||[]).filter(item=>item.status==='published').sort((a,b)=>a.title.localeCompare(b.title));
+}
 
 function timestampText(value: unknown) {
   if (!value) return '';
@@ -106,6 +121,10 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     season: valueText(value.season),
     quarter: valueText(value.quarter),
     certificateEligible: value.certificateEligible === true,
+    certificateDocumentType:valueText(value.certificateDocumentType || 'course'),
+    certificateTypeName:valueText(value.certificateTypeName),
+    certificationRequirementIds:Array.isArray(value.certificationRequirementIds)
+      ? value.certificationRequirementIds.map(valueText).filter(Boolean) : [],
     learnerEntryMode:value.learnerEntryMode==='sections'?'sections':'lessons',
     requiresFinalExam: value.requiresFinalExam === true,
     published: value.published === true,
@@ -179,6 +198,7 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [certificationRequirements,setCertificationRequirements]=useState<CertificationRequirement[]>([]);
   const pageSize = 5;
 
   const enabledLanguages = useMemo(
@@ -202,6 +222,13 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
   };
 
   useEffect(() => { void load(); }, [guides, organizationId]);
+  useEffect(()=>{
+    let cancelled=false;
+    void loadCertificationRequirements(organizationId).then(items=>{
+      if(!cancelled)setCertificationRequirements(items);
+    }).catch(()=>{if(!cancelled)setCertificationRequirements([]);});
+    return()=>{cancelled=true;};
+  },[organizationId]);
 
   const groups = useMemo(() => groupGuides(records), [records]);
   const seasons = useMemo(
@@ -242,6 +269,9 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       season: '',
       quarter: '',
       certificateEligible: false,
+      certificateDocumentType:'course',
+      certificateTypeName:'',
+      certificationRequirementIds:[],
       learnerEntryMode:'lessons',
       requiresFinalExam: true,
       published: false,
@@ -287,6 +317,9 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         season: editing.season.trim(),
         quarter: editing.quarter.trim(),
         certificateEligible: editing.certificateEligible,
+        certificateDocumentType:editing.certificateDocumentType.trim() || 'course',
+        certificateTypeName:editing.certificateTypeName.trim(),
+        certificationRequirementIds:[...editing.certificationRequirementIds],
         learnerEntryMode:editing.learnerEntryMode,
         requiresFinalExam: editing.requiresFinalExam,
         published: editing.published,
@@ -382,6 +415,37 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
             <div><div className="vop-setting-name">Certificate eligibility</div><div className="vop-setting-help">Available to the configured certification workflow.</div></div>
             <input type="checkbox" checked={editing.certificateEligible} onChange={e => setEditing({...editing,certificateEligible:e.target.checked})}/>
           </div>
+          {editing.certificateEligible && <div className="vop-form-grid vop-reference-form-grid">
+            <div className="vop-field"><label>Certificate type name</label>
+              <input maxLength={160} value={editing.certificateTypeName}
+                onChange={e=>setEditing({...editing,certificateTypeName:e.target.value})}
+                placeholder="e.g. Bible Correspondence Certificate"/>
+              <small>The issued credential snapshots this configured type; leave blank to use the official configured certificate title.</small>
+            </div>
+            <div className="vop-field"><label>Document type</label>
+              <input maxLength={80} value={editing.certificateDocumentType}
+                onChange={e=>setEditing({...editing,certificateDocumentType:e.target.value})}
+                placeholder="course"/>
+              <small>Data-driven document classification used in issuance and verification.</small>
+            </div>
+          </div>}
+          {editing.certificateEligible && <fieldset className="vop-program-guides" style={{marginTop:12}}>
+            <legend>Required evidence & signatures</legend>
+            <p>Select only the published portfolio requirements that must be complete before this guide can issue its certificate. Requirement IDs remain internal.</p>
+            <div className="vop-program-guide-options">
+              {certificationRequirements.map(requirement=><label key={requirement.id}>
+                <input type="checkbox" checked={editing.certificationRequirementIds.includes(requirement.id)}
+                  onChange={event=>setEditing(current=>current?{
+                    ...current,certificationRequirementIds:event.target.checked
+                      ?[...current.certificationRequirementIds,requirement.id]
+                      :current.certificationRequirementIds.filter(id=>id!==requirement.id),
+                  }:current)}/>
+                <ShieldCheck size={15}/><span>{requirement.title}</span>
+                <small>{Math.max(1,Number(requirement.requiredSignatures||1))} signature{Number(requirement.requiredSignatures||1)===1?'':'s'}{requirement.evidenceRequired===false?' · evidence optional':' · evidence required'}</small>
+              </label>)}
+              {!certificationRequirements.length&&<p>No published portfolio requirements are available in this organization. The guide can still certify from learning/graduation rules alone.</p>}
+            </div>
+          </fieldset>}
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Student guide navigation</div>
               <div className="vop-setting-help">

@@ -10,7 +10,7 @@ import {
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
-import { pendingForUser, syncPendingLessonCompletions } from './services/offlineStudyQueue';
+import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, syncPendingLessonResumes } from './services/offlineStudyQueue';
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
@@ -42,7 +42,7 @@ import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
 import './components/layout/navigation-header.css';
 
-const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
+const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
 
 export const App: React.FC = () => {
@@ -194,7 +194,7 @@ export const App: React.FC = () => {
     if (!uid) return;
     let cancelled = false;
     const replay = () => {
-      void syncPendingLessonCompletions().then(async result => {
+      void Promise.all([syncPendingLessonCompletions(),syncPendingLessonResumes()]).then(async ([result,resumeResult]) => {
         if (cancelled || auth?.currentUser?.uid !== uid) return;
         if (result.synced) {
           const refreshed = await loadFirestoreUser(uid).catch(() => null);
@@ -202,10 +202,11 @@ export const App: React.FC = () => {
           if (refreshed) { setCurrentUser(refreshed); setAllUsers([refreshed]); }
         }
         const remaining = pendingForUser(uid).length;
-        if (remaining) {
-          setStudyNotice(`${remaining} lesson completion${remaining === 1 ? '' : 's'} saved on this device, awaiting server confirmation.${result.rejected ? ' Some need administrator review.' : ''}`);
-        } else if (result.synced) {
-          setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} verified and synchronized.`);
+        const resumeRemaining = pendingResumesForUser(uid).length;
+        if (remaining || resumeRemaining) {
+          setStudyNotice(`${remaining} lesson completion${remaining === 1 ? '' : 's'} and ${resumeRemaining} reading position${resumeRemaining === 1 ? '' : 's'} saved on this device, awaiting server confirmation.${result.rejected || resumeResult.rejected ? ' Some need administrator review.' : ''}`);
+        } else if (result.synced || resumeResult.synced) {
+          setStudyNotice(`${result.synced} lesson completion${result.synced === 1 ? '' : 's'} and ${resumeResult.synced} reading position${resumeResult.synced === 1 ? '' : 's'} verified and synchronized.`);
         }
       }).catch(() => {
         if (!cancelled) setStudyNotice('Offline lesson progress is saved on this device and will be retried when connectivity returns.');
@@ -439,12 +440,12 @@ export const App: React.FC = () => {
         if (!nextLesson) setActiveLesson(null);
         return true;
       }} />}
-      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
-        const score = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
-        if (score === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
+        const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
+        if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
-        return score;
+        return result;
       }} onOpenCertificate={() => navigate('certificates')} />}
     </div>
   );
