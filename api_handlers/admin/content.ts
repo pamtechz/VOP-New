@@ -217,6 +217,24 @@ export default async function handler(req: Request, res: Response) {
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
       if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, current, 'edit');
+      const certificationRequirementIds=Array.isArray(data.certificationRequirementIds)
+        ? data.certificationRequirementIds.map(value=>safeId(value)) : [];
+      if(certificationRequirementIds.length>50||new Set(certificationRequirementIds).size!==certificationRequirementIds.length){
+        throw new Error('Choose at most 50 distinct certification requirements.');
+      }
+      if(certificationRequirementIds.length){
+        const requirements=await ctx.db.getAll(...certificationRequirementIds.map(requirementId=>
+          ctx.db.doc('masterGuideRequirements/'+requirementId)));
+        for(const requirement of requirements){
+          const value=requirement.data()||{};
+          const requirementOrg=String(value.organizationId||'');
+          const platformRequirement=!requirementOrg&&String(value.scope||'')==='platform';
+          if(!requirement.exists||value.status!=='published'||
+            (!platformRequirement&&requirementOrg!==effectiveOrganizationId)){
+            throw new Error('Every certification requirement must be published and available to the guide organization.');
+          }
+        }
+      }
       const nextGuide = {
         id,
         organizationId: effectiveOrganizationId,
@@ -237,6 +255,7 @@ export default async function handler(req: Request, res: Response) {
         certificateEligible: data.certificateEligible === true,
         certificateDocumentType: String(data.certificateDocumentType || 'course').trim().slice(0,80) || 'course',
         certificateTypeName: String(data.certificateTypeName || '').trim().slice(0,160),
+        certificationRequirementIds,
         // Presentation changes the learner's navigation, never the underlying
         // lesson/progress/certificate identity. Existing guides remain in
         // their familiar lesson-list mode until the author chooses otherwise.
