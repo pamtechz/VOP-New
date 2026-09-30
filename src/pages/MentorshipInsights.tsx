@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, ExternalLink, Link2, MessageCircle, QrCode, Send, UserCheck, Users, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, ExternalLink, Link2, MessageCircle, QrCode, Send, UserCheck, UserMinus, Users, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { appConfirm } from '../components/layout/AppDialog';
 
 async function mentoringApi(action: string, data: Record<string, unknown> = {}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -112,6 +113,17 @@ export const MentorshipInsights: React.FC = () => {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not assign mentor.'); }
   };
 
+  const unassign = async (studentId:string) => {
+    if(!await appConfirm('Remove the current mentor assignment? Conversation history is retained for audit, but new messages will be blocked until another mentor is assigned.',{
+      title:'Remove mentor assignment',confirmLabel:'Remove mentor',tone:'warning',
+    }))return;
+    try{
+      await mentoringApi('unassign',{studentId});
+      setNotice('Mentor assignment removed. Historical conversations were retained.');
+      await loadCore();
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not remove mentor assignment.');}
+  };
+
   const openConversation = async (item: any) => {
     setSelectedConversation(item);
     try {
@@ -221,7 +233,10 @@ export const MentorshipInsights: React.FC = () => {
           <select value={selectedMentor} onChange={e=>setSelectedMentor(e.target.value)}><option value="">Select mentor</option>{mentors.map(item=><option key={item.uid} value={item.uid}>{item.displayName || item.email}</option>)}</select>
           <button className="vop-primary" type="button" onClick={()=>void assign()} disabled={!selectedStudent||!selectedMentor}>Assign Mentor</button>
         </div>
-        <div className="vop-mentoring-table-wrap"><table className="vop-table"><thead><tr><th>Learner</th><th>Mentor</th><th>Status</th><th>Assigned</th><th>Action</th></tr></thead><tbody>{assignmentRows.map(item=><tr key={item.id}><td><strong>{item.student?.displayName || item.studentId}</strong><div className="vop-row-desc">{item.student?.email || ''}</div></td><td>{item.mentor?.displayName || item.mentorId}</td><td><span className="vop-status enabled">{item.status}</span></td><td>{item.assignedAt ? new Date(item.assignedAt).toLocaleDateString() : '—'}</td><td><button className="vop-actions" type="button" onClick={()=>{setSelectedStudent(item.studentId);setTab('performance');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button></td></tr>)}</tbody></table>{!assignmentRows.length&&!loading&&<div className="vop-empty">No mentor assignments have been configured.</div>}</div>
+        <div className="vop-mentoring-table-wrap"><table className="vop-table"><thead><tr><th>Learner</th><th>Mentor</th><th>Status</th><th>Assigned</th><th>Action</th></tr></thead><tbody>{assignmentRows.map(item=><tr key={item.id}><td><strong>{item.student?.displayName || item.studentId}</strong><div className="vop-row-desc">{item.student?.email || ''}</div></td><td>{item.mentor?.displayName || item.mentorId}</td><td><span className="vop-status enabled">{item.status}</span></td><td>{item.assignedAt ? new Date(item.assignedAt).toLocaleDateString() : '—'}</td><td><div style={{display:'flex',gap:6}}>
+          <button className="vop-actions" type="button" title="View learner performance" onClick={()=>{setSelectedStudent(item.studentId);setTab('performance');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button>
+          {item.status==='active'&&<button className="vop-actions" type="button" title="Remove mentor assignment" onClick={()=>void unassign(item.studentId)}><UserMinus size={16}/></button>}
+        </div></td></tr>)}</tbody></table>{!assignmentRows.length&&!loading&&<div className="vop-empty">No mentor assignments have been configured.</div>}</div>
       </section>}
 
       {tab==='conversations' && <section className="vop-mentoring-card">
