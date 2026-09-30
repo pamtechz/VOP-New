@@ -221,37 +221,47 @@ export default async function handler(
         return String(row.organizationId||'')===policyOrganizationId
           &&String(row.language||'')===language&&String(row.guideId||'')===effectiveGuideId;
       });
-      const currentPolicy=await policyRef.get();
-      const policyData=currentPolicy.data()||{};
-      const priorAttempts=currentPolicy.exists
-        ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
-      const lastAttemptMs=currentPolicy.exists
-        ?timestampMs(policyData.lastAttemptAt)
-        :relevant.reduce((latest,doc)=>Math.max(latest,timestampMs(doc.data()?.createdAt)),0);
-      if(policy.maxAttempts>0&&priorAttempts>=policy.maxAttempts){
-        return res.status(429).json({error:`Assessment attempt limit reached (${policy.maxAttempts} attempt${policy.maxAttempts===1?'':'s'}).`});
-      }
-      const retryAtMs=lastAttemptMs+policy.retakeCooldownMinutes*60_000;
-      if(policy.retakeCooldownMinutes>0&&priorAttempts>0&&retryAtMs>Date.now()){
-        return res.status(429).json({error:`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`});
-      }
       const sessionId=randomUUID();
+      const sessionRef=userRef.collection('assessmentSessions').doc(sessionId);
       const startedAt=Date.now();
+      const startedAtIso=new Date(startedAt).toISOString();
       const expiresAt=policy.timeLimitMinutes>0?startedAt+policy.timeLimitMinutes*60_000:0;
-      await userRef.collection('assessmentSessions').doc(sessionId).set({
-        sessionId,organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
-        startedAt:new Date(startedAt).toISOString(),
-        expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
-        consumed:false,createdAt:FieldValue.serverTimestamp(),
+      const historicalLastAttemptMs=relevant.reduce((latest,doc)=>Math.max(latest,timestampMs(doc.data()?.createdAt)),0);
+      const reserved=await db.runTransaction(async transaction=>{
+        const currentPolicy=await transaction.get(policyRef);
+        const policyData=currentPolicy.data()||{};
+        const priorAttempts=currentPolicy.exists
+          ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
+        const lastAttemptMs=currentPolicy.exists?timestampMs(policyData.lastAttemptAt):historicalLastAttemptMs;
+        if(policy.maxAttempts>0&&priorAttempts>=policy.maxAttempts){
+          throw new Error(`Assessment attempt limit reached (${policy.maxAttempts} attempt${policy.maxAttempts===1?'':'s'}).`);
+        }
+        const retryAtMs=lastAttemptMs+policy.retakeCooldownMinutes*60_000;
+        if(policy.retakeCooldownMinutes>0&&priorAttempts>0&&retryAtMs>startedAt){
+          throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
+        }
+        const attemptNumber=priorAttempts+1;
+        transaction.set(policyRef,{
+          organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+          attemptCount:attemptNumber,lastAttemptAt:startedAtIso,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        transaction.set(sessionRef,{
+          sessionId,organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+          attemptNumber,startedAt:startedAtIso,
+          expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+          consumed:false,createdAt:FieldValue.serverTimestamp(),
+        });
+        return {attemptNumber,priorAttempts};
       });
       return res.status(200).json({
-        ok:true,sessionId,startedAt:new Date(startedAt).toISOString(),
+        ok:true,sessionId,startedAt:startedAtIso,
         expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
         assessmentPolicy:{
           threshold:policy.threshold,maxAttempts:policy.maxAttempts||null,
-          remainingAttempts:policy.maxAttempts>0?Math.max(0,policy.maxAttempts-priorAttempts):null,
+          remainingAttempts:policy.maxAttempts>0?Math.max(0,policy.maxAttempts-reserved.attemptNumber):null,
           cooldownMinutes:policy.retakeCooldownMinutes,timeLimitMinutes:policy.timeLimitMinutes,
           feedbackMode:policy.feedbackMode,instructions:policy.instructions,
+          attemptsUsed:reserved.attemptNumber,
         },
       });
     }
@@ -412,8 +422,8 @@ export default async function handler(
     const sessionId=String(body.sessionId||'').trim();
     const sessionRef=sessionId?userRef.collection('assessmentSessions').doc(sessionId):null;
     let sessionSnapshot=sessionRef?await sessionRef.get():null;
-    if(timeLimitMinutes>0&&!sessionSnapshot?.exists){
-      return res.status(409).json({error:'Start this timed assessment before submitting answers.'});
+    if(!sessionSnapshot?.exists){
+      return res.status(409).json({error:'Review the assessment instructions and start the attempt before submitting answers.'});
     }
     if(sessionSnapshot?.exists){
       const session=sessionSnapshot.data()||{};
@@ -485,23 +495,13 @@ export default async function handler(
 
     const policyResult = await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(userRef);
-      const policySnapshot = await transaction.get(policyRef);
+      const transactionalSession = sessionRef ? await transaction.get(sessionRef) : null;
       if (!snapshot.exists) throw new Error('VOP account profile was not found.');
-
-      const policy = policySnapshot.data() || {};
-      const priorAttempts = policySnapshot.exists
-        ? Math.max(0, Number(policy.attemptCount || 0))
-        : historicalAttemptCount;
-      const lastAttemptMs = policySnapshot.exists
-        ? timestampMs(policy.lastAttemptAt)
-        : historicalLastAttemptMs;
-      if (maxAttempts > 0 && priorAttempts >= maxAttempts) {
-        throw new Error(`Assessment attempt limit reached (${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}).`);
+      if(!transactionalSession?.exists||transactionalSession.data()?.consumed===true){
+        throw new Error('This assessment attempt has already been submitted or is no longer valid.');
       }
-      const retryAtMs = lastAttemptMs + retakeCooldownMinutes * 60_000;
-      if (retakeCooldownMinutes > 0 && priorAttempts > 0 && retryAtMs > attemptTimeMs) {
-        throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
-      }
+      const session=transactionalSession.data()||{};
+      const attemptsUsed=Math.max(1,Math.trunc(Number(session.attemptNumber)||1));
 
       const data = snapshot.data() ?? {};
       const progress = data.progress && typeof data.progress === 'object'
@@ -526,17 +526,6 @@ export default async function handler(
         },
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-
-      const attemptsUsed = priorAttempts + 1;
-      transaction.set(policyRef, {
-        organizationId:policyOrganizationId,
-        language,
-        guideId: effectiveGuideId,
-        lessonId,
-        attemptCount: attemptsUsed,
-        lastAttemptAt: attemptTimeIso,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge:true });
 
       transaction.set(attemptRef, {
         candidateId: decoded.uid,
@@ -582,9 +571,7 @@ export default async function handler(
       for (const ref of successRefs) {
         transaction.set(ref, { organizationId:policyOrganizationId, answeredCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
-      if(sessionRef&&sessionSnapshot?.exists){
-        transaction.set(sessionRef,{consumed:true,consumedAt:FieldValue.serverTimestamp()},{merge:true});
-      }
+      transaction.set(sessionRef!,{consumed:true,consumedAt:FieldValue.serverTimestamp()},{merge:true});
       return { attemptsUsed };
     });
 
