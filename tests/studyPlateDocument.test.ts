@@ -165,14 +165,16 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(studio,/openModuleLesson\(item,section\.id\)/);
 });
 
-test('Plate review remains opt-in and does not replace the existing editor',()=>{
+test('Plate is the default structured editor while legacy compatibility remains guarded',()=>{
   const manager=read('src/pages/CurriculumManager.tsx');
   const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
   const reader=read('src/components/reader/LessonReaderModal.tsx');
   const safe=read('src/components/reader/StudyPlateContent.tsx');
   assert.match(manager,/const EditorComponent=plateReview\|\|hasRichSections/);
   assert.match(manager,/PlateCurriculumAuthoringReview:StructuredLessonEditor/);
-  assert.match(manager,/Try Plate editor/);
+  assert.match(manager,/useState\(true\)/);
+  assert.match(manager,/Plate is the primary authoring experience/);
+  assert.match(manager,/Legacy editor/);
   assert.match(plate,/onSplitPage=\{splitPage\}/);
   assert.match(plate,/vop-plate-page-tabs/);
   assert.match(plate,/duplicateSectionSafely/);
