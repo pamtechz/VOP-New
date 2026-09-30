@@ -164,7 +164,7 @@ export default async function handler(
     if (!guideSnapshot.exists || guideSnapshot.data()?.published !== true || guideSnapshot.data()?.archived === true) {
       return res.status(404).json({ error: 'The selected guide is not published.' });
     }
-    if (useTenantGuide && !candidateGuideShared && candidateGuideOrganizationId !== organizationId) {
+    if (useTenantGuide && !candidateGuideShared && !enrolledForGuide && candidateGuideOrganizationId !== organizationId) {
       return res.status(403).json({ error: 'The selected guide is outside your organization.' });
     }
     if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
