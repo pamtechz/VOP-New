@@ -133,7 +133,10 @@ test('approved audio and video stay as first-class Plate blocks and legacy media
   assert.equal(restored[0].url,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   assert.throws(()=>normalizeStudyPlateDocument([
     {id:'bad-media',type:'video',url:'https://example.org/not-a-media-page',children:[{text:''}]},
-  ]),/approved public HTTPS source/);
+  ]),/approved embeddable or direct public HTTPS source/);
+  assert.throws(()=>normalizeStudyPlateDocument([
+    {id:'external-page',type:'video',url:'https://www.umtu.me/app',children:[{text:''}]},
+  ]),/approved embeddable or direct public HTTPS source/);
   assert.throws(()=>normalizeStudyPlateDocument([
     {id:'wrong-kind',type:'audio',url:'https://cdn.example.org/movie.mp4',children:[{text:''}]},
   ]),/audio source/);
@@ -178,6 +181,7 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(editor,/New section/);
   assert.match(editor,/Insert approved audio or video/);
   assert.match(editor,/Supported public sources include YouTube/);
+  assert.match(editor,/page added as a safe external link/);
   assert.match(editor,/LinkRules\.autolink/);
   assert.match(editor,/upsertLink\(editor/);
   assert.match(editor,/fetch\('\/api\/media'/);
