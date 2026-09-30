@@ -131,7 +131,7 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
                   <small>{program.entryMode==='sections'?'STUDY BY SECTION':'STUDY BY LESSON'}</small>
                   <strong>{program.title}</strong>
                   <span>{program.description||'Explore this course.'}</span>
-                  <em>{program.guideIds.length} guides / modules <ChevronRight size={14}/></em>
+                  <em>{program.guideIds.length} {program.guideIds.length===1?'module':'modules'} <ChevronRight size={14}/></em>
                 </span>
               </button>)}
           </div>
