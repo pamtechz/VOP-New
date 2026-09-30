@@ -485,6 +485,7 @@ export type AppRoute =
   | 'announcements'
   | 'events'
   | 'support'
+  | 'mentor'
   | 'admin' 
   | 'certificates' 
   | 'certificate-verification';
