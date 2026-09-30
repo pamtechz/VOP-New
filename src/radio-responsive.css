@@ -180,3 +180,23 @@
 @media(max-width:1200px){.vop-yt-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.vop-yt-playlist-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.vop-yt-watch-page{grid-template-columns:minmax(0,1fr) 330px}.vop-yt-upnext-card{grid-template-columns:140px minmax(0,1fr)}}
 @media(max-width:900px){.vop-yt-topbar{grid-template-columns:auto minmax(0,1fr) auto;padding-inline:12px;gap:10px}.vop-yt-logo span{display:none}.vop-yt-feed{padding-inline:14px}.vop-yt-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 12px}.vop-yt-playlist-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.vop-yt-schedule-strip{grid-template-columns:1fr 1fr}.vop-yt-watch-page{grid-template-columns:1fr;padding:16px 14px 40px}.vop-yt-upnext{border-top:1px solid #e5e5e5;padding-top:16px}.vop-yt-upnext-card{grid-template-columns:168px minmax(0,1fr)}}
 @media(max-width:560px){.vop-yt-topbar{height:58px}.vop-yt-chipbar{top:58px;padding:9px 10px}.vop-yt-search{height:36px;grid-template-columns:minmax(0,1fr) 44px}.vop-yt-top-actions .vop-yt-icon-button{display:none}.vop-yt-live-pill{padding:8px 9px}.vop-yt-feed{padding:12px 10px 40px}.vop-yt-feed-heading{align-items:flex-start;flex-direction:column;gap:6px}.vop-yt-grid{grid-template-columns:1fr;gap:24px}.vop-yt-playlist-grid{grid-template-columns:1fr}.vop-yt-schedule-strip{grid-template-columns:1fr}.vop-yt-watch-page{padding-inline:0}.vop-yt-player{border-radius:0}.vop-yt-watch-title,.vop-yt-watch-meta,.vop-yt-description,.vop-yt-custom-controls,.vop-yt-watch-playlist{margin-left:12px;margin-right:12px}.vop-yt-watch-meta{align-items:flex-start;flex-direction:column}.vop-yt-custom-controls{grid-template-columns:auto auto auto auto minmax(70px,1fr) auto}.vop-yt-custom-controls .volume,.vop-yt-custom-controls label,.vop-yt-custom-controls>button:last-child{display:none}.vop-yt-upnext{padding:16px 12px 0}.vop-yt-upnext-card{grid-template-columns:150px minmax(0,1fr)}}
+
+
+/* Match the learner's selected dark theme to the familiar YouTube dark surface. */
+[data-theme="dark"] .vop-yt-radio{background:#0f0f0f;color:#f1f1f1}
+[data-theme="dark"] .vop-yt-topbar,[data-theme="dark"] .vop-yt-chipbar{background:rgba(15,15,15,.98);border-color:#272727}
+[data-theme="dark"] .vop-yt-logo,[data-theme="dark"] .vop-yt-icon-button{color:#f1f1f1}
+[data-theme="dark"] .vop-yt-icon-button:hover,[data-theme="dark"] .vop-yt-live-pill{background:#272727;color:#f1f1f1}
+[data-theme="dark"] .vop-yt-search input{background:#121212;border-color:#303030;color:#f1f1f1}
+[data-theme="dark"] .vop-yt-search>span{background:#222;border-color:#303030;color:#f1f1f1}
+[data-theme="dark"] .vop-yt-chipbar button{background:#272727;color:#f1f1f1}
+[data-theme="dark"] .vop-yt-chipbar button:hover{background:#3f3f3f}
+[data-theme="dark"] .vop-yt-chipbar button.active{background:#f1f1f1;color:#0f0f0f}
+[data-theme="dark"] .vop-yt-feed-heading h1,[data-theme="dark"] .vop-yt-card-meta strong,[data-theme="dark"] .vop-yt-shelf-head h2,[data-theme="dark"] .vop-yt-playlist-grid strong,[data-theme="dark"] .vop-yt-watch-title,[data-theme="dark"] .vop-yt-channel-row strong,[data-theme="dark"] .vop-yt-upnext-head strong,[data-theme="dark"] .vop-yt-upnext-card strong{color:#f1f1f1}
+[data-theme="dark"] .vop-yt-feed-heading p,[data-theme="dark"] .vop-yt-feed-heading>span,[data-theme="dark"] .vop-yt-card-meta span,[data-theme="dark"] .vop-yt-card-meta small,[data-theme="dark"] .vop-yt-shelf-head p,[data-theme="dark"] .vop-yt-playlist-grid small,[data-theme="dark"] .vop-yt-channel-row span,[data-theme="dark"] .vop-yt-upnext-card span,[data-theme="dark"] .vop-yt-upnext-card small{color:#aaa}
+[data-theme="dark"] .vop-yt-shelf,[data-theme="dark"] .vop-yt-upnext{border-color:#303030}
+[data-theme="dark"] .vop-yt-schedule-strip>button,[data-theme="dark"] .vop-yt-watch-playlist,[data-theme="dark"] .vop-yt-watch-playlist>button{background:#181818;border-color:#303030}
+[data-theme="dark"] .vop-yt-schedule-strip strong,[data-theme="dark"] .vop-yt-schedule-strip time,[data-theme="dark"] .vop-yt-watch-playlist h2,[data-theme="dark"] .vop-yt-watch-playlist>button strong{color:#f1f1f1}
+[data-theme="dark"] .vop-yt-description,[data-theme="dark"] .vop-yt-custom-controls,[data-theme="dark"] .vop-yt-watch-playlist>div,[data-theme="dark"] .vop-yt-watch-playlist>button.active{background:#272727;color:#f1f1f1}
+[data-theme="dark"] .vop-yt-description strong,[data-theme="dark"] .vop-yt-description p,[data-theme="dark"] .vop-yt-custom-controls button{color:#f1f1f1}
+[data-theme="dark"] .vop-yt-watch-actions button,[data-theme="dark"] .vop-yt-watch-actions a{background:#272727;color:#f1f1f1}
