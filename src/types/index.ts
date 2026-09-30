@@ -233,7 +233,7 @@ export interface User {
   information: UserInformation;
   privileges: UserPrivileges;
   progress: AccountProgress;
-  preferences?: { uiLocale?: string; studyLanguage?: string; };
+  preferences?: { uiLocale?: string; studyLanguage?: string; theme?: 'light' | 'dark' | 'system'; };
 }
 
 export interface Question {
