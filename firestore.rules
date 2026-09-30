@@ -900,6 +900,17 @@ service cloud.firestore {
       allow update: if isSuperAdmin() || canUpdateOwnProfile();
       allow delete: if isSuperAdmin();
 
+      // Verified assessment attempts contain question-level grading evidence.
+      // They are written/read through server APIs only so browser clients cannot
+      // reconstruct answer keys or inspect another learner's private history.
+      match /assessmentAttempts/{attemptId} {
+        allow read, write: if false;
+      }
+
+      match /assessmentAttemptPolicy/{policyId} {
+        allow read, write: if false;
+      }
+
       match /progress/{recordId} {
         allow get, list: if signedIn()
           && (
