@@ -132,6 +132,18 @@ function userCode(authUser: UserRecord, profile: Record<string, unknown> | undef
   return existing || authUser.uid.slice(0, 12).toUpperCase();
 }
 
+const HIERARCHY_COLLECTION: Record<string,string> = {
+  union:'unions', conference:'conferences', district:'districts', church:'churches',
+};
+
+async function validatedHierarchyAssignment(db: Firestore, nodeType: string, nodeId: string) {
+  const collection = HIERARCHY_COLLECTION[nodeType];
+  if (!collection || !nodeId) throw new Error('Choose a valid hierarchy level and assignment.');
+  const snapshot = await db.doc(collection + '/' + nodeId).get();
+  if (!snapshot.exists) throw new Error('The selected hierarchy assignment does not exist.');
+  return { nodeType, nodeId };
+}
+
 async function loadOrganizations(db: Firestore) {
   const [unions, conferences, districts, organizations] = await Promise.all([
     db.collection('unions').get(),
@@ -400,7 +412,15 @@ export default async function handler(request: Request, response: Response) {
 
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
-      if (type === 'admin' && !managedOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
+      const assignmentMode = String(body.assignmentMode || (managedOrganizationId ? 'organization' : '')).trim();
+      const requestedNodeType = String(body.adminNodeType || '').trim();
+      const requestedNodeId = String(body.adminNodeId || '').trim();
+      if (type === 'admin' && !managedOrganizationId) {
+        if (!(tenant.isSuperAdmin && assignmentMode === 'hierarchy')) {
+          return response.status(400).json({ error: 'Choose an organization or hierarchy assignment for this administrator.' });
+        }
+        await validatedHierarchyAssignment(db, requestedNodeType, requestedNodeId);
+      }
       if (type === 'super_admin' && !tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can create platform administrators.');
       if (type === 'admin' && tenantOrganizationId && !['owner','admin'].includes(String(tenant.membership.role || ''))) {
         throw new Error('Only an organization owner or administrator can create organization administrators.');
@@ -414,7 +434,10 @@ export default async function handler(request: Request, response: Response) {
         ...(password ? { password } : {}),
         disabled: false,
       });
-      const profile = profileForType(type, body, managedOrganizationId);
+      const profile = profileForType(type, {
+        ...body,
+        ...(type === 'admin' && !managedOrganizationId ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
+      }, managedOrganizationId);
       const hierarchyMembershipFields = hierarchyTenant
         ? {
             unionId: hierarchyTenant === 'union_admin' ? hierarchyNodeId : String(profile.unionId || body.unionId || '').trim(),
@@ -527,15 +550,29 @@ export default async function handler(request: Request, response: Response) {
       if (type === 'super_admin' && tenantOrganizationId) {
         throw new Error('A platform administrator cannot be assigned to an organization tenant.');
       }
-      // Super Admin may manage users platform-wide, but changing a user's
-      // display role must not silently detach that user from an existing tenant.
-      // Tenant reassignment is a separate, explicit organization operation.
-      const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
-      const baseProfile = profileForType(type, body, effectiveOrganizationId);
+      const assignmentMode = String(body.assignmentMode || '').trim();
+      const requestedNodeType = String(body.adminNodeType || '').trim();
+      const requestedNodeId = String(body.adminNodeId || '').trim();
+      const hierarchyReassignment = type === 'admin' && assignmentMode === 'hierarchy';
+      if (hierarchyReassignment) {
+        if (!tenant.isSuperAdmin) throw new Error('Only VOP Super Admin can assign hierarchy administrator roles.');
+        await validatedHierarchyAssignment(db, requestedNodeType, requestedNodeId);
+      }
+      // Organization membership is preserved by ordinary edits. A deliberate
+      // hierarchy reassignment is the only update path that detaches an account.
+      const effectiveOrganizationId = hierarchyReassignment
+        ? ''
+        : tenantOrganizationId || String(existingData.organizationId || '').trim();
+      const baseProfile = profileForType(type, {
+        ...body,
+        ...(hierarchyReassignment ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
+      }, effectiveOrganizationId);
       const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
-      const profile = existingPlatformRole
-        ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
-        : baseProfile;
+      const profile = hierarchyReassignment
+        ? baseProfile
+        : existingPlatformRole
+          ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
+          : baseProfile;
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
@@ -543,6 +580,13 @@ export default async function handler(request: Request, response: Response) {
         phoneNumber: updated.phoneNumber || existingData.phoneNumber || '',
         userType: type,
         ...profile,
+        ...(hierarchyReassignment ? {
+          organizationId:'', organizationRole:'',
+          unionId: requestedNodeType === 'union' ? requestedNodeId : '',
+          conferenceId: requestedNodeType === 'conference' ? requestedNodeId : '',
+          districtId: requestedNodeType === 'district' ? requestedNodeId : '',
+          churchId: requestedNodeType === 'church' ? requestedNodeId : '',
+        } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const preservedHierarchyRole = hierarchyRole(String(profile.role || existingData.role || ''));
@@ -556,6 +600,14 @@ export default async function handler(request: Request, response: Response) {
               ? { role: 'mentor' }
               : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
+      if (hierarchyReassignment) {
+        const previousOrganizationId = String(existingData.organizationId || '').trim();
+        if (previousOrganizationId) {
+          await db.doc(`organizations/${previousOrganizationId}/members/${uid}`).set({
+            active:false, updatedAt:new Date().toISOString(), assignedBy:decoded.uid,
+          }, {merge:true});
+        }
+      }
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
           uid, organizationId:membershipOrganizationId,
