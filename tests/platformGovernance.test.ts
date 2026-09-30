@@ -29,7 +29,7 @@ test('organization administrators retain candidates while language governance st
   const candidates=read('src/pages/CandidateEnrollment.tsx');
   const languageApi=read('api_handlers/admin/languages.ts');
   const localization=read('api/localization.ts');
-  assert.match(admin,/item\.id === 'candidates'/);
+  assert.match(admin,/item\.id==='candidates'/);
   assert.match(admin,/const coreTenantAdmin=isSuperAdmin\|\|isHierarchyAdmin\|\|organizationAdmin/);
   assert.match(admin,/item\.id==='curriculum'/);
   assert.match(admin,/curriculumContributor/);
