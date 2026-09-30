@@ -54,8 +54,12 @@ export interface AppSettings {
   website?: string;
   welcomeMessage?: string;
   systemOptions?: {
-    maintenanceMode?: boolean;
+    allowRegistrations?: boolean;
+    requireApproval?: boolean;
+    enableEmailNotifications?: boolean;
     showChurchInfo?: boolean;
+    enablePwa?: boolean;
+    maintenanceMode?: boolean;
   };
   features?: {
     candidatesModule?: boolean;
@@ -68,6 +72,14 @@ export interface AppSettings {
   security?: {
     /** Signed-in inactivity timeout. Zero/undefined uses the application default. */
     sessionTimeoutMinutes?: number;
+    allowMultipleSessions?: boolean;
+    enforceSecureConnections?: boolean;
+  };
+  notifications?: {
+    emailEnabled?: boolean;
+    enrollmentNotifications?: boolean;
+    announcementNotifications?: boolean;
+    certificateNotifications?: boolean;
   };
 }
 
