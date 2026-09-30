@@ -164,7 +164,7 @@ export default async function handler(req: Request, res: Response) {
       if (guideData.published !== true || guideData.archived === true) throw new Error('This course is no longer available for enrollment.');
       if (shareData.sharingScope === 'shared' && guideData.sharingScope !== 'shared') throw new Error('This shared course is not available.');
       if (lessonId) {
-        const lesson = await guide.collection('lessons').doc(lessonId).get();
+        const lesson = await guide.ref.collection('lessons').doc(lessonId).get();
         if (!lesson.exists || lesson.data()?.published !== true || lesson.data()?.archived === true) throw new Error('The selected lesson is no longer available.');
       }
       const profileRef = db.doc('users/' + decoded.uid);
