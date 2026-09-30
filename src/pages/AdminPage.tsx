@@ -34,6 +34,7 @@ import { TenantLanguagesPanel, getTenantLanguages } from '../components/admin/Te
 import { TenantTranslationsPanel } from '../components/admin/TenantTranslationsPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
+import { appConfirm } from '../components/layout/AppDialog';
 
 interface AdminPageProps {
   currentUser: User;
@@ -511,7 +512,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
 
   const deleteLanguage = async (language: CustomLanguage) => {
-    if (!window.confirm('Delete this language?')) return;
+    if (!await appConfirm('Delete this language?', {title:'Delete language',confirmLabel:'Delete',tone:'danger'})) return;
     try {
       await deleteLanguageFromFirestore(language.code);
       if (editingLanguage === language.code) openLanguageEditor();
@@ -557,7 +558,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   };
 
   const resetPermissionMatrix = async () => {
-    if (!isSuperAdmin || !window.confirm('Reset all configurable permissions to the VOP default matrix?')) return;
+    if (!isSuperAdmin || !await appConfirm('Reset all configurable permissions to the VOP default matrix?', {title:'Reset permission matrix',confirmLabel:'Reset',tone:'danger'})) return;
     setPermissionSaving(true);
     try {
       if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
