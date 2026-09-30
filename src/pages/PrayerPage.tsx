@@ -4,6 +4,7 @@ import { auth } from '../lib/firebase';
 import type { PrayerRequest, User } from '../types';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
+import { ModalLayer } from '../components/layout/ModalLayer';
 
 interface PrayerPageProps {
   currentUser: User;
@@ -171,7 +172,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
           </section>}
       </main>
 
-      {showComposer && <div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowComposer(false); }}>
+      {showComposer && <ModalLayer><div className="vop-prayer-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowComposer(false); }}>
         <form className="vop-prayer-composer" onSubmit={submit}>
           <div className="vop-prayer-composer-head"><div><span>Prayer Ministry</span><h2>{t('prayer.composer_title','What would you like us to pray about?')}</h2></div><button type="button" onClick={() => setShowComposer(false)}>×</button></div>
           <div className="vop-prayer-composer-body">
@@ -181,7 +182,7 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
           </div>
           <footer><button type="button" onClick={() => setShowComposer(false)}>{t('common.cancel','Cancel')}</button><button className="primary" type="submit" disabled={saving || requestText.trim().length < 5}><Send size={16}/>{saving ? t('common.sending','Sending…') : t('prayer.send','Send request')}</button></footer>
         </form>
-      </div>}
+      </div></ModalLayer>}
     </div>
   );
 };
