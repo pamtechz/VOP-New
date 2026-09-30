@@ -27,11 +27,13 @@ import { MediaPlayer } from '../media/MediaPlayer';
 import './plate-authoring.css';
 
 function ImageElement({element,children,...props}:PlateElementProps){
-  const url=String((element as {url?:unknown}).url||'');
+  const image=element as {url?:unknown;alt?:unknown};
+  const url=String(image.url||'');
+  const alt=String(image.alt||'');
   return <PlateElement as="figure" element={element} {...props}>
     <span contentEditable={false}>
     {isSafeHttpsMediaUrl(url)
-      ? <img className="vop-plate-image" src={url} alt="Lesson content" loading="lazy"/>
+      ? <img className="vop-plate-image" src={url} alt={alt} loading="lazy"/>
       : <span className="vop-plate-error">Invalid image URL</span>}
     </span>
     {children}
@@ -111,8 +113,21 @@ export function StudyPlatePageEditor({sectionId,organizationId,document,onChange
   const insertImage=()=>{
     const raw=window.prompt('Public HTTPS image URL');
     if(raw===null)return;
-    if(!isSafeHttpsMediaUrl(raw)){setInvalid('Choose a safe public HTTPS image URL.');return;}
-    command(()=>editor.tf.insertNodes({type:'img',url:raw,children:[{text:''}]}));
+    if(!isSafeHttpsMediaUrl(raw)){
+      const message='Choose a safe public HTTPS image URL.';
+      setInvalid(message);onValidationError?.(message);return;
+    }
+    const description=window.prompt(
+      'Alternative text for learners using screen readers. Describe the purpose of the image briefly. Leave blank only if it is decorative.',
+      ''
+    );
+    if(description===null)return;
+    const alt=description.trim();
+    if(alt.length>300){
+      const message='Image alternative text cannot exceed 300 characters.';
+      setInvalid(message);onValidationError?.(message);return;
+    }
+    command(()=>editor.tf.insertNodes({type:'img',url:raw,alt,children:[{text:''}]}));
   };
   const insertMedia=async()=>{
     const raw=window.prompt('Public media URL (YouTube, AudioVerse, Vimeo, Facebook, Instagram, TikTok, SoundCloud, or direct HTTPS media)');
