@@ -194,6 +194,9 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(structure,/initialSectionId/);
   assert.match(studio,/programContext\?\.entryMode==='sections'/);
   assert.match(studio,/openModuleLesson\(item,section\.id\)/);
+  assert.match(studio,/beforeunload/);
+  assert.match(studio,/You have unsaved lesson changes/);
+  assert.match(studio,/Save your lesson changes before leaving the editor to manage a quiz/);
 });
 
 test('Plate is the default structured editor while legacy compatibility remains guarded',()=>{
