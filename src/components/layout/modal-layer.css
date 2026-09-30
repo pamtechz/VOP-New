@@ -1,0 +1,4 @@
+.vop-modal-layer{
+  position:fixed;inset:0;pointer-events:none;isolation:isolate;
+}
+.vop-modal-layer>*{pointer-events:auto}

@@ -1,5 +1,8 @@
 /* Review-only course → chapter → page authoring layout. */
-.vop-plate-authoring-review{display:grid;gap:11px;min-width:0;color:#173e71}
+.vop-plate-authoring-review{
+  --vop-plate-sticky-top:76px;
+  display:grid;gap:11px;min-width:0;color:#173e71;
+}
 .vop-plate-path{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
   color:#647a97;font-size:11px;font-weight:670;}
 .vop-plate-path strong{color:#173d74}
@@ -73,13 +76,15 @@
 
 /* Continuous document workspace: compact page outline + one Plate chapter canvas. */
 .vop-plate-document-shell{
-  display:grid;grid-template-columns:minmax(190px,230px) minmax(0,1fr);
+  display:grid;grid-template-columns:minmax(220px,260px) minmax(0,1fr);
   gap:11px;align-items:start;min-width:0;
 }
 .vop-plate-outline{
-  position:sticky;top:10px;display:grid;gap:8px;min-width:0;max-height:calc(100vh - 95px);
-  overflow:auto;padding:9px;border:1px solid #dce6f2;border-radius:10px;background:#fbfdff;
-  scrollbar-width:thin;
+  position:sticky;top:var(--vop-plate-sticky-top,76px);z-index:30;
+  display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:8px;min-width:0;
+  max-height:calc(100dvh - var(--vop-plate-sticky-top,76px) - 10px);
+  overflow:hidden;padding:9px;border:1px solid #dce6f2;border-radius:10px;background:#fbfdff;
+  box-shadow:0 5px 15px rgba(15,46,90,.06);scrollbar-width:thin;
 }
 .vop-plate-outline-head{display:flex;align-items:center;justify-content:space-between;gap:7px}
 .vop-plate-outline-head>div{display:grid;gap:2px}
@@ -91,7 +96,7 @@
 }
 .vop-plate-outline-help{margin:0;padding:7px 8px;border-radius:7px;background:#f1f6fc;
   color:#708298;font-size:10px;line-height:1.45}
-.vop-plate-outline-list{display:grid;gap:6px}
+.vop-plate-outline-list{display:grid;gap:6px;min-height:0;overflow-y:auto;padding-right:2px;scrollbar-gutter:stable}
 .vop-plate-outline-row{
   display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:6px;
   border:1px solid #e0e8f1;border-radius:8px;background:#fff;min-width:0;
@@ -117,7 +122,7 @@
   border-color:#cbdced;background:#fff;outline:none;
 }
 .vop-plate-outline-row>.vop-structure-actions-menu{grid-column:2;grid-row:1;margin:0;align-self:center}
-.vop-plate-document-pane{display:grid;gap:8px;min-width:0}
+.vop-plate-document-pane{display:grid;gap:8px;min-width:0;overflow:visible}
 .vop-plate-document-note{
   display:flex;align-items:flex-start;gap:7px;padding:8px 10px;border:1px solid #dce8f5;
   border-radius:8px;background:#f7faff;color:#5d748f;font-size:10px;line-height:1.45;
@@ -126,7 +131,28 @@
 .vop-plate-document-note strong{color:#234f7f}
 @media(max-width:860px){
   .vop-plate-document-shell{grid-template-columns:1fr}
-  .vop-plate-outline{position:static;max-height:none}
+  .vop-plate-outline{position:static;max-height:none;box-shadow:none}
   .vop-plate-outline-list{display:flex;overflow-x:auto;gap:6px;padding-bottom:2px}
   .vop-plate-outline-row{flex:0 0 min(230px,78vw)}
+}
+
+
+@media(max-width:640px){
+  .vop-plate-authoring-review{--vop-plate-sticky-top:68px}
+}
+
+
+@media(min-width:861px){
+  .vop-plate-document-shell{
+    position:sticky;top:var(--vop-plate-sticky-top,76px);
+    height:calc(100dvh - var(--vop-plate-sticky-top,76px) - 10px);
+    min-height:520px;align-items:stretch;
+  }
+  .vop-plate-outline{
+    position:relative;top:auto;height:100%;max-height:none;align-self:stretch;
+  }
+  .vop-plate-document-pane{
+    height:100%;min-height:0;grid-template-rows:auto minmax(0,1fr);
+  }
+  .vop-plate-document-note{min-height:0}
 }

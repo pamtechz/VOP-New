@@ -23,6 +23,7 @@ type Props={
   onPageError?:(sectionId:string,message:string)=>void;
   onQuiz:(anchor:Anchor)=>void;
   canAttachQuiz:boolean;
+  lessonPublished:boolean;
   programTitle?:string;
   guideTitle:string;
   lessonTitle:string;
@@ -58,7 +59,7 @@ const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
 };
 
 export function PlateCurriculumAuthoringReview({
-  chapters,organizationId,onChange,onPageError,onQuiz,canAttachQuiz,programTitle,guideTitle,lessonTitle,
+  chapters,organizationId,onChange,onPageError,onQuiz,canAttachQuiz,lessonPublished,programTitle,guideTitle,lessonTitle,
   initialSectionId,canTransfer,otherLessons,onTransfer,
 }:Props){
   const initialChapter=initialSectionId
@@ -146,7 +147,7 @@ export function PlateCurriculumAuthoringReview({
   };
   const removeSection=(sectionId:string)=>{
     if(!canLeaveChapter()||!chapter||chapter.sections.length<=1)return;
-    if(canAttachQuiz){
+    if(lessonPublished){
       setMessage('Published sections may have quiz anchors. Unpublish and remove dependent assessments before deleting a page.');
       return;
     }
@@ -310,8 +311,8 @@ export function PlateCurriculumAuthoringReview({
               </label>}
               {destinations('section',section.id)}
               <button className="vop-structure-delete" type="button"
-                disabled={chapter.sections.length<=1||canAttachQuiz}
-                title={canAttachQuiz?'Unpublish and resolve dependent quizzes before deleting a published section.':''}
+                disabled={chapter.sections.length<=1||lessonPublished}
+                title={lessonPublished?'Unpublish and resolve dependent quizzes before deleting a published section.':''}
                 onClick={()=>removeSection(section.id)}><Trash2 size={15}/> Delete section</button>
             </StructureActionsMenu>
           </div>)}
