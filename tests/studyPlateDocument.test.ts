@@ -272,6 +272,16 @@ test('Plate overflow menu preserves selection and every visible action invokes r
   assert.match(editor,/attachQuiz\('block'\)/);
 });
 
+test('saved draft lessons can open anchored quiz authoring without publishing first',()=>{
+  const manager=read('src/pages/CurriculumManager.tsx');
+  const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
+  assert.match(manager,/canAttachQuiz=\{Boolean\(editor\.id\)\}/);
+  assert.match(manager,/lessonPublished=\{editor\.published\}/);
+  assert.match(manager,/Save this lesson before attaching a quiz so its section and block anchors exist/);
+  assert.doesNotMatch(manager,/Save and publish this lesson before attaching a published quiz/);
+  assert.match(plate,/if\(lessonPublished\)/);
+});
+
 test('modal dialogs use body-level activation-ordered layers',()=>{
   const layer=read('src/components/layout/ModalLayer.tsx');
   const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
