@@ -364,8 +364,10 @@ async function decide(req: Request, res: Response) {
       createdBy:ctx.auth.uid,
     });
   }
-  if(decision==='approve'&&nextStage){
-    await notifyStageApprovers(ctx,{...result,id:ref.id},nextStage,ctx.auth.uid);
+  const upcomingStage=decision==='approve'&&text(result.status)!=='approved'
+    ?stages[Number(result.workflowStageIndex)]:undefined;
+  if(upcomingStage){
+    await notifyStageApprovers(ctx,{...result,id:ref.id},upcomingStage,ctx.auth.uid);
   }
   return res.status(200).json({ ok: true, request: safe });
 }
