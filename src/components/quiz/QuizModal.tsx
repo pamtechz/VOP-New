@@ -3,6 +3,7 @@ import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
+import { ModalLayer } from '../layout/ModalLayer';
 
 interface QuizModalProps {
   lesson: Lesson;
@@ -65,7 +66,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const progressPercent = questions.length > 0 ? Math.round((Object.keys(answers).length / questions.length) * 100) : 0;
 
   return (
-    <div
+    <ModalLayer><div
       className="modal-overlay vop-study-modal vop-quiz-modal"
       role="presentation"
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
@@ -444,6 +445,6 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           </div>
         )}
       </section>
-    </div>
+    </div></ModalLayer>
   );
 };
