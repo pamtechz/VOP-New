@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppSettings, LanguageCode } from '../types';
 import { getTranslation, getUiLocale } from '../services/i18n';
-import { ArrowLeft, BookOpen, Clock, MapPin, Phone, Mail, MessageCircle, Info } from 'lucide-react';
+import { ArrowLeft, BookOpen, Clock, Globe2, MapPin, Phone, Mail, MessageCircle, Info } from 'lucide-react';
 
 interface AboutPageProps {
   settings: AppSettings;
@@ -186,20 +186,18 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <h3 className="text-sm sm:text-base font-bold text-slate-900">Headquarters Office</h3>
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-4">
-                  {details?.contactOfficeAddress ||
-                    'Plot 9221, Corner of Burma & Independence Avenue, P.O. Box 31309, Lusaka, Zambia'}
+                  {details?.contactOfficeAddress || 'Office address has not been configured for this ministry.'}
                 </p>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600">
                   <span className="font-bold text-slate-800 block mb-0.5">Office Hours</span>
-                  {details?.contactOfficeHours ||
-                    'Monday – Thursday: 08:00 – 17:00 | Friday: 08:00 – 12:30 | Sabbath & Sunday: Closed'}
+                  {details?.contactOfficeHours || 'Office hours have not been configured for this ministry.'}
                 </div>
               </div>
 
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
                 <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-2">Direct Communication</h3>
 
-                {details?.contactPhoneNumbers && details.contactPhoneNumbers.length > 0 && (
+                {((details?.contactPhoneNumbers?.length ? details.contactPhoneNumbers : settings.contactPhone ? [settings.contactPhone] : [])).length > 0 && (
                   <div>
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Enquiries</span>
                     <div className="space-y-1">
