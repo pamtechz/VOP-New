@@ -568,7 +568,9 @@ export default async function handler(request: Request, response: Response) {
         ...(hierarchyReassignment ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
       }, effectiveOrganizationId);
       const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
-      const profile = hierarchyReassignment
+      const explicitAdminScopeChange = tenant.isSuperAdmin && type === 'admin'
+        && (assignmentMode === 'hierarchy' || assignmentMode === 'organization');
+      const profile = explicitAdminScopeChange
         ? baseProfile
         : existingPlatformRole
           ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
