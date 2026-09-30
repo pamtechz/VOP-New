@@ -2,7 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {Bell,Check,ExternalLink,Search,Trash2,X} from 'lucide-react';
 import {auth} from '../../lib/firebase';
 import type {AppRoute} from '../../types';
-import {notificationRoute} from '../../services/notificationRouting';
+import {notificationRoute,prepareNotificationNavigation} from '../../services/notificationRouting';
 
 type SearchItem={type:string;id:string;title:string;description:string;actionUrl:string};
 type NotificationItem={id:string;title?:string;body?:string;read?:boolean;actionUrl?:string;type?:string;metadata?:Record<string,unknown>;createdAt?:unknown};
@@ -81,7 +81,7 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
       const response=await fetch('/api/admin/notifications',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action:'markRead',notificationId:item.id})});
       if(response.ok)setNotifications(items=>items.map(entry=>entry.id===item.id?{...entry,read:true}:entry));
     }
-    if(navigate&&onNavigate){setNotificationsOpen(false);setToast(null);onNavigate(notificationRoute(item));}
+    if(navigate&&onNavigate){setNotificationsOpen(false);setToast(null);prepareNotificationNavigation(item);onNavigate(notificationRoute(item));}
   };
   const deleteOne=async(item:NotificationItem)=>{
     const idToken=await token();if(!idToken)return;
