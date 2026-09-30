@@ -235,6 +235,16 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   </div>
                 )}
 
+                {settings.website?.trim() && (
+                  <div className="flex items-start gap-3">
+                    <Globe2 size={18} className="mt-0.5 shrink-0 text-amber-500" />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Website</p>
+                      <a href={settings.website} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-blue-700 hover:underline">{settings.website}</a>
+                    </div>
+                  </div>
+                )}
+
                 {(details?.contactWhatsAppNumbers?.[0] || settings.whatsappNumber) && (
                   <div className="pt-2">
                     <a
