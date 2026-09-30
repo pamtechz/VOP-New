@@ -337,8 +337,27 @@ export default async function handler(
     const effectiveGuideId = legacyStudyGuide ? 'discover' : guideId;
     const scoreKey = `${organizationId || 'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
     const passed = score >= threshold;
-    const attemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const attemptId = randomUUID();
     const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
+    const policyRef = userRef.collection('assessmentAttemptPolicy').doc(
+      retakePolicyKey(organizationId, language, effectiveGuideId, lessonId),
+    );
+    // Bootstrap from historical attempts so introducing a policy does not reset
+    // a learner's prior assessment history.
+    const historical = await userRef.collection('assessmentAttempts')
+      .where('lessonId','==',lessonId).limit(500).get();
+    const relevantHistorical = historical.docs.filter(doc => {
+      const row = doc.data() || {};
+      return String(row.organizationId || '') === organizationId
+        && String(row.language || '') === language
+        && String(row.guideId || '') === effectiveGuideId;
+    });
+    const historicalAttemptCount = relevantHistorical.length;
+    const historicalLastAttemptMs = relevantHistorical.reduce(
+      (latest, doc) => Math.max(latest, timestampMs(doc.data()?.createdAt)), 0,
+    );
+    const attemptTimeMs = Date.now();
+    const attemptTimeIso = new Date(attemptTimeMs).toISOString();
     const questionResults = questions.map((question, index) => {
       const answer = answers[String(index)];
       const correct = Array.isArray(question.options)
@@ -361,10 +380,8 @@ export default async function handler(
     ));
 
     const policyResult = await db.runTransaction(async transaction => {
-      const [snapshot, policySnapshot] = await Promise.all([
-        transaction.get(userRef),
-        transaction.get(policyRef),
-      ]);
+      const snapshot = await transaction.get(userRef);
+      const policySnapshot = await transaction.get(policyRef);
       if (!snapshot.exists) throw new Error('VOP account profile was not found.');
 
       const policy = policySnapshot.data() || {};
