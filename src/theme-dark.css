@@ -395,3 +395,123 @@
   background:#f2c15d!important;
   color:#15191e!important;
 }
+
+
+/* Dark-mode regression shield: remove legacy light islands */
+[data-theme="dark"] :is(
+  .vop-account-head,.vop-account-link,.vop-account-profile,.vop-account-progress,
+  .vop-user-metric,.vop-user-search,.vop-program-catalog-card,.vop-program-catalog-open,
+  .vop-program-editor,.vop-program-detail,.vop-dialog-card,.vop-app-dialog-card,
+  .vop-guide-direct-section,.vop-guide-lesson,.vop-plate-chapter-picker,
+  .vop-plate-editor,.vop-plate-toolbar,.vop-plate-more-menu,.vop-plate-link-popover,
+  .vop-guide-first-card,.vop-module-item,.vop-structure-section,
+  .vop-structure-quiz,.vop-structure-delete,.vop-structure-block-actions>button,
+  .vop-structure-actions-trigger,.vop-structure-actions-popover,
+  .vop-radio-program,.vop-prayer-loading,.vop-prayer-empty,
+  .vop-radio-admin-library-grid>article,.vop-study-plate blockquote,
+  .vop-header-popover,.vop-header-searchbox,.vop-header-result,
+  .vop-header-notification-row,.vop-notification-toast
+){
+  background:var(--bg-card)!important;
+  color:var(--text-primary)!important;
+  border-color:var(--border-subtle)!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] :is(
+  .vop-account-link:hover,.vop-guide-direct-section:hover,.vop-guide-lesson:hover,
+  .vop-program-catalog-card:hover,.vop-guide-first-card:hover,.vop-module-item:hover,
+  .vop-structure-actions-trigger:hover,.vop-header-result:hover,
+  .vop-header-notification-row.unread
+){
+  background:var(--bg-elevated)!important;
+  border-color:var(--border-strong)!important;
+}
+[data-theme="dark"] :is(
+  .vop-account-link-copy strong,.vop-account-profile strong,
+  .vop-guide-direct-section strong,.vop-guide-lesson strong,
+  .vop-program-catalog-card strong,.vop-program-detail h2,
+  .vop-guide-first-card h3,.vop-module-item-content h3,
+  .vop-prayer-empty h2,.vop-radio-program h3,
+  .vop-header-result strong,.vop-notification-toast strong,
+  .vop-plate-editor h1,.vop-plate-editor h2,.vop-plate-editor h3,
+  .vop-structure-section h3,.vop-structure-section h4
+){color:var(--text-primary)!important}
+[data-theme="dark"] :is(
+  .vop-account-link-copy small,.vop-account-profile small,
+  .vop-guide-direct-section p,.vop-guide-direct-section em,.vop-guide-lesson p,
+  .vop-program-catalog-card span,.vop-program-editor p,.vop-program-detail p,
+  .vop-guide-first-card p,.vop-guide-first-card small,
+  .vop-module-item-content p,.vop-module-item-content span,
+  .vop-prayer-empty,.vop-radio-program p,.vop-header-empty,
+  .vop-header-result>span span,.vop-notification-toast small
+){color:var(--text-muted)!important}
+
+[data-theme="dark"] .vop-user-toolbar select,
+[data-theme="dark"] .vop-program-manager :is(input,select,textarea),
+[data-theme="dark"] .vop-app-dialog-card :is(input,select,textarea),
+[data-theme="dark"] .vop-dialog-card :is(input,select,textarea),
+[data-theme="dark"] .vop-plate-chapter-picker :is(input,select),
+[data-theme="dark"] .vop-structure-section :is(input,select,textarea),
+[data-theme="dark"] .vop-header-searchbox input{
+  background:var(--bg-input)!important;
+  color:var(--text-primary)!important;
+  border-color:var(--border-subtle)!important;
+}
+[data-theme="dark"] .vop-header-searchbox>button,
+[data-theme="dark"] .vop-header-notification-delete{
+  background:transparent!important;color:var(--text-muted)!important;border-color:transparent!important
+}
+[data-theme="dark"] .vop-header-notification-delete:hover{
+  background:#351d22!important;color:#ffb0ba!important
+}
+[data-theme="dark"] .vop-notification-popover .vop-header-popover-head{
+  background:var(--bg-secondary)!important;border-color:var(--border-subtle)!important;color:var(--text-primary)!important
+}
+[data-theme="dark"] .vop-notification-popover .vop-header-popover-head button{
+  background:var(--bg-elevated)!important;color:#b9d5ef!important;border:1px solid var(--border-subtle)!important;border-radius:7px
+}
+[data-theme="dark"] .vop-notification-popover .vop-header-popover-head button.danger{color:#ffb0ba!important;border-color:#6d3942!important}
+
+[data-theme="dark"] .vop-prayer-notice.success{
+  background:#142f28!important;color:#a6e5c3!important;border-color:#2e6a55!important
+}
+[data-theme="dark"] .vop-prayer-notice.error,
+[data-theme="dark"] .vop-study-plate-error{
+  background:#381d22!important;color:#ffbdc5!important;border-color:#7a3943!important
+}
+[data-theme="dark"] .vop-study-plate blockquote{background:#211d14!important;color:#d8caa7!important;border-left-color:#e2b956!important}
+[data-theme="dark"] .vop-learner-sidebar-toggle,
+[data-theme="dark"] .vop-login-home-link{
+  background:var(--bg-elevated)!important;color:#d9e8f7!important;border-color:var(--border-subtle)!important
+}
+[data-theme="dark"] .vop-cert-toggle-row input:after{background:#e8edf3!important}
+
+/* Inline legacy light feedback in the application shell must not punch white
+   or pale-blue islands through the dark canvas. */
+[data-theme="dark"] .vop-learner-main>[role="status"]{
+  background:#142b40!important;color:#b9d9f4!important;border-color:#315672!important
+}
+[data-theme="dark"] .vop-learner-main>[role="alert"]{
+  background:#381d22!important;color:#ffbdc5!important;border-color:#7a3943!important
+}
+
+/* Old pages contain hard-coded navy/black copy. Keep semantic foreground
+   contrast authoritative in dark mode without recoloring intentional artwork. */
+[data-theme="dark"] :is(
+  .vop-app-content,.vop-admin,.vop-account-dialog,.vop-header-popover,
+  .vop-candidates-page,.vop-reference-manager,.vop-program-manager
+) :is(h1,h2,h3,h4,h5,h6,legend,strong){
+  color:var(--text-primary)!important
+}
+[data-theme="dark"] :is(
+  .vop-app-content,.vop-admin,.vop-account-dialog,.vop-header-popover,
+  .vop-candidates-page,.vop-reference-manager,.vop-program-manager
+) :is(p,small){
+  color:var(--text-muted)!important
+}
+[data-theme="dark"] :is(
+  .vop-account-link,.vop-guide-direct-section,.vop-guide-lesson,
+  .vop-program-catalog-card,.vop-guide-first-card,.vop-module-item,
+  .vop-structure-actions-trigger,.vop-structure-actions-popover,
+  .vop-structure-quiz,.vop-structure-delete
+){color:var(--text-secondary)!important}
