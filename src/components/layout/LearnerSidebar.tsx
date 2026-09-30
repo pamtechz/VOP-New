@@ -23,6 +23,12 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
     || ['owner','admin'].includes(String(currentUser.organizationRole||''));
+  const enabled=(route:AppRoute)=>{
+    if(route==='radio')return settings.features?.radio!==false;
+    if(route==='announcements'||route==='events')return settings.features?.announcements!==false;
+    if(route==='certificates'||route==='certificate-verification')return settings.features?.certification!==false;
+    return true;
+  };
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
@@ -63,7 +69,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
     <nav id="vop-learner-sidebar-links" className="vop-learner-sidebar-scroll" aria-label="Learner sections">
       {groups.map(group=><div className="vop-learner-sidebar-group" key={group.name}>
         <span className="vop-learner-sidebar-label" aria-hidden="true">{collapsed?'•':group.name}</span>
-        {group.items.map(item=>{
+        {group.items.filter(item=>enabled(item.route)).map(item=>{
           const Icon=item.icon;
           return <button type="button" key={item.route}
             className={'vop-learner-sidebar-link'+(currentRoute===item.route?' active':'')}
