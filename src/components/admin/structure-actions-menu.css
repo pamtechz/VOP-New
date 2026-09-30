@@ -3,14 +3,14 @@
 .vop-structure-more{
   display:grid;place-items:center;min-width:33px;width:33px;height:33px;
   padding:0;border:1px solid #d9e4ef;border-radius:8px;
-  background:#fff;color:#315980;cursor:pointer;
+  background:var(--bg-card,#fff);color:#315980;cursor:pointer;
 }
 .vop-structure-more:hover,.vop-structure-more[aria-expanded="true"]{background:#edf5ff;border-color:#accbed}
 .vop-structure-actions-popover{
   position:absolute;right:0;top:calc(100% + 5px);
   display:grid;gap:4px;min-width:245px;width:min(340px,calc(100vw - 40px));
   max-height:min(67vh,530px);overflow-y:auto;overscroll-behavior:contain;
-  padding:8px;border:1px solid #d8e4f1;border-radius:11px;background:#fff;
+  padding:8px;border:1px solid #d8e4f1;border-radius:11px;background:var(--bg-card,#fff);
   box-shadow:0 16px 36px rgba(16,49,88,.18);color:#1c406b;text-align:left;
 }
 .vop-structure-actions-popover.is-portaled{
