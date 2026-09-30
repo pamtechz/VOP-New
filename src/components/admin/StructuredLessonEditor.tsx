@@ -9,6 +9,7 @@ import { StructureActionsMenu } from './StructureActionsMenu';
 type QuizAnchor = {type:'chapter'|'section'|'block';id:string};
 type Props = {
   chapters:CurriculumChapter[];
+  organizationId?:string;
   onChange:(chapters:CurriculumChapter[])=>void;
   onPageError?:(sectionId:string,message:string)=>void;
   onQuiz:(anchor:QuizAnchor)=>void;
