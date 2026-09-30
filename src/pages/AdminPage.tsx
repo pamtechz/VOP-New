@@ -433,7 +433,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const canSee = (id: AdminTab) => id === 'engagement'
       ? ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'))
       : permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
+    const featureForTab:Partial<Record<AdminTab,keyof NonNullable<ExtendedAppSettings['features']>>> = {
+      candidates:'candidatesModule',curriculum:'curriculumStudio',translations:'translations',
+      radio:'radio',announcements:'announcements',events:'announcements',certification:'certification',
+    };
     return NAV.filter(item => {
+      const feature=featureForTab[item.id];
+      if(feature&&settings?.features?.[feature]===false)return false;
       if (!canSee(item.id)) return false;
       if (item.id === 'languages' && !isSuperAdmin && !(['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId))) return false;
       const role = String(currentUser.role || '');
@@ -443,7 +449,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
       return true;
     }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
-  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, isSuperAdmin]);
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
