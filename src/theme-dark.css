@@ -169,3 +169,27 @@
   [data-theme="dark"]{--border-subtle:#48617d;--border-strong:#6882a0}
   [data-theme="dark"] :is(a,button){text-decoration-thickness:2px}
 }
+
+
+/* Public, authentication, verification and bootstrap surfaces */
+[data-theme="dark"] .vop-public{background:#07111f!important;color:#eaf2fb!important;--public-ink:#eaf2fb}
+[data-theme="dark"] :is(.vop-public-feature-section,.vop-public-cta,.vop-public-steps){background:#07111f!important}
+[data-theme="dark"] :is(.vop-public-feature,.vop-public-step-grid article,.vop-public-window,.vop-public-float){
+  background:#101f33!important;border-color:#2a3f59!important;color:#eaf2fb!important
+}
+[data-theme="dark"] .vop-public-window-bar{background:#0b192b!important;border-color:#2a3f59!important}
+[data-theme="dark"] .vop-public-window-lesson{background:#0c1a2b!important;border-color:#2a3f59!important}
+[data-theme="dark"] :is(.vop-public-section-head h2,.vop-public-feature h3,.vop-public-step-grid h3,.vop-public-window-head h2,.vop-public-window-lesson strong,.vop-public-cta h2){color:#edf4fb!important}
+[data-theme="dark"] :is(.vop-public-section-head p,.vop-public-feature p,.vop-public-step-grid p,.vop-public-window-head p,.vop-public-window-lesson small,.vop-public-cta p){color:#9cacbf!important}
+[data-theme="dark"] .vop-public-cta button:last-child{background:#101f33!important;border-color:#3a526f!important;color:#c7d9eb!important}
+[data-theme="dark"] .vop-public-skip{background:#101f33!important;color:#eaf2fb!important}
+
+[data-theme="dark"] .vop-login-page{background:#07111f!important;color:#edf4fb!important}
+[data-theme="dark"] .vop-login-card{background:#0a1728!important}
+[data-theme="dark"] .vop-login-card-inner{background:#101f33!important;border-color:#2a3f59!important;color:#eaf2fb!important;box-shadow:0 22px 55px rgba(0,0,0,.32)!important}
+[data-theme="dark"] :is(.vop-login-card h2,.vop-login-brand h1){color:#f2f6fb!important}
+[data-theme="dark"] :is(.vop-login-subtitle,.vop-login-note){color:#97a9bd!important}
+[data-theme="dark"] .vop-login-google{background:#0d1e32!important;border-color:#36506d!important;color:#dbe7f4!important}
+[data-theme="dark"] .vop-login-divider::before,[data-theme="dark"] .vop-login-divider::after{background:#2a3f59!important}
+[data-theme="dark"] .vop-login-divider span{background:#101f33!important;color:#8396aa!important}
+[data-theme="dark"] :is(.vop-auth-loading,.vop-error-page,.vop-not-found-page,.vop-bootstrap-page,.vop-portfolio-verification){background:#07111f!important;color:#eaf2fb!important}
