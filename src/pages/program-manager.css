@@ -12,7 +12,7 @@
 .vop-program-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .vop-program-toolbar>label:first-child,.vop-program-guide-filter{
   display:flex;align-items:center;gap:7px;border:1px solid #d9e4f0;
-  border-radius:8px;min-height:35px;padding:0 9px;background:#fff;
+  border-radius:8px;min-height:35px;padding:0 9px;background:var(--bg-card,#fff);
 }
 .vop-program-toolbar>label:first-child{flex:1 1 240px}
 .vop-program-toolbar input[type=search],.vop-program-guide-filter input{
@@ -20,7 +20,7 @@
 .vop-program-toolbar>span{font-size:11px;color:#637e9b}
 .vop-program-archived,.vop-program-publish{display:flex;gap:6px;align-items:center;color:#526a81;font-size:11px}
 .vop-program-editor,.vop-program-detail{display:grid;gap:13px;min-width:0;padding:14px;
-  background:#fff;border:1px solid #dfe8f2;border-radius:10px}
+  background:var(--bg-card,#fff);border:1px solid #dfe8f2;border-radius:10px}
 .vop-program-editor-head{padding-bottom:8px;border-bottom:1px solid #edf2f7}
 .vop-program-editor-head h3{margin:0;font-size:16px;color:#10376e}
 .vop-program-editor-head>.vop-actions{min-height:32px;width:32px}
@@ -28,7 +28,7 @@
 .vop-program-fields label,.vop-program-editor-bottom label{display:grid;gap:5px;min-width:0;color:#526e8b;font-size:11px;font-weight:700}
 .vop-program-fields :is(input,select,textarea),.vop-program-editor-bottom select{
   width:100%;min-height:36px;padding:7px 9px;border:1px solid #dae5f1;border-radius:7px;
-  color:#243e61;background:#fff;font:inherit;font-size:12px;outline-color:#efb73c}
+  color:#243e61;background:var(--bg-card,#fff);font:inherit;font-size:12px;outline-color:#efb73c}
 .vop-program-wide{grid-column:1/-1}
 .vop-program-fields textarea{resize:vertical;min-height:70px}
 .vop-program-guides{border:1px solid #e0e9f3;border-radius:8px;padding:10px;min-width:0}
@@ -44,13 +44,13 @@
 .vop-program-guide-order li{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid #e5edf5;border-radius:6px}
 .vop-program-guide-order li>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vop-program-guide-order li button{width:27px;height:27px;display:grid;place-items:center;
-  padding:0;border:1px solid #e2e8f1;border-radius:5px;background:#fff;cursor:pointer}
+  padding:0;border:1px solid #e2e8f1;border-radius:5px;background:var(--bg-card,#fff);cursor:pointer}
 .vop-program-editor-bottom{display:flex;flex-wrap:wrap;align-items:end;gap:9px;justify-content:flex-end}
 .vop-program-editor-bottom>label:first-child{margin-right:auto;min-width:170px}
 .vop-program-publish{min-height:34px;margin-right:auto;white-space:nowrap}
 .vop-program-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:11px}
 .vop-program-card{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;
-  padding:11px;border:1px solid #dfe9f3;border-radius:10px;background:#fff}
+  padding:11px;border:1px solid #dfe9f3;border-radius:10px;background:var(--bg-card,#fff)}
 .vop-program-card-image{display:grid;place-items:center;width:64px;height:64px;border-radius:8px;
   background:#edf5ff;color:#1753a3;overflow:hidden}
 .vop-program-card-image img{width:100%;height:100%;object-fit:cover}
@@ -71,7 +71,7 @@
 .vop-program-module-list{display:grid;gap:7px}
 .vop-program-module-list>button{display:flex;align-items:center;gap:11px;min-height:53px;
   width:100%;padding:8px 10px;border:1px solid #dce7f3;border-radius:8px;
-  background:#fff;text-align:left;color:#19456f;cursor:pointer}
+  background:var(--bg-card,#fff);text-align:left;color:#19456f;cursor:pointer}
 .vop-program-module-list>button:hover{background:#f4f9ff}
 .vop-program-seq{display:grid;place-items:center;min-width:29px;width:29px;height:29px;
   border-radius:7px;background:#e9f3ff;color:#1555a0;font-weight:800}

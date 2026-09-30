@@ -235,7 +235,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 {validThreshold ? `${threshold}%` : 'Not configured'}
               </strong>
             </p>
-            {(previewMaxAttempts > 0 || previewCooldown > 0 || previewTimeLimit > 0) && <p style={{color:'#64748b',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
+            {(previewMaxAttempts > 0 || previewCooldown > 0 || previewTimeLimit > 0) && <p style={{color:'var(--text-muted)',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
               {previewTimeLimit>0?`Time limit: ${previewTimeLimit} min · `:''}
               Retake policy: {previewMaxAttempts > 0 ? `maximum ${previewMaxAttempts} attempt${previewMaxAttempts === 1 ? '' : 's'}` : 'unlimited attempts'}
               {previewCooldown > 0 ? ` · ${previewCooldown} minute waiting period` : ' · no waiting period'}.
@@ -440,7 +440,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               lineHeight:1,marginBottom:'0.5rem',
             }}>{Math.round(Number(score)*10)/10}%</div>}
 
-            <p role="status" style={{ color:'#64748b',fontSize:'0.9rem',marginBottom:'1.5rem' }}>
+            <p role="status" style={{ color:'var(--text-muted)',fontSize:'0.9rem',marginBottom:'1.5rem' }}>
               {submission.feedbackMode==='none'
                 ?'Your attempt has been securely recorded. Results are not shown under this assessment\'s feedback policy.'
                 :Number(score)>=threshold
@@ -455,7 +455,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               <strong>Review notes</strong>
               {submission.explanations.map((text,index)=>text?<p key={index}><b>Question {index+1}:</b> {text}</p>:null)}
             </div>}
-            {submission.feedbackMode!=='none' && (score===null || Number(score)<threshold) ? <p style={{color:'#64748b',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
+            {submission.feedbackMode!=='none' && (score===null || Number(score)<threshold) ? <p style={{color:'var(--text-muted)',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
               Attempt {submission?.retakePolicy.attemptsUsed || 1}
               {submission?.retakePolicy.maxAttempts ? ` of ${submission.retakePolicy.maxAttempts}` : ''}
               {submission?.retakePolicy.remainingAttempts !== null && submission?.retakePolicy.remainingAttempts !== undefined

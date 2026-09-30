@@ -138,3 +138,39 @@ test('dark theme defines semantic surfaces and covers late legacy UI islands',()
   assert.match(preference,/#0c1118/);
   assert.match(html,/meta name="theme-color" content="#0c1118"/);
 });
+
+
+test('portal-wide dark contract eliminates light islands across every portal',()=>{
+  const theme=read('src/theme-dark.css');
+  const admin=read('src/pages/admin.css');
+  const candidates=read('src/pages/candidate-management.css');
+  const users=read('src/pages/userManagement.css');
+  const personal=read('src/pages/personalSettings.css');
+  const reference=read('src/reference.css');
+  const index=read('src/index.css');
+
+  assert.match(theme,/Portal-wide dark theme contract v3/);
+  for(const selector of [
+    'vop-events-page','vop-certificate-page','vop-page-head','vop-candidate-table-wrap',
+    'vop-user-table-wrap','vop-personal-header','vop-reference-card','vop-metric-value',
+    'vop-events-empty','vop-official-certificate-meta>div','vop-primary',
+  ]) assert.ok(theme.includes(selector),selector);
+
+  // The previous regression forced black text onto blue primary buttons.
+  assert.doesNotMatch(theme,/\.vop-primary,\.btn-primary\)\{color:#111820!important/);
+  assert.match(theme,/\.vop-primary,\.btn-primary\)\{color:#fff!important/);
+
+  const exactWhite=/background\s*:\s*#fff(?:fff)?\s*(?:;|})/i;
+  for(const [name,css] of [
+    ['admin',admin],['candidate',candidates],['user management',users],
+    ['personal settings',personal],['global portal',index],
+  ] as const){
+    assert.doesNotMatch(css,exactWhite,name+' still contains an exact white application surface');
+  }
+
+  assert.match(candidates,/var\(--bg-card,#fff\)/);
+  assert.match(users,/var\(--bg-card,#fff\)/);
+  assert.match(personal,/var\(--bg-card, #fff\)/);
+  assert.match(reference,/Reference document paper exceptions/);
+  assert.match(reference,/\.vop-certificate-artwork,[\s\S]*background:#fff/);
+});
