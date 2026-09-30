@@ -935,7 +935,7 @@ function RadioAdminDashboard({
   save: (event: React.FormEvent) => Promise<void>; setError: (value: string) => void; setMessage: (value: string) => void;
   canCreate: boolean; canUpdate: boolean; canDelete: boolean;
 }) {
-  const [tab, setTab] = useState<'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('live');
+  const [tab, setTab] = useState<'content'|'live'|'audio'|'video'|'playlists'|'schedule'|'analytics'|'settings'>('content');
   const [search, setSearch] = useState('');
   const [sourceMode, setSourceMode] = useState<'stream'|'youtube'|'audioverse'>('stream');
   const [importUrl, setImportUrl] = useState('');
@@ -1007,124 +1007,131 @@ function RadioAdminDashboard({
   };
 
   const change = (key: string, value: string | boolean) => setForm(current => ({ ...current, [key]: value }));
+  const studioRecords = filtered.filter(item => {
+    if (tab === 'live') return live.includes(item);
+    if (tab === 'audio') return audio.includes(item);
+    if (tab === 'video') return videos.includes(item);
+    return true;
+  });
 
   const submit = async (event: React.FormEvent) => {
     await save(event);
   };
 
   return (
-    <div className="vop-radio-admin-dashboard">
-      <div className="vop-radio-admin-topbar">
-        <div className="vop-radio-admin-title">
-          <div className="vop-radio-admin-icon"><Radio size={28}/></div>
-          <div><span>{t('admin.radio','Radio')}</span><h1>{t('admin.audio_video_streaming','Audio / Video Streaming')}</h1></div>
+    <div className="vop-radio-admin-dashboard vop-yt-studio">
+      <header className="vop-studio-topbar">
+        <div className="vop-studio-brand">
+          <span className="vop-studio-brandmark"><img src="/assets/vop_logo_2.png" alt=""/></span>
+          <div><small>VOICE OF PROPHECY</small><strong>Media Studio</strong></div>
         </div>
-        <div className="vop-radio-admin-actions"><button className="vop-radio-admin-public" type="button" onClick={() => window.open('/?radio=1','_blank')}><ExternalLink size={16}/> View Public Radio</button><button className="vop-radio-admin-add" type="button" onClick={startNewEditor}><Plus size={17}/> Add Content <span>⌄</span></button></div>
-      </div>
+        <label className="vop-studio-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search across your media" aria-label="Search media content"/></label>
+        <div className="vop-studio-top-actions">
+          <button type="button" className="secondary" onClick={()=>window.open('/?radio=1','_blank')}><ExternalLink size={16}/> View channel</button>
+          <button type="button" className="create" onClick={startNewEditor}><Plus size={17}/> Create</button>
+        </div>
+      </header>
 
-      <div className="vop-radio-admin-intro">
-        <div><div className="vop-radio-admin-intro-icon"><Radio size={30}/></div><div><h2>{t('admin.radio_audio_video','Radio (Audio & Video)')}</h2><p>{t('admin.radio_manage_hint','Manage live streams, playlists and on-demand content. Provider controls are detected automatically.')}</p></div></div>
-      </div>
+      <section className="vop-studio-page-head">
+        <div><h1>Channel content</h1><p>Manage VOP live radio, video, audio, playlists and scheduled programmes.</p></div>
+        <div className="vop-studio-summary">
+          <span><b>{records.length}</b> content</span>
+          <span><b>{live.length}</b> live</span>
+          <span><b>{activePlaylists.length}</b> playlists</span>
+        </div>
+      </section>
 
-      <div className="vop-radio-admin-stats">
-        <AdminStat icon={<Radio/>} tone="red" label="Live Streams" value={String(live.length)} note="Currently live"/>
-        <AdminStat icon={<Video/>} tone="purple" label="Total Content" value={String(records.length)} note="Audio & Video"/>
-        <AdminStat icon={<BarChart3/>} tone="green" label="Total Plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'} note={hasPlayMetrics ? 'All time' : 'Not configured'}/>
-        <AdminStat icon={<ListVideo/>} tone="blue" label="Active Playlists" value={String(activePlaylists.length)} note={playlists.length ? String(playlists.length) + " configured" : "No playlist records"}/>
-        <AdminStat icon={<Users/>} tone="orange" label="Listeners Now" value={hasListenerMetrics ? listeners.toLocaleString() : '—'} note={hasListenerMetrics ? 'Across streams' : 'Not configured'}/>
-      </div>
+      <nav className="vop-studio-tabs" aria-label="Media Studio sections">
+        {([
+          ['content','Content'],['live','Live'],['video','Videos'],['audio','Audio'],
+          ['playlists','Playlists'],['schedule','Schedule'],['analytics','Analytics'],['settings','Settings']
+        ] as const).map(([value,label])=><button key={value} type="button" className={tab===value?'active':''} onClick={()=>setTab(value)}>{label}</button>)}
+      </nav>
 
-      <div className="vop-radio-admin-tabs">
-        {([['live','Live Radio'],['audio','Audio Library'],['video','Video Library'],['playlists','Playlists'],['schedule','Schedule'],['analytics','Analytics'],['settings','Settings']] as const).map(([value,label]) => <button key={value} className={tab===value?'active':''} type="button" onClick={()=>setTab(value)}>{label}</button>)}
-      </div>
-
-      {tab === 'live' ? (
-        <div className="vop-radio-admin-workspace">
-          <div className="vop-radio-admin-now">
-            <div className="vop-radio-admin-card-title"><span><Radio size={17}/> Now Playing</span>{live.length > 0 && <b>● LIVE</b>}</div>
-            <div className="vop-radio-admin-player">
-              {nowPlaying ? <RadioAdminMediaPreview record={nowPlaying} /> : <div className="vop-radio-admin-preview-empty"><Radio size={38}/><span>{t('admin.no_radio_content','No radio content configured.')}</span></div>}
-            </div>
-            <div className="vop-radio-admin-now-meta"><strong>{String(nowPlaying?.title || 'No radio content configured')}</strong><span>{String(nowPlaying?.speaker || nowPlaying?.series || 'Add content to populate the player.')}</span></div>
-            <div className="vop-radio-admin-player-controls"><span>{nowPlaying ? radioProvider(nowPlaying) : '—'}</span><span>{nowPlaying ? radioTime(nowPlaying) : '—'}</span><span>{nowPlaying?.durationMinutes ? Math.round(Number(nowPlaying.durationMinutes)) + ' min' : 'Duration detected by player'}</span></div>
+      {['content','live','video','audio'].includes(tab) && <section className="vop-studio-panel">
+        <div className="vop-studio-panel-tools">
+          <div><strong>{tab==='content'?'All content':tab==='live'?'Live content':tab==='video'?'Videos':'Audio'}</strong><span>{studioRecords.length} item{studioRecords.length===1?'':'s'}</span></div>
+          <button type="button" onClick={startNewEditor}><Plus size={16}/> New upload / stream</button>
+        </div>
+        <div className="vop-studio-table" role="table" aria-label="Media content">
+          <div className="vop-studio-table-head" role="row">
+            <span>Content</span><span>Visibility</span><span>Source</span><span>Date</span><span>Plays</span><span>Actions</span>
           </div>
-
-          <div className="vop-radio-admin-schedule">
-            <div className="vop-radio-admin-card-title"><span><CalendarDays size={17}/> Schedule</span><button type="button" onClick={()=>setTab('schedule')}>{t('admin.view_schedule','View Schedule')} <ChevronRight size={14}/></button></div>
-            <div className="vop-radio-admin-schedule-list">{records.slice(0,6).map(item=><div key={item.id} className="vop-radio-schedule-row"><button type="button" className="vop-radio-schedule-info" onClick={()=>startEditEditor(item)}><span className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><Radio size={15}/></span><span><strong>{String(item.title || 'Untitled')}</strong><small>{String(item.speaker || item.series || radioProvider(item))}</small></span><time>{radioTime(item)}</time></button><div className="vop-radio-schedule-btns"><button type="button" className="vop-actions" title="Edit" disabled={item.canEdit === false || !canUpdate} onClick={()=>startEditEditor(item)}><Edit3 size={13}/></button><button type="button" className="vop-actions" title="Delete" disabled={item.canEdit === false || !canDelete} onClick={()=>void remove(item.id)}><Trash2 size={13}/></button></div></div>)}{records.length===0&&<div className="vop-radio-admin-empty">{t('admin.no_radio_content','No radio content configured.')}</div>}</div>
-          </div>
+          {studioRecords.map(item=><article className="vop-studio-row" key={item.id} role="row">
+            <button type="button" className="vop-studio-content-cell" onClick={()=>startEditEditor(item)}>
+              <span className="vop-studio-thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}>
+                {!item.posterUrl&&<Video size={24}/>}
+                {Boolean(item.streamUrl)&&<em>LIVE</em>}
+              </span>
+              <span className="vop-studio-title"><strong>{String(item.title||'Untitled')}</strong><small>{String(item.speaker||item.series||'Voice of Prophecy')}</small></span>
+            </button>
+            <span><b className={'vop-studio-visibility '+(item.published===true?'public':'draft')}>{item.published===true?'Public':'Draft'}</b></span>
+            <span className="vop-studio-source">{radioProvider(item)}</span>
+            <span className="vop-studio-date">{radioTime(item)}</span>
+            <span className="vop-studio-metric">{radioNumeric(item,['plays','playCount','views'])?.toLocaleString()||'—'}</span>
+            <span className="vop-studio-row-actions">
+              <button type="button" title="Edit" disabled={item.canEdit===false||!canUpdate} onClick={()=>startEditEditor(item)}><Edit3 size={16}/></button>
+              <button type="button" title="Delete" disabled={item.canEdit===false||!canDelete} onClick={()=>void remove(item.id)}><Trash2 size={16}/></button>
+            </span>
+          </article>)}
+          {!studioRecords.length&&<div className="vop-studio-empty"><Video size={34}/><strong>No content in this view</strong><span>Create a programme or change your search.</span><button type="button" onClick={startNewEditor}><Plus size={15}/> Create content</button></div>}
         </div>
-      ) : (
-        <div className="vop-radio-admin-library">
-          <div className="vop-radio-admin-library-head"><div><h2>{tab === 'audio' ? 'Audio Library' : tab === 'video' ? 'Video Library' : tab === 'playlists' ? 'Playlists' : tab === 'schedule' ? 'Schedule' : tab === 'analytics' ? 'Analytics' : 'Radio Settings'}</h2><p>{tab === 'analytics' ? 'Only metrics actually stored on published records are shown.' : 'Manage configured radio records without demo or placeholder entries.'}</p></div><div className="vop-radio-admin-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search content…"/></div></div>
-          {tab === 'settings' ? <div className="vop-radio-admin-settings-note"><Settings size={28}/><strong>{t('admin.provider_aware_settings','Provider-aware player settings')}</strong><p>YouTube content is controlled through the YouTube IFrame Player API. AudioVerse content keeps the embedded AudioVerse controls. Direct audio/video uses the VOP custom player.</p></div> :
-           tab === 'analytics' ? <div className="vop-radio-admin-analytics"><AdminMetric label="Tracked plays" value={hasPlayMetrics ? totalPlays.toLocaleString() : '—'}/><AdminMetric label="Tracked listeners" value={hasListenerMetrics ? listeners.toLocaleString() : '—'}/><AdminMetric label="Configured content" value={String(records.length)}/></div> :
-           tab === 'playlists' ? <div className="vop-radio-playlists">
-             <div className="vop-radio-playlist-editor">
-               <div className="vop-radio-admin-card-title"><span><ListVideo size={17}/> {playlistEditingId ? 'Edit Playlist' : 'New Playlist'}</span><button type="button" onClick={()=>startPlaylist()}><X size={15}/> Clear</button></div>
-               <label>{t('common.name','Name')}<input value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="Playlist name"/></label>
-               <label>{t('common.description','Description')}<textarea value={playlistDescription} onChange={e=>setPlaylistDescription(e.target.value)} placeholder="Describe this playlist"/></label>
-               <label>{t('admin.cover_image_url','Cover image URL')}<input value={playlistCoverUrl} onChange={e=>setPlaylistCoverUrl(e.target.value)} placeholder="https://…"/></label>
-               <div className="vop-radio-playlist-items"><strong>{t('admin.programme_selection','Programme selection')}</strong>{records.map(item=><label key={item.id}><input type="checkbox" checked={playlistItems.includes(item.id)} onChange={e=>setPlaylistItems(current=>e.target.checked ? [...current,item.id] : current.filter(id=>id!==item.id))}/><span>{String(item.title || 'Untitled')}</span><small>{radioProvider(item)}</small></label>)}{!records.length&&<p>No radio content is available yet.</p>}</div>
-               <label className="vop-setting-row"><span>{t('admin.published','Published')}</span><input type="checkbox" checked={playlistPublished} onChange={e=>setPlaylistPublished(e.target.checked)}/></label>
-               <button className="vop-primary" type="button" disabled={playlistSaving} onClick={()=>void savePlaylist()}><Save size={16}/>{playlistSaving ? 'Saving…' : playlistEditingId ? 'Save Playlist' : 'Create Playlist'}</button>
-             </div>
-             <div className="vop-radio-playlist-list">{visiblePlaylists.map(item=><article key={item.id}><div className="media" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={24}/><span>{item.published === true ? 'Published' : 'Draft'}</span></div><h3>{String(item.name || 'Untitled playlist')}</h3><p>{String(item.description || '')}</p><small>{Array.isArray(item.itemIds) ? item.itemIds.length : 0} programme{Array.isArray(item.itemIds) && item.itemIds.length === 1 ? '' : 's'}</small><div><button type="button" onClick={()=>startPlaylist(item)} disabled={item.canEdit === false || !canUpdate}>{t('common.edit','Edit')}</button><button type="button" onClick={()=>void removePlaylist(item.id)} disabled={item.canEdit === false || !canDelete}>{t('common.delete','Delete')}</button></div></article>)}{!visiblePlaylists.length&&<div className="vop-radio-admin-empty">{t('admin.no_playlists','No playlists configured.')}</div>}</div>
-           </div> :
-           <div className="vop-radio-admin-library-grid">
-             {filtered
-               .filter(item => {
-                 if (tab === 'audio') return audio.includes(item);
-                 if (tab === 'video') return videos.includes(item);
-                 return true;
-               })
-               .map(item => (
-                 <article key={item.id}>
-                   <div className="media" style={item.posterUrl ? { backgroundImage: 'url("' + String(item.posterUrl) + '")' } : undefined}>
-                     <span className={item.published ? 'vop-status enabled' : 'vop-status disabled'}>{item.published ? 'Published' : 'Draft'}</span>
-                     <span className="vop-radio-provider-badge">{radioProvider(item)}</span>
-                     <button type="button" className="vop-radio-play-btn" onClick={() => startEditEditor(item)} title="Edit"><Play size={16} fill="currentColor"/></button>
-                   </div>
-                   <h3>{String(item.title || 'Untitled')}</h3>
-                   <p>{String(item.speaker || item.series || '')}</p>
-                   <small className="vop-radio-card-time">{radioTime(item)}</small>
-                   <div className="vop-radio-card-actions">
-                     <button
-                       type="button"
-                       className="vop-actions"
-                       disabled={item.canEdit === false || !canUpdate}
-                       title={item.canEdit === false ? 'Owned by another contributor' : !canUpdate ? 'Permission denied' : 'Edit'}
-                       onClick={() => startEditEditor(item)}
-                     >{t('common.edit','Edit')}</button>
-                     <button
-                       type="button"
-                       className="vop-actions vop-actions-delete"
-                       disabled={item.canEdit === false || !canDelete}
-                       title={item.canEdit === false ? 'Owned by another contributor' : !canDelete ? 'Permission denied' : 'Delete'}
-                       onClick={() => void remove(item.id)}
-                     ><Trash2 size={14}/> {t('common.delete','Delete')}</button>
-                   </div>
-                 </article>
-               ))}
-             {filtered.length === 0 && <div className="vop-radio-admin-empty">{t('admin.no_records','No records configured.')}</div>}
-           </div>}
-        </div>
-      )}
+      </section>}
 
-      {error && <div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
-      {message && <div className="vop-radio-admin-alert success">{message}</div>}
-      {editorOpen && <ModalLayer><div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
+      {tab==='playlists'&&<section className="vop-studio-panel">
+        <div className="vop-studio-panel-tools"><div><strong>Playlists</strong><span>Curate programmes into learner-facing collections.</span></div><button type="button" onClick={()=>startPlaylist()}><Plus size={16}/> New playlist</button></div>
+        <div className="vop-studio-playlists">
+          <form className="vop-studio-playlist-editor" onSubmit={e=>{e.preventDefault();void savePlaylist()}}>
+            <h2>{playlistEditingId?'Edit playlist':'New playlist'}</h2>
+            <label><span>Name</span><input value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="Playlist name"/></label>
+            <label><span>Description</span><textarea value={playlistDescription} onChange={e=>setPlaylistDescription(e.target.value)} placeholder="Describe this playlist"/></label>
+            <label><span>Cover image URL</span><input value={playlistCoverUrl} onChange={e=>setPlaylistCoverUrl(e.target.value)} placeholder="https://…"/></label>
+            <div className="vop-studio-playlist-items"><strong>Programme selection</strong>{records.map(item=><label key={item.id}><input type="checkbox" checked={playlistItems.includes(item.id)} onChange={e=>setPlaylistItems(current=>e.target.checked?[...current,item.id]:current.filter(id=>id!==item.id))}/><span>{String(item.title||'Untitled')}</span><small>{radioProvider(item)}</small></label>)}</div>
+            <label className="publish"><input type="checkbox" checked={playlistPublished} onChange={e=>setPlaylistPublished(e.target.checked)}/><span>Publish playlist</span></label>
+            <div className="actions"><button type="button" onClick={()=>startPlaylist()}>Clear</button><button type="submit" disabled={playlistSaving}>{playlistSaving?'Saving…':playlistEditingId?'Save playlist':'Create playlist'}</button></div>
+          </form>
+          <div className="vop-studio-playlist-grid">{visiblePlaylists.map(item=><article key={item.id}>
+            <div className="thumb" style={item.coverUrl?{backgroundImage:'url("' + String(item.coverUrl) + '")'}:undefined}><ListVideo size={26}/><span>{Array.isArray(item.itemIds)?item.itemIds.length:0} items</span></div>
+            <div><strong>{String(item.name||'Untitled playlist')}</strong><span>{item.published===true?'Public':'Draft'}</span><p>{String(item.description||'')}</p></div>
+            <footer><button type="button" disabled={item.canEdit===false||!canUpdate} onClick={()=>startPlaylist(item)}><Edit3 size={15}/> Edit</button><button type="button" disabled={item.canEdit===false||!canDelete} onClick={()=>void removePlaylist(item.id)}><Trash2 size={15}/></button></footer>
+          </article>)}{!visiblePlaylists.length&&<div className="vop-studio-empty"><ListVideo size={34}/><strong>No playlists yet</strong><span>Create a playlist to organize related programmes.</span></div>}</div>
+        </div>
+      </section>}
+
+      {tab==='schedule'&&<section className="vop-studio-panel">
+        <div className="vop-studio-panel-tools"><div><strong>Schedule</strong><span>Scheduled and live programme timing.</span></div><button type="button" onClick={startNewEditor}><Plus size={16}/> Schedule programme</button></div>
+        <div className="vop-studio-schedule-list">
+          {[...records].sort((a,b)=>String(a.broadcastTime||'').localeCompare(String(b.broadcastTime||''))).map(item=><article key={item.id}>
+            <time>{radioTime(item)}</time><div className="thumb" style={item.posterUrl?{backgroundImage:'url("' + String(item.posterUrl) + '")'}:undefined}><CalendarDays size={18}/></div><div><strong>{String(item.title||'Untitled')}</strong><span>{String(item.speaker||item.series||radioProvider(item))}</span></div><b>{item.published===true?'Published':'Draft'}</b><button type="button" onClick={()=>startEditEditor(item)}><Edit3 size={16}/></button>
+          </article>)}
+          {!records.length&&<div className="vop-studio-empty"><CalendarDays size={34}/><strong>No scheduled content</strong><span>Add a programme and set its broadcast time.</span></div>}
+        </div>
+      </section>}
+
+      {tab==='analytics'&&<section className="vop-studio-panel">
+        <div className="vop-studio-panel-tools"><div><strong>Analytics</strong><span>Metrics available on stored media records.</span></div></div>
+        <div className="vop-studio-analytics-grid">
+          <div><span>Total plays</span><strong>{hasPlayMetrics?totalPlays.toLocaleString():'—'}</strong><small>{hasPlayMetrics?'All tracked content':'Play tracking not configured'}</small></div>
+          <div><span>Listeners now</span><strong>{hasListenerMetrics?listeners.toLocaleString():'—'}</strong><small>{hasListenerMetrics?'Across live sources':'Listener tracking not configured'}</small></div>
+          <div><span>Published content</span><strong>{records.filter(item=>item.published===true).length}</strong><small>Visible to learners</small></div>
+          <div><span>Active playlists</span><strong>{activePlaylists.length}</strong><small>{playlists.length} configured</small></div>
+        </div>
+      </section>}
+
+      {tab==='settings'&&<section className="vop-studio-panel">
+        <div className="vop-studio-settings-card"><Settings size={30}/><div><strong>Provider-aware playback</strong><p>YouTube uses the YouTube IFrame player; AudioVerse uses its trusted embed; direct HTTPS audio/video uses the VOP player. Provider credentials and secrets remain server-side.</p></div></div>
+      </section>}
+
+      {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
+      {message&&<div className="vop-radio-admin-alert success">{message}</div>}
+      {editorOpen&&<ModalLayer><div className="vop-radio-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setEditorOpen(false)}}>
         <form className="vop-radio-editor-modal" onSubmit={submit}>
-          <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
+          <div className="vop-radio-editor-head"><div><span>VOP Media Studio</span><h2>{editingId?'Edit content':'Create content'}</h2><p>Add a live stream, video, audio programme or trusted public media source.</p></div><button type="button" onClick={()=>setEditorOpen(false)}>×</button></div>
           <div className="vop-radio-editor-body">
-             <div className="vop-field"><label>Import from a trusted public provider</label>
-               <input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="WordPress, YouTube, TikTok, Facebook, Instagram, Umtu or direct HTTPS media" />
-               <button className="vop-secondary" type="button" disabled={importBusy || !importUrl.trim()} onClick={()=>void importRadioSource()}>{importBusy ? 'Inspecting public source…' : 'Add media'}</button>
-               <small>Official player embeds and public media metadata only. Protected, private or login-only media cannot be extracted.</small>
-             </div>
-             <Fields kind="radio" form={form} setForm={setForm} records={records} />
-           </div>
-          <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
+            <div className="vop-field"><label>Import from a trusted public provider</label><input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="YouTube, AudioVerse, WordPress, Facebook, Instagram, TikTok, Umtu or direct HTTPS media"/><button className="vop-secondary" type="button" disabled={importBusy||!importUrl.trim()} onClick={()=>void importRadioSource()}>{importBusy?'Inspecting public source…':'Add media'}</button><small>Only public, trusted media that can be safely embedded or linked is accepted.</small></div>
+            <Fields kind="radio" form={form} setForm={setForm} records={records}/>
+          </div>
+          <footer><button type="button" className="vop-secondary" onClick={()=>setEditorOpen(false)}>Cancel</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving?'Saving…':editingId?'Save changes':'Save content'}</button></footer>
         </form>
       </div></ModalLayer>}
     </div>
