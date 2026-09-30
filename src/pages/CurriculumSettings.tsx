@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { CustomLanguage } from '../types';
 import type { ExtendedAppSettings } from '../services/adminFirestore';
+import { ModalLayer } from '../components/layout/ModalLayer';
 
 type Tab = 'general' | 'categories' | 'seasons' | 'types' | 'difficulty' | 'display';
 
@@ -327,6 +328,6 @@ export default function CurriculumSettings({ languages, settings, adminContent, 
     {tab === 'types' && renderListTab('types')}
     {tab === 'difficulty' && renderListTab('difficulty')}
     {tab === 'display' && renderDisplay()}
-    {preview && <div className="vop-cs-modal-backdrop" role="presentation" onMouseDown={() => setPreview(false)}><div className="vop-cs-modal" role="dialog" aria-modal="true" aria-label="Curriculum preview" onMouseDown={event => event.stopPropagation()}><div className="vop-cs-modal-head"><div><strong>{data.programName || 'Curriculum'}</strong><span>{data.tagline}</span></div><button type="button" onClick={() => setPreview(false)}><X size={19}/></button></div><div className="vop-cs-preview"><h2>{data.programName}</h2>{data.description && <p>{data.description}</p>}<div className="vop-cs-preview-grid">{data.enableSeasons && <span>Seasons / Quarters</span>}{data.enableGuides && <span>Guides</span>}<span>Lessons</span></div><div className="vop-cs-preview-empty">{data.display.showFeaturedImages ? <ImageIcon size={28}/> : <BookOpen size={28}/>}<strong>No sample curriculum is shown</strong><span>The preview uses only records configured in the curriculum.</span></div></div></div></div>}
+    {preview && <ModalLayer><div className="vop-cs-modal-backdrop" role="presentation" onMouseDown={() => setPreview(false)}><div className="vop-cs-modal" role="dialog" aria-modal="true" aria-label="Curriculum preview" onMouseDown={event => event.stopPropagation()}><div className="vop-cs-modal-head"><div><strong>{data.programName || 'Curriculum'}</strong><span>{data.tagline}</span></div><button type="button" onClick={() => setPreview(false)}><X size={19}/></button></div><div className="vop-cs-preview"><h2>{data.programName}</h2>{data.description && <p>{data.description}</p>}<div className="vop-cs-preview-grid">{data.enableSeasons && <span>Seasons / Quarters</span>}{data.enableGuides && <span>Guides</span>}<span>Lessons</span></div><div className="vop-cs-preview-empty">{data.display.showFeaturedImages ? <ImageIcon size={28}/> : <BookOpen size={28}/>}<strong>No sample curriculum is shown</strong><span>The preview uses only records configured in the curriculum.</span></div></div></div></div></ModalLayer>}
   </div>;
 }
