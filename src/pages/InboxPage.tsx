@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,Bell,Check,CheckCheck,Clock3,ExternalLink,Mail,RefreshCw,Send,Trash2,UserPlus,X} from 'lucide-react';
 import {auth} from '../lib/firebase';
 import type {AppRoute} from '../types';
-import {notificationRoute} from '../services/notificationRouting';
+import {notificationRoute,prepareNotificationNavigation} from '../services/notificationRouting';
 import './inbox.css';
 
 type NotificationItem={
@@ -81,7 +81,7 @@ export default function InboxPage({onBack,onNavigate,initialTab='notifications',
     setNotifications(rows=>rows.map(row=>row.id===item.id?{...row,read}:row));
   };
   const openNotification=async(item:NotificationItem)=>{
-    try{if(!item.read)await markRead(item,true);onNavigate(notificationRoute(item));}
+    try{if(!item.read)await markRead(item,true);prepareNotificationNavigation(item);onNavigate(notificationRoute(item));}
     catch(reason){setError(reason instanceof Error?reason.message:'Could not open notification.');}
   };
   const deleteNotification=async(item:NotificationItem)=>{
