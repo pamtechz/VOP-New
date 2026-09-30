@@ -141,6 +141,17 @@ export default async function handler(req: Request, res: Response) {
         organizationId,
         organizationRole: role,
       });
+      if(invitedBy&&invitedBy!==ctx.auth.uid){
+        const organization=await bootstrapDb.doc('organizations/'+organizationId).get();
+        await createNotification(bootstrapDb,{
+          organizationId,recipientId:invitedBy,type:'invitation',
+          title:'Organization invitation accepted',
+          body:`${String(ctx.auth.name||ctx.auth.email||'A member')} accepted the invitation to join ${String(organization.data()?.name||organizationId)} as ${role}.`,
+          actionUrl:'/admin/organizations',
+          metadata:{source:'organization-invite-response',inviteToken:token,status:'accepted',memberUid:ctx.auth.uid},
+          createdBy:ctx.auth.uid,
+        });
+      }
       return res.status(200).json({ok:true,organizationId,role});
     }
 
@@ -177,6 +188,19 @@ export default async function handler(req: Request, res: Response) {
       if(String(data.email||'').trim().toLowerCase()!==String(ctx.auth.email||'').trim().toLowerCase())throw new Error('This invitation belongs to another account.');
       if(String(data.status||'')!=='pending')throw new Error('This invitation is no longer pending.');
       await inviteRef.set({status:'declined',declinedBy:ctx.auth.uid,declinedAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      const invitedBy=String(data.invitedBy||'').trim();
+      if(invitedBy&&invitedBy!==ctx.auth.uid){
+        const organizationId=String(data.organizationId||'').trim();
+        const organization=organizationId?await bootstrapDb.doc('organizations/'+organizationId).get():null;
+        await createNotification(bootstrapDb,{
+          organizationId,recipientId:invitedBy,type:'invitation',
+          title:'Organization invitation declined',
+          body:`${String(ctx.auth.name||ctx.auth.email||'The invited member')} declined the invitation to ${String(organization?.data()?.name||organizationId||'your organization')}.`,
+          actionUrl:'/admin/organizations',
+          metadata:{source:'organization-invite-response',inviteToken:token,status:'declined'},
+          createdBy:ctx.auth.uid,
+        });
+      }
       return res.status(200).json({ok:true,status:'declined'});
     }
 
