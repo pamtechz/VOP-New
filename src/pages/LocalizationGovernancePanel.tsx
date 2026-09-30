@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import { CheckCircle2, Globe2, RefreshCw, ShieldCheck, UserPlus, Users, XCircle } from 'lucide-react';
+import { CheckCircle2, Globe2, RefreshCw, ShieldCheck, UserCheck, UserPlus, Users, XCircle } from 'lucide-react';
 import {
   localizationRequest,type LocalizationAccessRequest,type LocalizationApplication,type LocalizationCollaborator,
   type LocalizationLanguage,type LocalizationProposal,type LocalizationRole,
