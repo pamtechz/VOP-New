@@ -30,6 +30,7 @@ import OrganizationManagement from './OrganizationManagement';
 import CandidateEnrollment from './CandidateEnrollment';
 import PrayerManagementPanel from './PrayerManagementPanel';
 import EngagementStudio from './EngagementStudio';
+import LocalizationGovernancePanel from './LocalizationGovernancePanel';
 import { getTenantLanguages } from '../components/admin/TenantLanguagesPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
@@ -1146,6 +1147,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='userManagement'&&<UserManagement onBack={onBack} scope={{ isSuperAdmin: currentUser.role === 'super_admin', organizationId: currentUser.organizationId, role: currentUser.role }} />}
         {activeTab==='settings'&&renderSettings()}
         {activeTab==='languages'&&isSuperAdmin&&renderLanguages()}
+        {activeTab==='translations'&&isSuperAdmin&&<LocalizationGovernancePanel/>}
         {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={scopedLanguages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={scopedLanguages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
         {activeTab==='candidates'&&<CandidateEnrollment currentUser={currentUser}/>}
         {activeTab==='certification'&&(
@@ -1160,7 +1162,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
-        {managedTabs.includes(activeTab as ManagedAdminCollection) && (activeTab!=='translations'||isSuperAdmin) && (
+        {managedTabs.includes(activeTab as ManagedAdminCollection) && activeTab!=='translations' && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
             isSuperAdmin={isSuperAdmin}
