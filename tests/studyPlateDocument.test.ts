@@ -110,7 +110,9 @@ test('Plate images preserve bounded accessible alternative text end to end',()=>
   ]),/alternative text cannot exceed 300/);
   const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
   const reader=read('src/components/reader/StudyPlateContent.tsx');
-  assert.match(editor,/Alternative text for learners using screen readers/);
+  assert.match(editor,/Alternative text/);
+  assert.match(editor,/vop-plate-insert-dialog/);
+  assert.doesNotMatch(editor,/window\.prompt/);
   assert.match(editor,/type:'img',url:raw,alt,children/);
   assert.match(editor,/alt=\{alt\}/);
   assert.match(reader,/alt=\{node\.alt\|\|''\}/);
@@ -175,6 +177,7 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(editor,/Paragraph style/);
   assert.match(editor,/New section/);
   assert.match(editor,/Insert approved audio or video/);
+  assert.match(editor,/Supported public sources include YouTube/);
   assert.match(editor,/LinkRules\.autolink/);
   assert.match(editor,/upsertLink\(editor/);
   assert.match(editor,/fetch\('\/api\/media'/);
