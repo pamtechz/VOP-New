@@ -68,10 +68,10 @@ test('empty organization About profile falls back to Super Admin platform profil
 
 test('learner navigation state validates route and preserves nested study location',()=>{
   const location=normalizeLearnerLocation({
-    route:'lessons',guideId:'guide-a',guideLanguage:'bem',lessonId:'lesson-a',pageIndex:4.9,
+    route:'lessons',programId:'program-a',guideId:'guide-a',guideLanguage:'bem',lessonId:'lesson-a',pageIndex:4.9,
   });
   assert.deepEqual(location,{
-    route:'lessons',guideId:'guide-a',guideLanguage:'bem',lessonId:'lesson-a',pageIndex:4,
+    route:'lessons',programId:'program-a',guideId:'guide-a',guideLanguage:'bem',lessonId:'lesson-a',pageIndex:4,
   });
   assert.equal(sameLearnerLocation(location,{...location}),true);
   assert.equal(sameLearnerLocation(location,{...location,pageIndex:5}),false);
@@ -101,5 +101,7 @@ test('App restores route, guide, lesson and page and uses browser history for pr
   assert.match(app,/replaceLearnerLocation\(currentUser\.uid,location\)/);
   assert.match(app,/window\.history\.back\(\)/);
   assert.match(app,/onPageChange=\{rememberStudyPage\}/);
+  assert.match(app,/selectedProgramId=\{activeProgramId\}/);
+  assert.match(app,/rememberLocation\(\{route:'lessons',\.\.\.\(programId\?\{programId\}:\{\}\)\}\)/);
   assert.match(reader,/onPageChange\?\.\(currentPageIndex\)/);
 });
