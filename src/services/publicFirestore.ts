@@ -180,6 +180,14 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     features: platformSettings.features,
     security: platformSettings.security,
     notifications: platformSettings.notifications,
+    detailPages: {
+      ...(scopedSettings.detailPages || {}),
+      // About the application itself remains platform-owned; tenant scopes own
+      // Ministry & Mission plus Offices & Contact.
+      aboutAppDescription: platformSettings.detailPages?.aboutAppDescription || '',
+      aboutAppVersion: platformSettings.detailPages?.aboutAppVersion || '',
+      aboutAppCredits: platformSettings.detailPages?.aboutAppCredits || '',
+    },
   } : platformSettings;
 
   const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
