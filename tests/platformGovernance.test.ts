@@ -114,8 +114,12 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(inbox,/acceptInvite/);
   assert.match(inbox,/declineInvite/);
   assert.match(inbox,/cancelInvite/);
+  assert.match(inbox,/dismissInvite/);
+  assert.match(inbox,/clearInviteHistory/);
   assert.match(notifications,/action==='clearAll'/);
   assert.match(organizations,/action === 'listInvites'/);
+  assert.match(organizations,/action === 'dismissInvite'/);
+  assert.match(organizations,/action === 'clearInviteHistory'/);
   assert.match(organizations,/action === 'declineInvite'/);
   assert.match(organizations,/action === 'cancelInvite'/);
   assert.match(organizations,/type:'invitation'/);
