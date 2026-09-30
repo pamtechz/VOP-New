@@ -17,8 +17,10 @@ type Props={
   onPageError?:(sectionId:string,message:string)=>void;
   onQuiz:(anchor:Anchor)=>void;
   canAttachQuiz:boolean;
+  programTitle?:string;
   guideTitle:string;
   lessonTitle:string;
+  initialSectionId?:string;
   canTransfer:boolean;
   otherLessons:Array<{id:string;title:string;chapters:CurriculumChapter[]}>;
   onTransfer:(request:{
@@ -55,11 +57,14 @@ const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
 };
 
 export function PlateCurriculumAuthoringReview({
-  chapters,onChange,onPageError,onQuiz,canAttachQuiz,guideTitle,lessonTitle,
+  chapters,onChange,onPageError,onQuiz,canAttachQuiz,programTitle,guideTitle,lessonTitle,initialSectionId,
   canTransfer,otherLessons,onTransfer,
 }:Props){
-  const [chapterId,setChapterId]=useState(chapters[0]?.id||'');
-  const [pageId,setPageId]=useState(chapters[0]?.sections[0]?.id||'');
+  const initialChapter=initialSectionId
+    ?chapters.find(item=>item.sections.some(section=>section.id===initialSectionId))
+    :undefined;
+  const [chapterId,setChapterId]=useState(initialChapter?.id||chapters[0]?.id||'');
+  const [pageId,setPageId]=useState(initialSectionId||initialChapter?.sections[0]?.id||chapters[0]?.sections[0]?.id||'');
   const [message,setMessage]=useState('');
   const [invalidPage,setInvalidPage]=useState('');
   const [transferTarget,setTransferTarget]=useState('');
@@ -75,6 +80,12 @@ export function PlateCurriculumAuthoringReview({
     return false;
   };
   useEffect(()=>setInvalidPage(''),[pageId]);
+  useEffect(()=>{
+    if(!initialSectionId)return;
+    const target=chapters.find(item=>item.sections.some(section=>section.id===initialSectionId));
+    if(!target)return;
+    setChapterId(target.id);setPageId(initialSectionId);
+  },[initialSectionId,chapters]);
   useEffect(()=>{
     if(!chapters.some(item=>item.id===chapterId)){
       setChapterId(chapters[0]?.id||'');
@@ -196,7 +207,7 @@ export function PlateCurriculumAuthoringReview({
 
   return <div className="vop-plate-authoring-review">
     <div className="vop-plate-path">
-      <BookOpen size={15}/><span>Course / Program</span><ChevronRight size={14}/>
+      <BookOpen size={15}/><span>{programTitle||'Course / Program'}</span><ChevronRight size={14}/>
       <span>{guideTitle||'Guide'}</span><ChevronRight size={14}/>
       <strong>{lessonTitle||'Lesson'}</strong>
     </div>
