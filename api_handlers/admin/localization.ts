@@ -128,7 +128,7 @@ export default async function handler(req:Request,res:Response){
         recipientId:doc.id,type:'invitation',
         title:'Localization application',
         body:`${profile.displayName||profile.email||'A VOP member'} applied to help with ${requestedLanguages.join(', ').toUpperCase()} localization.`,
-        actionUrl:'/admin',
+        actionUrl:'/admin/translations',
         metadata:{source:'localization-application',applicantUid:uid,languages:requestedLanguages,roles:requestedRoles},
         createdBy:uid,
       })));
