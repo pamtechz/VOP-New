@@ -5,7 +5,9 @@
 export type PendingCompletion = {
   uid: string; guideId: string; lessonId: string; language: string; queuedAt: number;
 };
+export type PendingResume = PendingCompletion & { pageIndex: number };
 const STORAGE_KEY = 'vop-pending-lesson-completions-v1';
+const RESUME_STORAGE_KEY = 'vop-pending-lesson-resume-v1';
 const idPattern = /^[A-Za-z0-9_-]{1,120}$/;
 const localePattern = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i;
 const QUEUE_LIMIT = 200;
@@ -19,6 +21,44 @@ export function validCompletion(value: unknown): value is PendingCompletion {
     && typeof item.lessonId === 'string' && idPattern.test(item.lessonId)
     && typeof item.language === 'string' && localePattern.test(item.language)
     && typeof item.queuedAt === 'number' && Number.isFinite(item.queuedAt);
+}
+
+export function validResume(value: unknown): value is PendingResume {
+  return validCompletion(value)
+    && Number.isInteger((value as PendingResume).pageIndex)
+    && (value as PendingResume).pageIndex >= 0
+    && (value as PendingResume).pageIndex <= 5000;
+}
+
+export function readPendingResumes(): PendingResume[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const value = JSON.parse(localStorage.getItem(RESUME_STORAGE_KEY) || '[]') as unknown;
+    return Array.isArray(value) ? value.filter(validResume).slice(0, QUEUE_LIMIT) : [];
+  } catch { return []; }
+}
+function writeResumes(items: PendingResume[]) {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    localStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(items));
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('vop_pending_progress_changed'));
+    return true;
+  } catch { return false; }
+}
+export function pendingResumesForUser(uid:string) {
+  return readPendingResumes().filter(item=>item.uid===uid);
+}
+export function queueResume(item:PendingResume) {
+  if (!validResume(item)) return false;
+  const queue=readPendingResumes();
+  const remaining=queue.filter(row=>!(row.uid===item.uid && row.language===item.language
+    && row.guideId===item.guideId && row.lessonId===item.lessonId));
+  if (remaining.length >= QUEUE_LIMIT) return false;
+  return writeResumes([...remaining,item]);
+}
+export function dropResume(item:PendingResume) {
+  return writeResumes(readPendingResumes().filter(row=>!(row.uid===item.uid && row.language===item.language
+    && row.guideId===item.guideId && row.lessonId===item.lessonId)));
 }
 
 export function readPendingCompletions(): PendingCompletion[] {
@@ -92,4 +132,34 @@ export async function syncPendingLessonCompletions() {
   })();
   try { return await inFlight; }
   finally { inFlight = null; }
+}
+
+
+export async function syncPendingLessonResumes() {
+  if (typeof window === 'undefined') return {synced:0,remaining:0,rejected:0};
+  const { auth } = await import('../lib/firebase');
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    return {synced:0,remaining:firebaseUser ? pendingResumesForUser(firebaseUser.uid).length : 0,rejected:0};
+  }
+  let synced=0;
+  let rejected=0;
+  for (const item of pendingResumesForUser(firebaseUser.uid)) {
+    if (auth?.currentUser?.uid !== item.uid) break;
+    try {
+      const token=await firebaseUser.getIdToken();
+      const response=await fetch('/api/study/progress',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({
+          action:'saveLessonResume',language:item.language,
+          guideId:item.guideId,lessonId:item.lessonId,pageIndex:item.pageIndex,
+        }),
+      });
+      if (response.ok) { dropResume(item); synced++; continue; }
+      if (response.status >= 400 && response.status < 500) { rejected++; continue; }
+      break;
+    } catch { break; }
+  }
+  return {synced,remaining:pendingResumesForUser(firebaseUser.uid).length,rejected};
 }
