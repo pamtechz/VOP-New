@@ -42,7 +42,7 @@ import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
 import './components/layout/navigation-header.css';
 
-const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
+const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', features:{candidatesModule:true,curriculumStudio:true,translations:true,radio:true,announcements:true,certification:true}, security:{sessionTimeoutMinutes:60}, detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
 
 export const App: React.FC = () => {
@@ -337,6 +337,35 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
+  useEffect(() => {
+    const minutes=Number(settings.security?.sessionTimeoutMinutes||0);
+    if(!Number.isFinite(minutes)||minutes<5)return;
+    let timer=0;
+    const arm=()=>{
+      window.clearTimeout(timer);
+      timer=window.setTimeout(()=>{ void firebaseSignOut(); },Math.min(minutes,1440)*60_000);
+    };
+    const events=['pointerdown','keydown','touchstart','focus'] as const;
+    events.forEach(name=>window.addEventListener(name,arm,{passive:true}));
+    document.addEventListener('visibilitychange',arm);
+    arm();
+    return()=>{
+      window.clearTimeout(timer);
+      events.forEach(name=>window.removeEventListener(name,arm));
+      document.removeEventListener('visibilitychange',arm);
+    };
+  },[settings.security?.sessionTimeoutMinutes]);
+
+  const routeFeatureEnabled=(route:AppRoute)=>{
+    if(route==='radio')return settings.features?.radio!==false;
+    if(route==='announcements'||route==='events')return settings.features?.announcements!==false;
+    if(route==='certificates'||route==='certificate-verification')return settings.features?.certification!==false;
+    return true;
+  };
+  useEffect(()=>{
+    if(!routeFeatureEnabled(currentRoute))setCurrentRoute('home');
+  },[currentRoute,settings.features]);
+
 
   const orderedActiveLessons = useMemo(() => {
     if (!activeGuide) return [];
@@ -357,6 +386,7 @@ export const App: React.FC = () => {
     setStudyError('');
     setIsMenuOpen(false);
     if (route === 'admin' && !(['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || '')))) return;
+    if(!routeFeatureEnabled(route)){setStudyNotice('This module is currently disabled for your ministry.');setCurrentRoute('home');return;}
     setCurrentRoute(route);
   };
   const returnHome = () => navigate('home');
