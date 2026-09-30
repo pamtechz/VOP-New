@@ -9,7 +9,7 @@
 .vop-study-plate li{padding-left:3px}
 .vop-study-plate li+li{margin-top:4px}
 .vop-study-plate blockquote{
-  border-left:3px solid #edb63c;background:#fffaf0;border-radius:0 8px 8px 0;
+  border-left:3px solid #edb63c;background:var(--bg-card,#fff)af0;border-radius:0 8px 8px 0;
   padding:10px 14px;color:#516178;
 }
 .vop-study-plate code{font-size:.92em;border-radius:4px;background:#eef2f8;padding:2px 5px}
@@ -21,7 +21,7 @@
 .vop-study-plate a:focus-visible{outline:2px solid #c8951e;outline-offset:3px}
 @media(max-width:600px){.vop-study-plate{font-size:14px;gap:10px}.vop-study-plate .vop-study-plate-heading{font-size:18px}}
 
-.vop-study-plate-error{padding:12px 14px;border:1px solid #f5c4c9;border-radius:8px;background:#fff3f4;color:#8d3440;font-size:13px;line-height:1.5}
+.vop-study-plate-error{padding:12px 14px;border:1px solid #f5c4c9;border-radius:8px;background:var(--bg-card,#fff)3f4;color:#8d3440;font-size:13px;line-height:1.5}
 
 .vop-study-plate-media{display:block;width:100%;margin:4px 0 8px}
 .vop-study-plate-media :is(video,iframe){max-width:100%}
