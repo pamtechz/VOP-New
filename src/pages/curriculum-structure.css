@@ -304,3 +304,58 @@
   .vop-lesson-aux-tab{padding:11px}
   .vop-editor-save-status{margin-bottom:9px}
 }
+
+
+/* Curriculum Studio lesson tabs: inset the whole tab body, not only individual
+ * controls. This keeps labels, fields, helper text and setting rows away from
+ * the card border on every editor tab. */
+.vop-lesson-content-card>.vop-lesson-tab-panel{
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  padding:20px 22px 22px!important;
+  margin:0!important;
+}
+.vop-lesson-content-card>.vop-lesson-tab-panel.vop-form-grid{
+  gap:14px;
+}
+.vop-lesson-content-card>.vop-lesson-tab-panel>.vop-field,
+.vop-lesson-content-card>.vop-lesson-tab-panel>.vop-setting-row{
+  min-width:0;
+}
+.vop-lesson-content-card>.vop-lesson-tab-panel textarea{
+  min-height:180px;
+}
+.vop-lesson-settings-panel .vop-setting-row{
+  padding:12px 14px;
+  border:1px solid #e1e9f3;
+  border-radius:9px;
+  background:#f8fbff;
+}
+.vop-lesson-settings-panel .vop-setting-row select{
+  min-width:130px;
+}
+
+/* Always-visible compact persistence state beside editor actions. */
+.vop-save-state-chip{
+  display:inline-flex;align-items:center;gap:6px;min-height:32px;
+  padding:6px 9px;border:1px solid #dce6f1;border-radius:999px;
+  background:#f7faff;color:#607894;font-size:10px;font-weight:800;white-space:nowrap;
+}
+.vop-save-state-chip.saving{border-color:#bcd7f2;background:#eef6ff;color:#1d5d9c}
+.vop-save-state-chip.saved{border-color:#bee7cf;background:#f0fbf5;color:#24714a}
+.vop-save-state-chip.dirty{border-color:#f0d7a8;background:#fff9eb;color:#825d1e}
+.vop-save-state-chip.idle{border-style:dashed}
+.vop-save-state-chip svg{flex:none}
+
+@media(max-width:700px){
+  .vop-lesson-content-card>.vop-lesson-tab-panel{
+    padding:14px 13px 16px!important;
+  }
+  .vop-lesson-settings-panel .vop-setting-row{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .vop-lesson-settings-panel .vop-setting-row select{width:100%}
+  .vop-save-state-chip{order:-1}
+}

@@ -966,6 +966,18 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Author each chapter as one continuous Plate document. Mark paragraphs as section boundaries to define the pages learners will navigate.</p></div>
           </div>
           <div className="vop-reference-actions">
+            <span className={'vop-save-state-chip '+(saving?'saving':editorDirty?'dirty':message||editor.id?'saved':'idle')}
+              role="status" aria-live="polite">
+              {saving
+                ? <><LoaderCircle className="vop-save-spin" size={14}/><span>{tx('common.saving','Saving…')}</span></>
+                : editorDirty
+                  ? <><Save size={14}/><span>{tx('curriculum.unsavedChanges','Unsaved')}</span></>
+                  : message
+                    ? <><CheckCircle size={14}/><span>{message}</span></>
+                    : editor.id
+                      ? <><CheckCircle size={14}/><span>{tx('curriculum.saved','Saved')}</span></>
+                      : <><Save size={14}/><span>{tx('curriculum.notSavedYet','Not saved')}</span></>}
+            </span>
             <button className="vop-secondary" type="button" onClick={() => {
               if(Object.values(plateValidationErrors).some(Boolean)){
                 setError('Correct the invalid study page before previewing.');
@@ -1017,7 +1029,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               }}>{label}</button>)}
             </div>
 
-            {editorTab === 'content' && <div className="vop-lesson-rich-editor">
+            {editorTab === 'content' && <div className="vop-lesson-rich-editor vop-lesson-tab-panel">
               {editor.chapters.length ? <>
                 <div className="vop-plate-review-mode">
                   <div><strong>Plate continuous document mode</strong>
@@ -1098,7 +1110,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               </div>
             </div>}
 
-            {editorTab === 'image' && <section className="vop-lesson-featured-tab"
+            {editorTab === 'image' && <section className="vop-lesson-featured-tab vop-lesson-tab-panel"
               aria-label={tx('curriculum.featuredImage','Featured Image')}>
               <div className="vop-lesson-featured-preview">
                 {editor.imageUrl
@@ -1118,7 +1130,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                 {tx('common.remove','Remove image')}</button>}
             </section>}
 
-            {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column vop-lesson-aux-tab">
+            {editorTab === 'media' && <div className="vop-form-grid vop-reference-single-column vop-lesson-tab-panel">
               <div className="vop-field"><label>Import public media from a trusted source</label>
                 <input type="url" placeholder="Paste a public WordPress, YouTube, TikTok, Instagram, Facebook, Umtu or direct media link" value={mediaSourceInput} onChange={e=>setMediaSourceInput(e.target.value)} />
                 <button className="vop-secondary" type="button" disabled={mediaResolving || !mediaSourceInput.trim()} onClick={()=>void resolvePastedMedia()}>{mediaResolving?'Checking source…':'Add media'}</button>
@@ -1128,12 +1140,12 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               <div className="vop-field"><label>{tx('curriculum.videoUrl', 'Video URL')}</label><div className="vop-input-with-icon"><Video size={18}/><input value={editor.videoUrl} onChange={e => setEditor({...editor,videoUrl:e.target.value})}/></div></div>
             </div>}
 
-            {editorTab === 'bible' && <div className="vop-lesson-aux-tab"><div className="vop-field"><label>{tx('curriculum.bibleReferences', 'Bible References')}</label><textarea value={editor.bibleReferences} onChange={e => setEditor({...editor,bibleReferences:e.target.value})}/></div></div>}
+            {editorTab === 'bible' && <div className="vop-lesson-tab-panel"><div className="vop-field"><label>{tx('curriculum.bibleReferences', 'Bible References')}</label><textarea value={editor.bibleReferences} onChange={e => setEditor({...editor,bibleReferences:e.target.value})}/></div></div>}
 
 
-            {editorTab === 'notes' && <div className="vop-lesson-aux-tab"><div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div></div>}
+            {editorTab === 'notes' && <div className="vop-lesson-tab-panel"><div className="vop-field"><label>{tx('curriculum.teacherNotes', 'Teacher Notes')}</label><textarea value={editor.teacherNotes} onChange={e => setEditor({...editor,teacherNotes:e.target.value})}/></div></div>}
 
-            {editorTab === 'settings' && <div className="vop-form-grid vop-reference-single-column vop-lesson-aux-tab">
+            {editorTab === 'settings' && <div className="vop-form-grid vop-reference-single-column vop-lesson-tab-panel vop-lesson-settings-panel">
               <div className="vop-field"><label>{tx('common.sharing', 'Sharing')}</label><select value={editor.sharingScope} onChange={e => setEditor({...editor,sharingScope:e.target.value as EditorState['sharingScope']})}><option value="private">{tx('common.private', 'Private')}</option><option value="organization">{tx('curriculum.organizationOnly', 'Organization only')}</option><option value="shared">{tx('common.shared', 'Shared')}</option></select><small>Shared lessons can be consumed by other organizations. Canonical editing remains restricted to the owning organization and VOP Super Admin.</small></div>
               <div className="vop-field"><label>{tx('curriculum.estimatedMinutes', 'Estimated Minutes')}</label><input type="number" min="1" value={editor.estimatedMinutes} onChange={e => setEditor({...editor,estimatedMinutes:Number(e.target.value)})}/></div>
               <div className="vop-field"><label>{tx('common.tags', 'Tags')}</label><input value={editor.tags} onChange={e => setEditor({...editor,tags:e.target.value})}/></div>
