@@ -1,6 +1,7 @@
 import React from 'react';
 import { BookResource } from '../../types';
 import { X, BookOpen, Download, ExternalLink, Bookmark } from 'lucide-react';
+import { ModalLayer } from '../layout/ModalLayer';
 
 interface BooksModalProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ export const BooksModal: React.FC<BooksModalProps> = ({
   const publishedBooks = books.filter(book => book.published !== false);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <ModalLayer><div className="modal-overlay" onClick={onClose}>
       <div
         className="glass-panel animate-fade-in"
         onClick={(e) => e.stopPropagation()}
@@ -137,6 +138,6 @@ export const BooksModal: React.FC<BooksModalProps> = ({
           ))}
         </div>
       </div>
-    </div>
+    </div></ModalLayer>
   );
 };
