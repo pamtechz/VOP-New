@@ -112,17 +112,27 @@ function blockFromLegacy(raw,ctx){
   if(value.length>8000)throw new Error('Legacy text block '+id+' exceeds 8000 characters.');
   return {id,type,text:value};
 }
+function splitLegacyText(value){
+  const source=text(value).trim();
+  if(!source)return [];
+  const paragraphs=source.split(/\n{2,}/g).map(item=>item.trim()).filter(Boolean);
+  const chunks=[];
+  for(const paragraph of paragraphs.length?paragraphs:[source]){
+    if(paragraph.length<=8000){chunks.push(paragraph);continue;}
+    for(let start=0;start<paragraph.length;start+=8000)chunks.push(paragraph.slice(start,start+8000));
+  }
+  return chunks;
+}
 function pageBlocks(page,ctx){
   const existing=Array.isArray(page.blocks)?page.blocks:[];
   const blocks=[];
   if(existing.length){
     existing.forEach((raw,index)=>blocks.push(blockFromLegacy(raw,{...ctx,blockIndex:index})));
   }else{
-    const value=text(page.content).trim();
-    if(value)blocks.push({
-      id:deterministicId('block',ctx.guideId,ctx.lessonId,ctx.sectionId,'content'),
-      type:'paragraph',text:value.slice(0,8000),
-    });
+    splitLegacyText(page.content).forEach((value,index)=>blocks.push({
+      id:deterministicId('block',ctx.guideId,ctx.lessonId,ctx.sectionId,'content',String(index+1)),
+      type:'paragraph',text:value,
+    }));
   }
   const image=publicHttpsUrl(page.imageUrl);
   if(text(page.imageUrl).trim()&&!image)throw new Error('Unsafe legacy page image URL on page '+ctx.pageIndex+'.');
@@ -332,6 +342,9 @@ async function executeMigration(db,backup){
   for(const entry of backup.entries){
     const ref=db.doc(entry.path);
     try{
+      const quizSnapshot=await db.collection('quizzes').where('guideId','==',entry.guideId).get();
+      const relevantQuizzes=quizSnapshot.docs.map(doc=>({id:doc.id,...doc.data()}))
+        .filter(quiz=>text(quiz.lessonId)===entry.lessonId);
       await db.runTransaction(async transaction=>{
         const current=await transaction.get(ref);
         if(!current.exists)throw new Error('Lesson no longer exists.');
@@ -339,11 +352,7 @@ async function executeMigration(db,backup){
         if(stableHash(before)!==entry.sourceHash)throw new Error('Lesson changed after preview/backup; migration skipped.');
         const preview=buildPlateMigrationPreview(before,{guideId:entry.guideId,lessonId:entry.lessonId});
         if(preview.status!=='migratable')throw new Error('Lesson is no longer a legacy lesson.');
-        const quizSnapshot=await db.collection('quizzes').where('guideId','==',entry.guideId).get();
-        assertQuizAnchorsPreserved(
-          quizSnapshot.docs.map(doc=>({id:doc.id,...doc.data()})).filter(quiz=>text(quiz.lessonId)===entry.lessonId),
-          preview.anchors,
-        );
+        assertQuizAnchorsPreserved(relevantQuizzes,preview.anchors);
         const after=migrationAfter(before,preview,backup.backupId,backup.migratedAt);
         if(stableHash(after)!==entry.afterHash)throw new Error('Migration preview changed after backup; write refused.');
         transaction.set(ref,after);
