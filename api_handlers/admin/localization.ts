@@ -7,6 +7,7 @@ import { isEnglishLocale } from '../../shared/locales.js';
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;body?:unknown};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void};
 type Role='translator'|'reviewer';
+type AccessRequestKind='existing_language'|'new_language';
 
 const clean=(value:unknown,max=500)=>String(value||'').trim().slice(0,max);
 const languageCode=(value:unknown)=>{
@@ -34,6 +35,35 @@ function collaboratorAllows(item:Record<string,unknown>|null,role:Role,language:
 async function enabledLanguage(db:FirebaseFirestore.Firestore,code:string){
   const snap=await db.doc('languages/'+code).get();
   return snap.exists&&snap.data()?.enabled!==false;
+}
+async function assignLanguage(db:FirebaseFirestore.Firestore,collaboratorUid:string,code:string){
+  const ref=db.doc('localizationCollaborators/'+collaboratorUid);
+  const snap=await ref.get();
+  if(!snap.exists||snap.data()?.status!=='active')throw new Error('The localization collaborator is not active.');
+  const assigned=languages(snap.data()?.languages);
+  if(assigned.includes('*')||assigned.includes(code))return;
+  await ref.set({languages:FieldValue.arrayUnion(code),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+}
+async function createRequestedLanguage(
+  db:FirebaseFirestore.Firestore,code:string,name:string,nativeName:string,reviewerUid:string
+){
+  const now=FieldValue.serverTimestamp();
+  await Promise.all([
+    db.doc('languages/'+code).set({
+      code,languageCode:code,name,nativeName:nativeName||name,enabled:true,rtl:false,sortOrder:0,
+      sharingScope:'shared',organizationId:'',ownerUid:reviewerUid,
+      createdAt:now,updatedAt:now,updatedBy:reviewerUid,source:'localization-access-request',
+    },{merge:true}),
+    db.doc('locales/'+code).set({
+      code,name,nativeName:nativeName||name,enabled:true,rtl:false,direction:'ltr',fallback:'',
+      createdAt:now,updatedAt:now,updatedBy:reviewerUid,
+    },{merge:true}),
+    db.doc('translations/'+code).set({
+      id:code,languageCode:code,code,sharingScope:'shared',scope:'platform',platformOwned:true,
+      organizationId:'',ownerOrganizationId:'',values:{},translationRevision:0,
+      createdAt:now,updatedAt:now,
+    },{merge:true}),
+  ]);
 }
 async function reviewerPool(db:FirebaseFirestore.Firestore,code:string){
   const snap=await db.collection('localizationCollaborators').where('status','==','active').get();
@@ -96,15 +126,17 @@ export default async function handler(req:Request,res:Response){
     const profile=await safeUser(db,uid);
 
     if(action==='status'){
-      const [application,collab,languageSnap]=await Promise.all([
+      const [application,collab,languageSnap,accessRequestSnap]=await Promise.all([
         db.doc('localizationApplications/'+uid).get(),collaborator(db,uid),
         db.collection('languages').where('enabled','==',true).get(),
+        db.collection('localizationAccessRequests').where('requesterUid','==',uid).limit(50).get(),
       ]);
       return res.status(200).json({ok:true,
         application:application.exists?{id:application.id,...application.data()}:null,
         collaborator:collab,
         languages:languageSnap.docs.map(doc=>({code:doc.id,name:clean(doc.data()?.name||doc.id,120),nativeName:clean(doc.data()?.nativeName,120)}))
           .filter(item=>!isEnglishLocale(item.code)).sort((a,b)=>a.name.localeCompare(b.name)),
+        accessRequests:accessRequestSnap.docs.map(doc=>({id:doc.id,...doc.data()})),
       });
     }
 
@@ -178,7 +210,7 @@ export default async function handler(req:Request,res:Response){
       return res.status(200).json({ok:true,items:snap.docs.map(doc=>({id:doc.id,...doc.data()}))});
     }
 
-    if(action==='setCollaborator'){
+    if(action==='inviteCollaborator'){
       if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can invite localization collaborators.');
       const email=clean(body.email,320).toLowerCase();
       let collaboratorUid=clean(body.uid,160);
@@ -192,23 +224,151 @@ export default async function handler(req:Request,res:Response){
       const assignedLanguages=languages(body.languages);
       if(!assignedRoles.length)throw new Error('Choose translator, reviewer, or both.');
       if(!assignedLanguages.length)throw new Error('Assign at least one language or all languages.');
-      const status=body.status==='inactive'?'inactive':'active';
       await db.doc('localizationCollaborators/'+collaboratorUid).set({
         uid:collaboratorUid,email:user.email,displayName:user.displayName,
-        roles:assignedRoles,languages:assignedLanguages,status,source:'invite',
-        invitedBy:uid,updatedAt:FieldValue.serverTimestamp(),
+        roles:assignedRoles,languages:assignedLanguages,status:'invited',source:'invite',
+        invitedBy:uid,invitedAt:FieldValue.serverTimestamp(),acceptedAt:null,declinedAt:null,
+        updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
-      if(status==='active'){
+      await createNotification(db,{
+        recipientId:collaboratorUid,type:'invitation',
+        title:'Localization invitation',
+        body:`You were invited as ${assignedRoles.join(' and ')} for ${assignedLanguages.includes('*')?'all enabled languages':assignedLanguages.join(', ').toUpperCase()}. Accept the invitation before translation access is activated.`,
+        actionUrl:'/personal-settings',
+        metadata:{source:'localization-invite',roles:assignedRoles,languages:assignedLanguages,status:'invited'},
+        createdBy:uid,
+      });
+      return res.status(200).json({ok:true,item:{uid:collaboratorUid,email:user.email,displayName:user.displayName,roles:assignedRoles,languages:assignedLanguages,status:'invited'}});
+    }
+
+    if(action==='acceptInvitation'||action==='declineInvitation'){
+      const ref=db.doc('localizationCollaborators/'+uid);
+      const snap=await ref.get();
+      if(!snap.exists||snap.data()?.status!=='invited')throw new Error('No pending localization invitation was found.');
+      const data=snap.data()||{};
+      const accepted=action==='acceptInvitation';
+      await ref.set({
+        status:accepted?'active':'declined',
+        acceptedAt:accepted?FieldValue.serverTimestamp():null,
+        declinedAt:accepted?null:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      const inviterUid=clean(data.invitedBy,160);
+      if(inviterUid){
         await createNotification(db,{
-          recipientId:collaboratorUid,type:'invitation',
-          title:'Localization role assigned',
-          body:`You were assigned as ${assignedRoles.join(' and ')} for ${assignedLanguages.includes('*')?'all enabled languages':assignedLanguages.join(', ').toUpperCase()}.`,
-          actionUrl:'/personal-settings',
-          metadata:{source:'localization-role',roles:assignedRoles,languages:assignedLanguages},
+          recipientId:inviterUid,type:'invitation',
+          title:accepted?'Localization invitation accepted':'Localization invitation declined',
+          body:`${profile.displayName||profile.email||'A VOP member'} ${accepted?'accepted':'declined'} the localization invitation.`,
+          actionUrl:'/admin/translations',
+          metadata:{source:'localization-invite-response',collaboratorUid:uid,status:accepted?'active':'declined'},
           createdBy:uid,
         });
       }
+      return res.status(200).json({ok:true,status:accepted?'active':'declined'});
+    }
+
+    if(action==='setCollaborator'){
+      if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can manage localization collaborators.');
+      const email=clean(body.email,320).toLowerCase();
+      let collaboratorUid=clean(body.uid,160);
+      if(!collaboratorUid&&email){
+        const userSnap=await db.collection('users').where('email','==',email).limit(1).get();
+        collaboratorUid=userSnap.docs[0]?.id||'';
+      }
+      if(!collaboratorUid)throw new Error('The collaborator must already have a VOP account.');
+      const existing=await collaborator(db,collaboratorUid);
+      if(!existing)throw new Error('Invite the collaborator before changing their status.');
+      const user=await safeUser(db,collaboratorUid);
+      const assignedRoles=roles(body.roles).length?roles(body.roles):roles(existing.roles);
+      const assignedLanguages=languages(body.languages).length?languages(body.languages):languages(existing.languages);
+      const status=body.status==='inactive'?'inactive':body.status==='active'?'active':String(existing.status||'inactive');
+      await db.doc('localizationCollaborators/'+collaboratorUid).set({
+        uid:collaboratorUid,email:user.email,displayName:user.displayName,
+        roles:assignedRoles,languages:assignedLanguages,status,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
       return res.status(200).json({ok:true,item:{uid:collaboratorUid,email:user.email,displayName:user.displayName,roles:assignedRoles,languages:assignedLanguages,status}});
+    }
+
+    if(action==='requestLanguageAccess'){
+      const collab=await collaborator(db,uid);
+      if(!collab||collab.status!=='active'||!roles(collab.roles).includes('translator'))
+        throw new Error('Active translator access is required before requesting another language.');
+      const kind:AccessRequestKind=body.kind==='new_language'?'new_language':'existing_language';
+      const code=languageCode(kind==='new_language'?body.code:body.languageId);
+      const languageRef=db.doc('languages/'+code);
+      const languageSnap=await languageRef.get();
+      if(kind==='existing_language'){
+        if(!languageSnap.exists||languageSnap.data()?.enabled===false)throw new Error('Choose an enabled platform language.');
+      }else if(languageSnap.exists){
+        throw new Error('That language already exists. Request access to the existing translation instead.');
+      }
+      const assigned=languages(collab.languages);
+      if(assigned.includes('*')||assigned.includes(code))throw new Error('This language is already assigned to you.');
+      const open=await db.collection('localizationAccessRequests').where('requesterUid','==',uid).limit(100).get();
+      if(open.docs.some(doc=>String(doc.data()?.languageCode||'')===code&&doc.data()?.status==='pending'))
+        throw new Error('You already have a pending request for this language.');
+      const name=kind==='new_language'?clean(body.name,120):clean(languageSnap.data()?.name||code,120);
+      const nativeName=kind==='new_language'?clean(body.nativeName||body.name,120):clean(languageSnap.data()?.nativeName||name,120);
+      if(kind==='new_language'&&!name)throw new Error('Language name is required.');
+      const ref=db.collection('localizationAccessRequests').doc();
+      await ref.set({
+        id:ref.id,requesterUid:uid,requesterEmail:profile.email,requesterName:profile.displayName,
+        kind,languageCode:code,name,nativeName,reason:clean(body.reason,3000),status:'pending',
+        createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      });
+      const superAdmins=await db.collection('users').where('role','==','super_admin').limit(25).get();
+      await Promise.all(superAdmins.docs.filter(doc=>doc.id!==uid).map(doc=>createNotification(db,{
+        recipientId:doc.id,type:'invitation',
+        title:kind==='new_language'?'New localization language request':'Localization access request',
+        body:`${profile.displayName||profile.email||'A translator'} requested ${kind==='new_language'?'a new language':'access to'} ${name||code} (${code.toUpperCase()}).`,
+        actionUrl:'/admin/translations',
+        metadata:{source:'localization-access-request',requestId:ref.id,kind,languageCode:code},
+        createdBy:uid,
+      })));
+      return res.status(200).json({ok:true,item:{id:ref.id,kind,languageCode:code,name,nativeName,status:'pending'}});
+    }
+
+    if(action==='listAccessRequests'){
+      if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can review localization access requests.');
+      const snap=await db.collection('localizationAccessRequests').limit(300).get();
+      return res.status(200).json({ok:true,items:snap.docs.map(doc=>({id:doc.id,...doc.data()}))});
+    }
+
+    if(action==='reviewAccessRequest'){
+      if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can review localization access requests.');
+      const requestId=clean(body.requestId,180);
+      const decision=body.decision==='approve'?'approved':body.decision==='reject'?'rejected':'';
+      if(!requestId||!decision)throw new Error('Request and decision are required.');
+      const ref=db.doc('localizationAccessRequests/'+requestId);
+      const snap=await ref.get();
+      if(!snap.exists)throw new Error('Localization access request was not found.');
+      const data=snap.data()||{};
+      if(data.status!=='pending')throw new Error('This localization access request has already been reviewed.');
+      const requesterUid=clean(data.requesterUid,160);
+      const code=languageCode(data.languageCode);
+      if(decision==='approved'){
+        if(data.kind==='new_language'){
+          await createRequestedLanguage(db,code,clean(data.name,120),clean(data.nativeName,120),uid);
+        }else if(!(await enabledLanguage(db,code))){
+          throw new Error('The requested platform language is no longer enabled.');
+        }
+        await assignLanguage(db,requesterUid,code);
+      }
+      await ref.set({
+        status:decision,reviewedBy:uid,reviewedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      await createNotification(db,{
+        recipientId:requesterUid,type:'invitation',
+        title:decision==='approved'?'Localization language request approved':'Localization language request update',
+        body:decision==='approved'
+          ?`${clean(data.name,120)||code.toUpperCase()} is now available in your localization workspace.`
+          :`Your request for ${clean(data.name,120)||code.toUpperCase()} was not approved at this time.`,
+        actionUrl:'/personal-settings',
+        metadata:{source:'localization-access-decision',requestId,languageCode:code,status:decision},
+        createdBy:uid,
+      });
+      return res.status(200).json({ok:true,status:decision,languageCode:code});
     }
 
     if(action==='listProposals'){
