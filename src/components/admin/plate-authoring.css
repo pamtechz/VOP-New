@@ -41,3 +41,48 @@
   .vop-plate-editable{min-height:250px;font-size:13px}
   .vop-plate-editor-foot{flex-wrap:wrap}
 }
+
+.vop-plate-toolbar-group{display:flex;align-items:center;gap:1px}
+.vop-plate-toolbar-group>button{
+  display:grid;place-items:center;width:31px;height:31px;padding:0;border:0;
+  border-radius:6px;background:transparent;color:#26446e;cursor:pointer
+}
+.vop-plate-toolbar-group>button:hover{background:#eef4ff}
+.vop-plate-block-style{
+  display:flex;align-items:center;gap:5px;min-width:118px;height:32px;
+  padding:0 7px;border-radius:7px;color:#2a496f;background:transparent;
+}
+.vop-plate-block-style:hover{background:#eef4ff}
+.vop-plate-block-style select{
+  appearance:none;-webkit-appearance:none;min-width:0;flex:1;border:0;outline:0;
+  background:transparent;color:#263f62;font:inherit;font-size:12px;font-weight:680;cursor:pointer
+}
+.vop-plate-block-style>svg:last-child{pointer-events:none;flex:none}
+.vop-plate-section-break{
+  display:inline-flex!important;align-items:center;justify-content:center!important;
+  gap:6px;width:auto!important;min-width:104px;height:32px!important;
+  padding:0 9px!important;margin-left:auto;border:1px solid #c7daef!important;
+  border-radius:7px!important;background:#f2f7ff!important;color:#174f91!important;
+  font-size:11px;font-weight:740;white-space:nowrap
+}
+.vop-plate-section-break:hover{background:#e7f1ff!important;border-color:#9ebfe2!important}
+.vop-plate-section-break+ .vop-plate-more{margin-left:0}
+.vop-plate-toolbar button:disabled{opacity:.45;cursor:not-allowed}
+.vop-plate-editable code{
+  border-radius:4px;background:#eef2f7;padding:1px 4px;color:#193d66;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+  font-size:.92em
+}
+@media(max-width:880px){
+  .vop-plate-toolbar{gap:1px}
+  .vop-plate-divider{margin:0 2px}
+  .vop-plate-block-style{min-width:104px}
+  .vop-plate-section-break span{display:none}
+  .vop-plate-section-break{min-width:32px!important;width:32px!important;padding:0!important}
+}
+@media(max-width:620px){
+  .vop-plate-toolbar{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:thin}
+  .vop-plate-toolbar-group,.vop-plate-divider,.vop-plate-block-style,.vop-plate-section-break,.vop-plate-more{flex:none}
+  .vop-plate-more{position:static}
+  .vop-plate-more>div{position:fixed;right:12px;top:auto;max-height:55vh;overflow:auto}
+}
