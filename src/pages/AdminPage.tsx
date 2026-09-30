@@ -34,6 +34,7 @@ import LocalizationGovernancePanel from './LocalizationGovernancePanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
+import { consumeNotificationAdminTarget } from '../services/notificationRouting';
 
 interface AdminPageProps {
   currentUser: User;
@@ -123,7 +124,10 @@ async function adminContent(action: string, collection: string, id?: string, dat
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const target=consumeNotificationAdminTarget();
+    return (target||'dashboard') as AdminTab;
+  });
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
