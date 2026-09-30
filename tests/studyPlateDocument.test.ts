@@ -238,8 +238,8 @@ test('Plate authoring uses a continuous chapter document with explicit section b
 test('authoring outline and Plate toolbar remain visibly sticky below the admin header',()=>{
   const toolbar=read('src/components/admin/plate-authoring.css');
   const structure=read('src/components/admin/plate-structure.css');
-  assert.match(toolbar,/top:var\(--vop-plate-sticky-top,76px\)/);
-  assert.match(toolbar,/z-index:75/);
+  assert.match(toolbar,/top:var\(--vop-plate-toolbar-top,var\(--vop-plate-sticky-top,76px\)\)/);
+  assert.match(toolbar,/z-index:90/);
   assert.match(structure,/--vop-plate-sticky-top:76px/);
   assert.match(structure,/\.vop-plate-outline\{[\s\S]*position:sticky;top:var\(--vop-plate-sticky-top,76px\)/);
   assert.match(structure,/max-height:calc\(100dvh - var\(--vop-plate-sticky-top,76px\) - 10px\)/);
