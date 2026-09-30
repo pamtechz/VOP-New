@@ -49,6 +49,31 @@ export interface AppSettings {
   certificateTitle?: string;
   certificateBodyText?: string;
   detailPages?: DetailPagesSettings;
+  appTagline?: string;
+  timezone?: string;
+  website?: string;
+  welcomeMessage?: string;
+  systemOptions?: {
+    maintenanceMode?: boolean;
+    showChurchInfo?: boolean;
+  };
+  features?: {
+    candidatesModule?: boolean;
+    curriculumStudio?: boolean;
+    translations?: boolean;
+    radio?: boolean;
+    announcements?: boolean;
+    certification?: boolean;
+  };
+  security?: {
+    sessionTimeoutMinutes?: number;
+  };
+  notifications?: {
+    emailEnabled?: boolean;
+    enrollmentNotifications?: boolean;
+    announcementNotifications?: boolean;
+    certificateNotifications?: boolean;
+  };
 }
 
 export interface Union {
