@@ -56,7 +56,7 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
 
   useEffect(()=>{
     void loadNotifications();
-    const timer=window.setInterval(()=>void loadNotifications(true),45000);
+    const timer=window.setInterval(()=>void loadNotifications(true),15000);
     const refresh=()=>void loadNotifications(true);
     const visible=()=>{if(document.visibilityState==='visible')refresh();};
     window.addEventListener('focus',refresh);
