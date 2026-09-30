@@ -519,41 +519,52 @@ export const subscribeCandidates = (
   callback: (users: User[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe => {
-  return tenantSubscription('users',
-    (snapshot) => {
-      const list: User[] = snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          uid: d.id,
-          displayName: String(data.displayName || data.name || 'Student'),
-          email: String(data.email || ''),
-          phoneNumber: data.phoneNumber ? String(data.phoneNumber) : undefined,
-          photoURL: data.photoURL ? String(data.photoURL) : undefined,
-          role: data.role || 'student',
-          adminNodeType: data.adminNodeType || null,
-          adminNodeId: data.adminNodeId || null,
-          churchId: data.churchId ? String(data.churchId) : undefined,
-          districtId: data.districtId ? String(data.districtId) : undefined,
-          conferenceId: data.conferenceId ? String(data.conferenceId) : undefined,
-          unionId: data.unionId ? String(data.unionId) : undefined,
-          information: data.information || {
-            enrollmentDate: new Date().toISOString(),
-            graduating: false,
-            graduated: false,
-            baptismCandidate: false,
-            baptized: false,
-          },
-          privileges: data.privileges || { admin: false, guardian: false, editor: false, manager: false, developer: false },
-          progress: data.progress || { discoverProgress: 0, completedGuidesCount: 0, totalGuidesCount: 0, guideScores: {}, completedLessons: [] },
-        };
+  let cancelled=false;
+  const load=async()=>{
+    try{
+      const user=auth?.currentUser;
+      if(!user)throw new Error('Sign in first.');
+      const token=await user.getIdToken();
+      const response=await fetch('/api/admin/users',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({action:'list'}),
       });
+      const payload=await response.json().catch(()=>({})) as {error?:string;items?:Array<Record<string,unknown>>};
+      if(!response.ok)throw new Error(payload.error||'Candidate records could not be loaded.');
+      if(cancelled)return;
+      const list:User[]=(payload.items||[])
+        .filter(data=>String(data.userType||'')==='learner'||String(data.roleLabel||'')==='Learner'||String(data.role||'')==='student')
+        .map(data=>({
+          uid:String(data.uid||data.id||''),
+          displayName:String(data.displayName||data.name||'Student'),
+          email:String(data.email||''),
+          phoneNumber:data.phoneNumber?String(data.phoneNumber):undefined,
+          photoURL:data.photoURL?String(data.photoURL):undefined,
+          role:String(data.role||'student'),
+          organizationId:data.organizationId?String(data.organizationId):undefined,
+          organizationRole:data.organizationRole?String(data.organizationRole):undefined,
+          information:(data.information&&typeof data.information==='object'?data.information:{
+            enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false,
+          }) as User['information'],
+          privileges:(data.privileges&&typeof data.privileges==='object'?data.privileges:{
+            admin:false,guardian:false,editor:false,manager:false,developer:false,
+          }) as User['privileges'],
+          progress:(data.progress&&typeof data.progress==='object'?data.progress:{
+            discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[],
+          }) as User['progress'],
+        }))
+        .filter(item=>item.uid);
       callback(list);
-    },
-    (err) => {
-      console.error('Firestore users subscription error:', err);
-      if (onError) onError(err);
+    }catch(error){
+      if(cancelled)return;
+      onError?.(error instanceof Error?error:new Error('Candidate records could not be loaded.'));
     }
-  );
+  };
+  const refresh=()=>void load();
+  void load();
+  window.addEventListener('vop_data_updated',refresh);
+  return()=>{cancelled=true;window.removeEventListener('vop_data_updated',refresh);};
 };
 
 // ------------------------------------------------------------------
