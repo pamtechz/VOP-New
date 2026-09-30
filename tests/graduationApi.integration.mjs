@@ -87,6 +87,19 @@ test('graduation: learner self-submission and official issuance require verified
         questions:[{key:id+'-q1',question:'Assessment?',options:['Wrong','Right']}],
       });
     }
+    await db.doc('certificates/legacy-certificate').set({
+      candidateId:'legacy-candidate',organizationId:org,
+      candidateName:'Legacy Learner',courseName:'Legacy Bible Course',
+      certificateNumber:'VOP-2024-LEGACY',status:'Certified',
+      issuedAt:'2024-06-01T00:00:00.000Z',verificationEnabled:true,
+    });
+    const legacyPublic=await verifyCertificate('VOP-2024-LEGACY');
+    assert.equal(legacyPublic.status,200,JSON.stringify(legacyPublic));
+    assert.equal(legacyPublic.verified,true);
+    assert.equal(legacyPublic.state,'valid');
+    assert.equal(legacyPublic.certificate.documentType,'course',
+      'Historical certificates without a documentType remain compatible.');
+
     const candidate=await identity('graduation-candidate',org);
     const admin=await identity('graduation-admin',org,'admin');
     const outsider=await identity('graduation-outsider','org-graduation-b','admin');
