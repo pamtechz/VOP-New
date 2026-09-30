@@ -196,3 +196,35 @@
 .vop-plate-review-mode>button{min-height:33px;flex:none;font-size:12px;padding:6px 9px}
 @media(max-width:620px){.vop-plate-review-mode{align-items:stretch;flex-direction:column}
   .vop-plate-review-mode>button{width:100%;justify-content:center}}
+
+/* Course/Program section-first drill-down: compact chapter/page tree before editor. */
+.vop-admin-section-first{display:grid;gap:10px}
+.vop-admin-section-lesson{display:grid;gap:9px;padding:10px;border:1px solid #dfe8f2;border-radius:9px;background:#fff}
+.vop-admin-section-lesson>header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:9px}
+.vop-admin-section-lesson>header>div{min-width:0}
+.vop-admin-section-lesson>header span:first-child{display:block;font-size:10px;font-weight:780;letter-spacing:.055em;color:#6e8299}
+.vop-admin-section-lesson h3{margin:2px 0 3px;font-size:14px;line-height:1.25;color:#153d70}
+.vop-admin-section-lesson header small{font-size:11px;color:#6a7f95}
+.vop-admin-section-lesson>header>.vop-secondary{min-height:32px;padding:6px 9px;font-size:11px;gap:5px}
+.vop-admin-section-chapters{display:grid;gap:4px}
+.vop-admin-section-chapter{border:1px solid #e4ecf5;border-radius:8px;overflow:hidden;background:#fbfdff}
+.vop-admin-section-chapter>summary{display:flex;align-items:center;gap:8px;min-height:36px;padding:7px 9px;list-style:none;color:#244f7d;cursor:pointer}
+.vop-admin-section-chapter>summary::-webkit-details-marker{display:none}
+.vop-admin-section-chapter>summary>svg:first-child{color:#1a5aa4;flex:none}
+.vop-admin-section-chapter>summary>strong{flex:1;min-width:0;font-size:12px;font-weight:760;overflow-wrap:anywhere}
+.vop-admin-section-chapter>summary>small{font-size:10px;color:#71849a}
+.vop-admin-section-chapter>summary>svg:last-child{flex:none;color:#6c829a;transition:transform .16s ease}
+.vop-admin-section-chapter[open]>summary>svg:last-child{transform:rotate(90deg)}
+.vop-admin-section-chapter>div{display:grid;border-top:1px solid #e8eef5;background:#fff}
+.vop-admin-section-chapter>div>button{display:grid;grid-template-columns:25px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 9px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;color:#315878;font-size:11px;cursor:pointer}
+.vop-admin-section-chapter>div>button:last-child{border-bottom:0}
+.vop-admin-section-chapter>div>button:hover:not(:disabled){background:#f2f7fd}
+.vop-admin-section-chapter>div>button>span:first-child{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:#edf4fb;color:#1c5799;font-size:10px;font-weight:780}
+.vop-admin-section-chapter>div>button>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vop-admin-section-empty{margin:0;padding:9px 10px;border:1px dashed #dbe5ef;border-radius:7px;color:#6e8299;font-size:11px}
+.vop-admin-section-assessments{display:flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:7px 10px;border:1px solid #d9e5f1;border-radius:8px;background:#f7faff;color:#24527e;font-size:11px;font-weight:700;cursor:pointer}
+.vop-admin-section-assessments:hover{background:#edf5ff}
+@media(max-width:720px){
+  .vop-admin-section-lesson>header{grid-template-columns:minmax(0,1fr) auto}
+  .vop-admin-section-lesson>header>.vop-secondary{grid-column:1/-1;width:100%;justify-content:center}
+}
