@@ -44,6 +44,10 @@ import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
+import {
+  applyThemePreference, persistThemePreference, readThemePreference,
+  resolvedTheme, subscribeSystemTheme, type ThemePreference,
+} from './services/theme';
 import './components/layout/navigation-header.css';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
@@ -91,7 +95,8 @@ export const App: React.FC = () => {
   const [studyError, setStudyError] = useState('');
   const [studyNotice, setStudyNotice] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [themePreference,setThemePreference] = useState<ThemePreference>(readThemePreference);
+  const [isDarkMode,setIsDarkMode] = useState(()=>resolvedTheme(readThemePreference())==='dark');
   const [isMobileShell, setIsMobileShell] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const toggleDesktopSidebar = () => setSidebarCollapsed(value => {
@@ -161,6 +166,20 @@ export const App: React.FC = () => {
         }
         setLocalizationOrganizationScope(profile.organizationId || '');
         setCurrentUser(profile);
+        if(firebaseAuth.currentUser){
+          void firebaseAuth.currentUser.getIdToken().then(async token=>{
+            const response=await fetch('/api/admin/users',{
+              method:'POST',
+              headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+              body:JSON.stringify({action:'personalSettings',operation:'get'}),
+            });
+            const payload=await response.json().catch(()=>({})) as {settings?:{theme?:ThemePreference}};
+            if(response.ok&&payload.settings?.theme){
+              const next=persistThemePreference(payload.settings.theme);
+              setThemePreference(next);
+            }
+          }).catch(()=>undefined);
+        }
         if (profile.preferences?.uiLocale) {
           setUiLocale(profile.preferences.uiLocale);
         }
@@ -356,9 +375,13 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
-    else document.documentElement.removeAttribute('data-theme');
-  }, [isDarkMode]);
+    applyThemePreference(themePreference);
+    setIsDarkMode(resolvedTheme(themePreference)==='dark');
+    return subscribeSystemTheme(themePreference,()=>{
+      applyThemePreference(themePreference);
+      setIsDarkMode(resolvedTheme(themePreference)==='dark');
+    });
+  }, [themePreference]);
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
@@ -569,14 +592,20 @@ export const App: React.FC = () => {
         {currentRoute !== 'admin' && currentRoute !== 'radio' && (
           <Header currentUser={currentUser} settings={settings} activeLanguage={uiLocale}
             onChangeLanguage={language => setUiLocale(language)}
-            isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(value => !value)} isMobileShell={isMobileShell}
+            isDarkMode={isDarkMode} onToggleDarkMode={() => {
+              const next:ThemePreference=isDarkMode?'light':'dark';
+              persistThemePreference(next);setThemePreference(next);
+            }} isMobileShell={isMobileShell}
             onToggleMobileShell={() => setIsMobileShell(value => !value)} onOpenMenu={() => setIsMenuOpen(true)} onLogout={() => void firebaseSignOut()} currentRoute={currentRoute} onNavigate={navigate} />
         )}
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
-          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
+          {currentRoute === 'personal-settings' && <PersonalSettingsPage
+            onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }}
+            onThemeChange={value=>{const next=persistThemePreference(value);setThemePreference(next);}}
+            currentUser={currentUser} onBack={goBack} />}
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
