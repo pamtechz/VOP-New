@@ -15,6 +15,10 @@ const {
   normalizeCurriculumStructure,curriculumPages,containsPublicQuizAnswer,
 }=await server.ssrLoadModule('/shared/curriculumStructure.ts') as typeof import('../shared/curriculumStructure.ts');
 const {transferCurriculumNode}=await server.ssrLoadModule('/shared/curriculumTransfer.ts');
+const {
+  curriculumSectionsToAuthoringDocument,authoringDocumentToCurriculumSections,
+  createStudyPlateSectionMarker,isStudyPlateSectionMarker,
+}=await server.ssrLoadModule('/shared/studyPlateAuthoring.ts') as typeof import('../shared/studyPlateAuthoring.ts');
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
 
@@ -58,14 +62,15 @@ test('Plate List Classic lic nodes round-trip through validated section pages',(
   }]));
   assert.equal(pages[0].document?.[0].children[0].children[0].type,'lic');
 });
-test('the Plate preview locks the classic editor for rich documents and guards invalid drafts',()=>{
+test('structured lessons always use Plate and invalid chapter documents are guarded',()=>{
   const studio=read('src/pages/CurriculumManager.tsx');
   const editor=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
-  assert.match(studio,/hasRichSections=editor\.chapters\.some/);
-  assert.match(studio,/disabled=\{hasRichSections\}/);
+  assert.match(studio,/Plate continuous document mode/);
   assert.match(studio,/plateValidationErrors/);
   assert.match(studio,/onPageError=/);
-  assert.match(editor,/canLeavePage/);
+  assert.doesNotMatch(studio,/PlateCurriculumAuthoringReview:StructuredLessonEditor/);
+  assert.doesNotMatch(studio,/setPlateReview/);
+  assert.match(editor,/canLeaveChapter/);
   assert.match(editor,/onValidationError=/);
 });
 
@@ -87,6 +92,34 @@ test('one author-defined section corresponds to exactly one student page',()=>{
   assert.equal(pages[1].document?.length,2);
   assert.match(pages[1].content,/Let us pray/);
   assert.equal(pages[0].blocks[1].id,'block-intro');
+});
+
+test('continuous Plate authoring uses section boundaries without consuming the marked paragraph block',()=>{
+  const original=normalizeStudyPlateDocument(rich());
+  const sections=[{
+    id:'section-one',title:'The teaching',
+    blocks:studyPlateLegacyBlocks(original),document:original,
+  }];
+  const authoring=curriculumSectionsToAuthoringDocument(sections);
+  assert.equal(authoring.length,4);
+  assert.equal(isStudyPlateSectionMarker(authoring[0]),true);
+  assert.equal(authoring[1].id,'block-title');
+
+  // Mark the second paragraph as a new section by inserting an authoring-only
+  // boundary before it. The paragraph itself keeps the same canonical block ID.
+  authoring.splice(2,0,createStudyPlateSectionMarker('section-two','Remember the seventh day'));
+  const converted=authoringDocumentToCurriculumSections(authoring);
+  assert.equal(converted.length,2);
+  assert.equal(converted[0].document?.[0].id,'block-title');
+  assert.equal(converted[1].document?.[0].id,'block-intro');
+  assert.equal(converted[1].document?.[1].id,'block-list');
+  assert.equal(converted[1].title,'Remember the seventh day');
+
+  const pages=curriculumPages(normalizeCurriculumStructure([{
+    id:'chapter-one',title:'Sabbath Fundamentals',sections:converted,
+  }]));
+  assert.deepEqual(pages.map(page=>page.sectionId),['section-one','section-two']);
+  assert.equal(JSON.stringify(pages).includes('section_page'),false);
 });
 test('unchanged legacy lessons bridge without rewriting their anchor IDs',()=>{
   const original=[{id:'block-first',type:'heading',text:'First'},
@@ -170,15 +203,15 @@ test('public document rejects private quiz payloads, even when nested in Plate n
   const normalized=normalizeStudyPlateDocument(leaked);
   assert.equal(JSON.stringify(normalized).includes('answer'),false);
 });
-test('Plate authoring uses a compact document toolbar and explicit section/page controls',()=>{
+test('Plate authoring uses a continuous chapter document with explicit section boundaries',()=>{
   const editor=read('src/components/admin/StudyPlatePageEditor.tsx');
   const structure=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
   const studio=read('src/pages/CurriculumManager.tsx');
-  assert.match(editor,/CodePlugin/);
-  assert.match(editor,/editor\.tf\.undo\(\)/);
-  assert.match(editor,/editor\.tf\.redo\(\)/);
-  assert.match(editor,/Paragraph style/);
-  assert.match(editor,/New section/);
+  assert.match(editor,/SectionPagePlugin/);
+  assert.match(editor,/authoringDocumentToCurriculumSections/);
+  assert.match(editor,/markSection/);
+  assert.match(editor,/Start section/);
+  assert.match(editor,/Quiz for current block/);
   assert.match(editor,/Insert approved audio or video/);
   assert.match(editor,/Supported public sources include YouTube/);
   assert.match(editor,/page added as a safe external link/);
@@ -189,31 +222,31 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(editor,/StudyAudioPlugin/);
   assert.match(editor,/ctrlKey\|\|event\.metaKey/);
   assert.match(editor,/key\.toLowerCase\(\)==='k'/);
-  assert.match(structure,/movePage=\(step:-1\|1\)/);
+  assert.match(structure,/vop-plate-document-shell/);
+  assert.match(structure,/curriculumSectionsToAuthoringDocument/);
+  assert.match(structure,/moveSection=\(sectionId:string,step:-1\|1\)/);
   assert.match(structure,/moveChapter=\(step:-1\|1\)/);
   assert.match(structure,/initialSectionId/);
   assert.match(studio,/programContext\?\.entryMode==='sections'/);
-  assert.match(studio,/openModuleLesson\(item,section\.id\)/);
+  assert.match(studio,/vop-admin-direct-section/);
+  assert.match(studio,/openModuleLesson\(entry\.item,entry\.section\.id\)/);
   assert.match(studio,/beforeunload/);
   assert.match(studio,/You have unsaved lesson changes/);
   assert.match(studio,/Save your lesson changes before leaving the editor to manage a quiz/);
 });
 
-test('Plate is the default structured editor while legacy compatibility remains guarded',()=>{
+test('Plate is the single structured editor while learner rendering remains validated',()=>{
   const manager=read('src/pages/CurriculumManager.tsx');
   const plate=read('src/components/admin/PlateCurriculumAuthoringReview.tsx');
   const reader=read('src/components/reader/LessonReaderModal.tsx');
   const safe=read('src/components/reader/StudyPlateContent.tsx');
-  assert.match(manager,/const EditorComponent=plateReview\|\|hasRichSections/);
-  assert.match(manager,/PlateCurriculumAuthoringReview:StructuredLessonEditor/);
-  assert.match(manager,/useState\(true\)/);
-  assert.match(manager,/Plate is the primary authoring experience/);
-  assert.match(manager,/Legacy editor/);
-  assert.match(plate,/onSplitPage=\{splitPage\}/);
-  assert.match(plate,/vop-plate-page-tabs/);
+  assert.match(manager,/PlateCurriculumAuthoringReview/);
+  assert.doesNotMatch(manager,/const EditorComponent=/);
+  assert.doesNotMatch(manager,/Legacy editor/);
+  assert.match(plate,/curriculumSectionsToAuthoringDocument/);
+  assert.match(plate,/vop-plate-outline/);
   assert.match(plate,/duplicateSectionSafely/);
   assert.match(plate,/organizationId=\{organizationId\}/);
-  assert.doesNotMatch(plate,/Use the classic editor for this section until its audio and video/);
   assert.match(reader,/currentSection\.document/);
   assert.match(reader,/afterBlock=\{blockId=>assessmentLinks\('block',blockId\)\}/);
   assert.doesNotMatch(safe,/dangerouslySetInnerHTML/);
@@ -279,6 +312,7 @@ test('guide editor persists a learner navigation preference without changing cou
   assert.match(api,/learnerEntryMode: data\.learnerEntryMode === 'sections'/);
   assert.match(loader,/learnerEntryMode: data\.learnerEntryMode === 'sections'/);
   assert.match(view,/guide\.learnerEntryMode==='sections'/);
+  assert.match(view,/vop-guide-direct-section/);
   assert.match(view,/onSelectLesson\(lesson,actualIndex\)/);
   assert.match(app,/initialPageIndex===undefined/);
   assert.match(app,/lessonResume/);
