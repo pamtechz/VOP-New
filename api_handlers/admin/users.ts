@@ -543,7 +543,9 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
-      if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (!tenant.isSuperAdmin && tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) {
+        throw new Error('This user belongs to another organization.');
+      }
       if (type === 'super_admin' && !tenant.isSuperAdmin) {
         throw new Error('Only the VOP Super Admin can assign the platform super administrator role.');
       }
@@ -554,6 +556,7 @@ export default async function handler(request: Request, response: Response) {
       const requestedNodeType = String(body.adminNodeType || '').trim();
       const requestedNodeId = String(body.adminNodeId || '').trim();
       const hierarchyReassignment = type === 'admin' && assignmentMode === 'hierarchy';
+      const platformReassignment = tenant.isSuperAdmin && type === 'super_admin';
       const organizationReassignment = tenant.isSuperAdmin && assignmentMode === 'organization'
         && Object.prototype.hasOwnProperty.call(body, 'organizationId');
       if (hierarchyReassignment) {
@@ -566,7 +569,7 @@ export default async function handler(request: Request, response: Response) {
       // Ordinary tenant edits preserve membership. Super Admin can explicitly
       // move or detach an account by sending the assignment field, including an
       // empty organizationId for a platform-level non-admin account.
-      const effectiveOrganizationId = hierarchyReassignment
+      const effectiveOrganizationId = hierarchyReassignment || platformReassignment
         ? ''
         : organizationReassignment
           ? requestedManagedOrganizationId
@@ -594,6 +597,8 @@ export default async function handler(request: Request, response: Response) {
           conferenceId: requestedNodeType === 'conference' ? requestedNodeId : '',
           districtId: requestedNodeType === 'district' ? requestedNodeId : '',
           churchId: requestedNodeType === 'church' ? requestedNodeId : '',
+        } : platformReassignment ? {
+          organizationId:'', organizationRole:'', unionId:'', conferenceId:'', districtId:'', churchId:'',
         } : organizationReassignment && !effectiveOrganizationId ? {
           organizationId:'', organizationRole:'',
         } : {}),
@@ -611,7 +616,7 @@ export default async function handler(request: Request, response: Response) {
               : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
       const previousOrganizationId = String(existingData.organizationId || '').trim();
-      if ((hierarchyReassignment || organizationReassignment)
+      if ((hierarchyReassignment || platformReassignment || organizationReassignment)
         && previousOrganizationId && previousOrganizationId !== membershipOrganizationId) {
         await db.doc(`organizations/${previousOrganizationId}/members/${uid}`).set({
           active:false, updatedAt:new Date().toISOString(), assignedBy:decoded.uid,
