@@ -63,7 +63,8 @@ test('lesson reader, grading and offline completion follow each guide language',
   assert.ok(app.includes('completeLesson(activeGuide.id, activeLesson.id, activeGuide.language)'));
   assert.ok(app.includes('submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language)'));
   assert.ok(study.includes('uid:firebaseUser.uid, language, guideId, lessonId'));
-  assert.ok(app.includes('${activeGuide.language}:${activeGuide.id}:${lesson.id}'));
+  assert.ok(app.includes('${guide.language}:${guide.id}:${lesson.id}'));
+  assert.match(app,/openStudyItem\(activeGuide,lesson/);
 });
 
 test('published lesson and guide status share server-scoped completion checks',()=>{

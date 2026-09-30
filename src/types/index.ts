@@ -30,6 +30,13 @@ export interface DetailPagesSettings {
   };
 }
 
+export interface AboutContext {
+  scope: 'platform' | 'organization' | 'hierarchy';
+  organizationId?: string;
+  organizationName?: string;
+  inheritedFromPlatform?: boolean;
+}
+
 export interface AppSettings {
   appName: string;
   organizationName: string;
@@ -53,6 +60,8 @@ export interface AppSettings {
   certificateTitle?: string;
   certificateBodyText?: string;
   detailPages?: DetailPagesSettings;
+  /** Resolved at read time so learner-facing About UI can show the correct tenant provenance. */
+  aboutContext?: AboutContext;
   appTagline?: string;
   timezone?: string;
   website?: string;

@@ -28,6 +28,48 @@ async function mayEdit(ctx:TenantContext,data:Record<string,unknown>):Promise<bo
  * lesson bodies. Permissions are enforced on both program and guide records. */
 export async function handleCurriculumPrograms(ctx:TenantContext,
   action:string,body:Record<string,unknown>,targetOrganizationId:string,res:Reply){
+  if(action==='learnerList'){
+    // Learner catalogue reads are server-filtered rather than relying on a
+    // compound client Firestore query that can be rejected by tenant rules.
+    const ids=ctx.tenantType==='hierarchy'&&!ctx.isSuperAdmin
+      ?await accessibleOrganizationIds(ctx)
+      :ctx.organizationId?[ctx.organizationId]:[];
+    const snapshots=ctx.isSuperAdmin
+      ?[await ctx.db.collection('programs').where('published','==',true).get()]
+      :await Promise.all([
+          ...ids.map(orgId=>ctx.db.collection('programs')
+            .where('organizationId','==',orgId).where('published','==',true).get()),
+          ctx.db.collection('programs').where('sharingScope','==','shared')
+            .where('published','==',true).get(),
+        ]);
+    const known=new Map<string,Record<string,unknown>>();
+    for(const snapshot of snapshots)for(const document of snapshot.docs){
+      const data=document.data();
+      const orgId=String(data.organizationId||'').trim();
+      const owned=ctx.isSuperAdmin||ids.includes(orgId);
+      const shared=data.sharingScope==='shared';
+      if(data.archived===true||data.published!==true||(!owned&&!shared))continue;
+      const title=String(data.title||'').trim();
+      if(!title)continue;
+      known.set(document.id,{
+        id:document.id,
+        title,
+        description:String(data.description||''),
+        coverImageUrl:String(data.coverImageUrl||''),
+        guideIds:Array.isArray(data.guideIds)
+          ?data.guideIds.filter((value:unknown):value is string=>
+              typeof value==='string'&&value.length>0).slice(0,100)
+          :[],
+        organizationId:orgId,
+        entryMode:data.entryMode==='sections'?'sections':'lessons',
+        sharingScope:shared?'shared':'organization',
+        published:true,
+        archived:false,
+      });
+    }
+    return res.status(200).json({ok:true,items:[...known.values()]
+      .sort((a,b)=>String(a.title).localeCompare(String(b.title)))});
+  }
   if(action==='list'){
     await requirePermission(ctx,'curriculum','view');
     const ids=ctx.tenantType==='hierarchy'&&!ctx.isSuperAdmin

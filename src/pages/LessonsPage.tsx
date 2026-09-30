@@ -11,6 +11,8 @@ interface Props {
   guides: DiscoverGuide[];
   currentUser: User;
   onBack: () => void;
+  selectedProgramId: string;
+  onSelectProgram: (programId: string) => void;
   onOpenGuide: (guide: DiscoverGuide) => void;
   onOpenLesson: (guide: DiscoverGuide, lesson: Lesson) => void;
   onRefresh: () => Promise<void>;
@@ -23,11 +25,12 @@ function orderedLessons(guide: DiscoverGuide) {
 
 /** Published lessons are supplied by the same scoped Firestore guide loader as
  * the administrator's curriculum studio. No duplicate public content store. */
-export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGuide,onOpenLesson,onRefresh}) => {
+export const LessonsPage: React.FC<Props> = ({
+  guides,currentUser,onBack,selectedProgramId,onSelectProgram,onOpenGuide,onOpenLesson,onRefresh,
+}) => {
   const [refreshing,setRefreshing]=useState(false);
   const [programs,setPrograms]=useState<CurriculumProgram[]>([]);
   const [programError,setProgramError]=useState('');
-  const [selectedProgramId,setSelectedProgramId]=useState('');
   useEffect(()=>{
     let active=true;
     setProgramError('');
@@ -96,7 +99,7 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
         {activeProgram?<div className="vop-program-catalog-open">
           <header>
             <button type="button" className="vop-program-back"
-              onClick={()=>setSelectedProgramId('')}><ArrowLeft size={16}/> All programs</button>
+              onClick={()=>onSelectProgram('')}><ArrowLeft size={16}/> All programs</button>
             <span>{activeProgram.entryMode==='sections'?'Section-first study':'Lesson-first study'}</span>
           </header>
           <div className="vop-program-catalog-heading">
@@ -124,14 +127,14 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
                 .toLowerCase().includes(query.trim().toLowerCase()))
               .map(program=><button type="button" key={program.id}
                 className="vop-program-catalog-card"
-                onClick={()=>setSelectedProgramId(program.id)}>
+                onClick={()=>onSelectProgram(program.id)}>
                 <span className="vop-program-catalog-cover">
                   {program.coverImageUrl?<img src={program.coverImageUrl} alt=""/>:<BookOpen size={27}/>}
                 </span><span className="vop-program-catalog-description">
                   <small>{program.entryMode==='sections'?'STUDY BY SECTION':'STUDY BY LESSON'}</small>
                   <strong>{program.title}</strong>
                   <span>{program.description||'Explore this course.'}</span>
-                  <em>{program.guideIds.length} guides / modules <ChevronRight size={14}/></em>
+                  <em>{program.guideIds.length} {program.guideIds.length===1?'module':'modules'} <ChevronRight size={14}/></em>
                 </span>
               </button>)}
           </div>

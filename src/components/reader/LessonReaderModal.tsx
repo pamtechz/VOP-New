@@ -17,13 +17,14 @@ interface LessonReaderModalProps {
   onPreviousLesson?: () => void;
   onNextLesson?: () => void;
   onOpenQuiz?: (quiz: Lesson) => void;
+  onPageChange?: (pageIndex: number) => void;
   initialPageIndex?: number;
   hasPreviousLesson?: boolean;
   hasNextLesson?: boolean;
 }
 
 export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
-  lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz,
+  lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz, onPageChange,
   hasPreviousLesson = false, hasNextLesson = false, initialPageIndex = 0,
 }) => {
   const language = getActiveLanguage();
@@ -53,6 +54,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   };
 
   useEffect(() => { setCurrentPageIndex(Math.max(0, initialPageIndex)); }, [lesson.id, initialPageIndex]);
+
+  useEffect(() => {
+    onPageChange?.(currentPageIndex);
+  }, [currentPageIndex, lesson.id, onPageChange]);
 
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };

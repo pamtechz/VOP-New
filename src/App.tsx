@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import type {
@@ -14,6 +14,10 @@ import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, sy
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
 import { loadPublicContent } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
+import {
+  learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
+  readLearnerLocation, replaceLearnerLocation, type LearnerLocation,
+} from './services/learnerNavigation';
 import { auth, db } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
@@ -64,7 +68,10 @@ export const App: React.FC = () => {
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [contentRefresh, setContentRefresh] = useState(0);
+  const [contentHydrated,setContentHydrated] = useState(false);
   const appliedDeepLink = useRef(false);
+  const explicitNavigation = useRef(false);
+  const restoredNavigationUid = useRef('');
   useEffect(() => {
     const refresh = () => setContentRefresh(value => value + 1);
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
@@ -77,6 +84,7 @@ export const App: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+  const [activeProgramId,setActiveProgramId] = useState('');
   const [activeGuide, setActiveGuide] = useState<DiscoverGuide | null>(null);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [deepLinkPageIndex, setDeepLinkPageIndex] = useState(0);
@@ -98,6 +106,11 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const hasExplicitRoute = params.has('certificate') || params.has('certificateNumber')
+      || params.get('radio') === '1' || params.get('announcements') === '1'
+      || params.get('events') === '1' || params.get('support') === '1'
+      || Boolean(params.get('guide') || params.get('lesson') || params.get('ref') || params.get('invite'));
+    explicitNavigation.current = hasExplicitRoute;
     if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
     else if (params.get('radio') === '1') setCurrentRoute('radio');
     else if (params.get('announcements') === '1') setCurrentRoute('announcements');
@@ -240,6 +253,7 @@ export const App: React.FC = () => {
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
       setRadioPlaylists(snapshot.radioPlaylists);
+      setContentHydrated(true);
       const deepLinkParams = new URLSearchParams(window.location.search);
       const guideParam = deepLinkParams.get('guide');
       const lessonParam = deepLinkParams.get('lesson');
@@ -253,8 +267,17 @@ export const App: React.FC = () => {
           if (lessonParam) {
             const deepLesson = deepGuide.lessons.find(lesson => lesson.id === lessonParam || lesson.lessonNumber === lessonParam);
             if (deepLesson) {
+              const restoredPage=Number.isFinite(pageParam) ? Math.max(0, pageParam - 1) : 0;
               setActiveLesson(deepLesson);
-              setDeepLinkPageIndex(Number.isFinite(pageParam) ? Math.max(0, pageParam - 1) : 0);
+              setDeepLinkPageIndex(restoredPage);
+              if(currentUser.uid)replaceLearnerLocation(currentUser.uid,{
+                route:'home',guideId:deepGuide.id,guideLanguage:deepGuide.language,
+                lessonId:deepLesson.id,pageIndex:restoredPage,
+              });
+            } else if(currentUser.uid) {
+              replaceLearnerLocation(currentUser.uid,{
+                route:'home',guideId:deepGuide.id,guideLanguage:deepGuide.language,
+              });
             }
           }
         }
@@ -272,6 +295,7 @@ export const App: React.FC = () => {
       saveRadioBroadcasts(snapshot.radioBroadcasts);
     }).catch(error => {
       if (!cancelled) {
+        setContentHydrated(true);
         console.error('VOP public content load failed', error);
         setStudyError(error instanceof Error ? error.message : 'VOP content could not be loaded.');
       }
@@ -365,9 +389,119 @@ export const App: React.FC = () => {
     return()=>{window.clearTimeout(timer);events.forEach(name=>window.removeEventListener(name,reset));};
   }, [currentUser.uid,settings.security?.sessionTimeoutMinutes]);
 
+  const applyLearnerLocation = useCallback((location:LearnerLocation) => {
+    const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin']
+      .includes(String(currentUser.role||''))||['owner','admin'].includes(String(currentUser.organizationRole||''));
+    if(location.route==='admin'&&!privileged)return false;
+    const guide=(location.guideId
+      ?guides.find(item=>item.id===location.guideId
+        && (!location.guideLanguage||item.language===location.guideLanguage))
+      :null)||null;
+    if(location.guideId&&!guide)return false;
+    const lesson=(location.lessonId&&guide
+      ?guide.lessons.find(item=>item.id===location.lessonId)
+      :null)||null;
+    if(location.lessonId&&!lesson)return false;
+    setCurrentRoute(location.route);
+    setActiveProgramId(location.programId||'');
+    setActiveGuide(guide);
+    setActiveLesson(lesson);
+    setDeepLinkPageIndex(lesson
+      ?Math.max(0,Math.min((lesson.contentPages?.length||1)-1,Math.trunc(location.pageIndex||0)))
+      :0);
+    setStudyError('');
+    setIsMenuOpen(false);
+    return true;
+  },[currentUser.role,currentUser.organizationRole,guides]);
+
+  useEffect(()=>{
+    const uid=currentUser.uid;
+    if(!uid){
+      restoredNavigationUid.current='';
+      return;
+    }
+    if(!contentHydrated||explicitNavigation.current||restoredNavigationUid.current===uid)return;
+    const stored=readLearnerLocation(uid);
+    if(stored&&applyLearnerLocation(stored.location)){
+      replaceLearnerLocation(uid,stored.location,stored.depth);
+    }else{
+      const home:LearnerLocation={route:'home'};
+      applyLearnerLocation(home);
+      replaceLearnerLocation(uid,home,0);
+    }
+    restoredNavigationUid.current=uid;
+  },[currentUser.uid,contentHydrated,applyLearnerLocation]);
+
+  useEffect(()=>{
+    const uid=currentUser.uid;
+    if(!uid)return;
+    const pop=(event:PopStateEvent)=>{
+      const stored=learnerLocationFromHistory(uid,event.state);
+      if(stored)applyLearnerLocation(stored.location);
+    };
+    window.addEventListener('popstate',pop);
+    return()=>window.removeEventListener('popstate',pop);
+  },[currentUser.uid,applyLearnerLocation]);
+
+  const rememberLocation=useCallback((location:LearnerLocation,replace=false)=>{
+    if(!currentUser.uid)return;
+    if(replace)replaceLearnerLocation(currentUser.uid,location);
+    else pushLearnerLocation(currentUser.uid,location);
+  },[currentUser.uid]);
+
+  const goBack=useCallback(()=>{
+    setIsMenuOpen(false);
+    setStudyError('');
+    if(currentUser.uid&&learnerHistoryHasPrevious(currentUser.uid)){
+      window.history.back();
+      return;
+    }
+    const home:LearnerLocation={route:'home'};
+    applyLearnerLocation(home);
+    if(currentUser.uid)replaceLearnerLocation(currentUser.uid,home,0);
+  },[currentUser.uid,applyLearnerLocation]);
+
+  const openGuide=useCallback((guide:DiscoverGuide)=>{
+    setStudyError('');
+    setActiveProgramId('');
+    setActiveGuide(guide);
+    setActiveLesson(null);
+    setCurrentRoute('home');
+    rememberLocation({route:'home',guideId:guide.id,guideLanguage:guide.language});
+  },[rememberLocation]);
+
+  const openStudyItem=useCallback((guide:DiscoverGuide,lesson:Lesson,pageIndex?:number,route?:AppRoute)=>{
+    const resumeKey=`${guide.language}:${guide.id}:${lesson.id}`;
+    const desired=pageIndex===undefined
+      ?Math.max(0,Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex??0)||0)
+      :Math.max(0,Math.min((lesson.contentPages?.length||1)-1,Math.trunc(pageIndex)));
+    const destination=route||currentRoute;
+    setStudyError('');
+    if(destination!=='lessons')setActiveProgramId('');
+    setActiveGuide(guide);
+    setActiveLesson(lesson);
+    setDeepLinkPageIndex(desired);
+    rememberLocation({
+      route:destination,
+      ...(destination==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
+      guideId:guide.id,guideLanguage:guide.language,
+      lessonId:lesson.id,pageIndex:desired,
+    });
+  },[activeProgramId,currentRoute,currentUser.progress.lessonResume,rememberLocation]);
+
+  const rememberStudyPage=useCallback((pageIndex:number)=>{
+    if(!activeGuide||!activeLesson)return;
+    rememberLocation({
+      route:currentRoute,
+      ...(currentRoute==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
+      guideId:activeGuide.id,guideLanguage:activeGuide.language,
+      lessonId:activeLesson.id,pageIndex:Math.max(0,Math.trunc(pageIndex)),
+    },true);
+  },[activeGuide,activeLesson,activeProgramId,currentRoute,rememberLocation]);
+
   const orderedActiveLessons = useMemo(() => {
     if (!activeGuide) return [];
-    return [...activeGuide.lessons].sort((a, b) => {
+    return [...activeGuide.lessons].filter(item=>item.type==='Lesson').sort((a, b) => {
       const an = Number.parseFloat(a.lessonNumber);
       const bn = Number.parseFloat(b.lessonNumber);
       if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
@@ -379,6 +513,7 @@ export const App: React.FC = () => {
   const nextLesson = activeLessonIndex >= 0 && activeLessonIndex < orderedActiveLessons.length - 1 ? orderedActiveLessons[activeLessonIndex + 1] : undefined;
 
   const navigate = (route: AppRoute) => {
+    setActiveProgramId('');
     setActiveGuide(null);
     setActiveLesson(null);
     setStudyError('');
@@ -393,18 +528,18 @@ export const App: React.FC = () => {
     if(feature&&settings.features?.[feature]===false){
       setStudyNotice('This module is currently disabled by the VOP platform administrator.');
       setCurrentRoute('home');
+      rememberLocation({route:'home'});
       return;
     }
     setStudyNotice('');
     setCurrentRoute(route);
+    rememberLocation({route});
   };
-  const returnHome = () => navigate('home');
-  const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson) => {
-    setStudyError('');
-    setActiveGuide(guide);
-    const resumeKey = `${guide.language}:${guide.id}:${lesson.id}`;
-    setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0));
-    setActiveLesson(lesson);
+  const openCatalogLesson = (guide: DiscoverGuide, lesson: Lesson) =>
+    openStudyItem(guide,lesson,undefined,currentRoute);
+  const selectCatalogProgram=(programId:string)=>{
+    setActiveProgramId(programId);
+    rememberLocation({route:'lessons',...(programId?{programId}:{})});
   };
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
   const showCourse = currentRoute === 'home' && activeGuide !== null;
@@ -440,46 +575,48 @@ export const App: React.FC = () => {
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
-          {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
-          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={() => setCurrentRoute('profile')} />}
-          {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} onNavigateToCertificates={() => navigate('certificates')} />}
-          {currentRoute === 'resources' && <ResourcesPage books={books} onBack={returnHome} />}
+          {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
+          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
+          {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
+          {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
-            onBack={returnHome} onOpenGuide={guide => {setActiveGuide(guide);setCurrentRoute('home');}}
+            onBack={goBack} selectedProgramId={activeProgramId} onSelectProgram={selectCatalogProgram}
+            onOpenGuide={openGuide}
             onOpenLesson={openCatalogLesson} onRefresh={async () => {
               const latest = await loadFirestoreGuides();
               setGuides(latest);
               saveGuides(latest);
             }}/>}
-          {currentRoute === 'master-guide' && <EngagementPage mode="master-guide" onBack={returnHome}/>}
-          {currentRoute === 'scripture-memory' && <EngagementPage mode="memory" onBack={returnHome}/>}
-          {currentRoute === 'iron-duels' && <EngagementPage mode="duels" onBack={returnHome}/>} 
-          {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={returnHome} />}
-          {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={returnHome} />}
-          {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={returnHome} />}
-          {currentRoute === 'events' && <EventsPage events={events} onBack={returnHome} />}
-          {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={returnHome} />}
-          {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={returnHome} />}
-          {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={returnHome} />}
-          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={returnHome}
+          {currentRoute === 'master-guide' && <EngagementPage mode="master-guide" onBack={goBack}/>}
+          {currentRoute === 'scripture-memory' && <EngagementPage mode="memory" onBack={goBack}/>}
+          {currentRoute === 'iron-duels' && <EngagementPage mode="duels" onBack={goBack}/>} 
+          {currentRoute === 'prayer' && <PrayerPage currentUser={currentUser} prayerRequests={prayerRequests} onBack={goBack} />}
+          {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={goBack} />}
+          {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
+          {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
+          {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
+          {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
+          {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
+          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
               onLogout={() => void firebaseSignOut()} />}
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
-            onBack={() => setActiveGuide(null)} onSelectLesson={(lesson,initialPageIndex) => {
-              setStudyError('');
-              const resumeKey = `${activeGuide.language}:${activeGuide.id}:${lesson.id}`;
-              setDeepLinkPageIndex(initialPageIndex===undefined
-                ? Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)
-                : Math.max(0, Math.min((lesson.contentPages?.length||1)-1,Math.trunc(initialPageIndex))));
-              setActiveLesson(lesson);
-            }} onOpenCertificate={() => navigate('certificates')} />}
-          {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={setActiveGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
+            onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
+              openStudyItem(activeGuide,lesson,initialPageIndex,'home')}
+            onOpenCertificate={() => navigate('certificates')} />}
+          {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={openGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
         </main>
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} />
-      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex} onOpenQuiz={quiz=>{setStudyError('');setActiveLesson(quiz);}} onClose={() => setActiveLesson(null)} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)} onPreviousLesson={() => { if (previousLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${previousLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(previousLesson); } }} onNextLesson={() => { if (nextLesson) { const resumeKey = `${activeGuide.language}:${activeGuide.id}:${nextLesson.id}`; setDeepLinkPageIndex(Math.max(0, Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex ?? 0) || 0)); setActiveLesson(nextLesson); } }} onComplete={async () => {
+      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex}
+        onPageChange={rememberStudyPage}
+        onOpenQuiz={quiz=>openStudyItem(activeGuide,quiz,0,currentRoute)}
+        onClose={goBack} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)}
+        onPreviousLesson={() => { if (previousLesson) openStudyItem(activeGuide,previousLesson,undefined,currentRoute); }}
+        onNextLesson={() => { if (nextLesson) openStudyItem(activeGuide,nextLesson,undefined,currentRoute); }}
+        onComplete={async () => {
         const accepted = await completeLesson(activeGuide.id, activeLesson.id, activeGuide.language);
         if (accepted === 'failed') { setStudyError('Lesson completion was not accepted or could not be safely queued. Check your connection and sign-in status, then retry.'); return false; }
         setStudyError('');
@@ -490,10 +627,10 @@ export const App: React.FC = () => {
           const refreshedUser = await loadFirestoreUser(auth.currentUser.uid).catch(() => null);
           if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); }
         }
-        if (!nextLesson) setActiveLesson(null);
+        if (!nextLesson) goBack();
         return true;
       }} />}
-      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={() => setActiveLesson(null)} hasNextLesson={Boolean(nextLesson)} onContinue={() => { if (nextLesson) setActiveLesson(nextLesson); }} onSubmitScore={async answers => {
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onSubmitScore={async answers => {
         const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language);
         if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');

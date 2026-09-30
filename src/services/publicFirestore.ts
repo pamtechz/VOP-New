@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import { db, auth } from '../lib/firebase';
 import { loadFirestoreGuides } from './firestoreData';
+import { resolveAboutProfile } from './aboutSettings';
 
 export interface PublicContentSnapshot {
   settings: AppSettings;
@@ -163,21 +164,44 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     : ownHierarchyIds.unionId ? 'union_admin:' + ownHierarchyIds.unionId
     : '';
 
-  const systemSettingsSnap = await getDoc(doc(firestore, 'system', 'settings'));
-  const scopedSettingsSnap = organizationId
-    ? await getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
-    : hierarchyTenantId
-      ? await getDoc(doc(firestore, 'tenantSettings', hierarchyTenantId, 'settings', 'settings'))
-      : null;
+  const [systemSettingsSnap, scopedSettingsSnap, scopedOrganizationSnap] = await Promise.all([
+    getDoc(doc(firestore, 'system', 'settings')),
+    organizationId
+      ? getDoc(doc(firestore, 'organizations', organizationId, 'settings', 'settings'))
+      : hierarchyTenantId
+        ? getDoc(doc(firestore, 'tenantSettings', hierarchyTenantId, 'settings', 'settings'))
+        : Promise.resolve(null),
+    organizationId
+      ? getDoc(doc(firestore, 'organizations', organizationId))
+      : Promise.resolve(null),
+  ]);
   const platformSettings = systemSettingsSnap.exists() ? normalizeSettings(systemSettingsSnap.data()) : emptySettings();
   const scopedSettings = scopedSettingsSnap?.exists() ? normalizeSettings(scopedSettingsSnap.data()) : null;
-  const platformDetails = platformSettings.detailPages || emptySettings().detailPages!;
-  const scopedDetails = scopedSettings?.detailPages || emptySettings().detailPages!;
+  const scopedOrganizationName = String(scopedOrganizationSnap?.data()?.name || '').trim();
+  const aboutProfile = scopedSettings
+    ? resolveAboutProfile(platformSettings, scopedSettings, {
+        scope: organizationId ? 'organization' : 'hierarchy',
+        organizationId: organizationId || undefined,
+        organizationName: scopedOrganizationName || undefined,
+      })
+    : {
+        organizationName: platformSettings.organizationName,
+        contactPhone: platformSettings.contactPhone,
+        whatsappNumber: platformSettings.whatsappNumber,
+        contactEmail: platformSettings.contactEmail,
+        website: platformSettings.website,
+        detailPages: platformSettings.detailPages,
+        aboutContext: {
+          scope:'platform' as const,
+          organizationId:organizationId || undefined,
+          organizationName:platformSettings.organizationName || undefined,
+          inheritedFromPlatform:Boolean(organizationId || hierarchyTenantId),
+        },
+      };
   const effectiveSettings: AppSettings = scopedSettings ? {
     ...platformSettings,
     ...scopedSettings,
-    // Product availability and platform security remain authoritative at the
-    // platform layer; tenant settings customize identity, mission and contacts.
+    // Product identity, availability and security remain platform-owned.
     appName: platformSettings.appName || scopedSettings.appName,
     appTagline: platformSettings.appTagline || scopedSettings.appTagline,
     versionLabel: platformSettings.versionLabel || scopedSettings.versionLabel,
@@ -186,23 +210,14 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     features: platformSettings.features,
     security: platformSettings.security,
     notifications: platformSettings.notifications,
-    detailPages: {
-      // Tenant scopes own Ministry & Mission plus Offices & Contact.
-      aboutUsMission: scopedDetails.aboutUsMission,
-      aboutUsHistory: scopedDetails.aboutUsHistory,
-      aboutUsLeadership: scopedDetails.aboutUsLeadership,
-      contactOfficeAddress: scopedDetails.contactOfficeAddress,
-      contactOfficeHours: scopedDetails.contactOfficeHours,
-      contactPhoneNumbers: scopedDetails.contactPhoneNumbers,
-      contactEmails: scopedDetails.contactEmails,
-      contactWhatsAppNumbers: scopedDetails.contactWhatsAppNumbers,
-      socialLinks: scopedDetails.socialLinks,
-      // About the VOP application itself remains platform-owned.
-      aboutAppDescription: platformDetails.aboutAppDescription,
-      aboutAppVersion: platformDetails.aboutAppVersion,
-      aboutAppCredits: platformDetails.aboutAppCredits,
-    },
-  } : platformSettings;
+    // About/contacts resolve organization-first only when that tenant has
+    // actually configured an About profile; otherwise Super Admin's platform
+    // profile is the learner-facing fallback.
+    ...aboutProfile,
+  } : {
+    ...platformSettings,
+    ...aboutProfile,
+  };
 
   const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
     const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;

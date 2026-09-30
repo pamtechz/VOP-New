@@ -1,0 +1,41 @@
+.vop-about-page{min-height:100%;background:#f4f7fb;color:#183b68;padding-bottom:86px}
+.vop-about-hero{background:linear-gradient(135deg,#061f4d 0%,#0a438a 72%,#0d559b 100%);color:#fff;border-bottom:1px solid rgba(255,255,255,.12)}
+.vop-about-hero-inner{width:min(1100px,calc(100% - 34px));margin:0 auto;padding:18px 0 34px}
+.vop-about-back{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 10px;border:1px solid rgba(255,255,255,.18);border-radius:9px;background:rgba(255,255,255,.07);color:#eef6ff;font:inherit;font-size:11px;font-weight:760;cursor:pointer}
+.vop-about-back:hover{background:rgba(255,255,255,.13)}
+.vop-about-hero-content{display:flex;align-items:center;gap:18px;margin-top:24px}
+.vop-about-logo{display:grid;place-items:center;width:78px;height:78px;flex:0 0 78px;border-radius:20px;background:#fff;border:1px solid rgba(255,255,255,.35);box-shadow:0 14px 35px rgba(0,18,54,.22);overflow:hidden;padding:10px}
+.vop-about-logo img{width:100%;height:100%;object-fit:contain}
+.vop-about-title{min-width:0}.vop-about-kicker{display:flex;align-items:center;gap:6px;color:#f4c954;font-size:10px;font-weight:850;letter-spacing:.07em;text-transform:uppercase}
+.vop-about-title h1{margin:5px 0;color:#fff;font-size:clamp(25px,4vw,36px);line-height:1.05;letter-spacing:-.025em}
+.vop-about-title>p{max-width:700px;margin:0;color:#d2e2f5;font-size:12px;line-height:1.55}
+.vop-about-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+.vop-about-meta span{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.09);color:#dbeafe;font-size:9.5px;font-weight:680}
+.vop-about-shell{width:min(1100px,calc(100% - 34px));margin:-14px auto 0}
+.vop-about-source-note{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;padding:10px 12px;border:1px solid #d7e4f3;border-radius:10px;background:#fff;box-shadow:0 5px 20px rgba(15,51,91,.06)}
+.vop-about-source-note svg{flex:0 0 auto;color:#2b6da8;margin-top:1px}.vop-about-source-note div{display:grid;gap:2px}
+.vop-about-source-note strong{font-size:10.5px;color:#204b7d}.vop-about-source-note span{font-size:10px;color:#6a7f98;line-height:1.45}
+.vop-about-tabs{display:flex;align-items:center;gap:7px;padding:7px;margin-bottom:13px;overflow-x:auto;border:1px solid #dfe8f2;border-radius:12px;background:#fff;box-shadow:0 5px 20px rgba(15,51,91,.05)}
+.vop-about-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:1 0 auto;min-height:38px;padding:7px 13px;border:1px solid transparent;border-radius:9px;background:transparent;color:#58718d;font:inherit;font-size:10.5px;font-weight:780;cursor:pointer}
+.vop-about-tabs button:hover{background:#f4f8fd;color:#194f8c}.vop-about-tabs button.active{background:#0b4387;color:#fff;box-shadow:0 4px 12px rgba(11,67,135,.17)}
+.vop-about-panel{display:grid;gap:13px}.vop-about-feature,.vop-about-card,.vop-about-connect{border:1px solid #dfe8f2;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(15,51,91,.045)}
+.vop-about-feature{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;padding:22px}.vop-about-card{padding:18px}
+.vop-about-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#edf5ff;color:#1e63a9}
+.vop-about-feature small,.vop-about-connect small{display:block;margin-bottom:4px;color:#7d8ea3;font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.vop-about-feature h2{margin:0;color:#173e72;font-size:19px}.vop-about-card h3,.vop-about-connect h3{margin:8px 0 6px;color:#1d4777;font-size:14px}
+.vop-about-feature p,.vop-about-card p{margin:7px 0 0;color:#5d728b;font-size:11.5px;line-height:1.7;white-space:pre-line}
+.vop-about-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.vop-about-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.vop-about-facts div{padding:12px;border:1px solid #e5ecf4;border-radius:10px;background:#fff;box-shadow:0 4px 14px rgba(15,51,91,.035);min-width:0}
+.vop-about-facts span,.vop-about-facts strong{display:block}.vop-about-facts span{color:#8392a5;font-size:8.5px;font-weight:780;text-transform:uppercase;letter-spacing:.05em}
+.vop-about-facts strong{margin-top:4px;color:#274d79;font-size:10.5px;overflow-wrap:anywhere}
+.vop-about-hours{display:flex;align-items:flex-start;gap:7px;margin-top:13px;padding-top:11px;border-top:1px solid #edf2f7;color:#6a7f98;font-size:10px;line-height:1.5}
+.vop-about-hours svg{flex:0 0 auto;margin-top:1px}.vop-about-contact-list{display:grid;gap:7px;margin-top:10px}
+.vop-about-contact-list>a{display:flex;align-items:center;gap:8px;min-height:37px;padding:8px 10px;border:1px solid #e4ebf3;border-radius:9px;background:#f9fbfd;color:#24558a;font-size:10.5px;font-weight:720;text-decoration:none;overflow-wrap:anywhere}
+.vop-about-contact-list>a span{min-width:0;overflow-wrap:anywhere}.vop-about-contact-list>a:hover{background:#f0f6fd;border-color:#c5d8ed}
+.vop-about-connect{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px}
+.vop-about-connect>div:last-child{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.vop-about-connect a{display:inline-flex;align-items:center;gap:6px;min-height:35px;padding:7px 11px;border:1px solid #dce6f0;border-radius:9px;background:#fff;color:#24558a;font-size:10.5px;font-weight:760;text-decoration:none}
+.vop-about-connect a.whatsapp{background:#15803d;border-color:#15803d;color:#fff}
+@media(max-width:720px){.vop-about-grid,.vop-about-facts{grid-template-columns:1fr}.vop-about-connect{align-items:flex-start;flex-direction:column}.vop-about-connect>div:last-child{justify-content:flex-start}}
+@media(max-width:520px){.vop-about-hero-inner,.vop-about-shell{width:min(100% - 22px,1100px)}.vop-about-hero-inner{padding-top:12px;padding-bottom:27px}.vop-about-hero-content{align-items:flex-start;gap:12px;margin-top:18px}.vop-about-logo{width:56px;height:56px;flex-basis:56px;border-radius:14px;padding:7px}.vop-about-title h1{font-size:23px}.vop-about-title>p{font-size:10.5px}.vop-about-tabs{justify-content:flex-start}.vop-about-tabs button{flex:0 0 auto}.vop-about-feature{padding:17px}.vop-about-card{padding:15px}}

@@ -377,8 +377,8 @@ test('guide editor persists a learner navigation preference without changing cou
   assert.match(view,/guide\.learnerEntryMode==='sections'/);
   assert.match(view,/vop-guide-direct-section/);
   assert.match(view,/onSelectLesson\(lesson,actualIndex\)/);
-  assert.match(app,/initialPageIndex===undefined/);
+  assert.match(app,/pageIndex===undefined/);
   assert.match(app,/lessonResume/);
   assert.match(view,/completedStudyLessons/);
-  assert.match(view,/isFinalExam/);
+  assert.match(view,/const isFinal=/);
 });
