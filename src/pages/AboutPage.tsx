@@ -183,7 +183,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
                     <MapPin size={18} />
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Headquarters Office</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Ministry Office</h3>
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-4">
                   {details?.contactOfficeAddress || 'Office address has not been configured for this ministry.'}
