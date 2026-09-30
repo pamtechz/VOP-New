@@ -16,7 +16,7 @@ type Program=CurriculumProgramDraft&{
 type Props={
   organizationId:string;
   guides:Guide[];
-  onOpenGuide:(id:string)=>void;
+  onOpenGuide:(id:string,context:{programId:string;programTitle:string;entryMode:'lessons'|'sections'})=>void;
   onCountChange?:(count:number)=>void;
 };
 const blank=(organizationId:string):CurriculumProgramDraft=>({
@@ -246,7 +246,7 @@ export default function ProgramManager({
         {selected.guideIds.map((id,index)=>{
           const guide=guides.find(item=>item.id===id);
           return guide?<button type="button" key={id}
-            onClick={()=>onOpenGuide(id)}>
+            onClick={()=>onOpenGuide(id,{programId:selected.id,programTitle:selected.title,entryMode:selected.entryMode})}>
             <span className="vop-program-seq">{index+1}</span>
             <span><strong>{guide.title}</strong>
               <small>{guide.lessons?.length||0} lessons / assessments · {guide.language.toUpperCase()}</small></span>
