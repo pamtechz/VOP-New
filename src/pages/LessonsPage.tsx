@@ -58,6 +58,10 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
     program.guideIds.some(id=>guides.some(guide=>guide.id===id&&guide.lessons.length>0))),
   [programs,guides]);
   const activeProgram=availablePrograms.find(program=>program.id===selectedProgramId);
+  const assignedGuideIds=useMemo(()=>new Set(availablePrograms.flatMap(program=>program.guideIds)),[availablePrograms]);
+  const standaloneEntries=availablePrograms.length
+    ?entries.filter(({guide})=>!assignedGuideIds.has(guide.id))
+    :entries;
   const programGuides=activeProgram
     ?activeProgram.guideIds.flatMap(id=>guides.filter(guide=>guide.id===id))
     :[];
@@ -133,7 +137,12 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
           </div>
         </>}
       </section>}
-      {!activeProgram&&<>
+      {!activeProgram&&(availablePrograms.length===0||standaloneEntries.length>0)&&<>
+      {availablePrograms.length>0&&<div className="vop-standalone-lessons-head">
+        <div><h2>Standalone study items</h2>
+          <p>Published lessons not currently assigned to one of the courses above.</p></div>
+        <span>{standaloneEntries.length}</span>
+      </div>}
       <div className="vop-lessons-toolbar">
         <label>Language <select value={language} onChange={event=>setLanguage(event.target.value)}>
           <option value="all">All languages</option>{languages.map(lang=><option key={lang} value={lang}>{lang.toUpperCase()}</option>)}
@@ -141,7 +150,7 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
         <label>Content <select value={kind} onChange={event=>setKind(event.target.value as 'all'|'Lesson'|'Test')}>
           <option value="all">All items</option><option value="Lesson">Lessons</option><option value="Test">Assessments</option>
         </select></label>
-        <span role="status">{entries.length} published item{entries.length===1?'':'s'}</span>
+        <span role="status">{standaloneEntries.length} published item{standaloneEntries.length===1?'':'s'}</span>
         <button type="button" className="vop-lessons-refresh" disabled={refreshing} onClick={()=>void(async()=>{
           setRefreshing(true);setRefreshError('');
           try{
@@ -153,7 +162,7 @@ export const LessonsPage: React.FC<Props> = ({guides,currentUser,onBack,onOpenGu
         })()}><RefreshCw size={16}/>{refreshing?'Refreshing…':'Refresh lessons'}</button>
       </div>
       {refreshError&&<div className="vop-lessons-refresh-error" role="alert">{refreshError}</div>}
-      {entries.length ? <div className="vop-lessons-grid">{entries.map(({guide,lesson})=>{
+      {standaloneEntries.length ? <div className="vop-lessons-grid">{standaloneEntries.map(({guide,lesson})=>{
         const state=status(guide,lesson);
         return <article className="vop-material-card vop-lesson-card" key={guide.id+':'+guide.language+':'+lesson.id}>
           <div className="vop-lesson-card-meta"><span>{guide.language.toUpperCase()} · {lesson.type==='Test'?'Assessment':'Lesson'} {lesson.lessonNumber}</span>
