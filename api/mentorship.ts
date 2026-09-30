@@ -265,7 +265,7 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || '').trim();
     const permissionAction =
       ['listStudents','listMentors','listAssignments','getAutomationSettings'].includes(action) ? 'view' :
-      ['assign','saveAutomationSettings','sendMessage','createDraft','sendDraft'].includes(action) ? 'manage' :
+      ['assign','unassign','saveAutomationSettings','sendMessage','createDraft','sendDraft'].includes(action) ? 'manage' :
       ['performance','questionFailures','listConversations','listMyConversations','messages'].includes(action) ? 'read' : '';
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
@@ -313,18 +313,74 @@ export default async function handler(req: Request, res: Response) {
       if (!isMentor(mentor)) throw new Error('The selected account is not configured as a mentor.');
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
       const ref = db.doc(`mentorAssignments/${studentId}`);
-      await ref.set({
-        organizationId: String(student.organizationId || organizationId),
-        studentId,
-        mentorId,
-        status: 'active',
-        assignedAt: FieldValue.serverTimestamp(),
-        assignedBy: decoded.uid,
-        notes: typeof body.notes === 'string' ? body.notes.trim() : '',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      await db.doc(`users/${studentId}`).set({ mentorId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      return res.status(200).json({ ok: true, item: { id: studentId, studentId, mentorId, status: 'active' } });
+      const current = await ref.get();
+      const before = current.exists ? current.data() || {} : {};
+      const currentMentorId = String(before.mentorId || '');
+      const tenantOrganizationId = String(student.organizationId || organizationId);
+      await db.runTransaction(async transaction => {
+        if (current.exists && currentMentorId && currentMentorId !== mentorId) {
+          const history = ref.collection('history').doc(randomUUID());
+          transaction.set(history, {
+            action:'reassigned',
+            organizationId:tenantOrganizationId,
+            studentId,
+            previousMentorId:currentMentorId,
+            mentorId,
+            changedBy:decoded.uid,
+            changedAt:FieldValue.serverTimestamp(),
+            previousAssignedAt:before.assignedAt || null,
+          });
+        } else if (!current.exists || before.status === 'inactive') {
+          const history = ref.collection('history').doc(randomUUID());
+          transaction.set(history, {
+            action:current.exists?'reactivated':'assigned',
+            organizationId:tenantOrganizationId,
+            studentId,mentorId,changedBy:decoded.uid,
+            changedAt:FieldValue.serverTimestamp(),
+          });
+        }
+        transaction.set(ref, {
+          organizationId:tenantOrganizationId,
+          studentId,
+          mentorId,
+          status:'active',
+          assignedAt:FieldValue.serverTimestamp(),
+          assignedBy:decoded.uid,
+          notes:typeof body.notes === 'string' ? body.notes.trim() : '',
+          updatedAt:FieldValue.serverTimestamp(),
+        }, { merge:true });
+        transaction.set(db.doc(`users/${studentId}`), {
+          mentorId, updatedAt:FieldValue.serverTimestamp(),
+        }, { merge:true });
+      });
+      return res.status(200).json({ ok:true, item:{id:studentId,studentId,mentorId,status:'active'} });
+    }
+
+    if (action === 'unassign') {
+      await assertAdmin(db, decoded.uid);
+      const studentId=id(body.studentId);
+      const student=await profile(db,studentId);
+      if(!sameTenant(actor,student,organizationId)||!sameScope(actor,student))throw new Error('You cannot manage this learner.');
+      const ref=db.doc(`mentorAssignments/${studentId}`);
+      const current=await ref.get();
+      if(!current.exists||current.data()?.status==='inactive')throw new Error('This learner does not have an active mentor assignment.');
+      if(String(current.data()?.organizationId||'')!==String(student.organizationId||organizationId))throw new Error('This assignment belongs to another organization.');
+      const mentorId=String(current.data()?.mentorId||'');
+      await db.runTransaction(async transaction=>{
+        transaction.set(ref.collection('history').doc(randomUUID()),{
+          action:'unassigned',organizationId:String(student.organizationId||organizationId),
+          studentId,mentorId,changedBy:decoded.uid,reason:String(body.reason||'').trim().slice(0,2000),
+          changedAt:FieldValue.serverTimestamp(),
+        });
+        transaction.set(ref,{
+          status:'inactive',unassignedAt:FieldValue.serverTimestamp(),unassignedBy:decoded.uid,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        transaction.set(db.doc(`users/${studentId}`),{
+          mentorId:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      });
+      return res.status(200).json({ok:true,item:{id:studentId,studentId,mentorId,status:'inactive'}});
     }
 
     if (action === 'performance') {
