@@ -362,6 +362,12 @@ export const App: React.FC = () => {
   }, [isDarkMode]);
   useEffect(() => {
     applyThemePreference(readThemePreference());
+    const sync=(event:Event)=>{
+      const theme=(event as CustomEvent<{theme?:string}>).detail?.theme;
+      if(theme==='dark'||theme==='light')setIsDarkMode(theme==='dark');
+    };
+    window.addEventListener('vop_theme_changed',sync);
+    return()=>window.removeEventListener('vop_theme_changed',sync);
   }, []);
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
