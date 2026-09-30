@@ -1,4 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
+import { createNotification } from '../../server/notifications.js';
 import { authenticateTenant } from '../../server/tenant.js';
 import { translationKey } from '../../server/localization.js';
 import { isEnglishLocale } from '../../shared/locales.js';
@@ -122,6 +123,15 @@ export default async function handler(req:Request,res:Response){
         submittedAt:old.data()?.submittedAt||FieldValue.serverTimestamp(),
         updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
+      const superAdmins=await db.collection('users').where('role','==','super_admin').limit(25).get();
+      await Promise.all(superAdmins.docs.filter(doc=>doc.id!==uid).map(doc=>createNotification(db,{
+        recipientId:doc.id,type:'invitation',
+        title:'Localization application',
+        body:`${profile.displayName||profile.email||'A VOP member'} applied to help with ${requestedLanguages.join(', ').toUpperCase()} localization.`,
+        actionUrl:'/admin',
+        metadata:{source:'localization-application',applicantUid:uid,languages:requestedLanguages,roles:requestedRoles},
+        createdBy:uid,
+      })));
       return res.status(200).json({ok:true,status:'pending'});
     }
 
