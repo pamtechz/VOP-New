@@ -1,22 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
+import type { AssessmentSubmissionResult } from '../../services/localStudy';
 
 interface QuizModalProps {
   lesson: Lesson;
   guide: DiscoverGuide;
   onClose: () => void;
-  onSubmitScore: (answers: Record<number, number | boolean>) => Promise<number | null>;
+  onSubmitScore: (answers: Record<number, number | boolean>) => Promise<AssessmentSubmissionResult | null>;
   onOpenCertificate: () => void;
   onContinue?: () => void;
   hasNextLesson?: boolean;
   passThreshold: number;
+  maxAttempts?: number;
+  retakeCooldownMinutes?: number;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
   lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false, passThreshold,
+  maxAttempts = 0, retakeCooldownMinutes = 0,
 }) => {
   const questions = lesson.questions ?? [];
   const threshold = passThreshold;
@@ -26,9 +30,20 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
   const [score, setScore] = useState<number | null>(null);
+  const [submission, setSubmission] = useState<AssessmentSubmissionResult | null>(null);
+  const [retakeReady, setRetakeReady] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const question = questions[index];
+
+  useEffect(() => {
+    const retryAt = submission?.retakePolicy.retryAt;
+    if (!retryAt) { setRetakeReady(true); return; }
+    const update = () => setRetakeReady(new Date(retryAt).getTime() <= Date.now());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [submission?.retakePolicy.retryAt]);
 
   const choose = (answer: number | boolean) => {
     if (!validQuiz || Object.hasOwn(answers, index)) return;
@@ -47,20 +62,26 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setSubmitting(true);
     setError('');
     try {
-      const serverScore = await onSubmitScore(answers);
-      if (serverScore === null) {
+      const result = await onSubmitScore(answers);
+      if (result === null) {
         setError('Your assessment could not be verified and saved. Check your connection and sign-in status, then try again.');
         return;
       }
-      setScore(serverScore);
+      setSubmission(result);
+      setScore(result.score);
       setStage('result');
-      if (serverScore >= threshold) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      if (result.passed) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Your assessment could not be saved.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const restart = () => { setAnswers({}); setScore(null); setIndex(0); setError(''); setStage('quiz'); };
+  const restart = () => {
+    if (!retakeReady || submission?.retakePolicy.remainingAttempts === 0) return;
+    setAnswers({}); setScore(null); setSubmission(null); setIndex(0); setError(''); setStage('quiz');
+  };
 
   const progressPercent = questions.length > 0 ? Math.round((Object.keys(answers).length / questions.length) * 100) : 0;
 
@@ -172,6 +193,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 {validThreshold ? `${threshold}%` : 'Not configured'}
               </strong>
             </p>
+            {(maxAttempts > 0 || retakeCooldownMinutes > 0) && <p style={{color:'#64748b',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
+              Retake policy: {maxAttempts > 0 ? `maximum ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'}` : 'unlimited attempts'}
+              {retakeCooldownMinutes > 0 ? ` · ${retakeCooldownMinutes} minute waiting period` : ' · no waiting period'}.
+            </p>}
 
             <div style={{
               display: 'grid', gridTemplateColumns: '1fr 1fr',
@@ -373,23 +398,37 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <p role="status" style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
               {score >= threshold
                 ? `You met the required ${threshold}% pass mark.`
-                : `The pass mark is ${threshold}%. You can retake this test.`}
+                : submission?.retakePolicy.remainingAttempts === 0
+                  ? `The pass mark is ${threshold}%. Your configured attempt limit has been reached.`
+                  : submission?.retakePolicy.retryAt && !retakeReady
+                    ? `The pass mark is ${threshold}%. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
+                    : `The pass mark is ${threshold}%. A retake is available under your organization's policy.`}
             </p>
+            {!score || score < threshold ? <p style={{color:'#64748b',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
+              Attempt {submission?.retakePolicy.attemptsUsed || 1}
+              {submission?.retakePolicy.maxAttempts ? ` of ${submission.retakePolicy.maxAttempts}` : ''}
+              {submission?.retakePolicy.remainingAttempts !== null && submission?.retakePolicy.remainingAttempts !== undefined
+                ? ` · ${submission.retakePolicy.remainingAttempts} remaining` : ''}
+              {(submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes) > 0
+                ? ` · ${submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes} minute wait` : ''}
+            </p> : null}
 
             <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '320px', margin: '0 auto' }}>
-              <button
+              {score < threshold && <button
                 type="button"
                 onClick={restart}
+                disabled={!retakeReady || submission?.retakePolicy.remainingAttempts === 0}
                 style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                   padding: '0.8rem', border: '1.5px solid #002d72',
                   borderRadius: '9999px', background: 'transparent',
                   color: '#002d72', fontWeight: 700, fontSize: '0.88rem',
-                  cursor: 'pointer',
+                  cursor: !retakeReady || submission?.retakePolicy.remainingAttempts === 0 ? 'not-allowed' : 'pointer',
+                  opacity: !retakeReady || submission?.retakePolicy.remainingAttempts === 0 ? 0.55 : 1,
                 }}
               >
-                <RotateCcw size={16} /> Retake Test
-              </button>
+                <RotateCcw size={16} /> {submission?.retakePolicy.remainingAttempts === 0 ? 'Attempt Limit Reached' : retakeReady ? 'Retake Test' : 'Retake Waiting Period'}
+              </button>}
 
               {score >= threshold && hasNextLesson && onContinue && (
                 <button
