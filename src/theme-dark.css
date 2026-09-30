@@ -515,3 +515,22 @@
   .vop-structure-actions-trigger,.vop-structure-actions-popover,
   .vop-structure-quiz,.vop-structure-delete
 ){color:var(--text-secondary)!important}
+
+
+[data-theme="dark"] :is(
+  .vop-org-editor-head,.vop-radio-admin-topbar,.vop-radio-admin-tabs,
+  .vop-radio-editor-head,.vop-reader-page-image
+){
+  background:var(--bg-card)!important;
+  border-color:var(--border-subtle)!important;
+  color:var(--text-primary)!important;
+}
+[data-theme="dark"] .vop-reader-page-title{color:var(--text-primary)!important}
+[data-theme="dark"] .vop-reader-page-copy{color:var(--text-secondary)!important}
+[data-theme="dark"] .vop-radio-admin-dashboard{
+  --studio-border:var(--border-subtle)!important;
+  --studio-text:var(--text-primary)!important;
+  --studio-muted:var(--text-muted)!important;
+}
+[data-theme="dark"] .vop-radio-admin-tabs button{color:var(--text-secondary)!important}
+[data-theme="dark"] .vop-radio-admin-tabs button.active{background:#183a62!important;color:#eef6ff!important}
