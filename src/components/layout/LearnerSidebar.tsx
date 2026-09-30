@@ -34,15 +34,17 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
     ]},
     {name:t('navigation.community','Community'),items:[
       {route:'prayer',label:t('navigation.prayer','Prayer requests'),icon:HeartHandshake},
-      {route:'radio',label:t('navigation.radio','Radio & broadcasts'),icon:Radio},
-      {route:'announcements',label:t('navigation.announcements','Announcements'),icon:Megaphone},
-      {route:'events',label:t('navigation.events','Events'),icon:CalendarDays},
+      ...(settings.features?.radio===false?[]:[{route:'radio' as const,label:t('navigation.radio','Radio & broadcasts'),icon:Radio}]),
+      ...(settings.features?.announcements===false?[]:[
+        {route:'announcements' as const,label:t('navigation.announcements','Announcements'),icon:Megaphone},
+        {route:'events' as const,label:t('navigation.events','Events'),icon:CalendarDays},
+      ]),
       ...(currentUser.role==='student'?[{route:'support' as const,label:t('navigation.support','Mentor support'),icon:MessageCircle}]:[]),
     ]},
     {name:t('navigation.account','Account'),items:[
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
       {route:'personal-settings',label:t('navigation.personal_settings','Personal settings'),icon:Settings},
-      {route:'certificates',label:t('certificates.my_certificate','Certificates'),icon:GraduationCap},
+      ...(settings.features?.certification===false?[]:[{route:'certificates' as const,label:t('certificates.my_certificate','Certificates'),icon:GraduationCap}]),
       {route:'about',label:t('navigation.about','About VOP'),icon:BookOpen},
       ...(isAdmin?[{route:'admin' as const,label:t('navigation.admin','Admin panel'),icon:ShieldCheck}]:[]),
     ]},
