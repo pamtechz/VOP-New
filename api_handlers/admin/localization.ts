@@ -459,7 +459,7 @@ export default async function handler(req:Request,res:Response){
     return res.status(400).json({error:'Unsupported localization action.'});
   }catch(error){
     const message=error instanceof Error?error.message:'Localization request failed.';
-    const forbidden=/only|not assigned|not active|cannot|permission/i.test(message);
+    const forbidden=/only|not assigned|not (?:an )?active|cannot|permission/i.test(message);
     return res.status(forbidden?403:400).json({error:message});
   }
 }
