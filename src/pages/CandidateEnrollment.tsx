@@ -54,8 +54,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
   const loadCandidates=async()=>{
     const response=await adminUsers('list');
     const items=(response.items||[]) as Candidate[];
-    setCandidates(items.filter(item=>
-      item.userType==='learner'||item.role==='student'||item.roleLabel==='Learner'));
+    setCandidates(items.filter(item=>item.userType==='learner'||item.roleLabel==='Learner'));
   };
   const loadOrganizations=async()=>{
     const response=await adminUsers('listOrganizations');
