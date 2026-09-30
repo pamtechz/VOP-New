@@ -687,3 +687,53 @@ test('courses obey tenant reads, API-only writes and private instructor note iso
     await environment.cleanup();
   }
 });
+
+
+test('private learning evidence, attempts and certificates stay isolated across tenants', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const adminDb=adminContext.firestore();
+      await adminDb.doc('users/private-a').set({uid:'private-a',role:'student',organizationId:'private-org-a',organizationRole:'learner'});
+      await adminDb.doc('users/private-b').set({uid:'private-b',role:'student',organizationId:'private-org-b',organizationRole:'learner'});
+      await adminDb.doc('organizations/private-org-a').set({id:'private-org-a',status:'active'});
+      await adminDb.doc('organizations/private-org-b').set({id:'private-org-b',status:'active'});
+      await adminDb.doc('organizations/private-org-a/members/private-a').set({uid:'private-a',organizationId:'private-org-a',role:'learner',active:true});
+      await adminDb.doc('organizations/private-org-b/members/private-b').set({uid:'private-b',organizationId:'private-org-b',role:'learner',active:true});
+      await adminDb.doc('users/private-a/assessmentAttempts/attempt-a').set({
+        candidateId:'private-a',userId:'private-a',organizationId:'private-org-a',
+        guideId:'guide-a',lessonId:'test-a',language:'en',score:85,passed:true,
+      });
+      await adminDb.doc('masterGuidePortfolios/private-a').set({
+        learnerId:'private-a',organizationId:'private-org-a',
+        evidence:[{id:'evidence-a',requirementId:'req-a',url:'https://example.org/private'}],
+        signoffs:[{id:'approval-a',requirementId:'req-a',decision:'approved',evaluatorId:'mentor-a'}],
+      });
+      await adminDb.doc('certificates/private-cert-a').set({
+        candidateId:'private-a',organizationId:'private-org-a',
+        certificateNumber:'PRIVATE-CERT-A',status:'Certified',
+      });
+    });
+    const learnerA=environment.authenticatedContext('private-a').firestore();
+    const learnerB=environment.authenticatedContext('private-b').firestore();
+    await assertSucceeds(learnerA.doc('users/private-a/assessmentAttempts/attempt-a').get());
+    await assertFails(learnerB.doc('users/private-a/assessmentAttempts/attempt-a').get());
+    await assertFails(learnerB.doc('users/private-a/assessmentAttempts/attempt-a').update({score:100}));
+    await assertFails(learnerB.doc('users/private-a/assessmentAttempts/attempt-a').delete());
+
+    await assertFails(learnerA.doc('masterGuidePortfolios/private-a').get(),
+      'Portfolio evidence/signatures are API-only private records.');
+    await assertFails(learnerB.doc('masterGuidePortfolios/private-a').get());
+    await assertFails(learnerB.doc('masterGuidePortfolios/private-a').update({status:'approved'}));
+
+    await assertSucceeds(learnerA.doc('certificates/private-cert-a').get());
+    await assertFails(learnerB.doc('certificates/private-cert-a').get());
+    await assertFails(learnerB.doc('certificates/private-cert-a').update({status:'Certified'}));
+  } finally {
+    await environment.cleanup();
+  }
+});
