@@ -25,6 +25,14 @@ const ordered=(items:Lesson[])=>[...items].sort((a,b)=>{
   return a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true,sensitivity:'base'});
 });
 
+function readMinutes(pages:NonNullable<Lesson['contentPages']>,fallback=1){
+  const words=pages.reduce((total,page)=>{
+    const text=[page.title,page.content,page.keyTakeaway,page.scriptureQuote?.text].filter(Boolean).join(' ');
+    return total+text.trim().split(/\s+/).filter(Boolean).length;
+  },0);
+  return words>0?Math.max(1,Math.ceil(words/220)):Math.max(1,fallback);
+}
+
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   guide,currentUser,onBack,onSelectLesson,onOpenCertificate,
 }) => {
@@ -40,6 +48,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     // reader. Only guide-level or legacy unanchored assessments belong here.
     return attachment==='guide'||(!item.attachedLessonId&&!['lesson','chapter','section','block'].includes(attachment));
   }),[assessments]);
+  const totalSections=useMemo(()=>studyLessons.reduce((sum,lesson)=>
+    sum+(lesson.chapters||[]).reduce((chapterTotal,chapter)=>chapterTotal+chapter.sections.length,0),0),[studyLessons]);
 
   const {certificateEligible}=calculateCurriculumProgress(
     getStoredGuides(),currentUser,threshold,guide.language,
@@ -51,6 +61,24 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     lessonIsComplete(guide,lesson,currentUser,threshold)).length;
   const progressPercent=studyLessons.length
     ?Math.round(completedCount*100/studyLessons.length):0;
+
+  const attachedAssessments=(lesson:Lesson,type:'lesson'|'chapter'|'section'|'block',anchorId='')=>
+    assessments.filter(item=>item.attachedLessonId===lesson.id
+      && String(item.attachmentType||'lesson')===type
+      && (type==='lesson'||item.anchorId===anchorId));
+
+  const inlineAssessment=(assessment:Lesson,label:string)=>{
+    const score=lessonScoreForDisplay(guide,assessment,currentUser);
+    const hasScore=typeof score==='number'&&Number.isFinite(score);
+    const passMark=Number.isFinite(Number(assessment.assessmentPassThreshold))
+      ?Number(assessment.assessmentPassThreshold):threshold;
+    const passed=hasScore&&Number.isFinite(passMark)&&score!>=passMark;
+    return <button type="button" key={assessment.id} className={'vop-section-test '+(passed?'passed':hasScore?'attempted':'')}
+      onClick={()=>onSelectLesson(assessment)} aria-label={label+': '+assessment.title}>
+      <FileQuestion size={14}/><span>{label}</span>
+      {hasScore&&<em>{passed?'Passed':'Score'} {Math.round(score!)}%</em>}
+    </button>;
+  };
 
   const assessmentCard=(assessment:Lesson)=>{
     const isFinal=assessment.attachmentType==='guide'&&assessment.assessmentKind==='final_exam';
