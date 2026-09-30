@@ -1237,41 +1237,42 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             {loading?<div className="vop-empty">Loading module content…</div>
             :programContext?.entryMode==='sections'&&moduleLessons.some(item=>item.type!=='Test')
               ?<div className="vop-admin-section-first">
-                {moduleLessons.filter(item=>item.type!=='Test').slice().sort((a,b)=>
-                  String(a.lessonNumber||'').localeCompare(String(b.lessonNumber||''),undefined,{numeric:true}))
-                  .map(item=>{
-                    const chapters=Array.isArray(item.chapters)?item.chapters as CurriculumChapter[]:[];
-                    return <article key={String(item.id)} className="vop-admin-section-lesson">
-                      <header>
-                        <div><span>LESSON {String(item.lessonNumber||'')}</span>
-                          <h3>{String(item.title||'Untitled lesson')}</h3>
-                          <small>{chapters.reduce((total,chapter)=>total+chapter.sections.length,0)} learner pages · {chapters.length} chapters</small>
-                        </div>
-                        <span className={'vop-status '+(item.published===true?'published':'draft')}>
-                          {item.published===true?'Published':'Draft'}
-                        </span>
-                        <button type="button" className="vop-secondary" disabled={item.canEdit===false}
-                          onClick={()=>openModuleLesson(item)}><Edit3 size={15}/> Edit lesson</button>
-                      </header>
-                      {chapters.length?<div className="vop-admin-section-chapters">
-                        {chapters.map((chapter,chapterIndex)=><details key={chapter.id}
-                          className="vop-admin-section-chapter" open={chapterIndex===0}>
-                          <summary><BookOpen size={15}/><strong>{chapter.title}</strong>
-                            <small>{chapter.sections.length} {chapter.sections.length===1?'page':'pages'}</small>
-                            <ChevronRight size={15}/>
-                          </summary>
-                          <div>
-                            {chapter.sections.map((section,index)=><button type="button" key={section.id}
-                              disabled={item.canEdit===false}
-                              onClick={()=>openModuleLesson(item,section.id)}>
-                              <span>{index+1}</span><span>{section.title}</span>
-                              <Edit3 size={14}/>
-                            </button>)}
-                          </div>
-                        </details>)}
-                      </div>:<p className="vop-admin-section-empty">This lesson is still using legacy content. Open it to convert it to authored section pages.</p>}
-                    </article>;
-                  })}
+                <div className="vop-admin-direct-sections-head">
+                  <div><span>SECTION-FIRST COURSE</span><h3>Learner pages in reading order</h3>
+                    <p>The lesson remains the progress/certification owner, but it is not an extra navigation step in this course.</p></div>
+                  <span>{moduleLessons.filter(item=>item.type!=='Test').reduce((total,item)=>
+                    total+(Array.isArray(item.chapters)
+                      ?(item.chapters as CurriculumChapter[]).reduce((count,chapter)=>count+chapter.sections.length,0):0),0)} pages</span>
+                </div>
+                <div className="vop-admin-direct-sections-list">
+                  {moduleLessons.filter(item=>item.type!=='Test').slice().sort((a,b)=>
+                    String(a.lessonNumber||'').localeCompare(String(b.lessonNumber||''),undefined,{numeric:true}))
+                    .flatMap(item=>{
+                      const chapters=Array.isArray(item.chapters)?item.chapters as CurriculumChapter[]:[];
+                      return chapters.flatMap((chapter,chapterIndex)=>chapter.sections.map((section,sectionIndex)=>({
+                        item,chapter,chapterIndex,section,sectionIndex,
+                      })));
+                    }).map((entry,index)=><button type="button" key={String(entry.item.id)+':'+entry.section.id}
+                      className="vop-admin-direct-section" disabled={entry.item.canEdit===false}
+                      onClick={()=>openModuleLesson(entry.item,entry.section.id)}>
+                      <span className="vop-admin-direct-section-number">{index+1}</span>
+                      <span className="vop-admin-direct-section-copy">
+                        <small>{entry.chapter.title} · Lesson {String(entry.item.lessonNumber||'')} · {String(entry.item.title||'Untitled lesson')}</small>
+                        <strong>{entry.section.title}</strong>
+                        <em>{entry.section.document?.length||entry.section.blocks.length} content blocks</em>
+                      </span>
+                      <span className={'vop-status '+(entry.item.published===true?'published':'draft')}>
+                        {entry.item.published===true?'Published':'Draft'}
+                      </span>
+                      <Edit3 size={14}/>
+                    </button>)}
+                </div>
+                {moduleLessons.filter(item=>item.type!=='Test'&&(!Array.isArray(item.chapters)||item.chapters.length===0))
+                  .map(item=><button key={String(item.id)} type="button" className="vop-admin-section-legacy"
+                    disabled={item.canEdit===false} onClick={()=>openModuleLesson(item)}>
+                    <FileText size={16}/><span><strong>{String(item.title||'Untitled lesson')}</strong>
+                      <small>Legacy lesson · open once to convert it to chapter/section pages</small></span><ChevronRight size={15}/>
+                  </button>)}
                 {moduleLessons.some(item=>item.type==='Test')&&<button type="button"
                   className="vop-admin-section-assessments"
                   onClick={()=>{setQuizPlacement(null);setTab('quizzes');onTabChange?.('quizzes');}}>
