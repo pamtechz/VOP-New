@@ -18,4 +18,5 @@ export function persistThemePreference(theme:VopTheme){
   applyThemePreference(theme);
   if(typeof window==='undefined')return;
   try{window.localStorage.setItem(KEY,theme);}catch{/* storage unavailable */}
+  window.dispatchEvent(new CustomEvent('vop_theme_changed',{detail:{theme}}));
 }
