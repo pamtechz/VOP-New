@@ -192,7 +192,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       ]
     : [
         {id:'general',label:isHierarchyAdmin ? 'Tenant Profile' : 'Organisation Profile',icon:Building2},
-        {id:'notifications',label:'Notifications',icon:Bell},
       ];
 
   useEffect(() => {
@@ -434,7 +433,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const canSee = (id: AdminTab) => id === 'engagement'
       ? ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'))
       : permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
+    const featureForTab:Partial<Record<AdminTab,keyof NonNullable<ExtendedAppSettings['features']>>> = {
+      candidates:'candidatesModule',curriculum:'curriculumStudio',translations:'translations',
+      radio:'radio',announcements:'announcements',events:'announcements',certification:'certification',
+    };
     return NAV.filter(item => {
+      const feature=featureForTab[item.id];
+      if(feature&&settings?.features?.[feature]===false)return false;
       if (!canSee(item.id)) return false;
       if (item.id === 'languages' && !isSuperAdmin && !(['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId))) return false;
       const role = String(currentUser.role || '');
@@ -444,7 +449,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
       return true;
     }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
-  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, isSuperAdmin]);
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
@@ -590,6 +595,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     });
   };
 
+  const updateDetailPages = (patch: Partial<NonNullable<ExtendedAppSettings['detailPages']>>) => {
+    if (!settings) return;
+    const current = settings.detailPages || {
+      aboutUsMission:'', aboutUsHistory:'', aboutUsLeadership:'',
+      aboutAppDescription:'', aboutAppVersion:'', aboutAppCredits:'',
+      contactOfficeAddress:'', contactOfficeHours:'',
+      contactPhoneNumbers:[], contactEmails:[], contactWhatsAppNumbers:[], socialLinks:{},
+    };
+    setSettings({...settings, detailPages:{...current,...patch}});
+  };
+  const splitSettingLines = (value:string) => value.split(/\r?\n/).map(item=>item.trim()).filter(Boolean);
+
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!settings) return;
@@ -607,18 +624,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const toggleFeature = async (key: keyof NonNullable<ExtendedAppSettings['features']>) => {
     if (!settings) return;
     const current = settings.features ?? {
-      candidatesModule: false,
-      curriculumStudio: false,
-      translations: false,
-      radio: false,
-      announcements: false,
-      certification: false,
+      candidatesModule: true,
+      curriculumStudio: true,
+      translations: true,
+      radio: true,
+      announcements: true,
+      certification: true,
     };
     const next: ExtendedAppSettings = {
       ...settings,
       features: {
         ...current,
-        [key]: !Boolean(current[key]),
+        [key]: current[key] === false,
       },
     };
     setSettings(next);
@@ -835,16 +852,28 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             <div className="vop-field"><label>Website</label><input value={settings.website || ''} onChange={e=>setSettings({...settings,website:e.target.value})}/></div>
             <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>
           </div>
+
+          <div className="vop-settings-about-grid">
+            <section className="vop-settings-about-card">
+              <div className="vop-section-title"><div><h3>About Ministry & Mission</h3><p>This content belongs to the current platform, union, conference, district, church or organisation scope.</p></div></div>
+              <div className="vop-field"><label>Mission & purpose</label><textarea rows={5} value={settings.detailPages?.aboutUsMission || ''} onChange={e=>updateDetailPages({aboutUsMission:e.target.value})} placeholder="Describe this ministry's mission and purpose."/></div>
+              <div className="vop-field"><label>Heritage & history</label><textarea rows={4} value={settings.detailPages?.aboutUsHistory || ''} onChange={e=>updateDetailPages({aboutUsHistory:e.target.value})} placeholder="Describe the history of this ministry in your local scope."/></div>
+              <div className="vop-field"><label>Ministry leadership</label><textarea rows={4} value={settings.detailPages?.aboutUsLeadership || ''} onChange={e=>updateDetailPages({aboutUsLeadership:e.target.value})} placeholder="Describe the responsible ministry team or leadership. A named director is optional."/></div>
+            </section>
+            <section className="vop-settings-about-card">
+              <div className="vop-section-title"><div><h3>Offices & Contact</h3><p>Learners in this scope see these local office and contact details on the About page.</p></div></div>
+              <div className="vop-field"><label>Office / ministry address</label><textarea rows={3} value={settings.detailPages?.contactOfficeAddress || ''} onChange={e=>updateDetailPages({contactOfficeAddress:e.target.value})} placeholder="Physical or postal address"/></div>
+              <div className="vop-field"><label>Office hours</label><textarea rows={2} value={settings.detailPages?.contactOfficeHours || ''} onChange={e=>updateDetailPages({contactOfficeHours:e.target.value})} placeholder="e.g. Monday–Thursday 08:00–17:00"/></div>
+              <div className="vop-field"><label>Phone numbers <small>(one per line)</small></label><textarea rows={3} value={(settings.detailPages?.contactPhoneNumbers || []).join('\n')} onChange={e=>updateDetailPages({contactPhoneNumbers:splitSettingLines(e.target.value)})}/></div>
+              <div className="vop-field"><label>Email addresses <small>(one per line)</small></label><textarea rows={3} value={(settings.detailPages?.contactEmails || []).join('\n')} onChange={e=>updateDetailPages({contactEmails:splitSettingLines(e.target.value)})}/></div>
+              <div className="vop-field"><label>WhatsApp numbers <small>(one per line)</small></label><textarea rows={3} value={(settings.detailPages?.contactWhatsAppNumbers || []).join('\n')} onChange={e=>updateDetailPages({contactWhatsAppNumbers:splitSettingLines(e.target.value)})}/></div>
+            </section>
+          </div>
 {isSuperAdmin && <>          <div style={{height:18}} />
           <div className="vop-section-title"><div><h3>System Options</h3><p>Configuration is securely managed.</p></div></div>
           <div className="vop-setting-list">
             {[
-              {key:'allowRegistrations',label:'Allow new registrations',help:'Permit new candidate accounts.'},
-              {key:'requireApproval',label:'Require admin approval',help:'Require an administrator to approve applicable records.'},
-              {key:'enableEmailNotifications',label:'Enable email notifications',help:'Enable configured notification workflows.'},
-              {key:'showChurchInfo',label:'Show church information',help:'Expose configured church information to the application.'},
-              {key:'enablePwa',label:'Enable offline access (PWA)',help:'Enable the configured offline application mode.'},
-              {key:'maintenanceMode',label:'Maintenance mode',help:'Temporarily restrict access to the application.'},
+              {key:'maintenanceMode',label:'Maintenance mode',help:'When saved, non-administrative signed-in users are sent to a maintenance screen while administrators retain access.'},
             ].map(option=>{const on=Boolean(settings.systemOptions?.[option.key as keyof NonNullable<ExtendedAppSettings['systemOptions']>]);return <div className="vop-setting-row" key={option.key}><div><div className="vop-setting-name">{option.label}</div><div className="vop-setting-help">{option.help}</div></div><Toggle on={on} onClick={()=>setSettings({...settings,systemOptions:{...settings.systemOptions,[option.key]:!on}} as ExtendedAppSettings)}/></div>;})}
           </div>
 </>}          <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" disabled={settingsSaving} type="submit"><Save size={17}/>{settingsSaving?'Saving…':'Save Settings'}</button></div>
@@ -858,20 +887,18 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             <div className="vop-section-title"><div><h3>System Information</h3><p>Current application configuration state.</p></div></div>
             <div className="vop-setting-list"><div className="vop-setting-row"><span className="vop-setting-name">Languages</span><strong>{languages.length}</strong></div><div className="vop-setting-row"><span className="vop-setting-name">Lessons</span><strong>{totalLessons}</strong></div><div className="vop-setting-row"><span className="vop-setting-name">Candidates</span><strong>{candidates.length}</strong></div></div>
           </div>
-          <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>Use configuration controls carefully. Destructive data operations are intentionally not exposed by this screen.</p><button type="button" onClick={()=>showMessage('No destructive reset was performed.')}>Reset to Defaults</button></div>
+          <div className="vop-card vop-section-card"><div className="vop-section-title"><div><h3>Configuration safety</h3><p>Destructive resets are intentionally not exposed as fake controls. Changes on this page persist only when you use the relevant Save action.</p></div></div></div>
         </div>
       </div>}
       {isSuperAdmin && settingsSubtab === 'features' && <div className="vop-grid-2">
-        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=Boolean(settings.features?.[item.key]);return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
-        <div className="vop-danger"><h3><AlertTriangle size={18} style={{verticalAlign:'middle',marginRight:6}}/>Danger Zone</h3><p>These controls do not delete application data. Use the dedicated administrative workflows for destructive operations.</p><button type="button" onClick={()=>showMessage('No destructive action was performed.')}>Reset All Data</button></div>
+        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>Feature Toggles</h2><p>Enable or disable configured modules.</p></div></div><div className="vop-setting-list">{featureRows.map(item=>{const Icon=item.icon;const on=settings.features?.[item.key] !== false;return <div className="vop-setting-row" key={item.key}><div style={{display:'flex',alignItems:'center',gap:10}}><Icon size={19}/><div><div className="vop-setting-name">{item.label}</div><div className="vop-setting-help">Feature availability is securely managed.</div></div></div><Toggle on={on} onClick={()=>void toggleFeature(item.key)}/></div>;})}</div></div>
+        <div className="vop-card vop-section-card"><div className="vop-section-title"><div><h3>Module policy</h3><p>Disabling a module hides it from learner navigation, blocks direct learner routes and suppresses its public content feed without deleting stored records.</p></div></div></div>
       </div>}
       {isSuperAdmin && settingsSubtab === 'appInfo' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>App Information</h2><p>Manage public application identity and version metadata.</p></div></div>
         <div className="vop-form-grid">
           <div className="vop-field"><label>School name</label><input value={settings.schoolName} onChange={e=>setSettings({...settings,schoolName:e.target.value})}/></div>
           <div className="vop-field"><label>Version label</label><input value={settings.versionLabel || ''} onChange={e=>setSettings({...settings,versionLabel:e.target.value})}/></div>
-          <div className="vop-field"><label>Director name</label><input value={settings.directorName} onChange={e=>setSettings({...settings,directorName:e.target.value})}/></div>
-          <div className="vop-field"><label>Director title</label><input value={settings.directorTitle} onChange={e=>setSettings({...settings,directorTitle:e.target.value})}/></div>
           <div className="vop-field"><label>Contact phone</label><input value={settings.contactPhone} onChange={e=>setSettings({...settings,contactPhone:e.target.value})}/></div>
           <div className="vop-field"><label>WhatsApp number</label><input value={settings.whatsappNumber} onChange={e=>setSettings({...settings,whatsappNumber:e.target.value})}/></div>
           <div className="vop-field"><label>Theme color</label><input type="text" value={settings.themeColor || ''} onChange={e=>setSettings({...settings,themeColor:e.target.value})} placeholder="CSS color"/></div>
@@ -880,11 +907,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>{settingsSaving?'Saving…':'Save App Information'}</button></div>
       </form>}
 
-      {isSuperAdmin && settingsSubtab === 'services' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
-        <div className="vop-section-title"><div><h2>Services</h2><p>Operational services are configured securely outside the administrator interface.</p></div></div>
-           <div className="vop-setting-list">
-             
-           </div></form>}
+      {isSuperAdmin && settingsSubtab === 'services' && <div className="vop-card vop-form-card">
+        <div className="vop-section-title"><div><h2>Runtime Services</h2><p>Live browser/deployment capabilities. Secrets and provider credentials remain server-side and are never editable here.</p></div></div>
+        <div className="vop-setting-list">
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Firebase authentication</div><div className="vop-setting-help">Required for user and administrator sessions.</div></div><span className={'vop-status '+(auth?'enabled':'disabled')}>{auth?'Available':'Unavailable'}</span></div>
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Secure context</div><div className="vop-setting-help">HTTPS is required for protected browser capabilities and production use.</div></div><span className={'vop-status '+(window.isSecureContext?'enabled':'disabled')}>{window.isSecureContext?'Secure':'Not secure'}</span></div>
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Offline service worker</div><div className="vop-setting-help">Reports whether this browser can run the installed PWA service worker.</div></div><span className={'vop-status '+('serviceWorker' in navigator?'enabled':'disabled')}>{'serviceWorker' in navigator?'Supported':'Unsupported'}</span></div>
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Browser notifications</div><div className="vop-setting-help">In-app notifications work independently; this reports browser notification capability only.</div></div><span className={'vop-status '+('Notification' in window?'enabled':'disabled')}>{'Notification' in window?'Supported':'Unsupported'}</span></div>
+        </div>
+      </div>}
 
       {isSuperAdmin && settingsSubtab === 'security' && <form className="vop-card vop-form-card" onSubmit={saveSettings}>
         <div className="vop-section-title"><div><h2>Security</h2><p>Application-level security preferences. Secrets remain server-side.</p></div></div>
@@ -892,10 +923,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <div className="vop-field"><label>Session timeout (minutes)</label><input type="number" min="5" max="1440" value={Number(settings.security?.sessionTimeoutMinutes ?? 60)} onChange={e=>setSettings({...settings,security:{...settings.security,sessionTimeoutMinutes:Number(e.target.value)}})} /></div>
         </div>
         <div className="vop-setting-list">
-          {[
-            ['allowMultipleSessions','Allow multiple sessions'],
-            ['enforceSecureConnections','Require secure connections'],
-          ].map(([key,label])=>{const on=Boolean(settings.security?.[key as 'allowMultipleSessions'|'enforceSecureConnections']);return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">Stored as configuration only; authentication enforcement remains controlled by the deployment.</div></div><Toggle on={on} onClick={()=>setSettings({...settings,security:{...settings.security,[key]:!on}})}/></div>;})}
+          <div className="vop-setting-row"><div><div className="vop-setting-name">HTTPS enforcement</div><div className="vop-setting-help">Enforced by the production host, not by a cosmetic application switch.</div></div><span className={'vop-status '+(window.isSecureContext?'enabled':'disabled')}>{window.isSecureContext?'Active':'Check deployment'}</span></div>
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Session policy</div><div className="vop-setting-help">The configured inactivity timeout is enforced in the signed-in application for non-administrative and administrative sessions.</div></div><span className="vop-status enabled">Enforced</span></div>
         </div>
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Security Settings</button></div>
       </form>}
@@ -904,11 +933,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className="vop-section-title"><div><h2>Notifications</h2><p>Configure which notification categories the system may use.</p></div></div>
         <div className="vop-setting-list">
           {[
-            ['emailEnabled','Email notifications'],
-            ['enrollmentNotifications','Enrollment notifications'],
-            ['announcementNotifications','Announcement notifications'],
-            ['certificateNotifications','Certificate notifications'],
-          ].map(([key,label])=>{const on=Boolean(settings.notifications?.[key as keyof NonNullable<ExtendedAppSettings['notifications']>]);return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">This preference does not send email by itself; a configured notification service is required.</div></div><Toggle on={on} onClick={()=>setSettings({...settings,notifications:{...settings.notifications,[key]:!on}})}/></div>;})}
+            ['announcementNotifications','Announcement & event in-app notifications'],
+          ].map(([key,label])=>{const on=settings.notifications?.[key as keyof NonNullable<ExtendedAppSettings['notifications']>] !== false;return <div className="vop-setting-row" key={key}><div><div className="vop-setting-name">{label}</div><div className="vop-setting-help">Controls real publication fan-out to organization members when announcements and events are published.</div></div><Toggle on={on} onClick={()=>setSettings({...settings,notifications:{...settings.notifications,[key]:!on}})}/></div>;})}
         </div>
         <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="vop-primary" type="submit" disabled={settingsSaving}><Save size={17}/>Save Notification Settings</button></div>
       </form>}
