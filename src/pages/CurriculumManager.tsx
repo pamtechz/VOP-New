@@ -985,14 +985,14 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
           </div>
         </div>
 
-        <div className={'vop-editor-save-status '+(saving?'saving':message?'saved':editorDirty?'dirty':editor.id?'saved':'idle')}
+        <div className={'vop-editor-save-status '+(saving?'saving':editorDirty?'dirty':message||editor.id?'saved':'idle')}
           role="status" aria-live="polite">
           {saving
             ? <><LoaderCircle className="vop-save-spin" size={15}/><span>{tx('common.saving','Saving changes…')}</span></>
-            : message
-              ? <><CheckCircle size={15}/><span>{message}</span></>
-              : editorDirty
-                ? <><Save size={15}/><span>{tx('curriculum.unsavedChanges','Unsaved changes')}</span></>
+            : editorDirty
+              ? <><Save size={15}/><span>{tx('curriculum.unsavedChanges','Unsaved changes')}</span></>
+              : message
+                ? <><CheckCircle size={15}/><span>{message}</span></>
                 : editor.id
                   ? <><CheckCircle size={15}/><span>{tx('curriculum.allChangesSaved','All changes saved')}</span></>
                   : <><Save size={15}/><span>{tx('curriculum.notSavedYet','Not saved yet')}</span></>}
