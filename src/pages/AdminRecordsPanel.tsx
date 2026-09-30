@@ -18,6 +18,7 @@ import { isEnglishLocale } from '../../shared/locales';
 import { getUiLocale, translationSourceLabel, getTranslation } from '../services/i18n';
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { MediaPlayer } from '../components/media/MediaPlayer';
+import { ModalLayer } from '../components/layout/ModalLayer';
 
 const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), undefined, fallback);
 
@@ -637,13 +638,13 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           {visibleRecords.length===0 && <div className="vop-empty">No {primaryTitle.toLowerCase()} records are configured.</div>}
         </div>
       </div>
-      {editorOpen && <div className="vop-admin-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setEditorOpen(false)}}>
+      {editorOpen && <ModalLayer><div className="vop-admin-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setEditorOpen(false)}}>
         <form className="vop-admin-editor-modal" onSubmit={save}>
           <div className="vop-section-title"><div><h2>{actionLabel}</h2><p>Changes are saved securely to the configured content store.</p></div><button type="button" className="vop-icon-button" onClick={()=>setEditorOpen(false)} aria-label="Close"><X size={18}/></button></div>
           <div className="vop-admin-editor-scroll"><Fields kind={kind} form={form} setForm={setForm} records={[...records, ...relatedRecords]}/></div>
           <div style={{display:'flex',gap:9,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={()=>{setEditorOpen(false);setEditingId(null);setForm(blankForm(kind))}}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" style={{flex:1,justifyContent:'center'}} disabled={saving}><Save size={16}/>{saving?'Saving…':actionLabel}</button></div>
         </form>
-      </div>}
+      </div></ModalLayer>}
     </div>
   );
 };
@@ -821,12 +822,12 @@ function AnnouncementAdminDashboard({
         const status=item.archived?'Archived':item.scheduledAt&&item.published!==true?'Scheduled':item.published?'Published':'Draft';
         return <tr key={item.id}><td>{index+1}</td><td><strong>{valueOf(item,'title')||'Untitled'}</strong><div className="vop-row-desc">{valueOf(item,'description')}</div></td><td><span className="vop-ann-tag">{valueOf(item,'tag')||'Uncategorized'}</span></td><td>{valueOf(item,'targetAudience')||'All Users'}</td><td><span className={'vop-status '+(status==='Published'?'enabled':status==='Scheduled'?'review':'disabled')}>{status}</span></td><td>{valueOf(item,'scheduledAt')||valueOf(item,'publishedAt')||'—'}</td><td><div style={{display:'flex',gap:6}}><button className="vop-actions" type="button" disabled={!canUpdate || item.canEdit === false} onClick={()=>openAnnouncementEdit(item)}><Edit3 size={15}/></button><button className="vop-actions" type="button" disabled={!canDelete || item.canEdit === false} onClick={()=>void remove(item.id)}><Trash2 size={15}/></button></div></td></tr>;
       })}</tbody></table>{!visible.length&&<div className="vop-empty">No announcements match the current filters.</div>}</div>
-      {announcementEditorOpen && <div className="vop-ann-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAnnouncementEditorOpen(false)}}>
+      {announcementEditorOpen && <ModalLayer><div className="vop-ann-editor-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAnnouncementEditorOpen(false)}}>
         <form className="vop-ann-editor-modal vop-card vop-form-card" onSubmit={save}>
           <div className="vop-section-title"><div><h2>{editingId?'Edit Announcement':'New Announcement'}</h2><p>Use actual configured content. Nothing is inserted as sample data.</p></div><button type="button" className="vop-icon-button" onClick={()=>setAnnouncementEditorOpen(false)}><X size={18}/></button></div>
           {field('title','Title *')}{field('tag','Category / Tag')}<AudienceSelect form={form} setForm={setForm}/>{area('description','Description *')}{field('imageUrl','Image URL','url')}{field('actionText','Action Text')}{field('actionUrl','Action URL','url')}{field('scheduledAt','Scheduled For','datetime-local')}<div className="vop-setting-row"><div><div className="vop-setting-name">{t('admin.published','Published')}</div><div className="vop-setting-help">Published announcements appear in the public announcements experience.</div></div><button type="button" className={'vop-toggle '+(form.published?'on':'')} onClick={()=>setForm(current=>({...current,published:!Boolean(current.published)}))}><span/></button></div><div style={{display:'flex',gap:8,marginTop:14}}><button className="vop-secondary" type="button" onClick={()=>setAnnouncementEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button className="vop-primary" type="submit" disabled={saving || (editingId ? !canUpdate : !canCreate)}><Save size={16}/>{saving?'Saving…':editingId?'Save Changes':'Create Announcement'}</button></div>
         </form>
-      </div>}
+      </div></ModalLayer>}
     </div>
     {error&&<div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}{message&&<div className="vop-radio-admin-alert success">{message}</div>}
   </div>;
@@ -1111,7 +1112,7 @@ function RadioAdminDashboard({
 
       {error && <div className="vop-radio-admin-alert error">{error}<button type="button" onClick={()=>setError('')}>×</button></div>}
       {message && <div className="vop-radio-admin-alert success">{message}</div>}
-      {editorOpen && <div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
+      {editorOpen && <ModalLayer><div className="vop-radio-editor-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
         <form className="vop-radio-editor-modal" onSubmit={submit}>
           <div className="vop-radio-editor-head"><div><span>Broadcast studio</span><h2>{editingId ? 'Edit radio content' : 'Add radio content'}</h2><p>Configure a single broadcast, stream or on-demand programme.</p></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
           <div className="vop-radio-editor-body">
@@ -1124,7 +1125,7 @@ function RadioAdminDashboard({
            </div>
           <footer><button type="button" className="vop-secondary" onClick={() => setEditorOpen(false)}>{t('common.cancel','Cancel')}</button><button type="submit" className="vop-primary" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Publish-ready draft'}</button></footer>
         </form>
-      </div>}
+      </div></ModalLayer>}
     </div>
   );
 }
