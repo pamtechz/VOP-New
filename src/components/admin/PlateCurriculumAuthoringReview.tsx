@@ -1,5 +1,5 @@
 import React, {useEffect,useMemo,useState} from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, BookOpen, ChevronRight,
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronRight,
   Copy, FilePlus2, FileQuestion, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import type {CurriculumChapter,CurriculumSection} from '../../../shared/curriculumStructure';
 import {
@@ -135,6 +135,22 @@ export function PlateCurriculumAuthoringReview({
     const next=freshChapter(chapters.length+1);
     onChange([...chapters,next]);setChapterId(next.id);setPageId(next.sections[0].id);
   };
+  const movePage=(step:-1|1)=>{
+    if(!canLeavePage()||!chapter||!page)return;
+    const target=pageIndex+step;
+    if(target<0||target>=chapter.sections.length)return;
+    const sections=[...chapter.sections];
+    [sections[pageIndex],sections[target]]=[sections[target],sections[pageIndex]];
+    onChange(chapters.map(item=>item.id===chapter.id?{...item,sections}:item));
+  };
+  const moveChapter=(step:-1|1)=>{
+    if(!canLeavePage()||!chapter)return;
+    const target=chapterIndex+step;
+    if(target<0||target>=chapters.length)return;
+    const reordered=[...chapters];
+    [reordered[chapterIndex],reordered[target]]=[reordered[target],reordered[chapterIndex]];
+    onChange(reordered);
+  };
   const duplicatePage=()=>{
     if(!canLeavePage())return;
     if(!chapter||!page||chapter.sections.length>=40)return;
@@ -234,6 +250,10 @@ export function PlateCurriculumAuthoringReview({
         value={chapter.title} onChange={e=>onChange(chapters.map(item=>item.id===chapter.id
           ?{...item,title:e.target.value}:item))}/>}
       <StructureActionsMenu label="Chapter">
+        <button type="button" disabled={chapterIndex<=0} onClick={()=>moveChapter(-1)}>
+          <ArrowUp size={15}/> Move chapter up</button>
+        <button type="button" disabled={chapterIndex<0||chapterIndex>=chapters.length-1} onClick={()=>moveChapter(1)}>
+          <ArrowDown size={15}/> Move chapter down</button>
         <button type="button" disabled={chapters.length>=40} onClick={duplicateChapter}>
           <Copy size={15}/> Duplicate chapter</button>
         <button type="button" disabled={!canAttachQuiz}
@@ -258,6 +278,10 @@ export function PlateCurriculumAuthoringReview({
           onChange={e=>updatePage({...page,title:e.target.value})}/>
       </div>
       <StructureActionsMenu label="Section">
+        <button type="button" disabled={pageIndex<=0} onClick={()=>movePage(-1)}>
+          <ArrowLeft size={15}/> Move page left</button>
+        <button type="button" disabled={pageIndex<0||pageIndex>=chapter.sections.length-1} onClick={()=>movePage(1)}>
+          <ArrowRight size={15}/> Move page right</button>
         <button type="button" disabled={!canAttachQuiz}
           onClick={()=>onQuiz({type:'section',id:page.id})}>
           <FileQuestion size={15}/> Quiz for this section
