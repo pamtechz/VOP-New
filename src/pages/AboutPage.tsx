@@ -131,7 +131,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                   {details?.aboutUsLeadership ||
-                    'Supervised by the Personal Ministries Department under Director Pst. Ernesto Ricci, in full collaboration with conference presidents and district pastors.'}
+                    'This ministry is led by the responsible Personal Ministries team and authorized church leadership for this local ministry scope.'}
                 </p>
               </div>
             </div>
@@ -203,7 +203,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <div>
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Enquiries</span>
                     <div className="space-y-1">
-                      {details.contactPhoneNumbers.map((phone, idx) => (
+                      {(details?.contactPhoneNumbers?.length ? details.contactPhoneNumbers : settings.contactPhone ? [settings.contactPhone] : []).map((phone, idx) => (
                         <a
                           key={idx}
                           href={`tel:${phone.replace(/\s+/g, '')}`}
@@ -217,11 +217,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   </div>
                 )}
 
-                {details?.contactEmails && details.contactEmails.length > 0 && (
+                {((details?.contactEmails?.length ? details.contactEmails : settings.contactEmail ? [settings.contactEmail] : [])).length > 0 && (
                   <div>
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Email Enquiries</span>
                     <div className="space-y-1">
-                      {details.contactEmails.map((email, idx) => (
+                      {(details?.contactEmails?.length ? details.contactEmails : settings.contactEmail ? [settings.contactEmail] : []).map((email, idx) => (
                         <a
                           key={idx}
                           href={`mailto:${email}`}
@@ -235,10 +235,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   </div>
                 )}
 
-                {settings.whatsappNumber && (
+                {(details?.contactWhatsAppNumbers?.[0] || settings.whatsappNumber) && (
                   <div className="pt-2">
                     <a
-                      href={`https://wa.me/${settings.whatsappNumber.replace(/[^0-9]/g, '')}`}
+                      href={`https://wa.me/${String(details?.contactWhatsAppNumbers?.[0] || settings.whatsappNumber).replace(/[^0-9]/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm"
