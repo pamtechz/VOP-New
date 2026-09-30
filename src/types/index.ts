@@ -292,6 +292,8 @@ export interface DiscoverGuide {
   image: string;
   lessons: Lesson[];
   certificateEligible: boolean;
+  certificateDocumentType?: string;
+  certificateTypeName?: string;
 }
 
 export interface Announcement {
