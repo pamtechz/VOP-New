@@ -1,6 +1,9 @@
 import React, { useMemo } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
-import { ArrowLeft, Award, Trophy, BookOpen, CheckCircle2, Clock, Lock, ChevronRight, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft, Award, BookOpen, CheckCircle2, ChevronRight, Clock,
+  FileQuestion, Lock, Sparkles, Trophy,
+} from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import { calculateCurriculumProgress } from '../../services/progress';
@@ -15,303 +18,191 @@ interface DiscoverGuideViewProps {
   onOpenCertificate: () => void;
 }
 
-/**
- * The reference Android timeline. The administrator's published lessons define
- * the available content. Do not invent a sequential lock without configurable
- * prerequisites; that gate previously stranded guides containing several tests.
- */
+const ordered=(items:Lesson[])=>[...items].sort((a,b)=>{
+  const an=Number.parseFloat(a.lessonNumber);
+  const bn=Number.parseFloat(b.lessonNumber);
+  if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn;
+  return a.lessonNumber.localeCompare(b.lessonNumber,undefined,{numeric:true,sensitivity:'base'});
+});
+
 export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
-  guide, currentUser, onBack, onSelectLesson, onOpenCertificate,
+  guide,currentUser,onBack,onSelectLesson,onOpenCertificate,
 }) => {
-  const language = getStoredSettings().defaultLanguage || guide.language || 'en';
-  const settings = getStoredSettings();
-  const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'DiscoverGuideView');
+  const settings=getStoredSettings();
+  const t=(key:string,fallback:string)=>
+    getTranslation(key,getUiLocale(),settings.customTranslations,fallback,'DiscoverGuideView');
+  const threshold=settings.quizPassThreshold;
+  const studyLessons=useMemo(()=>ordered(guide.lessons.filter(item=>item.type==='Lesson')),[guide.lessons]);
+  const assessments=useMemo(()=>ordered(guide.lessons.filter(item=>item.type==='Test')),[guide.lessons]);
+  const guideAssessments=useMemo(()=>assessments.filter(item=>{
+    const attachment=String(item.attachmentType||'').trim();
+    // Lesson/chapter/section/block quizzes live inside their owning lesson
+    // reader. Only guide-level or legacy unanchored assessments belong here.
+    return attachment==='guide'||(!item.attachedLessonId&&!['lesson','chapter','section','block'].includes(attachment));
+  }),[assessments]);
 
-  const { certificateEligible } = calculateCurriculumProgress(
-    getStoredGuides(), currentUser, getStoredSettings().quizPassThreshold, guide.language,
+  const {certificateEligible}=calculateCurriculumProgress(
+    getStoredGuides(),currentUser,threshold,guide.language,
   );
+  const completedStudyLessons=new Set(currentUser.progress?.completedLessons??[]);
+  const finalExamReady=studyLessons.length>0&&studyLessons.every(item=>
+    completedStudyLessons.has(`${guide.language}:${guide.id}:${item.id}`));
+  const completedCount=studyLessons.filter(lesson=>
+    lessonIsComplete(guide,lesson,currentUser,threshold)).length;
+  const progressPercent=studyLessons.length
+    ?Math.round(completedCount*100/studyLessons.length):0;
 
-  const orderedLessons = useMemo(() => [...guide.lessons].sort((a, b) => {
-    const an = Number.parseFloat(a.lessonNumber);
-    const bn = Number.parseFloat(b.lessonNumber);
-    if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
-    return a.lessonNumber.localeCompare(b.lessonNumber, undefined, { numeric: true, sensitivity: 'base' });
-  }), [guide.lessons]);
+  const assessmentCard=(assessment:Lesson)=>{
+    const isFinal=assessment.attachmentType==='guide'&&assessment.assessmentKind==='final_exam';
+    const locked=isFinal&&guide.requiresFinalExam===true&&!finalExamReady;
+    const score=lessonScoreForDisplay(guide,assessment,currentUser);
+    const hasScore=typeof score==='number'&&Number.isFinite(score);
+    const passed=hasScore&&Number.isFinite(threshold)&&threshold>=1&&threshold<=100&&score!>=threshold;
+    return <button type="button" key={assessment.id}
+      className={'vop-guide-assessment '+(locked?'locked':passed?'passed':hasScore?'attempted':'')}
+      onClick={()=>onSelectLesson(assessment)} disabled={locked}
+      aria-label={locked
+        ?`Final examination locked. Complete all lessons before taking ${assessment.title}.`
+        :`Open assessment ${assessment.title}`}>
+      <span className="vop-guide-assessment-icon">{locked?<Lock size={18}/>:<Trophy size={18}/>}</span>
+      <span className="vop-guide-assessment-copy">
+        <small>{isFinal?t('guide.final_exam','Final examination'):t('guide.assessment','Assessment')}</small>
+        <strong>{assessment.title}</strong>
+        <em>{locked
+          ?t('guide.exam_locked','Complete all lessons to unlock')
+          :passed
+            ?`${t('guide.passed','Passed')} · ${Math.round(score!)}%`
+            :hasScore
+              ?`${t('guide.score','Score')} · ${Math.round(score!)}%`
+              :assessment.estimatedMinutes>0?`${assessment.estimatedMinutes} min`:t('guide.ready','Ready')}</em>
+      </span>
+      <ChevronRight size={17}/>
+    </button>;
+  };
 
-  const threshold = settings.quizPassThreshold;
-  const completedStudyLessons = new Set(currentUser.progress?.completedLessons ?? []);
-  const finalExamReady = orderedLessons.some(item=>item.type==='Lesson') && orderedLessons
-    .filter(item=>item.type==='Lesson')
-    .every(item=>completedStudyLessons.has(`${guide.language}:${guide.id}:${item.id}`));
-  const lessonStats = (() => {
-    const completedCount = orderedLessons.filter(lesson =>
-      lessonIsComplete(guide, lesson, currentUser, threshold)).length;
-    const totalCount = orderedLessons.length;
-    const percent = totalCount ? Math.round(completedCount * 100 / totalCount) : 0;
-    return { completedCount, totalCount, percent };
-  })();
+  return <div className="min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
+    <div className="bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
+      <div className="vop-guide-orb" aria-hidden="true"/>
+      <div className="max-w-4xl mx-auto relative">
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <button onClick={onBack}
+            className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
+            <ArrowLeft size={22}/><span className="font-bold text-base sm:text-lg">{t('common.back','Back')}</span>
+          </button>
+          <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
+            {t('guide.module_label','Module')} {guide.discoverNumber}
+          </span>
+        </div>
 
-  return (
-    <div className="min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
-      {/* Deep Navy Header Banner */}
-      <div className="bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
-        {/* Decorative orb */}
-        <div style={{
-          position: 'absolute', top: '-30px', right: '-30px',
-          width: '180px', height: '180px', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(245,176,38,0.18) 0%, transparent 70%)',
-          pointerEvents: 'none'
-        }} />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/25 flex items-center justify-center flex-shrink-0">
+              <BookOpen size={26} className="text-amber-300"/>
+            </div>
+            <div>
+              {guide.subtitle&&<p className="text-[11px] font-bold uppercase tracking-wider text-amber-300/90 mb-0.5">{guide.subtitle}</p>}
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">{guide.title}</h1>
+              {guide.description&&<p className="text-xs text-blue-100/80 mt-0.5 max-w-lg">{guide.description}</p>}
+            </div>
+          </div>
+          {certificateEligible&&<button onClick={onOpenCertificate}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-xs uppercase tracking-wider transition-colors shadow-md cursor-pointer flex-shrink-0">
+            <Award size={16}/><span>{t('certificates.view_your','View Certificate')}</span>
+          </button>}
+        </div>
 
-        <div className="max-w-4xl mx-auto relative">
-          {/* Top row: back + badge */}
-          <div className="flex items-center justify-between gap-4 mb-5">
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1"
-            >
-              <ArrowLeft size={22} />
-              <span className="font-bold text-base sm:text-lg">{t('common.back','Back')}</span>
-            </button>
-            <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
-              Discover Guide {guide.discoverNumber}
+        <div className="mt-5 pt-4 border-t border-white/15">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-blue-100/80 font-semibold">
+              {completedCount} of {studyLessons.length} {studyLessons.length===1?'lesson':'lessons'} completed
             </span>
+            <span className="text-xs font-bold text-amber-300">{progressPercent}%</span>
           </div>
-
-          {/* Guide identity */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/25 flex items-center justify-center flex-shrink-0">
-                <BookOpen size={26} className="text-amber-300" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300/90 mb-0.5">
-                  {guide.subtitle}
-                </p>
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">{guide.title}</h1>
-                <p className="text-xs text-blue-100/80 mt-0.5 max-w-lg">{guide.description}</p>
-              </div>
-            </div>
-
-            {certificateEligible && (
-              <button
-                onClick={onOpenCertificate}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-xs uppercase tracking-wider transition-colors shadow-md cursor-pointer flex-shrink-0"
-              >
-                <Award size={16} />
-                <span>View Certificate</span>
-              </button>
-            )}
-          </div>
-
-          {/* Progress bar */}
-          <div className="mt-5 pt-4 border-t border-white/15">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-blue-100/80 font-semibold">
-                {lessonStats.completedCount} of {lessonStats.totalCount} modules completed
-              </span>
-              <span className="text-xs font-bold text-amber-300">{lessonStats.percent}%</span>
-            </div>
-            <div className="h-2 bg-white/15 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${lessonStats.percent}%`,
-                  background: lessonStats.percent === 100
-                    ? 'linear-gradient(90deg, #10b981, #34d399)'
-                    : 'linear-gradient(90deg, #f59e0b, #fbbf24)',
-                }}
-              />
-            </div>
+          <div className="h-2 bg-white/15 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-700"
+              style={{width:`${progressPercent}%`,background:progressPercent===100
+                ?'linear-gradient(90deg,#10b981,#34d399)'
+                :'linear-gradient(90deg,#f59e0b,#fbbf24)'}}/>
           </div>
         </div>
       </div>
-
-      {/* Lesson Timeline */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {orderedLessons.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
-            <BookOpen size={36} className="text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 text-sm font-medium">{t('guide.no_lessons','No lessons have been published for this guide yet.')}</p>
-            <p className="text-slate-400 text-xs mt-1">{t('guide.no_lessons_desc','Check back after an administrator publishes the content.')}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4 px-1">
-              {guide.learnerEntryMode==='sections' ? 'Study sections' : 'Curriculum modules'}
-            </h2>
-            {orderedLessons.map((lesson, index) => {
-              const isCompleted = lessonIsComplete(guide, lesson, currentUser, threshold);
-              const isTest = lesson.type === 'Test';
-              const isFinalExam = isTest && lesson.attachmentType==='guide' && lesson.assessmentKind==='final_exam';
-              const lockedFinal = isFinalExam && guide.requiresFinalExam===true && !finalExamReady;
-              const score = isTest ? lessonScoreForDisplay(guide, lesson, currentUser) : undefined;
-              const hasScore = typeof score === 'number' && Number.isFinite(score);
-              const passed = hasScore && Number.isFinite(threshold) && threshold >= 1 && threshold <= 100 && score! >= threshold;
-
-              // Section-first programs flatten authored pages directly under
-              // the guide. The lesson remains the hidden progress/certificate
-              // owner and is shown only as context, never as another click.
-              if(guide.learnerEntryMode==='sections' && !isTest && lesson.chapters?.length){
-                const sectionPages=(lesson.contentPages||[]).filter(item=>
-                  Boolean(item.sectionId) &&
-                  lesson.chapters?.some(chapter=>chapter.sections.some(section=>section.id===item.sectionId)));
-                if(sectionPages.length){
-                  return <React.Fragment key={lesson.id}>
-                    {sectionPages.map((sectionPage,pageIndex)=>{
-                      const chapter=lesson.chapters!.find(item=>item.id===sectionPage.chapterId
-                        || item.sections.some(section=>section.id===sectionPage.sectionId));
-                      const actualIndex=lesson.contentPages?.findIndex(item=>
-                        item.sectionId===sectionPage.sectionId)??pageIndex;
-                      return <button type="button" key={sectionPage.sectionId}
-                        className={'vop-guide-direct-section '+(isCompleted?'completed':'')}
-                        onClick={()=>onSelectLesson(lesson,actualIndex)}
-                        aria-label={'Open section '+sectionPage.title+(chapter?' in '+chapter.title:'')}>
-                        <span className="vop-guide-direct-section-number">
-                          {lesson.lessonNumber}.{pageIndex+1}
-                        </span>
-                        <span className="vop-guide-direct-section-copy">
-                          <small>{chapter?.title||'Study chapter'} · Lesson {lesson.lessonNumber}</small>
-                          <strong>{sectionPage.title}</strong>
-                          <em>{lesson.title}</em>
-                        </span>
-                        {isCompleted
-                          ?<CheckCircle2 size={18} className="text-emerald-600" aria-label="Owning lesson completed"/>
-                          :<ChevronRight size={17} aria-hidden="true"/>}
-                      </button>;
-                    })}
-                  </React.Fragment>;
-                }
-              }
-              return (
-                <button
-                  key={lesson.id}
-                  type="button"
-                  onClick={() => onSelectLesson(lesson)}
-                  disabled={lockedFinal}
-                  aria-disabled={lockedFinal}
-                  className={`w-full text-left p-5 rounded-2xl border transition-all cursor-pointer group ${
-                    lockedFinal
-                      ? 'bg-slate-100 border-slate-200 opacity-80 cursor-not-allowed'
-                      : isTest
-                      ? isCompleted || hasScore
-                        ? passed
-                          ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-400 hover:shadow-sm'
-                          : 'bg-amber-50/70 border-amber-300 hover:border-amber-400 hover:shadow-sm'
-                        : 'bg-white border-amber-200 hover:border-amber-400 hover:shadow-md'
-                      : isCompleted
-                        ? 'bg-emerald-50/60 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
-                        : 'bg-white border-slate-200/80 hover:border-[#002d72] hover:shadow-md'
-                  }`}
-                  aria-label={lockedFinal
-                    ? `Final examination locked. Complete all study lessons before taking ${lesson.title}.`
-                    : `${lesson.lessonNumber} ${lesson.type}: ${lesson.title}`}
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Step indicator */}
-                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 font-black text-sm transition-all ${
-                      isTest
-                        ? passed
-                          ? 'bg-emerald-500 text-white'
-                          : hasScore
-                          ? 'bg-amber-400 text-slate-900'
-                          : 'bg-[#002d72] text-white'
-                        : isCompleted
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-100 text-[#002d72] group-hover:bg-[#002d72] group-hover:text-white'
-                    }`}>
-                      {lockedFinal ? (
-                        <Lock size={20}/>
-                      ) : isTest ? (
-                        <Trophy size={20} />
-                      ) : isCompleted ? (
-                        <CheckCircle2 size={20} />
-                      ) : (
-                        <span>{index + 1}</span>
-                      )}
-                    </div>
-
-                    {/* Lesson content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          isTest
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : 'bg-blue-50 text-[#002d72] border border-blue-100'
-                        }`}>
-                          {lesson.lessonNumber} {isFinalExam?'Final examination':lesson.type}
-                        </span>
-                        {isCompleted && !isTest && (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            Completed
-                          </span>
-                        )}
-                        {isTest && hasScore && (
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            passed
-                              ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                              : 'text-amber-700 bg-amber-50 border-amber-200'
-                          }`}>
-                            {passed ? `Passed ${Math.round(score!)}%` : `Scored ${Math.round(score!)}%`}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug">{lesson.title}</h3>
-
-                      {lesson.description && (
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{lesson.description}</p>
-                      )}
-
-                      <div className="flex items-center gap-3 mt-2">
-                        {lesson.estimatedMinutes > 0 && (
-                          <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                            <Clock size={12} />
-                            {lesson.estimatedMinutes} mins
-                          </span>
-                        )}
-                        {lockedFinal && <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full">Locked until lessons are complete</span>}
-                        {isTest && !hasScore && !lockedFinal && (
-                          <span className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
-                            <Sparkles size={12} />
-                            Assessment
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Arrow */}
-                    <ChevronRight
-                      size={18}
-                      className="flex-shrink-0 text-slate-400 group-hover:text-[#002d72] transition-colors self-center"
-                    />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Completion celebration banner */}
-        {lessonStats.percent === 100 && (
-          <div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-center shadow-lg">
-            <Award size={40} className="mx-auto mb-2 text-amber-300" />
-            <h3 className="text-lg font-black mb-1">{t('guide.completed','Guide Completed!')}</h3>
-            <p className="text-sm text-emerald-100 mb-4">
-              {t('guide.completed_desc',`You have completed all ${lessonStats.totalCount} modules in this guide.`)}
-            </p>
-            {certificateEligible && (
-              <button
-                onClick={onOpenCertificate}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-colors cursor-pointer"
-              >
-                <Award size={16} />
-                {t('certificates.view_your','View Your Certificate')}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
     </div>
-  );
+
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      {studyLessons.length===0
+        ?<div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
+          <BookOpen size={36} className="text-slate-300 mx-auto mb-3"/>
+          <p className="text-slate-500 text-sm font-medium">{t('guide.no_lessons','No lessons have been published for this module yet.')}</p>
+          <p className="text-slate-400 text-xs mt-1">{t('guide.no_lessons_desc','Check back after an administrator publishes the content.')}</p>
+        </div>
+        :<div className="space-y-3">
+          <div className="vop-guide-list-heading">
+            <div><small>{t('guide.study_content','Study content')}</small>
+              <h2>{guide.learnerEntryMode==='sections'
+                ?t('guide.sections','Study sections')
+                :t('guide.lessons','Lessons')}</h2></div>
+            <span>{studyLessons.length} {studyLessons.length===1?'lesson':'lessons'}</span>
+          </div>
+
+          {studyLessons.flatMap((lesson,lessonIndex)=>{
+            const completed=lessonIsComplete(guide,lesson,currentUser,threshold);
+            if(guide.learnerEntryMode==='sections'&&lesson.chapters?.length){
+              const sectionPages=(lesson.contentPages||[]).filter(item=>
+                Boolean(item.sectionId)&&lesson.chapters?.some(chapter=>
+                  chapter.sections.some(section=>section.id===item.sectionId)));
+              if(sectionPages.length)return sectionPages.map((page,pageIndex)=>{
+                const chapter=lesson.chapters!.find(item=>
+                  item.id===page.chapterId||item.sections.some(section=>section.id===page.sectionId));
+                const actualIndex=lesson.contentPages?.findIndex(item=>item.sectionId===page.sectionId)??pageIndex;
+                return <button type="button" key={lesson.id+':'+page.sectionId}
+                  className={'vop-guide-direct-section '+(completed?'completed':'')}
+                  onClick={()=>onSelectLesson(lesson,actualIndex)}>
+                  <span className="vop-guide-direct-section-number">{lessonIndex+1}.{pageIndex+1}</span>
+                  <span className="vop-guide-direct-section-copy">
+                    <small>{chapter?.title||t('guide.study_chapter','Study chapter')} · {t('guide.lesson','Lesson')} {lesson.lessonNumber}</small>
+                    <strong>{page.title}</strong><em>{lesson.title}</em>
+                  </span>
+                  {completed?<CheckCircle2 size={18} className="text-emerald-600"/>:<ChevronRight size={17}/>}
+                </button>;
+              });
+            }
+            return [<button type="button" key={lesson.id}
+              onClick={()=>onSelectLesson(lesson)}
+              className={'vop-guide-lesson '+(completed?'completed':'')}>
+              <span className="vop-guide-lesson-number">{completed?<CheckCircle2 size={18}/>:lessonIndex+1}</span>
+              <span className="vop-guide-lesson-copy">
+                <small>{t('guide.lesson','Lesson')} {lesson.lessonNumber}</small>
+                <strong>{lesson.title}</strong>
+                {lesson.description&&<em>{lesson.description}</em>}
+                {lesson.estimatedMinutes>0&&<span><Clock size={12}/>{lesson.estimatedMinutes} min</span>}
+              </span>
+              <ChevronRight size={17}/>
+            </button>];
+          })}
+        </div>}
+
+      {guideAssessments.length>0&&<section className="vop-guide-assessment-section">
+        <header><div><span><FileQuestion size={18}/></span>
+          <div><small>{t('guide.check_knowledge','Check your knowledge')}</small>
+            <h2>{t('guide.assessments','Assessments')}</h2>
+            <p>{t('guide.assessment_help','Assessments are attached to this module; they are not lessons or modules themselves.')}</p></div>
+        </div><strong>{guideAssessments.length}</strong></header>
+        <div>{guideAssessments.map(assessmentCard)}</div>
+      </section>}
+
+      {progressPercent===100&&studyLessons.length>0&&<div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-center shadow-lg">
+        <Award size={40} className="mx-auto mb-2 text-amber-300"/>
+        <h3 className="text-lg font-black mb-1">{t('guide.lessons_completed','All lessons completed')}</h3>
+        <p className="text-sm text-emerald-100 mb-4">
+          {guideAssessments.some(item=>item.assessmentKind==='final_exam')&&!certificateEligible
+            ?t('guide.exam_next','Your study lessons are complete. Finish the required assessment steps to become certificate-eligible.')
+            :t('guide.completed_desc',`You have completed all ${studyLessons.length} lessons in this module.`)}
+        </p>
+        {certificateEligible&&<button onClick={onOpenCertificate}
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-colors cursor-pointer">
+          <Award size={16}/>{t('certificates.view_your','View Your Certificate')}
+        </button>}
+      </div>}
+    </div>
+  </div>;
 };
