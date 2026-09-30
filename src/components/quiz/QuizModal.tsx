@@ -411,12 +411,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <div style={{
               width: '6rem', height: '6rem',
               borderRadius: '50%',
-              background: score >= threshold
+              background: submission?.passed === true
                 ? 'linear-gradient(135deg, #d1fae5, #6ee7b7)'
                 : 'linear-gradient(135deg, #fef3c7, #fde68a)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 1.25rem',
-              boxShadow: score >= threshold
+              boxShadow: submission?.passed === true
                 ? '0 8px 20px rgba(16,185,129,0.3)'
                 : '0 8px 20px rgba(245,158,11,0.3)',
             }}>
