@@ -44,6 +44,7 @@ import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { EventsPage } from './pages/EventsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
+import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import './theme-dark.css';
@@ -403,6 +404,8 @@ export const App: React.FC = () => {
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin']
       .includes(String(currentUser.role||''))||['owner','admin'].includes(String(currentUser.organizationRole||''));
     if(location.route==='admin'&&!privileged)return false;
+    const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+    if(location.route==='mentor'&&!mentorAccess)return false;
     const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
         && (!location.guideLanguage||item.language===location.guideLanguage))
@@ -531,6 +534,8 @@ export const App: React.FC = () => {
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
       || ['owner','admin'].includes(String(currentUser.organizationRole || ''));
     if (route === 'admin' && !privileged) return;
+    const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+    if (route === 'mentor' && !mentorAccess) return;
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -605,6 +610,8 @@ export const App: React.FC = () => {
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
           {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
+          {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack}/>}
+
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
           {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
