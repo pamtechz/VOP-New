@@ -16,7 +16,7 @@ import { getTranslation } from '../services/i18n';
 import { MediaPlayer } from '../components/media/MediaPlayer';
 import { resolveMediaSource } from '../../shared/mediaSources';
 import { normalizeCurriculumStructure, curriculumPages, type CurriculumChapter } from '../../shared/curriculumStructure';
-import { StructuredLessonEditor, newChapter } from '../components/admin/StructuredLessonEditor';
+import { newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
@@ -420,7 +420,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   const [editor, setEditor] = useState<EditorState | null>(null);
   const savedEditorSignature=useRef('');
   const [editorDirty,setEditorDirty]=useState(false);
-  const [plateReview,setPlateReview] = useState(true);
   const [plateValidationErrors,setPlateValidationErrors]=useState<Record<string,string>>({});
   const [mediaSourceInput, setMediaSourceInput] = useState('');
   const [mediaResolving, setMediaResolving] = useState(false);
@@ -661,7 +660,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     savedEditorSignature.current=JSON.stringify(nextEditor);
     setEditor(nextEditor);
     setEditorDirty(false);
-    setPlateReview(true);
     setRequestedSectionId(sectionId);
     setPlateValidationErrors({});
     setEditorTab('content');
@@ -678,7 +676,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     savedEditorSignature.current=JSON.stringify(next);
     setEditor(next);
     setEditorDirty(false);
-    setPlateReview(true);
     setRequestedSectionId('');
     setPlateValidationErrors({});
     setEditorTab('content');
@@ -916,13 +913,6 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
   ];
 
   if (editor) {
-    // The legacy editor only understands plain blocks. Once any section owns
-    // a rich Plate document, opening the legacy editor would silently change
-    // a derived compatibility view rather than the authoritative document.
-    const hasRichSections=editor.chapters.some(chapter=>
-      chapter.sections.some(section=>Boolean(section.document)));
-    const EditorComponent=plateReview||hasRichSections
-      ?PlateCurriculumAuthoringReview:StructuredLessonEditor;
     if (previewOpen) return <LearnerPreview editor={editor} guideTitle={editor.guideTitle} onClose={() => setPreviewOpen(false)} />;
 
     const editorTabs = [
@@ -973,7 +963,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
         <div className="vop-reference-editor-head">
           <div className="vop-reference-editor-title">
             <div className="vop-reference-editor-thumb">{editor.imageUrl ? <img src={editor.imageUrl} alt="" /> : <FileText size={25}/>}</div>
-            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Organize this lesson into chapters, sections and blocks; attach quizzes through the private Quiz Library.</p></div>
+            <div><h1>{tx('curriculum.lessonEditor', 'Lesson Editor')}</h1><p>Author each chapter as one continuous Plate document. Mark paragraphs as section boundaries to define the pages learners will navigate.</p></div>
           </div>
           <div className="vop-reference-actions">
             <button className="vop-secondary" type="button" onClick={() => {
@@ -1011,21 +1001,11 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
             {editorTab === 'content' && <div className="vop-lesson-rich-editor">
               {editor.chapters.length ? <>
                 <div className="vop-plate-review-mode">
-                  <div><strong>{plateReview||hasRichSections?'Plate document authoring':'Legacy structured editor'}</strong>
-                    <span>{hasRichSections
-                      ? 'This lesson contains canonical rich pages. Plate is required so formatting, media and quiz anchors are preserved.'
-                      : plateReview
-                        ? 'Plate is the primary authoring experience. Each section is one learner page containing multiple rich content blocks.'
-                        : 'Compatibility mode for older structured lessons. Return to Plate before adding rich formatting or media.'}</span>
+                  <div><strong>Plate continuous document mode</strong>
+                    <span>Section boundaries are authoring markers inside the chapter. They become learner pages at save/publish time; content blocks and quiz anchors keep stable IDs.</span>
                   </div>
-                  <button className="vop-secondary" type="button"
-                    disabled={hasRichSections}
-                    title={hasRichSections?'Rich pages can only be edited in Plate without destructive conversion.':''}
-                    onClick={()=>setPlateReview(value=>!value)}>
-                    {hasRichSections?'Plate document mode':plateReview?'Legacy editor':'Return to Plate'}
-                  </button>
                 </div>
-                <EditorComponent
+                <PlateCurriculumAuthoringReview
                 programTitle={programContext?.programTitle}
                 organizationId={scopeOrganizationId}
                 guideTitle={editor.guideTitle} lessonTitle={editor.title}
