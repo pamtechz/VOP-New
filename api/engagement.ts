@@ -119,6 +119,14 @@ function canManagePortfolio(actor: Profile) {
 }
 
 function nowIso() { return new Date().toISOString(); }
+function revisionOf(value: Record<string,unknown>) {
+  const revision=Number(value.revision);
+  return Number.isInteger(revision) && revision >= 1 ? revision : 1;
+}
+function signatureCount(value: unknown) {
+  const count=Number(value);
+  return Number.isInteger(count) && count >= 1 && count <= 20 ? count : 1;
+}
 
 function dueDate(intervalDays: number) {
   return new Date(Date.now() + Math.max(1, intervalDays) * 86_400_000).toISOString();
@@ -167,7 +175,7 @@ async function publishedRequirement(db: FirebaseFirestore.Firestore, learner: Pr
       || (ownerOrganizationId && ownerOrganizationId !== orgOf(learner) && data.sharingScope !== 'shared')) {
     throw new Error('The selected Master Guide requirement is unavailable for this learner.');
   }
-  return requirementId;
+  return { id:requirementId, requiredSignatures:signatureCount(data.requiredSignatures) };
 }
 
 async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Record<string, unknown>) {
@@ -192,12 +200,22 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
       const data = snapshot.data() || {};
       const activities = Array.isArray(data.activities) ? data.activities as Array<Record<string, unknown>> : [];
       const signoffs = Array.isArray(data.signoffs) ? data.signoffs as Array<Record<string, unknown>> : [];
-      const pending = activities.filter(activity => activity.status === 'submitted' &&
-        !signoffs.some(signoff => signoff.requirementId === activity.requirementId && signoff.decision === 'approved'));
+      const requirementIds=[...new Set(activities.filter(item=>item.status==='submitted').map(item=>String(item.requirementId||'')).filter(Boolean))];
+      const pending=requirementIds.filter(requirementId=>{
+        const related=activities.filter(item=>String(item.requirementId||'')===requirementId && item.status==='submitted');
+        const revision=Math.max(0,...related.map(revisionOf));
+        if (!revision) return false;
+        const current=related.filter(item=>revisionOf(item)===revision);
+        const required=Math.max(1,...current.map(item=>signatureCount(item.requiredSignatures)));
+        const decisions=signoffs.filter(item=>String(item.requirementId||'')===requirementId && revisionOf(item)===revision);
+        if (decisions.some(item=>item.decision==='changes_requested'||item.decision==='rejected')) return false;
+        const approvals=new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||'')));
+        return approvals.size < required;
+      });
       return { uid:snapshot.id, displayName:String(learner.displayName || learner.email || 'Learner'),
         organizationId:orgOf(learner), pendingCount:pending.length };
     }));
-    return { learners:queue.filter((item):item is NonNullable<typeof item> => Boolean(item))
+    return { learners:queue.filter((item):item is NonNullable<typeof item> => Boolean(item) && item.pendingCount > 0)
       .sort((a,b)=>b.pendingCount-a.pendingCount || a.displayName.localeCompare(b.displayName)) };
   }
   const learnerId = cleanId(b.learnerId || actor.uid, 'learner');
@@ -227,37 +245,72 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
 
   if (action === 'portfolioSaveActivity') {
     if (!canManagePortfolio(actor) && learnerId !== String(actor.uid)) throw new Error('You cannot update this portfolio.');
-    const requirementId = await publishedRequirement(db, learner, b.requirementId);
+    const requirement = await publishedRequirement(db, learner, b.requirementId);
+    const requirementId=requirement.id;
     const activityId = cleanId(b.activityId || randomUUID(), 'activity');
     const status = String(b.status || 'started');
     if (!['started','submitted'].includes(status)) throw new Error('Only authorized evaluators may verify activities through the sign-off workflow.');
     const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
-    const snap = await ref.get();
-    const data = snap.exists ? snap.data() || {} : {};
-    const activities = Array.isArray(data.activities) ? [...data.activities as unknown[]] : [];
-    const existing = activities.findIndex(item => item && typeof item === 'object' && String((item as Record<string, unknown>).id || '') === activityId);
-    const activity = { id: activityId, requirementId, title: String(b.title || ''), status, notes: String(b.notes || ''), updatedAt: nowIso(), updatedBy: String(actor.uid) };
-    if (existing >= 0) {
-      const previous = activities[existing] as Record<string, unknown>;
-      if (String(previous.updatedBy || '') !== String(actor.uid)) {
-        throw new Error('Only the activity contributor may revise the submission.');
+    const activity=await db.runTransaction(async transaction=>{
+      const snap=await transaction.get(ref);
+      const data=snap.exists?snap.data()||{}:{};
+      const activities=Array.isArray(data.activities)?[...data.activities as unknown[]]:[];
+      const signoffs=Array.isArray(data.signoffs)?data.signoffs as Array<Record<string,unknown>>:[];
+      const related=activities.filter(item=>item&&typeof item==='object'&&String((item as Record<string,unknown>).requirementId||'')===requirementId) as Array<Record<string,unknown>>;
+      const currentRevision=related.length?Math.max(...related.map(revisionOf)):0;
+      const decisions=signoffs.filter(item=>String(item.requirementId||'')===requirementId && revisionOf(item)===Math.max(1,currentRevision));
+      const changesRequested=decisions.some(item=>item.decision==='changes_requested'||item.decision==='rejected');
+      const approvals=new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||''))).size;
+      if (approvals >= requirement.requiredSignatures && !changesRequested) throw new Error('This requirement is already fully approved.');
+      if (status==='submitted' && currentRevision>0 && !changesRequested
+        && related.some(item=>revisionOf(item)===currentRevision&&item.status==='submitted')) {
+        throw new Error('This requirement is already submitted and awaiting evaluator decisions.');
       }
-      activities[existing] = activity;
-    } else activities.push(activity);
-    await ref.set({ learnerId, organizationId: orgOf(learner), updatedAt: FieldValue.serverTimestamp(), updatedBy: String(actor.uid), activities }, { merge: true });
+      const existing=activities.findIndex(item=>item&&typeof item==='object'&&String((item as Record<string,unknown>).id||'')===activityId);
+      const revision=existing>=0
+        ? revisionOf(activities[existing] as Record<string,unknown>)
+        : currentRevision===0?1:changesRequested?currentRevision+1:currentRevision;
+      const next={id:activityId,requirementId,title:String(b.title||''),status,notes:String(b.notes||''),
+        revision,requiredSignatures:requirement.requiredSignatures,updatedAt:nowIso(),updatedBy:String(actor.uid)};
+      if(existing>=0){
+        const previous=activities[existing] as Record<string,unknown>;
+        if(String(previous.updatedBy||'')!==String(actor.uid))throw new Error('Only the activity contributor may revise the submission.');
+        activities[existing]=next;
+      } else activities.push(next);
+      transaction.set(ref,{learnerId,organizationId:orgOf(learner),updatedAt:FieldValue.serverTimestamp(),
+        updatedBy:String(actor.uid),activities},{merge:true});
+      return next;
+    });
     return { activity };
   }
 
   if (action === 'portfolioEvidence') {
-    const requirementId = await publishedRequirement(db, learner, b.requirementId);
-    const evidence = { id: randomUUID(), requirementId, title: String(b.title || '').trim(), url: String(b.url || '').trim(), note: String(b.note || '').trim(), submittedBy: String(actor.uid), submittedAt: nowIso() };
-    if (!evidence.title || !evidence.url) throw new Error('Evidence title and URL are required.');
+    const requirement = await publishedRequirement(db, learner, b.requirementId);
+    const requirementId=requirement.id;
+    const title=String(b.title||'').trim(),url=String(b.url||'').trim(),note=String(b.note||'').trim();
+    if (!title || !url) throw new Error('Evidence title and URL are required.');
     try {
-      const link = new URL(evidence.url);
+      const link = new URL(url);
       if (link.protocol !== 'https:' || link.username || link.password || link.hostname === 'localhost') throw new Error();
     } catch { throw new Error('Evidence must be a public HTTPS URL without credentials.'); }
-    const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
-    await ref.set({ learnerId, organizationId: orgOf(learner), updatedAt: FieldValue.serverTimestamp(), evidence: FieldValue.arrayUnion(evidence) }, { merge: true });
+    const ref=db.doc(`masterGuidePortfolios/${learnerId}`);
+    const evidence=await db.runTransaction(async transaction=>{
+      const snapshot=await transaction.get(ref);
+      const data=snapshot.data()||{};
+      const activities=Array.isArray(data.activities)?data.activities as Array<Record<string,unknown>>:[];
+      const signoffs=Array.isArray(data.signoffs)?data.signoffs as Array<Record<string,unknown>>:[];
+      const related=activities.filter(item=>String(item.requirementId||'')===requirementId);
+      const currentRevision=related.length?Math.max(...related.map(revisionOf)):0;
+      const decisions=signoffs.filter(item=>String(item.requirementId||'')===requirementId&&revisionOf(item)===Math.max(1,currentRevision));
+      const changesRequested=decisions.some(item=>item.decision==='changes_requested'||item.decision==='rejected');
+      const approvals=new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||''))).size;
+      if(approvals>=requirement.requiredSignatures&&!changesRequested)throw new Error('This requirement is already fully approved.');
+      const revision=currentRevision===0?1:changesRequested?currentRevision+1:currentRevision;
+      const next={id:randomUUID(),requirementId,title,url,note,revision,submittedBy:String(actor.uid),submittedAt:nowIso()};
+      transaction.set(ref,{learnerId,organizationId:orgOf(learner),updatedAt:FieldValue.serverTimestamp(),
+        evidence:FieldValue.arrayUnion(next)},{merge:true});
+      return next;
+    });
     return { evidence };
   }
 
@@ -267,27 +320,40 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
     const assignedMentor = assignment.exists ? String(assignment.data()?.mentorId || '') : '';
     const actorIsMentor = String(actor.uid) === assignedMentor || ['super_admin','union_admin','conference_admin','district_admin','church_admin','owner','admin','teacher'].includes(role(actor));
     if (!actorIsMentor) throw new Error('You are not an authorized evaluator for this learner.');
-    const requirementId = await publishedRequirement(db, learner, b.requirementId);
+    const requirement = await publishedRequirement(db, learner, b.requirementId);
+    const requirementId=requirement.id;
     if (learnerId === String(actor.uid)) throw new Error('A learner cannot sign off their own requirement.');
-    const signoff = { id: randomUUID(), requirementId, decision: String(b.decision || 'approved') === 'approved' ? 'approved' : 'rejected', notes: String(b.notes || ''), evaluatorId: String(actor.uid), evaluatorRole: role(actor), decidedAt: nowIso() };
+    const decision=String(b.decision||'approved');
+    if(!['approved','changes_requested'].includes(decision))throw new Error('Choose approve or request changes.');
+    const notes=String(b.notes||'').trim();
+    if(decision==='changes_requested'&&!notes)throw new Error('Explain the changes the learner must make before resubmitting.');
     const ref = db.doc(`masterGuidePortfolios/${learnerId}`);
-    // Verify state and write the decision atomically. Two evaluators must not
-    // approve the same requirement concurrently or sign off an unsubmitted item.
-    await db.runTransaction(async transaction => {
+    const result=await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(ref);
       const data = snapshot.data() || {};
       const activities = Array.isArray(data.activities) ? data.activities as Array<Record<string, unknown>> : [];
-      if (!activities.some(item => String(item.requirementId || '') === requirementId && item.status === 'submitted')) {
-        throw new Error('An activity must be submitted against this requirement before approval.');
+      const related=activities.filter(item=>String(item.requirementId||'')===requirementId&&item.status==='submitted');
+      if(!related.length)throw new Error('An activity must be submitted against this requirement before evaluation.');
+      const revision=Math.max(...related.map(revisionOf));
+      const decisions = (Array.isArray(data.signoffs) ? data.signoffs as Array<Record<string, unknown>> : [])
+        .filter(item=>String(item.requirementId||'')===requirementId&&revisionOf(item)===revision);
+      if(decisions.some(item=>item.decision==='changes_requested'||item.decision==='rejected')){
+        throw new Error('Changes were already requested for this submission. Wait for the learner to resubmit.');
       }
-      const decisions = Array.isArray(data.signoffs) ? data.signoffs as Array<Record<string, unknown>> : [];
-      if (decisions.some(item => String(item.requirementId || '') === requirementId && item.decision === 'approved')) {
-        throw new Error('This requirement is already approved.');
+      if(decisions.some(item=>String(item.evaluatorId||'')===String(actor.uid))){
+        throw new Error('You have already evaluated this submission revision.');
       }
-      transaction.set(ref, {learnerId,organizationId:orgOf(learner),updatedAt:FieldValue.serverTimestamp(),
-        signoffs:FieldValue.arrayUnion(signoff)}, {merge:true});
+      const approvals=new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||'')));
+      if(approvals.size>=requirement.requiredSignatures)throw new Error('This requirement is already fully approved.');
+      const signoff={id:randomUUID(),requirementId,revision,decision,notes,evaluatorId:String(actor.uid),
+        evaluatorRole:role(actor),requiredSignatures:requirement.requiredSignatures,decidedAt:nowIso()};
+      transaction.set(ref,{learnerId,organizationId:orgOf(learner),updatedAt:FieldValue.serverTimestamp(),
+        signoffs:FieldValue.arrayUnion(signoff)},{merge:true});
+      const approvalsAfter=decision==='approved'?approvals.size+1:approvals.size;
+      return {signoff,approvals:approvalsAfter,requiredSignatures:requirement.requiredSignatures,
+        complete:decision==='approved'&&approvalsAfter>=requirement.requiredSignatures};
     });
-    return { signoff };
+    return result;
   }
 
   if (action === 'portfolioShare') {
