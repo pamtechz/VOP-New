@@ -73,14 +73,14 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
   admin: {
     dashboard: read, organizations: ['view','read'], hierarchy: read, users: ['view','read','create','update','delete','assign','manage'],
     curriculum: contentManager, lessons: contentManager, quizzes: contentManager, materials: contentManager, radio: contentManager,
-    languages: contentManager, translations: contributor, announcements: contentManager, prayer: ['view','read','create','update','delete','manage'],
+    languages: read, translations: read, announcements: contentManager, prayer: ['view','read','create','update','delete','manage'],
     mentoring: ['view','read','create','update','delete','assign','manage'], certificates: ['view','read','create','update','manage'], analytics: read, audit: read, billing: billingRead,
     settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
   editor: {
     dashboard: read, hierarchy: read, users: read, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
-    materials: contributor, radio: contributor, languages: contentManager, translations: contributor, announcements: contributor,
+    materials: contributor, radio: contributor, languages: read, translations: read, announcements: contributor,
     prayer: read, mentoring: read, certificates: read, analytics: read, audit: read, settings: read,
     portfolio: read, scripture: read, duels: read,
   },
