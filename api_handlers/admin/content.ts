@@ -1083,11 +1083,7 @@ export default async function handler(req: Request, res: Response) {
       // credential identity. Existing records expose only a monotonic download counter.
       if (collection === 'certificates') {
         if (action === 'delete') {
-          if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can delete certificate records.');
-          if (!existing.exists) return res.status(200).json({ ok:true, id });
-          await ref.delete();
-          await writeTenantAudit(ctx, 'certificate.delete', `certificates/${id}`, existing.data(), undefined);
-          return res.status(200).json({ ok:true, id });
+          throw new Error('Issued certificate records are immutable. Revoke or replace the credential through the certificate lifecycle workflow.');
         }
         if (action === 'upsert') {
           if (!existing.exists) {
