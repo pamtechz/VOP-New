@@ -552,7 +552,7 @@ export default async function handler(
         transaction.set(ref, {
           key: failure.key,
           question: failure.question,
-          organizationId,
+          organizationId:policyOrganizationId,
           language,
           guideId,
           lessonId,
@@ -601,7 +601,9 @@ export default async function handler(
     console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
     if (message.includes('not configured')) return res.status(503).json({ error: message });
-    if (message.includes('Complete all published study lessons')) return res.status(409).json({error:message});
+    if (message.includes('Complete all published study lessons')
+        || message.includes('already been submitted')
+        || message.includes('attempt session')) return res.status(409).json({error:message});
     if (message.includes('Assessment attempt limit reached') || message.includes('Assessment retake is available after')) {
       return res.status(429).json({error:message});
     }
