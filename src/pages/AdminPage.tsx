@@ -30,8 +30,7 @@ import OrganizationManagement from './OrganizationManagement';
 import CandidateEnrollment from './CandidateEnrollment';
 import PrayerManagementPanel from './PrayerManagementPanel';
 import EngagementStudio from './EngagementStudio';
-import { TenantLanguagesPanel, getTenantLanguages } from '../components/admin/TenantLanguagesPanel';
-import { TenantTranslationsPanel } from '../components/admin/TenantTranslationsPanel';
+import { getTenantLanguages } from '../components/admin/TenantLanguagesPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
@@ -440,9 +439,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     return NAV.filter(item => {
       const feature=featureForTab[item.id];
       if(feature&&settings?.features?.[feature]===false)return false;
-      if (!canSee(item.id)) return false;
-      if (item.id === 'languages' && !isSuperAdmin && !(['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId))) return false;
       const role = String(currentUser.role || '');
+      const organizationAdmin = ['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId);
+      // Candidate management is an explicit organization-admin responsibility.
+      // Do not let a customized matrix accidentally remove the organisation's learner-enrollment workspace.
+      if (item.id === 'candidates') {
+        if (!(isSuperAdmin || isHierarchyAdmin || organizationAdmin)) return false;
+      } else if (!canSee(item.id)) return false;
+      // Language registry and canonical localization are platform governance.
+      // Tenant administrators use published locales; only Super Admin gets these admin tabs.
+      if ((item.id === 'languages' || item.id === 'translations') && !isSuperAdmin) return false;
       if (item.id === 'conferences' && !['super_admin','union_admin','conference_admin'].includes(role)) return false;
       if (item.id === 'districts' && !['super_admin','union_admin','conference_admin','district_admin'].includes(role)) return false;
       if (item.id === 'churches' && !['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role)) return false;
@@ -1139,8 +1145,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='userManagement'&&<UserManagement onBack={onBack} scope={{ isSuperAdmin: currentUser.role === 'super_admin', organizationId: currentUser.organizationId, role: currentUser.role }} />}
         {activeTab==='settings'&&renderSettings()}
-        {activeTab==='languages'&&(isSuperAdmin?renderLanguages():<TenantLanguagesPanel onChanged={setTenantLanguages}/>)}
-        {activeTab==='translations'&&!isSuperAdmin&&<TenantTranslationsPanel languages={scopedLanguages}/>}
+        {activeTab==='languages'&&isSuperAdmin&&renderLanguages()}
         {activeTab==='curriculum' && (curriculumSettingsOpen ? <CurriculumSettings languages={scopedLanguages} settings={settings} adminContent={adminContent} onBack={() => setCurriculumSettingsOpen(false)} showMessage={showMessage} /> : <CurriculumManager currentUser={currentUser} languages={scopedLanguages} initialTab={studioTab} onTabChange={setStudioTab} onOpenSettings={() => setCurriculumSettingsOpen(true)} />)}
         {activeTab==='candidates'&&<CandidateEnrollment currentUser={currentUser}/>}
         {activeTab==='certification'&&(
