@@ -9,7 +9,10 @@ type Quiz = {
   id: string; title: string; description?: string; language: string; archived?: boolean;
   questions: Array<Record<string, unknown>>; published?: boolean;
   sharingScope?: 'private' | 'organization' | 'shared';
-  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'final_exam'|'practice';
+  guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'chapter_quiz'|'final_exam'|'practice';
+  instructions?:string;timeLimitMinutes?:number;passThresholdOverride?:number|null;
+  maxAttemptsOverride?:number|null;retakeCooldownMinutesOverride?:number|null;
+  feedbackMode?:'immediate'|'after_submission'|'score_only'|'none';attemptStartRequired?:boolean;
   ownerOrganizationId?: string; ownerUid?: string; canEdit?: boolean;
 };
 type Guide = {
@@ -57,6 +60,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   const [anchorId,setAnchorId] = useState('');
   const [lessonDetails,setLessonDetails] = useState<LessonDetails[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [instructions,setInstructions]=useState('');
+  const [timeLimitMinutes,setTimeLimitMinutes]=useState('0');
+  const [passThresholdOverride,setPassThresholdOverride]=useState('');
+  const [maxAttemptsOverride,setMaxAttemptsOverride]=useState('');
+  const [retakeCooldownMinutesOverride,setRetakeCooldownMinutesOverride]=useState('');
+  const [feedbackMode,setFeedbackMode]=useState<'immediate'|'after_submission'|'score_only'|'none'>('after_submission');
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -86,7 +95,9 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setAttachmentType(initialExam ? 'guide' : initialAnchorType || (initialLessonId?'lesson':'guide'));
     setAnchorId(initialAnchorId || '');
     setTitle(initialExam ? 'Final guide examination' : '');
-    setDescription('');setQuestions([]);setPublished(false);
+    setDescription('');setQuestions([]);setPublished(false);setInstructions('');
+    setTimeLimitMinutes('0');setPassThresholdOverride('');setMaxAttemptsOverride('');
+    setRetakeCooldownMinutesOverride('');setFeedbackMode('after_submission');
   }, [initialGuideId,initialLessonId,initialAnchorType,initialAnchorId,initialExam,organizationId]);
   useEffect(() => {
     if (!guideId) {setLessonDetails([]);return;}
@@ -134,6 +145,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setLessonId(copy ? '' : quiz?.lessonId || '');
     setAnchorId(copy ? '' : quiz?.anchorId || '');
     setQuestions(quiz ? normalize(quiz.questions || []) : []);
+    setInstructions(copy?'':quiz?.instructions||'');
+    setTimeLimitMinutes(String(copy?0:quiz?.timeLimitMinutes??0));
+    setPassThresholdOverride(copy?'':quiz?.passThresholdOverride==null?'':String(quiz.passThresholdOverride));
+    setMaxAttemptsOverride(copy?'':quiz?.maxAttemptsOverride==null?'':String(quiz.maxAttemptsOverride));
+    setRetakeCooldownMinutesOverride(copy?'':quiz?.retakeCooldownMinutesOverride==null?'':String(quiz.retakeCooldownMinutesOverride));
+    setFeedbackMode(copy?'after_submission':quiz?.feedbackMode||'after_submission');
   };
   const save = async () => {
     if (!title.trim()) return setError('Quiz title is required.');
@@ -154,6 +171,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
           language: currentGuide.language, sharingScope: scope, published,
           attachmentType, guideId, lessonId: attachmentType === 'guide' ? '' : lessonId,
           anchorId: ['chapter','section','block'].includes(attachmentType) ? anchorId : '',
+          instructions:instructions.trim(),
+          timeLimitMinutes:Number(timeLimitMinutes)||0,
+          passThresholdOverride:passThresholdOverride===''?null:Number(passThresholdOverride),
+          maxAttemptsOverride:maxAttemptsOverride===''?null:Number(maxAttemptsOverride),
+          retakeCooldownMinutesOverride:retakeCooldownMinutesOverride===''?null:Number(retakeCooldownMinutesOverride),
+          feedbackMode,
           ...(sourceId ? { sourceContentId: sourceId } : {}),
           questions: questions.map(question => ({
             question: question.question, options: question.options,
@@ -242,6 +265,24 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         </div>
       </div>
       <div className="vop-field"><label>{t('common.description','Description')}</label><textarea value={description} onChange={e => setDescription(e.target.value)}/></div>
+      <div className="vop-assessment-policy-panel">
+        <div className="vop-section-title"><div><h3>Assessment delivery policy</h3>
+          <p>{attachmentType==='guide'?'Final examination':attachmentType==='chapter'?'Chapter quiz':'Practice assessment'} · instructions are shown before the attempt begins.</p></div></div>
+        <div className="vop-field"><label>Instructions shown before attempt</label><textarea value={instructions} onChange={e=>setInstructions(e.target.value)} maxLength={8000} placeholder="Explain timing, allowed materials, navigation and submission rules."/></div>
+        <div className="vop-form-grid">
+          <div className="vop-field"><label>Time limit (minutes)</label><input type="number" min="0" max="1440" value={timeLimitMinutes} onChange={e=>setTimeLimitMinutes(e.target.value)}/><small>0 = no time limit.</small></div>
+          <div className="vop-field"><label>Passing mark override (%)</label><input type="number" min="1" max="100" value={passThresholdOverride} onChange={e=>setPassThresholdOverride(e.target.value)} placeholder="Use platform default"/><small>Leave blank to inherit the configured platform/organization pass mark.</small></div>
+          <div className="vop-field"><label>Maximum attempts</label><input type="number" min="0" max="100" value={maxAttemptsOverride} onChange={e=>setMaxAttemptsOverride(e.target.value)} placeholder="Use platform default"/><small>Leave blank to inherit. Enter 0 for unlimited.</small></div>
+          <div className="vop-field"><label>Retake wait (minutes)</label><input type="number" min="0" max="10080" value={retakeCooldownMinutesOverride} onChange={e=>setRetakeCooldownMinutesOverride(e.target.value)} placeholder="Use platform default"/></div>
+          <div className="vop-field"><label>Feedback after submission</label><select value={feedbackMode} onChange={e=>setFeedbackMode(e.target.value as typeof feedbackMode)}>
+            <option value="after_submission">Score + answer feedback after submission</option>
+            <option value="immediate">Immediate answer feedback</option>
+            <option value="score_only">Score only</option>
+            <option value="none">No result details</option>
+          </select></div>
+          <div className="vop-field"><label>Assessment category</label><input readOnly value={attachmentType==='guide'?'Final examination':attachmentType==='chapter'?'Chapter quiz':'Practice'}/><small>Category follows where the assessment is attached.</small></div>
+        </div>
+      </div>
       <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
         {questions.map((question, index) => <div className="vop-card vop-form-card" key={index}>
           <div className="vop-section-title"><div><h3>Question {index + 1}</h3></div>
@@ -266,11 +307,12 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     </div>}
     <div className="vop-reference-table-wrap">
       {loading ? <div className="vop-empty">Loading quizzes…</div> : <table className="vop-reference-table">
-        <thead><tr><th>Quiz</th><th>Attached to</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Quiz</th><th>Type / attached to</th><th>Language</th><th>Questions</th><th>Policy</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{items.map(item => <tr key={item.id}>
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
-          <td>{item.attachmentType === 'guide' ? 'Final guide exam: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
+          <td><strong>{item.assessmentKind==='final_exam'?'Final exam':item.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice'}</strong><div>{item.attachmentType === 'guide' ? guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</div></td>
           <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
+          <td><div>{item.timeLimitMinutes?item.timeLimitMinutes+' min':'Untimed'}</div><div>{item.passThresholdOverride?'Pass '+item.passThresholdOverride+'%':'Inherited pass mark'}</div></td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.archived ? 'Archived' : item.published ? 'Published' : 'Draft'}</td>
           <td><div className="vop-reference-action-cell">
             <button className="vop-actions" type="button" onClick={() => open(item)} title={item.canEdit === false ? 'Owned by another contributor' : 'Edit'} disabled={item.canEdit === false}><Edit3 size={16}/></button>
