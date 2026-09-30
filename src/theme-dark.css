@@ -363,7 +363,7 @@
 [data-theme="dark"] .vop-public-radio-empty{color:var(--text-muted)!important}
 [data-theme="dark"] .vop-public-radio-empty h1{color:var(--text-primary)!important}
 
-[data-theme="dark"] :is(.vop-primary,.btn-primary){color:#111820!important}
+[data-theme="dark"] :is(.vop-primary,.btn-primary){color:#fff!important}
 [data-theme="dark"] :is(.vop-primary,.btn-primary):disabled{opacity:.55}
 
 @media print{
