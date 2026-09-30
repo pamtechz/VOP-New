@@ -145,8 +145,18 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
 
   const hierarchyRole = String(profileData.role || '');
   const hierarchyNodeId = String(profileData.adminNodeId || '').trim();
+  const ownHierarchyIds = {
+    unionId: String(profileData.unionId || '').trim(),
+    conferenceId: String(profileData.conferenceId || '').trim(),
+    districtId: String(profileData.districtId || '').trim(),
+    churchId: String(profileData.churchId || '').trim(),
+  };
   const hierarchyTenantId = hierarchyRole && hierarchyNodeId
     ? hierarchyRole + ':' + hierarchyNodeId
+    : ownHierarchyIds.churchId ? 'church_admin:' + ownHierarchyIds.churchId
+    : ownHierarchyIds.districtId ? 'district_admin:' + ownHierarchyIds.districtId
+    : ownHierarchyIds.conferenceId ? 'conference_admin:' + ownHierarchyIds.conferenceId
+    : ownHierarchyIds.unionId ? 'union_admin:' + ownHierarchyIds.unionId
     : '';
 
   const systemSettingsSnap = await getDoc(doc(firestore, 'system', 'settings'));
@@ -171,13 +181,6 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     security: platformSettings.security,
     notifications: platformSettings.notifications,
   } : platformSettings;
-
-  const ownHierarchyIds = {
-    unionId: String(profileData.unionId || '').trim(),
-    conferenceId: String(profileData.conferenceId || '').trim(),
-    districtId: String(profileData.districtId || '').trim(),
-    churchId: String(profileData.churchId || '').trim(),
-  };
 
   const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
     const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;
