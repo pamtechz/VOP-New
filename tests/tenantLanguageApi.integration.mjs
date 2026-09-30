@@ -84,16 +84,60 @@ test('platform language governance and localization contributor workflow',async 
       assert.ok(queue.payload.items.some(item=>item.id===applicant.uid));
     });
 
-    await t.test('Super Admin approves applicants and directly invites reviewers',async()=>{
+    await t.test('Super Admin approves applicants while invited reviewers must accept before access activates',async()=>{
       const approved=await call(workflow,superAdmin,{action:'setApplication',uid:applicant.uid,decision:'approve'});
       assert.equal(approved.status,200,JSON.stringify(approved.payload));
       assert.equal((await db.doc('localizationCollaborators/'+applicant.uid).get()).data()?.status,'active');
+
       for(const reviewer of [reviewerA,reviewerB]){
         const invited=await call(workflow,superAdmin,{
-          action:'setCollaborator',email:reviewer.email,roles:['reviewer'],languages:[code],status:'active',
+          action:'inviteCollaborator',email:reviewer.email,roles:['reviewer'],languages:[code],
         });
         assert.equal(invited.status,200,JSON.stringify(invited.payload));
+        assert.equal((await db.doc('localizationCollaborators/'+reviewer.uid).get()).data()?.status,'invited');
+
+        const blockedBeforeAcceptance=await call(workflow,reviewer,{
+          action:'listProposals',languageId:code,
+        });
+        assert.equal(blockedBeforeAcceptance.status,403,JSON.stringify(blockedBeforeAcceptance.payload));
+
+        const accepted=await call(workflow,reviewer,{action:'acceptInvitation'});
+        assert.equal(accepted.status,200,JSON.stringify(accepted.payload));
+        const active=(await db.doc('localizationCollaborators/'+reviewer.uid).get()).data();
+        assert.equal(active?.status,'active');
+        assert.deepEqual(active?.languages,[code]);
       }
+    });
+
+    await t.test('accepted translator can request another existing language and a new language through Super Admin review',async()=>{
+      const otherCode='nya';
+      const existingLanguage=await call(languages,superAdmin,{action:'upsert',code:otherCode,name:'Chichewa',nativeName:'Chichewa',enabled:true});
+      assert.equal(existingLanguage.status,200,JSON.stringify(existingLanguage.payload));
+
+      const existingRequest=await call(workflow,applicant,{
+        action:'requestLanguageAccess',kind:'existing_language',languageId:otherCode,reason:'I also translate Chichewa.',
+      });
+      assert.equal(existingRequest.status,200,JSON.stringify(existingRequest.payload));
+      const existingApproved=await call(workflow,superAdmin,{
+        action:'reviewAccessRequest',requestId:existingRequest.payload.item.id,decision:'approve',
+      });
+      assert.equal(existingApproved.status,200,JSON.stringify(existingApproved.payload));
+      assert.ok((await db.doc('localizationCollaborators/'+applicant.uid).get()).data()?.languages.includes(otherCode));
+
+      const newCode='toi';
+      const newRequest=await call(workflow,applicant,{
+        action:'requestLanguageAccess',kind:'new_language',code:newCode,name:'Tonga',nativeName:'Chitonga',reason:'Add Tonga localization.',
+      });
+      assert.equal(newRequest.status,200,JSON.stringify(newRequest.payload));
+      assert.equal((await db.doc('languages/'+newCode).get()).exists,false);
+      const newApproved=await call(workflow,superAdmin,{
+        action:'reviewAccessRequest',requestId:newRequest.payload.item.id,decision:'approve',
+      });
+      assert.equal(newApproved.status,200,JSON.stringify(newApproved.payload));
+      assert.equal((await db.doc('languages/'+newCode).get()).data()?.name,'Tonga');
+      assert.equal((await db.doc('locales/'+newCode).get()).data()?.nativeName,'Chitonga');
+      assert.equal((await db.doc('translations/'+newCode).get()).exists,true);
+      assert.ok((await db.doc('localizationCollaborators/'+applicant.uid).get()).data()?.languages.includes(newCode));
     });
 
     let proposalId='';
