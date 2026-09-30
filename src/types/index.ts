@@ -490,6 +490,8 @@ export type AppRoute =
   | 'radio' 
   | 'announcements'
   | 'events'
+  | 'notifications'
+  | 'invites'
   | 'support'
   | 'mentor'
   | 'admin' 

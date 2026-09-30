@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { organizationInHierarchyScope } from '../server/tenant.js';
 import { requirePermissionForProfile } from '../server/permissions.js';
+import { createNotification } from '../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -359,6 +360,19 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       await db.doc(`users/${studentId}`).set({ mentorId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      const assignmentOrganization=String(student.organizationId||organizationId);
+      await Promise.all([
+        createNotification(db,{
+          organizationId:assignmentOrganization,recipientId:studentId,type:'assignment',
+          title:'Mentor assigned',body:`${String(mentor.displayName||mentor.email||'Your mentor')} has been assigned to support your VOP learning.`,
+          actionUrl:'/support',metadata:{source:'mentor-assignment',mentorId},createdBy:decoded.uid,
+        }),
+        createNotification(db,{
+          organizationId:assignmentOrganization,recipientId:mentorId,type:'assignment',
+          title:'Learner assigned',body:`${String(student.displayName||student.email||'A learner')} has been assigned to your mentoring workspace.`,
+          actionUrl:'/mentor',metadata:{source:'mentor-assignment',studentId},createdBy:decoded.uid,
+        }),
+      ]);
       return res.status(200).json({ ok: true, item: { id: studentId, studentId, mentorId, status: 'active' } });
     }
 
@@ -477,12 +491,21 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const messageRef = ref.collection('messages').doc();
+      const recipientId=String(decoded.uid)===studentId?mentorId:studentId;
       await messageRef.set({
         senderId: decoded.uid,
-        recipientId: String(decoded.uid) === studentId ? mentorId : studentId,
+        recipientId,
         body: message,
         references,
         createdAt: FieldValue.serverTimestamp(),
+      });
+      const senderName=String(actor.displayName||actor.email||'VOP member');
+      await createNotification(db,{
+        organizationId:String(student.organizationId||organizationId),recipientId,type:'mentor-feedback',
+        title:'New mentoring message',body:`${senderName}: ${message.slice(0,240)}`,
+        actionUrl:recipientId===mentorId?'/mentor':'/support',
+        metadata:{source:'mentor-message',conversationId:ref.id,studentId,mentorId,messageId:messageRef.id},
+        createdBy:decoded.uid,
       });
       return res.status(200).json({ ok: true, item: { id: messageRef.id, senderId: decoded.uid, body: message, references } });
     }
@@ -570,14 +593,15 @@ export default async function handler(req: Request, res: Response) {
         if (!emailResponse.ok) throw new Error('Email delivery failed.');
         delivery = 'email';
       } else {
-        await db.collection('notifications').add({
-          organizationId: String(draft.organizationId || organizationId),
-          recipientId: String(draft.studentId || ''),
-          title: String(draft.subject || ''),
-          body: String(draft.body || ''),
-          type: 'learning-support',
-          createdAt: FieldValue.serverTimestamp(),
-          read: false,
+        await createNotification(db,{
+          organizationId:String(draft.organizationId||organizationId),
+          recipientId:String(draft.studentId||''),
+          title:String(draft.subject||'Learning support'),
+          body:String(draft.body||''),
+          type:'learning-support',
+          actionUrl:'/support',
+          metadata:{source:'mentorship-draft',draftId},
+          createdBy:decoded.uid,
         });
       }
       await draftRef.set({ status: 'sent', sentAt: FieldValue.serverTimestamp(), delivery }, { merge: true });

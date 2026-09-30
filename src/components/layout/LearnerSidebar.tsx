@@ -1,7 +1,7 @@
 import {
   BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, HeartHandshake,
   House, LibraryBig, Megaphone, MessageCircle, Radio, ScrollText,
-  Settings, ShieldCheck, Swords, Brain, UserRound, type LucideIcon,
+  Settings, ShieldCheck, Swords, Brain, UserRound, Bell, UserPlus, type LucideIcon,
 } from 'lucide-react';
 import type { AppRoute, AppSettings, User } from '../../types';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -22,7 +22,7 @@ type Props = {
 export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onToggle,onNavigate}:Props){
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
-    || ['owner','admin'].includes(String(currentUser.organizationRole||''));
+    || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole||''));
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
@@ -44,6 +44,8 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
       ...(isMentor?[{route:'mentor' as const,label:t('navigation.mentor_workspace','Mentor workspace'),icon:UserRound}]:[]),
     ]},
     {name:t('navigation.account','Account'),items:[
+      {route:'notifications',label:t('navigation.notifications','Notifications'),icon:Bell},
+      {route:'invites',label:t('navigation.invites','Invitations'),icon:UserPlus},
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
       {route:'personal-settings',label:t('navigation.personal_settings','Personal settings'),icon:Settings},
       ...(settings.features?.certification===false?[]:[{route:'certificates' as const,label:t('certificates.my_certificate','Certificates'),icon:GraduationCap}]),

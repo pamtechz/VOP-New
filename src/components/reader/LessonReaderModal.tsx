@@ -295,14 +295,14 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                 {pages[currentPageIndex+1]?.chapterId!==currentChapter.id&&assessmentLinks('chapter',currentChapter.id)}
                 {currentPageIndex===pages.length-1&&assessmentLinks('lesson')}
               </div> : <>
-                <h3 style={{ fontSize:'1.3rem',fontWeight:800,color:'#0f172a',lineHeight:1.3 }}>{currentPage.title}</h3>
-                {currentPage.imageUrl&&<div style={{borderRadius:'1rem',overflow:'hidden',background:'#f1f5f9'}}>
+                <h3 className="vop-reader-page-title" style={{ fontSize:'1.3rem',fontWeight:800,lineHeight:1.3 }}>{currentPage.title}</h3>
+                {currentPage.imageUrl&&<div className="vop-reader-page-image" style={{borderRadius:'1rem',overflow:'hidden'}}>
                   <img src={currentPage.imageUrl} alt="" loading="lazy"
                     style={{width:'100%',maxHeight:'22rem',objectFit:'contain',display:'block'}}/>
                 </div>}
                 {currentPageIndex===0&&lesson.media?.videoUrl&&<MediaPlayer src={lesson.media.videoUrl} title={lesson.title+' video'} kind="video"/>}
                 {currentPageIndex===0&&lesson.media?.audioUrl&&<MediaPlayer src={lesson.media.audioUrl} title={lesson.title+' audio'} kind="audio"/>}
-                <p style={{fontSize:'1rem',lineHeight:1.75,whiteSpace:'pre-line',color:'#334155'}}>{currentPage.content}</p>
+                <p className="vop-reader-page-copy" style={{fontSize:'1rem',lineHeight:1.75,whiteSpace:'pre-line'}}>{currentPage.content}</p>
                 {currentPageIndex===pages.length-1&&assessmentLinks('lesson')}
               </>}
 

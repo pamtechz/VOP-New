@@ -1,5 +1,6 @@
 import { authenticateTenant, writeTenantAudit, accessibleOrganizationIds, organizationInHierarchyScope } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
+import { createNotification } from '../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown; query?: Record<string, string | string[] | undefined> };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -86,6 +87,20 @@ export default async function handler(req: Request, res: Response) {
       };
       await ref.set(record);
       await writeTenantAudit(ctx,'prayer.create',`prayerRequests/${ref.id}`,undefined,record);
+      if(ctx.organizationId){
+        const members=await ctx.db.collection(`organizations/${ctx.organizationId}/members`).where('active','==',true).get();
+        const recipients=members.docs
+          .filter(doc=>['owner','admin'].includes(String(doc.data()?.role||''))&&doc.id!==ctx.auth.uid)
+          .map(doc=>doc.id);
+        await Promise.all(recipients.map(recipientId=>createNotification(ctx.db,{
+          organizationId:ctx.organizationId,recipientId,type:'prayer',
+          title:'New prayer request',
+          body:`${record.candidateName} submitted a ${category.toLowerCase()} prayer request.`,
+          actionUrl:'/admin/prayer',
+          metadata:{source:'prayer-request',requestId:ref.id,category,isPrivate:record.isPrivate},
+          createdBy:ctx.auth.uid,
+        })));
+      }
       return res.status(201).json({ ok:true, item:record });
     }
 
@@ -102,6 +117,17 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin && !(ctx.tenantType === 'hierarchy' ? await organizationInHierarchyScope(ctx, String(data.organizationId || '')) : String(data.organizationId || '') === ctx.organizationId)) throw new Error('You cannot manage a prayer request outside your authorized scope.');
       await ref.update({ status, updatedAt: new Date().toISOString(), updatedBy: ctx.auth.uid });
       await writeTenantAudit(ctx,'prayer.status',`prayerRequests/${requestId}`,data,{...data,status});
+      const candidateId=String(data.candidateId||'').trim();
+      if(candidateId&&candidateId!==ctx.auth.uid){
+        await createNotification(ctx.db,{
+          organizationId:String(data.organizationId||ctx.organizationId||''),recipientId:candidateId,type:'prayer',
+          title:'Prayer request updated',
+          body:`Your prayer request is now marked “${status}”.`,
+          actionUrl:'/prayer',
+          metadata:{source:'prayer-status',requestId,status},
+          createdBy:ctx.auth.uid,
+        });
+      }
       return res.status(200).json({ ok:true, id:requestId, status });
     }
 

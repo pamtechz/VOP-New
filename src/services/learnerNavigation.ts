@@ -18,7 +18,7 @@ const PREFIX='vop:learner-location:';
 const routes=new Set<AppRoute>([
   'home','guide','lesson','about','profile','personal-settings','resources','lessons',
   'master-guide','scripture-memory','iron-duels','prayer','radio','announcements',
-  'events','support','mentor','admin','certificates','certificate-verification',
+  'events','notifications','invites','support','mentor','admin','certificates','certificate-verification',
 ]);
 
 const text=(value:unknown)=>String(value||'').trim();

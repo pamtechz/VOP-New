@@ -5,6 +5,7 @@ import { requirePermission } from '../../server/permissions.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { verifiedAssessmentAverage } from '../../shared/graduationEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
+import { createNotification } from '../../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -53,6 +54,47 @@ async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>)
   const stages = stageConfig(snapshot.exists ? snapshot.data() || {} : {});
   if (!stages.length) throw new Error('Graduation approval stages are not configured. Configure at least one enabled approval stage before accepting graduation requests.');
   return stages;
+}
+
+async function notifyStageApprovers(
+  ctx: Awaited<ReturnType<typeof authenticateTenant>>,
+  request: Record<string, unknown>,
+  stage: ApprovalStage | undefined,
+  createdBy: string,
+) {
+  if (!stage) return;
+  const recipients=new Set<string>();
+  const organizationId=text(request.organizationId);
+  if(organizationId){
+    const members=await ctx.db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
+    for(const member of members.docs){
+      if(stage.approverRoles?.includes(text(member.data()?.role)))recipients.add(member.id);
+    }
+  }
+  const hierarchyRoleField:Record<string,string>={
+    union_admin:'unionId',conference_admin:'conferenceId',district_admin:'districtId',church_admin:'churchId',
+  };
+  for(const role of stage.approverRoles||[]){
+    if(role==='super_admin'){
+      const admins=await ctx.db.collection('users').where('role','==','super_admin').limit(50).get();
+      admins.docs.forEach(doc=>recipients.add(doc.id));
+      continue;
+    }
+    const scopeField=hierarchyRoleField[role];
+    if(!scopeField)continue;
+    const nodeId=text(request[scopeField]);
+    if(!nodeId)continue;
+    const admins=await ctx.db.collection('users').where('role','==',role).limit(100).get();
+    admins.docs.filter(doc=>text(doc.data()?.adminNodeId)===nodeId).forEach(doc=>recipients.add(doc.id));
+  }
+  await Promise.all([...recipients].filter(uid=>uid&&uid!==createdBy).map(recipientId=>createNotification(ctx.db,{
+    organizationId,recipientId,type:'certificate',
+    title:'Graduation approval required',
+    body:`${text(request.candidateName)||'A learner'} submitted ${text(request.guideTitle)||'a VOP course'} for ${stage.label||stage.id} review.`,
+    actionUrl:'/admin/certification',
+    metadata:{source:'graduation-approval',requestId:text(request.id),stageId:stage.id},
+    createdBy,
+  })));
 }
 
 async function submit(req: Request, res: Response) {
@@ -160,7 +202,10 @@ async function submit(req: Request, res: Response) {
     transaction.set(userRef, { information: { ...(freshData.information && typeof freshData.information === 'object' ? freshData.information : {}), graduating: true }, updatedAt: now }, { merge: true });
     return { created: true, data: safeRequest(ref.id, data) };
   });
-  if (result.created) await writeTenantAudit(ctx, 'graduation.request.submitted', ref.path, undefined, result.data as Record<string, unknown>);
+  if (result.created) {
+    await writeTenantAudit(ctx, 'graduation.request.submitted', ref.path, undefined, result.data as Record<string, unknown>);
+    await notifyStageApprovers(ctx,{...(result.data as Record<string,unknown>),id:ref.id},stages[0],ctx.auth.uid);
+  }
   return res.status(result.created ? 201 : 200).json({ ok: true, created: result.created, request: result.data });
 }
 
@@ -302,7 +347,29 @@ async function decide(req: Request, res: Response) {
     return { ...data, ...nextData };
   });
   await writeTenantAudit(ctx, decision === 'approve' ? 'graduation.stage.approved' : 'graduation.stage.rejected', ref.path, current, result);
-  return res.status(200).json({ ok: true, request: safeRequest(ref.id, result) });
+  const safe=safeRequest(ref.id,result);
+  const candidateId=text(result.candidateId);
+  if(candidateId&&candidateId!==ctx.auth.uid){
+    const finalStatus=text(result.status);
+    const statusMessage=decision==='reject'
+      ?'Your graduation request requires attention and was not approved at the current review stage.'
+      :finalStatus==='approved'
+        ?'Your graduation request has completed all required approval stages.'
+        :`Your graduation request passed ${stage.label||stage.id} review and moved to the next approval stage.`;
+    await createNotification(ctx.db,{
+      organizationId:requestOrganizationId,recipientId:candidateId,type:'certificate',
+      title:finalStatus==='approved'?'Graduation approved':decision==='reject'?'Graduation review update':'Graduation review progressed',
+      body:statusMessage,actionUrl:'/certificates',
+      metadata:{source:'graduation-decision',requestId:ref.id,status:finalStatus,decision,stageId:stage.id},
+      createdBy:ctx.auth.uid,
+    });
+  }
+  const upcomingStage=decision==='approve'&&text(result.status)!=='approved'
+    ?stages[Number(result.workflowStageIndex)]:undefined;
+  if(upcomingStage){
+    await notifyStageApprovers(ctx,{...result,id:ref.id},upcomingStage,ctx.auth.uid);
+  }
+  return res.status(200).json({ ok: true, request: safe });
 }
 
 export default async function handler(req: Request, res: Response) {

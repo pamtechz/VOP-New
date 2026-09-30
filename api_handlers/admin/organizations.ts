@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceQuota } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { createNotification } from '../../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -57,7 +58,7 @@ export default async function handler(req: Request, res: Response) {
     const bootstrapDb = getAdminDb();
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, action === 'acceptInvite');
+    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory'].includes(action));
     const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
     if (action === 'create') {
@@ -140,7 +141,118 @@ export default async function handler(req: Request, res: Response) {
         organizationId,
         organizationRole: role,
       });
+      if(invitedBy&&invitedBy!==ctx.auth.uid){
+        const organization=await bootstrapDb.doc('organizations/'+organizationId).get();
+        await createNotification(bootstrapDb,{
+          organizationId,recipientId:invitedBy,type:'invitation',
+          title:'Organization invitation accepted',
+          body:`${String(ctx.auth.name||ctx.auth.email||'A member')} accepted the invitation to join ${String(organization.data()?.name||organizationId)} as ${role}.`,
+          actionUrl:'/admin/organizations',
+          metadata:{source:'organization-invite-response',inviteToken:token,status:'accepted',memberUid:ctx.auth.uid},
+          createdBy:ctx.auth.uid,
+        });
+      }
       return res.status(200).json({ok:true,organizationId,role});
+    }
+
+    if (action === 'listInvites') {
+      const email=String(ctx.auth.email||'').trim().toLowerCase();
+      const receivedSnap=email
+        ?await bootstrapDb.collection('organizationInvites').where('email','==',email).limit(200).get()
+        :null;
+      const sentSnap=await bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(200).get();
+      const rows=[
+        ...(receivedSnap?.docs||[]).map(doc=>({token:doc.id,...doc.data(),direction:'received' as const})),
+        ...sentSnap.docs.map(doc=>({token:doc.id,...doc.data(),direction:'sent' as const})),
+      ];
+      const organizationIds=[...new Set(rows.map(item=>String(item.organizationId||'')).filter(Boolean))];
+      const organizationSnaps=organizationIds.length?await bootstrapDb.getAll(...organizationIds.map(orgId=>bootstrapDb.doc('organizations/'+orgId))):[];
+      const names=new Map(organizationSnaps.map(doc=>[doc.id,String(doc.data()?.name||doc.id)]));
+      const origin=String(req.headers?.origin||'').trim()
+        || `${String(req.headers?.['x-forwarded-proto']||'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host']||req.headers?.host||'').split(',')[0]}`.replace(/\/$/,'');
+      const items=rows.filter(item=>!Array.isArray(item.hiddenForUids)||!item.hiddenForUids.map(String).includes(ctx.auth.uid)).map(item=>({
+        ...item,
+        organizationName:names.get(String(item.organizationId||''))||String(item.organizationId||''),
+        inviteUrl:origin?`${origin}/?invite=${item.token}`:'',
+      })).sort((a,b)=>Date.parse(String(b.createdAt||0))-Date.parse(String(a.createdAt||0)));
+      return res.status(200).json({ok:true,items});
+    }
+
+    if (action === 'declineInvite') {
+      const token=String(body.token||'').trim();
+      if(!token)throw new Error('Invitation token is required.');
+      const inviteRef=bootstrapDb.doc('organizationInvites/'+token);
+      const invite=await inviteRef.get();
+      if(!invite.exists)throw new Error('This invitation is not valid.');
+      const data=invite.data()||{};
+      if(String(data.email||'').trim().toLowerCase()!==String(ctx.auth.email||'').trim().toLowerCase())throw new Error('This invitation belongs to another account.');
+      if(String(data.status||'')!=='pending')throw new Error('This invitation is no longer pending.');
+      await inviteRef.set({status:'declined',declinedBy:ctx.auth.uid,declinedAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      const invitedBy=String(data.invitedBy||'').trim();
+      if(invitedBy&&invitedBy!==ctx.auth.uid){
+        const organizationId=String(data.organizationId||'').trim();
+        const organization=organizationId?await bootstrapDb.doc('organizations/'+organizationId).get():null;
+        await createNotification(bootstrapDb,{
+          organizationId,recipientId:invitedBy,type:'invitation',
+          title:'Organization invitation declined',
+          body:`${String(ctx.auth.name||ctx.auth.email||'The invited member')} declined the invitation to ${String(organization?.data()?.name||organizationId||'your organization')}.`,
+          actionUrl:'/admin/organizations',
+          metadata:{source:'organization-invite-response',inviteToken:token,status:'declined'},
+          createdBy:ctx.auth.uid,
+        });
+      }
+      return res.status(200).json({ok:true,status:'declined'});
+    }
+
+    if (action === 'dismissInvite') {
+      const token=String(body.token||'').trim();
+      if(!token)throw new Error('Invitation token is required.');
+      const ref=bootstrapDb.doc('organizationInvites/'+token);
+      const snap=await ref.get();
+      if(!snap.exists)return res.status(200).json({ok:true,status:'dismissed'});
+      const data=snap.data()||{};
+      const email=String(ctx.auth.email||'').trim().toLowerCase();
+      const participant=String(data.invitedBy||'')===ctx.auth.uid
+        || (email&&String(data.email||'').trim().toLowerCase()===email);
+      if(!participant)throw new Error('This invitation is not part of your invitation history.');
+      if(String(data.status||'pending')==='pending')throw new Error('Respond to or cancel a pending invitation before deleting it from history.');
+      await ref.set({hiddenForUids:FieldValue.arrayUnion(ctx.auth.uid),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,status:'dismissed'});
+    }
+
+    if (action === 'clearInviteHistory') {
+      const email=String(ctx.auth.email||'').trim().toLowerCase();
+      const [received,sent]=await Promise.all([
+        email?bootstrapDb.collection('organizationInvites').where('email','==',email).limit(500).get():Promise.resolve(null),
+        bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(500).get(),
+      ]);
+      const map=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
+      received?.docs.forEach(doc=>map.set(doc.id,doc));
+      sent.docs.forEach(doc=>map.set(doc.id,doc));
+      const docs=[...map.values()].filter(doc=>String(doc.data()?.status||'pending')!=='pending'
+        && !(Array.isArray(doc.data()?.hiddenForUids)&&doc.data()?.hiddenForUids.map(String).includes(ctx.auth.uid)));
+      for(let offset=0;offset<docs.length;offset+=400){
+        const batch=bootstrapDb.batch();
+        docs.slice(offset,offset+400).forEach(doc=>batch.set(doc.ref,{hiddenForUids:FieldValue.arrayUnion(ctx.auth.uid),updatedAt:FieldValue.serverTimestamp()},{merge:true}));
+        await batch.commit();
+      }
+      return res.status(200).json({ok:true,cleared:docs.length});
+    }
+
+    if (action === 'cancelInvite') {
+      const token=String(body.token||'').trim();
+      if(!token)throw new Error('Invitation token is required.');
+      const inviteRef=bootstrapDb.doc('organizationInvites/'+token);
+      const invite=await inviteRef.get();
+      if(!invite.exists)throw new Error('Invitation was not found.');
+      const inviteData=invite.data()||{};
+      const inviteOrganizationId=String(inviteData.organizationId||'').trim();
+      const managed=await resolveManagedOrganization(ctx,inviteOrganizationId);
+      if(managed!==inviteOrganizationId)throw new Error('This invitation is outside your organization scope.');
+      if(!ctx.isSuperAdmin&&!hierarchyRole(String(ctx.profile.role||'')))requireOrgRole(ctx,['owner','admin']);
+      if(String(inviteData.status||'')!=='pending')throw new Error('Only a pending invitation can be cancelled.');
+      await inviteRef.set({status:'cancelled',cancelledBy:ctx.auth.uid,cancelledAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,status:'cancelled'});
     }
 
     if (action === 'delete') {
@@ -300,6 +412,21 @@ export default async function handler(req: Request, res: Response) {
         createdAt:now.toISOString(),expiresAt,status:'pending'
       });
       await writeTenantAudit(ctx,'membership.invite',`organizationInvites/${token}`,undefined,{email,role:inviteRole,expiresAt});
+      const organization=await ctx.db.doc('organizations/'+managedOrganizationId).get();
+      const organizationName=String(organization.data()?.name||managedOrganizationId);
+      const existingAccount=await ctx.db.collection('users').where('email','==',email).limit(1).get();
+      if(!existingAccount.empty){
+        await createNotification(ctx.db,{
+          organizationId:managedOrganizationId,
+          recipientId:existingAccount.docs[0].id,
+          type:'invitation',
+          title:'Organization invitation',
+          body:`You were invited to join ${organizationName} as ${inviteRole}. Review the invitation to accept or decline it.`,
+          actionUrl:'/invites',
+          metadata:{source:'organization-invite',inviteToken:token,organizationId:managedOrganizationId,role:inviteRole},
+          createdBy:ctx.auth.uid,
+        });
+      }
       const origin = String(req.headers?.origin || '').trim() || `${String(req.headers?.['x-forwarded-proto'] || 'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]}`.replace(/\/$/,'');
       const inviteUrl = `${origin}/?invite=${token}`;
       if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {

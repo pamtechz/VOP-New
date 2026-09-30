@@ -34,6 +34,7 @@ import LocalizationGovernancePanel from './LocalizationGovernancePanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
+import { consumeNotificationAdminTarget } from '../services/notificationRouting';
 
 interface AdminPageProps {
   currentUser: User;
@@ -123,7 +124,10 @@ async function adminContent(action: string, collection: string, id?: string, dat
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const target=consumeNotificationAdminTarget();
+    return (target||'dashboard') as AdminTab;
+  });
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -432,14 +436,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     };
     return NAV.filter(item => {
       const feature=featureForTab[item.id];
-      if(feature&&settings?.features?.[feature]===false)return false;
       const role = String(currentUser.role || '');
-      const organizationAdmin = ['owner','admin'].includes(String(currentUser.organizationRole || '')) && Boolean(currentUser.organizationId);
-      // Candidate management is an explicit organization-admin responsibility.
-      // Do not let a customized matrix accidentally remove the organisation's learner-enrollment workspace.
-      if (item.id === 'candidates') {
-        if (!(isSuperAdmin || isHierarchyAdmin || organizationAdmin)) return false;
-      } else if (!canSee(item.id)) return false;
+      const organizationRole=String(currentUser.organizationRole||'');
+      const organizationAdmin = ['owner','admin'].includes(organizationRole) && Boolean(currentUser.organizationId);
+      const curriculumContributor=['editor','teacher'].includes(organizationRole)&&Boolean(currentUser.organizationId);
+      const coreTenantAdmin=isSuperAdmin||isHierarchyAdmin||organizationAdmin;
+      // Candidates and Curriculum Studio are core tenant workspaces. Platform
+      // feature switches and stale/custom permission matrices must not make
+      // them disappear for the tenant roles that are responsible for them.
+      if(item.id==='candidates'){
+        if(!coreTenantAdmin)return false;
+      }else if(item.id==='curriculum'){
+        if(!(coreTenantAdmin||curriculumContributor||canSee(item.id)))return false;
+      }else{
+        if(feature&&settings?.features?.[feature]===false)return false;
+        if(!canSee(item.id))return false;
+      }
       // Language registry and canonical localization are platform governance.
       // Tenant administrators use published locales; only Super Admin gets these admin tabs.
       if ((item.id === 'languages' || item.id === 'translations') && !isSuperAdmin) return false;
@@ -1082,7 +1094,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       </button>
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
-        <CommunicationTools onNavigate={onNavigate} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
+        <CommunicationTools onNavigate={route=>{
+          if(route==='admin'){
+            const target=consumeNotificationAdminTarget();
+            if(target){setActiveTab(target as AdminTab);setSidebarOpen(false);return;}
+          }
+          onNavigate(route);
+        }} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
         <div className={'vop-profile '+(profileOpen?'open':'')}>
           <button className="vop-user" type="button" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>{setProfileOpen(value=>!value);setSidebarOpen(false)}} title="Open profile menu">
             {currentUser.photoURL ? <img className="vop-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}
