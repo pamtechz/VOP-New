@@ -45,6 +45,16 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       assert.ok(output&&typeof output==='object','Share API must return JSON.');
       return {status,...output};
     }
+    async function resolveShare(code){
+      let status=200,output,location='';
+      await share({method:'GET',headers:{},query:{c:code}},{
+        status(codeValue){status=codeValue;return this;},
+        setHeader(name,value){if(String(name).toLowerCase()==='location')location=String(value);},
+        json(data){output=data;return this;},
+      });
+      assert.ok(output&&typeof output==='object','Share redirect should return JSON.');
+      return {status,location,...output};
+    }
     async function callStudy(user,body){
       let status=200,output;
       await study({method:'POST',headers:{authorization:'Bearer '+user.token},body},{
@@ -75,6 +85,14 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       title:'Enrollment Lesson',published:true,archived:false,sharingScope:'organization',
       contentPages:[{pageNumber:1,title:'Study',content:'Enrollment content'}],
     });
+
+    await db.doc('shareReferences/legacy-link-01').set({
+      code:'legacy-link-01',targetPath:'/?guide=legacy-guide&lesson=legacy-lesson',
+      organizationId:orgA,sharingScope:'organization',clicks:0,installs:0,
+    });
+    const legacyRedirect=await resolveShare('legacy-link-01');
+    assert.equal(legacyRedirect.status,302,JSON.stringify(legacyRedirect));
+    assert.equal(legacyRedirect.location,'/?guide=legacy-guide&lesson=legacy-lesson&ref=legacy-link-01');
 
     const created=await callShare(author,{
       action:'create',guideId,lessonId,targetPath:'/?guide='+guideId+'&lesson='+lessonId,
