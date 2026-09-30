@@ -3,7 +3,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
-import { curriculumAnchorExists } from '../../shared/curriculumStructure.js';
+import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -177,9 +177,13 @@ export default async function handler(
 
     if (action === 'saveLessonResume') {
       const pageIndex = Number(body.pageIndex);
-      const maxPageIndex = Math.max(0, Number(body.pageCount) - 1);
-      if (!Number.isInteger(pageIndex) || pageIndex < 0 || !Number.isInteger(Number(body.pageCount)) || Number(body.pageCount) < 1 || pageIndex > maxPageIndex) {
-        return res.status(400).json({ error: 'A valid lesson page position is required.' });
+      const structuredPages = Array.isArray(lessonData.chapters)
+        ? curriculumPages(lessonData.chapters as Parameters<typeof curriculumPages>[0])
+        : [];
+      const canonicalPageCount = structuredPages.length || (Array.isArray(lessonData.contentPages) ? lessonData.contentPages.length : 0);
+      const maxPageIndex = canonicalPageCount - 1;
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || canonicalPageCount < 1 || pageIndex > maxPageIndex) {
+        return res.status(400).json({ error: 'A valid published lesson page position is required.' });
       }
       if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
         return res.status(409).json({ error: 'Only study lessons support resume positions.' });
