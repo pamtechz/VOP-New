@@ -46,6 +46,8 @@ export function emptySettings(): AppSettings {
     themeColor: '',
     certificateTitle: '',
     certificateBodyText: '',
+    features:{candidatesModule:true,curriculumStudio:true,translations:true,radio:true,announcements:true,certification:true},
+    security:{sessionTimeoutMinutes:60},
     detailPages: {
       aboutUsMission: '',
       aboutUsHistory: '',
