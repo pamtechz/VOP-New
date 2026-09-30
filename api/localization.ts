@@ -103,5 +103,5 @@ export default async function handler(req:Request,res:Response){
       return res.status(200).json({ok:true,item:{id:key,key,locale,namespace:namespaceOf(key),value,status}});
     }
     return res.status(400).json({error:'Unsupported localization action.'});
-  }catch(error){ const message=error instanceof Error?error.message:'Localization operation failed.'; const status=/sign in/i.test(message)?401:/permission|Only|membership|forbidden/i.test(message)?403:/not found|available/i.test(message)?404:400; return res.status(status).json({error:message}); }
+  }catch(error){ const message=error instanceof Error?error.message:'Localization operation failed.'; const status=/sign in/i.test(message)?401:/permission|Only|membership|forbidden|no longer supported|platform localization/i.test(message)?403:/not found|available/i.test(message)?404:400; return res.status(status).json({error:message}); }
 }
