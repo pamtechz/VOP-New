@@ -334,6 +334,11 @@ export default async function handler(request: Request, response: Response) {
       const invalid = Object.keys(incoming).filter(key => !allowed.includes(key));
       if (invalid.length) return response.status(400).json({ error:'Unsupported personal setting.' });
       const preferences: Record<string, string> = {};
+      if (incoming.theme !== undefined) {
+        const theme = String(incoming.theme || '').trim();
+        if (!['light','dark','system'].includes(theme)) return response.status(400).json({ error:'Select a valid theme.' });
+        preferences.theme = theme;
+      }
       for (const key of ['uiLocale', 'studyLanguage']) {
         if (incoming[key] !== undefined) {
           const locale = String(incoming[key] || '').trim().toLowerCase();
