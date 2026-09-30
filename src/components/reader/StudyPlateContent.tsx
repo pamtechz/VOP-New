@@ -30,7 +30,7 @@ function renderNode(node:StudyPlateNode|StudyPlateLeaf,key:string):React.ReactNo
       ? <a key={key} href={node.url} target="_blank" rel="noopener noreferrer">{children}</a>
       : <span key={key}>{children}</span>;
     case 'img':return node.url && isSafeHttpsMediaUrl(node.url)
-      ? <figure key={key}><img src={node.url} alt={node.children.map(item=>'text' in item?item.text:'').join('')}
+      ? <figure key={key}><img src={node.url} alt={node.alt||''}
           loading="lazy"/></figure>
       : null;
     case 'video':return node.url?<div key={key} className="vop-study-plate-media"><MediaPlayer src={node.url} title="Study video" kind="video"/></div>:null;
