@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
 import { requirePermission } from '../server/permissions.js';
-import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
+import { assessmentKindForAttachment, normalizeAssessmentPolicy, normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 import { quizManagementItem } from '../shared/quizManagementVisibility.js';
 import { curriculumAnchorExists } from '../shared/curriculumStructure.js';
 import { assertMutableTenantResource } from '../shared/platformStewardship.js';
@@ -181,6 +181,8 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && String(current.organizationId || '') !== target.organizationId) throw new Error('Moving a quiz between organizations is not allowed. Copy the quiz into the destination tenant instead.');
       const questions = normalizeQuizQuestions(data.questions, id);
       const learnerQuestions = publicQuizQuestions(questions);
+      const assessmentKind = assessmentKindForAttachment(target.attachmentType);
+      const assessmentPolicy = normalizeAssessmentPolicy(data.assessmentPolicy);
       if (published && questions.length === 0) throw new Error('Add at least one valid question before publishing.');
       const sourceContentId = String(current.sourceContentId || data.sourceContentId || '').trim();
       if (sourceContentId && !existing.exists) {
@@ -201,7 +203,7 @@ export default async function handler(req: Request, res: Response) {
       const quizDocument = {
         id, title, description, language, guideId:target.guideId,
         attachmentType:target.attachmentType, lessonId:target.lessonId,
-        anchorId:target.anchorId, assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        anchorId:target.anchorId, assessmentKind, assessmentPolicy,
         organizationId:current.organizationId || target.organizationId,
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
@@ -215,7 +217,7 @@ export default async function handler(req: Request, res: Response) {
         lessonNumber:quizLessonNumber(target.attachmentType, String(target.parentLesson?.lessonNumber || '')),
         type:'Test', sourceQuizId:id, attachmentType:target.attachmentType,
         attachedLessonId:target.lessonId, anchorId:target.anchorId,
-        assessmentKind:target.attachmentType === 'guide' ? 'final_exam' : 'practice',
+        assessmentKind, assessmentPolicy,
         questions:learnerQuestions, quiz:learnerQuestions,
         answerVisibility:'public_redacted',
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,
