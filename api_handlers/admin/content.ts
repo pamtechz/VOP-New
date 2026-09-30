@@ -173,14 +173,17 @@ export default async function handler(req: Request, res: Response) {
         : await Promise.all(organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()));
       const items = await Promise.all(snapshots.flatMap(snap => snap.docs).map(async d => {
         const lessons = await d.ref.collection('lessons').get();
+        const studyLessons=lessons.docs.filter(lesson =>
+          lesson.data().archived !== true && String(lesson.data().type || 'Lesson') !== 'Test');
         return {
           id: d.id,
           ...d.data(),
-          lessonCount: lessons.size,
-          // Metadata only: answer keys never belong in selector payloads.
-          lessons: lessons.docs.filter(lesson => lesson.data().archived !== true).map(lesson => ({
+          // Assessments are separate records and must never inflate a guide/module lesson count.
+          lessonCount: studyLessons.length,
+          // Metadata only: answer keys and assessment records never belong in lesson selector payloads.
+          lessons: studyLessons.map(lesson => ({
             id:lesson.id, title:String(lesson.data().title || ''), lessonNumber:String(lesson.data().lessonNumber || ''),
-            language:String(lesson.data().language || d.data().language || ''), type:String(lesson.data().type || 'Lesson'),
+            language:String(lesson.data().language || d.data().language || ''), type:'Lesson',
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
