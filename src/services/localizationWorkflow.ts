@@ -7,7 +7,7 @@ export type LocalizationApplication={
 };
 export type LocalizationCollaborator={
   id?:string;uid?:string;email?:string;displayName?:string;
-  languages?:string[];roles?:LocalizationRole[];status?:string;
+  languages?:string[];roles?:LocalizationRole[];status?:string;source?:string;invitedBy?:string;
 };
 export type LocalizationProposal={
   id:string;languageId:string;key:string;currentValue?:string;proposedValue?:string;
@@ -15,6 +15,11 @@ export type LocalizationProposal={
   status?:string;recommendationPercent?:number;positiveRecommendations?:number;totalReviewers?:number;
 };
 export type LocalizationLanguage={code:string;name:string;nativeName?:string};
+export type LocalizationAccessRequest={
+  id:string;requesterUid?:string;requesterEmail?:string;requesterName?:string;
+  kind:'existing_language'|'new_language';languageCode:string;name?:string;nativeName?:string;
+  reason?:string;status?:string;
+};
 
 export async function localizationRequest<T=Record<string,unknown>>(action:string,data:Record<string,unknown>={}):Promise<T>{
   const user=auth?.currentUser;

@@ -48,7 +48,7 @@ test('program UI links canonical guides and passes section-first entry mode to t
   assert.match(learner,/Standalone study items/);
   assert.match(loader,/loadFirestorePrograms/);
   assert.match(reader,/guide\.learnerEntryMode==='sections'/);
-  assert.match(reader,/vop-guide-direct-section/);
+  assert.match(reader,/vop-section-study-card/);
   assert.match(reader,/onSelectLesson\(lesson,actualIndex\)/);
 });
 test('private instructor notes cannot be persisted in the learner-readable lesson record',()=>{

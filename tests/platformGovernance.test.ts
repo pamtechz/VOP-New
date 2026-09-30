@@ -40,18 +40,28 @@ test('organization administrators retain candidates while language governance st
   assert.match(localization,/Organization-specific localization is no longer supported/);
 });
 
-test('localization workflow supports open applications, assigned reviewers and 90 percent auto publication',()=>{
+test('localization workflow requires invite acceptance, scopes assigned languages and supports governed language requests',()=>{
   const server=read('api_handlers/admin/localization.ts');
   const participation=read('src/components/localization/LocalizationParticipation.tsx');
   const governance=read('src/pages/LocalizationGovernancePanel.tsx');
   assert.match(server,/action==='apply'/);
-  assert.match(server,/action==='setCollaborator'/);
+  assert.match(server,/action==='inviteCollaborator'/);
+  assert.match(server,/status:'invited'/);
+  assert.match(server,/action==='acceptInvitation'\|\|action==='declineInvitation'/);
+  assert.match(server,/action==='requestLanguageAccess'/);
+  assert.match(server,/action==='reviewAccessRequest'/);
+  assert.match(server,/FieldValue\.arrayUnion\(code\)/);
+  assert.match(server,/createRequestedLanguage\(db,code/);
   assert.match(server,/action==='recommend'/);
   assert.match(server,/if\(percent>=90\)/);
   assert.match(server,/publishProposal\(db,code,proposalId,uid,'automatic'\)/);
-  assert.match(participation,/Apply for localization/);
-  assert.match(participation,/Reviewer queue/);
-  assert.match(governance,/Invite translator or reviewer/);
+  assert.match(participation,/Accept invitation/);
+  assert.match(participation,/assignedLanguageOptions/);
+  assert.match(participation,/Request another language/);
+  assert.match(participation,/Existing translation/);
+  assert.match(participation,/New language/);
+  assert.match(governance,/Awaiting recipient acceptance/);
+  assert.match(governance,/Language access requests/);
   assert.match(governance,/90% reviewer recommendation/);
 });
 

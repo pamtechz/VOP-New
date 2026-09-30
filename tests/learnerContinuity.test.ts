@@ -84,8 +84,15 @@ test('learner hierarchy counts lessons separately and keeps quizzes in their own
   const catalogue=read('src/pages/LessonsPage.tsx');
   assert.match(reader,/filter\(item=>item\.type==='Lesson'\)/);
   assert.match(reader,/filter\(item=>item\.type==='Test'\)/);
+  assert.match(reader,/vop-section-study-card/);
+  assert.match(reader,/attachedAssessments\(lesson,'section',section\.id\)/);
+  assert.match(reader,/attachedAssessments\(lesson,'chapter',chapter\.id\)/);
+  assert.match(reader,/attachedAssessments\(lesson,'lesson'\)/);
+  assert.match(reader,/guide\.learnerEntryMode==='sections'/);
+  assert.match(reader,/totalSections/);
+  assert.match(reader,/Take test/);
   assert.match(reader,/Lesson\/chapter\/section\/block quizzes live inside their owning lesson/);
-  assert.match(reader,/Assessments are attached to this module; they are not lessons or modules themselves/);
+  assert.match(reader,/never counted as lessons, sections or curriculum modules/);
   assert.doesNotMatch(reader,/modules completed/);
   assert.match(lessonReader,/item\.attachedLessonId===lesson\.id/);
   assert.match(lessonReader,/assessmentLinks\('section',currentSection\.id\)/);
