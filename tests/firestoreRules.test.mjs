@@ -720,7 +720,8 @@ test('private learning evidence, attempts and certificates stay isolated across 
     });
     const learnerA=environment.authenticatedContext('private-a').firestore();
     const learnerB=environment.authenticatedContext('private-b').firestore();
-    await assertSucceeds(learnerA.doc('users/private-a/assessmentAttempts/attempt-a').get());
+    await assertFails(learnerA.doc('users/private-a/assessmentAttempts/attempt-a').get(),
+      'Verified attempt detail is server-only even for the learner.');
     await assertFails(learnerB.doc('users/private-a/assessmentAttempts/attempt-a').get());
     await assertFails(learnerB.doc('users/private-a/assessmentAttempts/attempt-a').update({score:100}));
     await assertFails(learnerB.doc('users/private-a/assessmentAttempts/attempt-a').delete());
