@@ -1288,3 +1288,136 @@ h1, h2, h3, h4, h5, h6 {
 .vop-maintenance-screen{min-height:100dvh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 20%,#173e6b 0,#0d2747 44%,#071a31 100%);color:#fff}
 .vop-maintenance-screen section{width:min(560px,100%);padding:34px;border:1px solid rgba(255,255,255,.15);border-radius:20px;background:rgba(4,18,36,.62);text-align:center;box-shadow:0 28px 80px rgba(0,0,0,.3);backdrop-filter:blur(10px)}
 .vop-maintenance-screen img{width:82px;height:82px;object-fit:contain;margin:auto}.vop-maintenance-screen span{display:block;margin-top:16px;color:#e6b53b;font-size:11px;font-weight:900;letter-spacing:.2em}.vop-maintenance-screen h1{margin:8px 0 10px;font-size:clamp(26px,5vw,38px)}.vop-maintenance-screen p{margin:0 auto 20px;max-width:460px;color:#c8d5e3;line-height:1.65}.vop-maintenance-screen button{border:1px solid rgba(255,255,255,.25);border-radius:10px;background:#fff;color:#173f6d;padding:10px 18px;font-weight:850;cursor:pointer}
+
+
+/* ==========================================================================
+   Dark-first application surface normalization
+   Every portal inherits the same semantic dark surfaces. Components that
+   still carry historical light literals are normalized here until their
+   local styles are migrated to tokens.
+   ========================================================================== */
+[data-theme="dark"] {
+  --vop-success-bg: #0b2a21;
+  --vop-warning-bg: #33250b;
+  --vop-error-bg: #35151a;
+  --vop-info-bg: #0a2940;
+  --vop-navy-100: #183861;
+  --vop-navy-50: #0b1d37;
+  --vop-gold-100: #3a2a0d;
+  --vop-gold-50: #281f0d;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] #root,
+[data-theme="dark"] .vop-learner-shell,
+[data-theme="dark"] .vop-learner-main,
+[data-theme="dark"] .vop-app-content,
+[data-theme="dark"] .vop-admin-shell,
+[data-theme="dark"] .vop-main,
+[data-theme="dark"] .vop-page-shell,
+[data-theme="dark"] .vop-materials-page,
+[data-theme="dark"] .vop-lessons-page,
+[data-theme="dark"] .vop-engagement-page,
+[data-theme="dark"] .vop-about-page,
+[data-theme="dark"] .vop-personal-settings {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] :is(
+  .vop-card,.glass-panel,.vop-personal-card,.vop-candidate-list-card,
+  .vop-mentoring-card,.vop-program-catalog-open,.vop-program-catalog-card,
+  .vop-material-card,.vop-about-feature,.vop-about-card,.vop-about-connect,
+  .vop-about-tabs,.vop-about-source-note,.vop-guide-section-group,
+  .vop-guide-direct-section,.vop-guide-lesson,.vop-guide-assessment,
+  .vop-settings-card,.vop-section-card,.vop-form-card,
+  section[role="dialog"],.vop-dialog,.vop-candidate-modal
+) {
+  background: var(--bg-card) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,select
+) {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-strong) !important;
+}
+
+[data-theme="dark"] :is(input,textarea,select)::placeholder { color: #7f93ad !important; }
+[data-theme="dark"] option { background:#0a1b35; color:#f8fafc; }
+
+[data-theme="dark"] :is(
+  table,thead,tbody,tr,th,td,
+  .vop-table,.vop-candidate-table,.vop-users-table
+) {
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary);
+}
+[data-theme="dark"] :is(thead,th) { background:#0c2140 !important; color:#cfe0f4 !important; }
+[data-theme="dark"] :is(tbody tr,.vop-row) { background:var(--bg-card) !important; }
+[data-theme="dark"] :is(tbody tr:hover,.vop-row:hover) { background:#122b50 !important; }
+
+[data-theme="dark"] :is(
+  .vop-sidebar,.vop-admin-sidebar,.vop-learner-sidebar,
+  .vop-app-header,.vop-admin-header,.vop-header-learning-menu,
+  .vop-account-menu,.vop-profile-menu
+) {
+  background:#081a32 !important;
+  border-color:#1d3b63 !important;
+  color:#e8f0f8 !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-secondary,.btn-outline,.vop-actions,.vop-program-back,
+  .vop-structure-more,.vop-lessons-refresh
+) {
+  background:#0d2444 !important;
+  color:#d9e7f6 !important;
+  border-color:#294b77 !important;
+}
+[data-theme="dark"] :is(.vop-secondary,.btn-outline,.vop-actions,.vop-program-back):hover {
+  background:#15325b !important;
+}
+
+[data-theme="dark"] :is(
+  p,small,em,.vop-setting-help,.vop-row-desc,.vop-card p,
+  .vop-personal-card small,.vop-about-card p,.vop-about-feature p
+) { color:var(--text-secondary); }
+
+[data-theme="dark"] :is(h1,h2,h3,h4,h5,h6,strong,label) { color:var(--text-primary); }
+
+[data-theme="dark"] .modal-overlay,
+[data-theme="dark"] .vop-candidate-modal-backdrop {
+  background:rgba(2,8,18,.78) !important;
+}
+
+[data-theme="dark"] :is(
+  .bg-white,.bg-slate-50,.bg-slate-100,
+  .bg-emerald-50\/60,.bg-emerald-50\/70,.bg-amber-50\/70
+) { background-color:var(--bg-card) !important; }
+
+[data-theme="dark"] :is(.text-slate-900,.text-slate-800,.text-slate-700) { color:#f1f5f9 !important; }
+[data-theme="dark"] :is(.text-slate-500,.text-slate-400) { color:#9fb0c5 !important; }
+
+[data-theme="dark"] .vop-guide-lesson.completed,
+[data-theme="dark"] .vop-guide-direct-section.completed,
+[data-theme="dark"] .vop-guide-assessment.passed {
+  background:#0b2a21 !important;
+  border-color:#1f6b50 !important;
+}
+[data-theme="dark"] .vop-guide-assessment.attempted {
+  background:#30240d !important;
+  border-color:#6d5420 !important;
+}
+[data-theme="dark"] .vop-guide-assessment.locked { background:#101c2d !important; }
+
+[data-theme="dark"] .vop-about-hero,
+[data-theme="dark"] .vop-app-header,
+[data-theme="dark"] .vop-bottom-nav { color-scheme:dark; }
+
+[data-theme="dark"] ::selection { background:#245b9c; color:#fff; }
