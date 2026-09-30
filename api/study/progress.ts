@@ -136,9 +136,18 @@ export default async function handler(
     const candidateGuideData = candidateGuide?.exists ? candidateGuide.data() || {} : {};
     const candidateGuideOrganizationId = String(candidateGuideData.organizationId || '').trim();
     const candidateGuideShared = candidateGuideData.sharingScope === 'shared' && candidateGuideData.published === true;
+    const enrollmentId=candidateGuide?.exists&&candidateGuideOrganizationId
+      ? candidateGuideOrganizationId+'_'+decoded.uid+'_'+guideId : '';
+    const enrollment=enrollmentId?await db.doc('courseEnrollments/'+enrollmentId).get():null;
+    const enrolledForGuide=Boolean(enrollment?.exists
+      && enrollment.data()?.status==='active'
+      && String(enrollment.data()?.uid||'')===decoded.uid
+      && String(enrollment.data()?.organizationId||'')===candidateGuideOrganizationId
+      && String(enrollment.data()?.guideId||'')===guideId);
     const useTenantGuide = Boolean(candidateGuide?.exists && (
       (Boolean(organizationId) && candidateGuideOrganizationId === organizationId)
       || candidateGuideShared
+      || enrolledForGuide
     ));
     // Never resolve an unknown or forbidden canonical guide against the
     // legacy Discover collection. Only the literal "discover" ID is legacy.
@@ -170,7 +179,7 @@ export default async function handler(
     if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
-    if (useTenantGuide && candidateGuideOrganizationId !== organizationId
+    if (useTenantGuide && candidateGuideOrganizationId !== organizationId && !enrolledForGuide
         && (lessonData.sharingScope !== 'shared' || lessonData.archived === true)) {
       return res.status(403).json({ error: 'This lesson is not shared with your organization.' });
     }
