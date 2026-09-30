@@ -154,6 +154,8 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(editor,/Paragraph style/);
   assert.match(editor,/New section/);
   assert.match(editor,/Insert approved audio or video/);
+  assert.match(editor,/LinkRules\.autolink/);
+  assert.match(editor,/upsertLink\(editor/);
   assert.match(editor,/fetch\('\/api\/media'/);
   assert.match(editor,/StudyVideoPlugin/);
   assert.match(editor,/StudyAudioPlugin/);
