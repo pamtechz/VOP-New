@@ -167,6 +167,8 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
       : null;
   const platformSettings = systemSettingsSnap.exists() ? normalizeSettings(systemSettingsSnap.data()) : emptySettings();
   const scopedSettings = scopedSettingsSnap?.exists() ? normalizeSettings(scopedSettingsSnap.data()) : null;
+  const platformDetails = platformSettings.detailPages || emptySettings().detailPages!;
+  const scopedDetails = scopedSettings?.detailPages || emptySettings().detailPages!;
   const effectiveSettings: AppSettings = scopedSettings ? {
     ...platformSettings,
     ...scopedSettings,
@@ -181,12 +183,20 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     security: platformSettings.security,
     notifications: platformSettings.notifications,
     detailPages: {
-      ...(scopedSettings.detailPages || {}),
-      // About the application itself remains platform-owned; tenant scopes own
-      // Ministry & Mission plus Offices & Contact.
-      aboutAppDescription: platformSettings.detailPages?.aboutAppDescription || '',
-      aboutAppVersion: platformSettings.detailPages?.aboutAppVersion || '',
-      aboutAppCredits: platformSettings.detailPages?.aboutAppCredits || '',
+      // Tenant scopes own Ministry & Mission plus Offices & Contact.
+      aboutUsMission: scopedDetails.aboutUsMission,
+      aboutUsHistory: scopedDetails.aboutUsHistory,
+      aboutUsLeadership: scopedDetails.aboutUsLeadership,
+      contactOfficeAddress: scopedDetails.contactOfficeAddress,
+      contactOfficeHours: scopedDetails.contactOfficeHours,
+      contactPhoneNumbers: scopedDetails.contactPhoneNumbers,
+      contactEmails: scopedDetails.contactEmails,
+      contactWhatsAppNumbers: scopedDetails.contactWhatsAppNumbers,
+      socialLinks: scopedDetails.socialLinks,
+      // About the VOP application itself remains platform-owned.
+      aboutAppDescription: platformDetails.aboutAppDescription,
+      aboutAppVersion: platformDetails.aboutAppVersion,
+      aboutAppCredits: platformDetails.aboutAppCredits,
     },
   } : platformSettings;
 
