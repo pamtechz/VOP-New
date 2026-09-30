@@ -354,7 +354,7 @@ export const subscribeSettings = (
     if (!scope.superAdmin && !scope.organizationId && !['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
       callback({
         appName:'', organizationName:'', schoolName:'', directorName:'', directorTitle:'',
-        contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, defaultLanguage:'',
+        contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'',
         appTagline:'', timezone:'', website:'', welcomeMessage:'',
         systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
         features:{candidatesModule:false,curriculumStudio:false,translations:false,radio:false,announcements:false,certification:false},
@@ -380,6 +380,8 @@ export const subscribeSettings = (
           whatsappNumber: data.whatsappNumber || '',
           contactEmail: data.contactEmail || '',
           quizPassThreshold: Number(data.quizPassThreshold ?? 0),
+          quizMaxAttempts: Math.max(0, Math.trunc(Number(data.quizMaxAttempts ?? 0) || 0)),
+          quizRetakeCooldownMinutes: Math.max(0, Math.trunc(Number(data.quizRetakeCooldownMinutes ?? 0) || 0)),
           defaultLanguage: data.defaultLanguage || '',
           appTagline: data.appTagline || '',
           timezone: data.timezone || '',
@@ -426,6 +428,8 @@ export const subscribeSettings = (
           whatsappNumber: '',
           contactEmail: '',
           quizPassThreshold: 0,
+          quizMaxAttempts: 0,
+          quizRetakeCooldownMinutes: 0,
           defaultLanguage: '',
           appTagline: '',
           timezone: '',
