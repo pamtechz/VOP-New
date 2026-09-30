@@ -1045,14 +1045,15 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   }).catch(reason=>setError(reason instanceof Error?reason.message:'Transfer failed.'))
                     .finally(()=>setSaving(false));
                 }}
-                canAttachQuiz={Boolean(editor.id) && editor.published}
+                canAttachQuiz={Boolean(editor.id)}
+                lessonPublished={editor.published}
                 onQuiz={anchor=>{
                   if(editorDirty){
                     setError('Save your lesson changes before leaving the editor to manage a quiz.');
                     return;
                   }
-                  if (!editor.id || !editor.published) {
-                    setError('Save and publish this lesson before attaching a published quiz.');
+                  if (!editor.id) {
+                    setError('Save this lesson before attaching a quiz so its section and block anchors exist.');
                     return;
                   }
                   setQuizPlacement({guideId:editor.guideId,lessonId:editor.id,anchorType:anchor.type,anchorId:anchor.id,kind:'practice'});
