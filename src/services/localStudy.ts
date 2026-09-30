@@ -35,12 +35,24 @@ export async function completeLesson(
   } catch { return queue(); }
 }
 
+export interface AssessmentSubmissionResult {
+  score: number;
+  passed: boolean;
+  retakePolicy: {
+    attemptsUsed: number;
+    maxAttempts: number | null;
+    remainingAttempts: number | null;
+    cooldownMinutes: number;
+    retryAt: string | null;
+  };
+}
+
 export async function submitQuizAnswers(
   guideId: string,
   testId: string,
   answers: Record<number, number | boolean>,
   language: string = getActiveLanguage(),
-): Promise<number | null> {
+): Promise<AssessmentSubmissionResult | null> {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) return null;
 
@@ -60,8 +72,14 @@ export async function submitQuizAnswers(
     }),
   });
 
-  if (!response.ok) return null;
-  const body = await response.json().catch(() => null) as { score?: unknown } | null;
+  const body = await response.json().catch(() => null) as {
+    error?:unknown; score?:unknown; passed?:unknown;
+    retakePolicy?:Partial<AssessmentSubmissionResult['retakePolicy']>;
+  } | null;
+  if (!response.ok) {
+    throw new Error(typeof body?.error === 'string' && body.error.trim()
+      ? body.error : 'The assessment could not be verified and saved.');
+  }
   const score = Number(body?.score);
   if (Number.isFinite(score) && score >= 0 && score <= 100) {
     // Graduation eligibility is re-evaluated server-side; a 409 simply means the learner has not completed every requirement yet.
@@ -74,7 +92,20 @@ export async function submitQuizAnswers(
     } catch {
       // Quiz results remain authoritative even when graduation submission is not yet eligible or temporarily unavailable.
     }
-    return score;
+    const policy = body?.retakePolicy || {};
+    return {
+      score,
+      passed: body?.passed === true,
+      retakePolicy: {
+        attemptsUsed: Math.max(1, Math.trunc(Number(policy.attemptsUsed) || 1)),
+        maxAttempts: Number.isInteger(Number(policy.maxAttempts)) && Number(policy.maxAttempts) > 0
+          ? Number(policy.maxAttempts) : null,
+        remainingAttempts: Number.isInteger(Number(policy.remainingAttempts)) && Number(policy.remainingAttempts) >= 0
+          ? Number(policy.remainingAttempts) : null,
+        cooldownMinutes: Math.max(0, Math.trunc(Number(policy.cooldownMinutes) || 0)),
+        retryAt: typeof policy.retryAt === 'string' && policy.retryAt ? policy.retryAt : null,
+      },
+    };
   }
   return null;
 }
