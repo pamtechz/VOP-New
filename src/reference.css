@@ -6,9 +6,9 @@
 }
 
 .vop-screen {
-  background: #fff;
+  background:var(--bg-card,#fff);
   min-height: 100%;
-  color: #17202d;
+  color:var(--text-primary,#17202d);
   padding-bottom: max(5.5rem, env(safe-area-inset-bottom, 0px));
 }
 
@@ -86,7 +86,7 @@
 .vop-step-copy {
   background: none;
   border: 0;
-  color: #17202d;
+  color:var(--text-primary,#17202d);
   display: block;
   text-align: left;
   padding: 0;
@@ -149,7 +149,7 @@
   overflow: hidden;
   width: 100%;
   aspect-ratio: 1.55;
-  background: #fff;
+  background:var(--bg-card,#fff);
   box-shadow: 0 3px 12px #0002;
   border: 1px solid #dce3ea;
   padding: clamp(0.6rem, 3vw, 1.5rem);
@@ -171,7 +171,7 @@
 
 .vop-certificate-card h3 {
   font-size: clamp(0.68rem, 2vw, 1.1rem);
-  color: #283548;
+  color:var(--text-secondary,#283548);
 }
 
 .vop-certificate-card h4 {
@@ -281,7 +281,7 @@
 }
 
 [class~='bg-white'] {
-  background: #fff !important;
+  background:var(--bg-card,#fff) !important;
 }
 
 [class~='w-16'] {
@@ -494,7 +494,7 @@
 
 .vop-login-card-inner {
   width: min(100%, 460px);
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #dce3ec;
   border-radius: 24px;
   box-shadow: 0 18px 55px rgba(10, 25, 47, .13);
@@ -532,8 +532,8 @@
   padding: .82rem .9rem;
   min-height: 48px;
   font: inherit;
-  background: #fff;
-  color: #17202d;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#17202d);
 }
 
 .vop-login-form input:focus {
@@ -563,8 +563,8 @@
 .vop-login-google {
   width: 100%;
   border: 1px solid #cfd7e3;
-  background: #fff;
-  color: #17202d;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#17202d);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -618,7 +618,7 @@
   margin: 1rem 0 0;
   padding: .8rem .9rem;
   border-radius: 10px;
-  background: #fff1f2;
+  background:var(--bg-card,#fff)1f2;
   border: 1px solid #fecdd3;
   color: #9f1239;
   font-size: .82rem;
@@ -795,7 +795,7 @@
 }
 
 .vop-reference-card {
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #edf2f7;
   border-radius: 1.35rem;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .07);
@@ -841,8 +841,8 @@
   display: grid;
   place-items: center;
   border: 4px solid #cbd5e1;
-  background: #fff;
-  color: #17202d;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#17202d);
   font-size: .86rem;
   font-weight: 800;
 }
@@ -878,12 +878,12 @@
 .vop-guide-progress-copy strong {
   display: block;
   margin-bottom: .5rem;
-  color: #17202d;
+  color:var(--text-primary,#17202d);
   font-size: .84rem;
 }
 
 .vop-reference-muted {
-  color: #64748b;
+  color:var(--text-muted,#64748b);
   font-size: .8rem;
   line-height: 1.45;
 }
@@ -901,7 +901,7 @@
 }
 
 .vop-reference-form {
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #dfe5ec;
   border-radius: 1.35rem;
   box-shadow: 0 3px 15px rgba(0, 0, 0, .08);
@@ -913,7 +913,7 @@
 .vop-reference-field {
   display: grid;
   gap: .3rem;
-  color: #17202d;
+  color:var(--text-primary,#17202d);
   font-size: .83rem;
   font-weight: 700;
 }
@@ -925,7 +925,7 @@
   border-radius: .7rem;
   min-height: 2.85rem;
   padding: .55rem .8rem;
-  background: #fff;
+  background:var(--bg-card,#fff);
   color: #14223b;
   font: inherit;
 }
@@ -936,8 +936,8 @@
 
 .vop-certificate-page {
   min-height: 100dvh;
-  background: #fff;
-  color: #17202d;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#17202d);
   padding-bottom: max(3rem, env(safe-area-inset-bottom));
 }
 
@@ -1015,7 +1015,7 @@
 }
 
 .vop-certificate-reference-kicker {
-  color: #283548;
+  color:var(--text-secondary,#283548);
   font-size: clamp(.62rem, 1.9vw, .9rem);
   font-weight: 700;
   letter-spacing: .02em;
@@ -1031,7 +1031,7 @@
 
 .vop-certificate-reference-copy {
   margin: 0;
-  color: #283548;
+  color:var(--text-secondary,#283548);
   font-size: clamp(.52rem, 1.8vw, .78rem);
   line-height: 1.35;
 }
@@ -1062,7 +1062,7 @@
 }
 
 .vop-certificate-reference-meta {
-  color: #283548;
+  color:var(--text-secondary,#283548);
   font-size: clamp(.48rem, 1.55vw, .72rem);
   line-height: 1.3;
 }
@@ -1078,7 +1078,7 @@
 .vop-certificate-progress-title {
   margin: 0 0 .7rem;
   text-align: center;
-  color: #17202d;
+  color:var(--text-primary,#17202d);
   font-size: .95rem;
   font-weight: 800;
 }
@@ -1100,7 +1100,7 @@
   gap: .35rem;
   border: 0;
   background: transparent;
-  color: #17202d;
+  color:var(--text-primary,#17202d);
   font: 700 .78rem/1.2 var(--font-sans);
   cursor: pointer;
 }
@@ -1181,8 +1181,8 @@
    -------------------------------------------------------------------------- */
 .vop-admin-reference-page {
   min-height: 100dvh;
-  background: #fff;
-  color: #111827;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#111827);
   padding-bottom: max(3.5rem, env(safe-area-inset-bottom));
 }
 
@@ -1233,7 +1233,7 @@
   padding: 1.35rem 1.15rem;
   border: 1px solid #edf1f7;
   border-radius: 1.5rem;
-  background: #fff;
+  background:var(--bg-card,#fff);
   box-shadow: 0 4px 18px rgba(0, 30, 80, 0.07);
   display: flex;
   flex-direction: column;
@@ -1261,7 +1261,7 @@
 
 .vop-admin-reference-card h2 {
   margin: 0 0 0.3rem;
-  color: #111827;
+  color:var(--text-primary,#111827);
   font-size: 1.02rem;
   font-weight: 750;
   line-height: 1.25;
@@ -1269,7 +1269,7 @@
 
 .vop-admin-reference-card p {
   margin: 0;
-  color: #6b7280;
+  color:var(--text-muted,#6b7280);
   font-size: 0.76rem;
   line-height: 1.35;
 }
@@ -1279,7 +1279,7 @@
   padding: 0.85rem 1rem;
   border: 1px solid #edf1f7;
   border-radius: 1.25rem;
-  background: #fff;
+  background:var(--bg-card,#fff);
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
 }
 
@@ -1298,7 +1298,7 @@
   flex: 0 0 auto;
   border: 1px solid #dce3ec;
   border-radius: 999px;
-  background: #fff;
+  background:var(--bg-card,#fff);
   color: var(--vop-navy-deep);
   padding: 0.5rem 0.9rem;
   font: 700 0.74rem/1 var(--font-sans);
@@ -1383,7 +1383,7 @@
 }
 
 .vop-reference-card {
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #edf2f7;
   border-radius: 1.5rem;
   box-shadow: 0 4px 18px rgba(0, 30, 80, 0.07);
@@ -1394,7 +1394,7 @@
 
 .vop-reference-card-title {
   margin: 0 0 1.2rem;
-  color: #718096;
+  color:var(--text-muted,#718096);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -1429,8 +1429,8 @@
   display: grid;
   place-items: center;
   border: 3.5px solid #ff9900;
-  background: #fff;
-  color: #111827;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#111827);
   font-size: 0.92rem;
   font-weight: 800;
   box-sizing: border-box;
@@ -1460,7 +1460,7 @@
 .vop-guide-progress-copy strong {
   display: block;
   margin-bottom: 0.5rem;
-  color: #111827;
+  color:var(--text-primary,#111827);
   font-size: 0.88rem;
 }
 
@@ -1469,8 +1469,8 @@
    -------------------------------------------------------------------------- */
 .vop-certificate-page {
   min-height: 100dvh;
-  background: #fff;
-  color: #111827;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#111827);
   padding-bottom: max(3.5rem, env(safe-area-inset-bottom));
 }
 
@@ -1512,7 +1512,7 @@
   overflow: hidden;
   aspect-ratio: 1.62;
   width: 100%;
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #dce3ec;
   border-radius: 1.25rem;
   box-shadow: 0 10px 32px rgba(0, 30, 80, 0.12);
@@ -1588,7 +1588,7 @@
 }
 
 .vop-certificate-reference-kicker {
-  color: #334155;
+  color:var(--text-secondary,#334155);
   font-size: clamp(0.6rem, 1.8vw, 0.86rem);
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1596,7 +1596,7 @@
 }
 
 .vop-certificate-reference-sub {
-  color: #475569;
+  color:var(--text-secondary,#475569);
   font-size: clamp(0.55rem, 1.6vw, 0.76rem);
   margin-top: 0.35rem;
 }
@@ -1612,7 +1612,7 @@
 
 .vop-certificate-reference-course {
   margin: 0.2rem 0;
-  color: #111827;
+  color:var(--text-primary,#111827);
   font-size: clamp(0.72rem, 2.2vw, 1.05rem);
   font-weight: 850;
   letter-spacing: 0.04em;
@@ -1621,7 +1621,7 @@
 
 .vop-certificate-reference-copy {
   margin: 0;
-  color: #475569;
+  color:var(--text-secondary,#475569);
   font-size: clamp(0.52rem, 1.55vw, 0.74rem);
   line-height: 1.35;
 }
@@ -1663,7 +1663,7 @@
 
 .vop-cert-meta-school {
   font-size: clamp(0.44rem, 1.3vw, 0.62rem);
-  color: #64748b;
+  color:var(--text-muted,#64748b);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1671,7 +1671,7 @@
 
 .vop-cert-meta-date {
   font-size: clamp(0.44rem, 1.3vw, 0.62rem);
-  color: #64748b;
+  color:var(--text-muted,#64748b);
   margin-top: 0.1rem;
 }
 
@@ -1686,12 +1686,12 @@
 .vop-cert-signer-name {
   font-size: clamp(0.52rem, 1.55vw, 0.76rem);
   font-weight: 800;
-  color: #111827;
+  color:var(--text-primary,#111827);
 }
 
 .vop-cert-signer-title {
   font-size: clamp(0.44rem, 1.3vw, 0.62rem);
-  color: #64748b;
+  color:var(--text-muted,#64748b);
 }
 
 /* Certificate Progress & CTA block */
@@ -1703,7 +1703,7 @@
 .vop-certificate-progress-title {
   margin: 0 0 0.65rem;
   text-align: center;
-  color: #111827;
+  color:var(--text-primary,#111827);
   font-size: 1.05rem;
   font-weight: 750;
 }
@@ -1724,7 +1724,7 @@
 
 .vop-cert-progress-caption {
   text-align: center;
-  color: #6b7280;
+  color:var(--text-muted,#6b7280);
   font-size: 0.84rem;
   margin: 0.5rem 0 1rem;
 }
@@ -1776,7 +1776,7 @@
 
 .vop-cert-caption {
   text-align: center;
-  color: #64748b;
+  color:var(--text-muted,#64748b);
   font-size: 0.82rem;
   margin: 0.85rem 0;
 }
@@ -1805,7 +1805,7 @@
 
 .vop-public-certificate-preview-head strong {
   font-size: 15px;
-  color: #173d75
+  color:var(--text-primary,#173d75)
 }
 
 .vop-public-certificate-preview-head span {
@@ -1823,8 +1823,8 @@
   height: 38px;
   border: 1px solid #dbe5ef;
   border-radius: 8px;
-  background: #fff;
-  color: #173d75;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#173d75);
   padding: 0 12px;
   font-weight: 800;
   display: flex;
@@ -1866,7 +1866,7 @@
   }
 
   .vop-certificate-verification {
-    background: #fff
+    background:var(--bg-card,#fff)
   }
 
   .vop-certificate-verification-body {
@@ -1896,7 +1896,7 @@
 .vop-certificate-artwork {
   position: relative;
   aspect-ratio: 1.46;
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 5px solid #082e70;
   overflow: hidden;
   box-shadow: 0 5px 18px rgba(15, 45, 90, .13);
@@ -2122,7 +2122,7 @@
 .vop-certificate-verification-qr span {
   font-size: 6px;
   font-weight: 800;
-  color: #173d75;
+  color:var(--text-primary,#173d75);
   line-height: 1;
   white-space: nowrap
 }
@@ -2174,7 +2174,7 @@
 .vop-official-certificate {
   position: relative;
   aspect-ratio: 1.46;
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 5px solid #082e70;
   overflow: hidden;
   box-shadow: 0 5px 18px rgba(15, 45, 90, .13);
@@ -2359,7 +2359,7 @@
 }
 
 .vop-official-certificate-meta div {
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #dfe7f1;
   border-radius: 10px;
   padding: 12px
@@ -2377,7 +2377,7 @@
 
 .vop-official-certificate-meta strong {
   font-size: 13px;
-  color: #173d75;
+  color:var(--text-primary,#173d75);
   margin-top: 4px;
   word-break: break-word
 }
@@ -2396,8 +2396,8 @@
   padding: 0 18px;
   border: 1px solid #dbe5ef;
   border-radius: 9px;
-  background: #fff;
-  color: #09275f;
+  background:var(--bg-card,#fff);
+  color:var(--text-primary,#09275f);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -2452,13 +2452,13 @@
 
 .vop-certificate-verification {
   min-height: 100dvh;
-  background: #f5f8fc;
-  color: #09275f
+  background:var(--bg-primary,#f5f8fc);
+  color:var(--text-primary,#09275f)
 }
 
 .vop-certificate-verification-head {
   min-height: 84px;
-  background: #fff;
+  background:var(--bg-card,#fff);
   border-bottom: 1px solid #dfe7f1;
   display: flex;
   align-items: center;
@@ -2469,7 +2469,7 @@
 .vop-certificate-verification-head>button {
   border: 0;
   background: transparent;
-  color: #173d75;
+  color:var(--text-primary,#173d75);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -2493,7 +2493,7 @@
 }
 
 .vop-certificate-verification-search {
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #dfe7f1;
   border-radius: 13px;
   padding: 15px;
@@ -2525,7 +2525,7 @@
   border: 0;
   outline: 0;
   width: 100%;
-  color: #173d75
+  color:var(--text-primary,#173d75)
 }
 
 .vop-certificate-verification-search>button {
@@ -2546,7 +2546,7 @@
   margin-top: 15px;
   border-radius: 13px;
   padding: 18px;
-  background: #fff;
+  background:var(--bg-card,#fff);
   border: 1px solid #dfe7f1
 }
 
@@ -2554,7 +2554,7 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: #fff3f3;
+  background:var(--bg-card,#fff)3f3;
   border-color: #fecaca;
   color: #a51d36
 }
@@ -2594,7 +2594,7 @@
 }
 
 .vop-verification-grid>div {
-  background: #fff;
+  background:var(--bg-card,#fff);
   padding: 12px
 }
 
@@ -2609,7 +2609,7 @@
 }
 
 .vop-verification-grid strong {
-  color: #173d75;
+  color:var(--text-primary,#173d75);
   font-size: 13px;
   margin-top: 3px
 }
@@ -2687,4 +2687,16 @@
   .vop-official-certificate {
     box-shadow: none
   }
+}
+
+/* Reference document paper exceptions */
+.vop-certificate-artwork,
+.vop-official-certificate,
+.vop-certificate-reference-card{
+  background:#fff;
+  color:#111;
+}
+.vop-certificate-artwork :is(h1,h2,h3,h4,p,strong,span,small,div),
+.vop-official-certificate :is(h1,h2,h3,h4,p,strong,span,small,div){
+  color:inherit;
 }
