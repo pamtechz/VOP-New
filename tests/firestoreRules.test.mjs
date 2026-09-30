@@ -199,6 +199,16 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
       await adminDb.doc('users/church-admin').set({
         uid:'church-admin', role:'church_admin', adminNodeId:'church-1', adminNodeType:'church', organizationId:'',
       });
+      await adminDb.doc('users/church-learner').set({
+        uid:'church-learner', role:'student', organizationId:'',
+        unionId:'union-1', conferenceId:'conf-1', districtId:'dist-1', churchId:'church-1',
+      });
+      await adminDb.doc('tenantSettings/church_admin:church-1/settings/settings').set({
+        organizationName:'Church One Ministry', detailPages:{aboutUsMission:'Local mission'},
+      });
+      await adminDb.doc('tenantSettings/church_admin:church-2/settings/settings').set({
+        organizationName:'Church Two Ministry',
+      });
     });
 
     const superAdmin = environment.authenticatedContext('super-admin').firestore();
@@ -226,8 +236,13 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertSucceeds(unionAdmin.doc('tenantSettings/union_admin:union-1/settings/settings').update({ organizationName: 'Updated Scoped Tenant' }));
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').get());
     await assertFails(unionAdmin.doc('tenantSettings/union_admin:union-2/settings/settings').set({ organizationName: 'Foreign' }));
-    await assertFails(unionAdmin.doc('system/settings').get());
+    await assertSucceeds(unionAdmin.doc('system/settings').get());
     await assertFails(unionAdmin.doc('system/permissions').get());
+    const churchLearner = environment.authenticatedContext('church-learner').firestore();
+    await assertSucceeds(churchLearner.doc('system/settings').get());
+    await assertSucceeds(churchLearner.doc('tenantSettings/church_admin:church-1/settings/settings').get());
+    await assertFails(churchLearner.doc('tenantSettings/church_admin:church-2/settings/settings').get());
+    await assertFails(churchLearner.doc('tenantSettings/church_admin:church-1/settings/settings').update({organizationName:'Learner cannot edit'}));
 
     // Each hierarchy administrator can update its own hierarchy profile and
     // descendants, while cross-scope records remain inaccessible.

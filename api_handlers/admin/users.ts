@@ -132,6 +132,18 @@ function userCode(authUser: UserRecord, profile: Record<string, unknown> | undef
   return existing || authUser.uid.slice(0, 12).toUpperCase();
 }
 
+const HIERARCHY_COLLECTION: Record<string,string> = {
+  union:'unions', conference:'conferences', district:'districts', church:'churches',
+};
+
+async function validatedHierarchyAssignment(db: Firestore, nodeType: string, nodeId: string) {
+  const collection = HIERARCHY_COLLECTION[nodeType];
+  if (!collection || !nodeId) throw new Error('Choose a valid hierarchy level and assignment.');
+  const snapshot = await db.doc(collection + '/' + nodeId).get();
+  if (!snapshot.exists) throw new Error('The selected hierarchy assignment does not exist.');
+  return { nodeType, nodeId };
+}
+
 async function loadOrganizations(db: Firestore) {
   const [unions, conferences, districts, organizations] = await Promise.all([
     db.collection('unions').get(),
@@ -400,7 +412,15 @@ export default async function handler(request: Request, response: Response) {
 
       if (!email || !displayName) return response.status(400).json({ error: 'Name and email are required.' });
       if (password && password.length < 6) return response.status(400).json({ error: 'Password must contain at least 6 characters.' });
-      if (type === 'admin' && !managedOrganizationId) return response.status(400).json({ error: 'Select an organization tenant before creating an administrator.' });
+      const assignmentMode = String(body.assignmentMode || (managedOrganizationId ? 'organization' : '')).trim();
+      const requestedNodeType = String(body.adminNodeType || '').trim();
+      const requestedNodeId = String(body.adminNodeId || '').trim();
+      if (type === 'admin' && !managedOrganizationId) {
+        if (!(tenant.isSuperAdmin && assignmentMode === 'hierarchy')) {
+          return response.status(400).json({ error: 'Choose an organization or hierarchy assignment for this administrator.' });
+        }
+        await validatedHierarchyAssignment(db, requestedNodeType, requestedNodeId);
+      }
       if (type === 'super_admin' && !tenant.isSuperAdmin) throw new Error('Only the VOP Super Admin can create platform administrators.');
       if (type === 'admin' && tenantOrganizationId && !['owner','admin'].includes(String(tenant.membership.role || ''))) {
         throw new Error('Only an organization owner or administrator can create organization administrators.');
@@ -414,7 +434,10 @@ export default async function handler(request: Request, response: Response) {
         ...(password ? { password } : {}),
         disabled: false,
       });
-      const profile = profileForType(type, body, managedOrganizationId);
+      const profile = profileForType(type, {
+        ...body,
+        ...(type === 'admin' && !managedOrganizationId ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
+      }, managedOrganizationId);
       const hierarchyMembershipFields = hierarchyTenant
         ? {
             unionId: hierarchyTenant === 'union_admin' ? hierarchyNodeId : String(profile.unionId || body.unionId || '').trim(),
@@ -520,22 +543,47 @@ export default async function handler(request: Request, response: Response) {
       if (typeof body.disabled === 'boolean') update.disabled = body.disabled;
       const updated = await authService.updateUser(uid, update);
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : profileType(existingData, existing);
-      if (tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) throw new Error('This user belongs to another organization.');
+      if (!tenant.isSuperAdmin && tenantOrganizationId && String(existingData.organizationId || '') !== tenantOrganizationId) {
+        throw new Error('This user belongs to another organization.');
+      }
       if (type === 'super_admin' && !tenant.isSuperAdmin) {
         throw new Error('Only the VOP Super Admin can assign the platform super administrator role.');
       }
       if (type === 'super_admin' && tenantOrganizationId) {
         throw new Error('A platform administrator cannot be assigned to an organization tenant.');
       }
-      // Super Admin may manage users platform-wide, but changing a user's
-      // display role must not silently detach that user from an existing tenant.
-      // Tenant reassignment is a separate, explicit organization operation.
-      const effectiveOrganizationId = tenantOrganizationId || String(existingData.organizationId || '').trim();
-      const baseProfile = profileForType(type, body, effectiveOrganizationId);
+      const assignmentMode = String(body.assignmentMode || '').trim();
+      const requestedNodeType = String(body.adminNodeType || '').trim();
+      const requestedNodeId = String(body.adminNodeId || '').trim();
+      const hierarchyReassignment = type === 'admin' && assignmentMode === 'hierarchy';
+      const platformReassignment = tenant.isSuperAdmin && type === 'super_admin';
+      const organizationReassignment = tenant.isSuperAdmin && assignmentMode === 'organization'
+        && Object.prototype.hasOwnProperty.call(body, 'organizationId');
+      if (hierarchyReassignment) {
+        if (!tenant.isSuperAdmin) throw new Error('Only VOP Super Admin can assign hierarchy administrator roles.');
+        await validatedHierarchyAssignment(db, requestedNodeType, requestedNodeId);
+      }
+      if (tenant.isSuperAdmin && type === 'admin' && assignmentMode === 'organization' && !requestedManagedOrganizationId) {
+        throw new Error('Choose an organization for an organization administrator.');
+      }
+      // Ordinary tenant edits preserve membership. Super Admin can explicitly
+      // move or detach an account by sending the assignment field, including an
+      // empty organizationId for a platform-level non-admin account.
+      const effectiveOrganizationId = hierarchyReassignment || platformReassignment
+        ? ''
+        : organizationReassignment
+          ? requestedManagedOrganizationId
+          : tenantOrganizationId || String(existingData.organizationId || '').trim();
+      const baseProfile = profileForType(type, {
+        ...body,
+        ...(hierarchyReassignment ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
+      }, effectiveOrganizationId);
       const existingPlatformRole = hierarchyRole(String(existingData.role || ''));
-      const profile = existingPlatformRole
-        ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
-        : baseProfile;
+      const profile = tenant.isSuperAdmin
+        ? baseProfile
+        : existingPlatformRole
+          ? { ...baseProfile, role: existingPlatformRole, adminNodeType: existingData.adminNodeType, adminNodeId: existingData.adminNodeId }
+          : baseProfile;
       await profileRef.set({
         uid,
         email: updated.email || existingData.email || '',
@@ -543,6 +591,17 @@ export default async function handler(request: Request, response: Response) {
         phoneNumber: updated.phoneNumber || existingData.phoneNumber || '',
         userType: type,
         ...profile,
+        ...(hierarchyReassignment ? {
+          organizationId:'', organizationRole:'',
+          unionId: requestedNodeType === 'union' ? requestedNodeId : '',
+          conferenceId: requestedNodeType === 'conference' ? requestedNodeId : '',
+          districtId: requestedNodeType === 'district' ? requestedNodeId : '',
+          churchId: requestedNodeType === 'church' ? requestedNodeId : '',
+        } : platformReassignment ? {
+          organizationId:'', organizationRole:'', unionId:'', conferenceId:'', districtId:'', churchId:'',
+        } : organizationReassignment && !effectiveOrganizationId ? {
+          organizationId:'', organizationRole:'',
+        } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const preservedHierarchyRole = hierarchyRole(String(profile.role || existingData.role || ''));
@@ -556,6 +615,13 @@ export default async function handler(request: Request, response: Response) {
               ? { role: 'mentor' }
               : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
+      const previousOrganizationId = String(existingData.organizationId || '').trim();
+      if ((hierarchyReassignment || platformReassignment || organizationReassignment)
+        && previousOrganizationId && previousOrganizationId !== membershipOrganizationId) {
+        await db.doc(`organizations/${previousOrganizationId}/members/${uid}`).set({
+          active:false, updatedAt:new Date().toISOString(), assignedBy:decoded.uid,
+        }, {merge:true});
+      }
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
           uid, organizationId:membershipOrganizationId,
@@ -583,7 +649,7 @@ export default async function handler(request: Request, response: Response) {
       const target = await authService.getUser(uid);
       if (!target.email) return response.status(400).json({ error: 'This user does not have an email address.' });
       const resetLink = await authService.generatePasswordResetLink(target.email);
-      return response.status(200).json({ ok: true, email: target.email, resetLink });
+      return response.status(200).json({ ok: true, item: { uid, email: target.email, resetLink } });
     }
 
     if (action === 'delete') {
@@ -697,8 +763,16 @@ export default async function handler(request: Request, response: Response) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'User management operation failed.';
     if (message === 'Sign in first.') return response.status(401).json({ error: message });
-    if (message.includes('Only the VOP super administrator')) return response.status(403).json({ error: message });
-    if (message.includes('Firebase Admin server configuration is missing')) return response.status(503).json({ error: 'Server-side Firebase administration is not configured.' });
+    if (message.includes('Firebase Admin server configuration is missing')) {
+      return response.status(503).json({ error: 'Server-side Firebase administration is not configured.' });
+    }
+    if (/permission|only |outside your|another organization|authorized tenant|cannot access|not a member|belongs to another/i.test(message)) {
+      return response.status(403).json({ error: message });
+    }
+    if (/not found|does not exist/i.test(message)) return response.status(404).json({ error: message });
+    if (/required|select |valid |password|name and email|cannot delete their own|transfer organization ownership|assign another administrator/i.test(message)) {
+      return response.status(400).json({ error: message });
+    }
     console.error('VOP user management failed', error);
     return response.status(500).json({ error: 'User management operation failed.' });
   }

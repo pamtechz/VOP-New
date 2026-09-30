@@ -7,7 +7,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
-  ChevronRight, ListMusic, Clock3, Video, Headphones
+  ChevronRight, ListMusic, Clock3, Video, Headphones, Search, SlidersHorizontal
 } from 'lucide-react';
 
 interface RadioPageProps { broadcasts: RadioBroadcast[]; playlists?: RadioPlaylist[]; onBack: () => void; }
@@ -55,11 +55,16 @@ function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = Math.floor(seconds % 60);
   return h ? h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') : m + ':' + String(s).padStart(2, '0');
 }
-function localTime(date: Date) { return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date); }
-function dateTime(value?: string) {
+function localTime(date: Date, timeZone?: string) {
+  try { return new Intl.DateTimeFormat(undefined, { hour:'2-digit', minute:'2-digit', ...(timeZone ? {timeZone} : {}) }).format(date); }
+  catch { return new Intl.DateTimeFormat(undefined, { hour:'2-digit', minute:'2-digit' }).format(date); }
+}
+function dateTime(value?: string, timeZone?: string) {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  if (Number.isNaN(date.getTime())) return '';
+  try { return new Intl.DateTimeFormat(undefined, { dateStyle:'medium', timeStyle:'short', ...(timeZone ? {timeZone} : {}) }).format(date); }
+  catch { return new Intl.DateTimeFormat(undefined, { dateStyle:'medium', timeStyle:'short' }).format(date); }
 }
 function youtubeSource(value?: string) {
   if (!value) return null;
@@ -144,6 +149,9 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   const [ytReady, setYtReady] = useState(false);
   const [scheduleRange, setScheduleRange] = useState<'today' | 'tomorrow' | 'week'>('today');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+  const [viewMode,setViewMode]=useState<'browse'|'watch'>('browse');
+  const [search,setSearch]=useState('');
+  const [browseFilter,setBrowseFilter]=useState('all');
   const playlistIndexRef = useRef(-1);
   const playlistItemsRef = useRef<RadioBroadcast[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
@@ -168,7 +176,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       if (cancelled || !ytMountRef.current) return;
       const player = new YT.Player(ytMountRef.current, {
         videoId: youtubeVideoId, width: '100%', height: '100%',
-        playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1, enablejsapi: 1 },
+        playerVars: { autoplay: 0, controls: 1, rel: 0, playsinline: 1, enablejsapi: 1 },
         events: {
           onReady: event => { if (cancelled) return; ytPlayerRef.current = event.target; setYtReady(true); setDuration(event.target.getDuration() || 0); event.target.setVolume(volume * 100); },
           onStateChange: event => {
@@ -187,7 +195,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       ytPlayerRef.current = player;
     }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'YouTube player controls could not be initialised.'); });
     return () => { cancelled = true; ytPlayerRef.current?.destroy(); ytPlayerRef.current = null; };
-  }, [source?.provider, youtubeVideoId]);
+  }, [source?.provider, youtubeVideoId, viewMode]);
 
   useEffect(() => {
     if (source?.provider !== 'youtube' || !ytPlayerRef.current || !ytReady) return;
@@ -217,7 +225,7 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       }
     } catch { setPlaying(false); setError('The configured media could not be played. Check the source and browser permissions.'); }
   };
-  const selectProgramme = (item: RadioBroadcast) => { if (selected?.id === item.id) void togglePlay(); else setSelected(item); };
+  const selectProgramme = (item: RadioBroadcast) => { setSelected(item); setViewMode('watch'); };
   const selectPlaylist = (playlist: RadioPlaylist) => {
     const items = playlist.itemIds.map(id => broadcasts.find(item => item.id === id)).filter((item): item is RadioBroadcast => Boolean(item && detectMedia(item)));
     if (!items.length) return;
@@ -282,8 +290,22 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   });
 
   const heroItem = selected || broadcasts[0], selectedPoster = heroItem?.posterUrl?.trim() || '';
-  const featured = broadcasts.slice(0, 4);
-  const latestAudio = broadcasts.filter(item => { const media = detectMedia(item); return media?.provider !== 'direct-video'; }).slice(0, 4);
+  const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
+  const filteredBroadcasts = useMemo(()=>{
+    const q=search.trim().toLowerCase();
+    return broadcasts.filter(item=>{
+      const media=detectMedia(item);
+      const matchesSearch=!q||[item.title,item.speaker,item.series,item.description,sourceLabel(media)].join(' ').toLowerCase().includes(q);
+      const matchesFilter=browseFilter==='all'
+        ||(browseFilter==='live'&&Boolean(media?.live))
+        ||(browseFilter==='video'&&(media?.provider==='youtube'||media?.provider==='direct-video'))
+        ||(browseFilter==='audio'&&(media?.provider==='direct-audio'||media?.provider==='audioverse'))
+        ||item.series===browseFilter;
+      return matchesSearch&&matchesFilter;
+    });
+  },[broadcasts,search,browseFilter]);
+  const featured = filteredBroadcasts.slice(0, 4);
+  const latestAudio = filteredBroadcasts.filter(item => { const media = detectMedia(item); return media?.provider !== 'direct-video' && media?.provider !== 'youtube'; }).slice(0, 6);
   const schedule = useMemo(() => {
     const nowDate = new Date();
     const startToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
@@ -312,7 +334,6 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
       .map(entry => entry.item)
       .slice(0, 10);
   }, [broadcasts, scheduleRange]);
-  const categories = Array.from(new Set(broadcasts.map(item => item.series?.trim()).filter(Boolean))) as string[];
   const publishedPlaylists = playlists.filter(item => item.published === true && item.itemIds.length).slice(0, 8);
   const selectedPlaylist = publishedPlaylists.find(item => item.id === selectedPlaylistId) || null;
   const playlistItems = selectedPlaylist
@@ -340,104 +361,119 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   }
 
   return (
-    <div className="vop-audience-radio">
-      <header className="vop-public-radio-top">
-        <button type="button" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.12)', color: '#ffffff', borderRadius: '10px', padding: '8px 16px', fontWeight: 800, fontSize: '14px', cursor: 'pointer' }}>
-          <ArrowLeft size={18}/> {t('common.back','Back')}
-        </button>
-      </header>
-      <section className="vop-radio-hero" style={selectedPoster ? { backgroundImage: 'linear-gradient(90deg, rgba(2,20,45,.96) 0%, rgba(2,20,45,.75) 42%, rgba(2,20,45,.35) 100%), url("' + selectedPoster + '")' } : undefined}>
-        <div className="vop-radio-hero-inner">
-          <div className="vop-radio-hero-copy">
-            <button type="button" className="vop-radio-hero-back" onClick={onBack}><ArrowLeft size={17}/> Radio</button>
-            <div className="vop-radio-kicker">{t('common.app_title','Voice of Prophecy')}</div>
-            <h1>{heroItem?.title || 'Radio'}</h1>
-            <div className="vop-radio-tagline">{heroItem?.series || 'Inspire · Equip · Transform'}</div>
-            <p>{heroItem?.description || 'Bible truth, practical life teaching and messages of hope for everyone, everywhere.'}</p>
-            <div className="vop-radio-hero-actions">
-              <button type="button" className="vop-radio-listen" disabled={source?.provider === 'audioverse' || source?.provider === 'embed'} onClick={() => void togglePlay()}><Play size={17} fill="currentColor"/> {source?.provider === 'audioverse' || source?.provider === 'embed' ? 'Use embedded player' : playing ? 'Pause' : 'Listen Live'}</button>
-              <a className="vop-radio-watch" href={source?.url || '#'} target="_blank" rel="noreferrer"><Video size={17}/> Watch / Open</a>
-            </div>
-          </div>
-          <div className="vop-radio-live-card">
-            <div className="vop-radio-live-head"><span><i/> {source?.live ? 'LIVE ON VOP RADIO' : sourceLabel(source)}</span><small>{live.length ? live.length + ' live source' + (live.length === 1 ? '' : 's') : localTime(now)}</small></div>
-            <div className="vop-radio-provider-stage">
-              {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-radio-youtube-stage"/>}
-              {source?.provider === 'audioverse' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || 'AudioVerse'} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="autoplay; encrypted-media; picture-in-picture" />}
-              {source?.provider === 'embed' && <iframe className="vop-radio-audioverse-stage" src={source.embedUrl} title={heroItem?.title || source.label} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" referrerPolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />}
-              {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster || undefined} playsInline preload="metadata" {...mediaEvents}/>}
-              {source?.provider === 'direct-audio' && <audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents} />}
-              {!source && <div className="vop-radio-provider-empty"><Radio size={26}/>{t('radio.no_source','No playable source configured.')}</div>}
-            </div>
-            <div className="vop-radio-live-body">
-              <div className="vop-radio-cover" style={selectedPoster ? {backgroundImage: 'url("' + selectedPoster + '" )'} : undefined}><Radio size={28}/></div>
-              <div><strong>{heroItem?.title}</strong><span>{heroItem?.speaker || 'Voice of Prophecy'}</span><span>{heroItem?.broadcastTime ? dateTime(heroItem.broadcastTime) : localTime(now)}</span></div>
-            </div>
-            <div className="vop-radio-wave">{Array.from({length:24},(_,i)=><b key={i} style={{height: (12 + ((i*17)%30)) + 'px'}}/>)}</div>
-            {source?.provider === 'audioverse' || source?.provider === 'embed' ? <div className="vop-radio-provider-note">{t('radio.audioverse_controls','Controls are provided by the embedded media player.')}</div> : <div className="vop-radio-mini-controls"><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/><button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button type="button" onClick={fullscreen}><Maximize2 size={16}/></button></div>}
-          </div>
+    <div className="vop-audience-radio vop-yt-radio">
+      <header className="vop-yt-topbar">
+        <div className="vop-yt-brand">
+          <button type="button" className="vop-yt-icon-button" onClick={onBack} aria-label={t('common.back','Back')}><ArrowLeft size={20}/></button>
+          <button type="button" className="vop-yt-logo" onClick={()=>setViewMode('browse')} aria-label="VOP Media home">
+            <img src="/assets/vop_logo_2.png" alt=""/>
+            <span>VOP <b>Media</b></span>
+          </button>
         </div>
-      </section>
+        <label className="vop-yt-search">
+          <input value={search} onChange={e=>{setSearch(e.target.value);setViewMode('browse')}} placeholder="Search VOP Radio & Media" aria-label="Search VOP Radio and Media"/>
+          <span><Search size={20}/></span>
+        </label>
+        <div className="vop-yt-top-actions">
+          {live.length>0&&<button type="button" className="vop-yt-live-pill" onClick={()=>{setBrowseFilter('live');setViewMode('browse')}}><i/> Live</button>}
+          <button type="button" className="vop-yt-icon-button" onClick={()=>setViewMode('browse')} title="Browse media"><Radio size={20}/></button>
+        </div>
+      </header>
 
-      <section className="vop-radio-feature-strip">
-        <div><span><Radio size={24}/></span><div><strong>{t('navigation.radio','Radio')}</strong><small>{t('radio.live_on_demand','Live & On-Demand')}</small></div></div>
-        <div><span><Video size={24}/></span><div><strong>{t('radio.videos','Videos')}</strong><small>{t('radio.sermons','Sermons, Bible Studies & More')}</small></div></div>
-        <div><span><BookOpen size={24}/></span><div><strong>{t('radio.materials','Bible Study Materials')}</strong><small>{t('radio.materials_desc','Guides, PDFs, eBooks')}</small></div></div>
-        <div><span><Headphones size={24}/></span><div><strong>{t('radio.listen_anywhere','Listen Anywhere')}</strong><small>{t('radio.platforms','Web, Mobile, YouTube, AudioVerse')}</small></div></div>
-        <div><span><Globe2 size={24}/></span><div><strong>{t('radio.languages','Multiple Languages')}</strong><small>{t('radio.reaching_everyone','Reaching Everyone')}</small></div></div>
-      </section>
+      <div className="vop-yt-chipbar" aria-label="Media filters">
+        {[
+          ['all','All'],['live','Live'],['video','Videos'],['audio','Audio'],
+          ...categories.slice(0,10).map(category=>[category,category]),
+        ].map(([value,label])=><button type="button" key={value} className={browseFilter===value?'active':''} aria-pressed={browseFilter===value} onClick={()=>{setBrowseFilter(value);setViewMode('browse')}}>{label}</button>)}
+      </div>
 
-      <main className="vop-radio-audience-main">
-        <section className="vop-radio-section-grid">
-          <div className="vop-radio-schedule-card">
-            <div className="vop-radio-section-head"><h2><CalendarDays size={19}/> Program Schedule</h2><button type="button">View Full Schedule <ChevronRight size={15}/></button></div>
-            <div className="vop-radio-schedule-tabs">
-              {(['today', 'tomorrow', 'week'] as const).map(range => (
-                <button key={range} className={scheduleRange === range ? 'active' : ''} type="button" onClick={() => setScheduleRange(range)}>
-                  {range === 'today' ? 'Today' : range === 'tomorrow' ? 'Tomorrow' : 'This Week'}
-                </button>
-              ))}
-            </div>
-            <div className="vop-radio-schedule-list">
-              {schedule.map(item=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime ? localTime(new Date(item.broadcastTime)) : '—'}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{detectMedia(item)?.live && <em>{t('radio.live','LIVE')}</em>}</button>)}
-              {!schedule.length && <div className="vop-radio-muted">{t('radio.no_schedule','No scheduled programmes configured.')}</div>}
-            </div>
-          </div>
-          <div className="vop-radio-featured-card">
-            <div className="vop-radio-section-head"><h2><Radio size={19}/> Featured Programs</h2><span>{broadcasts.length} available</span></div>
-            <div className="vop-radio-featured-grid">
-              {featured.map(item=>{const itemSource=detectMedia(item);return <button key={item.id} type="button" onClick={()=>selectProgramme(item)}><div className="vop-radio-feature-image" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}><span>{itemSource?.provider==='audioverse'?<Headphones/>:itemSource?.provider==='youtube'||itemSource?.provider==='direct-video'?<Video/>:<Play fill="currentColor"/>}</span><small>{item.durationMinutes?formatTime(item.durationMinutes*60):sourceLabel(itemSource)}</small></div><strong>{item.title}</strong><span>{item.speaker||item.series||'Voice of Prophecy'}</span><small>{dateTime(item.createdAt||item.updatedAt)}</small></button>;})}
-            </div>
-          </div>
+      {viewMode==='browse' ? <main className="vop-yt-feed">
+        <div className="vop-yt-feed-heading">
+          <div><h1>VOP Radio & Media</h1><p>Messages of hope, Bible teaching, live radio, video and audio from Voice of Prophecy.</p></div>
+          <span>{filteredBroadcasts.length} programme{filteredBroadcasts.length===1?'':'s'}</span>
+        </div>
+
+        <section className="vop-yt-grid" aria-label="VOP programmes">
+          {filteredBroadcasts.map(item=>{
+            const itemSource=detectMedia(item);
+            return <button type="button" className="vop-yt-card" key={item.id} onClick={()=>selectProgramme(item)}>
+              <div className="vop-yt-thumb" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}>
+                {!item.posterUrl&&<span className="vop-yt-thumb-fallback"><Radio size={42}/></span>}
+                {itemSource?.live?<span className="vop-yt-badge live">LIVE</span>:item.durationMinutes?<span className="vop-yt-badge duration">{formatTime(item.durationMinutes*60)}</span>:<span className="vop-yt-badge duration">{sourceLabel(itemSource)}</span>}
+              </div>
+              <div className="vop-yt-card-meta">
+                <span className="vop-yt-channel-avatar"><img src="/assets/vop_logo_2.png" alt=""/></span>
+                <div><strong>{item.title}</strong><span>{item.speaker||'Voice of Prophecy'}</span><small>{item.series||sourceLabel(itemSource)}{item.broadcastTime?' · '+dateTime(item.broadcastTime,settings.timezone):''}</small></div>
+              </div>
+            </button>;
+          })}
+          {!filteredBroadcasts.length&&<div className="vop-yt-empty"><Search size={34}/><h2>No programmes found</h2><p>Try another search or category.</p></div>}
         </section>
 
-        {publishedPlaylists.length>0 && <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><ListMusic size={19}/> Playlists</h2><span>{publishedPlaylists.length} available</span></div><div className="vop-radio-featured-grid">{publishedPlaylists.map(playlist=>{return <button key={playlist.id} type="button" className={selectedPlaylistId===playlist.id?'active':''} onClick={()=>selectPlaylist(playlist)}><div className="vop-radio-feature-image" style={playlist.coverUrl?{backgroundImage:'url("' + playlist.coverUrl + '")'}:undefined}><span><ListMusic/></span><small>{playlist.itemIds.length} programmes</small></div><strong>{playlist.name}</strong><span>{playlist.description || 'Curated radio programmes'}</span></button>})}</div></section>}
-
-        {selectedPlaylist && <section className="vop-radio-audience-block">
-          <div className="vop-radio-section-head"><h2><ListMusic size={19}/> {selectedPlaylist.name}</h2><span>{playlistItems.length} playable programme{playlistItems.length === 1 ? '' : 's'}</span></div>
-          <div className="vop-radio-schedule-list">
-            {playlistItems.map((item, index) => <button key={item.id} type="button" className={selected?.id === item.id ? 'active' : ''} onClick={() => playPlaylistItem(item)}>
-              <time>{String(index + 1).padStart(2, '0')}</time><strong>{item.title}</strong><span>{item.speaker || item.series || sourceLabel(detectMedia(item))}</span>{selected?.id === item.id && playing && <em>PLAYING</em>}
-            </button>)}
-          </div>
-          <div className="vop-radio-mini-controls">
-            <button type="button" onClick={previousPlaylistItem} disabled={playlistIndex <= 0}><SkipBack size={16}/></button>
-            <button type="button" className="vop-radio-mini-play" onClick={() => void togglePlay()} disabled={!selected}>{playing ? <Pause size={16}/> : <Play size={16} fill="currentColor"/>}</button>
-            <button type="button" onClick={nextPlaylistItem} disabled={playlistIndex < 0 || playlistIndex >= playlistItems.length - 1}><SkipForward size={16}/></button>
-          </div>
+        {publishedPlaylists.length>0&&<section className="vop-yt-shelf">
+          <div className="vop-yt-shelf-head"><div><h2>Playlists</h2><p>Curated VOP collections</p></div><ListMusic size={22}/></div>
+          <div className="vop-yt-playlist-grid">{publishedPlaylists.map(playlist=><button type="button" key={playlist.id} onClick={()=>selectPlaylist(playlist)}>
+            <div className="vop-yt-playlist-thumb" style={playlist.coverUrl?{backgroundImage:'url("' + playlist.coverUrl + '")'}:undefined}><span><ListMusic size={28}/>{playlist.itemIds.length} videos</span></div>
+            <strong>{playlist.name}</strong><small>{playlist.description||'Voice of Prophecy playlist'}</small>
+          </button>)}</div>
         </section>}
 
-        {categories.length>0 && <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><ListMusic size={19}/> Browse by Category</h2><span>{categories.length} configured</span></div><div className="vop-radio-category-grid">{categories.slice(0,6).map(category=><button key={category} type="button" onClick={()=>setSelected(broadcasts.find(item=>item.series===category)||selected)}><span><BookOpen size={25}/></span><strong>{category}</strong><small>{broadcasts.filter(item=>item.series===category).length} programme{broadcasts.filter(item=>item.series===category).length===1?'':'s'}</small></button>)}</div></section>}
+        {schedule.length>0&&<section className="vop-yt-shelf">
+          <div className="vop-yt-shelf-head"><div><h2>Programme schedule</h2><p>Upcoming broadcasts in your configured timezone</p></div><div className="vop-yt-schedule-tabs">{(['today','tomorrow','week'] as const).map(range=><button key={range} className={scheduleRange===range?'active':''} onClick={()=>setScheduleRange(range)}>{range==='today'?'Today':range==='tomorrow'?'Tomorrow':'This week'}</button>)}</div></div>
+          <div className="vop-yt-schedule-strip">{schedule.map(item=><button type="button" key={item.id} onClick={()=>selectProgramme(item)}><time>{item.broadcastTime?localTime(new Date(item.broadcastTime),settings.timezone):'—'}</time><div><strong>{item.title}</strong><span>{item.speaker||item.series||sourceLabel(detectMedia(item))}</span></div>{detectMedia(item)?.live&&<em>LIVE</em>}</button>)}</div>
+        </section>}
+      </main> : <main className="vop-yt-watch-page">
+        <section className="vop-yt-watch-main">
+          <div className="vop-yt-player">
+            {source?.provider === 'youtube' && <div ref={ytMountRef} className="vop-yt-youtube-stage"/>}
+            {source?.provider === 'audioverse' && <iframe src={source.embedUrl} title={selected?.title||'AudioVerse'} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="autoplay; encrypted-media; picture-in-picture" />}
+            {source?.provider === 'embed' && <iframe src={source.embedUrl} title={selected?.title||source.label} sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" referrerPolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />}
+            {source?.provider === 'direct-video' && <video ref={videoRef} src={source.url} poster={selectedPoster||undefined} playsInline preload="metadata" controls {...mediaEvents}/>}
+            {source?.provider === 'direct-audio' && <div className="vop-yt-audio-stage" style={selectedPoster?{backgroundImage:'linear-gradient(rgba(0,0,0,.28),rgba(0,0,0,.58)),url("' + selectedPoster + '")'}:undefined}><audio ref={audioRef} src={source.url} preload="metadata" {...mediaEvents}/><button type="button" onClick={()=>void togglePlay()}>{playing?<Pause size={36}/>:<Play size={36} fill="currentColor"/>}</button><span>{source.live?'LIVE RADIO':'AUDIO PROGRAMME'}</span></div>}
+            {!source&&<div className="vop-yt-player-empty"><Radio size={46}/><span>No playable source configured.</span></div>}
+          </div>
 
-        <section className="vop-radio-audience-block"><div className="vop-radio-section-head"><h2><Headphones size={19}/> Latest Audio</h2><span>{latestAudio.length} shown</span></div><div className="vop-radio-latest-list">{latestAudio.map(item=><button key={item.id} type="button" onClick={()=>selectProgramme(item)}><div className="vop-radio-latest-cover" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}><Play size={17} fill="currentColor"/></div><div><strong>{item.title}</strong><small>{item.speaker||item.series||'Voice of Prophecy'}</small><span>{item.durationMinutes?formatTime(item.durationMinutes*60):sourceLabel(detectMedia(item))}</span></div><Play className="latest-play" size={18} fill="currentColor"/></button>)}</div></section>
-      </main>
+          <h1 className="vop-yt-watch-title">{selected?.title||'VOP Media'}</h1>
+          <div className="vop-yt-watch-meta">
+            <div className="vop-yt-channel-row"><span className="vop-yt-channel-avatar large"><img src="/assets/vop_logo_2.png" alt=""/></span><div><strong>{selected?.speaker||'Voice of Prophecy'}</strong><span>{selected?.series||sourceLabel(source)}</span></div>{source?.live&&<em>LIVE</em>}</div>
+            <div className="vop-yt-watch-actions">
+              {source?.provider!=='audioverse'&&source?.provider!=='embed'&&<button type="button" onClick={()=>void togglePlay()}>{playing?<Pause size={18}/>:<Play size={18} fill="currentColor"/>}{playing?'Pause':'Play'}</button>}
+              <a href={source?.url||'#'} target="_blank" rel="noreferrer"><ExternalLink size={17}/> Open source</a>
+            </div>
+          </div>
 
-      <section className="vop-radio-docked-player">
-        <div className="vop-radio-docked-meta"><div className="vop-radio-docked-cover" style={selectedPoster?{backgroundImage:'url("' + selectedPoster + '")'}:undefined}><Radio size={18}/></div><div><strong>{selected?.title}</strong><small>{selected?.speaker||selected?.series||'Voice of Prophecy'}</small></div>{source?.live&&<em>{t('radio.live','LIVE')}</em>}</div>
-        <div className="vop-radio-docked-center"><button type="button" onClick={()=>skip(-10)} disabled={!duration}><SkipBack size={17}/></button><button className="main" type="button" onClick={()=>void togglePlay()} disabled={!source||(source.provider==='youtube'&&!ytReady)||(source.provider==='audioverse'||source.provider==='embed')}>{playing?<Pause size={19}/>:<Play size={19} fill="currentColor"/>}</button><button type="button" onClick={()=>skip(10)} disabled={!duration}><SkipForward size={17}/></button></div>
-        <div className="vop-radio-docked-progress"><span>{formatTime(current)}</span><input type="range" min="0" max={duration||0} step=".1" value={Math.min(current,duration||0)} onChange={e=>seek(Number(e.target.value))} disabled={!duration}/><span>{duration?formatTime(duration):source?.live?'LIVE':'—'}</span></div>
-        <div className="vop-radio-docked-actions">{source?.provider!=='audioverse'&&source?.provider!=='embed'&&<><button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/></>}{source?.provider !== 'audioverse' && source?.provider !== 'embed' && <label><Gauge size={15}/><select value={rate} onChange={e=>changeRate(Number(e.target.value))}>{[.5,.75,1,1.25,1.5,1.75,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>}{(source?.provider==='direct-video'||source?.provider==='youtube')&&<button type="button" onClick={fullscreen}><Maximize2 size={17}/></button>}<a href={source?.url||'#'} target="_blank" rel="noreferrer"><ExternalLink size={17}/></a></div>
-      </section>
+          {source?.provider==='direct-audio'&&<div className="vop-yt-custom-controls">
+            <button type="button" onClick={()=>skip(-10)} disabled={!duration}><SkipBack size={17}/></button>
+            <button type="button" onClick={()=>void togglePlay()} disabled={!source}>{playing?<Pause size={18}/>:<Play size={18} fill="currentColor"/>}</button>
+            <button type="button" onClick={()=>skip(10)} disabled={!duration}><SkipForward size={17}/></button>
+            <span>{formatTime(current)}</span><input className="progress" type="range" min="0" max={duration||0} step=".1" value={Math.min(current,duration||0)} onChange={e=>seek(Number(e.target.value))} disabled={!duration}/><span>{duration?formatTime(duration):source?.live?'LIVE':'—'}</span>
+            <button type="button" onClick={toggleMute}><Volume2 size={17}/></button><input className="volume" type="range" min="0" max="1" step=".01" value={volume} onChange={e=>setPlayerVolume(Number(e.target.value))}/>
+            <label><Gauge size={15}/><select value={rate} onChange={e=>changeRate(Number(e.target.value))}>{[.5,.75,1,1.25,1.5,1.75,2].map(v=><option key={v} value={v}>{v}×</option>)}</select></label>
+          </div>}
+
+          <div className="vop-yt-description">
+            <strong>{selected?.broadcastTime?dateTime(selected.broadcastTime,settings.timezone):sourceLabel(source)}</strong>
+            <p>{selected?.description||'Voice of Prophecy Bible teaching and media ministry.'}</p>
+          </div>
+
+          {selectedPlaylist&&<section className="vop-yt-watch-playlist">
+            <div><h2>{selectedPlaylist.name}</h2><span>{Math.max(playlistIndex+1,1)} / {playlistItems.length}</span></div>
+            {playlistItems.map((item,index)=><button type="button" key={item.id} className={selected?.id===item.id?'active':''} onClick={()=>playPlaylistItem(item)}><span>{index+1}</span><strong>{item.title}</strong>{selected?.id===item.id&&playing&&<em>PLAYING</em>}</button>)}
+          </section>}
+        </section>
+
+        <aside className="vop-yt-upnext">
+          <div className="vop-yt-upnext-head"><strong>Up next</strong><button type="button" onClick={()=>setViewMode('browse')}>See all</button></div>
+          {broadcasts.filter(item=>item.id!==selected?.id).slice(0,14).map(item=>{
+            const itemSource=detectMedia(item);
+            return <button type="button" className="vop-yt-upnext-card" key={item.id} onClick={()=>selectProgramme(item)}>
+              <div className="thumb" style={item.posterUrl?{backgroundImage:'url("' + item.posterUrl + '")'}:undefined}>{!item.posterUrl&&<Radio size={24}/>}<span>{itemSource?.live?'LIVE':item.durationMinutes?formatTime(item.durationMinutes*60):sourceLabel(itemSource)}</span></div>
+              <div><strong>{item.title}</strong><span>{item.speaker||'Voice of Prophecy'}</span><small>{item.series||sourceLabel(itemSource)}</small></div>
+            </button>;
+          })}
+        </aside>
+      </main>}
+
       {error&&<div className="vop-radio-player-error">{error}</div>}
       {waiting&&<div className="vop-radio-player-waiting"><Clock3 size={15}/> Buffering media…</div>}
     </div>
