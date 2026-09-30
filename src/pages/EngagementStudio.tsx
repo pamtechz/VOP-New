@@ -14,14 +14,16 @@ type Item = {
   id: string; title: string; description?: string; status?: Status;
   sharingScope?: Sharing; canEdit?: boolean; organizationId?: string;
   verses?: Verse[]; question?: string; options?: string[]; answer?: string; scriptureRef?: string;
+  requiredSignatures?: number;
 };
 type Editor = {
   id?: string; title: string; description: string; status: 'draft' | 'published';
   sharingScope: Sharing; verses: Verse[]; question: string; options: string[]; answer: string; scriptureRef: string;
+  requiredSignatures: number;
 };
 const blank = (): Editor => ({
   title:'', description:'', status:'draft', sharingScope:'organization',
-  verses:[{reference:'',text:''}], question:'', options:['','','',''], answer:'', scriptureRef:'',
+  verses:[{reference:'',text:''}], question:'', options:['','','',''], answer:'', scriptureRef:'', requiredSignatures:1,
 });
 const options: Array<{ value:Kind; label:string; description:string; Icon:typeof BookOpen }> = [
   { value:'requirements',label:'Master Guide Requirements',description:'Activities and verified leadership achievements',Icon:GraduationCap },
@@ -154,6 +156,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       verses:item.verses?.map(verse=>({id:verse.id,reference:verse.reference,text:verse.text})) || [{reference:'',text:''}],
       question:item.question || '', options:item.options?.length ? [...item.options] : ['','','',''],
       answer:item.answer || '', scriptureRef:item.scriptureRef || '',
+      requiredSignatures:Math.max(1,Number(item.requiredSignatures || 1)),
     } : blank());
   };
   const save = async (event:React.FormEvent) => {
@@ -164,7 +167,8 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       const payload = {
         title:editor.title.trim(),description:editor.description.trim(),status:editor.status,
         sharingScope:editor.sharingScope,
-        ...(kind==='memoryDecks' ? {verses:editor.verses.map(verse=>({reference:verse.reference.trim(),text:verse.text.trim()}))}
+        ...(kind==='requirements' ? {requiredSignatures:editor.requiredSignatures}
+          : kind==='memoryDecks' ? {verses:editor.verses.map(verse=>({reference:verse.reference.trim(),text:verse.text.trim()}))}
           : kind==='duelQuestions' ? {question:editor.question.trim(),options:editor.options.map(x=>x.trim()).filter(Boolean),answer:editor.answer,scriptureRef:editor.scriptureRef.trim()} : {}),
       };
       await engagementRequest({action:'catalogUpsert',kind,organizationId,id:editor.id,data:payload});
@@ -247,6 +251,11 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
         <div className="vop-field"><label htmlFor="engagement-sharing">Visibility</label><select id="engagement-sharing" value={editor.sharingScope} onChange={e=>setEditor({...editor,sharingScope:e.target.value as Sharing})}><option value="private">Private</option><option value="organization">Organization only</option><option value="shared">Shared with other organizations</option></select></div>
       </div>
       <div className="vop-field"><label htmlFor="engagement-description">Description</label><textarea id="engagement-description" value={editor.description} onChange={e=>setEditor({...editor,description:e.target.value})} maxLength={2500}/></div>
+      {kind==='requirements' && <div className="vop-field"><label htmlFor="engagement-required-signatures">Required evaluator signatures</label>
+        <input id="engagement-required-signatures" type="number" min="1" max="20" step="1" required value={editor.requiredSignatures}
+          onChange={e=>setEditor({...editor,requiredSignatures:Math.max(1,Math.min(20,Math.trunc(Number(e.target.value)||1)))})}/>
+        <small>A requirement is approved only after this many distinct authorized evaluators sign the current submission revision.</small>
+      </div>}
       {kind==='memoryDecks' && <div style={{display:'grid',gap:12,marginTop:18}}>
         <h3>Scripture memory cards</h3>
         {editor.verses.map((verse,index)=><div className="vop-card vop-form-card" key={verse.id || index}>
