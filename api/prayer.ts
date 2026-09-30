@@ -96,7 +96,7 @@ export default async function handler(req: Request, res: Response) {
           organizationId:ctx.organizationId,recipientId,type:'prayer',
           title:'New prayer request',
           body:`${record.candidateName} submitted a ${category.toLowerCase()} prayer request.`,
-          actionUrl:'/admin',
+          actionUrl:'/admin/prayer',
           metadata:{source:'prayer-request',requestId:ref.id,category,isPrivate:record.isPrivate},
           createdBy:ctx.auth.uid,
         })));
