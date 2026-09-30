@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { DiscoverGuide, Lesson, User } from '../../types';
 import {
   ArrowLeft, Award, BookOpen, CheckCircle2, ChevronRight, Clock,
-  FileQuestion, Lock, Sparkles, Trophy,
+  FileQuestion, Lock, Trophy,
 } from 'lucide-react';
 import { getStoredGuides, getStoredSettings } from '../../services/storage';
 import { getTranslation, getUiLocale } from '../../services/i18n';
