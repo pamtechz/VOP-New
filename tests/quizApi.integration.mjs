@@ -65,6 +65,10 @@ test('quiz API: private bank stays with author or Super Admin across organizatio
     const payload={
       attachmentType:'lesson',guideId:'guide-quiz-a',lessonId:'lesson-quiz-a',
       language:'en',title:'Confidential answers',published:true,sharingScope:'organization',
+      assessmentInstructions:'Read the lesson before attempting this practice assessment.',
+      assessmentTimeLimitMinutes:15,assessmentPassThreshold:70,
+      assessmentMaxAttempts:3,assessmentRetakeCooldownMinutes:20,
+      assessmentFeedbackMode:'after_submit',
       questions:[{question:'Question A',options:['Wrong','Right'],correctOptionIndex:1,explanation:'Teacher-only explanation'}],
     };
     const created=await call(author,{action:'upsert',organizationId:'org-quiz-a',data:payload});
@@ -74,6 +78,13 @@ test('quiz API: private bank stays with author or Super Admin across organizatio
     const learnerAssessment=(await db.doc('guides/guide-quiz-a/lessons/quiz-'+id).get()).data();
     assert.equal(learnerAssessment?.questions[0].correctOptionIndex,undefined);
     assert.equal(learnerAssessment?.questions[0].explanation,undefined);
+    assert.equal(learnerAssessment?.assessmentKind,'practice');
+    assert.equal(learnerAssessment?.assessmentInstructions,'Read the lesson before attempting this practice assessment.');
+    assert.equal(learnerAssessment?.assessmentTimeLimitMinutes,15);
+    assert.equal(learnerAssessment?.assessmentPassThreshold,70);
+    assert.equal(learnerAssessment?.assessmentMaxAttempts,3);
+    assert.equal(learnerAssessment?.assessmentRetakeCooldownMinutes,20);
+    assert.equal(learnerAssessment?.assessmentFeedbackMode,'after_submit');
 
     await t.test('author and Super Admin can manage the bank',async()=>{
       for (const user of [author,superAdmin]) {
@@ -97,6 +108,31 @@ test('quiz API: private bank stays with author or Super Admin across organizatio
       assert.equal(item.canEdit,false);
       assert.equal(JSON.stringify(item).includes('correctOptionIndex'),false);
     });
+    await t.test('attachment scope classifies chapter quizzes and guide final examinations separately',async()=>{
+      await db.doc('guides/guide-quiz-a/lessons/lesson-quiz-a').set({
+        chapters:[{id:'chapter-one',title:'Chapter One',sections:[{
+          id:'section-one',title:'Section One',blocks:[{id:'block-one',type:'paragraph',text:'Study'}],
+        }]}],
+      },{merge:true});
+      const chapter=await call(author,{action:'upsert',organizationId:'org-quiz-a',data:{
+        attachmentType:'chapter',guideId:'guide-quiz-a',lessonId:'lesson-quiz-a',anchorId:'chapter-one',
+        language:'en',title:'Chapter check',published:true,sharingScope:'organization',
+        questions:[{question:'Chapter?',options:['No','Yes'],correctOptionIndex:1}],
+      }});
+      assert.equal(chapter.status,200,JSON.stringify(chapter));
+      assert.equal(chapter.item.assessmentKind,'chapter_quiz');
+      assert.equal((await db.doc('guides/guide-quiz-a/lessons/quiz-'+chapter.item.id).get()).data()?.assessmentKind,'chapter_quiz');
+
+      const finalExam=await call(author,{action:'upsert',organizationId:'org-quiz-a',data:{
+        attachmentType:'guide',guideId:'guide-quiz-a',
+        language:'en',title:'Guide final examination',published:true,sharingScope:'organization',
+        questions:[{question:'Final?',options:['No','Yes'],correctOptionIndex:1}],
+      }});
+      assert.equal(finalExam.status,200,JSON.stringify(finalExam));
+      assert.equal(finalExam.item.assessmentKind,'final_exam');
+      assert.equal((await db.doc('guides/guide-quiz-a/lessons/quiz-'+finalExam.item.id).get()).data()?.assessmentKind,'final_exam');
+    });
+
     await t.test('foreign organization cannot read a private quiz or author it',async()=>{
       const got=await call(outsider,{action:'get',id,organizationId:'org-quiz-b'});
       assert.equal(got.status,403,JSON.stringify(got));
