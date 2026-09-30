@@ -40,6 +40,8 @@ export function emptySettings(): AppSettings {
     whatsappNumber: '',
     contactEmail: '',
     quizPassThreshold: 0,
+    quizMaxAttempts: 0,
+    quizRetakeCooldownMinutes: 0,
     defaultLanguage: '',
     customLanguages: [],
     customTranslations: {},
@@ -90,6 +92,8 @@ function normalizeSettings(data: Record<string, unknown>): AppSettings {
     ...base,
     ...data,
     quizPassThreshold: Number(data.quizPassThreshold ?? 0),
+    quizMaxAttempts: Math.max(0, Math.trunc(Number(data.quizMaxAttempts ?? 0) || 0)),
+    quizRetakeCooldownMinutes: Math.max(0, Math.trunc(Number(data.quizRetakeCooldownMinutes ?? 0) || 0)),
     defaultLanguage: String(data.defaultLanguage ?? ''),
     detailPages: {
       ...base.detailPages,
