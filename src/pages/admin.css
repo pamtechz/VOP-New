@@ -1585,3 +1585,11 @@
 @media(max-width:800px){.vop-translation-target{grid-template-columns:1fr}.vop-translation-target>.vop-translation-summary{grid-column:1}.vop-org-editor-backdrop{padding:10px}.vop-org-editor-modal{width:100%;max-height:95vh;padding:16px;border-radius:16px}.vop-org-editor-head{position:sticky;top:-16px;padding-top:4px}}
 
 .vop-admin-record-list-only{display:block!important;grid-template-columns:1fr!important;min-width:0}
+
+
+/* Tenant-owned About Ministry / Offices profile editor. */
+.vop-settings-about-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.vop-settings-about-card{display:grid;gap:12px;min-width:0;padding:15px;border:1px solid #dde7f2;border-radius:12px;background:#f9fbfe}
+.vop-settings-about-card .vop-section-title{margin:0}
+.vop-settings-about-card textarea{min-height:82px}
+@media(max-width:820px){.vop-settings-about-grid{grid-template-columns:1fr}}
