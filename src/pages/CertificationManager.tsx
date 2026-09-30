@@ -8,6 +8,7 @@ import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import CertificationConfigStudio from './CertificationConfigStudio';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
+import { ModalLayer } from '../components/layout/ModalLayer';
 import './certification-compact.css';
 
 type CertificateStatus = 'Certified' | 'Revoked' | 'Replaced' | 'Pending';
@@ -483,7 +484,7 @@ export const CertificationManager: React.FC<Props> = ({
         </>
       )}
       {issuerOpen && (
-        <div className="vop-cert-issuer-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setIssuerOpen(false); }}>
+        <ModalLayer><div className="vop-cert-issuer-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setIssuerOpen(false); }}>
           <section className="vop-cert-issuer-modal" role="dialog" aria-modal="true" aria-labelledby="vop-cert-issuer-title">
             <div className="vop-cert-issuer-head">
               <div><div className="vop-cert-kicker">{t('admin.certification','Certification')}</div><h2 id="vop-cert-issuer-title">{t('admin.issue_certificate','Issue Certificate')}</h2><p>Only candidates with a server-verified approved graduation record are shown.</p></div>
@@ -503,7 +504,7 @@ export const CertificationManager: React.FC<Props> = ({
               {issuerCandidates.length === 0 && <div className="vop-cert-empty"><Award size={34} /><strong>No approved candidates are waiting for certification.</strong><span>Certification eligibility is verified on the server when an issue request is submitted.</span></div>}
             </div>
           </section>
-        </div>
+        </div></ModalLayer>
       )}
     </div>
   );
