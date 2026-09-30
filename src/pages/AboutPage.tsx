@@ -16,6 +16,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'ministry' | 'app' | 'contact'>('ministry');
   const details = settings.detailPages;
+  const tenantName = settings.organizationName || settings.schoolName || settings.appName || 'Voice of Prophecy';
+  const leadership = details?.aboutUsLeadership?.trim() || [settings.directorTitle,settings.directorName].filter(Boolean).join(' — ');
+  const phones = (details?.contactPhoneNumbers?.length ? details.contactPhoneNumbers : [settings.contactPhone]).filter(Boolean);
+  const emails = (details?.contactEmails?.length ? details.contactEmails : [settings.contactEmail]).filter(Boolean);
+  const whatsApps = (details?.contactWhatsAppNumbers?.length ? details.contactWhatsAppNumbers : [settings.whatsappNumber]).filter(Boolean);
 
   const t = (key: string, fallback: string) =>
     getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'AboutPage');
@@ -47,7 +52,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 {settings.appName || 'Voice of Prophecy'}
               </h1>
               <p className="text-xs sm:text-sm text-blue-100/90 mt-0.5">
-                {settings.schoolName} • {settings.organizationName}
+                {[settings.schoolName, tenantName].filter((value,index,items)=>value && items.indexOf(value)===index).join(' • ')}
               </p>
             </div>
           </div>
@@ -121,19 +126,15 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 </p>
               </div>
 
-              {/* Leadership Card */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
+              {leadership && <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
                 <div className="flex items-center gap-2.5 mb-3">
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
                     <Info size={18} />
                   </div>
                   <h3 className="text-sm sm:text-base font-bold text-slate-900">Ministry Leadership</h3>
                 </div>
-                <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                  {details?.aboutUsLeadership ||
-                    'Supervised by the Personal Ministries Department under Director Pst. Ernesto Ricci, in full collaboration with conference presidents and district pastors.'}
-                </p>
-              </div>
+                <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">{leadership}</p>
+              </div>}
             </div>
           </div>
         )}
@@ -183,27 +184,25 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
                     <MapPin size={18} />
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">Headquarters Office</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">{tenantName} Office</h3>
                 </div>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-4">
-                  {details?.contactOfficeAddress ||
-                    'Plot 9221, Corner of Burma & Independence Avenue, P.O. Box 31309, Lusaka, Zambia'}
+                  {details?.contactOfficeAddress || 'No office address has been configured for this ministry.'}
                 </p>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600">
                   <span className="font-bold text-slate-800 block mb-0.5">Office Hours</span>
-                  {details?.contactOfficeHours ||
-                    'Monday – Thursday: 08:00 – 17:00 | Friday: 08:00 – 12:30 | Sabbath & Sunday: Closed'}
+                  {details?.contactOfficeHours || 'Office hours have not been configured.'}
                 </div>
               </div>
 
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
                 <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-2">Direct Communication</h3>
 
-                {details?.contactPhoneNumbers && details.contactPhoneNumbers.length > 0 && (
+                {phones.length > 0 && (
                   <div>
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Phone Enquiries</span>
                     <div className="space-y-1">
-                      {details.contactPhoneNumbers.map((phone, idx) => (
+                      {phones.map((phone, idx) => (
                         <a
                           key={idx}
                           href={`tel:${phone.replace(/\s+/g, '')}`}
@@ -217,11 +216,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   </div>
                 )}
 
-                {details?.contactEmails && details.contactEmails.length > 0 && (
+                {emails.length > 0 && (
                   <div>
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Email Enquiries</span>
                     <div className="space-y-1">
-                      {details.contactEmails.map((email, idx) => (
+                      {emails.map((email, idx) => (
                         <a
                           key={idx}
                           href={`mailto:${email}`}
@@ -235,17 +234,17 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                   </div>
                 )}
 
-                {settings.whatsappNumber && (
-                  <div className="pt-2">
-                    <a
-                      href={`https://wa.me/${settings.whatsappNumber.replace(/[^0-9]/g, '')}`}
+                {whatsApps.length > 0 && (
+                  <div className="pt-2 flex flex-wrap gap-2">
+                    {whatsApps.map((number,idx)=><a key={idx}
+                      href={`https://wa.me/${number.replace(/[^0-9]/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm"
                     >
                       <MessageCircle size={16} />
-                      <span>Chat on WhatsApp</span>
-                    </a>
+                      <span>{whatsApps.length>1 ? `WhatsApp ${idx+1}` : 'Chat on WhatsApp'}</span>
+                    </a>)}
                   </div>
                 )}
               </div>
