@@ -20,6 +20,7 @@ import { newChapter } from '../components/admin/StructuredLessonEditor';
 import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurriculumAuthoringReview';
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
+import { appConfirm } from '../components/layout/AppDialog';
 
 export type CurriculumStudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -442,8 +443,10 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     window.addEventListener('beforeunload',warn);
     return()=>window.removeEventListener('beforeunload',warn);
   },[editorDirty]);
-  const leaveEditor=()=>{
-    if(editorDirty&&!window.confirm('You have unsaved lesson changes. Leave without saving them?'))return;
+  const leaveEditor=async()=>{
+    if(editorDirty&&!await appConfirm('You have unsaved lesson changes. Leave without saving them?', {
+      title:'Leave lesson editor?',confirmLabel:'Leave without saving',tone:'danger',
+    }))return;
     savedEditorSignature.current='';setEditorDirty(false);setEditor(null);setRequestedSectionId('');
   };
 
@@ -842,7 +845,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
 
   const unpublishLesson = async () => {
     if (!editor?.id || !editor.published) return;
-    if (!window.confirm(tx('curriculum.confirmUnpublish', 'Unpublish this lesson from the learner curriculum?'))) return;
+    if (!await appConfirm(tx('curriculum.confirmUnpublish', 'Unpublish this lesson from the learner curriculum?'), {title:'Unpublish lesson',confirmLabel:'Unpublish'})) return;
     setSaving(true);
     try {
       await adminContent('unpublishLesson', 'curriculum', editor.id, { language: editor.language, guideId: editor.guideId, lessonId: editor.id });
@@ -892,7 +895,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
       setError(tx('curriculum.recordOwnedByAnotherDelete', 'This curriculum record is owned by another contributor and cannot be deleted here.'));
       return;
     }
-    if (!window.confirm(tx('common.confirmDelete', 'Delete this curriculum record?'))) return;
+    if (!await appConfirm(tx('common.confirmDelete', 'Delete this curriculum record?'), {title:'Delete curriculum record',confirmLabel:'Delete',tone:'danger'})) return;
     try {
       await adminContent('delete', COLLECTIONS[kind], id);
       await load();
@@ -1058,23 +1061,27 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
                   id:String(item.id),title:String(item.title||'Untitled lesson'),
                   chapters:item.chapters as CurriculumChapter[],
                 }))}
-                onTransfer={request=>{
+                onTransfer={async request=>{
                   if(!editor.id||editor.published){
                     setError('Save this lesson as a draft before transferring content.');
                     return;
                   }
-                  if(!window.confirm('Transfers use the last saved draft. Save unsaved changes before continuing.'))return;
+                  if(!await appConfirm('Transfers use the last saved draft. Save unsaved changes before continuing.', {
+                    title:'Transfer lesson content?',confirmLabel:'Continue',
+                  }))return;
                   setSaving(true);setError('');
-                  void adminContent('transferLessonStructure','curriculum',undefined,{
-                    ...request,guideId:editor.guideId,sourceLessonId:editor.id,
-                  }).then(async result=>{
+                  try{
+                    const result=await adminContent('transferLessonStructure','curriculum',undefined,{
+                      ...request,guideId:editor.guideId,sourceLessonId:editor.id,
+                    });
                     if(Array.isArray(result.source))setEditor(previous=>previous?{
                       ...previous,chapters:result.source as CurriculumChapter[],
                     }:previous);
                     setMessage('Lesson content '+(request.mode==='copy'?'copied':'moved')+' successfully.');
                     await load();
-                  }).catch(reason=>setError(reason instanceof Error?reason.message:'Transfer failed.'))
-                    .finally(()=>setSaving(false));
+                  }catch(reason){
+                    setError(reason instanceof Error?reason.message:'Transfer failed.');
+                  }finally{setSaving(false);}
                 }}
                 canAttachQuiz={Boolean(editor.id)}
                 lessonPublished={editor.published}
