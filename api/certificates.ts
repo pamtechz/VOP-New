@@ -26,6 +26,55 @@ function hierarchyScopeField(role:string){
  return '';
 }
 function publicCertificate(id:string,data:Record<string,unknown>){return {...safe({...data,id})};}
+function portfolioRevision(value:Record<string,unknown>){const revision=Number(value.revision);return Number.isInteger(revision)&&revision>=1?revision:1;}
+function requiredSignatures(value:unknown){const count=Number(value);return Number.isInteger(count)&&count>=1&&count<=20?count:1;}
+function portfolioFingerprint(data:Record<string,unknown>,requirementIds:string[]){
+ const ids=new Set(requirementIds);
+ const pick=(value:unknown)=>Array.isArray(value)?value.filter(item=>item&&typeof item==='object'&&ids.has(String((item as Record<string,unknown>).requirementId||''))):[];
+ return createHash('sha256').update(JSON.stringify({activities:pick(data.activities),evidence:pick(data.evidence),signoffs:pick(data.signoffs)})).digest('hex');
+}
+async function certificationPortfolioEvidence(
+ db:FirebaseFirestore.Firestore,candidateId:string,organizationId:string,requirementIds:string[],
+){
+ const portfolioRef=db.doc('masterGuidePortfolios/'+candidateId);
+ if(!requirementIds.length)return {portfolioRef,fingerprint:'',reasons:[] as string[],snapshot:[] as Array<Record<string,unknown>>};
+ const [portfolio,...requirements]=await Promise.all([
+   portfolioRef.get(),
+   ...requirementIds.map(id=>db.doc('masterGuideRequirements/'+id).get()),
+ ]);
+ const data=portfolio.data()||{};
+ const activities=Array.isArray(data.activities)?data.activities as Array<Record<string,unknown>>:[];
+ const evidence=Array.isArray(data.evidence)?data.evidence as Array<Record<string,unknown>>:[];
+ const signoffs=Array.isArray(data.signoffs)?data.signoffs as Array<Record<string,unknown>>:[];
+ const reasons:string[]=[];const snapshot:Array<Record<string,unknown>>=[];
+ for(let index=0;index<requirements.length;index++){
+   const requirement=requirements[index],requirementId=requirementIds[index],value=requirement.data()||{};
+   const title=String(value.title||'Required portfolio evidence');
+   const requirementOrg=String(value.organizationId||'');
+   const platformRequirement=!requirementOrg&&String(value.scope||'')==='platform';
+   if(!requirement.exists||value.status!=='published'||(!platformRequirement&&requirementOrg!==organizationId)){
+     reasons.push(title+': the required portfolio rule is no longer published for this organization.');continue;
+   }
+   const submitted=activities.filter(item=>String(item.requirementId||'')===requirementId&&item.status==='submitted');
+   const revision=submitted.length?Math.max(...submitted.map(portfolioRevision)):0;
+   if(!revision){reasons.push(title+': submit the required activity.');continue;}
+   const currentEvidence=evidence.filter(item=>String(item.requirementId||'')===requirementId&&portfolioRevision(item)===revision);
+   const decisions=signoffs.filter(item=>String(item.requirementId||'')===requirementId&&portfolioRevision(item)===revision);
+   const change=decisions.find(item=>item.decision==='changes_requested'||item.decision==='rejected');
+   const required=requiredSignatures(value.requiredSignatures);
+   const approvers=[...new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||'')).filter(Boolean))];
+   if(change){
+     const note=String(change.notes||'').trim();
+     reasons.push(title+': changes were requested'+(note?' — '+note:'')+'.');
+   } else {
+     if(value.evidenceRequired!==false&&!currentEvidence.length)reasons.push(title+': add the required supporting evidence.');
+     if(approvers.length<required)reasons.push(title+`: ${required-approvers.length} more evaluator signature${required-approvers.length===1?' is':'s are'} required.`);
+   }
+   snapshot.push({requirementId,title,revision,evidenceRequired:value.evidenceRequired!==false,
+     evidenceCount:currentEvidence.length,requiredSignatures:required,approvalCount:approvers.length,evaluatorIds:approvers});
+ }
+ return {portfolioRef,fingerprint:portfolioFingerprint(data,requirementIds),reasons,snapshot};
+}
 
 async function mine(req:Request,res:Response){
  const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
@@ -116,6 +165,13 @@ async function issue(req:Request,res:Response){
  for(const test of tests)if(!Array.isArray(test.questions)||!test.questions.length)return res.status(409).json({error:'The approved guide has an invalid assessment configuration.'});
  const attestedAverage=verifiedAssessmentAverage(tests,scores,organizationId,lang,guideId,threshold);
  if(attestedAverage===null)return res.status(409).json({error:'The candidate has not passed all required assessments.'});
+ const certificationRequirementIds=Array.isArray(gd.certificationRequirementIds)
+   ? gd.certificationRequirementIds.map((value:unknown)=>String(value)).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)) : [];
+ const portfolioEligibility=await certificationPortfolioEvidence(db,candidateId,organizationId,certificationRequirementIds);
+ if(portfolioEligibility.reasons.length)return res.status(409).json({
+   error:'Certificate eligibility is incomplete: '+portfolioEligibility.reasons.join(' '),
+   reasons:portfolioEligibility.reasons,
+ });
  const [church,district,conference,union]=await Promise.all([candidate.churchId?db.doc('churches/'+candidate.churchId).get():Promise.resolve(null),candidate.districtId?db.doc('districts/'+candidate.districtId).get():Promise.resolve(null),candidate.conferenceId?db.doc('conferences/'+candidate.conferenceId).get():Promise.resolve(null),candidate.unionId?db.doc('unions/'+candidate.unionId).get():Promise.resolve(null)]);
  const certificateRef=db.collection('certificates').doc(certificateDocumentId(candidateId,lang,organizationId)),issuedAt=FieldValue.serverTimestamp(),certificateNumber='VOP-'+new Date().getUTCFullYear()+'-'+certificateRef.id.toUpperCase();
  const documentType=String(gd.certificateDocumentType||'course').trim()||'course';
@@ -129,6 +185,7 @@ async function issue(req:Request,res:Response){
    requiredAssessmentIds:tests.map(item=>String(item.id)),
    passThreshold:threshold,assessmentAverageScore:attestedAverage,
    graduationRequestId:String(approved.id),graduationApprovedAt:dateValue(approved.approvedAt),
+   certificationRequirements:portfolioEligibility.snapshot,
    completionDate,capturedAt:new Date().toISOString(),
  };
  const certificate={candidateId,organizationId,unionId:String(candidate.unionId||''),conferenceId:String(candidate.conferenceId||''),districtId:String(candidate.districtId||''),churchId:String(candidate.churchId||''),candidateName:String(candidate.displayName??''),candidateEmail:String(candidate.email??''),candidatePhotoURL:String(candidate.photoURL??''),language:lang,courseName,courseCode:String(config.courseCode??''),documentType,certificateTypeName,certificateNumber,completionDate,issuedAt,churchName:church?.exists?String(church.data()?.name??''):'',districtName:district?.exists?String(district.data()?.name??''):'',conferenceName:conference?.exists?String(conference.data()?.name??''):'',unionName:union?.exists?String(union.data()?.name??''):'',guideId,guideTitle:String(gd.title??''),assessmentAverageScore:attestedAverage,eligibilitySnapshot,issuer:{name:String(config.issuerName||''),subtitle:String(config.issuerSubtitle||''),actorUid:decoded.uid,organizationId},status:'Certified',downloadCount:0,issuedBy:decoded.uid,verificationEnabled:config.verificationEnabled===true,lifecycleHistory:[{action:'issued',at:new Date().toISOString(),by:decoded.uid}],createdAt:issuedAt,updatedAt:issuedAt};
@@ -144,6 +201,12 @@ async function issue(req:Request,res:Response){
    if(verifiedAssessmentAverage(tests,freshGrades,organizationId,lang,guideId,threshold)!==attestedAverage) throw new Error('The candidate assessment scores changed before certificate issuance.');
    const requestFresh=await tx.get(approvedRequestRef);
    if(!requestFresh.exists||requestFresh.data()?.status!=='approved'||String(requestFresh.data()?.organizationId||'')!==organizationId||String(requestFresh.data()?.guideId||'')!==approvedGuideId) throw new Error('The approved graduation record changed before certificate issuance.');
+   if(certificationRequirementIds.length){
+     const portfolioFresh=await tx.get(portfolioEligibility.portfolioRef);
+     if(portfolioFingerprint(portfolioFresh.data()||{},certificationRequirementIds)!==portfolioEligibility.fingerprint){
+       throw new Error('The candidate portfolio evidence changed before certificate issuance.');
+     }
+   }
    tx.create(certificateRef,certificate);
    return {created:true};
  });
