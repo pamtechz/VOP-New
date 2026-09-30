@@ -33,7 +33,9 @@ export function quizManagementItem(
     attachmentType: ['guide','lesson','chapter','section','block'].includes(String(data.attachmentType || ''))
       ? String(data.attachmentType) : 'guide',
     anchorId: String(data.anchorId || ''),
-    assessmentKind: data.assessmentKind === 'final_exam' ? 'final_exam' : 'practice',
+    assessmentKind: data.assessmentKind === 'final_exam' ? 'final_exam' : data.assessmentKind === 'chapter_quiz' ? 'chapter_quiz' : 'practice',
+    assessmentPolicy: data.assessmentPolicy && typeof data.assessmentPolicy === 'object' && !Array.isArray(data.assessmentPolicy)
+      ? data.assessmentPolicy : undefined,
     lessonId: String(data.lessonId || ''),
     organizationId: String(data.organizationId || ''),
     ownerOrganizationId: String(data.ownerOrganizationId || ''),
