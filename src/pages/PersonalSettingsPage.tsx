@@ -8,6 +8,7 @@ import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
 import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { applyThemePreference, normalizeThemePreference, readThemePreference } from '../services/theme';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -38,7 +39,7 @@ async function callPersonalSettings(operation: 'get' | 'save', settings?: Person
 
 export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange }) => {
   const [settings, setSettings] = useState<PersonalSettings>({
-    theme: 'system', language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
+    theme: normalizeThemePreference(currentUser.preferences?.theme) || readThemePreference(), language: '', notifications: { enabled: true, email: true, announcements: true, certificates: true },
     accessibility: { reducedMotion: false, largeText: false, highContrast: false },
     privacy: { profileVisibility: 'organization' }, studyPreferences: { reminders: true, preferredStudyTime: '' },
   });
@@ -68,7 +69,12 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   useEffect(() => {
     let active = true;
     const loadSettings = callPersonalSettings('get')
-      .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
+      .then(value => {
+        if (!active || !value) return;
+        setSettings(previous => ({ ...previous, ...value, theme: normalizeThemePreference(value.theme) || previous.theme || 'dark' }));
+        const remoteTheme = normalizeThemePreference(value.theme);
+        if (remoteTheme) applyThemePreference(remoteTheme);
+      })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
     void loadUiLocaleRegistry().then(setUiLocales).catch(() => undefined);
     const loadLanguages = loadPublicContent()
@@ -91,6 +97,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     setSaving(true); setMessage('');
     try {
       await callPersonalSettings('save', settings);
+      applyThemePreference(normalizeThemePreference(settings.theme) || 'dark');
       if (settings.uiLocale) setUiLocale(settings.uiLocale);
       if (settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
       setMessage(t('settings.saved', 'Your personal settings have been saved.'));
@@ -113,7 +120,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-personal-card vop-card">
         <h2><Globe2 size={19}/> Interface</h2>
-        <label>Theme<select value={settings.theme || 'system'} onChange={e => patch('theme', e.target.value as PersonalSettings['theme'])}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label>Theme<select value={settings.theme || 'dark'} onChange={e => { const theme=e.target.value as PersonalSettings['theme']; patch('theme', theme); if(theme) applyThemePreference(theme); }}><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <label>{t('settings.ui_language', 'Interface language')}<select value={settings.uiLocale || getUiLocale()} onChange={e => { patch('uiLocale', e.target.value); setUiLocale(e.target.value); }}>
           {uiLocales.map(language => <option key={language.code} value={language.code}>{language.name} · {language.nativeName || language.code}</option>)}
         </select></label>
