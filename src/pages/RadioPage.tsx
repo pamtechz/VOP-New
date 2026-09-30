@@ -7,8 +7,9 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, Maximize2, ExternalLink,
   SkipBack, SkipForward, Gauge, BookOpen, Globe2, CalendarDays,
-  ChevronRight, ListMusic, Clock3, Video, Headphones
+  ChevronRight, ListMusic, Clock3, Video, Headphones, Search, Sparkles
 } from 'lucide-react';
+import './radio-youtube.css';
 
 interface RadioPageProps { broadcasts: RadioBroadcast[]; playlists?: RadioPlaylist[]; onBack: () => void; }
 
@@ -144,6 +145,8 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   const [ytReady, setYtReady] = useState(false);
   const [scheduleRange, setScheduleRange] = useState<'today' | 'tomorrow' | 'week'>('today');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+  const [query,setQuery]=useState('');
+  const [mediaFilter,setMediaFilter]=useState<'all'|'live'|'video'|'audio'>('all');
   const playlistIndexRef = useRef(-1);
   const playlistItemsRef = useRef<RadioBroadcast[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null), videoRef = useRef<HTMLVideoElement | null>(null);
@@ -282,8 +285,19 @@ export const RadioPage: React.FC<RadioPageProps> = ({ broadcasts, playlists = []
   });
 
   const heroItem = selected || broadcasts[0], selectedPoster = heroItem?.posterUrl?.trim() || '';
-  const featured = broadcasts.slice(0, 4);
-  const latestAudio = broadcasts.filter(item => { const media = detectMedia(item); return media?.provider !== 'direct-video'; }).slice(0, 4);
+  const filteredBroadcasts=useMemo(()=>broadcasts.filter(item=>{
+    const q=query.trim().toLowerCase();
+    const source=detectMedia(item);
+    const matchesText=!q||[item.title,item.speaker,item.series,item.description].some(value=>String(value||'').toLowerCase().includes(q));
+    const matchesType=mediaFilter==='all'
+      ||(mediaFilter==='live'&&Boolean(source?.live))
+      ||(mediaFilter==='video'&&Boolean(source&&['youtube','direct-video','embed'].includes(source.provider)))
+      ||(mediaFilter==='audio'&&Boolean(source&&['direct-audio','audioverse'].includes(source.provider)));
+    return matchesText&&matchesType;
+  }),[broadcasts,query,mediaFilter]);
+  const featured = filteredBroadcasts.slice(0, 8);
+  const latestAudio = filteredBroadcasts.filter(item => { const media = detectMedia(item); return media?.provider === 'direct-audio'||media?.provider==='audioverse'; }).slice(0, 8);
+  const upNext=filteredBroadcasts.filter(item=>item.id!==selected?.id).slice(0,8);
   const schedule = useMemo(() => {
     const nowDate = new Date();
     const startToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
