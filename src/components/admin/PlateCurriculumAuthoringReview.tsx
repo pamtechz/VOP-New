@@ -13,6 +13,7 @@ import './plate-structure.css';
 type Anchor={type:'chapter'|'section'|'block';id:string};
 type Props={
   chapters:CurriculumChapter[];
+  organizationId?:string;
   onChange:(chapters:CurriculumChapter[])=>void;
   onPageError?:(sectionId:string,message:string)=>void;
   onQuiz:(anchor:Anchor)=>void;
@@ -48,16 +49,11 @@ const cloneDocument=(source:StudyPlateDocument):StudyPlateDocument=>
   }));
 const duplicateSectionSafely=(section:CurriculumSection):CurriculumSection=>{
   const clone:CurriculumSection={...section,id:id('section')};
-  // Never project an unsupported legacy media block to a paragraph. Keep
-  // old video/audio assets intact until an explicit reviewed conversion.
-  if(!section.document&&section.blocks.some(block=>block.type==='audio'||block.type==='video')){
-    return {...clone,blocks:section.blocks.map(block=>({...block,id:id('block')}))};
-  }
   return setDocument(clone,cloneDocument(doc(section)));
 };
 
 export function PlateCurriculumAuthoringReview({
-  chapters,onChange,onPageError,onQuiz,canAttachQuiz,programTitle,guideTitle,lessonTitle,initialSectionId,
+  chapters,organizationId,onChange,onPageError,onQuiz,canAttachQuiz,programTitle,guideTitle,lessonTitle,initialSectionId,
   canTransfer,otherLessons,onTransfer,
 }:Props){
   const initialChapter=initialSectionId
@@ -73,7 +69,6 @@ export function PlateCurriculumAuthoringReview({
   const chapterIndex=chapters.findIndex(item=>item.id===chapter?.id);
   const pageIndex=chapter?.sections.findIndex(item=>item.id===page?.id)??-1;
   const sourceDocument=useMemo(()=>page?doc(page):[],[page]);
-  const legacyMedia=Boolean(page?.blocks.some(item=>item.type==='video'||item.type==='audio'));
   const canLeavePage=()=>{
     if(!invalidPage)return true;
     setMessage('Correct this page before leaving: '+invalidPage);
@@ -299,19 +294,14 @@ export function PlateCurriculumAuthoringReview({
         {destinations('section')}
       </StructureActionsMenu>
     </div>}
-    {page&&(!legacyMedia
-      ?<StudyPlatePageEditor key={page.id} sectionId={page.id}
+    {page&&<StudyPlatePageEditor key={page.id} sectionId={page.id}
+        organizationId={organizationId}
         document={sourceDocument} onChange={updateDocument}
         onSplitPage={splitPage} onNotify={setMessage}
         onValidationError={value=>{
           setInvalidPage(value);
           onPageError?.(page.id,value);
-        }}/>
-      :<div className="vop-plate-review-compat" role="alert">
-          <strong>Existing media content is preserved.</strong>
-          Use the classic editor for this section until its audio and video
-          embeds have been reviewed for conversion into Plate blocks.
-        </div>)}
+        }}/>} 
     {message&&<p className="vop-plate-message" role="status">{message}</p>}
     <div className="vop-plate-publish-hint">
       <GripVertical size={15}/>
