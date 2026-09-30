@@ -123,7 +123,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     : 0;
 
   return (
-    <div
+    <ModalLayer><div
       className="modal-overlay vop-study-modal vop-lesson-modal"
       role="presentation"
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
