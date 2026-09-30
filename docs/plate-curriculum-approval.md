@@ -49,8 +49,8 @@ Keep **Learning Paths** separate: a pathway can arrange multiple programs or gui
 1. Courses catalogue: search/filter by scope, publication, type and language. Creating a program specifies ownership, navigation mode and visibility. Users see only resources authorized for them.
 2. Open program: reorder/assign guides or modules and manage final examinations. Show draft, published, empty and loading states.
 3. Open guide: create/reorder lessons, or manage them as the internal container when the program is section-first.
-4. Open lesson: compact header + Chapter selector + page tabs + Plate paper-style canvas. No permanent chapter-sidebar or duplicated block forms. A compact `…` menu handles duplication, moves, quizzes, and section splitting.
-5. Plate toolbar: paragraph/headings, strong/emphasis/underline, lists, quotations, safe HTTPS images/links; media and Bible-reference blocks only after validated provider support. Further items such as tables, galleries, interactive forms, AI writing and collaborative comments are **not** part of the reviewed core unless separately implemented and tested.
+4. Open lesson: compact header + Chapter selector + page tabs + Plate paper-style canvas. Plate is the default structured authoring surface. No permanent chapter-sidebar or duplicated block forms. A compact `…` menu handles duplication, moves, quizzes and section ordering; the toolbar exposes a visible **New section** action that splits the page at the selected paragraph.
+5. Plate toolbar: undo/redo, paragraph/headings, strong/emphasis/underline/strikethrough/inline-code, lists, quotations, safe HTTPS images/links, plus approved audio/video resolved through the existing `/api/media` allowlist. Further items such as tables, galleries, interactive forms, AI writing and collaborative comments are **not** part of the reviewed core unless separately implemented and tested.
 6. Save draft/preview/publish are explicit. Invalid editor state cannot be silently discarded or published. Preview uses exactly the validated learner renderer and actual section-page order.
 
 ## 5. Security, stewardship and lifecycle
@@ -69,7 +69,7 @@ The draft now writes instructor notes atomically to `guides/{guideId}/lessons/{l
 
 ## 6. What the current PR demonstrates
 
-**Implemented in the draft:** A React/Vite Plate editing surface, compact chapter/page selector, deliberate section splitting, safe JSON-to-reader rendering, rich formatting, draft save through the existing lesson API, guarded transfers, legacy-mode fallback, first-class Course/Program CRUD, tenant-constrained ordered guide assignments, course-first learner catalogue, program-level lesson/section navigation, API-only program writes and rules tests, and segregated instructor notes for new/edited lessons.
+**Implemented in the draft:** A React/Vite Plate editing surface used by default for structured lessons, compact sticky toolbar, compact chapter/page selector, deliberate paragraph-to-section splitting, stable block/page ordering, approved media insertion, safe JSON-to-reader rendering, rich formatting, draft save through the existing lesson API, guarded transfers, legacy compatibility fallback, first-class Course/Program CRUD, tenant-constrained ordered guide assignments, course-first learner catalogue, program-level lesson/section navigation, API-only program writes and rules tests, and segregated instructor notes for new/edited lessons.
 
 **Still requiring product approval and controlled follow-up:** Historical note migration, published immutable revision history and rollback, guide-to-program navigation from every older entry point, accessibility review, program-wide hierarchy scope if desired, and verified real-device authenticated editor interactions. The old guide-level navigation preference remains a fallback for legacy guides that are not opened through a program.
 
