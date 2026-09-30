@@ -95,6 +95,27 @@ test('unchanged legacy lessons bridge without rewriting their anchor IDs',()=>{
   assert.deepEqual(d.map(x=>x.id),['block-first','block-second']);
   assert.equal(studyPlateLegacyBlocks(d)[0].id,'block-first');
 });
+test('approved audio and video stay as first-class Plate blocks and legacy media keeps stable IDs',()=>{
+  const document=normalizeStudyPlateDocument([
+    {id:'video-one',type:'video',url:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',children:[{text:''}]},
+    {id:'audio-one',type:'audio',url:'https://www.audioverse.org/en/media/12345',children:[{text:''}]},
+    {id:'direct-video',type:'video',url:'https://cdn.example.org/study.mp4',children:[{text:''}]},
+  ]);
+  assert.deepEqual(document.map(item=>item.type),['video','audio','video']);
+  const bridge=studyPlateLegacyBlocks(document);
+  assert.deepEqual(bridge.map(item=>item.type),['video','audio','video']);
+  assert.deepEqual(bridge.map(item=>item.id),['video-one','audio-one','direct-video']);
+  const restored=normalizeStudyPlateDocument(legacyBlocksToPlate(bridge));
+  assert.deepEqual(restored.map(item=>item.id),['video-one','audio-one','direct-video']);
+  assert.equal(restored[0].url,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.throws(()=>normalizeStudyPlateDocument([
+    {id:'bad-media',type:'video',url:'https://example.org/not-a-media-page',children:[{text:''}]},
+  ]),/approved public HTTPS source/);
+  assert.throws(()=>normalizeStudyPlateDocument([
+    {id:'wrong-kind',type:'audio',url:'https://cdn.example.org/movie.mp4',children:[{text:''}]},
+  ]),/audio source/);
+});
+
 test('document schema rejects active content, private destinations and malformed lists',()=>{
   for(const type of ['script','iframe','html','form','table','svg']){
     assert.throws(()=>normalizeStudyPlateDocument([
@@ -132,6 +153,10 @@ test('Plate authoring uses a compact document toolbar and explicit section/page 
   assert.match(editor,/editor\.tf\.redo\(\)/);
   assert.match(editor,/Paragraph style/);
   assert.match(editor,/New section/);
+  assert.match(editor,/Insert approved audio or video/);
+  assert.match(editor,/fetch\('\/api\/media'/);
+  assert.match(editor,/StudyVideoPlugin/);
+  assert.match(editor,/StudyAudioPlugin/);
   assert.match(editor,/ctrlKey\|\|event\.metaKey/);
   assert.match(structure,/movePage=\(step:-1\|1\)/);
   assert.match(structure,/moveChapter=\(step:-1\|1\)/);
@@ -151,8 +176,8 @@ test('Plate review remains opt-in and does not replace the existing editor',()=>
   assert.match(plate,/onSplitPage=\{splitPage\}/);
   assert.match(plate,/vop-plate-page-tabs/);
   assert.match(plate,/duplicateSectionSafely/);
-  assert.match(plate,/section\.blocks\.some\(block=>block\.type==='audio'\|\|block\.type==='video'\)/);
-  assert.match(plate,/blocks:section\.blocks\.map\(block=>\(\{\.\.\.block,id:id\('block'\)\}\)\)/);
+  assert.match(plate,/organizationId=\{organizationId\}/);
+  assert.doesNotMatch(plate,/Use the classic editor for this section until its audio and video/);
   assert.match(reader,/currentSection\.document/);
   assert.match(reader,/afterBlock=\{blockId=>assessmentLinks\('block',blockId\)\}/);
   assert.doesNotMatch(safe,/dangerouslySetInnerHTML/);
