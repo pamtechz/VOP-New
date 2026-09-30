@@ -134,4 +134,13 @@ export function learnerHistoryHasPrevious(uid:string){
 export function clearLearnerLocation(uid:string){
   if(typeof window==='undefined'||!text(uid))return;
   try{sessionStorage.removeItem(key(uid));}catch{/* storage unavailable */}
+  const state=window.history.state&&typeof window.history.state==='object'
+    ?{...(window.history.state as Record<string,unknown>)}:{};
+  const envelope=state.vopLearner&&typeof state.vopLearner==='object'&&!Array.isArray(state.vopLearner)
+    ?state.vopLearner as Record<string,unknown>:null;
+  if(envelope&&text(envelope.uid)===text(uid)){
+    delete state.vopLearner;
+    delete state.vopLearnerDepth;
+    window.history.replaceState(state,'',window.location.href);
+  }
 }
