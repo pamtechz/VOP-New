@@ -18,6 +18,8 @@ type GuideRecord = {
   season: string;
   quarter: string;
   certificateEligible: boolean;
+  certificateDocumentType:string;
+  certificateTypeName:string;
   learnerEntryMode:'lessons'|'sections';
   requiresFinalExam: boolean;
   published: boolean;
@@ -106,6 +108,8 @@ function makeRecord(value: Record<string, unknown>, fallbackLessons = 0): GuideR
     season: valueText(value.season),
     quarter: valueText(value.quarter),
     certificateEligible: value.certificateEligible === true,
+    certificateDocumentType:valueText(value.certificateDocumentType || 'course'),
+    certificateTypeName:valueText(value.certificateTypeName),
     learnerEntryMode:value.learnerEntryMode==='sections'?'sections':'lessons',
     requiresFinalExam: value.requiresFinalExam === true,
     published: value.published === true,
@@ -242,6 +246,8 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
       season: '',
       quarter: '',
       certificateEligible: false,
+      certificateDocumentType:'course',
+      certificateTypeName:'',
       learnerEntryMode:'lessons',
       requiresFinalExam: true,
       published: false,
@@ -287,6 +293,8 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         season: editing.season.trim(),
         quarter: editing.quarter.trim(),
         certificateEligible: editing.certificateEligible,
+        certificateDocumentType:editing.certificateDocumentType.trim() || 'course',
+        certificateTypeName:editing.certificateTypeName.trim(),
         learnerEntryMode:editing.learnerEntryMode,
         requiresFinalExam: editing.requiresFinalExam,
         published: editing.published,
@@ -382,6 +390,20 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
             <div><div className="vop-setting-name">Certificate eligibility</div><div className="vop-setting-help">Available to the configured certification workflow.</div></div>
             <input type="checkbox" checked={editing.certificateEligible} onChange={e => setEditing({...editing,certificateEligible:e.target.checked})}/>
           </div>
+          {editing.certificateEligible && <div className="vop-form-grid vop-reference-form-grid">
+            <div className="vop-field"><label>Certificate type name</label>
+              <input maxLength={160} value={editing.certificateTypeName}
+                onChange={e=>setEditing({...editing,certificateTypeName:e.target.value})}
+                placeholder="e.g. Bible Correspondence Certificate"/>
+              <small>The issued credential snapshots this configured type; leave blank to use the official configured certificate title.</small>
+            </div>
+            <div className="vop-field"><label>Document type</label>
+              <input maxLength={80} value={editing.certificateDocumentType}
+                onChange={e=>setEditing({...editing,certificateDocumentType:e.target.value})}
+                placeholder="course"/>
+              <small>Data-driven document classification used in issuance and verification.</small>
+            </div>
+          </div>}
           <div className="vop-setting-row">
             <div><div className="vop-setting-name">Student guide navigation</div>
               <div className="vop-setting-help">
