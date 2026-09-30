@@ -58,7 +58,7 @@ export default async function handler(req: Request, res: Response) {
     const bootstrapDb = getAdminDb();
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
-    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites'].includes(action));
+    const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory'].includes(action));
     const permissionAction = action === 'list' ? 'view' : action === 'create' ? 'create' : ['update','assignOwner','transferOwnership'].includes(action) ? 'update' : action === 'delete' ? 'delete' : '';
     if (permissionAction) await requirePermission(ctx, 'organizations', permissionAction);
     if (action === 'create') {
@@ -170,7 +170,7 @@ export default async function handler(req: Request, res: Response) {
       const names=new Map(organizationSnaps.map(doc=>[doc.id,String(doc.data()?.name||doc.id)]));
       const origin=String(req.headers?.origin||'').trim()
         || `${String(req.headers?.['x-forwarded-proto']||'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host']||req.headers?.host||'').split(',')[0]}`.replace(/\/$/,'');
-      const items=rows.map(item=>({
+      const items=rows.filter(item=>!Array.isArray(item.hiddenForUids)||!item.hiddenForUids.map(String).includes(ctx.auth.uid)).map(item=>({
         ...item,
         organizationName:names.get(String(item.organizationId||''))||String(item.organizationId||''),
         inviteUrl:origin?`${origin}/?invite=${item.token}`:'',
@@ -202,6 +202,41 @@ export default async function handler(req: Request, res: Response) {
         });
       }
       return res.status(200).json({ok:true,status:'declined'});
+    }
+
+    if (action === 'dismissInvite') {
+      const token=String(body.token||'').trim();
+      if(!token)throw new Error('Invitation token is required.');
+      const ref=bootstrapDb.doc('organizationInvites/'+token);
+      const snap=await ref.get();
+      if(!snap.exists)return res.status(200).json({ok:true,status:'dismissed'});
+      const data=snap.data()||{};
+      const email=String(ctx.auth.email||'').trim().toLowerCase();
+      const participant=String(data.invitedBy||'')===ctx.auth.uid
+        || (email&&String(data.email||'').trim().toLowerCase()===email);
+      if(!participant)throw new Error('This invitation is not part of your invitation history.');
+      if(String(data.status||'pending')==='pending')throw new Error('Respond to or cancel a pending invitation before deleting it from history.');
+      await ref.set({hiddenForUids:FieldValue.arrayUnion(ctx.auth.uid),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      return res.status(200).json({ok:true,status:'dismissed'});
+    }
+
+    if (action === 'clearInviteHistory') {
+      const email=String(ctx.auth.email||'').trim().toLowerCase();
+      const [received,sent]=await Promise.all([
+        email?bootstrapDb.collection('organizationInvites').where('email','==',email).limit(500).get():Promise.resolve(null),
+        bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(500).get(),
+      ]);
+      const map=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
+      received?.docs.forEach(doc=>map.set(doc.id,doc));
+      sent.docs.forEach(doc=>map.set(doc.id,doc));
+      const docs=[...map.values()].filter(doc=>String(doc.data()?.status||'pending')!=='pending'
+        && !(Array.isArray(doc.data()?.hiddenForUids)&&doc.data()?.hiddenForUids.map(String).includes(ctx.auth.uid)));
+      for(let offset=0;offset<docs.length;offset+=400){
+        const batch=bootstrapDb.batch();
+        docs.slice(offset,offset+400).forEach(doc=>batch.set(doc.ref,{hiddenForUids:FieldValue.arrayUnion(ctx.auth.uid),updatedAt:FieldValue.serverTimestamp()},{merge:true}));
+        await batch.commit();
+      }
+      return res.status(200).json({ok:true,cleared:docs.length});
     }
 
     if (action === 'cancelInvite') {
