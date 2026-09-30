@@ -43,84 +43,10 @@ export default async function handler(req: Request, res: Response) {
     const action = lower(body.action);
     const db = getAdminDb();
     if (action.startsWith('tenant')) {
-      // These records are private organization drafts. The canonical registry
-      // has a distinct, Super-Admin-only authorization boundary.
-      const organizationId = ctx.organizationId;
-      if (!organizationId || ctx.tenantType !== 'organization') {
-        throw new Error('Select an active organization to manage its languages.');
-      }
-      const collection = db.collection('organizations/' + organizationId + '/languages');
-      if (action === 'tenantlist') {
-        await requirePermission(ctx, 'languages', 'view');
-        const snap = await collection.get();
-        return res.status(200).json({ok:true,items:snap.docs.map(doc => {
-          const data=doc.data();
-          return {id:doc.id,...data,canEdit:ctx.isSuperAdmin ||
-            (!data.adoptedByPlatform && !data.platformOwned && data.ownerUid===ctx.auth.uid)};
-        })});
-      }
-      requireOrgRole(ctx,['owner','admin']);
-      const code=lower(body.code || body.id);
-      if (!CODE_RE.test(code)) throw new Error('A valid language code is required.');
-      const ref=collection.doc(code);
-      const globalRef=db.doc('languages/' + code);
-      if (action === 'tenantupsert') {
-        await requirePermission(ctx,'languages','update');
-        const name=normalize(body.name).slice(0,120);
-        const nativeName=normalize(body.nativeName || body.name).slice(0,120);
-        if (!name || !nativeName) throw new Error('A name and native name are required.');
-        const now=FieldValue.serverTimestamp();
-        await db.runTransaction(async transaction=>{
-          const [existing,global]=await Promise.all([transaction.get(ref),transaction.get(globalRef)]);
-          if (global.exists && !existing.exists) throw new Error('This language already exists in the platform registry. Choose it instead.');
-          const old=existing.data() || {};
-          if (existing.exists && !ctx.isSuperAdmin && old.ownerUid !== ctx.auth.uid)
-            throw new Error('Only the contributor or Super Admin may edit this language.');
-          if (old.adoptedByPlatform || old.platformOwned)
-            throw new Error('This language is platform-stewarded and cannot be changed by the organization.');
-          transaction.set(ref,{
-            id:code,code,name,nativeName,rtl:body.rtl===true,
-            enabled:body.enabled!==false,sortOrder:Number.isFinite(Number(body.sortOrder))?Number(body.sortOrder):0,
-            organizationId,ownerOrganizationId:organizationId,
-            ownerUid:old.ownerUid || ctx.auth.uid,
-            scope:'organization',sharingScope:'organization',adoptedByPlatform:false,
-            createdAt:old.createdAt || now,updatedAt:now,updatedBy:ctx.auth.uid,
-          },{merge:true});
-        });
-        await writeTenantAudit(ctx,'tenant.language.upsert',ref.path,undefined,{code});
-        return res.status(200).json({ok:true,code});
-      }
-      if (action === 'tenantdelete') {
-        await requirePermission(ctx,'languages','delete');
-        const [usedGuides,usedUsers] = await Promise.all([
-          db.collection('guides').where('organizationId','==',organizationId).where('language','==',code).limit(1).get(),
-          db.collection('users').where('organizationId','==',organizationId).where('preferences.studyLanguage','==',code).limit(1).get(),
-        ]);
-        if (!usedGuides.empty || !usedUsers.empty)
-          throw new Error('This language is already used by a guide or learner. It cannot be deleted.');
-        await db.runTransaction(async transaction=>{
-          const [existing,global]=await Promise.all([transaction.get(ref),transaction.get(globalRef)]);
-          if (!existing.exists) throw new Error('Language not found.');
-          const data=existing.data() || {};
-          if (data.ownerUid!==ctx.auth.uid && !ctx.isSuperAdmin)
-            throw new Error('Only the contributor or Super Admin can delete this language.');
-          if (global.exists || data.adoptedByPlatform || data.platformOwned || data.sharingScope==='shared')
-            throw new Error('The language has been adopted into the platform and cannot be deleted.');
-          transaction.delete(ref);
-        });
-        await writeTenantAudit(ctx,'tenant.language.delete',ref.path,undefined,{code});
-        return res.status(200).json({ok:true,code});
-      }
-      if (action === 'tenantshare') {
-        await requirePermission(ctx,'languages','publish');
-        // Sharing is adoption: no temporary global edit rights are given to
-        // the originating tenant, and existing platform codes are immutable.
-        await db.runTransaction(transaction =>
-          adoptOrganizationLanguage(ctx,transaction,organizationId,code));
-        await writeTenantAudit(ctx,'tenant.language.adopted',ref.path,undefined,{code,platformPath:globalRef.path});
-        return res.status(200).json({ok:true,code,platformOwned:true});
-      }
-      throw new Error('Unsupported organization language action.');
+      // Language creation and registry governance are platform-wide. Tenant
+      // administrators consume published platform languages and contribute
+      // through the localization application/review workflow instead.
+      throw new Error('Language registry management is platform-wide. Apply for localization access or ask VOP Super Admin to invite you as a translator.');
     }
 
     // This endpoint writes the canonical, system-wide registry and locales.
