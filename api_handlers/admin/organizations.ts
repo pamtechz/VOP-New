@@ -817,7 +817,10 @@ export default async function handler(req: Request, res: Response) {
     if (/expired or has already been used|already been used/i.test(message)) {
       return res.status(409).json({error:message});
     }
-    const code = /Sign in|membership|permission|Super Admin|organization is not available|already exists/.test(message) ? 403 : 400;
+    const code = /expired or has already been used|already been used/.test(message)
+      ?409
+      :/Sign in|membership|permission|Super Admin|organization is not available|already exists/.test(message)
+        ?403:400;
     return res.status(code).json({ error: message });
   }
 }
