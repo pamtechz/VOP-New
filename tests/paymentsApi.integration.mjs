@@ -74,7 +74,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         if(signature!=='valid')throw new Error('Invalid payment webhook signature.');
         const data=request.body?.data||{};
         return {
-          reference:String(data.reference||''),eventType:String(request.body?.event||'provider.event'),
+          reference:String(data.reference||''),eventType:String(request.body?.event||'provider.event'),authenticated:true,
           providerStatus:String(data.status||''),providerTransactionId:'',
           providerReference:String(data.lencoReference||''),completedAt:data.completedAt||null,
         };
@@ -114,7 +114,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       parseWebhook(request){
         const data=request.body||{};
         return {
-          reference:String(data.externalId||''),eventType:'requesttopay.callback',
+          reference:String(data.externalId||''),eventType:'requesttopay.callback',authenticated:false,
           providerStatus:String(data.status||'').toLowerCase(),providerTransactionId:'',
           providerReference:String(data.financialTransactionId||''),completedAt:null,
         };
@@ -421,12 +421,15 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(stillPending?.status,'pending');
       assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).exists,false);
 
-      // Conversely, even a callback body claiming failure results in paid only
-      // when the authenticated provider status lookup independently says SUCCESSFUL.
+      // Repeated callback payload changes are deduplicated. Once MTN's
+      // authenticated status changes, normal verification/reconciliation applies it.
       mtnStatuses.set(started.payment.reference,'successful');
-      const verified=await mtnWebhook({
+      const duplicate=await mtnWebhook({
         externalId:started.payment.reference,status:'FAILED',financialTransactionId:'CALLBACK-CLAIM-2',
       },'POST');
+      assert.equal(duplicate.status,200,JSON.stringify(duplicate));
+      assert.equal(duplicate.duplicate,true);
+      const verified=await call(mtnLearner,'verify',{reference:started.payment.reference});
       assert.equal(verified.status,200,JSON.stringify(verified));
       const paid=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
       assert.equal(paid?.status,'paid');
