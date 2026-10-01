@@ -135,6 +135,40 @@ test('assessment architecture separates classification and policy and starts att
 });
 
 
+test('platform finance administration is Super Admin-only while organizations consume subscription packages',()=>{
+  const admin=read('src/pages/PaymentManagement.tsx');
+  const consumer=read('src/pages/PaymentsPage.tsx');
+  const api=read('api/payments.ts');
+  const core=read('server/payments/core.ts');
+  const plans=read('api_handlers/admin/plans.ts');
+  const serverPermissions=read('server/permissions.ts');
+  const sharedPermissions=read('shared/permissions.ts');
+
+  assert.match(admin,/Subscription packages/);
+  assert.match(admin,/isSuperAdmin&&tab==='items'/);
+  assert.match(admin,/isSuperAdmin&&tab==='providers'/);
+  assert.match(admin,/isSuperAdmin&&tab==='reconciliation'/);
+  assert.match(admin,/New subscription package/);
+  assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payable item administration'\)/);
+  assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payment provider administration'\)/);
+  assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payment reconciliation'\)/);
+  assert.match(core,/requireOrganizationSubscriptionConsumer/);
+  assert.match(core,/selectProviderForMethod/);
+  assert.match(core,/scopedTransactionProjection/);
+  assert.match(serverPermissions,/resource === 'payable_items'/);
+  assert.match(sharedPermissions,/resource === 'payable_items'/);
+  assert.match(api,/json\(\{ok:true,items\}\)/);
+  assert.doesNotMatch(api,/checkoutOptions/);
+  assert.match(plans,/action === 'listAvailablePlans'/);
+  assert.match(plans,/Only the VOP Super Admin can access subscription package administration/);
+  assert.match(plans,/subscription_'\+planId/);
+  assert.match(plans,/upsertPayableItem/);
+  assert.match(consumer,/Subscription packages/);
+  assert.doesNotMatch(consumer,/Payment provider/);
+  assert.doesNotMatch(consumer,/selectedProvider/);
+  assert.doesNotMatch(consumer,/providerKey/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');

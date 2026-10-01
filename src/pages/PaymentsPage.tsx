@@ -6,7 +6,7 @@ import { paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
 import {
   getPaymentStatus, loadLencoCheckoutScript, loadPaymentCatalog, loadPaymentHistory,
   loadPaymentReceipt, startPaymentCheckout, verifyPayment,
-  type ClientPayment, type PaymentProviderDescriptor,
+  type ClientPayment,
 } from '../services/payments';
 import './payments.css';
 
@@ -32,10 +32,8 @@ function friendlyStatus(payment:ClientPayment){
 
 const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   const [items,setItems]=useState<PayableItem[]>([]);
-  const [providers,setProviders]=useState<PaymentProviderDescriptor[]>([]);
   const [history,setHistory]=useState<ClientPayment[]>([]);
   const [selected,setSelected]=useState<PayableItem|null>(null);
-  const [providerKey,setProviderKey]=useState('lenco');
   const [method,setMethod]=useState<PaymentMethod>('airtel_money');
   const [phone,setPhone]=useState(currentUser.phoneNumber||'');
   const [busy,setBusy]=useState(false);
@@ -46,36 +44,22 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   const [checkoutReference,setCheckoutReference]=useState('');
   const [checkoutStatus,setCheckoutStatus]=useState('Ready');
 
-  const availableProviders=useMemo(()=>{
-    if(!selected)return [] as PaymentProviderDescriptor[];
-    const allowed=new Set(selected.allowedProviders||[]);
-    return providers.filter(provider=>provider.configured&&provider.enabled&&(allowed.size===0||allowed.has(provider.key)));
-  },[selected,providers]);
-  const selectedProvider=useMemo(
-    ()=>availableProviders.find(provider=>provider.key===providerKey)||availableProviders[0]||null,
-    [availableProviders,providerKey],
+  const availableMethods=useMemo(
+    ()=>selected?(selected.allowedMethods||[]).filter(value=>value!=='manual'&&value!=='bank'):[] as PaymentMethod[],
+    [selected],
   );
-  const availableMethods=useMemo(()=>{
-    if(!selected||!selectedProvider)return [] as PaymentMethod[];
-    const allowed=new Set(selected.allowedMethods||[]);
-    return (selectedProvider.methods||[]).filter(value=>allowed.size===0||allowed.has(value));
-  },[selected,selectedProvider]);
+  const subscriptionItems=useMemo(()=>items.filter(item=>item.itemType==='organization_subscription'),[items]);
+  const otherItems=useMemo(()=>items.filter(item=>item.itemType!=='organization_subscription'),[items]);
 
   const refresh=async()=>{
     setLoading(true);setError('');
     try{
       const [catalog,payments]=await Promise.all([loadPaymentCatalog(),loadPaymentHistory()]);
-      setItems(catalog.items);setProviders(catalog.providers);setHistory(payments.items);
+      setItems(catalog.items);setHistory(payments.items);
     }catch(reason){setError(reason instanceof Error?reason.message:'Payments could not be loaded.');}
     finally{setLoading(false);}
   };
   useEffect(()=>{void refresh();},[]);
-
-  useEffect(()=>{
-    if(!selected)return;
-    const firstProvider=availableProviders[0];
-    if(firstProvider&&!availableProviders.some(provider=>provider.key===providerKey))setProviderKey(firstProvider.key);
-  },[selected,availableProviders,providerKey]);
 
   useEffect(()=>{
     if(!selected)return;
@@ -94,19 +78,19 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
           setMessage(result.payment.status==='paid'?'Payment verified and access activated.':'Payment ended with status: '+friendlyStatus(result.payment));
           return;
         }
-      }catch{/* Reconciliation remains authoritative if the browser loses connectivity. */}
+      }catch{/* Server-side payment confirmation remains authoritative if the browser loses connectivity. */}
     }
-    setMessage('Payment is still being confirmed. You can close this page; VOP will continue reconciling it securely.');
+    setMessage('Payment is still being confirmed. You can close this page; VOP will continue confirming it securely.');
     await refresh();
   };
 
   const pay=async()=>{
-    if(!selected||!selectedProvider)return;
+    if(!selected)return;
     if(method!=='card'&&!phone.trim()){setError('Enter the mobile money phone number.');return;}
     setBusy(true);setError('');setMessage('');
     try{
       const result=await startPaymentCheckout({
-        payableItemId:selected.id,provider:selectedProvider.key,paymentMethod:method,
+        payableItemId:selected.id,paymentMethod:method,
         phone:method==='card'?undefined:phone.trim(),
         firstName:(currentUser.displayName||'').trim().split(/\s+/)[0]||undefined,
         lastName:(currentUser.displayName||'').trim().split(/\s+/).slice(1).join(' ')||undefined,
@@ -119,7 +103,6 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
         setSelected(null);await refresh();return;
       }
       if(result.checkout?.mode==='inline'){
-        if(selectedProvider.key!=='lenco')throw new Error('This provider checkout mode is not supported by the current client.');
         if(!result.checkout.scriptUrl||!result.checkout.publicKey)throw new Error('The secure card checkout is not available.');
         await loadLencoCheckoutScript(result.checkout.scriptUrl);
         const api=(window as unknown as {LencoPay?:LencoApi}).LencoPay;
@@ -148,13 +131,13 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
             finally{setBusy(false);}
           },
           onClose:()=>{setMessage('Payment window closed. No access is granted unless the server verifies payment.');void refresh();},
-          onConfirmationPending:()=>{setMessage('Your payment is awaiting provider confirmation. VOP will verify it automatically.');void poll(payment.reference);},
+          onConfirmationPending:()=>{setMessage('Your payment is awaiting confirmation. VOP will verify it automatically.');void poll(payment.reference);},
         });
         return;
       }
       setMessage(payment.status==='requires_action'
         ?'Payment request sent. Approve it on your mobile phone; VOP will activate access only after verification.'
-        :'Payment request created. VOP is waiting for provider confirmation.');
+        :'Payment request created. VOP is waiting for secure payment confirmation.');
       setSelected(null);void poll(payment.reference);await refresh();
     }catch(reason){setError(reason instanceof Error?reason.message:'Payment could not be started.');}
     finally{setBusy(false);}
@@ -176,21 +159,30 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {error&&<div className="vop-payment-alert danger"><XCircle size={18}/><span>{error}</span><button onClick={()=>setError('')} aria-label="Dismiss">×</button></div>}
     {message&&<div className="vop-payment-alert success"><CheckCircle2 size={18}/><span>{message}</span><button onClick={()=>setMessage('')} aria-label="Dismiss">×</button></div>}
 
-    <section className="vop-payment-section">
-      <div className="vop-payment-section-title"><div><span>Available charges</span><h2>Payable items</h2></div><WalletCards size={24}/></div>
-      {loading?<div className="vop-payment-empty"><LoaderCircle className="spin" size={28}/>Loading secure payment options…</div>:
-      items.length?<div className="vop-payable-grid">{items.map(item=><article key={item.id} className="vop-payable-card">
-        <div><span className="vop-payment-type">{item.itemType.replaceAll('_',' ')}</span><h3>{item.name}</h3><p>{item.description||'Configured VOP charge'}</p></div>
+    {subscriptionItems.length>0&&<section className="vop-payment-section">
+      <div className="vop-payment-section-title"><div><span>Organization billing</span><h2>Subscription packages</h2></div><WalletCards size={24}/></div>
+      <div className="vop-payable-grid">{subscriptionItems.map(item=><article key={item.id} className="vop-payable-card">
+        <div><span className="vop-payment-type">Organization subscription</span><h3>{item.name}</h3><p>{item.description||'VOP organization subscription package'}</p></div>
         <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
-          <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setProviderKey((item.allowedProviders||[])[0]||'lenco');setCheckoutReference('');setCheckoutStatus('Ready');}}>Pay now</button></div>
-      </article>)}</div>:<div className="vop-payment-empty">There are no payable items available to your account.</div>}
+          <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Choose package</button></div>
+      </article>)}</div>
+    </section>}
+
+    <section className="vop-payment-section">
+      <div className="vop-payment-section-title"><div><span>Available payments</span><h2>Charges & registrations</h2></div><WalletCards size={24}/></div>
+      {loading?<div className="vop-payment-empty"><LoaderCircle className="spin" size={28}/>Loading secure payment options…</div>:
+      otherItems.length?<div className="vop-payable-grid">{otherItems.map(item=><article key={item.id} className="vop-payable-card">
+        <div><span className="vop-payment-type">{item.itemType.replaceAll('_',' ')}</span><h3>{item.name}</h3><p>{item.description||'Available VOP payment'}</p></div>
+        <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
+          <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Pay now</button></div>
+      </article>)}</div>:<div className="vop-payment-empty">{subscriptionItems.length?'No other charges are currently available.':'There are no payment options available to your account.'}</div>}
     </section>
 
     <section className="vop-payment-section">
       <div className="vop-payment-section-title"><div><span>Your records</span><h2>Payment history</h2></div><Clock3 size={24}/></div>
       {history.length?<div className="vop-payment-history">{history.map(payment=><article key={payment.id}>
         <div className="vop-payment-history-icon">{methodIcon(payment.paymentMethod)}</div>
-        <div className="vop-payment-history-copy"><strong>{payment.description}</strong><span>{payment.reference} · {payment.provider==='lenco'?'Lenco':payment.provider}</span><small>{payment.createdAt?new Date(payment.createdAt).toLocaleString():'Date pending'}</small></div>
+        <div className="vop-payment-history-copy"><strong>{payment.description}</strong><span>{payment.reference}</span><small>{payment.createdAt?new Date(payment.createdAt).toLocaleString():'Date pending'}</small></div>
         <div className="vop-payment-history-amount"><strong>{payment.currency} {payment.amountDecimal}</strong><span className={'vop-payment-status '+statusTone(payment.status)}>{friendlyStatus(payment)}</span></div>
         {payment.receiptId&&<button type="button" className="vop-payment-receipt-button" onClick={()=>void showReceipt(payment.id)}><Download size={15}/>Receipt</button>}
       </article>)}</div>:<div className="vop-payment-empty">No payment transactions have been recorded for your account yet.</div>}
@@ -199,16 +191,13 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {selected&&<div className="vop-payment-modal-layer" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setSelected(null)}}>
       <section className="vop-payment-modal" role="dialog" aria-modal="true" aria-labelledby="vop-payment-title">
         <header><div><span>Secure checkout</span><h2 id="vop-payment-title">{selected.name}</h2></div><button onClick={()=>setSelected(null)} disabled={busy} aria-label="Close">×</button></header>
-        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}<div><dt>Provider</dt><dd>{selectedProvider?selectedProvider.key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()):'Unavailable'}</dd></div>{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
-        {!selectedProvider?<div className="vop-payment-alert danger"><XCircle size={17}/>No configured payment provider is available for this charge.</div>:<>
-          {availableProviders.length>1&&<fieldset><legend>Payment provider</legend><div className="vop-payment-methods">
-            {availableProviders.map(provider=><button type="button" key={provider.key} className={selectedProvider.key===provider.key?'active':''} onClick={()=>setProviderKey(provider.key)} disabled={busy}><WalletCards size={20}/><span>{provider.key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}</span></button>)}
-          </div></fieldset>}
+        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
+        {!availableMethods.length?<div className="vop-payment-alert danger"><XCircle size={17}/>No payment method is currently available for this charge.</div>:<>
           <fieldset><legend>Payment method</legend><div className="vop-payment-methods">
             {availableMethods.map(value=><button type="button" key={value} className={method===value?'active':''} onClick={()=>setMethod(value)} disabled={busy}>{methodIcon(value)}<span>{paymentMethodLabel(value)}</span></button>)}
           </div></fieldset>
           {method!=='card'&&<label className="vop-payment-phone"><span>Mobile money number</span><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="097..." inputMode="tel" disabled={busy}/><small>You will approve the request on this phone.</small></label>}
-          <div className="vop-payment-security"><CreditCard size={18}/><p>VOP never marks a payment successful from the browser. Access is activated only after server verification with the payment provider.</p></div>
+          <div className="vop-payment-security"><CreditCard size={18}/><p>VOP never marks a payment successful from the browser. Access is activated only after independent server-side verification.</p></div>
           <button type="button" className="btn btn-primary vop-payment-submit" onClick={()=>void pay()} disabled={busy||!availableMethods.length}>{busy?<><LoaderCircle className="spin" size={17}/>Starting secure payment…</>:<>Pay {selected.currency} {selected.amountDecimal}</>}</button>
         </>}
       </section>
@@ -222,7 +211,6 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
           <div><dt>Paid by</dt><dd>{String(receipt.payerName||currentUser.displayName||currentUser.email)}</dd></div>
           <div><dt>Amount</dt><dd>{String(receipt.currency||'')} {String(receipt.amountDecimal||'')}</dd></div>
           <div><dt>Reference</dt><dd>{String(receipt.reference||'')}</dd></div>
-          <div><dt>Provider</dt><dd>{String(receipt.provider||'').replace(/\b\w/g,c=>c.toUpperCase())}</dd></div>
           <div><dt>Paid</dt><dd>{receipt.paidAt?new Date(String(receipt.paidAt)).toLocaleString():'Recorded'}</dd></div>
         </dl>
       </section>

@@ -81,11 +81,10 @@ async function request<T>(path:string,body?:Record<string,unknown>,method:'GET'|
 }
 
 export async function loadPaymentCatalog(){
-  return request<{ok:true;items:PayableItem[];providers:PaymentProviderDescriptor[]}>('catalog',{},'POST');
+  return request<{ok:true;items:PayableItem[]}>('catalog',{},'POST');
 }
 export async function startPaymentCheckout(input:{
   payableItemId:string;
-  provider?:string;
   paymentMethod:PaymentMethod;
   phone?:string;
   firstName?:string;

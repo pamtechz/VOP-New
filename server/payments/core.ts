@@ -157,8 +157,22 @@ async function assertTargetOrganization(ctx:TenantContext,organizationId:string)
   throw new Error('An authorized organization scope is required.');
 }
 
+function requireSuperAdminFinanceControl(ctx:TenantContext,resource:string){
+  if(!ctx.isSuperAdmin)throw new Error(`Only Super Admin can access ${resource}.`);
+}
+
+async function requireOrganizationSubscriptionConsumer(ctx:TenantContext){
+  if(ctx.isSuperAdmin)return;
+  await requirePermission(ctx,'billing','view');
+  const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+  if(ctx.tenantType!=='organization'||!ctx.organizationId||!['owner','admin'].includes(role)){
+    throw new Error('Only an organization owner or administrator can manage the organization subscription.');
+  }
+}
+
 export async function upsertPayableItem(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payable_items','manage');
+  requireSuperAdminFinanceControl(ctx,'payable item management');
   const id=input.id?safePaymentId(input.id,'payable item identifier'):'pay_'+randomUUID().replaceAll('-','');
   const itemType=text(input.itemType);
   if(!PAYABLE_ITEM_TYPES.includes(itemType as never))throw new Error('Select a supported payable item type.');
@@ -211,6 +225,7 @@ export async function upsertPayableItem(ctx:TenantContext,input:Record<string,un
 
 export async function deletePayableItem(ctx:TenantContext,idValue:unknown){
   await requirePermission(ctx,'payable_items','manage');
+  requireSuperAdminFinanceControl(ctx,'payable item management');
   const id=safePaymentId(idValue,'payable item identifier');
   const ref=ctx.db.doc('payableItems/'+id),snap=await ref.get();
   if(!snap.exists)throw new Error('The payable item does not exist.');
@@ -240,15 +255,55 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
+async function consumerPaymentMethods(db:Firestore,data:DocumentData){
+  const allowedMethods=stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never));
+  const configuredProviders=stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
+  const providerKeys=configuredProviders.length?configuredProviders:registeredPaymentProviderKeys();
+  const methods=new Set<string>();
+  for(const key of providerKeys){
+    const config=await providerConfig(db,key);
+    if(!config.enabled||!config.configured)continue;
+    for(const method of config.methods){
+      if((!allowedMethods.length||allowedMethods.includes(method))&&PAYMENT_METHODS.includes(method as never)
+        &&method!=='manual'&&method!=='bank')methods.add(method);
+    }
+  }
+  return [...methods] as PaymentMethod[];
+}
+
+async function consumerPayableItem(db:Firestore,id:string,data:DocumentData){
+  return {
+    id,
+    name:text(data.name),
+    description:text(data.description),
+    itemType:text(data.itemType),
+    organizationName:text(data.organizationName),
+    currency:text(data.currency),
+    amountMinor:Number(data.amountMinor||0),
+    amountDecimal:text(data.amountDecimal),
+    repeatable:bool(data.repeatable,false),
+    allowedMethods:await consumerPaymentMethods(db,data),
+  };
+}
+
 export async function listPayableItems(ctx:TenantContext,admin=false){
-  if(admin)await requirePermission(ctx,'payable_items','view');
+  if(admin){
+    await requirePermission(ctx,'payable_items','view');
+    requireSuperAdminFinanceControl(ctx,'payable item administration');
+  }
   const snap=await ctx.db.collection('payableItems').get();
   const items=[];
   for(const doc of snap.docs){
     const data=doc.data();
     if(admin){
-      if(ctx.isSuperAdmin||await itemVisibleToUser(ctx,{...data,active:true}))items.push({id:doc.id,...data});
-    }else if(await itemVisibleToUser(ctx,data))items.push({id:doc.id,...data});
+      items.push({id:doc.id,...data});
+    }else if(await itemVisibleToUser(ctx,data)){
+      if(text(data.itemType)==='organization_subscription'){
+        try{await requireOrganizationSubscriptionConsumer(ctx);}
+        catch{continue;}
+      }
+      items.push(await consumerPayableItem(ctx.db,doc.id,data));
+    }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
 }
@@ -328,10 +383,25 @@ async function providerAllowed(db:Firestore,item:DocumentData,providerKey:string
   return getPaymentProvider(providerKey);
 }
 
+async function selectProviderForMethod(db:Firestore,item:DocumentData,method:PaymentMethod){
+  const allowedProviders=stringArray(item.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
+  const candidates=allowedProviders.length?allowedProviders:registeredPaymentProviderKeys();
+  const preferred=method==='airtel_money'?'airtel_money':method==='mtn_money'?'mtn_momo':method==='card'?'lenco':'';
+  const ordered=preferred&&candidates.includes(preferred)
+    ?[preferred,...candidates.filter(key=>key!==preferred)]
+    :candidates;
+  for(const providerKey of ordered){
+    try{
+      const provider=await providerAllowed(db,item,providerKey,method);
+      return {providerKey,provider};
+    }catch{/* try the next configured provider */}
+  }
+  throw new Error('The selected payment method is currently unavailable.');
+}
+
 export async function createCheckout(ctx:TenantContext,input:Record<string,unknown>){
   await enforcePaymentRateLimit(ctx,'checkout',8,60_000);
   const payableItemId=safePaymentId(input.payableItemId,'payable item identifier');
-  const providerKey=text(input.provider||'lenco').toLowerCase();
   const method=text(input.paymentMethod) as PaymentMethod;
   if(!PAYMENT_METHODS.includes(method as never)||method==='manual'||method==='bank')throw new Error('Select a supported online payment method.');
 
@@ -339,9 +409,12 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   if(!itemSnap.exists)throw new Error('The payable item was not found.');
   const item=itemSnap.data()||{};
   if(!(await itemVisibleToUser(ctx,item)))throw new Error('This charge is not available to your account.');
+  if(text(item.itemType)==='organization_subscription'){
+    await requireOrganizationSubscriptionConsumer(ctx);
+  }
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
-  const provider=await providerAllowed(ctx.db,item,providerKey,method);
+  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
   const organizationId=text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
   const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
@@ -389,20 +462,22 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   });
   if(reused){
     let checkout:null|Record<string,unknown>=null;
-    if(reused.status!=='paid'&&reused.paymentMethod==='card'&&provider.resumeCheckout){
+    const existingProviderKey=text(reused.provider);
+    const existingProvider=existingProviderKey?getPaymentProvider(existingProviderKey):provider;
+    if(reused.status!=='paid'&&reused.paymentMethod==='card'&&existingProvider.resumeCheckout){
       try{
-        const resumed=await provider.resumeCheckout({
+        const resumed=await existingProvider.resumeCheckout({
           reference:reused.reference,amountMinor:reused.amountMinor,currency:reused.currency,
           method:reused.paymentMethod as PaymentMethod,email:reused.payerEmail,
           description:reused.description,
         });
         checkout=resumed.checkout||null;
-        await paymentAudit(ctx.db,reused.id,'checkout.resumed',ctx.auth.uid,{provider:providerKey});
+        await paymentAudit(ctx.db,reused.id,'checkout.resumed',ctx.auth.uid,{provider:existingProviderKey});
       }catch(error){
-        await paymentAudit(ctx.db,reused.id,'checkout.resume_failed',ctx.auth.uid,{provider:providerKey,error:publicError(error)});
+        await paymentAudit(ctx.db,reused.id,'checkout.resume_failed',ctx.auth.uid,{provider:existingProviderKey,error:publicError(error)});
       }
     }
-    return {payment:reused,reused:true,checkout};
+    return {payment:scopedTransactionProjection(reused),reused:true,checkout};
   }
 
   const attemptId='attempt_'+randomUUID().replaceAll('-','');
@@ -435,7 +510,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       await verifyAndApplyPayment(ctx.db,reference,'checkout-verification');
     }
     const latest=await paymentRef.get();
-    return {payment:serializePayment(paymentId,latest.data()||{}),checkout:result.checkout||null,reused:false};
+    return {payment:scopedTransactionProjection(serializePayment(paymentId,latest.data()||{})),checkout:result.checkout||null,reused:false};
   }catch(error){
     const message=publicError(error);
     // A timeout/network loss is ambiguous: the provider may have accepted the
@@ -636,7 +711,7 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
 
 export async function paymentHistory(ctx:TenantContext){
   const snap=await ctx.db.collection('paymentTransactions').where('payerUid','==',ctx.auth.uid).limit(200).get();
-  return snap.docs.map(doc=>serializePayment(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  return snap.docs.map(doc=>scopedTransactionProjection(serializePayment(doc.id,doc.data()))).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function paymentStatusForUser(ctx:TenantContext,referenceValue:unknown,verify=false){
@@ -649,7 +724,7 @@ export async function paymentStatusForUser(ctx:TenantContext,referenceValue:unkn
   }
   const doc=await loadPaymentByReference(ctx.db,reference);
   if(!doc||text(doc.data()?.payerUid)!==ctx.auth.uid)throw new Error('The payment reference was not found.');
-  return serializePayment(doc.id,doc.data());
+  return scopedTransactionProjection(serializePayment(doc.id,doc.data()));
 }
 
 export async function receiptForUser(ctx:TenantContext,paymentIdValue:unknown){
@@ -659,7 +734,26 @@ export async function receiptForUser(ctx:TenantContext,paymentIdValue:unknown){
   const receipt=await ctx.db.doc('paymentReceipts/'+paymentId).get();
   if(!receipt.exists)throw new Error('The receipt is not available yet.');
   const data=receipt.data()||{};
-  return {...data,paidAt:timestampIso(data.paidAt),issuedAt:timestampIso(data.issuedAt)};
+  return Object.fromEntries(Object.entries({
+    ...data,paidAt:timestampIso(data.paidAt),issuedAt:timestampIso(data.issuedAt),
+  }).filter(([key])=>!['provider','providerReference','providerTransactionId'].includes(key)));
+}
+
+function scopedTransactionProjection(row:ReturnType<typeof serializePayment>){
+  return {
+    ...row,
+    provider:'',
+    providerStatus:'',
+    providerReference:'',
+    providerTransactionId:'',
+    webhookStatus:'',
+    reconciliationStatus:'',
+    settlementStatus:'',
+  };
+}
+
+function scopedRefundProjection(row:ReturnType<typeof serializeRefund>){
+  return {...row,providerStatus:'',providerRefundReference:''};
 }
 
 export async function adminListTransactions(ctx:TenantContext,filters:Record<string,unknown>={}){
@@ -698,7 +792,8 @@ export async function adminListTransactions(ctx:TenantContext,filters:Record<str
   }
   if(Number.isFinite(minAmount)&&minAmount>=0)rows=rows.filter(row=>Number(row.amountDecimal)>=minAmount);
   if(Number.isFinite(maxAmount)&&maxAmount>=0)rows=rows.filter(row=>Number(row.amountDecimal)<=maxAmount);
-  return rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const sorted=rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  return ctx.isSuperAdmin?sorted:sorted.map(scopedTransactionProjection);
 }
 
 export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unknown){
@@ -712,17 +807,30 @@ export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unkno
     if(org&&!allowed.has(org))throw new Error('The transaction is outside your authorized scope.');
   }
   const [attempts,audit,receipt,refunds]=await Promise.all([
-    ref.collection('attempts').orderBy('createdAt','desc').limit(50).get(),
-    ref.collection('audit').orderBy('createdAt','desc').limit(100).get(),
+    ctx.isSuperAdmin?ref.collection('attempts').orderBy('createdAt','desc').limit(50).get():Promise.resolve(null),
+    ctx.isSuperAdmin?ref.collection('audit').orderBy('createdAt','desc').limit(100).get():Promise.resolve(null),
     ctx.db.doc('paymentReceipts/'+paymentId).get(),
     ctx.db.collection('paymentRefunds').where('paymentId','==',paymentId).limit(100).get(),
   ]);
+  const payment=serializePayment(paymentId,snap.data()||{});
+  const refundRows=refunds.docs.map(doc=>serializeRefund(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const receiptData=receipt.exists?{...receipt.data(),issuedAt:timestampIso(receipt.data()?.issuedAt),paidAt:timestampIso(receipt.data()?.paidAt)}:null;
+  if(!ctx.isSuperAdmin){
+    const safeReceipt=receiptData?Object.fromEntries(Object.entries(receiptData).filter(([key])=>!['provider','providerReference','providerTransactionId'].includes(key))):null;
+    return {
+      payment:scopedTransactionProjection(payment),
+      attempts:[],
+      audit:[],
+      refunds:refundRows.map(scopedRefundProjection),
+      receipt:safeReceipt,
+    };
+  }
   return {
-    payment:serializePayment(paymentId,snap.data()||{}),
-    attempts:attempts.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt),updatedAt:timestampIso(doc.data().updatedAt)})),
-    audit:audit.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt)})),
-    refunds:refunds.docs.map(doc=>serializeRefund(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)),
-    receipt:receipt.exists?{...receipt.data(),issuedAt:timestampIso(receipt.data()?.issuedAt),paidAt:timestampIso(receipt.data()?.paidAt)}:null,
+    payment,
+    attempts:attempts?.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt),updatedAt:timestampIso(doc.data().updatedAt)}))||[],
+    audit:audit?.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt)}))||[],
+    refunds:refundRows,
+    receipt:receiptData,
   };
 }
 
@@ -826,6 +934,7 @@ async function finalizeRefundRecord(
 
 export async function adminRequestRefund(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment refunds');
   await enforcePaymentRateLimit(ctx,'refund',6,60_000);
   const paymentId=safePaymentId(input.paymentId,'payment identifier');
   const details=await adminPaymentDetails(ctx,paymentId);
@@ -893,6 +1002,7 @@ export async function adminRequestRefund(ctx:TenantContext,input:Record<string,u
 
 export async function adminCompleteManualRefund(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment refunds');
   const refundId=safePaymentId(input.refundId,'refund identifier');
   const refundRef=ctx.db.doc('paymentRefunds/'+refundId),refundSnap=await refundRef.get();
   if(!refundSnap.exists)throw new Error('The refund request was not found.');
@@ -912,6 +1022,7 @@ export async function adminCompleteManualRefund(ctx:TenantContext,input:Record<s
 
 export async function adminCancelRefund(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment refunds');
   const refundId=safePaymentId(input.refundId,'refund identifier');
   const ref=ctx.db.doc('paymentRefunds/'+refundId),snap=await ref.get();
   if(!snap.exists)throw new Error('The refund request was not found.');
@@ -1111,18 +1222,27 @@ export async function reconcilePendingPayments(db:Firestore,limit=100){
 
 export async function adminReconcile(ctx:TenantContext,paymentIdValue?:unknown){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment reconciliation');
   if(paymentIdValue){
     const details=await adminPaymentDetails(ctx,paymentIdValue);
     return {payment:await verifyAndApplyPayment(ctx.db,details.payment.reference,'admin-reconciliation')};
   }
-  if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can run platform-wide payment reconciliation.');
   return {summary:await reconcilePendingPayments(ctx.db,100)};
 }
 
 export async function adminExportTransactions(ctx:TenantContext,filters:Record<string,unknown>={}){
   const rows=await adminListTransactions(ctx,filters);
-  const headerRow=['Reference','Date','Payer','Email','Organization','Item','Amount','Currency','Provider','Method','Status','Provider Reference','Verification','Reconciliation'];
   const escape=(value:unknown)=>'"'+String(value??'').replaceAll('"','""')+'"';
+  if(!ctx.isSuperAdmin){
+    const headerRow=['Reference','Date','Payer','Email','Organization','Item','Amount','Currency','Method','Status'];
+    const lines=[headerRow.map(escape).join(',')];
+    for(const row of rows)lines.push([
+      row.reference,row.createdAt,row.payerName,row.payerEmail,row.organizationId,row.description,
+      row.amountDecimal,row.currency,row.paymentMethod,row.status,
+    ].map(escape).join(','));
+    return lines.join('\n');
+  }
+  const headerRow=['Reference','Date','Payer','Email','Organization','Item','Amount','Currency','Provider','Method','Status','Provider Reference','Verification','Reconciliation'];
   const lines=[headerRow.map(escape).join(',')];
   for(const row of rows)lines.push([
     row.reference,row.createdAt,row.payerName,row.payerEmail,row.organizationId,row.description,
@@ -1133,8 +1253,9 @@ export async function adminExportTransactions(ctx:TenantContext,filters:Record<s
 }
 
 export async function listPaymentProviders(ctx:TenantContext){
-  const catalog=await safeProviderCatalog(ctx.db);
-  return catalog;
+  await requirePermission(ctx,'payments','view');
+  requireSuperAdminFinanceControl(ctx,'payment provider administration');
+  return safeProviderCatalog(ctx.db);
 }
 
 export function configuredPaymentStatuses(){return [...PAYMENT_STATUSES];}

@@ -45,15 +45,15 @@ const checks = [
   ['api_handlers/admin/analytics.ts', ['accessibleOrganizationIds','requirePermission','ORG_SCOPED_COLLECTIONS']],
   ['api_handlers/admin/audit.ts', ['platformAudit','tenantAudit','requirePermission']],
   ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users']],
-  ['api_handlers/admin/plans.ts', ['system/plans/catalog','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId']],
+  ['api_handlers/admin/plans.ts', ['system/plans/catalog','listAvailablePlans','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId','subscription_','upsertPayableItem']],
   ['shared/payments.ts', ['PAYMENT_STATUSES','PAYABLE_ITEM_TYPES','amountToMinor','canTransitionPaymentStatus']],
   ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
   ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
   ['scripts/mtn-momo-sandbox-provision.mjs', ['/v1_0/apiuser','/apikey','providerCallbackHost','MTN_MOMO_SUBSCRIPTION_KEY']],
-  ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds']],
+  ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds','requireSuperAdminFinanceControl','requireOrganizationSubscriptionConsumer','selectProviderForMethod','scopedTransactionProjection']],
   ['api/payments.ts', ["name.startsWith('webhooks/')",'getPaymentProvider','callbackMethods','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
-  ['src/pages/PaymentsPage.tsx', ['Payments & receipts','startPaymentCheckout','verifyPayment']],
-  ['src/pages/PaymentManagement.tsx', ['Payments & Transactions','Payable items','Reconciliation']],
+  ['src/pages/PaymentsPage.tsx', ['Payments & receipts','Subscription packages','startPaymentCheckout','verifyPayment']],
+  ['src/pages/PaymentManagement.tsx', ['Payments & Transactions','Subscription packages','Payable items','Providers','Reconciliation','isSuperAdmin']],
 
 ];
 const errors = [];

@@ -81,8 +81,8 @@ export default async function handler(req:Request,res:Response){
 
     if(name==='catalog'){
       if(req.method!=='GET'&&req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
-      const [items,providers]=await Promise.all([listPayableItems(ctx,false),listPaymentProviders(ctx)]);
-      return res.status(200).json({ok:true,items,providers});
+      const items=await listPayableItems(ctx,false);
+      return res.status(200).json({ok:true,items});
     }
     if(name==='checkout'){
       if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
