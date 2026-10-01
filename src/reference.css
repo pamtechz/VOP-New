@@ -538,7 +538,7 @@
 
 .vop-login-form input:focus {
   outline: 3px solid rgba(255, 153, 0, .22);
-  border-color: #0c2d63;
+  border-color: var(--theme-accent);
 }
 
 .vop-login-primary,
@@ -618,7 +618,7 @@
   margin: 1rem 0 0;
   padding: .8rem .9rem;
   border-radius: 10px;
-  background:var(--bg-card,#fff)1f2;
+  background:var(--vop-error-bg);
   border: 1px solid #fecdd3;
   color: #9f1239;
   font-size: .82rem;
@@ -2359,8 +2359,8 @@
 }
 
 .vop-official-certificate-meta div {
-  background:var(--bg-card,#fff);
-  border: 1px solid #dfe7f1;
+  background:var(--theme-surface);
+  border: 1px solid var(--theme-border);
   border-radius: 10px;
   padding: 12px
 }
@@ -2554,7 +2554,7 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background:var(--bg-card,#fff)3f3;
+  background:var(--vop-error-bg);
   border-color: #fecaca;
   color: #a51d36
 }
