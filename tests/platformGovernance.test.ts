@@ -192,8 +192,9 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(graduation,/Graduation approval required/);
 });
 
-test('organization records open as read-only pages and require explicit edit mode',()=>{
+test('organization records open as read-only browser-navigable pages and require explicit edit mode',()=>{
   const page=read('src/pages/OrganizationManagement.tsx');
+  const admin=read('src/pages/AdminPage.tsx');
   const css=read('src/pages/admin.css');
   assert.doesNotMatch(page,/ModalLayer/);
   assert.doesNotMatch(page,/vop-org-editor-backdrop/);
@@ -205,6 +206,15 @@ test('organization records open as read-only pages and require explicit edit mod
   assert.match(page,/Editing is enabled/);
   assert.match(page,/const cancelEditing=\(\)=>/);
   assert.match(page,/restoreOrganizationFields\(selected\)/);
+  assert.match(page,/searchParams\.set\('organization',item\.slug\)/);
+  assert.match(page,/vop-admin-organization-view-v1:/);
+  assert.match(page,/history\.pushState/);
+  assert.match(page,/history\.replaceState/);
+  assert.match(page,/addEventListener\('popstate'/);
+  assert.match(admin,/ADMIN_TAB_STORAGE_PREFIX/);
+  assert.match(admin,/params\.get\('organization'\)\)return 'organizations'/);
+  assert.match(admin,/navigateAdminTab/);
+  assert.match(admin,/addEventListener\('popstate'/);
   assert.match(css,/\.vop-org-detail-page/);
   assert.match(css,/\.vop-org-detail-card/);
 });
@@ -216,5 +226,6 @@ test('notification actions preserve exact admin destinations',()=>{
   assert.match(routing,/localization:'translations'/);
   assert.match(routing,/graduations:'certification'/);
   assert.match(admin,/consumeNotificationAdminTarget/);
-  assert.match(admin,/setActiveTab\(target as AdminTab\)/);
+  assert.match(admin,/validAdminTab\(target\)/);
+  assert.match(admin,/navigateAdminTab\(target\)/);
 });
