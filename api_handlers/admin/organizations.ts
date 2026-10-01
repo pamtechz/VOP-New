@@ -814,6 +814,9 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported organization action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Organization operation failed.';
+    if (/expired or has already been used|already been used/i.test(message)) {
+      return res.status(409).json({error:message});
+    }
     const code = /Sign in|membership|permission|Super Admin|organization is not available|already exists/.test(message) ? 403 : 400;
     return res.status(code).json({ error: message });
   }
