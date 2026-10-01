@@ -27,6 +27,7 @@ export interface PayableItem {
   scope:PaymentScope;
   tenantId:string;
   organizationId:string;
+  organizationName?:string;
   itemId:string;
   itemType:PayableItemType;
   name:string;
