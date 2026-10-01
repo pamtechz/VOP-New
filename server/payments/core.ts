@@ -391,8 +391,25 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     const latest=await paymentRef.get();
     return {payment:serializePayment(paymentId,latest.data()||{}),checkout:result.checkout||null,reused:false};
   }catch(error){
+    const message=publicError(error);
+    // A timeout/network loss is ambiguous: the provider may have accepted the
+    // request before VOP lost the response. Never mark it failed or allow a
+    // second charge immediately; keep it pending for independent reconciliation.
+    const ambiguous=/timed out|network|fetch failed|socket|connection|unreachable/i.test(message);
+    if(ambiguous){
+      await Promise.all([
+        attemptRef.set({status:'pending',providerStatus:'provider_unreachable',safeMessage:message,updatedAt:FieldValue.serverTimestamp()},{merge:true}),
+        paymentRef.set({
+          status:'pending',providerStatus:'provider_unreachable',
+          reconciliationStatus:'pending',updatedBy:'system:provider-initiation',updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+        paymentAudit(ctx.db,paymentId,'provider.initiation_ambiguous','system',{provider:providerKey}),
+      ]);
+      const latest=await paymentRef.get();
+      return {payment:serializePayment(paymentId,latest.data()||{}),checkout:null,reused:false,providerUnavailable:true};
+    }
     await Promise.all([
-      attemptRef.set({status:'failed',safeMessage:publicError(error),updatedAt:FieldValue.serverTimestamp()},{merge:true}),
+      attemptRef.set({status:'failed',safeMessage:message,updatedAt:FieldValue.serverTimestamp()},{merge:true}),
       paymentRef.set({
         status:'failed',providerStatus:'request_failed',failedAt:FieldValue.serverTimestamp(),
         reconciliationStatus:'failed',updatedBy:'system:provider-initiation',updatedAt:FieldValue.serverTimestamp(),
