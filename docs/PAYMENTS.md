@@ -125,7 +125,7 @@ Payment state, settlement state, verification state, webhook state, reconciliati
 - Webhook events are deduplicated using a deterministic event hash.
 - Fulfilment uses an expiring transaction claim and deterministic entitlement/receipt IDs.
 - Ambiguous network timeouts remain pending instead of being declared failed, then reconciliation independently queries the provider.
-- Scheduled reconciliation rechecks initiated/pending/requires-action/processing transactions.
+- Scheduled reconciliation rechecks initiated/pending/requires-action/processing transactions. The current Vercel Hobby deployment runs this fallback once daily; webhook processing and authenticated status/verification checks remain immediate. On a plan or external scheduler that permits it, call the protected reconciliation route every 30 minutes.
 
 ## Fulfilment
 
