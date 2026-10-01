@@ -35,6 +35,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   const [providers,setProviders]=useState<PaymentProviderDescriptor[]>([]);
   const [history,setHistory]=useState<ClientPayment[]>([]);
   const [selected,setSelected]=useState<PayableItem|null>(null);
+  const [providerKey,setProviderKey]=useState('lenco');
   const [method,setMethod]=useState<PaymentMethod>('airtel_money');
   const [phone,setPhone]=useState(currentUser.phoneNumber||'');
   const [busy,setBusy]=useState(false);
@@ -45,12 +46,20 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   const [checkoutReference,setCheckoutReference]=useState('');
   const [checkoutStatus,setCheckoutStatus]=useState('Ready');
 
-  const lenco=useMemo(()=>providers.find(provider=>provider.key==='lenco'&&provider.configured&&provider.enabled),[providers]);
+  const availableProviders=useMemo(()=>{
+    if(!selected)return [] as PaymentProviderDescriptor[];
+    const allowed=new Set(selected.allowedProviders||[]);
+    return providers.filter(provider=>provider.configured&&provider.enabled&&(allowed.size===0||allowed.has(provider.key)));
+  },[selected,providers]);
+  const selectedProvider=useMemo(
+    ()=>availableProviders.find(provider=>provider.key===providerKey)||availableProviders[0]||null,
+    [availableProviders,providerKey],
+  );
   const availableMethods=useMemo(()=>{
-    if(!selected||!lenco)return [] as PaymentMethod[];
+    if(!selected||!selectedProvider)return [] as PaymentMethod[];
     const allowed=new Set(selected.allowedMethods||[]);
-    return (lenco.methods||[]).filter(value=>allowed.size===0||allowed.has(value));
-  },[selected,lenco]);
+    return (selectedProvider.methods||[]).filter(value=>allowed.size===0||allowed.has(value));
+  },[selected,selectedProvider]);
 
   const refresh=async()=>{
     setLoading(true);setError('');
@@ -64,8 +73,15 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
 
   useEffect(()=>{
     if(!selected)return;
+    const firstProvider=availableProviders[0];
+    if(firstProvider&&!availableProviders.some(provider=>provider.key===providerKey))setProviderKey(firstProvider.key);
+  },[selected,availableProviders,providerKey]);
+
+  useEffect(()=>{
+    if(!selected)return;
     const preferred=(selected.allowedMethods||[]).find(value=>availableMethods.includes(value));
     if(preferred)setMethod(preferred);
+    else if(availableMethods[0])setMethod(availableMethods[0]);
   },[selected,availableMethods]);
 
   const poll=async(reference:string)=>{
@@ -85,12 +101,12 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   };
 
   const pay=async()=>{
-    if(!selected)return;
+    if(!selected||!selectedProvider)return;
     if(method!=='card'&&!phone.trim()){setError('Enter the mobile money phone number.');return;}
     setBusy(true);setError('');setMessage('');
     try{
       const result=await startPaymentCheckout({
-        payableItemId:selected.id,provider:'lenco',paymentMethod:method,
+        payableItemId:selected.id,provider:selectedProvider.key,paymentMethod:method,
         phone:method==='card'?undefined:phone.trim(),
         firstName:(currentUser.displayName||'').trim().split(/\s+/)[0]||undefined,
         lastName:(currentUser.displayName||'').trim().split(/\s+/).slice(1).join(' ')||undefined,
@@ -103,6 +119,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
         setSelected(null);await refresh();return;
       }
       if(result.checkout?.mode==='inline'){
+        if(selectedProvider.key!=='lenco')throw new Error('This provider checkout mode is not supported by the current client.');
         if(!result.checkout.scriptUrl||!result.checkout.publicKey)throw new Error('The secure card checkout is not available.');
         await loadLencoCheckoutScript(result.checkout.scriptUrl);
         const api=(window as unknown as {LencoPay?:LencoApi}).LencoPay;
@@ -165,7 +182,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
       items.length?<div className="vop-payable-grid">{items.map(item=><article key={item.id} className="vop-payable-card">
         <div><span className="vop-payment-type">{item.itemType.replaceAll('_',' ')}</span><h3>{item.name}</h3><p>{item.description||'Configured VOP charge'}</p></div>
         <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
-          <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Pay now</button></div>
+          <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setProviderKey((item.allowedProviders||[])[0]||'lenco');setCheckoutReference('');setCheckoutStatus('Ready');}}>Pay now</button></div>
       </article>)}</div>:<div className="vop-payment-empty">There are no payable items available to your account.</div>}
     </section>
 
@@ -182,8 +199,11 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {selected&&<div className="vop-payment-modal-layer" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setSelected(null)}}>
       <section className="vop-payment-modal" role="dialog" aria-modal="true" aria-labelledby="vop-payment-title">
         <header><div><span>Secure checkout</span><h2 id="vop-payment-title">{selected.name}</h2></div><button onClick={()=>setSelected(null)} disabled={busy} aria-label="Close">×</button></header>
-        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}<div><dt>Provider</dt><dd>Lenco</dd></div>{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
-        {!lenco?<div className="vop-payment-alert danger"><XCircle size={17}/>Payment processing is not configured yet.</div>:<>
+        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}<div><dt>Provider</dt><dd>{selectedProvider?selectedProvider.key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()):'Unavailable'}</dd></div>{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
+        {!selectedProvider?<div className="vop-payment-alert danger"><XCircle size={17}/>No configured payment provider is available for this charge.</div>:<>
+          {availableProviders.length>1&&<fieldset><legend>Payment provider</legend><div className="vop-payment-methods">
+            {availableProviders.map(provider=><button type="button" key={provider.key} className={selectedProvider.key===provider.key?'active':''} onClick={()=>setProviderKey(provider.key)} disabled={busy}><WalletCards size={20}/><span>{provider.key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}</span></button>)}
+          </div></fieldset>}
           <fieldset><legend>Payment method</legend><div className="vop-payment-methods">
             {availableMethods.map(value=><button type="button" key={value} className={method===value?'active':''} onClick={()=>setMethod(value)} disabled={busy}>{methodIcon(value)}<span>{paymentMethodLabel(value)}</span></button>)}
           </div></fieldset>
