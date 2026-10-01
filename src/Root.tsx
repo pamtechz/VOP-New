@@ -11,7 +11,6 @@ import { createFirestoreStudentProfile, loadFirestoreUser } from './services/fir
 import { App } from './App';
 import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
-import './theme-dark.css';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
