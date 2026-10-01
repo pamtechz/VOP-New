@@ -52,9 +52,12 @@ function safeError(error:unknown){
 export default async function handler(req:Request,res:Response){
   const name=route(req);
   try{
-    if(name==='webhooks/lenco'){
-      if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
-      const result=await processProviderWebhook(getAdminDb(),'lenco',req);
+    if(name.startsWith('webhooks/')){
+      if(req.method!=='POST'&&req.method!=='PUT')return res.status(405).json({error:'Method not allowed.'});
+      const providerKey=name.slice('webhooks/'.length).replaceAll('-','_');
+      if(!['lenco','mtn_momo'].includes(providerKey))return res.status(404).json({error:'Unknown payment callback endpoint.'});
+      if(providerKey==='lenco'&&req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
+      const result=await processProviderWebhook(getAdminDb(),providerKey,req);
       return res.status(200).json({ok:true,...result});
     }
 
@@ -150,8 +153,9 @@ export default async function handler(req:Request,res:Response){
 
     return res.status(404).json({error:'Unknown payment endpoint.'});
   }catch(error){
-    if(name==='webhooks/lenco'){
-      // Invalid signatures must never be acknowledged as successfully processed.
+    if(name.startsWith('webhooks/')){
+      // Signed providers such as Lenco return 401 for invalid signatures.
+      // MTN callbacks are notification-only and are independently verified.
       return res.status(/signature/i.test(safeError(error))?401:400).json({error:'Webhook rejected.'});
     }
     return res.status(statusFor(error)).json({error:safeError(error)});
