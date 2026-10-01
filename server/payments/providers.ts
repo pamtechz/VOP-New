@@ -62,6 +62,7 @@ export interface ProviderWebhookRequest {
 export interface ProviderWebhookEvent {
   reference:string;
   eventType:string;
+  authenticated:boolean;
   providerStatus:string;
   providerTransactionId:string;
   providerReference:string;
@@ -287,6 +288,7 @@ class LencoProvider implements PaymentProviderAdapter{
     return {
       reference:text(data.reference),
       eventType:text(event.event)||'provider.event',
+      authenticated:true,
       providerStatus:text(data.status),
       providerTransactionId:text(data.id),
       providerReference:text(data.lencoReference),
@@ -485,6 +487,7 @@ class MtnMomoProvider implements PaymentProviderAdapter{
     return {
       reference:text(data.externalId),
       eventType:'requesttopay.callback',
+      authenticated:false,
       providerStatus:text(data.status).toLowerCase(),
       providerTransactionId:text(data.referenceId),
       providerReference:text(data.financialTransactionId),
