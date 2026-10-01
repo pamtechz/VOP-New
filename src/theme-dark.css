@@ -908,3 +908,153 @@
 [data-theme="dark"] .vop-official-certificate :is(h1,h2,h3,h4,p,strong,span,small,div){
   color:inherit;
 }
+
+
+/* 2026-10 black dark-theme completion --------------------------------------
+   Product rule: dark mode is genuinely black/neutral. Blue/navy surfaces and
+   blue gradients are presentation accents only in light mode. */
+[data-theme="dark"]{
+  --bg-primary:#000;
+  --bg-secondary:#050505;
+  --bg-card:#0d0d0d;
+  --bg-elevated:#171717;
+  --bg-hover:#242424;
+  --bg-input:#080808;
+  --border-subtle:#2c2c2c;
+  --border-strong:#494949;
+  --text-primary:#f7f7f7;
+  --text-secondary:#d4d4d4;
+  --text-muted:#a3a3a3;
+  --text-inverse:#050505;
+  --vop-bg:#000;
+  --vop-card:#0d0d0d;
+  --vop-text:#f7f7f7;
+  --vop-muted:#a3a3a3;
+  --vop-border:#2c2c2c;
+  --vop-rail-bg:#050505;
+  --vop-rail-edge:#292929;
+}
+[data-theme="dark"] html,
+[data-theme="dark"] body,
+[data-theme="dark"] #root,
+[data-theme="dark"] :is(
+  .vop-learner-shell,.vop-learner-main,.vop-app-content,.vop-admin,.vop-main,
+  .vop-screen,.vop-screen-body,.vop-materials-page,.vop-materials-main,
+  .vop-home,.vop-reference-page,.vop-settings-page,.vop-personal-settings,
+  .vop-mentoring-page,.vop-localization-page,.vop-program-manager,
+  .vop-curriculum-page,.vop-user-management,.vop-candidate-page
+){background:#000!important}
+
+[data-theme="dark"] :is(
+  .vop-header,.vop-app-header,.vop-admin-header,.vop-materials-hero,.vop-inbox-hero,
+  .vop-mentoring-head,.vop-page-header,.vop-module-workspace-head,
+  .vop-public-header,.vop-login-brand,
+  .bg-\[\#002d72\],.bg-\[\#07111f\],.bg-\[\#0b1829\]
+){
+  background:#000!important;
+  background-image:none!important;
+}
+
+/* No navy/blue gradient remains behind application chrome in dark mode. */
+[data-theme="dark"] :is(
+  .vop-home-hero,.vop-materials-hero,.vop-inbox-hero,.vop-mentoring-head,
+  .vop-page-header,.vop-module-workspace-head,.vop-program-catalog-heading,
+  .vop-admin-direct-sections-head,.vop-plate-review-mode
+){
+  background-color:#000!important;
+  background-image:none!important;
+  border-color:#2c2c2c!important;
+}
+
+/* The three audited administrator workspaces must never leak light cards or
+   native white form controls. */
+[data-theme="dark"] :is(
+  .vop-mentoring,.vop-org-workspace,.vop-org-editor-modal,.vop-guide-first,
+  .vop-module-workspace,.vop-structure,.vop-reference-manager
+) :is(
+  input,textarea,select,.vop-card,.vop-form-card,.vop-section-card,
+  .vop-setting-row,.vop-table-wrap,.vop-empty,.vop-toolbar,.vop-search,
+  .vop-org-list-card,.vop-org-suggestions,.vop-org-suggestions button,
+  .vop-mentoring-card,.vop-mentoring-tabs button,.vop-performance-stats>div,
+  .vop-weak-list>div,.vop-share-list>div,.vop-share-result,
+  .vop-guide-first-card,.vop-module-item,.vop-module-workspace-head,
+  .vop-structure-chapter,.vop-structure-section,.vop-structure-block,
+  .vop-structure-legacy,.vop-structure-actions-popover,
+  .vop-structure-actions-popover>button,.vop-structure-transfer-buttons button,
+  .vop-lesson-featured-preview,.vop-plate-review-mode,
+  .vop-admin-section-lesson,.vop-admin-section-chapter,
+  .vop-admin-section-chapter>div,.vop-admin-section-chapter>div>button,
+  .vop-admin-direct-sections-head,.vop-admin-direct-section,
+  .vop-lesson-content-card>.vop-lesson-tab-panel,.vop-lesson-settings-panel .vop-setting-row
+){
+  background:#0d0d0d!important;
+  background-image:none!important;
+  border-color:#303030!important;
+  color:#f4f4f4!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] :is(
+  .vop-mentoring,.vop-org-workspace,.vop-org-editor-modal,.vop-guide-first,
+  .vop-module-workspace,.vop-structure,.vop-reference-manager
+) :is(input,textarea,select){
+  background:#080808!important;
+  color:#f7f7f7!important;
+  border-color:#3a3a3a!important;
+}
+[data-theme="dark"] :is(
+  .vop-mentoring,.vop-org-workspace,.vop-org-editor-modal,.vop-guide-first,
+  .vop-module-workspace,.vop-structure,.vop-reference-manager
+) :is(input,textarea)::placeholder{color:#8f8f8f!important}
+[data-theme="dark"] :is(
+  .vop-mentoring,.vop-org-workspace,.vop-org-editor-modal,.vop-guide-first,
+  .vop-module-workspace,.vop-structure,.vop-reference-manager
+) select option{background:#080808!important;color:#f7f7f7!important}
+
+/* Neutralize old blue helper surfaces while keeping semantic green/red/amber
+   states meaningful. */
+[data-theme="dark"] :is(
+  .vop-guide-direct-section-number,.vop-guide-lesson-number,
+  .vop-section-study-marker,.vop-admin-direct-section-number,
+  .vop-structure-chapter-icon,.vop-structure-quiz,
+  .vop-structure-add-block button,.vop-structure-add-section,
+  .vop-inbox-icon,.vop-heading-icon,.vop-mentoring-icon
+){
+  background:#171717!important;
+  background-image:none!important;
+  border-color:#3a3a3a!important;
+  color:#ededed!important;
+}
+[data-theme="dark"] :is(
+  .vop-learner-sidebar-link.active,.vop-admin .vop-sidebar .vop-nav-item.active,
+  .vop-reference-tab.active,.vop-page-btn.active
+){
+  background:#1a1a1a!important;
+  color:#fff!important;
+  border-color:#4a4a4a!important;
+  box-shadow:inset 4px 0 #d4a72c!important;
+}
+
+/* Tailwind utility remnants used by older screens. */
+[data-theme="dark"] :is(
+  .bg-blue-50,.bg-blue-100,.bg-blue-600,.bg-blue-700,.bg-blue-800,.bg-blue-900,
+  .bg-sky-50,.bg-sky-100,.bg-indigo-50,.bg-indigo-100
+){background-color:#0d0d0d!important}
+[data-theme="dark"] [class*="bg-gradient-to-"]{
+  background-color:#000!important;
+  background-image:none!important;
+}
+
+/* When an interactive state intentionally uses a bright background, enforce
+   dark foreground text instead of leaving white text with low contrast. */
+[data-theme="dark"] :is(
+  .btn-gold,.btn-gold:hover,.vop-public-cta button:first-child,
+  .vop-primary.bright,.vop-section-test:hover,
+  .vop-material-actions button:hover,.vop-login-primary:hover
+){
+  color:#050505!important;
+}
+[data-theme="dark"] :is(
+  button,a,[role="button"]
+)[data-bright-hover="true"]:hover{
+  color:#050505!important;
+}
