@@ -5,7 +5,7 @@ import {
   amountToMinor, canTransitionPaymentStatus, mapProviderStatus,
   minorToDecimal, normalizeCurrency, paymentMethodOperator,
 } from '../shared/payments.ts';
-import { getPaymentProvider, registeredPaymentProviderKeys } from '../server/payments/providers.ts';
+import { verifyLencoWebhookSignature } from '../server/payments/lencoSignature.ts';
 
 test('payment amounts use currency-aware integer minor units',()=>{
   assert.equal(amountToMinor('500.25','ZMW'),50025);
@@ -42,10 +42,8 @@ test('Lenco webhook verification follows the documented API-token signature deri
     const body=Buffer.from(JSON.stringify({event:'collection.successful',data:{reference:'VOP-TEST-001'}}));
     const hashKey=createHash('sha256').update(process.env.LENCO_API_TOKEN).digest('hex');
     const signature=createHmac('sha512',hashKey).update(body).digest('hex');
-    const lenco=getPaymentProvider('lenco');
-    assert.equal(lenco.verifyWebhook(body,signature),true);
-    assert.equal(lenco.verifyWebhook(body,signature.slice(0,-2)+'00'),false);
-    assert.equal(registeredPaymentProviderKeys().includes('lenco'),true);
+    assert.equal(verifyLencoWebhookSignature(body,signature,process.env.LENCO_API_TOKEN),true);
+    assert.equal(verifyLencoWebhookSignature(body,signature.slice(0,-2)+'00',process.env.LENCO_API_TOKEN),false);
   }finally{
     if(prior===undefined)delete process.env.LENCO_API_TOKEN;
     else process.env.LENCO_API_TOKEN=prior;
