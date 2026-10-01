@@ -40,7 +40,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
 
   const restoreOrganizationFields=(item:Organization)=>{setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(quotaState(item.quotas||{}));setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteEmail('');setInviteUrl('');setShowCreateMember(false)};
   const openOrganization=(item:Organization)=>{setSelected(item);setDetailsOpen(true);setEditing(false);restoreOrganizationFields(item);void loadDetails(item.id)};
-  const closeOrganization=()=>{setDetailsOpen(false);setEditing(false);setSelected(null);setMembers([]);setUsage(null);setAudit([]);setError('')};
+  const closeOrganization=()=>{setDetailsOpen(false);setEditing(false);setSelected(null);setMembers([]);setUsage(null);setAudit([]);setName('');setOrganizationId('');setError('')};
   const cancelEditing=()=>{if(!selected)return;restoreOrganizationFields(selected);setEditing(false);setError('')};
   useEffect(()=>{if(!isSuperAdmin&&items.length===1&&!selected)openOrganization(items[0])},[isSuperAdmin,items,selected]);
 
@@ -69,7 +69,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   return <div>
     <div className="vop-page-header">
       <div><div className="vop-breadcrumb"><Building2 size={15}/> {isSuperAdmin?'Platform / Organizations':'My Organization'}</div><h1>{isSuperAdmin?t('admin.organizations','Organizations'):t('admin.my_organization','My Organization')}</h1><p>{isSuperAdmin?'Manage tenant workspaces, membership, plans and usage without exposing technical identifiers.':'Manage your organization profile, members and invitations.'}</p></div>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}><button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button>{selected&&!isSuperAdmin&&<button className="vop-primary" type="button" onClick={()=>setDetailsOpen(true)}><Edit3 size={16}/>{t('common.edit','Edit My Organization')}</button>}</div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}><button className="vop-secondary" type="button" onClick={()=>void load()}><RefreshCw size={16}/>{t('common.refresh','Refresh')}</button></div>
     </div>
     {message&&<div className="vop-toast"><Check size={16}/>{message}</div>}{error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:12,borderRadius:11,marginBottom:14}}>{error}</div>}
 
