@@ -81,6 +81,25 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'payments', label: 'Payments & Transactions', icon: WalletCards },
 ];
 
+const ADMIN_TAB_IDS=new Set<AdminTab>(NAV.map(item=>item.id));
+const ADMIN_TAB_STORAGE_PREFIX='vop-admin-tab-v1:';
+function validAdminTab(value:unknown):value is AdminTab {
+  return typeof value==='string'&&ADMIN_TAB_IDS.has(value as AdminTab);
+}
+function readInitialAdminTab(uid:string,notificationTarget:string|null):AdminTab {
+  if(validAdminTab(notificationTarget))return notificationTarget;
+  if(typeof window==='undefined')return 'dashboard';
+  const params=new URL(window.location.href).searchParams;
+  if(params.get('organization'))return 'organizations';
+  const fromUrl=params.get('admin');
+  if(validAdminTab(fromUrl))return fromUrl;
+  try{
+    const stored=sessionStorage.getItem(ADMIN_TAB_STORAGE_PREFIX+uid);
+    if(validAdminTab(stored))return stored;
+  }catch{/* storage may be unavailable */}
+  return 'dashboard';
+}
+
 const text = (value: unknown) => value == null ? '' : String(value);
 
 function relativeTime(value?: string) {
@@ -126,10 +145,8 @@ async function adminContent(action: string, collection: string, id?: string, dat
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
-    const target=consumeNotificationAdminTarget();
-    return (target||'dashboard') as AdminTab;
-  });
+  const [activeTab, setActiveTab] = useState<AdminTab>(() =>
+    readInitialAdminTab(currentUser.uid,consumeNotificationAdminTarget()));
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -155,6 +172,43 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [permissionMatrix, setPermissionMatrix] = useState<PermissionMatrix>(DEFAULT_PERMISSION_MATRIX);
   const [permissionSaving, setPermissionSaving] = useState(false);
   const [permissionLoading, setPermissionLoading] = useState(false);
+
+  const navigateAdminTab=(tab:AdminTab,mode:'push'|'replace'='push')=>{
+    setActiveTab(tab);
+    setProfileOpen(false);
+    setSidebarOpen(false);
+    if(typeof window==='undefined')return;
+    try{sessionStorage.setItem(ADMIN_TAB_STORAGE_PREFIX+currentUser.uid,tab)}catch{/* ignore storage denial */}
+    const url=new URL(window.location.href);
+    if(tab==='dashboard')url.searchParams.delete('admin');
+    else url.searchParams.set('admin',tab);
+    if(tab!=='organizations')url.searchParams.delete('organization');
+    const next=url.pathname+url.search+url.hash;
+    const state={...(window.history.state&&typeof window.history.state==='object'?window.history.state:{}),vopAdminTab:tab};
+    if(mode==='replace')window.history.replaceState(state,'',next);
+    else if(next!==window.location.pathname+window.location.search+window.location.hash)window.history.pushState(state,'',next);
+    else window.history.replaceState(state,'',next);
+  };
+
+  useEffect(()=>{
+    if(typeof window==='undefined')return;
+    try{sessionStorage.setItem(ADMIN_TAB_STORAGE_PREFIX+currentUser.uid,activeTab)}catch{/* ignore storage denial */}
+  },[activeTab,currentUser.uid]);
+
+  useEffect(()=>{
+    if(typeof window==='undefined')return;
+    const onPopState=()=>{
+      const params=new URL(window.location.href).searchParams;
+      const requested=params.get('organization')?'organizations':params.get('admin');
+      const next=validAdminTab(requested)?requested:'dashboard';
+      setActiveTab(next);
+      setProfileOpen(false);
+      setSidebarOpen(false);
+      try{sessionStorage.setItem(ADMIN_TAB_STORAGE_PREFIX+currentUser.uid,next)}catch{/* ignore storage denial */}
+    };
+    window.addEventListener('popstate',onPopState);
+    return()=>window.removeEventListener('popstate',onPopState);
+  },[currentUser.uid]);
   const [lessonSearch, setLessonSearch] = useState('');
   const [lessonLanguage, setLessonLanguage] = useState('all');
   const [lessonStatus, setLessonStatus] = useState('all');
@@ -809,7 +863,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       </div>
       <div style={{height:18}} />
       <div className="vop-grid-4">
-        {quickActions.map((item,index)=>{const Icon=item.icon;return <button key={item.label} type="button" className="vop-card vop-quick" onClick={()=>setActiveTab(item.tab)} style={{background:index===0?'#eef6ff':index===1?'#ecfbf4':index===2?'#f7efff':'#fff4e7'}}><div style={{display:'flex',alignItems:'center',gap:12}}><Icon size={25}/><div><div className="vop-quick-title">{item.label}</div><div className="vop-quick-desc">{item.desc}</div></div></div><ChevronRight size={20}/></button>;})}
+        {quickActions.map((item,index)=>{const Icon=item.icon;return <button key={item.label} type="button" className="vop-card vop-quick" onClick={()=>navigateAdminTab(item.tab)} style={{background:index===0?'#eef6ff':index===1?'#ecfbf4':index===2?'#f7efff':'#fff4e7'}}><div style={{display:'flex',alignItems:'center',gap:12}}><Icon size={25}/><div><div className="vop-quick-title">{item.label}</div><div className="vop-quick-desc">{item.desc}</div></div></div><ChevronRight size={20}/></button>;})}
       </div>
     </div>;
   };
@@ -1088,7 +1142,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
 
   return <div className={'vop-admin'+(sidebarCollapsed?' sidebar-collapsed':' sidebar-expanded')}>
     <header className={'vop-admin-top '+(sidebarCollapsed ? 'sidebar-collapsed' : '')}>
-      <button type="button" className="vop-brand" onClick={()=>{setActiveTab('dashboard');setSidebarOpen(false)}}
+      <button type="button" className="vop-brand" onClick={()=>navigateAdminTab('dashboard')}
         aria-label="Voice of Prophecy – Administration dashboard">
         <span className="vop-brand-mark"><img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/></span>
         <span className="vop-brand-copy"><span className="vop-brand-name">{settings?.appName || 'Voice of Prophecy'}</span>
@@ -1099,7 +1153,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <CommunicationTools onNavigate={route=>{
           if(route==='admin'){
             const target=consumeNotificationAdminTarget();
-            if(target){setActiveTab(target as AdminTab);setSidebarOpen(false);return;}
+            if(validAdminTab(target)){navigateAdminTab(target);return;}
           }
           onNavigate(route);
         }} t={(key,fallback)=>getTranslation(key,uiLocale,settings?.customTranslations,fallback)}/>
@@ -1111,7 +1165,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           </button>
           {profileOpen&&<div className="vop-profile-menu" role="menu">
             <div className="vop-profile-menu-head">{currentUser.photoURL ? <img className="vop-profile-menu-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-profile-menu-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><strong>{currentUser.displayName || currentUser.email || 'Account'}</strong><span>{currentUser.email || ''}</span><small>{accountRoleLabel}</small></div></div>
-            <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);setActiveTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
+            <button type="button" role="menuitem" onClick={()=>{navigateAdminTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onLogout()}}><LogOut size={16}/>Sign out</button>
           </div>}
@@ -1122,7 +1176,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       {sidebarOpen && <button className="vop-sidebar-backdrop open" type="button" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)} />}
       <aside id="vop-admin-navigation" aria-label="Administration navigation" className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}>
         <div className="vop-admin-sidebar-head">
-          <button type="button" className="vop-admin-sidebar-brand" onClick={()=>{setActiveTab('dashboard');setSidebarOpen(false)}}
+          <button type="button" className="vop-admin-sidebar-brand" onClick={()=>navigateAdminTab('dashboard')}
             title="Admin dashboard" aria-label="Voice of Prophecy – Admin dashboard">
             <img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/>
             <span className="vop-admin-sidebar-brand-copy"><strong>{settings?.appName || 'Voice of Prophecy'}</strong><small>Administration workspace</small></span>
@@ -1150,7 +1204,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               title={sidebarCollapsed?item.label:undefined} aria-label={item.label}
               aria-current={activeTab===item.id?'page':undefined}
               className={'vop-nav-item '+(activeTab===item.id?'active':'')}
-              onClick={()=>{setActiveTab(item.id);setSidebarOpen(false)}}><Icon size={20}/><span>{item.label}</span></button>})}
+              onClick={()=>navigateAdminTab(item.id)}><Icon size={20}/><span>{item.label}</span></button>})}
           </div>:null;
         })}</nav>
       </aside>
