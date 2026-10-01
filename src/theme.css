@@ -1,7 +1,7 @@
-/* VOP dark theme ---------------------------------------------------------
-   Dark is the application default. This stylesheet is imported after the
-   portal/page styles so older light-only selectors cannot create white islands.
-   Components should still prefer the design tokens below for new work. */
+/* VOP legacy theme compatibility layer.
+   Historical selectors remain temporarily so older portal styles keep working.
+   The canonical light/dark token contract is declared at the end of this file
+   and is authoritative for new and migrated components. */
 [data-theme="dark"]{
   --bg-primary:#07111f;
   --bg-secondary:#0b1829;
@@ -1370,3 +1370,224 @@
   background-image:none!important;
 }
 
+
+
+/* ==========================================================================
+   CANONICAL LIGHT / DARK THEME CONTRACT
+   Pattern: one light token set + one dark override set, matching the
+   responsive-sidebar-dark-light approach. Components use the same variables
+   in both modes; theme switching changes only the parent theme state.
+   ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --theme-accent: #315fc4;
+  --theme-accent-hover: #244ea8;
+  --theme-title: #111827;
+  --theme-text: #475569;
+  --theme-muted: #7c8a9b;
+  --theme-bg: #f7f9fc;
+  --theme-surface: #ffffff;
+  --theme-surface-soft: #f1f5f9;
+  --theme-surface-elevated: #ffffff;
+  --theme-border: #e2e8f0;
+  --theme-border-strong: #cbd5e1;
+  --theme-shadow: rgba(15, 23, 42, .10);
+  --theme-input: #ffffff;
+  --theme-scroll-track: #e9eef5;
+  --theme-scroll-thumb: #c4ceda;
+
+  --bg-primary: var(--theme-bg);
+  --bg-secondary: var(--theme-surface);
+  --bg-card: var(--theme-surface);
+  --bg-elevated: var(--theme-surface-elevated);
+  --bg-glass: color-mix(in srgb, var(--theme-surface) 90%, transparent);
+  --border-subtle: var(--theme-border);
+  --border-strong: var(--theme-border-strong);
+  --text-primary: var(--theme-title);
+  --text-secondary: var(--theme-text);
+  --text-muted: var(--theme-muted);
+  --text-inverse: #ffffff;
+
+  --vop-bg: var(--theme-bg);
+  --vop-card: var(--theme-surface);
+  --vop-text: var(--theme-title);
+  --vop-muted: var(--theme-muted);
+  --vop-border: var(--theme-border);
+  --vop-rail-bg: var(--theme-surface);
+  --vop-rail-edge: var(--theme-border);
+  --qr-paper: #ffffff;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --theme-accent: #7aa2ff;
+  --theme-accent-hover: #9ab8ff;
+  --theme-title: #f5f7fa;
+  --theme-text: #c5cbd4;
+  --theme-muted: #9099a6;
+  --theme-bg: #0b0c0f;
+  --theme-surface: #121418;
+  --theme-surface-soft: #191c21;
+  --theme-surface-elevated: #20242a;
+  --theme-border: #2c3138;
+  --theme-border-strong: #3a414b;
+  --theme-shadow: rgba(0, 0, 0, .38);
+  --theme-input: #101216;
+  --theme-scroll-track: #23272e;
+  --theme-scroll-thumb: #3b424c;
+
+  --bg-primary: var(--theme-bg);
+  --bg-secondary: var(--theme-surface);
+  --bg-card: var(--theme-surface);
+  --bg-elevated: var(--theme-surface-elevated);
+  --bg-glass: color-mix(in srgb, var(--theme-surface) 92%, transparent);
+  --border-subtle: var(--theme-border);
+  --border-strong: var(--theme-border-strong);
+  --text-primary: var(--theme-title);
+  --text-secondary: var(--theme-text);
+  --text-muted: var(--theme-muted);
+  --text-inverse: #0b0c0f;
+
+  --vop-bg: var(--theme-bg);
+  --vop-card: var(--theme-surface);
+  --vop-text: var(--theme-title);
+  --vop-muted: var(--theme-muted);
+  --vop-border: var(--theme-border);
+  --vop-rail-bg: var(--theme-surface);
+  --vop-rail-edge: var(--theme-border);
+  --qr-paper: #ffffff;
+}
+
+html,
+body,
+#root {
+  background-color: var(--theme-bg);
+  color: var(--theme-text);
+  transition: background-color .3s ease, color .3s ease;
+}
+
+body,
+.vop-app-header,
+.vop-learner-sidebar,
+.vop-admin .vop-sidebar,
+.vop-card,
+.glass-panel,
+.vop-admin-card,
+.vop-dialog-card,
+.vop-candidate-list-card,
+.vop-program-catalog-card {
+  transition:
+    background-color .3s ease,
+    color .3s ease,
+    border-color .3s ease,
+    box-shadow .3s ease;
+}
+
+h1,h2,h3,h4,h5,h6,
+strong,
+.vop-setting-name {
+  color: var(--theme-title);
+}
+
+p,small,label,
+.vop-setting-help,
+.vop-row-desc {
+  color: inherit;
+}
+
+:is(input, textarea, select) {
+  background-color: var(--theme-input);
+  color: var(--theme-title);
+  border-color: var(--theme-border-strong);
+  transition: background-color .3s ease, color .3s ease, border-color .3s ease;
+}
+
+:is(input, textarea)::placeholder {
+  color: var(--theme-muted);
+  opacity: 1;
+}
+
+select option {
+  background: var(--theme-input);
+  color: var(--theme-title);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--theme-scroll-track);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--theme-scroll-thumb);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-border-strong);
+}
+
+hr,
+.vop-divider,
+.vop-separator,
+.vop-table th,
+.vop-table td,
+.vop-candidate-table th,
+.vop-candidate-table td,
+.vop-user-table th,
+.vop-user-table td,
+.vop-reference-table th,
+.vop-reference-table td {
+  border-color: var(--theme-border);
+}
+
+[data-theme="dark"] :is(
+  .vop-card,.glass-panel,.vop-admin-card,.vop-error-card,
+  .vop-candidate-metrics>div,.vop-candidate-list-card,.vop-candidate-modal,
+  .vop-about-source-note,.vop-about-tabs,.vop-about-feature,.vop-about-card,.vop-about-connect,
+  .vop-program-catalog-card,.vop-program-catalog-open,.vop-program-catalog-heading,
+  .vop-guide-direct-section,.vop-guide-lesson,.vop-guide-section-group,.vop-guide-section-links>button,
+  .vop-mentoring-card,.vop-mentoring-tabs button,.vop-conversation-grid>button,
+  .vop-material-card,.vop-cert-card,.vop-personal-card,.vop-support-panel,
+  .vop-dialog-card,.vop-structure-actions-popover,.vop-structure-more
+) {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-title) !important;
+  box-shadow: 0 8px 24px var(--theme-shadow) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-learner-sidebar,.vop-admin .vop-sidebar,.vop-admin-sidebar-head,
+  .vop-learner-sidebar-foot,.vop-admin .vop-sidebar .vop-nav,
+  .vop-header-learning-menu,.vop-account-menu,.vop-app-header-account-menu
+) {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-title) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-learner-sidebar-link:hover,.vop-admin .vop-sidebar .vop-nav-item:hover,
+  .vop-learner-sidebar-user:hover,.vop-learner-sidebar-logout:hover,
+  .vop-admin-sidebar-collapse:hover,.vop-about-tabs button:hover
+) {
+  background: var(--theme-surface-elevated) !important;
+  color: var(--theme-title) !important;
+}
+
+[data-theme="dark"] :is(
+  .vop-learner-sidebar-link.active,.vop-admin .vop-sidebar .vop-nav-item.active
+) {
+  background: var(--theme-surface-soft) !important;
+  color: var(--theme-title) !important;
+  box-shadow: inset 3px 0 var(--theme-accent) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,body,#root,
+  body,.vop-app-header,.vop-learner-sidebar,.vop-admin .vop-sidebar,
+  .vop-card,.glass-panel,.vop-admin-card,.vop-dialog-card,
+  :is(input,textarea,select) {
+    transition: none !important;
+  }
+}

@@ -132,80 +132,59 @@ test('guide selectors and dashboards exclude assessment records from lesson and 
   assert.match(home,/primaryStudyLessons/);
 });
 
-test('dark theme defines semantic surfaces and covers late legacy UI islands',()=>{
-  const theme=read('src/theme-dark.css');
+test('light and dark modes share one canonical variable contract',()=>{
+  const theme=read('src/theme.css');
   const preference=read('src/services/themePreference.ts');
   const html=read('index.html');
-  for(const token of ['--bg-primary:#0c1118','--bg-card:#151e28','--bg-elevated:#1c2835','--text-primary:#f6f8fa','--border-subtle:#314050']){
-    assert.ok(theme.includes(token),token);
-  }
-  for(const selector of ['vop-app-header-account-menu','vop-admin-sidebar-footer','vop-plate-more>div','vop-reference-table th','vop-save-state-chip.saved']){
-    assert.ok(theme.includes(selector),selector);
-  }
-  assert.match(preference,/#0c1118/);
-  assert.match(html,/meta name="theme-color" content="#0c2d63"/);
+  const main=read('src/main.tsx');
+  const index=read('src/index.css');
+
+  assert.match(theme,/CANONICAL LIGHT \/ DARK THEME CONTRACT/);
+  assert.match(theme,/:root,\s*\[data-theme="light"\]/);
+  assert.match(theme,/\[data-theme="dark"\]\s*\{/);
+  for(const token of [
+    '--theme-accent:','--theme-title:','--theme-text:','--theme-muted:',
+    '--theme-bg:','--theme-surface:','--theme-border:','--theme-shadow:',
+  ]) assert.ok(theme.includes(token),token);
+
+  assert.match(theme,/--bg-primary: var\(--theme-bg\)/);
+  assert.match(theme,/--bg-card: var\(--theme-surface\)/);
+  assert.match(theme,/--text-primary: var\(--theme-title\)/);
+  assert.match(theme,/--border-subtle: var\(--theme-border\)/);
+  assert.match(theme,/transition: background-color \.3s ease, color \.3s ease/);
+  assert.match(theme,/prefers-reduced-motion: reduce/);
+
+  assert.match(preference,/localStorage\.setItem\(KEY,theme\)/);
+  assert.match(preference,/classList\.toggle\('dark-theme',theme==='dark'\)/);
+  assert.match(preference,/#0b0c0f/);
+  assert.match(preference,/#f7f9fc/);
+
+  assert.match(html,/<html lang="en" data-theme="light">/);
+  assert.match(html,/localStorage\.getItem\('vop_theme'\) === 'dark' \? 'dark' : 'light'/);
+  assert.match(html,/theme === 'dark' \? '#0b0c0f' : '#f7f9fc'/);
+  assert.ok(main.indexOf("import './theme.css';") > main.indexOf("import './admin-layout-overrides.css';"),
+    'canonical theme stylesheet must load after portal styles');
+  assert.doesNotMatch(main,/theme-dark\.css/);
+  assert.doesNotMatch(index,/\/\* Dark Theme Variables \*\//);
 });
 
-
-test('portal-wide dark contract eliminates light islands across every portal',()=>{
-  const theme=read('src/theme-dark.css');
-  const main=read('src/main.tsx');
-  const rootSource=read('src/Root.tsx');
+test('legacy portals remain covered while canonical theme variables own final surfaces',()=>{
+  const theme=read('src/theme.css');
   const readerModal=read('src/components/reader/LessonReaderModal.tsx');
   const quizModal=read('src/components/quiz/QuizModal.tsx');
   const contentStudio=read('src/components/admin/ContentStudio.tsx');
   const adminRecords=read('src/pages/AdminRecordsPanel.tsx');
-  const admin=read('src/pages/admin.css');
-  const candidates=read('src/pages/candidate-management.css');
-  const users=read('src/pages/userManagement.css');
-  const personal=read('src/pages/personalSettings.css');
-  const reference=read('src/reference.css');
-  const index=read('src/index.css');
 
-  assert.match(theme,/Portal-wide dark theme contract v3/);
-  assert.match(theme,/2026-10 black dark-theme completion/);
-  assert.match(theme,/Neutral surfaces and faint-divider contract v4/);
-  assert.match(theme,/\[class\*="border-white"\]/);
-  assert.match(theme,/\[class\*="bg-blue-"\]/);
-  assert.ok(main.indexOf("import './theme-dark.css';") > main.indexOf("import './admin-layout-overrides.css';"),'dark theme must load last');
-  assert.doesNotMatch(rootSource,/theme-dark\.css/);
+  for(const selector of [
+    'vop-learner-sidebar','vop-admin .vop-sidebar','vop-candidate-list-card',
+    'vop-program-catalog-card','vop-mentoring-card','vop-dialog-card',
+  ]) assert.ok(theme.includes(selector),selector+' theme coverage');
+
+  assert.match(theme,/background: var\(--theme-surface\) !important/);
+  assert.match(theme,/border-color: var\(--theme-border\) !important/);
+  assert.match(theme,/box-shadow: inset 3px 0 var\(--theme-accent\) !important/);
   assert.match(readerModal,/data-surface="progress"/);
-  assert.match(readerModal,/borderTop: '1px solid var\(--border-subtle\)'/);
   assert.match(quizModal,/data-surface="question"/);
   assert.doesNotMatch(contentStudio,/bg-blue-50/);
   assert.doesNotMatch(adminRecords,/#f5f9ff/);
-  assert.match(theme,/--bg-primary:#000/);
-  for(const workspace of ['vop-mentoring','vop-org-workspace','vop-module-workspace','vop-structure']){
-    assert.ok(theme.includes(workspace),workspace+' dark coverage');
-  }
-  assert.match(theme,/\[class\*="from-blue-"\]/);
-  assert.match(theme,/background-color:#000!important/);
-  for(const selector of [
-    'vop-mentoring-assign-form','vop-org-invitations','vop-reference-editor-fields',
-    'vop-lesson-settings-panel','vop-assessment-retake','vop-lesson-anchored-quizzes',
-  ]) assert.ok(theme.includes(selector),selector+' targeted dark-mode coverage');
-  assert.match(theme,/background:#f2c15d!important;[\s\S]*color:#050505!important/);
-  for(const selector of [
-    'vop-events-page','vop-certificate-page','vop-page-head','vop-candidate-table-wrap',
-    'vop-user-table-wrap','vop-personal-header','vop-reference-card','vop-metric-value',
-    'vop-events-empty','vop-official-certificate-meta>div','vop-primary',
-  ]) assert.ok(theme.includes(selector),selector);
-
-  // The previous regression forced black text onto blue primary buttons.
-  assert.doesNotMatch(theme,/\.vop-primary,\.btn-primary\)\{color:#111820!important/);
-  assert.match(theme,/\.vop-primary,\.btn-primary\)\{color:#fff!important/);
-
-  const exactWhite=/background\s*:\s*#fff(?:fff)?\s*(?:;|})/i;
-  for(const [name,css] of [
-    ['admin',admin],['candidate',candidates],['user management',users],
-    ['personal settings',personal],['global portal',index],
-  ] as const){
-    assert.doesNotMatch(css,exactWhite,name+' still contains an exact white application surface');
-  }
-
-  assert.match(candidates,/var\(--bg-card,#fff\)/);
-  assert.match(users,/var\(--bg-card,#fff\)/);
-  assert.match(personal,/var\(--bg-card, #fff\)/);
-  assert.match(reference,/Reference document paper exceptions/);
-  assert.match(reference,/\.vop-certificate-artwork,[\s\S]*background:#fff/);
 });

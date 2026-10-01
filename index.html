@@ -1,19 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/assets/vop_logo_2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0c2d63" />
+    <meta name="theme-color" content="#f7f9fc" />
     <meta name="description" content="Bible Correspondence School study guides and learning progress." />
     <script>
       (function () {
         try {
           var theme = localStorage.getItem('vop_theme') === 'dark' ? 'dark' : 'light';
           document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.classList.toggle('dark-theme', theme === 'dark');
           document.documentElement.style.colorScheme = theme;
+          var themeMeta = document.querySelector('meta[name="theme-color"]');
+          if (themeMeta) themeMeta.setAttribute('content', theme === 'dark' ? '#0b0c0f' : '#f7f9fc');
         } catch (_) {
           document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.classList.remove('dark-theme');
           document.documentElement.style.colorScheme = 'light';
         }
       })();
