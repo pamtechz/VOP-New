@@ -85,9 +85,22 @@ export default async function handler(req: Request, res: Response) {
       if (!plan.exists || plan.data()?.active !== true) throw new Error('The selected plan is not active.');
       const planData = plan.data() || {};
       const before = organization.data();
+      const activationSource=['complimentary','manual_override','migration'].includes(text(body.activationSource))
+        ?text(body.activationSource):'manual_override';
+      const overrideReason=text(body.overrideReason);
+      if(!overrideReason)throw new Error('A reason is required for a non-payment subscription activation.');
       await organizationRef.set({ plan: planId, quotas: planData.quotas || {}, featureEntitlements: planData.features || {}, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      await organizationRef.collection('subscription').doc('current').set({ organizationId, planId, status: 'active', billingProvider: text(body.billingProvider) || 'manual', externalCustomerId: text(body.externalCustomerId) || null, externalSubscriptionId: text(body.externalSubscriptionId) || null, startedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      await writeTenantAudit(ctx, 'subscription.assign', organizationRef.path, before, { plan: planId, quotas: planData.quotas || {}, featureEntitlements: planData.features || {} });
+      await organizationRef.collection('subscription').doc('current').set({
+        organizationId,planId,status:'active',activationSource,overrideReason,
+        billingProvider:text(body.billingProvider)||'manual',
+        externalCustomerId:text(body.externalCustomerId)||null,
+        externalSubscriptionId:text(body.externalSubscriptionId)||null,
+        startedAt:FieldValue.serverTimestamp(),activatedAt:FieldValue.serverTimestamp(),
+        activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await writeTenantAudit(ctx, 'subscription.assign', organizationRef.path, before, {
+        plan:planId,activationSource,overrideReason,quotas:planData.quotas||{},featureEntitlements:planData.features||{},
+      });
       return res.status(200).json({ ok: true, organizationId, planId, status: 'active' });
     }
 
@@ -98,8 +111,15 @@ export default async function handler(req: Request, res: Response) {
       const snapshot = await subscriptionRef.get();
       if (!snapshot.exists) throw new Error('The organization has no subscription record.');
       const before = snapshot.data();
-      await subscriptionRef.set({ status: 'active', activatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      await writeTenantAudit(ctx, `subscription.${action === 'activateSubscription' ? 'activate' : 'reactivate'}`, subscriptionRef.path, before, { status: 'active' });
+      const overrideReason=text(body.overrideReason);
+      if(!overrideReason)throw new Error('A reason is required for a non-payment subscription activation.');
+      await subscriptionRef.set({
+        status:'active',activationSource:'manual_override',overrideReason,
+        activatedAt:FieldValue.serverTimestamp(),activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await writeTenantAudit(ctx, `subscription.${action === 'activateSubscription' ? 'activate' : 'reactivate'}`, subscriptionRef.path, before, {
+        status:'active',activationSource:'manual_override',overrideReason,
+      });
       return res.status(200).json({ ok: true, organizationId, status: 'active' });
     }
 
