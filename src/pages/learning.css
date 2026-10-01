@@ -4,29 +4,29 @@
 .vop-bottom-nav{
   position:fixed;inset:auto 0 0;z-index:80;
   display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:stretch;
-  background:rgba(5,26,59,.98);backdrop-filter:blur(14px);
-  border-top:1px solid rgba(255,255,255,.14);
-  box-shadow:0 -8px 28px rgba(4,23,49,.2);
+  background:color-mix(in srgb,var(--theme-surface) 96%,transparent);backdrop-filter:blur(14px);
+  border-top:1px solid var(--theme-border);
+  box-shadow:0 -8px 28px var(--theme-shadow);
   padding:7px max(6px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left));
 }
 .vop-bottom-nav button{
   display:flex;flex-direction:column;justify-content:center;align-items:center;
   gap:3px;min-width:0;min-height:53px;padding:6px 1px;border:0;border-radius:12px;
-  color:#bdcce0;background:transparent;font:inherit;font-size:clamp(9px,2.6vw,11px);
+  color:var(--theme-text);background:transparent;font:inherit;font-size:clamp(9px,2.6vw,11px);
   font-weight:650;cursor:pointer;line-height:1.15;
 }
 .vop-bottom-nav button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vop-bottom-nav button.active{color:#f8c85f;background:rgba(248,200,95,.14)}
+.vop-bottom-nav button.active{color:var(--theme-accent);background:var(--theme-surface-soft)}
 .vop-bottom-nav button:focus-visible{outline:2px solid #f8c85f;outline-offset:-2px}
-.vop-menu-section-label{padding:13px 16px 5px;margin-top:6px;color:#536a87;font-weight:900;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-top:1px solid #e4eaf2}
+.vop-menu-section-label{padding:13px 16px 5px;margin-top:6px;color:var(--theme-muted);font-weight:900;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--theme-border)}
 .vop-engagement-page,.vop-lessons-page{min-width:0}
 .vop-engagement-hero-content{padding:23px 0 4px;max-width:760px}
 .vop-engagement-page .vop-materials-main{width:100%}
 .vop-engagement-page .vop-material-card{max-width:100%}
 .vop-engagement-page .vop-material-body{padding:clamp(15px,2.6vw,27px);min-width:0}
 .vop-engagement-page .vop-material-body h2{font-size:clamp(19px,2vw,25px);margin:0 0 10px;line-height:1.3}
-.vop-engagement-page .vop-material-body h3{font-size:16px;color:#163a70;margin:0 0 8px}
-.vop-engagement-page .vop-material-body p{font-size:13px;line-height:1.6;color:#526880;margin:6px 0 13px}
+.vop-engagement-page .vop-material-body h3{font-size:16px;color:var(--theme-title);margin:0 0 8px}
+.vop-engagement-page .vop-material-body p{font-size:13px;line-height:1.6;color:var(--theme-text);margin:6px 0 13px}
 .vop-engagement-page .vop-material-body>div,.vop-engagement-page .vop-material-body form{min-width:0}
 .vop-engagement-page .vop-material-body button:not(.vop-materials-back){
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
@@ -54,15 +54,15 @@
 .vop-lesson-card{display:flex;flex-direction:column;min-width:0;padding:19px;gap:14px}
 .vop-lesson-card-meta,.vop-lesson-card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .vop-lesson-card-meta>span:first-child{font-size:11px;color:#426586;font-weight:850;text-transform:uppercase;letter-spacing:.045em}
-.vop-lesson-status{display:inline-flex;align-items:center;gap:4px;background:#eff5fc;color:#365d83;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:850}
+.vop-lesson-status{display:inline-flex;align-items:center;gap:4px;background:var(--theme-surface-soft);color:var(--theme-text);border-radius:999px;padding:5px 9px;font-size:10px;font-weight:850}
 .vop-lesson-status.completed{background:#e6f7ef;color:#047857}
 .vop-lesson-card-body{flex:1;min-width:0}
-.vop-lesson-card-body h2{font-size:clamp(17px,2vw,21px);line-height:1.25;color:#133b70;margin:0 0 9px;overflow-wrap:anywhere}
-.vop-lesson-card-body>p{font-size:13px;line-height:1.55;color:#506c87;margin:0 0 13px}
+.vop-lesson-card-body h2{font-size:clamp(17px,2vw,21px);line-height:1.25;color:var(--theme-title);margin:0 0 9px;overflow-wrap:anywhere}
+.vop-lesson-card-body>p{font-size:13px;line-height:1.55;color:var(--theme-text);margin:0 0 13px}
 .vop-lesson-card .vop-lesson-guide{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;background:transparent;color:#0b4c96;cursor:pointer;font-size:12px;font-weight:850;text-align:left;min-width:0}
 .vop-lesson-guide span{overflow-wrap:anywhere}
-.vop-lesson-card-footer{border-top:1px solid #e7edf5;padding-top:14px}
-.vop-lesson-card-footer>span{display:flex;gap:6px;align-items:center;color:#668098;font-size:12px}
+.vop-lesson-card-footer{border-top:1px solid var(--theme-border);padding-top:14px}
+.vop-lesson-card-footer>span{display:flex;gap:6px;align-items:center;color:var(--theme-muted);font-size:12px}
 .vop-lesson-card .vop-lesson-open{display:inline-flex;gap:6px;align-items:center;justify-content:center;min-height:42px;padding:10px 13px;border:0;border-radius:10px;background:#0a438f;color:#fff;font-size:12px;font-weight:850;cursor:pointer}
 .vop-lesson-card button:focus-visible{outline:3px solid #f1bd4f;outline-offset:3px}
 @media(max-width:900px){.vop-lessons-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -88,17 +88,17 @@
  * provides the same destinations at every breakpoint. */
 .vop-desktop-nav{display:none!important}
 @media(min-width:1480px){.vop-desktop-nav{display:flex!important}}
-.vop-header-learning{position:relative;color:#cbd5e1;font-size:12px;font-weight:700}
+.vop-header-learning{position:relative;color:var(--theme-text);font-size:12px;font-weight:700}
 .vop-header-learning>summary{display:flex;align-items:center;gap:5px;cursor:pointer;list-style:none;border-radius:11px;padding:8px 10px}
 .vop-header-learning>summary::-webkit-details-marker{display:none}
 .vop-header-learning>summary:hover,.vop-header-learning[open]>summary{color:#fbbf24;background:rgba(255,255,255,.08)}
-.vop-header-learning-menu{position:absolute;z-index:120;top:calc(100% + 9px);left:0;min-width:220px;padding:7px;background:var(--bg-card,#fff);border:1px solid #d9e4f2;border-radius:13px;box-shadow:0 12px 40px rgba(6,29,67,.25);display:grid;gap:3px}
-.vop-header-learning-menu button{display:flex;align-items:center;gap:9px;min-height:43px;padding:10px 12px;background:transparent;border:0;border-radius:9px;color:#143a6c;cursor:pointer;text-align:left;font-size:12px;font-weight:750}
-.vop-header-learning-menu button:hover,.vop-header-learning-menu button:focus-visible{background:#edf4ff}
+.vop-header-learning-menu{position:absolute;z-index:120;top:calc(100% + 9px);left:0;min-width:220px;padding:7px;background:var(--theme-surface);border:1px solid var(--theme-border);border-radius:13px;box-shadow:0 12px 40px rgba(6,29,67,.25);display:grid;gap:3px}
+.vop-header-learning-menu button{display:flex;align-items:center;gap:9px;min-height:43px;padding:10px 12px;background:transparent;border:0;border-radius:9px;color:var(--theme-title);cursor:pointer;text-align:left;font-size:12px;font-weight:750}
+.vop-header-learning-menu button:hover,.vop-header-learning-menu button:focus-visible{background:var(--theme-surface-soft)}
 
-.vop-lessons-toolbar .vop-lessons-refresh{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:10px 13px;border:1px solid #b9cfe6;border-radius:9px;background:var(--bg-card,#fff);color:#164b85;font-size:12px;font-weight:850;cursor:pointer}
+.vop-lessons-toolbar .vop-lessons-refresh{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:10px 13px;border:1px solid var(--theme-border-strong);border-radius:9px;background:var(--theme-surface);color:var(--theme-accent);font-size:12px;font-weight:850;cursor:pointer}
 .vop-lessons-toolbar .vop-lessons-refresh:disabled{opacity:.6;cursor:wait}
-.vop-lessons-refresh-error{padding:12px 15px;margin-bottom:14px;border:1px solid #f1c2cb;border-radius:10px;background:var(--bg-card,#fff)1f2;color:#922b40;font-size:13px;overflow-wrap:anywhere}
+.vop-lessons-refresh-error{padding:12px 15px;margin-bottom:14px;border:1px solid color-mix(in srgb,var(--vop-error) 35%,var(--theme-border));border-radius:10px;background:var(--vop-error-bg);color:var(--vop-error);font-size:13px;overflow-wrap:anywhere}
 @media(max-width:650px){.vop-lessons-toolbar .vop-lessons-refresh{flex:1 1 100%;width:100%}}
 
 /* The persistent audio dock and primary mobile navigation must never overlap. */
