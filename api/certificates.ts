@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { awardApprovedCertificate } from '../server/certificateAward.js';
+import { ensureAutomaticGraduationReview } from '../server/graduationAutomation.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -28,6 +29,19 @@ async function mine(req:Request,res:Response){
  const profile=await db.doc(`users/${decoded.uid}`).get();
  if (!profile.exists) return res.status(404).json({error:'VOP account profile was not found.'});
  const profileData=profile.data()||{};
+ // Reconcile learners who completed curriculum before automatic certificate
+ // reviews existed. This is bounded by completed guide IDs already present in
+ // the authenticated learner's own progress record.
+ const profileProgress=profileData.progress&&typeof profileData.progress==='object'
+   ?profileData.progress as Record<string,unknown>:{};
+ const completedKeys=Array.isArray(profileProgress.completedLessons)?profileProgress.completedLessons.map(String):[];
+ const completedGuideIds=[...new Set(completedKeys.map(key=>key.split(':')[1]).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)))].slice(0,20);
+ if(String(profileData.role||'')==='student'&&completedGuideIds.length){
+   await Promise.all(completedGuideIds.map(async guideId=>{
+     try{await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:certificate-reconciliation');}
+     catch(error){console.warn('Certificate review reconciliation skipped',guideId,error);}
+   }));
+ }
  const organizationId=String(profileData.organizationId||'').trim();
  const profileRole=String(profileData.role||'');
  const adminNodeId=String(profileData.adminNodeId||'').trim();
