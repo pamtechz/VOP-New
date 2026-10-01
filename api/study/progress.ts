@@ -196,8 +196,10 @@ export default async function handler(
     if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
+    const platformGuide = useTenantGuide && candidateGuideShared
+      && (!candidateGuideOrganizationId || String(candidateGuideData.scope || '') === 'platform');
     if (useTenantGuide && candidateGuideOrganizationId !== organizationId && !enrolledForGuide
-        && (lessonData.sharingScope !== 'shared' || lessonData.archived === true)) {
+        && !platformGuide && (lessonData.sharingScope !== 'shared' || lessonData.archived === true)) {
       return res.status(403).json({ error: 'This lesson is not shared with your organization.' });
     }
 
