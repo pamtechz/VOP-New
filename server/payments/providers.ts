@@ -481,7 +481,7 @@ class MtnMomoProvider implements PaymentProviderAdapter{
       reference:text(data.externalId),
       eventType:'requesttopay.callback',
       providerStatus:text(data.status).toLowerCase(),
-      providerTransactionId:text(data.referenceId||data.referenceId),
+      providerTransactionId:text(data.referenceId),
       providerReference:text(data.financialTransactionId),
       completedAt:null,
     };
