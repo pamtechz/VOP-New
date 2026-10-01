@@ -33,23 +33,79 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
   const [ownerSearch,setOwnerSearch]=useState(''),[ownerMatches,setOwnerMatches]=useState<DirectoryUser[]>([]),[selectedOwner,setSelectedOwner]=useState<DirectoryUser|null>(null);
   const [showCreateMember,setShowCreateMember]=useState(false),[newMemberName,setNewMemberName]=useState(''),[newMemberEmail,setNewMemberEmail]=useState(''),[newMemberPassword,setNewMemberPassword]=useState('');
   const [saving,setSaving]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[error,setError]=useState('');
+  const viewStorageKey='vop-admin-organization-view-v1:'+(auth?.currentUser?.uid||'anonymous');
 
   const loadDetails=async(id:string)=>{try{const [m,u,a]=await Promise.all([api('listMembers',{organizationId:id}),api('getUsage',{organizationId:id}),api('listAudit',{organizationId:id})]);setMembers((m.items||[]) as Member[]);setUsage(u.usage||null);setAudit((a.items||[]) as Array<Record<string,unknown>>)}catch(e){setError(e instanceof Error?e.message:'Could not load organization details.')}};
   const load=async()=>{setLoading(true);setError('');try{const body=await api('list');const next=(body.items||[]) as Organization[];setItems(next);if(selected){const fresh=next.find(x=>x.id===selected.id);if(fresh){setSelected(fresh);if(detailsOpen)await loadDetails(fresh.id)}}}catch(e){setError(e instanceof Error?e.message:'Could not load organizations.')}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
 
   const restoreOrganizationFields=(item:Organization)=>{setName(item.name);setPlan(item.plan||'standard');setStatus(item.status||'active');setQuotas(quotaState(item.quotas||{}));setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteEmail('');setInviteUrl('');setShowCreateMember(false)};
-  const openOrganization=(item:Organization)=>{setSelected(item);setDetailsOpen(true);setEditing(false);restoreOrganizationFields(item);void loadDetails(item.id)};
-  const closeOrganization=()=>{setDetailsOpen(false);setEditing(false);setSelected(null);setMembers([]);setUsage(null);setAudit([]);setName('');setOrganizationId('');setError('')};
+  const writeOrganizationLocation=(item:Organization|null,mode:'push'|'replace',fromList=false)=>{
+    if(typeof window==='undefined')return;
+    const url=new URL(window.location.href);
+    url.searchParams.set('admin','organizations');
+    if(item?.slug)url.searchParams.set('organization',item.slug);
+    else url.searchParams.delete('organization');
+    const next=url.pathname+url.search+url.hash;
+    const state={
+      ...(window.history.state&&typeof window.history.state==='object'?window.history.state:{}),
+      vopAdminTab:'organizations',
+      vopOrganizationSlug:item?.slug||null,
+      vopOrganizationFromList:Boolean(item&&fromList),
+    };
+    if(mode==='push')window.history.pushState(state,'',next);
+    else window.history.replaceState(state,'',next);
+  };
+  const openOrganization=(item:Organization,historyMode:'push'|'replace'|'none'='push')=>{
+    setSelected(item);setDetailsOpen(true);setEditing(false);restoreOrganizationFields(item);void loadDetails(item.id);
+    try{sessionStorage.setItem(viewStorageKey,item.slug)}catch{/* storage may be unavailable */}
+    if(historyMode!=='none')writeOrganizationLocation(item,historyMode,historyMode==='push');
+  };
+  const closeOrganization=(historyMode:'replace'|'none'='replace')=>{
+    setDetailsOpen(false);setEditing(false);setSelected(null);setMembers([]);setUsage(null);setAudit([]);setName('');setOrganizationId('');setError('');
+    try{sessionStorage.removeItem(viewStorageKey)}catch{/* storage may be unavailable */}
+    if(historyMode!=='none')writeOrganizationLocation(null,historyMode);
+  };
+  const returnToOrganizations=()=>{
+    if(typeof window!=='undefined'&&window.history.state?.vopOrganizationFromList===true
+      &&new URL(window.location.href).searchParams.get('organization')){
+      window.history.back();
+      return;
+    }
+    closeOrganization('replace');
+  };
   const cancelEditing=()=>{if(!selected)return;restoreOrganizationFields(selected);setEditing(false);setError('')};
-  useEffect(()=>{if(!isSuperAdmin&&items.length===1&&!selected)openOrganization(items[0])},[isSuperAdmin,items,selected]);
+
+  useEffect(()=>{
+    if(!items.length||selected)return;
+    let requested='';
+    if(typeof window!=='undefined'){
+      requested=new URL(window.location.href).searchParams.get('organization')||'';
+      if(!requested){try{requested=sessionStorage.getItem(viewStorageKey)||''}catch{/* ignore */}}
+    }
+    const target=requested?items.find(item=>item.slug===requested):null;
+    if(target){openOrganization(target,'replace');return;}
+    if(!isSuperAdmin&&items.length===1)openOrganization(items[0],'replace');
+  },[isSuperAdmin,items,selected,viewStorageKey]);
+
+  useEffect(()=>{
+    if(typeof window==='undefined')return;
+    const onPopState=()=>{
+      const slug=new URL(window.location.href).searchParams.get('organization')||'';
+      if(!slug){if(selected)closeOrganization('none');return;}
+      const target=items.find(item=>item.slug===slug);
+      if(target&&target.id!==selected?.id)openOrganization(target,'none');
+    };
+    window.addEventListener('popstate',onPopState);
+    return()=>window.removeEventListener('popstate',onPopState);
+  },[items,selected?.id]);
 
   useEffect(()=>{if(ownerSearch.trim().length<2){setOwnerMatches([]);return}const timer=window.setTimeout(()=>void (async()=>{try{const body=await api('searchUsers',{organizationId:selected?.id,query:ownerSearch.trim()});setOwnerMatches((body.items||[]) as DirectoryUser[])}catch(e){setError(e instanceof Error?e.message:'Could not search accounts.')}})(),250);return()=>window.clearTimeout(timer)},[ownerSearch,selected?.id]);
   useEffect(()=>{if(memberSearch.trim().length<2){setMemberMatches([]);return}const timer=window.setTimeout(()=>void (async()=>{try{const body=await api('searchUsers',{organizationId:selected?.id,query:memberSearch.trim()});setMemberMatches((body.items||[]) as DirectoryUser[])}catch(e){setError(e instanceof Error?e.message:'Could not search accounts.')}})(),250);return()=>window.clearTimeout(timer)},[memberSearch,selected?.id]);
 
   const create=async()=>{if(!name.trim())return;setSaving(true);setError('');try{const body=await api('create',{name:name.trim(),id:organizationId.trim()||undefined});setName('');setOrganizationId('');setMessage('Organization created.');await load();const created=body.item as Organization|undefined;if(created)openOrganization(created)}catch(e){setError(e instanceof Error?e.message:'Could not create organization.')}finally{setSaving(false)}};
   const save=async()=>{if(!selected)return;setSaving(true);setError('');try{await api('update',{organizationId:selected.id,data:{name:name.trim()||selected.name,...(isSuperAdmin?{plan,status,quotas:quotaPayload(quotas)}:{})}});if(isSuperAdmin&&status!==selected.status)await api('setStatus',{organizationId:selected.id,status});setMessage('Organization settings saved.');setEditing(false);await load();}catch(e){setError(e instanceof Error?e.message:'Could not save organization.')}finally{setSaving(false)}};
-  const deleteOrganization=async(item?:Organization)=>{if(!isSuperAdmin)return;const target=item||selected;if(!target)return;if(!await appConfirm('Permanently delete the organization "'+target.name+'"? This removes its tenant membership, invitations, settings and organization-scoped records. This action cannot be undone.', {title:'Delete organization',confirmLabel:'Delete permanently',tone:'danger'}))return;setSaving(true);setError('');try{await api('delete',{organizationId:target.id});if(selected?.id===target.id){setSelected(null);setDetailsOpen(false);setEditing(false);setMembers([]);setUsage(null);setAudit([]);setName('');setOrganizationId('')}setMessage('Organization deleted.');await load()}catch(e){setError(e instanceof Error?e.message:'Could not delete the organization.')}finally{setSaving(false)}};
+  const deleteOrganization=async(item?:Organization)=>{if(!isSuperAdmin)return;const target=item||selected;if(!target)return;if(!await appConfirm('Permanently delete the organization "'+target.name+'"? This removes its tenant membership, invitations, settings and organization-scoped records. This action cannot be undone.', {title:'Delete organization',confirmLabel:'Delete permanently',tone:'danger'}))return;setSaving(true);setError('');try{await api('delete',{organizationId:target.id});if(selected?.id===target.id)closeOrganization('replace');setMessage('Organization deleted.');await load()}catch(e){setError(e instanceof Error?e.message:'Could not delete the organization.')}finally{setSaving(false)}};
   const assignOwner=async()=>{if(!editing||!selected||!selectedOwner)return;setSaving(true);setError('');try{await api('assignOwner',{organizationId:selected.id,uid:selectedOwner.uid});setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setMessage('Organization owner assigned.');await load();await loadDetails(selected.id)}catch(e){setError(e instanceof Error?e.message:'Could not assign the organization owner.')}finally{setSaving(false)}};
   const addExistingMember=async()=>{if(!editing||!selected||!selectedUser)return;setSaving(true);setError('');try{await api('setMember',{organizationId:selected.id,uid:selectedUser.uid,role:memberRole,active:true});setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setMessage('User assigned to the organization.');await loadDetails(selected.id);await load()}catch(e){setError(e instanceof Error?e.message:'Could not assign the user.')}finally{setSaving(false)}};
   const createAndAssign=async()=>{if(!editing||!selected||!newMemberName.trim()||!newMemberEmail.trim())return;setSaving(true);setError('');try{await api('createAndAssign',{organizationId:selected.id,displayName:newMemberName.trim(),email:newMemberEmail.trim(),password:newMemberPassword,role:memberRole});setNewMemberName('');setNewMemberEmail('');setNewMemberPassword('');setShowCreateMember(false);setMessage('Account created and assigned to the organization.');await loadDetails(selected.id);await load()}catch(e){setError(e instanceof Error?e.message:'Could not create the account.')}finally{setSaving(false)}};
@@ -82,7 +138,7 @@ export default function OrganizationManagement({isSuperAdmin}:{isSuperAdmin:bool
 
     {detailsOpen&&selected&&<section className="vop-org-detail-page">
       <div className="vop-org-detail-toolbar">
-        <button className="vop-secondary" type="button" onClick={closeOrganization}><ArrowLeft size={16}/>Back to organizations</button>
+        <button className="vop-secondary" type="button" onClick={returnToOrganizations}><ArrowLeft size={16}/>Back to organizations</button>
         <div className="vop-org-detail-actions">
           {!editing?<button className="vop-primary" type="button" onClick={()=>setEditing(true)}><Edit3 size={16}/>Edit</button>
           :<><button className="vop-secondary" type="button" disabled={saving} onClick={cancelEditing}>Cancel</button><button className="vop-primary" type="button" disabled={saving} onClick={()=>void save()}>{t('common.save_settings','Save Settings')}</button></>}
