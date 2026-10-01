@@ -210,9 +210,12 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
     const canReadTenantLessons = profileRole === 'super_admin'
       || Boolean(ownerOrganizationId && ownerOrganizationId === organizationId)
       || scopedOrganizationIds.includes(ownerOrganizationId);
-    // A shared guide can contain organization-only lessons. Its owning learners
-    // may see those lessons, while visitors may see only published shared lessons.
-    const lessonSnapshot = entry.guide.sharingScope === 'shared' && !canReadTenantLessons
+    const platformGuide = entry.guide.sharingScope === 'shared' && !ownerOrganizationId;
+    // Platform-owned guides are system-wide as a whole. Legacy platform lessons
+    // created before visibility inheritance may not yet carry sharingScope=shared,
+    // so read every published child. Organization-owned shared guides keep the
+    // stricter child-sharing rule.
+    const lessonSnapshot = entry.guide.sharingScope === 'shared' && !canReadTenantLessons && !platformGuide
       ? await getDocs(query(entry.lessonsRef, where('published', '==', true), where('sharingScope', '==', 'shared')))
       : await getDocs(query(entry.lessonsRef, where('published', '==', true)));
     for (const item of lessonSnapshot.docs) {
