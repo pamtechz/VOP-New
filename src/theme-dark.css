@@ -1064,3 +1064,62 @@
 )[data-bright-hover="true"]:hover{
   color:#050505!important;
 }
+
+
+/* Final neutral override: remove legacy navy fill values that predate the
+   black theme without erasing semantic green/red/amber state surfaces. */
+[data-theme="dark"] :is(
+  .vop-card,.glass-panel,.apk-card,.apk-action-card,.vop-admin-card,.vop-error-card,
+  .vop-candidate-metrics>div,.vop-candidate-list-card,.vop-candidate-modal,
+  .vop-about-source-note,.vop-about-tabs,.vop-about-feature,.vop-about-card,.vop-about-connect,
+  .vop-program-catalog-card,.vop-program-catalog-open,.vop-program-catalog-heading,
+  .vop-guide-direct-section,.vop-guide-lesson,.vop-guide-section-group,.vop-guide-section-links>button,
+  .vop-mentoring-card,.vop-mentoring-tabs button,.vop-conversation-grid>button,
+  .vop-material-card,.vop-cert-card,.vop-personal-card,.vop-support-panel,
+  .vop-dialog-card,.vop-structure-actions-popover,.vop-structure-more,
+  .vop-about-facts div,.vop-mentoring-stats>div,.vop-performance-stats>div,
+  .vop-weak-list>div,.vop-share-list>div,.vop-public-feature,.vop-public-step-grid article,
+  .vop-public-window,.vop-public-float,.vop-public-cta button:last-child,.vop-public-skip,
+  .vop-login-card-inner
+){
+  background:#0d0d0d!important;
+  border-color:#303030!important;
+}
+[data-theme="dark"] :is(
+  input,textarea,select,.vop-candidate-pager button,.vop-admin .vop-table th,
+  .vop-candidate-table th,.vop-public-window-bar,.vop-public-window-lesson,
+  .vop-study-modal section[role="dialog"],.vop-login-google
+){
+  background:#080808!important;
+  background-image:none!important;
+  border-color:#3a3a3a!important;
+}
+[data-theme="dark"] :is(
+  .vop-event-date,.vop-event-tags span,.vop-events-section-head span,
+  .vop-personal-settings .vop-personal-card h2 svg,
+  .vop-metric-icon,.vop-mini-stat-icon,.vop-user-metric-icon,
+  .vop-candidate-metrics>div>span,.vop-candidate-person>span,.vop-user-avatar-fallback,
+  .vop-quiz-metric>svg,.vop-quiz-title>span,
+  .vop-reference-tab.active,.vop-page-btn.active,.vop-radio-admin-tabs button.active,
+  .vop-guide-direct-section-number,.vop-guide-lesson-number,
+  .vop-chip,.vop-reference-season,.vop-language-pills span,
+  .vop-user-role-pill.teacher,.vop-save-state-chip.idle,.vop-reset-link,
+  .vop-learner-main>[role="status"]
+){
+  background:#171717!important;
+  background-image:none!important;
+  border-color:#3a3a3a!important;
+}
+[data-theme="dark"] :is(
+  .vop-learner-sidebar-link:hover,.vop-admin .vop-sidebar .vop-nav-item:hover,
+  .vop-learner-sidebar-user:hover,.vop-learner-sidebar-logout:hover,
+  .vop-admin-sidebar-collapse:hover,.vop-about-tabs button:hover
+){
+  background:#242424!important;
+  color:#f7f7f7!important;
+}
+[data-theme="dark"] .vop-about-tabs button.active{
+  background:#1a1a1a!important;
+  color:#fff!important;
+  border-color:#555!important;
+}
