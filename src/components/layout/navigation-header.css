@@ -6,10 +6,10 @@
   min-height:88px!important;
   height:88px!important;
   padding:0 clamp(12px,1.5vw,27px)!important;
-  background:linear-gradient(105deg,#0b3270 0%,#0c2447 100%)!important;
-  color:#fff;
-  border-bottom:1px solid rgba(255,255,255,.13)!important;
-  box-shadow:0 3px 14px rgba(7,35,72,.08);
+  background:var(--theme-surface)!important;
+  color:var(--theme-title);
+  border-bottom:1px solid var(--theme-border)!important;
+  box-shadow:0 3px 14px var(--theme-shadow);
   z-index:80;
 }
 .vop-learner-main .vop-app-header-inner{
@@ -25,14 +25,14 @@
 }
 .vop-learner-main .vop-app-brand{
   display:flex;align-items:center;gap:12px;flex:0 1 auto;min-width:0;
-  padding:0;border:0;background:transparent;color:#fff;text-align:left;
+  padding:0;border:0;background:transparent;color:var(--theme-title);text-align:left;
   cursor:pointer;font:inherit;
 }
 .vop-learner-main .vop-app-brand-mark,
 .vop-admin .vop-admin-top .vop-brand-mark{
   display:grid;place-items:center;flex:0 0 52px;
   width:52px!important;height:52px!important;border-radius:15px;
-  background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.24);
+  background:var(--theme-surface-soft);border:1px solid var(--theme-border);
   overflow:hidden;
 }
 .vop-learner-main .vop-app-brand-mark img,
@@ -50,7 +50,7 @@
   font-family:var(--font-display,Inter,system-ui,sans-serif);
   font-size:clamp(19px,1.23vw,24px)!important;
   font-weight:850;letter-spacing:-.025em;line-height:1.14;
-  color:#fff;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;
+  color:var(--theme-title);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;
 }
 .vop-learner-main .vop-app-brand-version{
   display:inline-flex;align-items:center;flex:none;
@@ -60,7 +60,7 @@
 .vop-learner-main .vop-app-brand-subtitle,
 .vop-admin .vop-admin-top .vop-brand-sub{
   display:block;
-  color:#d1dded;font-size:clamp(12px,.83vw,16px)!important;
+  color:var(--theme-muted);font-size:clamp(12px,.83vw,16px)!important;
   font-weight:500;letter-spacing:0;line-height:1.25;
   text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
@@ -74,13 +74,13 @@
 .vop-admin .vop-top-actions > div > .btn.btn-ghost,
 .vop-learner-main .vop-header-icon-btn{
   width:44px;min-width:44px;height:44px;padding:0!important;
-  display:grid;place-items:center;border-radius:13px;color:#eff5ff!important;
+  display:grid;place-items:center;border-radius:13px;color:var(--theme-text)!important;
   background:transparent;border:1px solid transparent;
 }
 .vop-app-header-actions > div > .btn.btn-ghost:hover,
 .vop-admin .vop-top-actions > div > .btn.btn-ghost:hover,
 .vop-learner-main .vop-header-icon-btn:hover{
-  background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);
+  background:var(--theme-surface-soft);border-color:var(--theme-border);
 }
 .vop-app-header-actions > div > .btn.btn-ghost svg,
 .vop-admin .vop-top-actions > div > .btn.btn-ghost svg{width:22px;height:22px;}
@@ -91,17 +91,17 @@
   display:flex;align-items:center;gap:11px;
   min-width:160px;max-width:260px;height:43px;
   padding:0 12px;border-radius:999px;
-  color:#fff;background:rgba(255,255,255,.1);
-  border:1px solid rgba(255,255,255,.17);
+  color:var(--theme-title);background:var(--theme-surface-soft);
+  border:1px solid var(--theme-border);
 }
 .vop-header-locale-control > svg:first-child{flex:none;color:#ffbc2d}
 .vop-header-locale-control > svg:last-child{flex:none;pointer-events:none}
 .vop-header-locale-control select{
   appearance:none;-webkit-appearance:none;min-width:0;width:100%;
-  max-width:190px;border:0;outline:0;background:transparent;color:#fff;
+  max-width:190px;border:0;outline:0;background:transparent;color:var(--theme-title);
   font:inherit;font-size:15px;font-weight:780;cursor:pointer;text-overflow:ellipsis;
 }
-.vop-header-locale-control option{background:#0b274f;color:#fff}
+.vop-header-locale-control option{background:var(--theme-input);color:var(--theme-title)}
 .vop-header-locale-control:focus-within,
 .vop-learner-main .vop-app-brand:focus-visible,
 .vop-admin .vop-admin-top .vop-brand:focus-visible,
@@ -116,7 +116,7 @@
   font-weight:760;white-space:nowrap;border-radius:999px!important;
 }
 .vop-learner-main .vop-app-header-admin.btn-outline{
-  border:1px solid rgba(255,255,255,.25);color:#fff;background:transparent;
+  border:1px solid var(--theme-border-strong);color:var(--theme-title);background:transparent;
 }
 .vop-learner-main .vop-app-header-admin.btn-outline svg{color:#f6bf39}
 .vop-learner-main .vop-app-header-account,
@@ -126,14 +126,14 @@
   display:flex;align-items:center;gap:9px;min-height:48px;
   max-width:200px;min-width:0;
   padding:4px 12px 4px 5px!important;
-  border:1px solid rgba(255,255,255,.22)!important;
-  background:rgba(255,255,255,.1)!important;
-  border-radius:999px!important;color:#fff;
+  border:1px solid var(--theme-border)!important;
+  background:var(--theme-surface-soft)!important;
+  border-radius:999px!important;color:var(--theme-title);
   text-align:left;
 }
 .vop-learner-main .vop-app-header-account-trigger:hover,
 .vop-admin .vop-admin-top .vop-user:hover,
-.vop-admin .vop-profile.open .vop-user{background:rgba(255,255,255,.18)!important}
+.vop-admin .vop-profile.open .vop-user{background:var(--theme-surface-elevated)!important}
 .vop-learner-main .vop-app-header-account-avatar,
 .vop-admin .vop-admin-top .vop-avatar{
   display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;
@@ -144,7 +144,7 @@
 .vop-learner-main .vop-app-header-account-identity{max-width:120px}
 .vop-learner-main .vop-app-header-account-identity strong,
 .vop-admin .vop-admin-top .vop-user-name{
-  display:block;color:#fff;font-size:15px!important;font-weight:800;
+  display:block;color:var(--theme-title);font-size:15px!important;font-weight:800;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .vop-learner-main .vop-app-header-account-identity small,
@@ -152,12 +152,12 @@
 .vop-admin .vop-admin-top .vop-user-copy{display:block;min-width:0;max-width:115px}
 .vop-admin .vop-admin-top .vop-profile-chevron{width:17px;height:17px;flex:none}
 .vop-admin .vop-profile-menu-head small{
-  display:block;color:#68809e;font-size:11px;margin-top:4px;
+  display:block;color:var(--theme-muted);font-size:11px;margin-top:4px;
 }
 .vop-admin .vop-admin-top .vop-brand{
   display:flex;align-items:center;flex:none;min-width:0;width:auto;
   height:100%;gap:12px;padding:0;border:0;background:transparent;
-  color:#fff;text-align:left;cursor:pointer;
+  color:var(--theme-title);text-align:left;cursor:pointer;
 }
 .vop-admin .vop-admin-top .vop-brand-copy{
   display:flex!important;flex-direction:column;gap:4px;
