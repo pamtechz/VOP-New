@@ -18,6 +18,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const providers=await vite.ssrLoadModule('/server/payments/providers.ts');
     const captured=new Map();
     const verificationOverrides=new Map();
+    const mtnCaptured=new Map();
+    const mtnStatuses=new Map();
     const state={nextCreateStatus:'pending',nextCreateError:''};
 
     providers.registerPaymentProviderForTesting({
@@ -67,7 +69,56 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
           initiatedAt:new Date().toISOString(),paymentType:'test',settlement:null,
         };
       },
-      verifyWebhook(_body,signature){return signature==='valid';},
+      parseWebhook(request){
+        const signature=request.headers?.['x-lenco-signature']||request.headers?.['X-Lenco-Signature'];
+        if(signature!=='valid')throw new Error('Invalid payment webhook signature.');
+        const data=request.body?.data||{};
+        return {
+          reference:String(data.reference||''),eventType:String(request.body?.event||'provider.event'),
+          providerStatus:String(data.status||''),providerTransactionId:'',
+          providerReference:String(data.lencoReference||''),completedAt:data.completedAt||null,
+        };
+      },
+    });
+
+    providers.registerPaymentProviderForTesting({
+      key:'mtn_momo',
+      capabilities:{checkout:true,card:false,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
+      configured(){return true;},
+      publicConfiguration(){return {key:'mtn_momo',configured:true,environment:'test',methods:['mtn_money'],capabilities:this.capabilities};},
+      async createPayment(input){
+        const transactionId='11111111-1111-4111-8111-'+String(mtnCaptured.size+1).padStart(12,'0');
+        mtnCaptured.set(input.reference,{...input,transactionId});
+        mtnStatuses.set(input.reference,'pending');
+        return {
+          provider:'mtn_momo',providerStatus:'pending',status:'pending',
+          providerTransactionId:transactionId,providerReference:transactionId,
+          settlementStatus:'unknown',safeMessage:'Approve MTN MoMo request.',
+        };
+      },
+      async verifyPayment(reference,context){
+        const input=mtnCaptured.get(reference);
+        if(!input)throw new Error('Provider transaction was not found.');
+        assert.equal(context?.providerTransactionId,input.transactionId);
+        const providerStatus=mtnStatuses.get(reference)||'pending';
+        const status=providerStatus==='successful'?'paid':providerStatus==='failed'?'failed':'pending';
+        return {
+          provider:'mtn_momo',providerStatus,status,
+          providerTransactionId:input.transactionId,
+          providerReference:status==='paid'?'MTN-FIN-'+reference:input.transactionId,
+          settlementStatus:status==='paid'?'pending':'unknown',safeMessage:'MTN status verified.',
+          amount:(input.amountMinor/100).toFixed(2),currency:input.currency,reference,
+          completedAt:status==='paid'?new Date().toISOString():null,initiatedAt:null,paymentType:'mtn_momo',settlement:null,
+        };
+      },
+      parseWebhook(request){
+        const data=request.body||{};
+        return {
+          reference:String(data.externalId||''),eventType:'requesttopay.callback',
+          providerStatus:String(data.status||'').toLowerCase(),providerTransactionId:'',
+          providerReference:String(data.financialTransactionId||''),completedAt:null,
+        };
+      },
     });
 
     const {default:payments}=await vite.ssrLoadModule('/api/payments.ts');
@@ -122,6 +173,20 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       return {status,...output};
     }
 
+    async function mtnWebhook(body,method='PUT'){
+      let status=200,output;
+      await payments({
+        method,url:'/api/payments/webhooks/mtn-momo',
+        query:{__vopPaymentRoute:'webhooks/mtn-momo'},
+        headers:{},body,rawBody:Buffer.from(JSON.stringify(body)),
+      },{
+        status(code){status=code;return this;},
+        json(data){output=data;return this;},
+        setHeader(){return this;},
+      });
+      return {status,...output};
+    }
+
     const orgA='pay-org-a',orgB='pay-org-b';
     await db.doc('organizations/'+orgA).set({id:orgA,name:'Payment Org A',status:'active'});
     await db.doc('organizations/'+orgB).set({id:orgB,name:'Payment Org B',status:'active'});
@@ -130,6 +195,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const subscriptionLearner=await identity('payment-subscription-learner',{organizationId:orgA,organizationRole:'learner'});
     const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
     const refundLearner=await identity('payment-refund-learner',{organizationId:orgA,organizationRole:'learner'});
+    const mtnLearner=await identity('payment-mtn-learner',{organizationId:orgA,organizationRole:'learner'});
     const outsider=await identity('payment-outsider',{organizationId:orgB,organizationRole:'learner'});
 
     const guideId='paid-guide';
@@ -152,7 +218,10 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       price:99,currency:'ZMW',features:{payments:true,radio:true},quotas:{users:100},
     });
 
-    async function createItem(name,itemType,itemId,{repeatable=false,amount=125,organizationId=orgA}={}){
+    async function createItem(name,itemType,itemId,{
+      repeatable=false,amount=125,organizationId=orgA,
+      allowedProviders=['lenco'],allowedMethods=['card'],
+    }={}){
       const response=await call(admin,'admin/payable-items',{
         organizationId,
         action:'upsert',
@@ -160,7 +229,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
           name,description:name+' charge',itemType,itemId,
           organizationId,scope:'organization',amount,currency:'ZMW',
           repeatable,active:true,paymentRequired:true,
-          allowedProviders:['lenco'],allowedMethods:['card'],
+          allowedProviders,allowedMethods,
         },
       });
       assert.equal(response.status,200,JSON.stringify(response));
@@ -331,6 +400,38 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const organization=(await db.doc('organizations/'+orgA).get()).data();
       assert.equal(organization?.plan,planId);
       assert.equal(organization?.featureEntitlements?.radio,true);
+    });
+
+    await t.test('MTN callback never overrides independent RequestToPay verification',async()=>{
+      const item=await createItem('Direct MTN charge','custom_charge','',{
+        amount:130,allowedProviders:['mtn_momo'],allowedMethods:['mtn_money'],
+      });
+      const started=await call(mtnLearner,'checkout',{
+        payableItemId:item.id,provider:'mtn_momo',paymentMethod:'mtn_money',phone:'0977000000',
+      });
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.payment.status,'pending');
+
+      // A forged/incorrect callback claiming success cannot mark the payment paid.
+      const untrusted=await mtnWebhook({
+        externalId:started.payment.reference,status:'SUCCESSFUL',financialTransactionId:'CALLBACK-CLAIM-1',
+      });
+      assert.equal(untrusted.status,200,JSON.stringify(untrusted));
+      const stillPending=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.equal(stillPending?.status,'pending');
+      assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).exists,false);
+
+      // Conversely, even a callback body claiming failure results in paid only
+      // when the authenticated provider status lookup independently says SUCCESSFUL.
+      mtnStatuses.set(started.payment.reference,'successful');
+      const verified=await mtnWebhook({
+        externalId:started.payment.reference,status:'FAILED',financialTransactionId:'CALLBACK-CLAIM-2',
+      },'POST');
+      assert.equal(verified.status,200,JSON.stringify(verified));
+      const paid=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.equal(paid?.status,'paid');
+      assert.equal(paid?.verificationStatus,'verified');
+      assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).data()?.status,'fulfilled');
     });
 
     await t.test('signed webhook is idempotent and invalid webhook is rejected',async()=>{
