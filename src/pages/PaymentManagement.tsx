@@ -33,6 +33,13 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   const [targets,setTargets]=useState<Target[]>([]);
   const [search,setSearch]=useState('');
   const [status,setStatus]=useState('');
+  const [organizationFilter,setOrganizationFilter]=useState('');
+  const [typeFilter,setTypeFilter]=useState('');
+  const [methodFilter,setMethodFilter]=useState('');
+  const [dateFrom,setDateFrom]=useState('');
+  const [dateTo,setDateTo]=useState('');
+  const [minAmount,setMinAmount]=useState('');
+  const [maxAmount,setMaxAmount]=useState('');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -51,7 +58,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     setLoading(true);setError('');
     try{
       const [tx,itemResult,providerResult,orgResult]=await Promise.all([
-        adminPaymentRequest<{ok:true;items:ClientPayment[]}>('transactions',{filters:{search,status}}),
+        adminPaymentRequest<{ok:true;items:ClientPayment[]}>('transactions',{filters:{search,status,organizationId:organizationFilter,itemType:typeFilter,paymentMethod:methodFilter,dateFrom,dateTo,minAmount,maxAmount}}),
         adminPaymentRequest<{ok:true;items:PayableItem[]}>('payable-items',{action:'list'}),
         adminPaymentRequest<{ok:true;items:PaymentProviderDescriptor[]}>('providers',{action:'list'}),
         adminApi('/api/admin/organizations',{action:'list'}),
@@ -134,7 +141,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   const exportCsv=async()=>{
     setBusy(true);setError('');
     try{
-      const result=await adminPaymentRequest<{ok:true;csv:string;filename:string}>('export',{filters:{search,status}});
+      const result=await adminPaymentRequest<{ok:true;csv:string;filename:string}>('export',{filters:{search,status,organizationId:organizationFilter,itemType:typeFilter,paymentMethod:methodFilter,dateFrom,dateTo,minAmount,maxAmount}});
       const blob=new Blob([result.csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);
       const link=document.createElement('a');link.href=url;link.download=result.filename;link.click();URL.revokeObjectURL(url);
     }catch(reason){setError(reason instanceof Error?reason.message:'Payment export failed.');}
@@ -172,7 +179,18 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     {message&&<div className="vop-payment-alert success"><CheckCircle2 size={17}/><span>{message}</span><button onClick={()=>setMessage('')}>×</button></div>}
 
     {tab==='transactions'&&<>
-      <div className="vop-payment-admin-toolbar"><label><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search payer or reference"/></label><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{['initiated','pending','requires_action','processing','paid','failed','cancelled','expired','refunded','partially_refunded'].map(value=><option value={value} key={value}>{paymentStatusLabel(value as never)}</option>)}</select><button className="btn btn-outline" onClick={()=>void load()}><SlidersHorizontal size={15}/>Apply</button><button className="btn btn-outline" onClick={()=>void exportCsv()} disabled={busy}><Download size={15}/>Export</button></div>
+      <div className="vop-payment-admin-toolbar vop-payment-filter-grid">
+        <label className="search"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Payer, internal or provider reference"/></label>
+        <select value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{['initiated','pending','requires_action','processing','paid','failed','cancelled','expired','refunded','partially_refunded'].map(value=><option value={value} key={value}>{paymentStatusLabel(value as never)}</option>)}</select>
+        <select value={organizationFilter} onChange={e=>setOrganizationFilter(e.target.value)}><option value="">All organizations</option>{organizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select>
+        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="">All payment types</option>{PAYABLE_ITEM_TYPES.map(value=><option value={value} key={value}>{typeLabel(value)}</option>)}</select>
+        <select value={methodFilter} onChange={e=>setMethodFilter(e.target.value)}><option value="">All methods</option>{(['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[]).map(value=><option value={value} key={value}>{paymentMethodLabel(value)}</option>)}</select>
+        <label><span className="sr-only">From date</span><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
+        <label><span className="sr-only">To date</span><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
+        <label><span className="sr-only">Minimum amount</span><input inputMode="decimal" value={minAmount} onChange={e=>setMinAmount(e.target.value)} placeholder="Min amount"/></label>
+        <label><span className="sr-only">Maximum amount</span><input inputMode="decimal" value={maxAmount} onChange={e=>setMaxAmount(e.target.value)} placeholder="Max amount"/></label>
+        <button className="btn btn-outline" onClick={()=>void load()}><SlidersHorizontal size={15}/>Apply</button><button className="btn btn-outline" onClick={()=>void exportCsv()} disabled={busy}><Download size={15}/>Export</button>
+      </div>
       {loading?<div className="vop-payment-empty"><LoaderCircle className="spin" size={26}/>Loading transactions…</div>:<div className="vop-payment-admin-table-wrap"><table className="vop-payment-admin-table"><thead><tr><th>Reference</th><th>Payer</th><th>Organization</th><th>Item</th><th>Amount</th><th>Method</th><th>Status</th><th>Verification</th></tr></thead><tbody>{filtered.map(payment=><tr key={payment.id} onClick={()=>void openDetails(payment)}><td><strong>{payment.reference}</strong><small>{payment.providerReference||'Provider reference pending'}</small></td><td>{payment.payerName||payment.payerEmail}<small>{payment.payerEmail}</small></td><td>{organizations.find(org=>org.id===payment.organizationId)?.name|| (payment.organizationId?'Authorized organization':'Platform')}</td><td>{payment.description}</td><td>{payment.currency} {payment.amountDecimal}</td><td>{paymentMethodLabel(payment.paymentMethod)}</td><td><span className={'vop-payment-status '+statusClass(payment.status)}>{paymentStatusLabel(payment.status as never)}</span></td><td>{payment.verificationStatus}</td></tr>)}</tbody></table></div>}
     </>}
 
