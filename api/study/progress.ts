@@ -626,16 +626,22 @@ export default async function handler(
       },
     });
   } catch (error) {
-    console.error('VOP study progress sync failed', error);
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
-    if (message.includes('not configured')) return res.status(503).json({ error: message });
+    if (message.includes('not configured')) {
+      console.warn('VOP study configuration is unavailable:', message);
+      return res.status(503).json({ error: message, code:'ASSESSMENT_CONFIGURATION' });
+    }
+    if (message.includes('Assessment attempt limit reached')) {
+      return res.status(409).json({error:message,code:'ASSESSMENT_ATTEMPT_LIMIT'});
+    }
+    if (message.includes('Assessment retake is available after')) {
+      return res.status(409).json({error:message,code:'ASSESSMENT_RETAKE_COOLDOWN'});
+    }
     if (message.includes('Complete all published study lessons')
         || message.includes('already been submitted')
-        || message.includes('attempt session')) return res.status(409).json({error:message});
-    if (message.includes('Assessment attempt limit reached') || message.includes('Assessment retake is available after')) {
-      return res.status(429).json({error:message});
-    }
+        || message.includes('attempt session')) return res.status(409).json({error:message,code:'ASSESSMENT_POLICY'});
     if (message.includes('profile was not found')) return res.status(404).json({ error: message });
+    console.error('VOP study progress sync failed', error);
     return res.status(500).json({ error: 'Study progress could not be saved.' });
   }
 }
