@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   mapProviderStatus, minorToDecimal, paymentMethodOperator,
   type PaymentMethod, type PaymentStatus,
@@ -496,14 +496,255 @@ class MtnMomoProvider implements PaymentProviderAdapter{
   }
 }
 
+
+type AirtelMoneyEnvelope={
+  data?:Record<string,unknown>;
+  status?:Record<string,unknown>;
+  access_token?:string;
+  expires_in?:number|string;
+  token_type?:string;
+  message?:string;
+};
+
+let airtelTokenCache:{token:string;expiresAt:number}|null=null;
+
+function airtelEnvironment(){
+  const value=text(process.env.AIRTEL_MONEY_ENVIRONMENT||'staging').toLowerCase();
+  return value==='production'?'production':'staging';
+}
+function airtelBaseUrl(){
+  const configured=text(process.env.AIRTEL_MONEY_BASE_URL).replace(/\/+$/,'');
+  if(configured)return configured;
+  return airtelEnvironment()==='production'
+    ?'https://openapi.airtel.africa'
+    :'https://openapiuat.airtel.africa';
+}
+function airtelClientId(){return text(process.env.AIRTEL_MONEY_CLIENT_ID);}
+function airtelClientSecret(){return text(process.env.AIRTEL_MONEY_CLIENT_SECRET);}
+function airtelCountry(){return text(process.env.AIRTEL_MONEY_COUNTRY||'ZM').toUpperCase();}
+function airtelCurrency(){return text(process.env.AIRTEL_MONEY_CURRENCY||'ZMW').toUpperCase();}
+function airtelCollectionPath(){return text(process.env.AIRTEL_MONEY_COLLECTION_PATH||'/merchant/v1/payments/');}
+function airtelStatusPathPrefix(){return text(process.env.AIRTEL_MONEY_STATUS_PATH_PREFIX||'/standard/v1/payments/');}
+function airtelCallbackAuthorization(){return text(process.env.AIRTEL_MONEY_CALLBACK_AUTHORIZATION);}
+function airtelConfigured(){
+  return Boolean(airtelBaseUrl()&&airtelClientId()&&airtelClientSecret()&&airtelCountry()&&airtelCurrency());
+}
+function secureTextEqual(a:string,b:string){
+  const left=Buffer.from(a),right=Buffer.from(b);
+  return left.length===right.length&&timingSafeEqual(left,right);
+}
+function airtelMsisdn(value:unknown){
+  let digits=text(value).replace(/\D/g,'');
+  if(digits.startsWith('0'))digits='260'+digits.slice(1);
+  if(!digits.startsWith('260')&&digits.length===9)digits='260'+digits;
+  if(!/^260\d{9}$/.test(digits))throw new Error('Enter a valid Airtel Money Zambia number.');
+  return digits;
+}
+function airtelPaymentStatus(value:unknown):PaymentStatus{
+  const status=text(value).toUpperCase();
+  if(status==='TS')return 'paid';
+  if(status==='TF')return 'failed';
+  if(status==='TE')return 'expired';
+  if(status==='TIP')return 'processing';
+  if(status==='TA')return 'pending';
+  return mapProviderStatus(status);
+}
+async function airtelAccessToken(){
+  if(airtelTokenCache&&airtelTokenCache.expiresAt>Date.now()+60_000)return airtelTokenCache.token;
+  if(!airtelClientId()||!airtelClientSecret())throw new Error('Airtel Money server configuration is incomplete.');
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20_000);
+  try{
+    const response=await fetch(airtelBaseUrl()+'/auth/oauth2/token',{
+      method:'POST',
+      headers:{Accept:'application/json','Content-Type':'application/json'},
+      body:JSON.stringify({
+        client_id:airtelClientId(),
+        client_secret:airtelClientSecret(),
+        grant_type:'client_credentials',
+      }),
+      signal:controller.signal,
+    });
+    const body=await response.json().catch(()=>({})) as AirtelMoneyEnvelope;
+    const token=text(body.access_token);
+    if(!response.ok||!token)throw new Error(safeProviderMessage(body.message||body.status?.message,'Airtel Money authentication failed.'));
+    const expiresIn=Math.max(120,Number(body.expires_in||3600));
+    airtelTokenCache={token,expiresAt:Date.now()+expiresIn*1000};
+    return token;
+  }catch(error){
+    if(error instanceof Error&&error.name==='AbortError')throw new Error('The payment provider timed out. The transaction will be reconciled automatically.');
+    throw error;
+  }finally{clearTimeout(timeout);}
+}
+async function airtelRequest(path:string,init:RequestInit={},retry=true):Promise<AirtelMoneyEnvelope>{
+  const token=await airtelAccessToken();
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20_000);
+  try{
+    const response=await fetch(airtelBaseUrl()+path,{
+      ...init,
+      headers:{
+        Accept:'application/json',
+        Authorization:'Bearer '+token,
+        'X-Country':airtelCountry(),
+        'X-Currency':airtelCurrency(),
+        ...(init.body?{'Content-Type':'application/json'}:{}),
+        ...(init.headers||{}),
+      },
+      signal:controller.signal,
+    });
+    if(response.status===401&&retry){
+      airtelTokenCache=null;
+      return airtelRequest(path,init,false);
+    }
+    const body=await response.json().catch(()=>({})) as AirtelMoneyEnvelope;
+    const status=object(body.status);
+    if(!response.ok||status.success===false){
+      throw new Error(safeProviderMessage(status.message||status.response_code||status.result_code||body.message,'Airtel Money rejected the request.'));
+    }
+    return body;
+  }catch(error){
+    if(error instanceof Error&&error.name==='AbortError')throw new Error('The payment provider timed out. The transaction will be reconciled automatically.');
+    throw error;
+  }finally{clearTimeout(timeout);}
+}
+function airtelTransaction(body:AirtelMoneyEnvelope){
+  return object(object(body.data).transaction);
+}
+function normalizeAirtelVerification(
+  body:AirtelMoneyEnvelope,transactionId:string,vopReference:string,context?:ProviderVerificationContext,
+):ProviderVerification{
+  const tx=airtelTransaction(body);
+  const providerStatus=text(tx.status||tx.status_code);
+  const status=airtelPaymentStatus(providerStatus);
+  const expectedCurrency=text(context?.currency||airtelCurrency()).toUpperCase();
+  const expectedAmount=Number.isSafeInteger(Number(context?.amountMinor))
+    ?minorToDecimal(Number(context?.amountMinor),expectedCurrency):'';
+  return {
+    provider:'airtel_money',
+    providerStatus,
+    status,
+    providerTransactionId:text(tx.id)||transactionId,
+    providerReference:text(tx.airtel_money_id)||transactionId,
+    settlementStatus:status==='paid'?'pending':'unknown',
+    safeMessage:status==='paid'
+      ?'Airtel Money payment confirmed.'
+      :status==='failed'||status==='expired'
+        ?'Airtel Money payment was not completed.'
+        :'Approve the Airtel Money payment request on your phone.',
+    amount:text(tx.amount)||expectedAmount,
+    currency:text(tx.currency||expectedCurrency).toUpperCase(),
+    reference:text(tx.reference)||vopReference,
+    initiatedAt:null,
+    completedAt:status==='paid'||status==='failed'||status==='expired'?new Date().toISOString():null,
+    paymentType:'airtel_money',
+    settlement:null,
+    raw:{...object(body.data),status:object(body.status)},
+  };
+}
+
+class AirtelMoneyProvider implements PaymentProviderAdapter{
+  readonly key='airtel_money';
+  readonly callbackMethods=['POST'] as const;
+  readonly capabilities={
+    checkout:true,card:false,mobileMoney:true,bank:false,
+    refunds:false,partialRefunds:false,webhooks:true,reconciliation:true,
+  };
+
+  configured(){return airtelConfigured();}
+
+  publicConfiguration(){
+    return {
+      key:this.key,
+      configured:this.configured(),
+      environment:airtelEnvironment(),
+      country:airtelCountry(),
+      currency:airtelCurrency(),
+      callbackPath:'/api/payments/webhooks/airtel-money',
+      methods:['airtel_money'],
+      callbackAuthentication:airtelCallbackAuthorization()?'configured':'provider-verification-only',
+      capabilities:this.capabilities,
+    };
+  }
+
+  async createPayment(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>{
+    if(!this.configured())throw new Error('Direct Airtel Money processing is not configured.');
+    if(input.method!=='airtel_money')throw new Error('This provider accepts Airtel Money payments only.');
+    if(input.currency.toUpperCase()!==airtelCurrency())throw new Error('The Airtel Money currency does not match this merchant configuration.');
+    if(!input.phone)throw new Error('An Airtel Money phone number is required.');
+
+    const transactionId=randomUUID();
+    const amount=minorToDecimal(input.amountMinor,input.currency);
+    const msisdn=airtelMsisdn(input.phone);
+    const response=await airtelRequest(airtelCollectionPath(),{
+      method:'POST',
+      body:JSON.stringify({
+        reference:input.reference,
+        subscriber:{
+          country:airtelCountry(),currency:airtelCurrency(),
+          // Zambia's collection API accepts the international MSISDN without +.
+          msisdn:Number(msisdn),
+        },
+        transaction:{
+          amount,country:airtelCountry(),currency:airtelCurrency(),id:transactionId,
+        },
+      }),
+    });
+    const tx=airtelTransaction(response);
+    const providerStatus=text(tx.status||tx.status_code)||'pending';
+    if(airtelPaymentStatus(providerStatus)==='failed'){
+      throw new Error(safeProviderMessage(tx.message,'Airtel Money rejected the payment request.'));
+    }
+    // Initiation is never proof of payment, even when the prompt response races
+    // to a success-like state. Verification/reconciliation must query Airtel.
+    return {
+      provider:this.key,providerStatus,status:'pending',
+      providerTransactionId:text(tx.id)||transactionId,
+      providerReference:text(tx.airtel_money_id)||transactionId,
+      settlementStatus:'unknown',
+      safeMessage:'Airtel Money request sent. Approve it on your phone.',
+      raw:{...object(response.data),status:object(response.status)},
+    };
+  }
+
+  async verifyPayment(reference:string,context?:ProviderVerificationContext):Promise<ProviderVerification>{
+    const transactionId=text(context?.providerTransactionId);
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(transactionId)){
+      throw new Error('Airtel Money transaction reference is unavailable.');
+    }
+    const response=await airtelRequest(airtelStatusPathPrefix()+encodeURIComponent(transactionId),{method:'GET'});
+    return normalizeAirtelVerification(response,transactionId,reference,context);
+  }
+
+  parseWebhook(request:ProviderWebhookRequest):ProviderWebhookEvent{
+    const body=object(request.body),tx=object(body.transaction);
+    const expectedAuth=airtelCallbackAuthorization();
+    const suppliedAuth=webhookHeader(request,'authorization');
+    if(expectedAuth&&(!suppliedAuth||!secureTextEqual(suppliedAuth,expectedAuth))){
+      throw new Error('Invalid Airtel Money callback authorization.');
+    }
+    // Airtel callback status is deliberately not trusted as financial proof.
+    // processProviderWebhook resolves the server-created transaction UUID and
+    // performs an authenticated transaction enquiry before applying any status.
+    return {
+      reference:text(body.reference||tx.reference),
+      eventType:'collection.callback',
+      authenticated:Boolean(expectedAuth),
+      providerStatus:text(tx.status_code||tx.status||body.status),
+      providerTransactionId:text(tx.id||body.transactionId),
+      providerReference:text(tx.airtel_money_id||body.airtelMoneyId),
+      completedAt:null,
+    };
+  }
+}
+
 const PROVIDERS=new Map<string,PaymentProviderAdapter>([
   ['lenco',new LencoProvider()],
   ['mtn_momo',new MtnMomoProvider()],
+  ['airtel_money',new AirtelMoneyProvider()],
 ]);
 
 /** Register additional server-side adapters without changing checkout or
- * financial-domain code. Direct Airtel/MTN adapters can be added here when
- * their merchant credentials/API contracts are approved. */
+ * financial-domain code. Additional gateways register the same adapter
+ * contract after their merchant credentials/API contracts are approved. */
 export function registerPaymentProvider(adapter:PaymentProviderAdapter){
   const key=text(adapter?.key).toLowerCase();
   if(!/^[a-z][a-z0-9_-]{1,60}$/.test(key))throw new Error('A valid payment provider key is required.');
