@@ -20,6 +20,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const verificationOverrides=new Map();
     const mtnCaptured=new Map();
     const mtnStatuses=new Map();
+    let mtnVerifyCalls=0;
     const airtelCaptured=new Map();
     const airtelStatuses=new Map();
     const state={nextCreateStatus:'pending',nextCreateError:''};
@@ -100,6 +101,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         };
       },
       async verifyPayment(reference,context){
+        mtnVerifyCalls++;
         const input=mtnCaptured.get(reference);
         if(!input)throw new Error('Provider transaction was not found.');
         assert.equal(context?.providerTransactionId,input.transactionId);
@@ -118,7 +120,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         const data=request.body||{};
         return {
           reference:String(data.externalId||''),eventType:'requesttopay.callback',authenticated:false,
-          providerStatus:String(data.status||'').toLowerCase(),providerTransactionId:'',
+          providerStatus:String(data.status||'').toLowerCase(),providerTransactionId:String(data.referenceId||''),
           providerReference:String(data.financialTransactionId||''),completedAt:null,
         };
       },
@@ -464,7 +466,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(organization?.featureEntitlements?.radio,true);
     });
 
-    await t.test('MTN callback never overrides independent RequestToPay verification',async()=>{
+    await t.test('unsigned MTN callbacks require the exact provider transaction id before verification',async()=>{
       const item=await createItem('Direct MTN charge','custom_charge','',{
         amount:130,allowedProviders:['mtn_momo'],allowedMethods:['mtn_money'],
       });
@@ -473,26 +475,48 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       });
       assert.equal(started.status,200,JSON.stringify(started));
       assert.equal(started.payment.status,'pending');
+      const providerTransactionId=started.payment.providerTransactionId;
+      assert.ok(providerTransactionId);
 
-      // A forged/incorrect callback claiming success cannot mark the payment paid.
-      const untrusted=await mtnWebhook({
+      // A public reference-only callback must not be allowed to turn a VOP
+      // reference into an authenticated provider lookup.
+      const referenceOnly=await mtnWebhook({
         externalId:started.payment.reference,status:'SUCCESSFUL',financialTransactionId:'CALLBACK-CLAIM-1',
       });
+      assert.equal(referenceOnly.status,200,JSON.stringify(referenceOnly));
+      assert.equal(referenceOnly.ignored,true);
+      assert.equal(referenceOnly.orphaned,true);
+      assert.equal(mtnVerifyCalls,0);
+      assert.equal((await db.collection('paymentWebhookEvents').where('paymentId','==',started.payment.id).get()).size,0);
+
+      // Even with the exact server-created transaction UUID, callback status is
+      // only a notification. VOP independently verifies MTN before changing state.
+      const untrusted=await mtnWebhook({
+        externalId:started.payment.reference,referenceId:providerTransactionId,
+        status:'SUCCESSFUL',financialTransactionId:'CALLBACK-CLAIM-2',
+      });
       assert.equal(untrusted.status,200,JSON.stringify(untrusted));
+      assert.equal(untrusted.duplicate,false);
+      assert.equal(mtnVerifyCalls,1);
       const stillPending=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
       assert.equal(stillPending?.status,'pending');
       assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).exists,false);
 
-      // Repeated callback payload changes are deduplicated. Once MTN's
-      // authenticated status changes, normal verification/reconciliation applies it.
-      mtnStatuses.set(started.payment.reference,'successful');
+      // Replays with the same opaque transaction locator are deduplicated before
+      // another provider lookup, even if the attacker changes claimed status.
       const duplicate=await mtnWebhook({
-        externalId:started.payment.reference,status:'FAILED',financialTransactionId:'CALLBACK-CLAIM-2',
+        externalId:started.payment.reference,referenceId:providerTransactionId,
+        status:'FAILED',financialTransactionId:'CALLBACK-CLAIM-3',
       },'POST');
       assert.equal(duplicate.status,200,JSON.stringify(duplicate));
       assert.equal(duplicate.duplicate,true);
+      assert.equal(mtnVerifyCalls,1);
+
+      // A normal authenticated user verification remains authoritative.
+      mtnStatuses.set(started.payment.reference,'successful');
       const verified=await call(mtnLearner,'verify',{reference:started.payment.reference});
       assert.equal(verified.status,200,JSON.stringify(verified));
+      assert.equal(mtnVerifyCalls,2);
       const paid=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
       assert.equal(paid?.status,'paid');
       assert.equal(paid?.verificationStatus,'verified');
