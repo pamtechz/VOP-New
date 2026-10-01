@@ -151,14 +151,14 @@ class LencoProvider implements PaymentProviderAdapter{
     refunds:false,partialRefunds:false,webhooks:true,reconciliation:true,
   };
 
-  configured(){return Boolean(lencoApiToken()&&lencoPublicKey());}
+  configured(){return Boolean(lencoApiToken());}
 
   publicConfiguration(){
     return {
       key:this.key,
       configured:this.configured(),
       environment:lencoEnvironment(),
-      methods:['card','airtel_money','mtn_money','zamtel_money'],
+      methods:[...(lencoPublicKey()?['card']:[]),'airtel_money','mtn_money','zamtel_money'],
       capabilities:this.capabilities,
     };
   }
@@ -166,6 +166,7 @@ class LencoProvider implements PaymentProviderAdapter{
   async createPayment(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>{
     if(!this.configured())throw new Error('Lenco payment processing is not configured.');
     if(input.method==='card'||input.method==='mobile_money'){
+      if(!lencoPublicKey())throw new Error('Lenco hosted checkout is not configured.');
       return {
         provider:'lenco',providerStatus:'initiated',status:'initiated',
         providerTransactionId:'',providerReference:'',settlementStatus:'unknown',
@@ -221,20 +222,34 @@ class LencoProvider implements PaymentProviderAdapter{
   }
 }
 
-const PROVIDERS:Record<string,PaymentProviderAdapter>=Object.freeze({
-  lenco:new LencoProvider(),
-});
+const PROVIDERS=new Map<string,PaymentProviderAdapter>([
+  ['lenco',new LencoProvider()],
+]);
+
+/** Register additional server-side adapters without changing checkout or
+ * financial-domain code. Direct Airtel/MTN adapters can be added here when
+ * their merchant credentials/API contracts are approved. */
+export function registerPaymentProvider(adapter:PaymentProviderAdapter){
+  const key=text(adapter?.key).toLowerCase();
+  if(!/^[a-z][a-z0-9_-]{1,60}$/.test(key))throw new Error('A valid payment provider key is required.');
+  PROVIDERS.set(key,adapter);
+}
+
+export function registerPaymentProviderForTesting(adapter:PaymentProviderAdapter){
+  if(!process.env.FIRESTORE_EMULATOR_HOST)throw new Error('Test payment providers are allowed only with the Firestore emulator.');
+  registerPaymentProvider(adapter);
+}
 
 export function getPaymentProvider(key:unknown){
-  const provider=PROVIDERS[text(key).toLowerCase()];
+  const provider=PROVIDERS.get(text(key).toLowerCase());
   if(!provider)throw new Error('The selected payment provider is not available.');
   return provider;
 }
 
 export function paymentProviderCatalog(){
-  return Object.values(PROVIDERS).map(provider=>provider.publicConfiguration());
+  return [...PROVIDERS.values()].map(provider=>provider.publicConfiguration());
 }
 
 export function registeredPaymentProviderKeys(){
-  return Object.keys(PROVIDERS);
+  return [...PROVIDERS.keys()];
 }
