@@ -40,6 +40,14 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
           safeMessage:'Test provider response.',
         };
       },
+      async resumeCheckout(input){
+        return {
+          provider:'lenco',providerStatus:'initiated',status:'initiated',
+          providerTransactionId:'provider-'+input.reference,providerReference:'ext-'+input.reference,
+          settlementStatus:'unknown',safeMessage:'Resume checkout.',
+          checkout:{mode:'inline',publicKey:'test-public-key',scriptUrl:'https://example.invalid/lenco.js',channels:['card']},
+        };
+      },
       async verifyPayment(reference){
         const input=captured.get(reference);
         if(!input)throw new Error('Provider transaction was not found.');
@@ -121,6 +129,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const learner=await identity('payment-learner',{organizationId:orgA,organizationRole:'learner'});
     const subscriptionLearner=await identity('payment-subscription-learner',{organizationId:orgA,organizationRole:'learner'});
     const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
+    const refundLearner=await identity('payment-refund-learner',{organizationId:orgA,organizationRole:'learner'});
     const outsider=await identity('payment-outsider',{organizationId:orgB,organizationRole:'learner'});
 
     const guideId='paid-guide';
@@ -169,6 +178,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(second.status,200,JSON.stringify(second));
       assert.equal(second.reused,true);
       assert.equal(second.payment.id,first.payment.id);
+      assert.equal(second.checkout?.mode,'inline');
       assert.equal((await db.collection('paymentTransactions').where('payableItemId','==',item.id).where('payerUid','==',learner.uid).get()).size,1);
     });
 
@@ -248,6 +258,63 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const registrations=await db.collection('eventRegistrations').where('uid','==',learner.uid).where('eventId','==',eventId).get();
       assert.equal(registrations.size,1);
       assert.equal(registrations.docs[0].data().source,'verified-payment');
+    });
+
+    await t.test('partial and full refunds are bounded, audited and revoke fulfilled access only after confirmation',async()=>{
+      const item=await createItem('Refundable ministry charge','custom_charge','',{amount:200});
+      const started=await call(refundLearner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
+      assert.equal(started.status,200,JSON.stringify(started));
+      const verified=await call(refundLearner,'verify',{reference:started.payment.reference});
+      assert.equal(verified.payment.status,'paid');
+      const entitlementBefore=await db.collection('paymentEntitlements').where('paymentId','==',started.payment.id).get();
+      assert.equal(entitlementBefore.size,1);
+      assert.equal(entitlementBefore.docs[0].data().status,'active');
+
+      const first=await call(admin,'admin/refunds',{
+        action:'request',paymentId:started.payment.id,amount:50,reason:'Partial service refund',
+      });
+      assert.equal(first.status,200,JSON.stringify(first));
+      assert.equal(first.item.status,'manual_action_required');
+      const stillPaid=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.equal(stillPaid?.status,'paid');
+
+      const over=await call(admin,'admin/refunds',{
+        action:'request',paymentId:started.payment.id,amount:151,reason:'Must exceed refundable balance',
+      });
+      assert.equal(over.status,400,JSON.stringify(over));
+      assert.match(String(over.error||''),/remaining refundable/i);
+
+      const firstDone=await call(admin,'admin/refunds',{
+        action:'completeManual',refundId:first.item.id,
+        providerRefundReference:'LENCO-RF-PARTIAL-001',
+        confirmationNote:'Refund completed and confirmed in provider dashboard.',
+      });
+      assert.equal(firstDone.status,200,JSON.stringify(firstDone));
+      assert.equal(firstDone.item.status,'completed');
+      const partial=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.equal(partial?.status,'partially_refunded');
+      assert.equal(partial?.refundedMinor,5000);
+      assert.equal((await db.collection('paymentEntitlements').where('paymentId','==',started.payment.id).get()).docs[0].data().status,'active');
+
+      const rest=await call(admin,'admin/refunds',{
+        action:'request',paymentId:started.payment.id,amount:150,reason:'Complete remaining refund',
+      });
+      assert.equal(rest.status,200,JSON.stringify(rest));
+      assert.equal(rest.item.status,'manual_action_required');
+      const restDone=await call(admin,'admin/refunds',{
+        action:'completeManual',refundId:rest.item.id,
+        providerRefundReference:'LENCO-RF-FULL-002',
+        confirmationNote:'Remaining amount refunded through provider dashboard.',
+      });
+      assert.equal(restDone.status,200,JSON.stringify(restDone));
+      const full=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.equal(full?.status,'refunded');
+      assert.equal(full?.refundedMinor,20000);
+      const entitlementAfter=await db.collection('paymentEntitlements').where('paymentId','==',started.payment.id).get();
+      assert.equal(entitlementAfter.docs[0].data().status,'refunded');
+      const details=await call(admin,'admin/transaction',{paymentId:started.payment.id});
+      assert.equal(details.status,200,JSON.stringify(details));
+      assert.equal(details.item.refunds.filter(refund=>refund.status==='completed').length,2);
     });
 
     await t.test('verified subscription payment activates plan with payment provenance',async()=>{
