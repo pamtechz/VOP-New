@@ -6,6 +6,8 @@ React/TypeScript/Vite interface packaged for Android with Capacitor. The applica
 
 ## Run and check
 
+Use Node.js 22.16.0 with npm 10 (the repository pins `npm@10.9.2`). `.nvmrc` and `.node-version` carry the same Node version, and unsupported runtimes are rejected before installation.
+
 ```bash
 npm ci
 npm run dev
