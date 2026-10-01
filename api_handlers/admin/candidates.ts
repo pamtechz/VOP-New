@@ -99,14 +99,29 @@ export default async function handler(request: Request, response: Response) {
       return response.status(400).json({ error: 'A valid candidate ID is required.' });
     }
 
-    const baptismCandidate = body.baptismCandidate === true;
-    const baptized = body.baptized === true;
+    const baptismStatus = typeof body.baptismStatus === 'string' ? body.baptismStatus.trim() : '';
+    if (baptismStatus && !['not_marked','scheduled','baptized'].includes(baptismStatus)) {
+      return response.status(400).json({ error: 'Baptism status must be not marked, scheduled, or baptized.' });
+    }
+    // Preserve older callers that send the two booleans while the dedicated
+    // candidate screen uses the explicit lifecycle status.
+    const baptismCandidate = baptismStatus
+      ? baptismStatus === 'scheduled'
+      : body.baptismCandidate === true;
+    const baptized = baptismStatus
+      ? baptismStatus === 'baptized'
+      : body.baptized === true;
     if (baptized && baptismCandidate) {
-      return response.status(400).json({ error: 'A candidate cannot be marked as both a baptism candidate and baptized.' });
+      return response.status(400).json({ error: 'A candidate cannot be marked as both scheduled for baptism and baptized.' });
     }
 
+    const baptismScheduledDate = validDate(body.baptismScheduledDate);
     const baptismDate = validDate(body.baptismDate);
+    if (baptismScheduledDate === null) return response.status(400).json({ error: 'Scheduled baptism date must use YYYY-MM-DD.' });
     if (baptismDate === null) return response.status(400).json({ error: 'Baptism date must use YYYY-MM-DD.' });
+    if (baptismStatus === 'scheduled' && !baptismScheduledDate) {
+      return response.status(400).json({ error: 'Choose the scheduled baptism date.' });
+    }
     if (baptized && !baptismDate) return response.status(400).json({ error: 'A baptism date is required when marking a candidate as baptized.' });
 
     const candidateRef = ctx.db.doc(`users/${candidateId}`);
@@ -116,11 +131,17 @@ export default async function handler(request: Request, response: Response) {
     if (!ctx.isSuperAdmin && (ctx.tenantType === 'organization' ? candidateOrganizationId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, candidateOrganizationId)))) return response.status(403).json({ error: 'This candidate belongs outside your authorized organization scope.' });
 
     const information = (candidateSnapshot.data()?.information || {}) as Record<string, unknown>;
+    const retainedScheduledDate = baptismStatus === 'not_marked'
+      ? ''
+      : baptized
+        ? String(information.baptismScheduledDate || baptismScheduledDate || '')
+        : baptismScheduledDate || String(information.baptismScheduledDate || '');
     await candidateRef.set({
       information: {
         ...information,
         baptismCandidate,
         baptized,
+        baptismScheduledDate: retainedScheduledDate,
         baptismDate: baptized ? baptismDate : '',
       },
       updatedAt: FieldValue.serverTimestamp(),
@@ -130,7 +151,10 @@ export default async function handler(request: Request, response: Response) {
 
     const saved = await candidateRef.get();
     const data = saved.data() || {};
-    await writeTenantAudit(ctx,'candidate.baptism.update',`users/${candidateId}`,undefined,{baptismCandidate,baptized,baptismDate});
+    await writeTenantAudit(ctx,'candidate.baptism.update',`users/${candidateId}`,undefined,{
+      baptismStatus:baptized?'baptized':baptismCandidate?'scheduled':'not_marked',
+      baptismCandidate,baptized,baptismScheduledDate:retainedScheduledDate,baptismDate,
+    });
     return response.status(200).json({
       ok: true,
       candidate: {
