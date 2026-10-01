@@ -42,6 +42,7 @@ import { AdminPage } from './pages/AdminPage';
 import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
 import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { EventsPage } from './pages/EventsPage';
+import PaymentsPage from './pages/PaymentsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
 import InboxPage from './pages/InboxPage';
@@ -111,7 +112,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedRoute=String(params.get('route')||'') as AppRoute;
-    const publicRoutes:AppRoute[]=['home','resources','lessons','master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications','invites','support','certificates'];
+    const publicRoutes:AppRoute[]=['home','resources','lessons','master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications','invites','support','certificates','payments'];
     const hasExplicitRoute = params.has('certificate') || params.has('certificateNumber')
       || params.get('radio') === '1' || params.get('announcements') === '1'
       || params.get('events') === '1' || params.get('support') === '1'
@@ -628,6 +629,7 @@ export const App: React.FC = () => {
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={goBack} />}
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
+          {currentRoute === 'payments' && <PaymentsPage currentUser={currentUser} onBack={goBack} />}
           {(currentRoute === 'notifications' || currentRoute === 'invites') && <InboxPage
             initialTab={currentRoute === 'invites' ? 'invites' : 'notifications'}
             inviteToken={new URLSearchParams(window.location.search).get('invite')||undefined}
