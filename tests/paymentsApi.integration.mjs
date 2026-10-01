@@ -171,6 +171,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     });
 
     const {default:payments}=await vite.ssrLoadModule('/api/payments.ts');
+    const {default:plans}=await vite.ssrLoadModule('/api_handlers/admin/plans.ts');
 
     async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner'}={}){
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
@@ -204,6 +205,18 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         setHeader(){return this;},
       });
       assert.ok(output&&typeof output==='object','Payment API must return JSON for '+route);
+      return {status,...output};
+    }
+
+    async function planCall(user,body={}){
+      let status=200,output;
+      await plans({
+        method:'POST',headers:{authorization:'Bearer '+user.token},body,
+      },{
+        status(code){status=code;return this;},
+        json(data){output=data;return this;},
+      });
+      assert.ok(output&&typeof output==='object','Plan API must return JSON');
       return {status,...output};
     }
 
@@ -255,7 +268,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await db.doc('organizations/'+orgB).set({id:orgB,name:'Payment Org B',status:'active'});
     const admin=await identity('payment-super',{role:'super_admin',membershipRole:''});
     const learner=await identity('payment-learner',{organizationId:orgA,organizationRole:'learner'});
-    const subscriptionLearner=await identity('payment-subscription-learner',{organizationId:orgA,organizationRole:'learner'});
+    const organizationOwner=await identity('payment-org-owner',{organizationId:orgA,organizationRole:'owner',membershipRole:'owner'});
+    const organizationAdmin=await identity('payment-org-admin',{organizationId:orgA,organizationRole:'admin',membershipRole:'admin'});
     const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
     const refundLearner=await identity('payment-refund-learner',{organizationId:orgA,organizationRole:'learner'});
     const mtnLearner=await identity('payment-mtn-learner',{organizationId:orgA,organizationRole:'learner'});
@@ -265,7 +279,6 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const guideId='paid-guide';
     const programId='paid-program';
     const eventId='paid-event';
-    const planId='paid-plan';
     await db.doc('guides/'+guideId).set({
       id:guideId,title:'Paid Guide',organizationId:orgA,ownerOrganizationId:orgA,
       published:true,archived:false,sharingScope:'organization',language:'en',
@@ -277,11 +290,6 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await db.doc('events/'+eventId).set({
       id:eventId,title:'Paid Event',organizationId:orgA,published:true,sharingScope:'organization',
     });
-    await db.doc('system/plans/catalog/'+planId).set({
-      id:planId,name:'Paid Organization Plan',active:true,interval:'month',
-      price:99,currency:'ZMW',features:{payments:true,radio:true},quotas:{users:100},
-    });
-
     async function createItem(name,itemType,itemId,{
       repeatable=false,amount=125,organizationId=orgA,
       allowedProviders=['lenco'],allowedMethods=['card'],
@@ -299,6 +307,86 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(response.status,200,JSON.stringify(response));
       return response.item;
     }
+
+    await t.test('platform finance controls are Super Admin-only and consumer catalog hides provider administration',async()=>{
+      const privateItem=await createItem('Super Admin charge','custom_charge','',{amount:25});
+      const learnerCatalog=await call(learner,'catalog',{});
+      assert.equal(learnerCatalog.status,200,JSON.stringify(learnerCatalog));
+      assert.equal(Object.hasOwn(learnerCatalog,'providers'),false);
+      const consumerItem=learnerCatalog.items.find(item=>item.id===privateItem.id);
+      assert.ok(consumerItem);
+      assert.equal(Object.hasOwn(consumerItem,'allowedProviders'),false);
+      assert.deepEqual(consumerItem.allowedMethods,['card']);
+
+      for(const routeBody of [
+        ['admin/payable-items',{action:'list'}],
+        ['admin/providers',{action:'list'}],
+        ['admin/reconcile',{}],
+      ]){
+        const blocked=await call(organizationOwner,routeBody[0],routeBody[1]);
+        assert.equal(blocked.status,403,JSON.stringify(blocked));
+      }
+
+      const ownerRows=await call(organizationOwner,'admin/transactions',{filters:{organizationId:orgA}});
+      assert.equal(ownerRows.status,200,JSON.stringify(ownerRows));
+      assert.ok(ownerRows.items.every(item=>item.provider===''&&item.providerReference===''&&item.reconciliationStatus===''));
+    });
+
+    await t.test('Super Admin subscription packages are auto-published for organization owner consumption',async()=>{
+      const created=await planCall(admin,{
+        action:'upsertPlan',
+        name:'Growth Package',
+        description:'Expanded organization capacity',
+        price:99,currency:'ZMW',interval:'month',sortOrder:2,active:true,
+        quotas:{maxUsers:100,maxGuides:50},
+        features:{payments:true,radio:true,curriculum:true},
+      });
+      assert.equal(created.status,200,JSON.stringify(created));
+      const packageId=created.item.id;
+      assert.match(packageId,/^growth-package-[a-f0-9]{8}$/);
+
+      const payableId='subscription_'+packageId;
+      const payable=(await db.doc('payableItems/'+payableId).get()).data();
+      assert.equal(payable?.itemType,'organization_subscription');
+      assert.equal(payable?.itemId,packageId);
+      assert.equal(payable?.scope,'platform');
+      assert.equal(payable?.amountDecimal,'99.00');
+
+      const learnerCatalog=await call(learner,'catalog',{});
+      assert.equal(learnerCatalog.items.some(item=>item.id===payableId),false);
+
+      const available=await planCall(organizationOwner,{action:'listAvailablePlans'});
+      assert.equal(available.status,200,JSON.stringify(available));
+      assert.ok(available.items.some(item=>item.id===packageId));
+      const blockedFullCatalog=await planCall(organizationOwner,{action:'listPlans'});
+      assert.equal(blockedFullCatalog.status,403,JSON.stringify(blockedFullCatalog));
+
+      const ownerCatalog=await call(organizationOwner,'catalog',{});
+      const offer=ownerCatalog.items.find(item=>item.id===payableId);
+      assert.ok(offer,JSON.stringify(ownerCatalog));
+      assert.equal(Object.hasOwn(offer,'allowedProviders'),false);
+      assert.ok(offer.allowedMethods.includes('card'));
+
+      const started=await call(organizationOwner,'checkout',{payableItemId:payableId,paymentMethod:'card'});
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.payment.provider,'');
+      assert.equal(started.payment.providerReference,'');
+      const verified=await call(organizationOwner,'verify',{reference:started.payment.reference});
+      assert.equal(verified.status,200,JSON.stringify(verified));
+      assert.equal(verified.payment.status,'paid');
+
+      const subscription=(await db.doc('organizations/'+orgA+'/subscription/current').get()).data();
+      assert.equal(subscription?.status,'active');
+      assert.equal(subscription?.planId,packageId);
+      assert.equal(subscription?.activationSource,'payment');
+      assert.equal(subscription?.lastPaymentId,started.payment.id);
+      const organization=(await db.doc('organizations/'+orgA).get()).data();
+      assert.equal(organization?.plan,packageId);
+      assert.equal(organization?.featureEntitlements?.radio,true);
+
+      const adminCatalog=await call(organizationAdmin,'catalog',{});
+      assert.ok(adminCatalog.items.some(item=>item.id===payableId));
+    });
 
     await t.test('duplicate checkout is idempotent and client amount is never authoritative',async()=>{
       const item=await createItem('Duplicate safe charge','custom_charge','',{amount:250});
@@ -450,22 +538,6 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(details.item.refunds.filter(refund=>refund.status==='completed').length,2);
     });
 
-    await t.test('verified subscription payment activates plan with payment provenance',async()=>{
-      const item=await createItem('Organization subscription','organization_subscription',planId,{amount:99});
-      const started=await call(subscriptionLearner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
-      assert.equal(started.status,200,JSON.stringify(started));
-      const verified=await call(subscriptionLearner,'verify',{reference:started.payment.reference});
-      assert.equal(verified.payment.status,'paid');
-      const subscription=(await db.doc('organizations/'+orgA+'/subscription/current').get()).data();
-      assert.equal(subscription?.status,'active');
-      assert.equal(subscription?.planId,planId);
-      assert.equal(subscription?.activationSource,'payment');
-      assert.equal(subscription?.lastPaymentId,started.payment.id);
-      const organization=(await db.doc('organizations/'+orgA).get()).data();
-      assert.equal(organization?.plan,planId);
-      assert.equal(organization?.featureEntitlements?.radio,true);
-    });
-
     await t.test('unsigned MTN callbacks require the exact provider transaction id before verification',async()=>{
       const item=await createItem('Direct MTN charge','custom_charge','',{
         amount:130,allowedProviders:['mtn_momo'],allowedMethods:['mtn_money'],
@@ -475,7 +547,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       });
       assert.equal(started.status,200,JSON.stringify(started));
       assert.equal(started.payment.status,'pending');
-      const providerTransactionId=started.payment.providerTransactionId;
+      assert.equal(started.payment.providerTransactionId,'');
+      const storedMtn=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      const providerTransactionId=storedMtn?.providerTransactionId;
       assert.ok(providerTransactionId);
 
       // A public reference-only callback must not be allowed to turn a VOP
@@ -532,7 +606,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       });
       assert.equal(started.status,200,JSON.stringify(started));
       assert.equal(started.payment.status,'pending');
-      const providerTransactionId=started.payment.providerTransactionId;
+      assert.equal(started.payment.providerTransactionId,'');
+      const storedAirtel=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      const providerTransactionId=storedAirtel?.providerTransactionId;
       assert.ok(providerTransactionId);
 
       // Airtel callback has no VOP reference here and falsely claims success.
@@ -591,6 +667,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(history.status,200);
       assert.ok(history.items.length>=1);
       assert.ok(history.items.every(item=>item.payerUid===learner.uid));
+      assert.ok(history.items.every(item=>item.provider===''&&item.providerReference===''&&item.providerTransactionId===''));
 
       const adminRows=await call(admin,'admin/transactions',{filters:{organizationId:orgA}});
       assert.equal(adminRows.status,200,JSON.stringify(adminRows));
