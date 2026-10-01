@@ -53,6 +53,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     name:'',description:'',itemType:'programme_registration' as PayableItemType,
     targetId:'',organizationId:'',scope:currentUser.role==='super_admin'?'platform':'organization',
     amount:'',currency:'ZMW',repeatable:false,active:true,
+    allowedProviders:['lenco'] as string[],
     allowedMethods:['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[],
   });
   const isSuperAdmin=currentUser.role==='super_admin';
@@ -98,20 +99,22 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
 
   const startCreate=()=>{
     setEditing({} as PayableItem);
-    setDraft({name:'',description:'',itemType:'programme_registration',targetId:'',organizationId:currentUser.organizationId||'',scope:isSuperAdmin?'platform':'organization',amount:'',currency:'ZMW',repeatable:false,active:true,allowedMethods:['card','airtel_money','mtn_money','zamtel_money']});
+    setDraft({name:'',description:'',itemType:'programme_registration',targetId:'',organizationId:currentUser.organizationId||'',scope:isSuperAdmin?'platform':'organization',amount:'',currency:'ZMW',repeatable:false,active:true,allowedProviders:providers.filter(provider=>provider.configured&&provider.enabled).map(provider=>provider.key),allowedMethods:['card','airtel_money','mtn_money','zamtel_money']});
   };
   const startEdit=(item:PayableItem)=>{
     setEditing(item);
     setDraft({
       name:item.name,description:item.description,itemType:item.itemType,targetId:item.itemId,
       organizationId:item.organizationId||'',scope:item.scope,amount:item.amountDecimal,currency:item.currency,
-      repeatable:item.repeatable,active:item.active,allowedMethods:item.allowedMethods||[],
+      repeatable:item.repeatable,active:item.active,allowedProviders:item.allowedProviders||[],allowedMethods:item.allowedMethods||[],
     });
   };
   const toggleMethod=(method:PaymentMethod)=>setDraft(value=>({...value,allowedMethods:value.allowedMethods.includes(method)?value.allowedMethods.filter(item=>item!==method):[...value.allowedMethods,method]}));
+  const toggleProvider=(providerKey:string)=>setDraft(value=>({...value,allowedProviders:value.allowedProviders.includes(providerKey)?value.allowedProviders.filter(item=>item!==providerKey):[...value.allowedProviders,providerKey]}));
 
   const saveItem=async()=>{
     if(!draft.name.trim()||!draft.amount.trim()){setError('Name and amount are required.');return;}
+    if(!draft.allowedProviders.length){setError('Select at least one payment provider.');return;}
     if(['programme_registration','event_registration','organization_subscription','material'].includes(draft.itemType)&&!draft.targetId){setError('Choose the linked item by name.');return;}
     setBusy(true);setError('');
     try{
@@ -119,7 +122,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
         ...(editing?.id?{id:editing.id}:{}),name:draft.name,description:draft.description,itemType:draft.itemType,
         ...(draft.targetId?{itemId:draft.targetId}:{}),organizationId:draft.organizationId||undefined,
         scope:draft.scope,amount:Number(draft.amount),currency:draft.currency,repeatable:draft.repeatable,
-        active:draft.active,paymentRequired:true,allowedProviders:['lenco'],allowedMethods:draft.allowedMethods,
+        active:draft.active,paymentRequired:true,allowedProviders:draft.allowedProviders,allowedMethods:draft.allowedMethods,
       }});
       setEditing(null);setMessage('Payable item saved.');await load();
     }catch(reason){setError(reason instanceof Error?reason.message:'The payable item could not be saved.');}
@@ -258,6 +261,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       {isSuperAdmin&&<label><span>Scope</span><select value={draft.scope} onChange={e=>setDraft(v=>({...v,scope:e.target.value,organizationId:e.target.value==='platform'?'':v.organizationId}))}><option value="platform">Platform-wide</option><option value="organization">Organization</option><option value="hierarchy">Hierarchy-managed organization</option></select></label>}
       {draft.scope!=='platform'&&<label><span>Organization</span><select value={draft.organizationId} onChange={e=>setDraft(v=>({...v,organizationId:e.target.value}))}><option value="">Choose organization</option>{organizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select></label>}
       <label className="wide"><span>Description</span><textarea value={draft.description} onChange={e=>setDraft(v=>({...v,description:e.target.value}))}/></label>
+      <fieldset className="wide"><legend>Payment providers</legend><div className="vop-payment-method-checks">{providers.map(provider=><label key={provider.key}><input type="checkbox" checked={draft.allowedProviders.includes(provider.key)} onChange={()=>toggleProvider(provider.key)} disabled={!provider.configured}/>{provider.key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}{!provider.configured?' (not configured)':''}</label>)}</div></fieldset>
       <fieldset className="wide"><legend>Payment methods</legend><div className="vop-payment-method-checks">{(['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[]).map(value=><label key={value}><input type="checkbox" checked={draft.allowedMethods.includes(value)} onChange={()=>toggleMethod(value)}/>{paymentMethodLabel(value)}</label>)}</div></fieldset>
       <label className="vop-checkbox"><input type="checkbox" checked={draft.repeatable} onChange={e=>setDraft(v=>({...v,repeatable:e.target.checked}))}/>Allow repeat payments</label><label className="vop-checkbox"><input type="checkbox" checked={draft.active} onChange={e=>setDraft(v=>({...v,active:e.target.checked}))}/>Active</label></div>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void saveItem()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save payable item</button></section></div>}
