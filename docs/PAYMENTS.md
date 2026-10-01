@@ -12,6 +12,7 @@ These collections are server-authoritative and denied to client Firestore access
 - `paymentProviderConfigs`
 - `paymentTransactions` and attempt/audit subcollections
 - `paymentWebhookEvents`
+- `paymentRefunds`
 - `paymentReceipts`
 - `paymentFulfilments`
 - `paymentLocks`
@@ -91,6 +92,7 @@ Administrative routes:
 - `POST /api/payments/admin/payable-items`
 - `POST /api/payments/admin/providers`
 - `POST /api/payments/admin/reconcile`
+- `POST /api/payments/admin/refunds`
 - `POST /api/payments/admin/export`
 
 ## Payable items
@@ -146,3 +148,14 @@ The legacy Super Admin plan API remains available for complimentary, migration o
 ## Direct Airtel/MTN providers
 
 Do not change `PaymentsPage`, transaction records, webhook audit, receipts or fulfilment when adding a direct provider. Add a provider adapter, register it, declare supported methods/capabilities, configure its server-only credentials, and add its signed webhook route through the consolidated payment function.
+
+
+## Refunds and partial refunds
+
+Refunds are separate immutable finance records. VOP reserves the requested amount immediately so concurrent refund requests cannot exceed the remaining refundable balance.
+
+A provider adapter may implement automated `refundPayment` and `verifyRefund` methods. When the provider does not expose a documented refund API, VOP records the request as `manual_action_required`: an authorized finance administrator performs the refund in the provider's official merchant interface and then records the external reversal/refund reference plus an audit note. Only that confirmation changes the VOP payment to `partially_refunded` or `refunded`.
+
+For Lenco, the current public v2 collection documentation exposes collection initiation/status, webhooks and settlement information but does not document a collection-refund endpoint. Therefore the Lenco adapter deliberately does not invent one.
+
+A full refund reverses payment-created access: programme/course enrolments are marked revoked, event registrations are cancelled, generic payment entitlements are revoked, and a refunded organization subscription is suspended until a Super Admin assigns a replacement/complimentary plan with an audit reason. Partial refunds do not automatically revoke fulfilled access.
