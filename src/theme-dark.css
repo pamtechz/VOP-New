@@ -1170,3 +1170,114 @@
   border-color:#555!important;
   color:#fff!important;
 }
+
+
+/* Requested dark-mode audit: Mentoring & Insights, Organizations and
+   Curriculum Studio. These selectors intentionally sit last so legacy page
+   literals cannot reintroduce white or navy surfaces. */
+[data-theme="dark"] .vop-mentoring :is(
+  .vop-mentoring-head,.vop-mentoring-assign-form,.vop-mentoring-table-wrap,
+  .vop-mentoring-card,.vop-mentoring-stats>div,.vop-performance-stats>div,
+  .vop-conversation-grid>button,.vop-weak-list>div,.vop-share-result,
+  .vop-share-list>div,.vop-draft,.vop-admin-chat,
+  .vop-automation-grid .vop-setting-row
+),
+[data-theme="dark"] .vop-org-workspace :is(
+  .vop-card,.vop-org-list-main,.vop-org-list-actions,.vop-org-suggestions,
+  .vop-org-suggestions button,.vop-org-invitations,.vop-org-invite-result,
+  .vop-table-wrap,.vop-form-card,.vop-setting-row
+),
+[data-theme="dark"] .vop-reference-manager :is(
+  .vop-reference-editor,.vop-reference-editor-head,.vop-reference-editor-fields,
+  .vop-reference-editor-layout,.vop-lesson-content-card,.vop-lesson-tab-panel,
+  .vop-lesson-settings-panel .vop-setting-row,.vop-reference-toolbar,
+  .vop-reference-table-wrap,.vop-module-workspace,.vop-module-workspace-head,
+  .vop-module-item,.vop-guide-first-card,.vop-structure-intro,
+  .vop-structure-chapter,.vop-structure-section,.vop-structure-block,
+  .vop-structure-legacy,.vop-plate-review-mode,.vop-admin-section-lesson,
+  .vop-admin-section-chapter,.vop-admin-direct-sections-head,
+  .vop-admin-direct-section,.vop-lesson-featured-preview
+){
+  background:#0d0d0d!important;
+  background-image:none!important;
+  color:#f7f7f7!important;
+  border-color:#303030!important;
+  box-shadow:none!important;
+}
+
+[data-theme="dark"] :is(.vop-mentoring,.vop-org-workspace,.vop-reference-manager) :is(
+  input:not([type="checkbox"]):not([type="radio"]),textarea,select
+){
+  background:#080808!important;
+  background-image:none!important;
+  color:#f7f7f7!important;
+  border-color:#3a3a3a!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] :is(.vop-mentoring,.vop-org-workspace,.vop-reference-manager) :is(input,textarea)::placeholder{
+  color:#8f8f8f!important;
+  opacity:1!important;
+}
+[data-theme="dark"] :is(.vop-mentoring,.vop-org-workspace,.vop-reference-manager) select option{
+  background:#080808!important;
+  color:#f7f7f7!important;
+}
+
+/* Old blue workspace accents are neutral in dark mode. */
+[data-theme="dark"] :is(
+  .vop-mentoring-icon,.vop-mentoring-tabs button.active,
+  .vop-module-workspace-head,.vop-structure-intro,
+  .vop-structure-quiz,.vop-structure-add-block button,.vop-structure-add-section,
+  .vop-admin-direct-sections-head,.vop-admin-direct-section-number,
+  .vop-admin-section-assessments
+){
+  background:#111!important;
+  background-image:none!important;
+  color:#f3f3f3!important;
+  border-color:#3a3a3a!important;
+}
+
+/* Reader/quiz overlays also obey the black theme even where legacy React
+   markup still has inline light cards or navy gradients. */
+[data-theme="dark"] :is(.vop-quiz-modal,.vop-lesson-modal)>section{
+  background:#080808!important;
+  color:#f7f7f7!important;
+  border:1px solid #303030!important;
+}
+[data-theme="dark"] :is(.vop-quiz-modal,.vop-lesson-modal)>section>header{
+  background:#000!important;
+  background-image:none!important;
+  color:#f7f7f7!important;
+  border-bottom:1px solid #303030!important;
+}
+[data-theme="dark"] .vop-lesson-anchored-quizzes button{
+  background:#111!important;
+  color:#f3f3f3!important;
+  border-color:#3a3a3a!important;
+}
+[data-theme="dark"] .vop-lesson-anchored-quizzes button:hover:not(:disabled){
+  background:#f2c15d!important;
+  color:#050505!important;
+  border-color:#f2c15d!important;
+}
+[data-theme="dark"] .vop-assessment-retake:hover:not(:disabled){
+  background:#f2c15d!important;
+  color:#050505!important;
+  border-color:#f2c15d!important;
+}
+
+/* Bright hover states must always flip their foreground to dark. */
+[data-theme="dark"] :is(
+  [class*="hover:bg-amber-"],[class*="hover:bg-yellow-"],
+  [class*="hover:bg-white"],[class*="hover:bg-emerald-50"],
+  [class*="hover:bg-lime-50"]
+):hover{
+  color:#050505!important;
+}
+[data-theme="dark"] :is(
+  [class*="hover:bg-amber-"],[class*="hover:bg-yellow-"],
+  [class*="hover:bg-white"],[class*="hover:bg-emerald-50"],
+  [class*="hover:bg-lime-50"]
+):hover :is(svg,span,strong,small){
+  color:#050505!important;
+}
