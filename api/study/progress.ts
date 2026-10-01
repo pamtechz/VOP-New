@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
 import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
+import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -352,7 +353,22 @@ export default async function handler(
         }, { merge: true });
       });
 
-      return res.status(200).json({ ok: true, completionKey: `${language}:${guideId}:${lessonId}` });
+      let certificateReview:Awaited<ReturnType<typeof ensureAutomaticGraduationReview>>|null=null;
+      if(useTenantGuide&&guideId!=='discover'){
+        try{
+          certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:lesson-completion');
+        }catch(reviewError){
+          // Study completion is authoritative even if a downstream review
+          // notification/configuration is temporarily unavailable. A later
+          // qualifying progress write or certificate-page read can retry.
+          console.warn('Automatic certificate review could not be created after lesson completion',reviewError);
+        }
+      }
+      return res.status(200).json({
+        ok:true,
+        completionKey:`${language}:${guideId}:${lessonId}`,
+        certificateReview,
+      });
     }
 
     if (String(lessonData.type ?? '') !== 'Test') {
@@ -577,6 +593,15 @@ export default async function handler(
       return { attemptsUsed };
     });
 
+    let certificateReview:Awaited<ReturnType<typeof ensureAutomaticGraduationReview>>|null=null;
+    if(useTenantGuide&&guideId!=='discover'){
+      try{
+        certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:assessment-completion');
+      }catch(reviewError){
+        console.warn('Automatic certificate review could not be created after assessment completion',reviewError);
+      }
+    }
+
     // Per-question correctness is retained for authorized mentor analytics only.
     // Exposing failed keys lets clients reconstruct the answer bank by probing.
     const remainingAttempts = maxAttempts > 0 ? Math.max(0, maxAttempts - policyResult.attemptsUsed) : null;
@@ -591,6 +616,7 @@ export default async function handler(
       explanations:policy.feedbackMode==='after_submit'
         ?questions.map(question=>String((question as Record<string,unknown>).explanation||''))
         :undefined,
+      certificateReview,
       retakePolicy: {
         attemptsUsed: policyResult.attemptsUsed,
         maxAttempts: maxAttempts || null,
