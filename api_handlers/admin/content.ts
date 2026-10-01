@@ -170,8 +170,18 @@ export default async function handler(req: Request, res: Response) {
           : (ctx.organizationId ? [ctx.organizationId] : []);
       const snapshots = ctx.isSuperAdmin
         ? [await ctx.db.collection('guides').get()]
-        : await Promise.all(organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()));
-      const items = await Promise.all(snapshots.flatMap(snap => snap.docs).map(async d => {
+        : await Promise.all([
+            ...organizationIds.map(orgId => ctx.db.collection('guides').where('organizationId','==',orgId).get()),
+            ctx.db.collection('guides').where('sharingScope','==','shared').where('published','==',true).get(),
+          ]);
+      const visibleGuides = new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
+      for (const snapshot of snapshots) for (const document of snapshot.docs) {
+        const data=document.data();
+        const owned=organizationIds.includes(String(data.organizationId||''));
+        const shared=data.sharingScope==='shared'&&data.published===true&&data.archived!==true;
+        if(ctx.isSuperAdmin||owned||shared)visibleGuides.set(document.id,document);
+      }
+      const items = await Promise.all([...visibleGuides.values()].map(async d => {
         const lessons = await d.ref.collection('lessons').get();
         const studyLessons=lessons.docs.filter(lesson =>
           lesson.data().archived !== true && String(lesson.data().type || 'Lesson') !== 'Test');
@@ -253,7 +263,11 @@ export default async function handler(req: Request, res: Response) {
         ownerUid: current.ownerUid || ctx.auth.uid,
         scope: effectiveOrganizationId ? 'organization' : 'platform',
         canonical: true,
-        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : (effectiveOrganizationId ? 'organization' : 'shared'),
+        sharingScope: !effectiveOrganizationId && data.published === true
+          ? 'shared'
+          : data.sharingScope === 'shared' ? 'shared'
+          : data.sharingScope === 'private' ? 'private'
+          : (effectiveOrganizationId ? 'organization' : 'shared'),
         curriculumId: 'discover',
         discoverNumber: Math.max(1, Number(data.discoverNumber ?? 1) || 1),
         title,
@@ -299,6 +313,19 @@ export default async function handler(req: Request, res: Response) {
           await adoptOrganizationLanguage(ctx,transaction,effectiveOrganizationId,lang);
           transaction.set(ref,nextGuide,{merge:true});
         });
+        // A system-wide guide is an atomic learner-facing unit: every published
+        // child lesson/assessment inherits the shared visibility of its guide.
+        // Repair legacy child records when an organization guide is adopted.
+        const lessons=await ref.collection('lessons').get();
+        if(!lessons.empty){
+          const batch=ctx.db.batch();
+          lessons.docs.forEach(lesson=>{
+            if(lesson.data().published===true&&lesson.data().archived!==true){
+              batch.set(lesson.ref,{sharingScope:'shared',updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
+            }
+          });
+          await batch.commit();
+        }
         await writeTenantAudit(ctx,'guide.language.adoption',`guides/${id}`,undefined,{language:lang});
       } else {
         await ref.set(nextGuide,{merge:true});
@@ -468,6 +495,10 @@ export default async function handler(req: Request, res: Response) {
       if (!guide.exists || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || guide.data()?.archived === true) throw new Error('The selected guide does not belong to this organization or is archived.');
       if (String(guide.data()?.language || '').toLowerCase() !== language.toLowerCase()) throw new Error('The lesson language must match its guide.');
       assertMutableTenantResource(ctx.isSuperAdmin,guide.data(),'edit');
+      const guideData=guide.data()||{};
+      const guideSystemWide=guideData.sharingScope==='shared'
+        || String(guideData.scope||'')==='platform'
+        || !String(guideData.organizationId||'').trim();
       const ref = guideRef.collection('lessons').doc(lessonId);
       const existing = await ref.get();
       if (existing.data()?.sourceQuizId) throw new Error('This assessment is linked to a quiz. Edit it through Quiz Library.');
@@ -539,7 +570,11 @@ export default async function handler(req: Request, res: Response) {
         ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
-        sharingScope: data.sharingScope === 'shared' ? 'shared' : data.sharingScope === 'private' ? 'private' : 'organization',
+        sharingScope: guideSystemWide
+          ? 'shared'
+          : data.sharingScope === 'shared' ? 'shared'
+          : data.sharingScope === 'private' ? 'private'
+          : 'organization',
         published: data.published === true,
         createdAt: existing.data()?.createdAt || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -572,6 +607,10 @@ export default async function handler(req: Request, res: Response) {
       const guide = await ctx.db.doc(`guides/${requestedGuideId}`).get();
       if (!guide.exists || guide.data()?.archived === true || String(guide.data()?.organizationId || '') !== effectiveOrganizationId || String(guide.data()?.language || '').toLowerCase() !== lang) throw new Error('A valid guide in this tenant and language is required.');
       assertMutableTenantResource(ctx.isSuperAdmin,guide.data(),'edit');
+      const guideData=guide.data()||{};
+      const guideSystemWide=guideData.sharingScope==='shared'
+        || String(guideData.scope||'')==='platform'
+        || !String(guideData.organizationId||'').trim();
       const ref = guide.ref.collection('lessons').doc(lessonId);
       const current = await ref.get();
       if (current.data()?.sourceQuizId) throw new Error('Publish or unpublish this assessment through Quiz Library.');
@@ -595,7 +634,11 @@ export default async function handler(req: Request, res: Response) {
         ownerOrganizationId: current.data()?.ownerOrganizationId || effectiveOrganizationId,
         ownerUid: current.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
-        sharingScope: current.data()?.sharingScope === 'shared' ? 'shared' : current.data()?.sharingScope === 'private' ? 'private' : 'organization',
+        sharingScope: guideSystemWide
+          ? 'shared'
+          : current.data()?.sharingScope === 'shared' ? 'shared'
+          : current.data()?.sharingScope === 'private' ? 'private'
+          : 'organization',
         published: true,
         publishedAt: FieldValue.serverTimestamp(),
         publishedBy: ctx.auth.uid,
