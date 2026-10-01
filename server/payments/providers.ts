@@ -44,6 +44,25 @@ export interface ProviderVerification extends ProviderPaymentResult {
   settlement?:Record<string,unknown>|null;
 }
 
+export interface ProviderRefundRequest {
+  paymentReference:string;
+  refundReference:string;
+  amountMinor:number;
+  currency:string;
+  reason:string;
+  providerTransactionId?:string;
+  providerReference?:string;
+}
+
+export interface ProviderRefundResult {
+  provider:string;
+  providerStatus:string;
+  status:'pending'|'completed'|'failed';
+  providerRefundId:string;
+  providerRefundReference:string;
+  safeMessage:string;
+}
+
 export interface PaymentProviderAdapter {
   readonly key:string;
   readonly capabilities:{
@@ -59,7 +78,10 @@ export interface PaymentProviderAdapter {
   configured():boolean;
   publicConfiguration():Record<string,unknown>;
   createPayment(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>;
+  resumeCheckout?(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>;
   verifyPayment(reference:string):Promise<ProviderVerification>;
+  refundPayment?(input:ProviderRefundRequest):Promise<ProviderRefundResult>;
+  verifyRefund?(refundReference:string):Promise<ProviderRefundResult>;
   verifyWebhook(rawBody:Buffer,signature:string):boolean;
 }
 
@@ -204,6 +226,11 @@ class LencoProvider implements PaymentProviderAdapter{
             ?'The mobile money request failed. You can try again.'
             :'The mobile money request is being processed.',
     };
+  }
+
+  async resumeCheckout(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>{
+    if(input.method!=='card'&&input.method!=='mobile_money')throw new Error('This payment method cannot be safely resumed.');
+    return this.createPayment(input);
   }
 
   async verifyPayment(reference:string):Promise<ProviderVerification>{
