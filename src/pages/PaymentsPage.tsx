@@ -6,7 +6,7 @@ import { paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
 import {
   getPaymentStatus, loadLencoCheckoutScript, loadPaymentCatalog, loadPaymentHistory,
   loadPaymentReceipt, startPaymentCheckout, verifyPayment,
-  type ClientPayment, type PaymentProviderDescriptor,
+  type CheckoutOption, type ClientPayment,
 } from '../services/payments';
 import './payments.css';
 
@@ -32,7 +32,7 @@ function friendlyStatus(payment:ClientPayment){
 
 const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   const [items,setItems]=useState<PayableItem[]>([]);
-  const [providers,setProviders]=useState<PaymentProviderDescriptor[]>([]);
+  const [checkoutOptions,setCheckoutOptions]=useState<CheckoutOption[]>([]);
   const [history,setHistory]=useState<ClientPayment[]>([]);
   const [selected,setSelected]=useState<PayableItem|null>(null);
   const [providerKey,setProviderKey]=useState('lenco');
@@ -47,10 +47,10 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   const [checkoutStatus,setCheckoutStatus]=useState('Ready');
 
   const availableProviders=useMemo(()=>{
-    if(!selected)return [] as PaymentProviderDescriptor[];
+    if(!selected)return [] as CheckoutOption[];
     const allowed=new Set(selected.allowedProviders||[]);
-    return providers.filter(provider=>provider.configured&&provider.enabled&&(allowed.size===0||allowed.has(provider.key)));
-  },[selected,providers]);
+    return checkoutOptions.filter(option=>allowed.size===0||allowed.has(option.key));
+  },[selected,checkoutOptions]);
   const selectedProvider=useMemo(
     ()=>availableProviders.find(provider=>provider.key===providerKey)||availableProviders[0]||null,
     [availableProviders,providerKey],
@@ -65,7 +65,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     setLoading(true);setError('');
     try{
       const [catalog,payments]=await Promise.all([loadPaymentCatalog(),loadPaymentHistory()]);
-      setItems(catalog.items);setProviders(catalog.providers);setHistory(payments.items);
+      setItems(catalog.items);setCheckoutOptions(catalog.checkoutOptions);setHistory(payments.items);
     }catch(reason){setError(reason instanceof Error?reason.message:'Payments could not be loaded.');}
     finally{setLoading(false);}
   };
