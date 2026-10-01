@@ -5,7 +5,7 @@ import {
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
   Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload, LogOut,
   Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
-  Send, FileText, Grid2X2, Building2, HeartHandshake
+  Send, FileText, Grid2X2, Building2, HeartHandshake, WalletCards
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson, AppRoute, LanguageCode } from '../types';
@@ -31,6 +31,7 @@ import CandidateEnrollment from './CandidateEnrollment';
 import PrayerManagementPanel from './PrayerManagementPanel';
 import EngagementStudio from './EngagementStudio';
 import LocalizationGovernancePanel from './LocalizationGovernancePanel';
+import PaymentManagement from './PaymentManagement';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
@@ -51,7 +52,7 @@ interface AdminPageProps {
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'events' | 'materials' | 'radio' | 'prayer' | 'engagement'
-  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations';
+  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations' | 'payments';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
 type StudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -77,6 +78,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'certification', label: 'Certification', icon: Award },
   { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
+  { id: 'payments', label: 'Payments & Transactions', icon: WalletCards },
 ];
 
 const text = (value: unknown) => value == null ? '' : String(value);
@@ -425,7 +427,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       curriculum:'curriculum', engagement:'portfolio', languages:'languages', translations:'translations',
       announcements:'announcements', events:'announcements', materials:'materials', radio:'radio', prayer:'prayer',
       unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
-      certification:'certificates', mentorship:'mentoring', organizations:'organizations',
+      certification:'certificates', mentorship:'mentoring', organizations:'organizations', payments:'payments',
     };
     const canSee = (id: AdminTab) => id === 'engagement'
       ? ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'))
@@ -1092,7 +1094,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <span className="vop-brand-copy"><span className="vop-brand-name">{settings?.appName || 'Voice of Prophecy'}</span>
           <span className="vop-brand-sub">{settings?.appTagline || 'Bible Correspondence School'}</span></span>
       </button>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : activeTab === 'payments' ? 'Financial Operations' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <CommunicationTools onNavigate={route=>{
           if(route==='admin'){
@@ -1138,6 +1140,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           {label:'WORKSPACE',ids:['dashboard','userManagement','settings','candidates']},
           {label:'LEARNING & CONTENT',ids:['curriculum','engagement','languages','translations','materials','certification']},
           {label:'COMMUNITY',ids:['announcements','events','radio','prayer','mentorship']},
+          {label:'FINANCE',ids:['payments']},
           {label:'ORGANIZATION',ids:['organizations','unions','conferences','districts','churches']},
         ] as Array<{label:string;ids:AdminTab[]}>).map(group=>{
           const entries=visibleNav.filter(item=>group.ids.includes(item.id));
@@ -1173,6 +1176,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
+        {activeTab==='payments'&&<PaymentManagement currentUser={currentUser}/>}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && activeTab!=='translations' && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}

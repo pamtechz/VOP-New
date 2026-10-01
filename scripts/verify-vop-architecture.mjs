@@ -46,6 +46,14 @@ const checks = [
   ['api_handlers/admin/audit.ts', ['platformAudit','tenantAudit','requirePermission']],
   ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users']],
   ['api_handlers/admin/plans.ts', ['system/plans/catalog','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId']],
+  ['shared/payments.ts', ['PAYMENT_STATUSES','PAYABLE_ITEM_TYPES','amountToMinor','canTransitionPaymentStatus']],
+  ['server/payments/providers.ts', ['PaymentProviderAdapter','verifyWebhook','verifyLencoWebhookSignature','registerPaymentProvider','/collections/status/']],
+  ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
+  ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds']],
+  ['api/payments.ts', ['webhooks/lenco','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
+  ['src/pages/PaymentsPage.tsx', ['Payments & receipts','startPaymentCheckout','verifyPayment']],
+  ['src/pages/PaymentManagement.tsx', ['Payments & Transactions','Payable items','Reconciliation']],
+
 ];
 const errors = [];
 const legacyCertificateModal = path.join(root, 'src/components/certificate/CertificateModal.tsx');
@@ -62,4 +70,4 @@ if (errors.length) {
   errors.forEach(error => console.error(' - ' + error));
   process.exit(1);
 }
-console.log('VOP architecture regression gate passed: tenant isolation, hierarchy roles, permissions, learner ownership, analytics, audit, onboarding and plan contracts are present.');
+console.log('VOP architecture regression gate passed: tenant isolation, hierarchy roles, permissions, learner ownership, analytics, audit, onboarding, plan and payment contracts are present.');

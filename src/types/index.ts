@@ -497,6 +497,7 @@ export type AppRoute =
   | 'mentor'
   | 'admin' 
   | 'certificates' 
+  | 'payments'
   | 'certificate-verification';
 
 export interface AutoLocalizationEntry {

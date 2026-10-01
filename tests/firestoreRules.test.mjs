@@ -782,3 +782,41 @@ test('private learning evidence, attempts and certificates stay isolated across 
     await environment.cleanup();
   }
 });
+
+
+test('financial records are server-authoritative even for authenticated administrators', async () => {
+  assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator must be running');
+  const environment = await initializeTestEnvironment({
+    projectId,
+    firestore: { rules, host: '127.0.0.1', port: 8080 },
+  });
+  try {
+    await environment.withSecurityRulesDisabled(async adminContext => {
+      const db=adminContext.firestore();
+      await db.doc('users/payment-super').set({uid:'payment-super',role:'super_admin',organizationId:''});
+      await db.doc('users/payment-user').set({uid:'payment-user',role:'student',organizationId:'payment-org'});
+      await db.doc('paymentTransactions/payment-1').set({payerUid:'payment-user',status:'paid',organizationId:'payment-org'});
+      await db.doc('paymentReceipts/payment-1').set({payerUid:'payment-user',paymentId:'payment-1'});
+      await db.doc('payableItems/item-1').set({active:true,scope:'organization',organizationId:'payment-org'});
+      await db.doc('paymentProviderConfigs/lenco').set({enabled:true});
+      await db.doc('paymentWebhookEvents/event-1').set({provider:'lenco'});
+      await db.doc('paymentRefunds/refund-1').set({paymentId:'payment-1',status:'completed'});
+      await db.doc('paymentFulfilments/payment-1').set({status:'fulfilled'});
+    });
+    const learner=environment.authenticatedContext('payment-user').firestore();
+    const admin=environment.authenticatedContext('payment-super').firestore();
+    for(const db of [learner,admin]){
+      await assertFails(db.doc('paymentTransactions/payment-1').get());
+      await assertFails(db.doc('paymentTransactions/payment-1').set({status:'paid'}));
+      await assertFails(db.doc('paymentReceipts/payment-1').get());
+      await assertFails(db.doc('payableItems/item-1').get());
+      await assertFails(db.doc('paymentProviderConfigs/lenco').get());
+      await assertFails(db.doc('paymentWebhookEvents/event-1').get());
+      await assertFails(db.doc('paymentRefunds/refund-1').get());
+      await assertFails(db.doc('paymentRefunds/refund-1').set({status:'completed'}));
+      await assertFails(db.doc('paymentFulfilments/payment-1').get());
+    }
+  } finally {
+    await environment.cleanup();
+  }
+});
