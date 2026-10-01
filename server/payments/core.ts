@@ -993,15 +993,27 @@ export async function processProviderWebhook(
   const suppliedReference=text(event.reference);
   const suppliedProviderTransactionId=text(event.providerTransactionId);
 
+  const authenticated=event.authenticated===true;
   let paymentDoc:null|QueryDocumentSnapshot=null;
   let reference='';
-  if(suppliedReference){
+
+  // Never let an unauthenticated public callback turn a guessable VOP
+  // reference into a provider status lookup. Unsigned providers (for example
+  // MTN RequestToPay, or Airtel when no callback Authorization value has been
+  // configured) must prove possession of the opaque provider transaction ID
+  // that VOP generated and stored when checkout was created.
+  if(!authenticated&&!suppliedProviderTransactionId){
+    return {duplicate:false,orphaned:true,ignored:true};
+  }
+
+  if(authenticated&&suppliedReference){
     try{
       reference=safeReference(suppliedReference);
       paymentDoc=await loadPaymentByReference(db,reference);
     }catch{
-      // Some gateways callback only their transaction ID. Do not reject a
-      // callback solely because an unrelated provider field is not a VOP ref.
+      // Authenticated gateways may callback only their transaction ID. Do not
+      // reject the callback solely because another provider field is not a
+      // valid VOP reference.
       reference='';
     }
   }
@@ -1030,8 +1042,12 @@ export async function processProviderWebhook(
 
   const payment=paymentDoc.data()||{};
   if(text(payment.provider)!==providerKey)throw new Error('Callback provider does not match the payment transaction.');
-  if(suppliedProviderTransactionId&&text(payment.providerTransactionId)
-    &&suppliedProviderTransactionId!==text(payment.providerTransactionId)){
+  const storedProviderTransactionId=text(payment.providerTransactionId);
+  if(!authenticated&&(!storedProviderTransactionId||suppliedProviderTransactionId!==storedProviderTransactionId)){
+    throw new Error('Unauthenticated callback transaction reference does not match the payment transaction.');
+  }
+  if(suppliedProviderTransactionId&&storedProviderTransactionId
+    &&suppliedProviderTransactionId!==storedProviderTransactionId){
     throw new Error('Callback transaction reference does not match the payment transaction.');
   }
 

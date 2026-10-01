@@ -111,6 +111,18 @@ test('direct Airtel Money adapter follows OAuth, collection, callback and enquir
       headers:{authorization:'Bearer wrong-secret'},
       body:{transaction:{id:transactionId,status_code:'TS'}},
     }),/invalid airtel money callback authorization/i);
+
+    // When Airtel does not provide a callback credential, the notification is
+    // explicitly unauthenticated. Core processing may act on it only when this
+    // opaque, server-created transaction UUID matches an existing VOP payment.
+    delete process.env.AIRTEL_MONEY_CALLBACK_AUTHORIZATION;
+    const unsignedCallback=provider.parseWebhook({
+      headers:{},
+      body:{reference:'VOP-AIRTEL-TEST-001',transaction:{id:transactionId,status_code:'TS'}},
+    });
+    assert.equal(unsignedCallback.authenticated,false);
+    assert.equal(unsignedCallback.providerTransactionId,transactionId);
+    assert.equal(unsignedCallback.reference,'VOP-AIRTEL-TEST-001');
     assert.ok(calls.length>=3);
   }finally{
     await vite.close();

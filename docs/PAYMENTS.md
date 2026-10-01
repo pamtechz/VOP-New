@@ -1,6 +1,6 @@
 # VOP Payments
 
-VOP payments are provider-neutral. Lenco and direct MTN MoMo Collections implement the same server-side adapter contract; future Airtel Money or other gateways plug into the same checkout, verification, receipt and fulfilment core.
+VOP payments are provider-neutral. Lenco, direct MTN MoMo Collections and direct Airtel Money Zambia Collections implement the same server-side adapter contract; additional gateways plug into the same checkout, verification, receipt and fulfilment core.
 
 ## Security boundary
 
@@ -205,6 +205,8 @@ MTN RequestToPay does not document a cryptographic signature header comparable t
 
 MTN documents callbacks as one-shot notifications with no retry. VOP's existing reconciliation process therefore remains mandatory as a recovery path when an MTN callback is lost.
 
+Because MTN RequestToPay callbacks are not cryptographically authenticated, VOP will not use the public `externalId`/VOP reference to locate a payment. An unsigned callback is actionable only when it includes the exact opaque `referenceId` UUID that VOP generated for the provider transaction. Reference-only or unknown unsigned callbacks are ignored and cannot trigger an MTN status lookup.
+
 
 ## Direct Airtel Money Zambia Collections
 
@@ -234,7 +236,7 @@ https://vopafrica.vercel.app/api/payments/webhooks/airtel-money
 
 If Airtel merchant configuration sends an Authorization header to the callback, set the exact expected value in `AIRTEL_MONEY_CALLBACK_AUTHORIZATION`. If no callback credential is configured, VOP treats the callback as unauthenticated notification data and discards unknown/orphan notifications.
 
-Regardless of callback authentication, a callback **cannot** mark a VOP transaction paid. The callback locates the transaction using the VOP reference or Airtel transaction UUID; VOP then performs an authenticated Airtel transaction enquiry and validates the provider state against the server-created transaction before fulfilment.
+Regardless of callback authentication, a callback **cannot** mark a VOP transaction paid. When callback Authorization is configured, VOP can accept the authenticated VOP reference or Airtel transaction UUID. Without callback authentication, VOP refuses reference-only lookup and requires the exact opaque Airtel transaction UUID that was created and stored during checkout. Only then does VOP perform an authenticated Airtel transaction enquiry and validate provider state before fulfilment.
 
 Airtel payment status is normalized from provider codes such as success, failure, expiry and in-progress states. Reconciliation continues checking non-terminal transactions because callbacks may be delayed or missed.
 
