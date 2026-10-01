@@ -1,6 +1,9 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createLocalApiMiddleware } from '../vite.config.ts';
 import { localeAliases } from '../shared/locales.ts';
 
@@ -72,4 +75,17 @@ test('loading fallback translations preserves the selected locale and resolves e
     globalThis.fetch = originalFetch;
     globalThis.document = originalDocument;
   }
+});
+
+
+test('package lock matches grpc override and Capacitor app dependency', () => {
+  const root=join(dirname(fileURLToPath(import.meta.url)),'..');
+  const pkg=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
+  const lock=JSON.parse(readFileSync(join(root,'package-lock.json'),'utf8'));
+  assert.equal(pkg.engines.node,'>=22 <23');
+  assert.equal(pkg.dependencies['@capacitor/app'],'8.1.1');
+  assert.equal(lock.packages[''].dependencies['@capacitor/app'],'8.1.1');
+  assert.equal(pkg.overrides['@grpc/grpc-js'],'1.14.5');
+  assert.equal(lock.packages['node_modules/@grpc/grpc-js'].version,'1.14.5');
+  assert.equal(lock.packages['node_modules/@grpc/grpc-js/node_modules/@grpc/proto-loader'].version,'0.8.1');
 });
