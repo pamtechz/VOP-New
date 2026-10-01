@@ -1123,3 +1123,50 @@
   color:#fff!important;
   border-color:#555!important;
 }
+
+
+/* Blue-background removal contract. In dark mode, action/chrome backgrounds
+   are neutral black; gold is reserved for intentional high-contrast hover. */
+[data-theme="dark"] :is(
+  .vop-admin-top,.vop-public-hero,.vop-home-hero,.vop-reference-hero,
+  .vop-radio-hero,.vop-prayer-hero,.vop-events-hero,.vop-cert-hero,
+  .vop-about-hero,.vop-support-hero,.vop-lesson-reader-head,
+  .vop-studio-topbar,.vop-radio-admin-topbar
+){
+  background:#000!important;
+  background-image:none!important;
+  border-color:#2f2f2f!important;
+}
+[data-theme="dark"] :is(
+  .vop-primary,.btn-primary,.apk-btn-primary,.vop-cert-primary-button,
+  .vop-personal-settings .vop-primary,.vop-studio-top-actions .create
+){
+  background:#111!important;
+  background-image:none!important;
+  border:1px solid #4a4a4a!important;
+  color:#f7f7f7!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] :is(
+  .vop-primary,.btn-primary,.apk-btn-primary,.vop-cert-primary-button,
+  .vop-personal-settings .vop-primary,.vop-studio-top-actions .create
+):hover:not(:disabled){
+  background:#f2c15d!important;
+  background-image:none!important;
+  border-color:#f2c15d!important;
+  color:#050505!important;
+}
+[data-theme="dark"] :is(
+  .vop-primary,.btn-primary,.apk-btn-primary,.vop-cert-primary-button,
+  .vop-personal-settings .vop-primary,.vop-studio-top-actions .create
+):hover:not(:disabled) :is(svg,span,strong){color:#050505!important}
+[data-theme="dark"] :is(
+  .vop-studio-tabs button.active,.vop-radio-admin-tabs button.active,
+  .vop-mentoring-tabs button.active,.vop-reference-tab.active,
+  .vop-page-btn.active
+){
+  background:#1a1a1a!important;
+  background-image:none!important;
+  border-color:#555!important;
+  color:#fff!important;
+}
