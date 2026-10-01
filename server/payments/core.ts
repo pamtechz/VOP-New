@@ -157,7 +157,10 @@ export async function upsertPayableItem(ctx:TenantContext,input:Record<string,un
   const id=input.id?safePaymentId(input.id,'payable item identifier'):'pay_'+randomUUID().replaceAll('-','');
   const itemType=text(input.itemType);
   if(!PAYABLE_ITEM_TYPES.includes(itemType as never))throw new Error('Select a supported payable item type.');
-  const itemId=safePaymentId(input.itemId,'service or item identifier');
+  const rawItemId=text(input.itemId);
+  const requiresLinkedTarget=['programme_registration','event_registration','organization_subscription','material'].includes(itemType);
+  if(requiresLinkedTarget&&!rawItemId)throw new Error('Choose the linked payable item.');
+  const itemId=rawItemId?safePaymentId(rawItemId,'service or item identifier'):'charge_'+randomUUID().replaceAll('-','');
   const currency=normalizeCurrency(input.currency||'ZMW');
   const amountMinor=amountToMinor(input.amount,currency);
   const scopeRaw=text(input.scope)||(
