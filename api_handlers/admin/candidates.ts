@@ -49,7 +49,10 @@ export default async function handler(request: Request, response: Response) {
       const guide = await guideRef.get();
       if (!guide.exists) throw new Error('The selected course was not found.');
       const guideData = guide.data() || {};
-      if (String(guideData.organizationId || '') !== organizationId) throw new Error('The selected course does not belong to this organization.');
+      const guideOrganizationId=String(guideData.organizationId || guideData.ownerOrganizationId || '').trim();
+      const systemWide=guideData.published===true && guideData.archived!==true
+        && (guideData.sharingScope==='shared' || String(guideData.scope||'')==='platform' || !guideOrganizationId);
+      if (guideOrganizationId !== organizationId && !systemWide) throw new Error('The selected course is not available to this organization.');
       if (guideData.published !== true || guideData.archived === true) throw new Error('Only a published active course can be used for enrollment.');
       const authService = getAuth(getApps()[0]);
       let account;
