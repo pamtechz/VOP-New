@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -44,6 +44,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [hasAttempted,setHasAttempted]=useState(previouslyAttempted);
   const [attemptBlocked,setAttemptBlocked]=useState(false);
+  const attemptStartLock=useRef(false);
   const question = questions[index];
   const remainingAttempts=submission?.retakePolicy.remainingAttempts;
   const retakeAllowed=remainingAttempts!==0;
@@ -113,7 +114,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setStage('intro');
   };
   const startAttempt=async()=>{
-    if(!validQuiz||!validThreshold||submitting||attemptBlocked)return;
+    // React state updates are asynchronous; a fast double-click can otherwise
+    // dispatch two startQuiz requests before the button re-renders disabled.
+    if(attemptStartLock.current||!validQuiz||!validThreshold||submitting||attemptBlocked)return;
+    attemptStartLock.current=true;
     setSubmitting(true);setError('');
     try{
       const started=await beginQuizAttempt(guide.id,lesson.id,guide.language);
@@ -123,7 +127,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       const message=reason instanceof Error?reason.message:'The assessment could not be started.';
       setError(message);
       if(/attempt limit reached|retake is available after/i.test(message))setAttemptBlocked(true);
-    }finally{setSubmitting(false);}
+    }finally{
+      attemptStartLock.current=false;
+      setSubmitting(false);
+    }
   };
   const assessmentLabel=lesson.assessmentKind==='final_exam'
     ?'Final examination':lesson.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice assessment';
