@@ -67,6 +67,33 @@ test('localization workflow requires invite acceptance, scopes assigned language
   assert.match(governance,/90% reviewer recommendation/);
 });
 
+test('system-wide curriculum, automatic certificate review and baptism tracking stay server-governed',()=>{
+  const content=read('api_handlers/admin/content.ts');
+  const candidatesApi=read('api_handlers/admin/candidates.ts');
+  const candidatesUi=read('src/pages/CandidateEnrollment.tsx');
+  const progress=read('api/study/progress.ts');
+  const automation=read('server/graduationAutomation.ts');
+  const graduations=read('api_handlers/admin/graduations.ts');
+  const certificateAward=read('server/certificateAward.ts');
+  const certificates=read('src/pages/CertificatesPage.tsx');
+  const rules=read('firestore.rules');
+
+  assert.match(content,/where\('sharingScope','==','shared'\)\.where\('published','==',true\)/);
+  assert.match(content,/guideSystemWide[\s\S]*sharingScope: guideSystemWide[\s\S]*\? 'shared'/);
+  assert.match(candidatesApi,/const systemWide=guideData\.published===true/);
+  assert.match(candidatesApi,/baptismScheduledDate/);
+  assert.match(candidatesUi,/Baptism scheduled/);
+  assert.match(candidatesUi,/action:'updateBaptism'/);
+  assert.match(progress,/ensureAutomaticGraduationReview/);
+  assert.match(automation,/source:'completion'/);
+  assert.match(automation,/Certificate earned — review pending/);
+  assert.match(graduations,/awardApprovedCertificate/);
+  assert.match(graduations,/mentorAssignments/);
+  assert.match(certificateAward,/certificateDocumentId\(candidateId:string,language:string,organizationId:string,guideId:string\)/);
+  assert.match(certificates,/Certificate earned — awaiting review/);
+  assert.match(rules,/data\.get\('scope',''\) == 'platform'/);
+});
+
 test('mentor accounts have a dedicated assigned-learner workspace and messaging uses participant permission',()=>{
   const app=read('src/App.tsx');
   const sidebar=read('src/components/layout/LearnerSidebar.tsx');

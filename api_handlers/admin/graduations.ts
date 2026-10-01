@@ -6,6 +6,7 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { verifiedAssessmentAverage } from '../../shared/graduationEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 import { createNotification } from '../../server/notifications.js';
+import { awardApprovedCertificate, certificationPortfolioEvidence } from '../../server/certificateAward.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -16,6 +17,10 @@ function text(value: unknown) { return typeof value === 'string' ? value.trim() 
 
 function stageConfig(data: Record<string, unknown>): ApprovalStage[] {
   const raw = Array.isArray(data.approvalStages) ? data.approvalStages : [];
+  if(!raw.length)return [{
+    id:'organization',label:'Organization review',
+    approverRoles:['owner','admin','mentor'],enabled:true,
+  }];
   return raw.map(item => item && typeof item === 'object' ? item as Record<string, unknown> : null)
     .map(item => item ? ({
       id: text(item.id),
@@ -68,7 +73,20 @@ async function notifyStageApprovers(
   if(organizationId){
     const members=await ctx.db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
     for(const member of members.docs){
-      if(stage.approverRoles?.includes(text(member.data()?.role)))recipients.add(member.id);
+      const memberRole=text(member.data()?.role);
+      // Mentor approval is assignment-specific; do not notify every mentor in
+      // the organization for one learner's certificate review.
+      if(memberRole!=='mentor'&&stage.approverRoles?.includes(memberRole))recipients.add(member.id);
+    }
+    if(stage.approverRoles?.includes('mentor')){
+      const candidateId=text(request.candidateId);
+      if(candidateId){
+        const assignment=await ctx.db.doc(`mentorAssignments/${candidateId}`).get();
+        if(assignment.exists&&assignment.data()?.status==='active'){
+          const mentorId=text(assignment.data()?.mentorId);
+          if(mentorId)recipients.add(mentorId);
+        }
+      }
     }
   }
   const hierarchyRoleField:Record<string,string>={
@@ -241,8 +259,17 @@ async function decide(req: Request, res: Response) {
   const stageIndex = Number(current.workflowStageIndex), stageId = text(current.workflowStageId), stage = stages[stageIndex];
   if (!stage || stage.id !== stageId) return res.status(409).json({ error: 'The configured approval workflow no longer matches this request. Reconfigure the workflow or migrate the request before deciding.' });
   const profileRole = text(ctx.profile.role), membershipRole = text(ctx.membership.role);
-  const allowed = stage.approverRoles?.some(role => role === profileRole || role === membershipRole);
-  if (!allowed && !ctx.isSuperAdmin) return res.status(403).json({ error: 'You are not authorized to decide this approval stage.' });
+  let allowed = stage.approverRoles?.some(role => role === profileRole || role === membershipRole);
+  if(allowed&&!ctx.isSuperAdmin&&stage.approverRoles?.includes('mentor')
+      &&(profileRole==='mentor'||membershipRole==='mentor')){
+    const nonMentorRoleMatch=stage.approverRoles.some(role=>role!=='mentor'&&(role===profileRole||role===membershipRole));
+    if(!nonMentorRoleMatch){
+      const assignment=await ctx.db.doc(`mentorAssignments/${text(current.candidateId)}`).get();
+      allowed=Boolean(assignment.exists&&assignment.data()?.status==='active'
+        &&text(assignment.data()?.mentorId)===ctx.auth.uid);
+    }
+  }
+  if (!allowed && !ctx.isSuperAdmin) return res.status(403).json({ error: 'You are not authorized or assigned to this learner for the current approval stage.' });
 
   // An approval may occur days after submission, after another retake or a
   // guide edit. Historical pending requests may also contain the former
@@ -281,6 +308,23 @@ async function decide(req: Request, res: Response) {
     if (!studyLessons.length || !testLessons.length ||
         testLessons.some(item => !Array.isArray(item.questions) || !item.questions.length)) {
       return res.status(409).json({ error: 'The graduation guide has missing study or assessment requirements.' });
+    }
+    // The final human approval is the only certificate release gate. Before
+    // saving that final decision, verify any additional configured portfolio
+    // evidence/signatures so an approved request can always be awarded.
+    if(stageIndex===stages.length-1){
+      if(configSnapshot.data()?.enabled!==true){
+        return res.status(409).json({error:'Official certification is currently disabled.'});
+      }
+      const requirementIds=Array.isArray(guide.certificationRequirementIds)
+        ?guide.certificationRequirementIds.map(String).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)):[];
+      const portfolio=await certificationPortfolioEvidence(ctx.db,text(current.candidateId),requestOrganizationId,requirementIds);
+      if(portfolio.reasons.length){
+        return res.status(409).json({
+          error:'Certificate review cannot be approved yet: '+portfolio.reasons.join(' '),
+          reasons:portfolio.reasons,
+        });
+      }
     }
     approvalEvidence = { guideId, language, threshold, studyLessons, testLessons };
   }
@@ -349,13 +393,30 @@ async function decide(req: Request, res: Response) {
   await writeTenantAudit(ctx, decision === 'approve' ? 'graduation.stage.approved' : 'graduation.stage.rejected', ref.path, current, result);
   const safe=safeRequest(ref.id,result);
   const candidateId=text(result.candidateId);
+  let certificateAward:Awaited<ReturnType<typeof awardApprovedCertificate>>|null=null;
+  let certificateAwardError='';
+  if(decision==='approve'&&text(result.status)==='approved'&&candidateId){
+    try{
+      certificateAward=await awardApprovedCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.guideId));
+    }catch(error){
+      certificateAwardError=error instanceof Error?error.message:'The approved certificate could not be published.';
+      await ref.set({
+        certificateStatus:'withheld_error',
+        certificateError:certificateAwardError,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      console.error('Automatic certificate award failed after final graduation approval',error);
+    }
+  }
   if(candidateId&&candidateId!==ctx.auth.uid){
     const finalStatus=text(result.status);
     const statusMessage=decision==='reject'
-      ?'Your graduation request requires attention and was not approved at the current review stage.'
+      ?'Your certificate review requires attention and was not approved at the current review stage.'
       :finalStatus==='approved'
-        ?'Your graduation request has completed all required approval stages.'
-        :`Your graduation request passed ${stage.label||stage.id} review and moved to the next approval stage.`;
+        ?certificateAward
+          ?'Your certificate review is approved. Your official certificate is now available.'
+          :'Your certificate review is approved. Certificate publication is being finalized.'
+        :`Your certificate review passed ${stage.label||stage.id} and moved to the next approval stage.`;
     await createNotification(ctx.db,{
       organizationId:requestOrganizationId,recipientId:candidateId,type:'certificate',
       title:finalStatus==='approved'?'Graduation approved':decision==='reject'?'Graduation review update':'Graduation review progressed',
@@ -369,7 +430,13 @@ async function decide(req: Request, res: Response) {
   if(upcomingStage){
     await notifyStageApprovers(ctx,{...result,id:ref.id},upcomingStage,ctx.auth.uid);
   }
-  return res.status(200).json({ ok: true, request: safe });
+  return res.status(200).json({
+    ok:true,
+    request:safe,
+    certificate:certificateAward?.certificate,
+    certificateAwarded:certificateAward?.created===true||Boolean(certificateAward?.certificate),
+    certificateAwardError:certificateAwardError||undefined,
+  });
 }
 
 export default async function handler(req: Request, res: Response) {

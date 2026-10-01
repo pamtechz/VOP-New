@@ -16,6 +16,10 @@ interface CertificateConfig {
   certificateTitle?: string; certificateBodyText?: string; issuerName?: string; issuerSubtitle?: string;
   directorName?: string; directorTitle?: string; signatureUrl?: string; sealUrl?: string; logoUrl?: string; backgroundUrl?: string; verificationEnabled?: boolean; verificationBaseUrl?: string; template?: CertificateTemplateConfig;
 }
+interface CertificateReview {
+  id:string; status:string; guideId?:string; guideTitle?:string;
+  submittedAt?:string|null; approvedAt?:string|null; certificateStatus?:string;
+}
 function dateText(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
@@ -25,11 +29,14 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
   const certificateRef = useRef<HTMLDivElement>(null);
   const [certificate, setCertificate] = useState<OfficialCertificate | null>(null);
   const [config, setConfig] = useState<CertificateConfig>({});
+  const [review, setReview] = useState<CertificateReview | null>(null);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'CertificatesPage');
   const title = config.certificateTitle || settings.certificateTitle || certificate?.courseName || '';
+  const reviewPending=Boolean(review&&review.status&&!['approved','rejected'].includes(review.status));
+  const reviewApproved=review?.status==='approved';
 
   useEffect(() => {
     let cancelled = false;
@@ -38,9 +45,13 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
       try {
         const token = await auth.currentUser.getIdToken();
         const response = await fetch('/api/certificates?action=mine', { headers: { Authorization: `Bearer ${token}` } });
-        const body = await response.json().catch(() => ({})) as { certificates?: OfficialCertificate[]; config?: CertificateConfig; error?: string };
+        const body = await response.json().catch(() => ({})) as { certificates?: OfficialCertificate[]; review?: CertificateReview | null; config?: CertificateConfig; error?: string };
         if (!response.ok) throw new Error(body.error || 'Certificates could not be loaded.');
-        if (!cancelled) { setCertificate((body.certificates || [])[0] || null); setConfig(body.config || {}); }
+        if (!cancelled) {
+          setCertificate((body.certificates || [])[0] || null);
+          setReview(body.review || null);
+          setConfig(body.config || {});
+        }
       } catch (error) {
         if (!cancelled) setFeedback(error instanceof Error ? error.message : 'Certificates could not be loaded.');
       } finally { if (!cancelled) setLoading(false); }
@@ -82,8 +93,16 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
           </div>
           <div className="vop-certificate-hero-reference">
             <Award size={67} strokeWidth={1.8} aria-hidden="true" />
-            <h2>{certificate ? t('congratulations','Congratulations!') : t('certificate_status','Certificate status')}</h2>
-            <p>{loading ? t('certificate_loading','Loading your official certificate record…') : certificate ? t('official_certificate_message','Your official VOP certificate has been issued and verified from the server.') : t('no_certificate_message','No official certificate has been issued to this account.')}</p>
+            <h2>{certificate ? t('congratulations','Congratulations!') : reviewPending ? t('certificate_earned','Certificate earned') : t('certificate_status','Certificate status')}</h2>
+            <p>{loading
+              ? t('certificate_loading','Loading your official certificate record…')
+              : certificate
+                ? t('official_certificate_message','Your official VOP certificate has been issued and verified from the server.')
+                : reviewPending
+                  ? t('certificate_review_pending','You completed the required study and assessments. Your certificate is being withheld until the required organization review is approved.')
+                  : reviewApproved
+                    ? t('certificate_publication_pending','Your review is approved. The official certificate is being finalized.')
+                    : t('no_certificate_message','No official certificate has been issued to this account.')}</p>
           </div>
         </div>
       </header>
@@ -111,7 +130,19 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
             {config.verificationEnabled === true && <div className="vop-official-verification-note"><ShieldCheck size={20} /><div><strong>{t('official_credential','Official credential')}</strong><span>{t('verification_note','This certificate can be independently verified using its certificate number.')}</span></div></div>}
           </>
         )}
-        {!loading && !certificate && <div className="vop-reference-card vop-official-empty"><Award size={38} /><strong>{t('no_certificate_issued','No official certificate has been issued.')}</strong><p>{t('certificate_pending_message','Complete the required curriculum and follow the graduation approval process before certification.')}</p></div>}
+        {!loading && !certificate && <div className="vop-reference-card vop-official-empty">
+          <Award size={38} />
+          <strong>{reviewPending
+            ? t('certificate_withheld_review','Certificate earned — awaiting review')
+            : reviewApproved
+              ? t('certificate_approved_pending','Certificate approved — publishing')
+              : t('no_certificate_issued','No official certificate has been issued.')}</strong>
+          <p>{reviewPending
+            ? `${review?.guideTitle||'Your course'} is complete. An authorized organization reviewer must approve the award before the certificate appears here.`
+            : reviewApproved
+              ? t('certificate_approved_publish_message','The approval is complete. The system is finalizing your official credential.')
+              : t('certificate_pending_message','Complete the required curriculum and assessments. Eligible certificates are then sent automatically for organization review.')}</p>
+        </div>}
         {feedback && <p role="status" className="vop-cert-caption">{feedback}</p>}
       </main>
     </section>

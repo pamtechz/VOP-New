@@ -186,6 +186,7 @@ export interface UserInformation {
   completionDate?: string;
   decisionDate?: string;
   graduationDate?: string;
+  baptismScheduledDate?: string;
   baptismDate?: string;
   graduating: boolean;
   graduated: boolean;
