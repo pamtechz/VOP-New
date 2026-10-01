@@ -78,7 +78,8 @@ export const LessonsPage: React.FC<Props> = ({
     const done=lessonIsComplete(guide,lesson,currentUser,settings.quizPassThreshold);
     if(lesson.type==='Lesson') return {label:done?'Completed':'Not started',done};
     const score=lessonScoreForDisplay(guide,lesson,currentUser);
-    return {label:score===undefined?'Assessment':`${done?'Passed':'Score'} · ${Math.round(score)}%`,done};
+    const retakeLabel=lesson.assessmentKind==='final_exam'?'Retake exam':'Retake quiz';
+    return {label:score===undefined?'Assessment':`${retakeLabel} · ${done?'Passed':'Score'} ${Math.round(score)}%`,done};
   };
 
   return <main className="vop-materials-page vop-lessons-page">
