@@ -95,6 +95,11 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(modal,/beginQuizAttempt/);
   assert.match(modal,/instructions/);
   assert.match(modal,/remainingSeconds/);
+  assert.match(modal,/previouslyAttempted/);
+  assert.match(modal,/Retake Quiz/);
+  assert.match(modal,/Retake Waiting Period/);
+  assert.match(study,/maxAttempts>0&&priorAttempts>=policy\.maxAttempts/);
+  assert.match(study,/const retryAt = retakeCooldownMinutes > 0/);
 });
 
 
