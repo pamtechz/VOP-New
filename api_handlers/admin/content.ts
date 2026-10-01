@@ -182,18 +182,26 @@ export default async function handler(req: Request, res: Response) {
         if(ctx.isSuperAdmin||owned||shared)visibleGuides.set(document.id,document);
       }
       const items = await Promise.all([...visibleGuides.values()].map(async d => {
+        const guideData=d.data();
         const lessons = await d.ref.collection('lessons').get();
-        const studyLessons=lessons.docs.filter(lesson =>
-          lesson.data().archived !== true && String(lesson.data().type || 'Lesson') !== 'Test');
+        const guideOrganizationId=String(guideData.organizationId||guideData.ownerOrganizationId||'');
+        const platformGuide=String(guideData.scope||'')==='platform'||!guideOrganizationId;
+        const canReadAllChildren=ctx.isSuperAdmin||platformGuide||organizationIds.includes(guideOrganizationId);
+        const studyLessons=lessons.docs.filter(lesson => {
+          const data=lesson.data();
+          return data.archived!==true
+            && String(data.type||'Lesson')!=='Test'
+            && (canReadAllChildren||data.sharingScope==='shared');
+        });
         return {
           id: d.id,
-          ...d.data(),
+          ...guideData,
           // Assessments are separate records and must never inflate a guide/module lesson count.
           lessonCount: studyLessons.length,
           // Metadata only: answer keys and assessment records never belong in lesson selector payloads.
           lessons: studyLessons.map(lesson => ({
             id:lesson.id, title:String(lesson.data().title || ''), lessonNumber:String(lesson.data().lessonNumber || ''),
-            language:String(lesson.data().language || d.data().language || ''), type:'Lesson',
+            language:String(lesson.data().language || guideData.language || ''), type:'Lesson',
             published:lesson.data().published === true, guideId:d.id,
           })),
           languages: [String(d.data().language || '')].filter(Boolean),
