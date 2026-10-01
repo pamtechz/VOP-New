@@ -49,7 +49,18 @@ async function notifyApprovers(
   if(organizationId){
     const members=await db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
     for(const member of members.docs){
-      if(stage.approverRoles.includes(text(member.data()?.role)))recipients.add(member.id);
+      const memberRole=text(member.data()?.role);
+      if(memberRole!=='mentor'&&stage.approverRoles.includes(memberRole))recipients.add(member.id);
+    }
+    if(stage.approverRoles.includes('mentor')){
+      const candidateId=text(request.candidateId);
+      if(candidateId){
+        const assignment=await db.doc(`mentorAssignments/${candidateId}`).get();
+        if(assignment.exists&&assignment.data()?.status==='active'){
+          const mentorId=text(assignment.data()?.mentorId);
+          if(mentorId)recipients.add(mentorId);
+        }
+      }
     }
   }
   const hierarchyRoleField:Record<string,string>={
