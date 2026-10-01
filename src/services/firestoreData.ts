@@ -327,6 +327,7 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
       completionDate: data.information?.completionDate,
       decisionDate: data.information?.decisionDate,
       graduationDate: data.information?.graduationDate,
+      baptismScheduledDate: data.information?.baptismScheduledDate,
       baptismDate: data.information?.baptismDate,
       graduating: data.information?.graduating === true,
       graduated: data.information?.graduated === true,
