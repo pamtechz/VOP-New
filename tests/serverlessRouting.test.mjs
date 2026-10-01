@@ -28,7 +28,9 @@ test('ownership scope is distinct from personal and assigned access relationship
 
 test('payments stay consolidated into one public Vercel function',()=>{
   const source=read('api/payments.ts');
-  for(const route of ['webhooks/lenco','checkout','verify','history','receipt','admin/transactions','admin/payable-items','admin/providers','admin/reconcile','admin/refunds']){
+  assert.match(source,/name\.startsWith\('webhooks\/'\)/);
+  assert.match(source,/provider\.callbackMethods/);
+  for(const route of ['checkout','verify','history','receipt','admin/transactions','admin/payable-items','admin/providers','admin/reconcile','admin/refunds']){
     assert.ok(source.includes(route),route);
   }
 });

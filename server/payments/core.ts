@@ -465,7 +465,13 @@ export async function verifyAndApplyPayment(db:Firestore,referenceValue:unknown,
   if(!paymentDoc)throw new Error('The payment reference was not found.');
   const payment=paymentDoc.data()||{};
   const provider=getPaymentProvider(payment.provider);
-  const verification=await provider.verifyPayment(reference);
+  const verification=await provider.verifyPayment(reference,{
+    providerTransactionId:text(payment.providerTransactionId),
+    providerReference:text(payment.providerReference),
+    paymentMethod:text(payment.paymentMethod) as PaymentMethod,
+    amountMinor:Number(payment.amountMinor||0),
+    currency:text(payment.currency),
+  });
   const matches=verificationMatches(payment,verification);
   if(!matches){
     await paymentDoc.ref.set({
@@ -965,36 +971,58 @@ export async function processProviderWebhook(
   db:Firestore,providerKey:string,req:{headers?:Record<string,string|string[]|undefined>;body?:unknown;rawBody?:Buffer|string},
 ){
   const provider=getPaymentProvider(providerKey);
-  const raw=rawWebhookBody(req);
-  const signature=header(req,'x-lenco-signature');
-  if(!provider.verifyWebhook(raw,signature))throw new Error('Invalid payment webhook signature.');
-  const event=object(req.body);
-  const data=object(event.data);
-  const reference=safeReference(data.reference);
-  const eventType=text(event.event)||'provider.event';
-  const eventId=hash(providerKey+':'+eventType+':'+reference+':'+text(data.lencoReference)+':'+text(data.status)+':'+text(data.completedAt));
+  if(!provider.capabilities.webhooks||!provider.parseWebhook)throw new Error('This payment provider does not accept callbacks.');
+  const event=provider.parseWebhook(req);
+  const reference=safeReference(event.reference);
+  const eventType=text(event.eventType)||'provider.event';
+  // Dedupe on provider + event type + immutable VOP reference. Callback body
+  // status/reference fields are untrusted and must not allow a caller to force
+  // repeated provider lookups by changing arbitrary payload values.
+  const eventId=hash(providerKey+':'+eventType+':'+reference);
   const eventRef=db.doc('paymentWebhookEvents/'+eventId);
   const paymentDoc=await loadPaymentByReference(db,reference);
   if(!paymentDoc){
-    await eventRef.set({provider:providerKey,eventType,reference,status:'orphaned',receivedAt:FieldValue.serverTimestamp()},{merge:false});
+    // Signed providers may retain orphan delivery evidence. Unsigned providers
+    // such as MTN are discarded to prevent public callback storage abuse.
+    if(event.authenticated){
+      await eventRef.set({
+        provider:providerKey,eventType,reference,status:'orphaned',authenticated:true,
+        providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
+        receivedAt:FieldValue.serverTimestamp(),
+      },{merge:false});
+    }
     return {duplicate:false,orphaned:true};
   }
+  const payment=paymentDoc.data()||{};
+  if(text(payment.provider)!==providerKey)throw new Error('Callback provider does not match the payment transaction.');
+  if(event.providerTransactionId&&text(payment.providerTransactionId)
+    &&event.providerTransactionId!==text(payment.providerTransactionId)){
+    throw new Error('Callback transaction reference does not match the payment transaction.');
+  }
+
   let duplicate=false;
   await db.runTransaction(async tx=>{
     const existing=await tx.get(eventRef);
     if(existing.exists){duplicate=true;return;}
     tx.create(eventRef,{
       provider:providerKey,eventType,reference,paymentId:paymentDoc.id,
-      providerStatus:text(data.status),providerReference:text(data.lencoReference),
+      authenticated:event.authenticated===true,
+      providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
+      providerTransactionId:text(event.providerTransactionId),
       receivedAt:FieldValue.serverTimestamp(),processingStatus:'received',
     });
-    tx.set(paymentDoc.ref,{webhookStatus:'received',lastWebhookAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.set(paymentDoc.ref,{
+      webhookStatus:'received',lastWebhookAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
   });
   if(duplicate){
     await paymentDoc.ref.set({webhookStatus:'duplicate',updatedAt:FieldValue.serverTimestamp()},{merge:true});
     return {duplicate:true,paymentId:paymentDoc.id};
   }
   try{
+    // A provider callback is only a signal. The provider adapter must perform
+    // an independent server-to-server status lookup before VOP can mark paid.
     await verifyAndApplyPayment(db,reference,'webhook');
     await eventRef.set({processingStatus:'processed',processedAt:FieldValue.serverTimestamp()},{merge:true});
     await paymentDoc.ref.set({webhookStatus:'processed',updatedAt:FieldValue.serverTimestamp()},{merge:true});
