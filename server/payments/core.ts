@@ -689,15 +689,17 @@ export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unkno
     const allowed=new Set(await accessibleOrganizationIds(ctx));
     if(org&&!allowed.has(org))throw new Error('The transaction is outside your authorized scope.');
   }
-  const [attempts,audit,receipt]=await Promise.all([
+  const [attempts,audit,receipt,refunds]=await Promise.all([
     ref.collection('attempts').orderBy('createdAt','desc').limit(50).get(),
     ref.collection('audit').orderBy('createdAt','desc').limit(100).get(),
     ctx.db.doc('paymentReceipts/'+paymentId).get(),
+    ctx.db.collection('paymentRefunds').where('paymentId','==',paymentId).limit(100).get(),
   ]);
   return {
     payment:serializePayment(paymentId,snap.data()||{}),
     attempts:attempts.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt),updatedAt:timestampIso(doc.data().updatedAt)})),
     audit:audit.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt)})),
+    refunds:refunds.docs.map(doc=>serializeRefund(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)),
     receipt:receipt.exists?{...receipt.data(),issuedAt:timestampIso(receipt.data()?.issuedAt),paidAt:timestampIso(receipt.data()?.paidAt)}:null,
   };
 }
