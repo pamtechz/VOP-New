@@ -192,6 +192,23 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(graduation,/Graduation approval required/);
 });
 
+test('organization records open as read-only pages and require explicit edit mode',()=>{
+  const page=read('src/pages/OrganizationManagement.tsx');
+  const css=read('src/pages/admin.css');
+  assert.doesNotMatch(page,/ModalLayer/);
+  assert.doesNotMatch(page,/vop-org-editor-backdrop/);
+  assert.match(page,/vop-org-detail-page/);
+  assert.match(page,/Back to organizations/);
+  assert.match(page,/setEditing\(true\)/);
+  assert.match(page,/disabled=\{!editing\}/);
+  assert.match(page,/Read only/);
+  assert.match(page,/Editing is enabled/);
+  assert.match(page,/const cancelEditing=\(\)=>/);
+  assert.match(page,/restoreOrganizationFields\(selected\)/);
+  assert.match(css,/\.vop-org-detail-page/);
+  assert.match(css,/\.vop-org-detail-card/);
+});
+
 test('notification actions preserve exact admin destinations',()=>{
   const routing=read('src/services/notificationRouting.ts');
   const admin=read('src/pages/AdminPage.tsx');
