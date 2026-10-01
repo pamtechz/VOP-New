@@ -20,6 +20,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const verificationOverrides=new Map();
     const mtnCaptured=new Map();
     const mtnStatuses=new Map();
+    const airtelCaptured=new Map();
+    const airtelStatuses=new Map();
     const state={nextCreateStatus:'pending',nextCreateError:''};
 
     providers.registerPaymentProviderForTesting({
@@ -122,6 +124,50 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       },
     });
 
+    providers.registerPaymentProviderForTesting({
+      key:'airtel_money',
+      callbackMethods:['POST'],
+      capabilities:{checkout:true,card:false,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
+      configured(){return true;},
+      publicConfiguration(){return {key:'airtel_money',configured:true,environment:'test',methods:['airtel_money'],capabilities:this.capabilities};},
+      async createPayment(input){
+        const transactionId='22222222-2222-4222-8222-'+String(airtelCaptured.size+1).padStart(12,'0');
+        airtelCaptured.set(input.reference,{...input,transactionId});
+        airtelStatuses.set(input.reference,'TIP');
+        return {
+          provider:'airtel_money',providerStatus:'TIP',status:'pending',
+          providerTransactionId:transactionId,providerReference:transactionId,
+          settlementStatus:'unknown',safeMessage:'Approve Airtel Money request.',
+        };
+      },
+      async verifyPayment(reference,context){
+        const input=airtelCaptured.get(reference);
+        if(!input)throw new Error('Airtel provider transaction was not found.');
+        assert.equal(context?.providerTransactionId,input.transactionId);
+        const providerStatus=airtelStatuses.get(reference)||'TIP';
+        const status=providerStatus==='TS'?'paid':providerStatus==='TF'?'failed':providerStatus==='TE'?'expired':'processing';
+        return {
+          provider:'airtel_money',providerStatus,status,
+          providerTransactionId:input.transactionId,
+          providerReference:status==='paid'?'AIRTEL-FIN-'+reference:input.transactionId,
+          settlementStatus:status==='paid'?'pending':'unknown',safeMessage:'Airtel status verified.',
+          amount:(input.amountMinor/100).toFixed(2),currency:input.currency,reference,
+          completedAt:status==='paid'||status==='failed'||status==='expired'?new Date().toISOString():null,
+          initiatedAt:null,paymentType:'airtel_money',settlement:null,
+        };
+      },
+      parseWebhook(request){
+        const transaction=request.body?.transaction||{};
+        return {
+          reference:String(request.body?.reference||transaction.reference||''),
+          eventType:'collection.callback',authenticated:true,
+          providerStatus:String(transaction.status_code||transaction.status||''),
+          providerTransactionId:String(transaction.id||''),
+          providerReference:String(transaction.airtel_money_id||''),completedAt:null,
+        };
+      },
+    });
+
     const {default:payments}=await vite.ssrLoadModule('/api/payments.ts');
 
     async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner'}={}){
@@ -188,6 +234,20 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       return {status,...output};
     }
 
+    async function airtelWebhook(body){
+      let status=200,output;
+      await payments({
+        method:'POST',url:'/api/payments/webhooks/airtel-money',
+        query:{__vopPaymentRoute:'webhooks/airtel-money'},
+        headers:{authorization:'Bearer test-airtel-callback'},body,rawBody:Buffer.from(JSON.stringify(body)),
+      },{
+        status(code){status=code;return this;},
+        json(data){output=data;return this;},
+        setHeader(){return this;},
+      });
+      return {status,...output};
+    }
+
     const orgA='pay-org-a',orgB='pay-org-b';
     await db.doc('organizations/'+orgA).set({id:orgA,name:'Payment Org A',status:'active'});
     await db.doc('organizations/'+orgB).set({id:orgB,name:'Payment Org B',status:'active'});
@@ -197,6 +257,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
     const refundLearner=await identity('payment-refund-learner',{organizationId:orgA,organizationRole:'learner'});
     const mtnLearner=await identity('payment-mtn-learner',{organizationId:orgA,organizationRole:'learner'});
+    const airtelLearner=await identity('payment-airtel-learner',{organizationId:orgA,organizationRole:'learner'});
     const outsider=await identity('payment-outsider',{organizationId:orgB,organizationRole:'learner'});
 
     const guideId='paid-guide';
@@ -435,6 +496,42 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const paid=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
       assert.equal(paid?.status,'paid');
       assert.equal(paid?.verificationStatus,'verified');
+      assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).data()?.status,'fulfilled');
+    });
+
+    await t.test('Airtel callback resolves by provider transaction id but cannot bypass authenticated enquiry',async()=>{
+      const item=await createItem('Direct Airtel charge','custom_charge','',{
+        amount:145,allowedProviders:['airtel_money'],allowedMethods:['airtel_money'],
+      });
+      const started=await call(airtelLearner,'checkout',{
+        payableItemId:item.id,provider:'airtel_money',paymentMethod:'airtel_money',phone:'0977000000',
+      });
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.payment.status,'pending');
+      const providerTransactionId=started.payment.providerTransactionId;
+      assert.ok(providerTransactionId);
+
+      // Airtel callback has no VOP reference here and falsely claims success.
+      // Core must locate the payment by Airtel transaction UUID, then call the
+      // provider verifier. The authoritative provider state is still TIP.
+      const callback=await airtelWebhook({
+        transaction:{id:providerTransactionId,status_code:'TS',airtel_money_id:'CALLBACK-CLAIM-AIRTEL'},
+      });
+      assert.equal(callback.status,200,JSON.stringify(callback));
+      assert.equal(callback.duplicate,false);
+      const stillPending=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.notEqual(stillPending?.status,'paid');
+      assert.equal(stillPending?.verificationStatus,'verified');
+      assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).exists,false);
+      const events=await db.collection('paymentWebhookEvents').where('paymentId','==',started.payment.id).get();
+      assert.equal(events.size,1);
+
+      // Only the independent authenticated provider enquiry can establish paid.
+      airtelStatuses.set(started.payment.reference,'TS');
+      const verified=await call(airtelLearner,'verify',{reference:started.payment.reference});
+      assert.equal(verified.status,200,JSON.stringify(verified));
+      assert.equal(verified.payment.status,'paid');
+      assert.equal(verified.payment.verificationStatus,'verified');
       assert.equal((await db.doc('paymentFulfilments/'+started.payment.id).get()).data()?.status,'fulfilled');
     });
 
