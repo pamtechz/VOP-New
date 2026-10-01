@@ -176,6 +176,7 @@ export const LessonsPage: React.FC<Props> = ({
       {refreshError&&<div className="vop-lessons-refresh-error" role="alert">{refreshError}</div>}
       {standaloneEntries.length ? <div className="vop-lessons-grid">{standaloneEntries.map(({guide,lesson})=>{
         const state=status(guide,lesson);
+        const attempted=lesson.type==='Test'&&lessonScoreForDisplay(guide,lesson,currentUser)!==undefined;
         return <article className="vop-material-card vop-lesson-card" key={guide.id+':'+guide.language+':'+lesson.id}>
           <div className="vop-lesson-card-meta"><span>{guide.language.toUpperCase()} · {lesson.type==='Test'?'Assessment':'Lesson'} {lesson.lessonNumber}</span>
             <span className={state.done?'vop-lesson-status completed':'vop-lesson-status'}>{state.done&&<CheckCircle2 size={13}/>} {state.label}</span>
@@ -190,7 +191,9 @@ export const LessonsPage: React.FC<Props> = ({
             <span>{lesson.type==='Test'?<CircleHelp size={15}/>:<Clock3 size={15}/>}
               {lesson.type==='Test'?`${lesson.questions?.length||0} questions`:`${lesson.estimatedMinutes||15} min`}</span>
             <button type="button" className="vop-lesson-open" onClick={()=>onOpenLesson(guide,lesson)}>
-              {lesson.type==='Test'?'Take assessment':'Open lesson'} <ChevronRight size={16}/>
+              {lesson.type==='Test'
+                ?attempted?t('guide.retake_quiz','Retake quiz'):t('lessons.take_assessment','Take assessment')
+                :t('lessons.open_lesson','Open lesson')} <ChevronRight size={16}/>
             </button>
           </div>
         </article>;
