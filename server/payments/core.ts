@@ -161,6 +161,15 @@ function requireSuperAdminFinanceControl(ctx:TenantContext,resource:string){
   if(!ctx.isSuperAdmin)throw new Error(`Only Super Admin can access ${resource}.`);
 }
 
+async function requireOrganizationSubscriptionConsumer(ctx:TenantContext){
+  if(ctx.isSuperAdmin)return;
+  await requirePermission(ctx,'billing','view');
+  const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+  if(ctx.tenantType!=='organization'||!ctx.organizationId||!['owner','admin'].includes(role)){
+    throw new Error('Only an organization owner or administrator can manage the organization subscription.');
+  }
+}
+
 export async function upsertPayableItem(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payable_items','manage');
   requireSuperAdminFinanceControl(ctx,'payable item management');
@@ -290,7 +299,7 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
       items.push({id:doc.id,...data});
     }else if(await itemVisibleToUser(ctx,data)){
       if(text(data.itemType)==='organization_subscription'){
-        try{await requirePermission(ctx,'billing','manage');}
+        try{await requireOrganizationSubscriptionConsumer(ctx);}
         catch{continue;}
       }
       items.push(await consumerPayableItem(ctx.db,doc.id,data));
@@ -377,7 +386,11 @@ async function providerAllowed(db:Firestore,item:DocumentData,providerKey:string
 async function selectProviderForMethod(db:Firestore,item:DocumentData,method:PaymentMethod){
   const allowedProviders=stringArray(item.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const candidates=allowedProviders.length?allowedProviders:registeredPaymentProviderKeys();
-  for(const providerKey of candidates){
+  const preferred=method==='airtel_money'?'airtel_money':method==='mtn_money'?'mtn_momo':method==='card'?'lenco':'';
+  const ordered=preferred&&candidates.includes(preferred)
+    ?[preferred,...candidates.filter(key=>key!==preferred)]
+    :candidates;
+  for(const providerKey of ordered){
     try{
       const provider=await providerAllowed(db,item,providerKey,method);
       return {providerKey,provider};
@@ -397,9 +410,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   const item=itemSnap.data()||{};
   if(!(await itemVisibleToUser(ctx,item)))throw new Error('This charge is not available to your account.');
   if(text(item.itemType)==='organization_subscription'){
-    await requirePermission(ctx,'billing','manage');
-    const billingOrganizationId=text(ctx.profile.organizationId)||ctx.organizationId;
-    if(!billingOrganizationId)throw new Error('An organization account is required to purchase a subscription package.');
+    await requireOrganizationSubscriptionConsumer(ctx);
   }
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
