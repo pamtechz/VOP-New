@@ -239,6 +239,26 @@ test('remaining portals do not define competing dark palettes or malformed theme
   assert.match(mentor,/background:var\(--vop-success-bg\)/);
 });
 
+test('theme switching is centralized and page styles do not define local dark palettes',()=>{
+  const theme=read('src/theme.css');
+  const index=read('src/index.css');
+  const admin=read('src/pages/admin.css');
+  const guideSections=read('src/components/guide/guide-sections.css');
+
+  assert.match(theme,/\[data-theme="dark"\]/);
+  for(const [name,css] of [
+    ['index',index],['admin',admin],['guide sections',guideSections],
+  ] as const){
+    assert.doesNotMatch(css,/\[data-theme="dark"\]/,name+' defines a competing dark theme');
+  }
+  assert.match(index,/\.vop-admin-account[\s\S]*background: var\(--theme-surface-soft\)/);
+  assert.match(admin,/\.vop-org-invite-result[\s\S]*background:var\(--theme-surface-soft\)/);
+  assert.match(guideSections,/\.vop-section-study-card[\s\S]*background:var\(--bg-card,#fff\)/);
+  assert.match(guideSections,/background:var\(--vop-warning-bg\)/);
+  assert.match(guideSections,/background:var\(--vop-success-bg\)/);
+  assert.doesNotMatch(guideSections,/#101f33|#314050|#342914|#143124|#3b2d17/);
+});
+
 test('legacy portals remain covered while canonical theme variables own final surfaces',()=>{
   const theme=read('src/theme.css');
   const readerModal=read('src/components/reader/LessonReaderModal.tsx');
