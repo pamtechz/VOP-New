@@ -36,6 +36,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
       return {uid:data.localId,token:data.idToken};
     }
     const learner=await identity('study-own',orgA);
+    const inheritanceLearner=await identity('study-settings-inheritance',orgA);
     const outsider=await identity('study-foreign',orgB);
     const retakeLearner=await identity('study-retake',orgA);
     const cooldownLearner=await identity('study-cooldown',orgA);
@@ -91,13 +92,29 @@ test('study progress: server grades and guide paths stay within authorized tenan
       ],
     });
 
-    await t.test('assessment policy inherits the platform pass mark when the organization has no settings document',async()=>{
-      await db.doc('system/settings').set({quizPassThreshold:77,quizMaxAttempts:0,quizRetakeCooldownMinutes:0},{merge:true});
-      await db.doc('organizations/'+orgA+'/settings/settings').delete();
-      const started=await startQuiz(learner);
+    await t.test('assessment start and submission inherit platform pass mark through partial organization settings',async()=>{
+      await db.doc('system/settings').set({
+        quizPassThreshold:77,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+      },{merge:true});
+      // A real organization commonly has a settings document for unrelated
+      // options. Its existence must not mask platform assessment defaults.
+      await db.doc('organizations/'+orgA+'/settings/settings').set({
+        quizRetakeCooldownMinutes:0,organizationTheme:'default',
+      });
+      const started=await startQuiz(inheritanceLearner);
       assert.equal(started.status,200,JSON.stringify(started));
       assert.equal(started.assessmentPolicy.threshold,77);
-      await db.doc('organizations/'+orgA+'/settings/settings').set({quizPassThreshold:80});
+      const submitted=await api(inheritanceLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+      assert.equal(submitted.threshold,77);
+      assert.equal(submitted.score,100);
+      assert.equal(submitted.passed,true);
+      await db.doc('organizations/'+orgA+'/settings/settings').set({
+        quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+      });
     });
 
     await t.test('a learner is graded from a private bank with an organization-bound score',async()=>{
