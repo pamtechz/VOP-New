@@ -157,8 +157,13 @@ async function assertTargetOrganization(ctx:TenantContext,organizationId:string)
   throw new Error('An authorized organization scope is required.');
 }
 
+function requireSuperAdminFinanceControl(ctx:TenantContext,resource:string){
+  if(!ctx.isSuperAdmin)throw new Error(`Only Super Admin can access ${resource}.`);
+}
+
 export async function upsertPayableItem(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payable_items','manage');
+  requireSuperAdminFinanceControl(ctx,'payable item management');
   const id=input.id?safePaymentId(input.id,'payable item identifier'):'pay_'+randomUUID().replaceAll('-','');
   const itemType=text(input.itemType);
   if(!PAYABLE_ITEM_TYPES.includes(itemType as never))throw new Error('Select a supported payable item type.');
@@ -211,6 +216,7 @@ export async function upsertPayableItem(ctx:TenantContext,input:Record<string,un
 
 export async function deletePayableItem(ctx:TenantContext,idValue:unknown){
   await requirePermission(ctx,'payable_items','manage');
+  requireSuperAdminFinanceControl(ctx,'payable item management');
   const id=safePaymentId(idValue,'payable item identifier');
   const ref=ctx.db.doc('payableItems/'+id),snap=await ref.get();
   if(!snap.exists)throw new Error('The payable item does not exist.');
@@ -240,15 +246,38 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
+function consumerPayableItem(id:string,data:DocumentData){
+  return {
+    id,
+    name:text(data.name),
+    description:text(data.description),
+    itemType:text(data.itemType),
+    organizationName:text(data.organizationName),
+    currency:text(data.currency),
+    amountMinor:Number(data.amountMinor||0),
+    amountDecimal:text(data.amountDecimal),
+    repeatable:bool(data.repeatable,false),
+    allowedMethods:stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never)),
+    // Provider keys are checkout routing hints only. Provider credentials,
+    // environment, capabilities and callback configuration remain Super Admin-only.
+    allowedProviders:stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key)),
+  };
+}
+
 export async function listPayableItems(ctx:TenantContext,admin=false){
-  if(admin)await requirePermission(ctx,'payable_items','view');
+  if(admin){
+    await requirePermission(ctx,'payable_items','view');
+    requireSuperAdminFinanceControl(ctx,'payable item administration');
+  }
   const snap=await ctx.db.collection('payableItems').get();
   const items=[];
   for(const doc of snap.docs){
     const data=doc.data();
     if(admin){
-      if(ctx.isSuperAdmin||await itemVisibleToUser(ctx,{...data,active:true}))items.push({id:doc.id,...data});
-    }else if(await itemVisibleToUser(ctx,data))items.push({id:doc.id,...data});
+      items.push({id:doc.id,...data});
+    }else if(await itemVisibleToUser(ctx,data)){
+      items.push(consumerPayableItem(doc.id,data));
+    }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
 }
@@ -1111,11 +1140,11 @@ export async function reconcilePendingPayments(db:Firestore,limit=100){
 
 export async function adminReconcile(ctx:TenantContext,paymentIdValue?:unknown){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment reconciliation');
   if(paymentIdValue){
     const details=await adminPaymentDetails(ctx,paymentIdValue);
     return {payment:await verifyAndApplyPayment(ctx.db,details.payment.reference,'admin-reconciliation')};
   }
-  if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can run platform-wide payment reconciliation.');
   return {summary:await reconcilePendingPayments(ctx.db,100)};
 }
 
@@ -1132,9 +1161,20 @@ export async function adminExportTransactions(ctx:TenantContext,filters:Record<s
   return lines.join('\n');
 }
 
-export async function listPaymentProviders(ctx:TenantContext){
+export async function listCheckoutOptions(ctx:TenantContext){
   const catalog=await safeProviderCatalog(ctx.db);
-  return catalog;
+  return catalog
+    .filter(provider=>provider.enabled&&provider.configured)
+    .map(provider=>({
+      key:text(provider.key),
+      methods:stringArray(provider.methods).filter(method=>PAYMENT_METHODS.includes(method as never)),
+    }));
+}
+
+export async function listPaymentProviders(ctx:TenantContext){
+  await requirePermission(ctx,'payments','view');
+  requireSuperAdminFinanceControl(ctx,'payment provider administration');
+  return safeProviderCatalog(ctx.db);
 }
 
 export function configuredPaymentStatuses(){return [...PAYMENT_STATUSES];}
