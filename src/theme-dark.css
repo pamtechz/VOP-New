@@ -1039,7 +1039,13 @@
   .bg-blue-50,.bg-blue-100,.bg-blue-600,.bg-blue-700,.bg-blue-800,.bg-blue-900,
   .bg-sky-50,.bg-sky-100,.bg-indigo-50,.bg-indigo-100
 ){background-color:#0d0d0d!important}
-[data-theme="dark"] [class*="bg-gradient-to-"]{
+[data-theme="dark"] :is(
+  [class*="from-blue-"],[class*="to-blue-"],[class*="via-blue-"],
+  [class*="from-sky-"],[class*="to-sky-"],[class*="via-sky-"],
+  [class*="from-indigo-"],[class*="to-indigo-"],[class*="via-indigo-"],
+  [class*="from-cyan-"],[class*="to-cyan-"],[class*="via-cyan-"],
+  .vop-events-hero,.vop-radio-hero,.vop-prayer-hero,.vop-cert-hero
+){
   background-color:#000!important;
   background-image:none!important;
 }
