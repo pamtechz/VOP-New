@@ -246,7 +246,23 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
-function consumerPayableItem(id:string,data:DocumentData){
+async function consumerPaymentMethods(db:Firestore,data:DocumentData){
+  const allowedMethods=stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never));
+  const configuredProviders=stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
+  const providerKeys=configuredProviders.length?configuredProviders:registeredPaymentProviderKeys();
+  const methods=new Set<string>();
+  for(const key of providerKeys){
+    const config=await providerConfig(db,key);
+    if(!config.enabled||!config.configured)continue;
+    for(const method of config.methods){
+      if((!allowedMethods.length||allowedMethods.includes(method))&&PAYMENT_METHODS.includes(method as never)
+        &&method!=='manual'&&method!=='bank')methods.add(method);
+    }
+  }
+  return [...methods] as PaymentMethod[];
+}
+
+async function consumerPayableItem(db:Firestore,id:string,data:DocumentData){
   return {
     id,
     name:text(data.name),
@@ -257,10 +273,7 @@ function consumerPayableItem(id:string,data:DocumentData){
     amountMinor:Number(data.amountMinor||0),
     amountDecimal:text(data.amountDecimal),
     repeatable:bool(data.repeatable,false),
-    allowedMethods:stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never)),
-    // Provider keys are checkout routing hints only. Provider credentials,
-    // environment, capabilities and callback configuration remain Super Admin-only.
-    allowedProviders:stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key)),
+    allowedMethods:await consumerPaymentMethods(db,data),
   };
 }
 
@@ -280,7 +293,7 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
         try{await requirePermission(ctx,'billing','manage');}
         catch{continue;}
       }
-      items.push(consumerPayableItem(doc.id,data));
+      items.push(await consumerPayableItem(ctx.db,doc.id,data));
     }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
@@ -361,10 +374,21 @@ async function providerAllowed(db:Firestore,item:DocumentData,providerKey:string
   return getPaymentProvider(providerKey);
 }
 
+async function selectProviderForMethod(db:Firestore,item:DocumentData,method:PaymentMethod){
+  const allowedProviders=stringArray(item.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
+  const candidates=allowedProviders.length?allowedProviders:registeredPaymentProviderKeys();
+  for(const providerKey of candidates){
+    try{
+      const provider=await providerAllowed(db,item,providerKey,method);
+      return {providerKey,provider};
+    }catch{/* try the next configured provider */}
+  }
+  throw new Error('The selected payment method is currently unavailable.');
+}
+
 export async function createCheckout(ctx:TenantContext,input:Record<string,unknown>){
   await enforcePaymentRateLimit(ctx,'checkout',8,60_000);
   const payableItemId=safePaymentId(input.payableItemId,'payable item identifier');
-  const providerKey=text(input.provider||'lenco').toLowerCase();
   const method=text(input.paymentMethod) as PaymentMethod;
   if(!PAYMENT_METHODS.includes(method as never)||method==='manual'||method==='bank')throw new Error('Select a supported online payment method.');
 
@@ -379,7 +403,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   }
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
-  const provider=await providerAllowed(ctx.db,item,providerKey,method);
+  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
   const organizationId=text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
   const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
@@ -427,20 +451,22 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   });
   if(reused){
     let checkout:null|Record<string,unknown>=null;
-    if(reused.status!=='paid'&&reused.paymentMethod==='card'&&provider.resumeCheckout){
+    const existingProviderKey=text(reused.provider);
+    const existingProvider=existingProviderKey?getPaymentProvider(existingProviderKey):provider;
+    if(reused.status!=='paid'&&reused.paymentMethod==='card'&&existingProvider.resumeCheckout){
       try{
-        const resumed=await provider.resumeCheckout({
+        const resumed=await existingProvider.resumeCheckout({
           reference:reused.reference,amountMinor:reused.amountMinor,currency:reused.currency,
           method:reused.paymentMethod as PaymentMethod,email:reused.payerEmail,
           description:reused.description,
         });
         checkout=resumed.checkout||null;
-        await paymentAudit(ctx.db,reused.id,'checkout.resumed',ctx.auth.uid,{provider:providerKey});
+        await paymentAudit(ctx.db,reused.id,'checkout.resumed',ctx.auth.uid,{provider:existingProviderKey});
       }catch(error){
-        await paymentAudit(ctx.db,reused.id,'checkout.resume_failed',ctx.auth.uid,{provider:providerKey,error:publicError(error)});
+        await paymentAudit(ctx.db,reused.id,'checkout.resume_failed',ctx.auth.uid,{provider:existingProviderKey,error:publicError(error)});
       }
     }
-    return {payment:reused,reused:true,checkout};
+    return {payment:scopedTransactionProjection(reused),reused:true,checkout};
   }
 
   const attemptId='attempt_'+randomUUID().replaceAll('-','');
@@ -473,7 +499,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       await verifyAndApplyPayment(ctx.db,reference,'checkout-verification');
     }
     const latest=await paymentRef.get();
-    return {payment:serializePayment(paymentId,latest.data()||{}),checkout:result.checkout||null,reused:false};
+    return {payment:scopedTransactionProjection(serializePayment(paymentId,latest.data()||{})),checkout:result.checkout||null,reused:false};
   }catch(error){
     const message=publicError(error);
     // A timeout/network loss is ambiguous: the provider may have accepted the
@@ -674,7 +700,7 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
 
 export async function paymentHistory(ctx:TenantContext){
   const snap=await ctx.db.collection('paymentTransactions').where('payerUid','==',ctx.auth.uid).limit(200).get();
-  return snap.docs.map(doc=>serializePayment(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  return snap.docs.map(doc=>scopedTransactionProjection(serializePayment(doc.id,doc.data()))).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function paymentStatusForUser(ctx:TenantContext,referenceValue:unknown,verify=false){
@@ -687,7 +713,7 @@ export async function paymentStatusForUser(ctx:TenantContext,referenceValue:unkn
   }
   const doc=await loadPaymentByReference(ctx.db,reference);
   if(!doc||text(doc.data()?.payerUid)!==ctx.auth.uid)throw new Error('The payment reference was not found.');
-  return serializePayment(doc.id,doc.data());
+  return scopedTransactionProjection(serializePayment(doc.id,doc.data()));
 }
 
 export async function receiptForUser(ctx:TenantContext,paymentIdValue:unknown){
@@ -697,7 +723,9 @@ export async function receiptForUser(ctx:TenantContext,paymentIdValue:unknown){
   const receipt=await ctx.db.doc('paymentReceipts/'+paymentId).get();
   if(!receipt.exists)throw new Error('The receipt is not available yet.');
   const data=receipt.data()||{};
-  return {...data,paidAt:timestampIso(data.paidAt),issuedAt:timestampIso(data.issuedAt)};
+  return Object.fromEntries(Object.entries({
+    ...data,paidAt:timestampIso(data.paidAt),issuedAt:timestampIso(data.issuedAt),
+  }).filter(([key])=>!['provider','providerReference','providerTransactionId'].includes(key)));
 }
 
 function scopedTransactionProjection(row:ReturnType<typeof serializePayment>){
@@ -1211,16 +1239,6 @@ export async function adminExportTransactions(ctx:TenantContext,filters:Record<s
     row.verificationStatus,row.reconciliationStatus,
   ].map(escape).join(','));
   return lines.join('\n');
-}
-
-export async function listCheckoutOptions(ctx:TenantContext){
-  const catalog=await safeProviderCatalog(ctx.db);
-  return catalog
-    .filter(provider=>provider.enabled&&provider.configured)
-    .map(provider=>({
-      key:text(provider.key),
-      methods:stringArray(provider.methods).filter(method=>PAYMENT_METHODS.includes(method as never)),
-    }));
 }
 
 export async function listPaymentProviders(ctx:TenantContext){
