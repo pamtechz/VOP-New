@@ -28,6 +28,8 @@ export interface ClientPayment {
   settlementStatus:string;
   fulfilmentStatus:string;
   receiptId:string;
+  refundedMinor:number;
+  refundStatus:string;
   createdAt:string;
   paidAt:string;
   failedAt:string;
