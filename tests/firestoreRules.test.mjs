@@ -800,6 +800,7 @@ test('financial records are server-authoritative even for authenticated administ
       await db.doc('payableItems/item-1').set({active:true,scope:'organization',organizationId:'payment-org'});
       await db.doc('paymentProviderConfigs/lenco').set({enabled:true});
       await db.doc('paymentWebhookEvents/event-1').set({provider:'lenco'});
+      await db.doc('paymentRefunds/refund-1').set({paymentId:'payment-1',status:'completed'});
       await db.doc('paymentFulfilments/payment-1').set({status:'fulfilled'});
     });
     const learner=environment.authenticatedContext('payment-user').firestore();
@@ -811,6 +812,8 @@ test('financial records are server-authoritative even for authenticated administ
       await assertFails(db.doc('payableItems/item-1').get());
       await assertFails(db.doc('paymentProviderConfigs/lenco').get());
       await assertFails(db.doc('paymentWebhookEvents/event-1').get());
+      await assertFails(db.doc('paymentRefunds/refund-1').get());
+      await assertFails(db.doc('paymentRefunds/refund-1').set({status:'completed'}));
       await assertFails(db.doc('paymentFulfilments/payment-1').get());
     }
   } finally {
