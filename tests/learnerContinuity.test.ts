@@ -165,6 +165,11 @@ test('portal-wide dark contract eliminates light islands across every portal',()
   assert.match(theme,/\[class\*="from-blue-"\]/);
   assert.match(theme,/background-color:#000!important/);
   for(const selector of [
+    'vop-mentoring-assign-form','vop-org-invitations','vop-reference-editor-fields',
+    'vop-lesson-settings-panel','vop-assessment-retake','vop-lesson-anchored-quizzes',
+  ]) assert.ok(theme.includes(selector),selector+' targeted dark-mode coverage');
+  assert.match(theme,/background:#f2c15d!important;[\s\S]*color:#050505!important/);
+  for(const selector of [
     'vop-events-page','vop-certificate-page','vop-page-head','vop-candidate-table-wrap',
     'vop-user-table-wrap','vop-personal-header','vop-reference-card','vop-metric-value',
     'vop-events-empty','vop-official-certificate-meta>div','vop-primary',
