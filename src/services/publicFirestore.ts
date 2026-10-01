@@ -176,7 +176,8 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
       : Promise.resolve(null),
   ]);
   const platformSettings = systemSettingsSnap.exists() ? normalizeSettings(systemSettingsSnap.data()) : emptySettings();
-  const scopedSettings = scopedSettingsSnap?.exists() ? normalizeSettings(scopedSettingsSnap.data()) : null;
+  const scopedSettingsRaw = scopedSettingsSnap?.exists() ? scopedSettingsSnap.data() as Record<string,unknown> : null;
+  const scopedSettings = scopedSettingsRaw ? normalizeSettings(scopedSettingsRaw) : null;
   const scopedOrganizationName = String(scopedOrganizationSnap?.data()?.name || '').trim();
   const aboutProfile = scopedSettings
     ? resolveAboutProfile(platformSettings, scopedSettings, {
@@ -201,6 +202,14 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
   const effectiveSettings: AppSettings = scopedSettings ? {
     ...platformSettings,
     ...scopedSettings,
+    // Assessment settings inherit from platform unless the tenant explicitly
+    // stores that key. Zero remains a valid explicit value for attempts/cooldown.
+    quizPassThreshold:Object.hasOwn(scopedSettingsRaw||{},'quizPassThreshold')
+      ?Number(scopedSettingsRaw?.quizPassThreshold??0):platformSettings.quizPassThreshold,
+    quizMaxAttempts:Object.hasOwn(scopedSettingsRaw||{},'quizMaxAttempts')
+      ?Math.max(0,Math.trunc(Number(scopedSettingsRaw?.quizMaxAttempts??0)||0)):platformSettings.quizMaxAttempts,
+    quizRetakeCooldownMinutes:Object.hasOwn(scopedSettingsRaw||{},'quizRetakeCooldownMinutes')
+      ?Math.max(0,Math.trunc(Number(scopedSettingsRaw?.quizRetakeCooldownMinutes??0)||0)):platformSettings.quizRetakeCooldownMinutes,
     // Product identity, availability and security remain platform-owned.
     appName: platformSettings.appName || scopedSettings.appName,
     appTagline: platformSettings.appTagline || scopedSettings.appTagline,
