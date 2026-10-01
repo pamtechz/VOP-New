@@ -6,6 +6,8 @@ React/TypeScript/Vite interface packaged for Android with Capacitor. The applica
 
 ## Run and check
 
+Use Node.js `>=22.12 <23`. The repository publishes `.nvmrc` and `.node-version` with major version `22`; do not install this project under Node 24 or 26.
+
 ```bash
 npm ci
 npm run dev
