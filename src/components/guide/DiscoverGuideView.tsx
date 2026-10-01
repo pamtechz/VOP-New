@@ -73,9 +73,10 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     const passMark=Number.isFinite(Number(assessment.assessmentPassThreshold))
       ?Number(assessment.assessmentPassThreshold):threshold;
     const passed=hasScore&&Number.isFinite(passMark)&&score!>=passMark;
+    const actionLabel=hasScore?t('guide.retake_quiz','Retake quiz'):label;
     return <button type="button" key={assessment.id} className={'vop-section-test '+(passed?'passed':hasScore?'attempted':'')}
-      onClick={()=>onSelectLesson(assessment)} aria-label={label+': '+assessment.title}>
-      <FileQuestion size={14}/><span>{label}</span>
+      onClick={()=>onSelectLesson(assessment)} aria-label={actionLabel+': '+assessment.title}>
+      <FileQuestion size={14}/><span>{actionLabel}</span>
       {hasScore&&<em>{passed?'Passed':'Score'} {Math.round(score!)}%</em>}
     </button>;
   };
@@ -98,11 +99,9 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         <strong>{assessment.title}</strong>
         <em>{locked
           ?t('guide.exam_locked','Complete all lessons to unlock')
-          :passed
-            ?`${t('guide.passed','Passed')} · ${Math.round(score!)}%`
-            :hasScore
-              ?`${t('guide.score','Score')} · ${Math.round(score!)}%`
-              :assessment.estimatedMinutes>0?`${assessment.estimatedMinutes} min`:t('guide.ready','Ready')}</em>
+          :hasScore
+            ?`${isFinal?t('guide.retake_exam','Retake exam'):t('guide.retake_quiz','Retake quiz')} · ${passed?t('guide.passed','Passed'):t('guide.score','Score')} ${Math.round(score!)}%`
+            :assessment.estimatedMinutes>0?`${assessment.estimatedMinutes} min`:t('guide.ready','Ready')}</em>
       </span>
       <ChevronRight size={17}/>
     </button>;
