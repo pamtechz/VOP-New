@@ -69,7 +69,20 @@ async function notifyStageApprovers(
   if(organizationId){
     const members=await ctx.db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
     for(const member of members.docs){
-      if(stage.approverRoles?.includes(text(member.data()?.role)))recipients.add(member.id);
+      const memberRole=text(member.data()?.role);
+      // Mentor approval is assignment-specific; do not notify every mentor in
+      // the organization for one learner's certificate review.
+      if(memberRole!=='mentor'&&stage.approverRoles?.includes(memberRole))recipients.add(member.id);
+    }
+    if(stage.approverRoles?.includes('mentor')){
+      const candidateId=text(request.candidateId);
+      if(candidateId){
+        const assignment=await ctx.db.doc(`mentorAssignments/${candidateId}`).get();
+        if(assignment.exists&&assignment.data()?.status==='active'){
+          const mentorId=text(assignment.data()?.mentorId);
+          if(mentorId)recipients.add(mentorId);
+        }
+      }
     }
   }
   const hierarchyRoleField:Record<string,string>={
@@ -242,8 +255,17 @@ async function decide(req: Request, res: Response) {
   const stageIndex = Number(current.workflowStageIndex), stageId = text(current.workflowStageId), stage = stages[stageIndex];
   if (!stage || stage.id !== stageId) return res.status(409).json({ error: 'The configured approval workflow no longer matches this request. Reconfigure the workflow or migrate the request before deciding.' });
   const profileRole = text(ctx.profile.role), membershipRole = text(ctx.membership.role);
-  const allowed = stage.approverRoles?.some(role => role === profileRole || role === membershipRole);
-  if (!allowed && !ctx.isSuperAdmin) return res.status(403).json({ error: 'You are not authorized to decide this approval stage.' });
+  let allowed = stage.approverRoles?.some(role => role === profileRole || role === membershipRole);
+  if(allowed&&!ctx.isSuperAdmin&&stage.approverRoles?.includes('mentor')
+      &&(profileRole==='mentor'||membershipRole==='mentor')){
+    const nonMentorRoleMatch=stage.approverRoles.some(role=>role!=='mentor'&&(role===profileRole||role===membershipRole));
+    if(!nonMentorRoleMatch){
+      const assignment=await ctx.db.doc(`mentorAssignments/${text(current.candidateId)}`).get();
+      allowed=Boolean(assignment.exists&&assignment.data()?.status==='active'
+        &&text(assignment.data()?.mentorId)===ctx.auth.uid);
+    }
+  }
+  if (!allowed && !ctx.isSuperAdmin) return res.status(403).json({ error: 'You are not authorized or assigned to this learner for the current approval stage.' });
 
   // An approval may occur days after submission, after another retake or a
   // guide edit. Historical pending requests may also contain the former
