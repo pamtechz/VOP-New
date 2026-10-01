@@ -32,7 +32,7 @@ test('local API mirrors consolidated Vercel payment rewrites', async () => {
   });
   for(const path of ['/api/payments/history','/api/payments/catalog']){
     const res={headersSent:false,writableEnded:false,setHeader(){},end(){this.writableEnded=true;}};
-    await middleware({method:'POST',url:path,headers:{}},res,()=>assert.fail('Payment request fell through'));
+    await middleware({method:'GET',url:path,headers:{}},res,()=>assert.fail('Payment request fell through'));
   }
   assert.deepEqual(loaded,['/api/payments.ts','/api/payments.ts']);
   assert.equal(received[0].query.__vopPaymentRoute,'history');
