@@ -78,13 +78,24 @@ test('loading fallback translations preserves the selected locale and resolves e
 });
 
 
-test('package lock matches grpc override and Capacitor app dependency', () => {
+test('package lock matches supported runtime, Vite, gRPC and Capacitor dependencies', () => {
   const root=join(dirname(fileURLToPath(import.meta.url)),'..');
   const pkg=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
   const lock=JSON.parse(readFileSync(join(root,'package-lock.json'),'utf8'));
-  assert.equal(pkg.engines.node,'>=22 <23');
+  assert.equal(pkg.engines.node,'>=22.12 <23');
+  assert.equal(pkg.engines.npm,'>=10 <11');
+  assert.equal(pkg.packageManager,'npm@10.9.2');
+  assert.equal(readFileSync(join(root,'.nvmrc'),'utf8').trim(),'22.16.0');
+  assert.equal(readFileSync(join(root,'.node-version'),'utf8').trim(),'22.16.0');
+  assert.equal(readFileSync(join(root,'.npmrc'),'utf8').trim(),'engine-strict=true');
   assert.equal(pkg.dependencies['@capacitor/app'],'8.1.1');
   assert.equal(lock.packages[''].dependencies['@capacitor/app'],'8.1.1');
+  assert.equal(pkg.devDependencies.vite,'8.3.0');
+  assert.equal(lock.packages[''].devDependencies.vite,'8.3.0');
+  assert.equal(lock.packages[''].engines.node,'>=22.12 <23');
+  assert.equal(lock.packages[''].engines.npm,'>=10 <11');
+  assert.equal(lock.packages['node_modules/vite'].version,'8.3.0');
+  assert.notEqual(lock.packages['node_modules/vite'].peer,true);
   assert.equal(pkg.overrides['@grpc/grpc-js'],'1.14.5');
   assert.equal(lock.packages['node_modules/@grpc/grpc-js'].version,'1.14.5');
   assert.equal(lock.packages['node_modules/@grpc/grpc-js/node_modules/@grpc/proto-loader'].version,'0.8.1');
