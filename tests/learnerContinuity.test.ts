@@ -149,6 +149,12 @@ test('dark theme defines semantic surfaces and covers late legacy UI islands',()
 
 test('portal-wide dark contract eliminates light islands across every portal',()=>{
   const theme=read('src/theme-dark.css');
+  const main=read('src/main.tsx');
+  const rootSource=read('src/Root.tsx');
+  const readerModal=read('src/components/reader/LessonReaderModal.tsx');
+  const quizModal=read('src/components/quiz/QuizModal.tsx');
+  const contentStudio=read('src/components/admin/ContentStudio.tsx');
+  const adminRecords=read('src/pages/AdminRecordsPanel.tsx');
   const admin=read('src/pages/admin.css');
   const candidates=read('src/pages/candidate-management.css');
   const users=read('src/pages/userManagement.css');
@@ -158,6 +164,16 @@ test('portal-wide dark contract eliminates light islands across every portal',()
 
   assert.match(theme,/Portal-wide dark theme contract v3/);
   assert.match(theme,/2026-10 black dark-theme completion/);
+  assert.match(theme,/Neutral surfaces and faint-divider contract v4/);
+  assert.match(theme,/\[class\*="border-white"\]/);
+  assert.match(theme,/\[class\*="bg-blue-"\]/);
+  assert.ok(main.indexOf("import './theme-dark.css';") > main.indexOf("import './admin-layout-overrides.css';"),'dark theme must load last');
+  assert.doesNotMatch(rootSource,/theme-dark\.css/);
+  assert.match(readerModal,/data-surface="progress"/);
+  assert.match(readerModal,/borderTop: '1px solid var\(--border-subtle\)'/);
+  assert.match(quizModal,/data-surface="question"/);
+  assert.doesNotMatch(contentStudio,/bg-blue-50/);
+  assert.doesNotMatch(adminRecords,/#f5f9ff/);
   assert.match(theme,/--bg-primary:#000/);
   for(const workspace of ['vop-mentoring','vop-org-workspace','vop-module-workspace','vop-structure']){
     assert.ok(theme.includes(workspace),workspace+' dark coverage');
