@@ -14,7 +14,7 @@
 .vop-user-metric small{font-size:9px;color:var(--text-muted,#607aa4);white-space:nowrap}
 .vop-user-metric strong{font-size:19px;color:var(--text-primary,#092f78);line-height:1.05;margin-top:2px}
 .vop-user-metric span{font-size:9px;color:var(--text-muted,#7085a6);margin-top:3px}
-.vop-user-metric.blue .vop-user-metric-icon{background:#e9f2ff;color:#1470e6}.vop-user-metric.green .vop-user-metric-icon{background:#e5f9ec;color:#10a24b}.vop-user-metric.red .vop-user-metric-icon{background:#ffe9ec;color:#e6223b}.vop-user-metric.purple .vop-user-metric-icon{background:#eee8ff;color:#6034e6}.vop-user-metric.orange .vop-user-metric-icon{background:var(--bg-card,#fff)0db;color:#f28b00}
+.vop-user-metric.blue .vop-user-metric-icon{background:#e9f2ff;color:#1470e6}.vop-user-metric.green .vop-user-metric-icon{background:#e5f9ec;color:#10a24b}.vop-user-metric.red .vop-user-metric-icon{background:#ffe9ec;color:#e6223b}.vop-user-metric.purple .vop-user-metric-icon{background:#eee8ff;color:#6034e6}.vop-user-metric.orange .vop-user-metric-icon{background:var(--vop-warning-bg);color:var(--vop-warning)}
 .vop-user-toolbar{display:grid;grid-template-columns:minmax(230px,1.7fr) repeat(4,minmax(120px,1fr)) 100px;gap:8px;margin-bottom:10px}
 .vop-user-search,.vop-user-toolbar select{height:38px;border:1px solid var(--border-subtle,#dce6f2);background:var(--bg-card,#fff);border-radius:8px;box-sizing:border-box}
 .vop-user-search{display:flex;align-items:center;gap:8px;padding:0 10px;color:#174b9c}

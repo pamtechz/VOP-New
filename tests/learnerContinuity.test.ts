@@ -214,6 +214,31 @@ test('admin learning and public neutral surfaces inherit the canonical theme con
   assert.match(admin,/background:var\(--vop-success-bg\)/);
 });
 
+test('remaining portals do not define competing dark palettes or malformed theme colors',()=>{
+  const candidates=read('src/pages/candidate-management.css');
+  const users=read('src/pages/userManagement.css');
+  const mentor=read('src/pages/mentor-workspace.css');
+  const reference=read('src/reference.css');
+
+  for(const [name,css] of [
+    ['candidates',candidates],['users',users],['mentor',mentor],['reference',reference],
+  ] as const){
+    assert.doesNotMatch(css,/var\([^)]*\)[0-9a-f]{2,6}\b/i,name+' contains a malformed theme color');
+  }
+
+  assert.match(candidates,/background:var\(--vop-error-bg\);color:var\(--vop-error\)/);
+  assert.match(users,/background:var\(--vop-warning-bg\);color:var\(--vop-warning\)/);
+  assert.match(reference,/background:var\(--vop-error-bg\)/);
+  assert.match(reference,/background:var\(--theme-surface\)/);
+  assert.doesNotMatch(mentor,/\[data-theme="dark"\]/);
+  assert.doesNotMatch(mentor,/#101f33|#2a3f59|#17304c|#174f8d/);
+  for(const token of ['--theme-title','--theme-text','--theme-muted','--theme-surface-soft','--theme-surface-elevated','--theme-border']){
+    assert.ok(mentor.includes('var('+token+')'),token+' missing from mentor workspace');
+  }
+  assert.match(mentor,/background:var\(--vop-error-bg\)/);
+  assert.match(mentor,/background:var\(--vop-success-bg\)/);
+});
+
 test('legacy portals remain covered while canonical theme variables own final surfaces',()=>{
   const theme=read('src/theme.css');
   const readerModal=read('src/components/reader/LessonReaderModal.tsx');
