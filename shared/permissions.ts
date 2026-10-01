@@ -142,5 +142,6 @@ export function roleForPermission(profile: { role?: unknown; organizationRole?: 
 
 export function permissionAllowed(matrix: PermissionMatrix, role: PermissionRole, resource: PermissionResource, action: PermissionAction): boolean {
   if (role === 'super_admin') return true;
+  if (resource === 'payable_items') return false;
   return Boolean(matrix[role]?.[resource]?.includes(action));
 }
