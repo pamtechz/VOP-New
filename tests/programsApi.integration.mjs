@@ -177,6 +177,52 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal((await db.doc('programs/'+programId).get()).data()?.adoptedByPlatform,true);
   });
 });
+
+await test('platform-published curriculum is inherited system-wide by organizations',async()=>{
+  const platformGuide='program-test-platform-guide';
+  const platformLesson='program-test-platform-lesson';
+  const guide=await call(superAdmin,{collection:'guides',action:'upsertGuide',data:{
+    id:platformGuide,title:'Platform Bible Course',subtitle:'System-wide',
+    description:'Published by VOP for every organization',language:'en',
+    discoverNumber:77,published:true,archived:false,sharingScope:'private',
+    certificateEligible:true,requiresFinalExam:true,
+  }});
+  assert.equal(guide.status,200,JSON.stringify(guide.value));
+  assert.equal((await db.doc('guides/'+platformGuide).get()).data()?.organizationId,'');
+  assert.equal((await db.doc('guides/'+platformGuide).get()).data()?.scope,'platform');
+  assert.equal((await db.doc('guides/'+platformGuide).get()).data()?.sharingScope,'shared');
+
+  const lesson=await call(superAdmin,{collection:'curriculum',action:'upsertLesson',
+    id:platformLesson,data:{
+      guideId:platformGuide,lessonId:platformLesson,language:'en',
+      title:'Platform lesson',lessonNumber:'1',type:'Lesson',
+      published:true,archived:false,sharingScope:'organization',
+      chapters:[{id:'chapter-one',title:'Chapter one',sections:[{id:'section-one',title:'Section one',blocks:[{id:'block-one',type:'paragraph',text:'Shared platform study.'}]}]}],
+    }});
+  assert.equal(lesson.status,200,JSON.stringify(lesson.value));
+  assert.equal((await db.doc('guides/'+platformGuide+'/lessons/'+platformLesson).get()).data()?.sharingScope,'shared');
+
+  const program=await call(superAdmin,{collection:'programs',action:'upsert',data:{
+    title:'Platform VOP Program',description:'Available to every organization',
+    coverImageUrl:'',entryMode:'lessons',guideIds:[platformGuide],
+    sharingScope:'private',published:true,archived:false,
+  }});
+  assert.equal(program.status,200,JSON.stringify(program.value));
+  assert.equal((await db.doc('programs/'+program.value.item.id).get()).data()?.sharingScope,'shared');
+
+  const orgCatalogue=await call(outsideLearner,{collection:'programs',action:'learnerList'});
+  assert.equal(orgCatalogue.status,200,JSON.stringify(orgCatalogue.value));
+  assert.ok(orgCatalogue.value.items.some(item=>item.id===program.value.item.id),
+    'organization learner should see the platform program');
+
+  const orgGuides=await call(outsider,{collection:'guides',action:'listGuides',organizationId:b});
+  assert.equal(orgGuides.status,200,JSON.stringify(orgGuides.value));
+  const visibleGuide=orgGuides.value.items.find(item=>item.id===platformGuide);
+  assert.ok(visibleGuide,'organization course selector should include system-wide guide');
+  assert.equal(visibleGuide.published,true);
+  assert.equal(visibleGuide.canEdit,false);
+});
+
 const notesGuide='program-test-notes-guide';
 await db.doc('guides/'+notesGuide).set({
   id:notesGuide,organizationId:a,ownerOrganizationId:a,ownerUid:author.uid,
