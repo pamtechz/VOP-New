@@ -47,7 +47,7 @@ const checks = [
   ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users']],
   ['api_handlers/admin/plans.ts', ['system/plans/catalog','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId']],
   ['shared/payments.ts', ['PAYMENT_STATUSES','PAYABLE_ITEM_TYPES','amountToMinor','canTransitionPaymentStatus']],
-  ['server/payments/providers.ts', ['PaymentProviderAdapter','X-Lenco-Signature','registerPaymentProvider','/collections/status/']],
+  ['server/payments/providers.ts', ['PaymentProviderAdapter','verifyWebhook','createHmac','registerPaymentProvider','/collections/status/']],
   ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','processProviderWebhook','reconcilePendingPayments','paymentLocks','paymentReceipts']],
   ['api/payments.ts', ['webhooks/lenco','reconcile-cron','admin/payable-items','admin/reconcile']],
   ['src/pages/PaymentsPage.tsx', ['Payments & receipts','startPaymentCheckout','verifyPayment']],
