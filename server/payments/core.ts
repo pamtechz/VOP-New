@@ -41,6 +41,11 @@ function safeMetadata(value:unknown){
   }
   return output;
 }
+function webhookIdentityPayload(value:unknown){
+  const data=object(value);
+  return JSON.stringify(data,Object.keys(data).sort()).slice(0,4000);
+}
+
 function publicError(error:unknown,fallback='Payment request failed.'){
   const message=error instanceof Error?error.message:fallback;
   if(/token|secret|credential|private key|authorization/i.test(message))return fallback;
@@ -298,6 +303,17 @@ function serializeRefund(id:string,data:DocumentData){
 async function loadPaymentByReference(db:Firestore,reference:string){
   const snap=await db.collection('paymentTransactions').where('reference','==',reference).limit(1).get();
   if(snap.empty)return null;
+  return snap.docs[0];
+}
+
+async function loadPaymentByProviderTransactionId(db:Firestore,providerTransactionId:string){
+  if(!providerTransactionId)return null;
+  const snap=await db.collection('paymentTransactions')
+    .where('providerTransactionId','==',providerTransactionId).limit(2).get();
+  if(snap.empty)return null;
+  // Provider transaction IDs must be unique. Fail closed rather than guessing
+  // if historical data ever violates that invariant.
+  if(snap.size!==1)throw new Error('The provider transaction reference is ambiguous.');
   return snap.docs[0];
 }
 
@@ -962,41 +978,55 @@ function rawWebhookBody(req:{body?:unknown;rawBody?:Buffer|string}){
   if(typeof req.body==='string')return Buffer.from(req.body);
   return Buffer.from(JSON.stringify(req.body&&typeof req.body==='object'?req.body:{}));
 }
-function header(req:{headers?:Record<string,string|string[]|undefined>},name:string){
-  const value=req.headers?.[name]??req.headers?.[name.toLowerCase()];
-  return Array.isArray(value)?value[0]||'':value||'';
-}
-
-export async function processProviderWebhook(
+function header(req:{headers?:Record<string,string|string[]|undeexport async function processProviderWebhook(
   db:Firestore,providerKey:string,req:{headers?:Record<string,string|string[]|undefined>;body?:unknown;rawBody?:Buffer|string},
 ){
   const provider=getPaymentProvider(providerKey);
   if(!provider.capabilities.webhooks||!provider.parseWebhook)throw new Error('This payment provider does not accept callbacks.');
   const event=provider.parseWebhook(req);
-  const reference=safeReference(event.reference);
   const eventType=text(event.eventType)||'provider.event';
-  // Dedupe on provider + event type + immutable VOP reference. Callback body
-  // status/reference fields are untrusted and must not allow a caller to force
-  // repeated provider lookups by changing arbitrary payload values.
-  const eventId=hash(providerKey+':'+eventType+':'+reference);
+  const suppliedReference=text(event.reference);
+  const suppliedProviderTransactionId=text(event.providerTransactionId);
+
+  let paymentDoc:null|FirebaseFirestore.QueryDocumentSnapshot=null;
+  let reference='';
+  if(suppliedReference){
+    try{
+      reference=safeReference(suppliedReference);
+      paymentDoc=await loadPaymentByReference(db,reference);
+    }catch{
+      // Some gateways callback only their transaction ID. Do not reject a
+      // callback solely because an unrelated provider field is not a VOP ref.
+      reference='';
+    }
+  }
+  if(!paymentDoc&&suppliedProviderTransactionId){
+    paymentDoc=await loadPaymentByProviderTransactionId(db,suppliedProviderTransactionId);
+    if(paymentDoc)reference=safeReference(text(paymentDoc.data()?.reference));
+  }
+
+  const eventLocator=reference||suppliedProviderTransactionId||hash(webhookIdentityPayload(req.body));
+  const eventId=hash(providerKey+':'+eventType+':'+eventLocator);
   const eventRef=db.doc('paymentWebhookEvents/'+eventId);
-  const paymentDoc=await loadPaymentByReference(db,reference);
+
   if(!paymentDoc){
-    // Signed providers may retain orphan delivery evidence. Unsigned providers
-    // such as MTN are discarded to prevent public callback storage abuse.
+    // Signed/authenticated providers may retain orphan delivery evidence.
+    // Unsigned callbacks are discarded to avoid a public storage-amplification path.
     if(event.authenticated){
       await eventRef.set({
-        provider:providerKey,eventType,reference,status:'orphaned',authenticated:true,
+        provider:providerKey,eventType,reference:suppliedReference||'',
+        providerTransactionId:suppliedProviderTransactionId,status:'orphaned',authenticated:true,
         providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
         receivedAt:FieldValue.serverTimestamp(),
       },{merge:false});
     }
     return {duplicate:false,orphaned:true};
   }
+
   const payment=paymentDoc.data()||{};
   if(text(payment.provider)!==providerKey)throw new Error('Callback provider does not match the payment transaction.');
-  if(event.providerTransactionId&&text(payment.providerTransactionId)
-    &&event.providerTransactionId!==text(payment.providerTransactionId)){
+  if(suppliedProviderTransactionId&&text(payment.providerTransactionId)
+    &&suppliedProviderTransactionId!==text(payment.providerTransactionId)){
     throw new Error('Callback transaction reference does not match the payment transaction.');
   }
 
@@ -1008,7 +1038,7 @@ export async function processProviderWebhook(
       provider:providerKey,eventType,reference,paymentId:paymentDoc.id,
       authenticated:event.authenticated===true,
       providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
-      providerTransactionId:text(event.providerTransactionId),
+      providerTransactionId:suppliedProviderTransactionId,
       receivedAt:FieldValue.serverTimestamp(),processingStatus:'received',
     });
     tx.set(paymentDoc.ref,{
@@ -1021,14 +1051,20 @@ export async function processProviderWebhook(
     return {duplicate:true,paymentId:paymentDoc.id};
   }
   try{
-    // A provider callback is only a signal. The provider adapter must perform
-    // an independent server-to-server status lookup before VOP can mark paid.
+    // Provider callbacks are notifications, never proof of payment. The adapter
+    // performs an independent authenticated provider status lookup before VOP
+    // changes payment state or grants an entitlement.
     await verifyAndApplyPayment(db,reference,'webhook');
     await eventRef.set({processingStatus:'processed',processedAt:FieldValue.serverTimestamp()},{merge:true});
     await paymentDoc.ref.set({webhookStatus:'processed',updatedAt:FieldValue.serverTimestamp()},{merge:true});
     return {duplicate:false,paymentId:paymentDoc.id};
   }catch(error){
     await eventRef.set({processingStatus:'failed',safeError:publicError(error),processedAt:FieldValue.serverTimestamp()},{merge:true});
+    await paymentDoc.ref.set({webhookStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    throw error;
+  }
+}
+,{merge:true});
     await paymentDoc.ref.set({webhookStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
     throw error;
   }
