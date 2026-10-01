@@ -9,21 +9,21 @@ const read=(path:string)=>readFileSync(root+path,'utf8');
 test('light mode is the default before first paint while dark mode remains available across portals',()=>{
   const html=read('index.html');
   const theme=read('src/services/themePreference.ts');
-  const css=read('src/theme-dark.css');
+  const css=read('src/theme.css');
   const app=read('src/App.tsx');
   assert.match(html,/localStorage\.getItem\('vop_theme'\) === 'dark' \? 'dark' : 'light'/);
   assert.match(theme,/return window\.localStorage\.getItem\(KEY\)==='dark'\?'dark':'light'/);
   assert.match(theme,/typeof window==='undefined'\)return 'light'/);
   assert.match(html,/setAttribute\('data-theme', 'light'\)/);
   assert.match(app,/readThemePreference\(\)==='dark'/);
-  assert.match(css,/\[data-theme="dark"\] \.vop-learner-shell/);
+  assert.match(css,/\[data-theme="dark"\]/);
   assert.match(css,/\.vop-admin/);
   assert.match(css,/\.vop-candidate-list-card/);
   assert.match(css,/\.vop-study-modal section\[role="dialog"\]/);
-  assert.match(css,/Dark-mode regression shield/);
-  assert.match(css,/\.vop-account-link/);
-  assert.match(css,/\.vop-guide-first-card/);
-  assert.match(css,/\.vop-header-popover/);
+  assert.match(css,/CANONICAL LIGHT \/ DARK THEME CONTRACT/);
+  assert.match(css,/--theme-surface:/);
+  assert.match(css,/--theme-border:/);
+  assert.match(css,/--theme-title:/);
 });
 
 test('organization administrators retain candidates while language governance stays Super Admin only',()=>{
