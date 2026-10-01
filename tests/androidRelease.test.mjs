@@ -82,7 +82,7 @@ test('Android invitation links are wired to the native package and verified doma
   assert.match(bridge,/CapacitorApp\.getLaunchUrl/);
   assert.match(bridge,/appUrlOpen/);
   assert.match(bridge,/vopapp\.org/);
-  assert.match(bridge,/vop:\\?'/);
+  assert.match(bridge,/url\.protocol==='vop:'/);
 });
 
 test('Android release verifies deployment identity, actual source sections and hashed image assets', async () => {
