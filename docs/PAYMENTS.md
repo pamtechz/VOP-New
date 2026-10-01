@@ -4,7 +4,13 @@ VOP payments are provider-neutral. Lenco, direct MTN MoMo Collections and direct
 
 ## Security boundary
 
-The browser never decides that a payment is successful. It sends only the payable-item selection, provider/method choice, and payer information needed for checkout. The server loads the authoritative payable item from Firestore, determines amount/currency/scope, creates the transaction, and independently verifies provider state before fulfilment.
+The browser never decides that a payment is successful. It sends only the payable-item selection, payment-method choice, and payer information needed for checkout. Provider routing is selected server-side from the Super Admin configuration. The server loads the authoritative payable item from Firestore, determines amount/currency/scope, creates the transaction, and independently verifies provider state before fulfilment.
+
+### Finance administration boundary
+
+Platform finance controls are **Super Admin-only**. Organization, church, district, conference and union administrators cannot read or mutate the administrative payable-item catalog, provider configuration, reconciliation state or provider-facing refund controls. Their finance view is restricted to authorized transaction outcomes and receipts; provider transaction IDs/references, webhook state, reconciliation state, provider attempts and provider audit remain platform-only.
+
+Consumer checkout receives a safe projection of an available charge: display name, description, amount/currency and currently available payment methods. Provider names, credentials, environments, callback configuration and routing priority are not returned. VOP selects the enabled provider on the server.
 
 These collections are server-authoritative and denied to client Firestore access:
 
@@ -89,13 +95,15 @@ Protected scheduled reconciliation:
 
 Administrative routes:
 
-- `POST /api/payments/admin/transactions`
-- `POST /api/payments/admin/transaction`
-- `POST /api/payments/admin/payable-items`
-- `POST /api/payments/admin/providers`
-- `POST /api/payments/admin/reconcile`
-- `POST /api/payments/admin/refunds`
-- `POST /api/payments/admin/export`
+- `POST /api/payments/admin/transactions` — organization/hierarchy scoped; provider internals are redacted outside Super Admin.
+- `POST /api/payments/admin/transaction` — organization/hierarchy scoped; provider internals are redacted outside Super Admin.
+- `POST /api/payments/admin/export` — scoped export; provider/reconciliation columns are Super Admin-only.
+- `POST /api/payments/admin/payable-items` — **Super Admin-only**.
+- `POST /api/payments/admin/providers` — **Super Admin-only**.
+- `POST /api/payments/admin/reconcile` — **Super Admin-only**.
+- `POST /api/payments/admin/refunds` — **Super Admin-only**.
+
+Subscription package administration uses `POST /api/admin/plans`. Full package listing and all create/update/delete/assignment actions are Super Admin-only. Organization owners/admins may read active package offers and consume them for their own organization.
 
 ## Payable items
 
@@ -111,6 +119,16 @@ Prices and payment requirements are configured in Firestore, never hard-coded in
 - custom charge
 
 Amounts are stored in integer minor units plus a decimal snapshot. Transactions snapshot the item name, description, amount, currency, organization context and fulfilment configuration so historical receipts do not change when administrators later edit pricing.
+
+The complete payable-item catalog is administered only by Super Admin. Organization-facing checkout never exposes the administrative record or provider-routing configuration.
+
+## Organization subscription packages
+
+Subscription packages are platform products stored under `system/plans/catalog` and managed only by Super Admin. The management form uses named fields for package name, description, price, currency, billing interval, quotas and included capabilities; package IDs are generated automatically.
+
+When Super Admin saves an active paid package, VOP automatically synchronizes an internal platform payable item named `subscription_<packageId>` with type `organization_subscription`. Deactivating/freeing/deleting the package deactivates or removes that checkout offer without deleting historical payment records.
+
+Only an organization's **owner or administrator** can see and purchase an organization subscription offer. Ordinary learners do not see those offers. After a server-verified payment, VOP applies the package plan, quotas and feature entitlements to that organization and records the current subscription period and payment provenance. Provider choice remains invisible to the organization and is selected server-side.
 
 ## Payment lifecycle
 
@@ -149,7 +167,7 @@ The legacy Super Admin plan API remains available for complimentary, migration o
 
 ## Direct Airtel/MTN providers
 
-Do not change `PaymentsPage`, transaction records, webhook audit, receipts or fulfilment when adding a direct provider. Add a provider adapter, register it, declare supported methods/capabilities, configure its server-only credentials, and add its signed webhook route through the consolidated payment function.
+Consumer pages remain provider-blind when adding a direct provider. Add a provider adapter, register it, declare supported methods/capabilities, configure its server-only credentials, and add its callback route through the consolidated payment function. Only Super Admin sees provider administration.
 
 
 ## Refunds and partial refunds
@@ -210,7 +228,7 @@ Because MTN RequestToPay callbacks are not cryptographically authenticated, VOP 
 
 ## Direct Airtel Money Zambia Collections
 
-The direct Airtel adapter is registered as `airtel_money` and supports Airtel Money only. Lenco may still be enabled separately for Airtel, MTN, Zamtel or card checkout; administrators choose which configured providers are allowed for each payable item.
+The direct Airtel adapter is registered as `airtel_money` and supports Airtel Money only. Lenco may still be enabled separately for Airtel, MTN, Zamtel or card checkout. Only Super Admin configures provider availability/payable-item routing; organization consumers choose a payment method and VOP selects the provider server-side.
 
 Environment:
 
