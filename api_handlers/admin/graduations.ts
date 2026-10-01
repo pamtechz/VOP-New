@@ -6,6 +6,7 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { verifiedAssessmentAverage } from '../../shared/graduationEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 import { createNotification } from '../../server/notifications.js';
+import { awardApprovedCertificate, certificationPortfolioEvidence } from '../../server/certificateAward.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -282,6 +283,23 @@ async function decide(req: Request, res: Response) {
         testLessons.some(item => !Array.isArray(item.questions) || !item.questions.length)) {
       return res.status(409).json({ error: 'The graduation guide has missing study or assessment requirements.' });
     }
+    // The final human approval is the only certificate release gate. Before
+    // saving that final decision, verify any additional configured portfolio
+    // evidence/signatures so an approved request can always be awarded.
+    if(stageIndex===stages.length-1){
+      if(configSnapshot.data()?.enabled!==true){
+        return res.status(409).json({error:'Official certification is currently disabled.'});
+      }
+      const requirementIds=Array.isArray(guide.certificationRequirementIds)
+        ?guide.certificationRequirementIds.map(String).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)):[];
+      const portfolio=await certificationPortfolioEvidence(ctx.db,text(current.candidateId),requestOrganizationId,requirementIds);
+      if(portfolio.reasons.length){
+        return res.status(409).json({
+          error:'Certificate review cannot be approved yet: '+portfolio.reasons.join(' '),
+          reasons:portfolio.reasons,
+        });
+      }
+    }
     approvalEvidence = { guideId, language, threshold, studyLessons, testLessons };
   }
 
@@ -349,13 +367,30 @@ async function decide(req: Request, res: Response) {
   await writeTenantAudit(ctx, decision === 'approve' ? 'graduation.stage.approved' : 'graduation.stage.rejected', ref.path, current, result);
   const safe=safeRequest(ref.id,result);
   const candidateId=text(result.candidateId);
+  let certificateAward:Awaited<ReturnType<typeof awardApprovedCertificate>>|null=null;
+  let certificateAwardError='';
+  if(decision==='approve'&&text(result.status)==='approved'&&candidateId){
+    try{
+      certificateAward=await awardApprovedCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.guideId));
+    }catch(error){
+      certificateAwardError=error instanceof Error?error.message:'The approved certificate could not be published.';
+      await ref.set({
+        certificateStatus:'withheld_error',
+        certificateError:certificateAwardError,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      console.error('Automatic certificate award failed after final graduation approval',error);
+    }
+  }
   if(candidateId&&candidateId!==ctx.auth.uid){
     const finalStatus=text(result.status);
     const statusMessage=decision==='reject'
-      ?'Your graduation request requires attention and was not approved at the current review stage.'
+      ?'Your certificate review requires attention and was not approved at the current review stage.'
       :finalStatus==='approved'
-        ?'Your graduation request has completed all required approval stages.'
-        :`Your graduation request passed ${stage.label||stage.id} review and moved to the next approval stage.`;
+        ?certificateAward
+          ?'Your certificate review is approved. Your official certificate is now available.'
+          :'Your certificate review is approved. Certificate publication is being finalized.'
+        :`Your certificate review passed ${stage.label||stage.id} and moved to the next approval stage.`;
     await createNotification(ctx.db,{
       organizationId:requestOrganizationId,recipientId:candidateId,type:'certificate',
       title:finalStatus==='approved'?'Graduation approved':decision==='reject'?'Graduation review update':'Graduation review progressed',
@@ -369,7 +404,13 @@ async function decide(req: Request, res: Response) {
   if(upcomingStage){
     await notifyStageApprovers(ctx,{...result,id:ref.id},upcomingStage,ctx.auth.uid);
   }
-  return res.status(200).json({ ok: true, request: safe });
+  return res.status(200).json({
+    ok:true,
+    request:safe,
+    certificate:certificateAward?.certificate,
+    certificateAwarded:certificateAward?.created===true||Boolean(certificateAward?.certificate),
+    certificateAwardError:certificateAwardError||undefined,
+  });
 }
 
 export default async function handler(req: Request, res: Response) {
