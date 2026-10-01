@@ -1281,3 +1281,74 @@
 ):hover :is(svg,span,strong,small){
   color:#050505!important;
 }
+
+/* Neutral surfaces and faint-divider contract v4 ---------------------------
+   Large application surfaces are neutral black/charcoal. Blue remains an
+   accent for text, icons, focus, badges and compact actions only. Dividers
+   are intentionally low-contrast grey rather than white. */
+[data-theme="dark"]{
+  --border-subtle:#292929;
+  --border-strong:#3d3d3d;
+  --vop-border:#292929;
+}
+[data-theme="dark"] :is(
+  div,section,article,aside,main,nav,header,footer
+)[class*="bg-slate-"],
+[data-theme="dark"] :is(
+  div,section,article,aside,main,nav,header,footer
+)[class*="bg-blue-"],
+[data-theme="dark"] :is(
+  div,section,article,aside,main,nav,header,footer
+)[class*="bg-sky-"],
+[data-theme="dark"] :is(
+  div,section,article,aside,main,nav,header,footer
+)[class*="bg-indigo-"],
+[data-theme="dark"] :is(
+  div,section,article,aside,main,nav,header,footer
+)[class*="bg-cyan-"]{
+  background-color:#0d0d0d!important;
+  background-image:none!important;
+}
+[data-theme="dark"] :is(
+  [class*="border-white"],
+  .border-slate-100,.border-slate-200,.border-slate-300,
+  .border-blue-100,.border-blue-200,.border-blue-300,
+  .border-sky-100,.border-sky-200,
+  .border-indigo-100,.border-indigo-200
+){
+  border-color:#303030!important;
+}
+[data-theme="dark"] :is(
+  hr,.vop-divider,.vop-separator,
+  .vop-learner-sidebar,.vop-admin .vop-sidebar,
+  .vop-app-header,.vop-admin-top,.vop-toolbar,
+  .vop-table th,.vop-table td,.vop-candidate-table th,.vop-candidate-table td,
+  .vop-user-table th,.vop-user-table td,.vop-reference-table th,.vop-reference-table td,
+  .vop-study-modal footer,.vop-lesson-modal footer,.vop-quiz-modal footer
+){
+  border-color:#292929!important;
+}
+[data-theme="dark"] .divide-y>:not([hidden])~:not([hidden]),
+[data-theme="dark"] [class*="divide-y"]>:not([hidden])~:not([hidden]){
+  border-top-color:#292929!important;
+}
+[data-theme="dark"] .divide-x>:not([hidden])~:not([hidden]),
+[data-theme="dark"] [class*="divide-x"]>:not([hidden])~:not([hidden]){
+  border-left-color:#292929!important;
+}
+[data-theme="dark"] :is(
+  .vop-study-modal [data-surface="progress"],
+  .vop-quiz-modal [data-surface="progress"],
+  .vop-study-modal [data-surface="question"],
+  .vop-quiz-modal [data-surface="question"],
+  .vop-study-modal [data-surface="footer"],
+  .vop-quiz-modal [data-surface="footer"],
+  .vop-study-modal [data-surface="note"],
+  .vop-quiz-modal [data-surface="note"]
+){
+  background:#0d0d0d!important;
+  background-image:none!important;
+  border-color:#292929!important;
+  color:var(--text-primary)!important;
+}
+
