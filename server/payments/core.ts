@@ -622,7 +622,8 @@ export async function adminListTransactions(ctx:TenantContext,filters:Record<str
   const status=text(filters.status),provider=text(filters.provider),method=text(filters.paymentMethod);
   const organizationId=text(filters.organizationId),itemType=text(filters.itemType),payerUid=text(filters.payerUid);
   const dateFrom=text(filters.dateFrom),dateTo=text(filters.dateTo);
-  const minAmount=Number(filters.minAmount),maxAmount=Number(filters.maxAmount);
+  const minText=text(filters.minAmount),maxText=text(filters.maxAmount);
+  const minAmount=minText?Number(minText):Number.NaN,maxAmount=maxText?Number(maxText):Number.NaN;
   if(search)rows=rows.filter(row=>[
     row.reference,row.providerReference,row.providerTransactionId,row.payerName,row.payerEmail,row.description,
   ].some(value=>text(value).toLowerCase().includes(search)));
