@@ -58,10 +58,12 @@ function inviteTarget(body:Record<string,unknown>){
     if(page>0)params.set('page',String(page));
     label='Lesson section';
   }else if(['material','radio','event','announcement'].includes(kind)){
-    if(!resourceId)throw new Error('A resource reference is required.');
     params.set('route',kind==='material'?'resources':kind==='radio'?'radio':kind==='event'?'events':'announcements');
-    params.set(kind==='material'?'material':kind,resourceId);
-    label=kind==='material'?'Study material':kind.charAt(0).toUpperCase()+kind.slice(1);
+    if(resourceId)params.set(kind==='material'?'material':kind,resourceId);
+    label=kind==='material'?(resourceId?'Study material':'Library')
+      :kind==='radio'?(resourceId?'Radio item':'Radio & broadcasts')
+      :kind==='event'?(resourceId?'Event':'Events')
+      :resourceId?'Announcement':'Announcements';
   }else if(kind!=='organization'){
     params.set('route',kind);
     label=kind==='master-guide'?'Master Guide':kind==='scripture-memory'?'Scripture Memory':kind==='iron-duels'?'Iron Duels':'Prayer requests';
