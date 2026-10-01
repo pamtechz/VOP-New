@@ -122,6 +122,15 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(tools,/vop-notification-toast/);
   assert.match(tools,/action:'clearAll'/);
   assert.match(inbox,/acceptInvite/);
+  assert.match(inbox,/createMemberInvite/);
+  assert.match(inbox,/Create invitation/);
+  assert.match(inbox,/quickchart\.io\/qr/);
+  assert.match(app,/Organization invitations require an explicit Accept action/);
+  assert.doesNotMatch(app,/body:JSON\.stringify\(\{action:'acceptInvite',token:inviteToken\}\)/);
+  assert.match(organizations,/action==='previewInvite'/);
+  assert.match(organizations,/action === 'createMemberInvite'/);
+  assert.match(organizations,/source:'member-link'/);
+  assert.match(organizations,/targetKind/);
   assert.match(inbox,/declineInvite/);
   assert.match(inbox,/cancelInvite/);
   assert.match(inbox,/dismissInvite/);
