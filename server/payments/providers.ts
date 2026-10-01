@@ -99,6 +99,7 @@ export interface PaymentProviderAdapter {
     webhooks:boolean;
     reconciliation:boolean;
   };
+  readonly callbackMethods?:ReadonlyArray<'POST'|'PUT'>;
   configured():boolean;
   publicConfiguration():Record<string,unknown>;
   createPayment(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>;
@@ -204,6 +205,7 @@ function normalizeLenco(dataValue:unknown):ProviderVerification{
 
 class LencoProvider implements PaymentProviderAdapter{
   readonly key='lenco';
+  readonly callbackMethods=['POST'] as const;
   readonly capabilities={
     checkout:true,card:true,mobileMoney:true,bank:false,
     refunds:false,partialRefunds:false,webhooks:true,reconciliation:true,
@@ -397,6 +399,7 @@ function normalizeMtnStatus(
 
 class MtnMomoProvider implements PaymentProviderAdapter{
   readonly key='mtn_momo';
+  readonly callbackMethods=['POST','PUT'] as const;
   readonly capabilities={
     checkout:true,card:false,mobileMoney:true,bank:false,
     refunds:false,partialRefunds:false,webhooks:true,reconciliation:true,
