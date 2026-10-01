@@ -45,7 +45,8 @@ import { EventsPage } from './pages/EventsPage';
 import PaymentsPage from './pages/PaymentsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
-import InboxPage from './pages/InboxPage';
+import NotificationsPage from './pages/NotificationsPage';
+import InvitationsPage from './pages/InvitationsPage';
 import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
@@ -630,8 +631,9 @@ export const App: React.FC = () => {
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
           {currentRoute === 'payments' && <PaymentsPage currentUser={currentUser} onBack={goBack} />}
-          {(currentRoute === 'notifications' || currentRoute === 'invites') && <InboxPage
-            initialTab={currentRoute === 'invites' ? 'invites' : 'notifications'}
+          {currentRoute === 'notifications' && <NotificationsPage
+            onBack={goBack} onNavigate={navigate}/>}
+          {currentRoute === 'invites' && <InvitationsPage
             inviteToken={new URLSearchParams(window.location.search).get('invite')||undefined}
             currentUser={currentUser} guides={guides}
             onBack={goBack} onNavigate={navigate}

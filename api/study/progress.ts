@@ -209,12 +209,19 @@ export default async function handler(
         return res.status(409).json({ error:'The selected item is not an assessment.' });
       }
       const policyOrganizationId=candidateGuideOrganizationId||organizationId;
-      const settingsRef=policyOrganizationId
-        ?db.doc(`organizations/${policyOrganizationId}/settings/settings`)
-        :db.doc('system/settings');
-      const settingsData=(await settingsRef.get()).data()||{};
+      const [platformSettingsSnap,scopedSettingsSnap]=await Promise.all([
+        db.doc('system/settings').get(),
+        policyOrganizationId
+          ?db.doc(`organizations/${policyOrganizationId}/settings/settings`).get()
+          :Promise.resolve(null),
+      ]);
+      const platformSettings=platformSettingsSnap.data()||{};
+      const scopedSettings=scopedSettingsSnap?.exists?scopedSettingsSnap.data()||{}:{};
+      // Match learner-facing settings inheritance: tenant values override only
+      // keys that actually exist; otherwise the platform setting remains effective.
+      const settingsData={...platformSettings,...scopedSettings};
       const policy=assessmentPolicy(lessonData,settingsData);
-      if(policy.threshold===null)return res.status(503).json({error:'The assessment pass mark is not configured.'});
+      if(policy.threshold===null)return res.status(409).json({error:'This assessment is unavailable until an administrator configures its pass mark.'});
       const effectiveGuideId=legacyStudyGuide?'discover':guideId;
       const policyRef=userRef.collection('assessmentAttemptPolicy').doc(
         retakePolicyKey(policyOrganizationId,language,effectiveGuideId,lessonId));

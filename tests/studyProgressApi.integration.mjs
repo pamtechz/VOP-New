@@ -91,6 +91,15 @@ test('study progress: server grades and guide paths stay within authorized tenan
       ],
     });
 
+    await t.test('assessment policy inherits the platform pass mark when the organization has no settings document',async()=>{
+      await db.doc('system/settings').set({quizPassThreshold:77,quizMaxAttempts:0,quizRetakeCooldownMinutes:0},{merge:true});
+      await db.doc('organizations/'+orgA+'/settings/settings').delete();
+      const started=await startQuiz(learner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.assessmentPolicy.threshold,77);
+      await db.doc('organizations/'+orgA+'/settings/settings').set({quizPassThreshold:80});
+    });
+
     await t.test('a learner is graded from a private bank with an organization-bound score',async()=>{
       const response=await submitStarted(learner,{0:1});
       assert.equal(response.status,200,JSON.stringify(response));

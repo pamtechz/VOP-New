@@ -127,6 +127,9 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(modal,/previouslyAttempted/);
   assert.match(modal,/Retake Quiz/);
   assert.match(modal,/Retake Waiting Period/);
+  assert.match(modal,/attemptStartLock/);
+  assert.match(study,/platformSettingsSnap/);
+  assert.match(study,/settingsData=\{\.\.\.platformSettings,\.\.\.scopedSettings\}/);
   assert.match(study,/maxAttempts>0&&priorAttempts>=policy\.maxAttempts/);
   assert.match(study,/const retryAt = retakeCooldownMinutes > 0/);
 });
@@ -139,6 +142,8 @@ test('notification and invitation workflows are visible, actionable and routed t
   const drawer=read('src/components/layout/MenuDrawer.tsx');
   const tools=read('src/components/layout/CommunicationTools.tsx');
   const inbox=read('src/pages/InboxPage.tsx');
+  const notificationPage=read('src/pages/NotificationsPage.tsx');
+  const invitationPage=read('src/pages/InvitationsPage.tsx');
   const notifications=read('api_handlers/admin/notifications.ts');
   const organizations=read('api_handlers/admin/organizations.ts');
   const mentoring=read('api/mentorship.ts');
@@ -147,7 +152,12 @@ test('notification and invitation workflows are visible, actionable and routed t
   const graduation=read('api_handlers/admin/graduations.ts');
   assert.match(types,/\| 'notifications'/);
   assert.match(types,/\| 'invites'/);
-  assert.match(app,/currentRoute === 'notifications' \|\| currentRoute === 'invites'/);
+  assert.match(app,/currentRoute === 'notifications' && <NotificationsPage/);
+  assert.match(app,/currentRoute === 'invites' && <InvitationsPage/);
+  assert.match(notificationPage,/fixedMode="notifications"/);
+  assert.match(invitationPage,/fixedMode="invites"/);
+  assert.match(inbox,/if\(activeMode==='notifications'\)/);
+  assert.match(inbox,/organizationAction<\{items\?:InviteItem\[\]\}>\('listInvites'\)/);
   assert.match(sidebar,/route:'notifications'/);
   assert.match(sidebar,/route:'invites'/);
   assert.match(drawer,/route: 'notifications'/);

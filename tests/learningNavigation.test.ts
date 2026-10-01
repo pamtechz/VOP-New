@@ -67,6 +67,7 @@ test('lesson reader, grading and offline completion follow each guide language',
   assert.match(quizModal,/beginQuizAttempt\(guide\.id,lesson\.id,guide\.language\)/);
   assert.match(localStudy,/action:'startQuiz'/);
   assert.match(localStudy,/sessionId/);
+  assert.match(quizModal,/attemptStartLock/);
   assert.ok(study.includes('uid:firebaseUser.uid, language, guideId, lessonId'));
   assert.ok(app.includes('${guide.language}:${guide.id}:${lesson.id}'));
   assert.match(app,/openStudyItem\(activeGuide,lesson/);
