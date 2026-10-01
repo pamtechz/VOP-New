@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CreditCard, Download, LoaderCircle, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, WalletCards, X, XCircle } from 'lucide-react';
 import type { User } from '../types';
 import type { PayableItem, PayableItemType, PaymentMethod } from '../../shared/payments';
-import { PAYABLE_ITEM_TYPES, paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
+import { PAYABLE_ITEM_TYPES, minorToDecimal, paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
 import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
 import { auth } from '../lib/firebase';
 import { appConfirm, appPrompt } from '../components/layout/AppDialog';
@@ -164,10 +164,9 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   };
 
   const requestRefund=async(payment:ClientPayment)=>{
-    const already=Math.max(0,Number(payment.refundedMinor||0))/100;
-    const remaining=Math.max(0,Number(payment.amountDecimal)-already);
+    const remainingMinor=Math.max(0,Number(payment.amountMinor||0)-Math.max(0,Number(payment.refundedMinor||0)));
     const amount=await appPrompt('Enter the amount to refund. VOP will prevent refunds above the remaining paid amount.',{
-      title:'Refund amount',defaultValue:remaining.toFixed(2),placeholder:'0.00',
+      title:'Refund amount',defaultValue:minorToDecimal(remainingMinor,payment.currency),placeholder:'0.00',
     });
     if(amount===null)return;
     const reason=await appPrompt('Enter the reason for this refund. This becomes part of the immutable payment audit trail.',{
@@ -263,7 +262,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       <label className="vop-checkbox"><input type="checkbox" checked={draft.repeatable} onChange={e=>setDraft(v=>({...v,repeatable:e.target.checked}))}/>Allow repeat payments</label><label className="vop-checkbox"><input type="checkbox" checked={draft.active} onChange={e=>setDraft(v=>({...v,active:e.target.checked}))}/>Active</label></div>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void saveItem()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save payable item</button></section></div>}
 
-    {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div><div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div><div><dt>Refunded</dt><dd>{details.payment.refundedMinor?details.payment.currency+' '+(details.payment.refundedMinor/100).toFixed(2):'None'}</dd></div></dl>
+    {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div><div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div><div><dt>Refunded</dt><dd>{details.payment.refundedMinor?details.payment.currency+' '+minorToDecimal(details.payment.refundedMinor,details.payment.currency):'None'}</dd></div></dl>
       {['paid','partially_refunded'].includes(details.payment.status)&&<button className="btn btn-outline vop-payment-submit" onClick={()=>void requestRefund(details.payment)} disabled={busy}>Request refund</button>}
       <h3>Refunds</h3><div className="vop-payment-audit">{details.refunds?.length?details.refunds.map(refund=><div key={refund.id}><strong>{refund.currency} {refund.amountDecimal} · {typeLabel(refund.status)}</strong><span>{refund.reason}</span>{refund.status==='manual_action_required'&&<button className="btn btn-outline" onClick={()=>void completeManualRefund(refund)} disabled={busy}>Confirm provider refund</button>}</div>):<div><strong>No refunds</strong><span>—</span></div>}</div>
       <h3>Payment attempts</h3><div className="vop-payment-audit">{details.attempts.length?details.attempts.map((entry,index)=><div key={String(entry.id||index)}><strong>{paymentMethodLabel(String(entry.paymentMethod||'card') as PaymentMethod)} · {paymentStatusLabel(String(entry.status||'pending') as never)}</strong><span>{entry.createdAt?new Date(String(entry.createdAt)).toLocaleString():'Recorded'}</span></div>):<div><strong>No provider attempt recorded</strong><span>—</span></div>}</div>
