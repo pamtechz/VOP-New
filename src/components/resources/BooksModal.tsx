@@ -36,6 +36,7 @@ export const BooksModal: React.FC<BooksModalProps> = ({
       >
         {/* Header */}
         <div
+          className="vop-neutral-modal-head"
           style={{
             padding: '1.25rem 1.75rem',
             background: 'linear-gradient(135deg, var(--vop-navy-950) 0%, var(--vop-navy-900) 100%)',

@@ -233,14 +233,14 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
 
         {/* Progress bar */}
         {configured && (
-          <div style={{ padding: '0.6rem 1.25rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+          <div data-surface="progress" style={{ padding: '0.6rem 1.25rem', background: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
               <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
                 Page {currentPageIndex + 1} of {pages.length}
               </span>
               <span style={{ fontSize: '0.75rem', color: '#002d72', fontWeight: 700 }}>{progressPercent}%</span>
             </div>
-            <div style={{ height: '5px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
+            <div style={{ height: '5px', background: 'var(--border-strong)', borderRadius: '9999px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${progressPercent}%`,
@@ -260,7 +260,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
           display: 'flex',
           flexDirection: 'column',
           gap: '1.25rem',
-          color: '#0f172a',
+          color: 'var(--text-primary)',
         }}>
           {!configured || !currentPage ? (
             <div role="alert" style={{
@@ -360,9 +360,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
 
               {/* Key takeaway */}
               {currentPage.keyTakeaway && (
-                <div style={{
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
+                <div data-surface="note" style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
                   padding: '1rem 1.25rem',
                   borderRadius: '1rem',
                   display: 'flex',
@@ -371,10 +371,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                 }}>
                   <Sparkles size={18} color="#2563eb" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
                   <div>
-                    <p style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
+                    <p style={{ fontSize: '0.72rem', fontWeight: 800, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
                       {t('lesson.key_truth','Key Truth')}
                     </p>
-                    <p style={{ fontSize: '0.9rem', color: '#1e3a8a', lineHeight: 1.55 }}>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
                       {currentPage.keyTakeaway}
                     </p>
                   </div>
@@ -389,10 +389,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
         </div>
 
         {/* Footer navigation */}
-        <footer style={{
+        <footer data-surface="footer" style={{
           padding: '1rem 1.25rem',
-          borderTop: '1px solid #e2e8f0',
-          background: '#f8fafc',
+          borderTop: '1px solid var(--border-subtle)',
+          background: 'var(--bg-card)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -413,10 +413,10 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
               padding: '0.7rem 1.25rem',
-              border: '1.5px solid #e2e8f0',
+              border: '1.5px solid var(--border-strong)',
               borderRadius: '9999px',
-              background: '#fff',
-              color: (currentPageIndex === 0 && !hasPreviousLesson) || !configured ? '#cbd5e1' : '#374151',
+              background: 'var(--bg-card)',
+              color: (currentPageIndex === 0 && !hasPreviousLesson) || !configured ? 'var(--text-muted)' : 'var(--text-primary)',
               fontWeight: 600, fontSize: '0.875rem',
               cursor: currentPageIndex === 0 || !configured ? 'not-allowed' : 'pointer',
               opacity: currentPageIndex === 0 || !configured ? 0.5 : 1,
@@ -435,11 +435,11 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
               border: 'none',
               borderRadius: '9999px',
               background: !configured
-                ? '#e2e8f0'
+                ? 'var(--bg-elevated)'
                 : configured && currentPageIndex < pages.length - 1
                 ? 'linear-gradient(135deg, #002d72, #1d4ed8)'
                 : 'linear-gradient(135deg, #059669, #10b981)',
-              color: !configured ? '#94a3b8' : '#fff',
+              color: !configured ? 'var(--text-muted)' : '#fff',
               fontWeight: 700, fontSize: '0.875rem',
               cursor: !configured ? 'not-allowed' : 'pointer',
               boxShadow: !configured ? 'none' : '0 4px 12px rgba(0,0,0,0.2)',

@@ -77,18 +77,18 @@
 
 /* Dark Theme Variables */
 [data-theme="dark"] {
-  --bg-primary: #071224;
-  --bg-secondary: #0a1b35;
-  --bg-card: #0f2447;
-  --bg-elevated: #16325f;
-  --bg-glass: rgba(15, 36, 71, 0.85);
-  --border-subtle: #1e3a68;
-  --border-strong: #2a4e8a;
+  --bg-primary: #000000;
+  --bg-secondary: #050505;
+  --bg-card: #0d0d0d;
+  --bg-elevated: #171717;
+  --bg-glass: rgba(13, 13, 13, 0.92);
+  --border-subtle: #292929;
+  --border-strong: #3d3d3d;
 
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --text-inverse: #071224;
+  --text-primary: #f7f7f7;
+  --text-secondary: #d4d4d4;
+  --text-muted: #a3a3a3;
+  --text-inverse: #050505;
 
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.4);

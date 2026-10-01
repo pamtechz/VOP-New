@@ -129,6 +129,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       >
         {/* Top Header Matching Screenshot 3 */}
         <div
+          className="vop-neutral-modal-head"
           style={{
             padding: '1.75rem 1.5rem 1.25rem',
             background: 'linear-gradient(135deg, var(--vop-navy-950) 0%, var(--vop-navy-900) 100%)',
