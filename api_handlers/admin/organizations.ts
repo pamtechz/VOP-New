@@ -454,7 +454,11 @@ export default async function handler(req: Request, res: Response) {
 
 
     const managedOrganizationId = await resolveManagedOrganization(ctx, String(requestedOrg || '').trim());
-    if (!ctx.isSuperAdmin && !hierarchyRole(String(ctx.profile.role || ''))) requireOrgRole(ctx, ['owner','admin']);
+    // Shareable learner invitations are a member capability. All other
+    // organization-management mutations below retain the owner/admin gate.
+    if (action !== 'createMemberInvite' && !ctx.isSuperAdmin && !hierarchyRole(String(ctx.profile.role || ''))) {
+      requireOrgRole(ctx, ['owner','admin']);
+    }
     if (action === 'listAudit') {
       const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
