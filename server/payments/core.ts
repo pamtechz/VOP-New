@@ -276,6 +276,10 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
     if(admin){
       items.push({id:doc.id,...data});
     }else if(await itemVisibleToUser(ctx,data)){
+      if(text(data.itemType)==='organization_subscription'){
+        try{await requirePermission(ctx,'billing','manage');}
+        catch{continue;}
+      }
       items.push(consumerPayableItem(doc.id,data));
     }
   }
@@ -368,6 +372,11 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   if(!itemSnap.exists)throw new Error('The payable item was not found.');
   const item=itemSnap.data()||{};
   if(!(await itemVisibleToUser(ctx,item)))throw new Error('This charge is not available to your account.');
+  if(text(item.itemType)==='organization_subscription'){
+    await requirePermission(ctx,'billing','manage');
+    const billingOrganizationId=text(ctx.profile.organizationId)||ctx.organizationId;
+    if(!billingOrganizationId)throw new Error('An organization account is required to purchase a subscription package.');
+  }
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
   const provider=await providerAllowed(ctx.db,item,providerKey,method);
