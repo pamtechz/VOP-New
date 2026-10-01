@@ -21,6 +21,24 @@ test('local API preserves locale, action and repeated query parameters', async (
   assert.deepEqual(received.query.tag, ['a', 'b']);
 });
 
+test('local API mirrors consolidated Vercel payment rewrites', async () => {
+  const loaded=[];
+  const received=[];
+  const middleware=createLocalApiMiddleware({
+    ssrLoadModule:async path=>{
+      loaded.push(path);
+      return {default(req,res){received.push(req);res.status(200).json({ok:true});}};
+    },
+  });
+  for(const path of ['/api/payments/history','/api/payments/catalog']){
+    const res={headersSent:false,writableEnded:false,setHeader(){},end(){this.writableEnded=true;}};
+    await middleware({method:'POST',url:path,headers:{}},res,()=>assert.fail('Payment request fell through'));
+  }
+  assert.deepEqual(loaded,['/api/payments.ts','/api/payments.ts']);
+  assert.equal(received[0].query.__vopPaymentRoute,'history');
+  assert.equal(received[1].query.__vopPaymentRoute,'catalog');
+});
+
 test('certificate mine query reaches authentication instead of public verification', async () => {
   const { default: handler } = await server.ssrLoadModule('/api/certificates.ts');
   const res = response();
