@@ -1352,3 +1352,21 @@
   color:var(--text-primary)!important;
 }
 
+[data-theme="dark"] .vop-neutral-modal-head,
+[data-theme="dark"] .vop-home-mission{
+  background:#000!important;
+  background-image:none!important;
+  border-color:#292929!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] .vop-home-mission-card{
+  background:#111!important;
+  border-color:#303030!important;
+  box-shadow:none!important;
+}
+[data-theme="dark"] .vop-ann-hero{background-color:#0d0d0d!important}
+[data-theme="dark"] .vop-ann-hero:not([style]){
+  background:#0d0d0d!important;
+  background-image:none!important;
+}
+
