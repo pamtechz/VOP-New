@@ -42,12 +42,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [retakeReady, setRetakeReady] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [hasAttempted,setHasAttempted]=useState(previouslyAttempted);
   const question = questions[index];
   const remainingAttempts=submission?.retakePolicy.remainingAttempts;
   const retakeAllowed=remainingAttempts!==0;
-  const hasAttempted=previouslyAttempted
-    || (attempt?.assessmentPolicy.attemptsUsed ?? 0)>1
-    || (submission?.retakePolicy.attemptsUsed ?? 0)>1;
+
+  useEffect(()=>{if(previouslyAttempted)setHasAttempted(true)},[previouslyAttempted]);
 
   useEffect(()=>{
     const expiresAt=attempt?.expiresAt;
@@ -97,6 +97,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       }
       setSubmission(result);
       setScore(result.score);
+      setHasAttempted(true);
       setStage('result');
       if (result.passed) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (reason) {
