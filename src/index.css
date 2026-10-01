@@ -873,11 +873,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: .15rem;
   padding: .9rem 1rem;
   border-radius: var(--radius-md);
-  background: var(--vop-navy-50);
-}
-
-[data-theme="dark"] .vop-admin-account {
-  background: rgba(30, 79, 148, .2);
+  background: var(--theme-surface-soft);
 }
 
 .vop-admin-account span {
