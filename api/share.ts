@@ -183,22 +183,34 @@ export default async function handler(req: Request, res: Response) {
       const enrollmentRef=db.doc('courseEnrollments/' + organizationId + '_' + decoded.uid + '_' + guideId);
       const installerRef=shareRef.collection('installers').doc(decoded.uid);
       const now = new Date().toISOString();
-      const preservePrimaryScope=crossOrganization||platformScoped;
+      const sharedCourse=shareData.sharingScope==='shared';
+      // A course/share URL can grant course access, but it must never create
+      // organization membership. Unassigned users join an organization only
+      // after accepting a real organization invitation.
+      const preservePrimaryScope=crossOrganization||platformScoped||(sharedCourse&&!existingOrganizationId);
       const result=await db.runTransaction(async transaction => {
         const membership=await transaction.get(membershipRef);
         const installer=await transaction.get(installerRef);
+        const activeMembership=membership.exists&&membership.data()?.active===true;
+        if(!sharedCourse&&!platformScoped&&!activeMembership&&!existingOrganizationId){
+          throw new Error('Organization invitation acceptance is required before course enrollment.');
+        }
         if(!preservePrimaryScope && membership.exists && membership.data()?.active===false){
           throw new Error('Your organization membership is inactive. An administrator must reactivate it before enrollment.');
         }
         // Active membership is authoritative. Profile role is only a legacy fallback
         // when a same-organization membership record has not yet been created.
-        const role=membershipRole(membership.exists&&membership.data()?.active===true?membership.data()?.role:'')
+        const role=membershipRole(activeMembership?membership.data()?.role:'')
           || membershipRole(existingOrganizationId===organizationId?profile.organizationRole:'')
           || 'learner';
         if(!preservePrimaryScope){
           transaction.set(profileRef,{organizationId,organizationRole:role,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-          transaction.set(membershipRef,{uid:decoded.uid,organizationId,role,active:true,
-            joinedAt:String(membership.data()?.joinedAt||now),updatedAt:now,joinedByShareCode:code},{merge:true});
+          // Reconcile a legacy same-organization profile only. A share link
+          // does not establish a brand-new organization membership.
+          if(existingOrganizationId===organizationId&&!activeMembership){
+            transaction.set(membershipRef,{uid:decoded.uid,organizationId,role,active:true,
+              joinedAt:String(membership.data()?.joinedAt||now),updatedAt:now,joinedBy:'legacy-profile-reconciliation'},{merge:true});
+          }
         }
         transaction.set(enrollmentRef,{uid:decoded.uid,organizationId,guideId,lessonId,source:'share',
           shareCode:code,enrolledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
@@ -244,7 +256,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported share action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Share operation failed.';
-    if (message.includes('organization-only')) return res.status(409).json({error:message});
+    if (message.includes('organization-only') || message.includes('invitation acceptance is required')) return res.status(409).json({error:message});
     if (message.includes('membership is inactive')) return res.status(403).json({error:message});
     if (message.includes('required') || message.includes('invalid') || message.includes('Administrator') || message.includes('not found')) return res.status(400).json({ error: message });
     console.error('VOP share operation failed', error);
