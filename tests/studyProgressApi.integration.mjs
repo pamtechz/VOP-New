@@ -39,6 +39,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     const outsider=await identity('study-foreign',orgB);
     const retakeLearner=await identity('study-retake',orgA);
     const cooldownLearner=await identity('study-cooldown',orgA);
+    const passedRetakeLearner=await identity('study-passed-retake',orgA);
     async function api(user,body){
       let status=200,output;
       await study({method:'POST',headers:{authorization:'Bearer '+user.token},body},{
@@ -138,6 +139,30 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
       },{merge:true});
+    });
+
+    await t.test('passed and failed quizzes remain retakeable when no attempt limit is configured',async()=>{
+      await db.doc('organizations/'+orgA+'/settings/settings').set({
+        quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+      },{merge:true});
+      const passed=await submitStarted(passedRetakeLearner,{0:1});
+      assert.equal(passed.status,200,JSON.stringify(passed));
+      assert.equal(passed.passed,true);
+      assert.equal(passed.retakePolicy.attemptsUsed,1);
+      assert.equal(passed.retakePolicy.maxAttempts,null);
+      assert.equal(passed.retakePolicy.remainingAttempts,null);
+      assert.equal(passed.retakePolicy.retryAt,null);
+
+      const failedRetake=await submitStarted(passedRetakeLearner,{0:0});
+      assert.equal(failedRetake.status,200,JSON.stringify(failedRetake));
+      assert.equal(failedRetake.passed,false);
+      assert.equal(failedRetake.retakePolicy.attemptsUsed,2);
+      assert.equal(failedRetake.retakePolicy.remainingAttempts,null);
+
+      const third=await submitStarted(passedRetakeLearner,{0:1});
+      assert.equal(third.status,200,JSON.stringify(third));
+      assert.equal(third.retakePolicy.attemptsUsed,3);
+      assert.equal((await db.collection('users/'+passedRetakeLearner.uid+'/assessmentAttempts').get()).size,3);
     });
 
     await t.test('submission requires a server-started single-use attempt session',async()=>{
