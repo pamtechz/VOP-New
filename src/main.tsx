@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Root } from './Root';
+import { installNativeDeepLinkBridge } from './services/nativeDeepLinks';
 import './index.css';
 import './reference.css';
 import './radio-responsive.css';
@@ -15,6 +16,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     });
   });
 }
+
+void installNativeDeepLinkBridge().catch(error=>console.warn('[native] deep link bridge unavailable',error));
 
 // Only the Firebase-backed study app can be mounted; no legacy demo fallback.
 const container = document.getElementById('root');
