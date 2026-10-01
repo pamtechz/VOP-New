@@ -17,6 +17,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
   try {
     const {default:share}=await vite.ssrLoadModule('/api/share.ts');
     const {default:study}=await vite.ssrLoadModule('/api/study/progress.ts');
+    const {default:organizations}=await vite.ssrLoadModule('/api_handlers/admin/organizations.ts');
     async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='',membershipActive=true}={}) {
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
         '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
@@ -55,6 +56,18 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       assert.ok(output&&typeof output==='object','Share redirect should return JSON.');
       return {status,location,...output};
     }
+    async function callOrganization(user,body){
+      let status=200,output;
+      await organizations({method:'POST',headers:{
+        ...(user?{authorization:'Bearer '+user.token}:{}),
+        origin:'https://vopapp.org',host:'vopapp.org',
+      },body},{
+        status(code){status=code;return this;},
+        json(data){output=data;return this;},
+      });
+      assert.ok(output&&typeof output==='object','Organization API must return JSON.');
+      return {status,...output};
+    }
     async function callStudy(user,body){
       let status=200,output;
       await study({method:'POST',headers:{authorization:'Bearer '+user.token},body},{
@@ -72,6 +85,8 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     const sameOrg=await identity('share-existing-owner',{organizationId:orgA,organizationRole:'learner',membershipRole:'owner'});
     const newcomer=await identity('share-newcomer');
     const foreign=await identity('share-enroll-foreign',{organizationId:orgB,organizationRole:'learner',membershipRole:'learner'});
+    const ordinaryMember=await identity('share-invite-member',{organizationId:orgA,organizationRole:'learner',membershipRole:'learner'});
+    const invitee=await identity('share-invite-newcomer');
     const platformAdmin=await identity('share-platform-admin',{role:'super_admin'});
 
     const guideId='share-enroll-guide',lessonId='share-enroll-lesson';
@@ -100,6 +115,32 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     });
     assert.equal(created.status,200,JSON.stringify(created));
     const code=created.item.code;
+
+    await t.test('active members create explicit lesson invitations and the recipient joins only after accepting',async()=>{
+      const createdInvite=await callOrganization(ordinaryMember,{
+        action:'createMemberInvite',organizationId:orgA,role:'admin',
+        targetKind:'lesson',guideId,lessonId,targetLabel:'Enrollment Lesson',
+      });
+      assert.equal(createdInvite.status,200,JSON.stringify(createdInvite));
+      assert.equal(createdInvite.item.role,'learner','ordinary members cannot grant elevated roles');
+      assert.match(createdInvite.item.inviteUrl,/^https:\/\/vopapp\.org\/\?invite=[A-Za-z0-9]+$/);
+      assert.equal((await db.doc('users/'+invitee.uid).get()).data()?.organizationId,'');
+
+      const preview=await callOrganization(null,{action:'previewInvite',token:createdInvite.item.token});
+      assert.equal(preview.status,200,JSON.stringify(preview));
+      assert.equal(preview.item.organizationId,orgA);
+      assert.equal(preview.item.targetLabel,'Enrollment Lesson');
+      assert.equal(preview.item.emailBound,false);
+
+      const accepted=await callOrganization(invitee,{action:'acceptInvite',token:createdInvite.item.token});
+      assert.equal(accepted.status,200,JSON.stringify(accepted));
+      assert.equal(accepted.targetPath,'/?route=lessons&guide='+guideId+'&lesson='+lessonId);
+      assert.equal((await db.doc('users/'+invitee.uid).get()).data()?.organizationId,orgA);
+      assert.equal((await db.doc('organizations/'+orgA+'/members/'+invitee.uid).get()).data()?.role,'learner');
+
+      const reused=await callOrganization(invitee,{action:'acceptInvite',token:createdInvite.item.token});
+      assert.equal(reused.status,409,JSON.stringify(reused));
+    });
 
     await t.test('existing organization privilege is never downgraded by enrollment',async()=>{
       const enrolled=await callShare(sameOrg,{action:'enroll',code});
