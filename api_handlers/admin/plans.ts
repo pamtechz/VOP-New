@@ -26,6 +26,12 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listAvailablePlans') {
+      if (!ctx.isSuperAdmin) {
+        const role=text(ctx.membership?.role || ctx.profile.organizationRole);
+        if (ctx.tenantType !== 'organization' || !ctx.organizationId || !['owner','admin'].includes(role)) {
+          throw new Error('Only an organization owner or administrator can view subscription packages for the organization.');
+        }
+      }
       const snapshot = await ctx.db.collection('system/plans/catalog').where('active', '==', true).get();
       const items = snapshot.docs.map(doc => {
         const data = doc.data() || {};
