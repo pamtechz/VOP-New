@@ -3,8 +3,11 @@ name: Refresh npm lockfile
 on:
   push:
     branches:
+      - main
       - fix/reference-design-and-certification-integrity
       - feat/plate-curriculum-authoring-review-20260929
+      - fix/node22-lockfile-ci-consistency-20261001
+  workflow_dispatch:
 
 permissions:
   contents: write
