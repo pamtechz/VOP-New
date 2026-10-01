@@ -978,7 +978,12 @@ function rawWebhookBody(req:{body?:unknown;rawBody?:Buffer|string}){
   if(typeof req.body==='string')return Buffer.from(req.body);
   return Buffer.from(JSON.stringify(req.body&&typeof req.body==='object'?req.body:{}));
 }
-function header(req:{headers?:Record<string,string|string[]|undeexport async function processProviderWebhook(
+function header(req:{headers?:Record<string,string|string[]|undefined>},name:string){
+  const value=req.headers?.[name]??req.headers?.[name.toLowerCase()];
+  return Array.isArray(value)?value[0]||'':value||'';
+}
+
+export async function processProviderWebhook(
   db:Firestore,providerKey:string,req:{headers?:Record<string,string|string[]|undefined>;body?:unknown;rawBody?:Buffer|string},
 ){
   const provider=getPaymentProvider(providerKey);
