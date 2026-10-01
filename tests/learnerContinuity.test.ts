@@ -168,6 +168,21 @@ test('light and dark modes share one canonical variable contract',()=>{
   assert.doesNotMatch(index,/\/\* Dark Theme Variables \*\//);
 });
 
+test('shared sidebar and header chrome consume canonical theme tokens',()=>{
+  const sidebar=read('src/components/layout/sidebar-system.css');
+  const header=read('src/components/layout/navigation-header.css');
+  for(const token of ['--theme-bg','--theme-surface','--theme-surface-soft','--theme-border','--theme-title','--theme-text','--theme-muted','--theme-accent']){
+    assert.ok(sidebar.includes('var('+token+')'),token+' missing from shared sidebar');
+  }
+  for(const token of ['--theme-surface','--theme-surface-soft','--theme-border','--theme-title','--theme-text','--theme-muted']){
+    assert.ok(header.includes('var('+token+')'),token+' missing from shared header');
+  }
+  assert.doesNotMatch(sidebar,/#eaf1f9|#eaf2ff|#e4efff|#e8f1ff|#edf4ff/);
+  assert.doesNotMatch(header,/#f6faff|#edf5ff/);
+  assert.doesNotMatch(header,/var\([^)]*\)[0-9a-f]/i);
+  assert.match(header,/background:var\(--vop-error-bg\);color:var\(--vop-error\)/);
+});
+
 test('legacy portals remain covered while canonical theme variables own final surfaces',()=>{
   const theme=read('src/theme.css');
   const readerModal=read('src/components/reader/LessonReaderModal.tsx');
