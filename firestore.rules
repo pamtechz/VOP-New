@@ -847,6 +847,9 @@ service cloud.firestore {
     match /paymentWebhookEvents/{eventId} {
       allow read, write: if false;
     }
+    match /paymentRefunds/{refundId} {
+      allow read, write: if false;
+    }
     match /paymentReceipts/{receiptId} {
       allow read, write: if false;
     }
