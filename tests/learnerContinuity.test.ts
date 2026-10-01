@@ -125,7 +125,7 @@ test('guide selectors and dashboards exclude assessment records from lesson and 
   const guideManager=read('src/pages/GuideManager.tsx');
   const home=read('src/components/home/HomeDashboard.tsx');
   assert.match(contentApi,/lessonCount: studyLessons\.length/);
-  assert.match(contentApi,/type \|\| 'Lesson'\) !== 'Test'/);
+  assert.match(contentApi,/String\((?:lesson\.)?data(?:\(\))?\.type\s*\|\|\s*'Lesson'\)\s*!==?\s*'Test'/);
   assert.match(admin,/lesson\.type === 'Lesson'/);
   assert.match(admin,/lesson\.type === 'Test'/);
   assert.match(guideManager,/lesson\.type === 'Lesson'/);
