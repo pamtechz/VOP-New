@@ -701,26 +701,20 @@ export async function receiptForUser(ctx:TenantContext,paymentIdValue:unknown){
 }
 
 function scopedTransactionProjection(row:ReturnType<typeof serializePayment>){
-  const {
-    provider: _provider,
-    providerStatus: _providerStatus,
-    providerReference: _providerReference,
-    providerTransactionId: _providerTransactionId,
-    webhookStatus: _webhookStatus,
-    reconciliationStatus: _reconciliationStatus,
-    settlementStatus: _settlementStatus,
-    ...safe
-  }=row;
-  return safe;
+  return {
+    ...row,
+    provider:'',
+    providerStatus:'',
+    providerReference:'',
+    providerTransactionId:'',
+    webhookStatus:'',
+    reconciliationStatus:'',
+    settlementStatus:'',
+  };
 }
 
 function scopedRefundProjection(row:ReturnType<typeof serializeRefund>){
-  const {
-    providerStatus: _providerStatus,
-    providerRefundReference: _providerRefundReference,
-    ...safe
-  }=row;
-  return safe;
+  return {...row,providerStatus:'',providerRefundReference:''};
 }
 
 export async function adminListTransactions(ctx:TenantContext,filters:Record<string,unknown>={}){
