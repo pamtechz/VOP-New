@@ -5,6 +5,7 @@ import type { PayableItem, PayableItemType, PaymentMethod } from '../../shared/p
 import { PAYABLE_ITEM_TYPES, paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
 import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
 import { auth } from '../lib/firebase';
+import './payments.css';
 
 interface Props{currentUser:User}
 type Tab='transactions'|'items'|'providers'|'reconciliation';
