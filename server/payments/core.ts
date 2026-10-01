@@ -700,6 +700,29 @@ export async function receiptForUser(ctx:TenantContext,paymentIdValue:unknown){
   return {...data,paidAt:timestampIso(data.paidAt),issuedAt:timestampIso(data.issuedAt)};
 }
 
+function scopedTransactionProjection(row:ReturnType<typeof serializePayment>){
+  const {
+    provider: _provider,
+    providerStatus: _providerStatus,
+    providerReference: _providerReference,
+    providerTransactionId: _providerTransactionId,
+    webhookStatus: _webhookStatus,
+    reconciliationStatus: _reconciliationStatus,
+    settlementStatus: _settlementStatus,
+    ...safe
+  }=row;
+  return safe;
+}
+
+function scopedRefundProjection(row:ReturnType<typeof serializeRefund>){
+  const {
+    providerStatus: _providerStatus,
+    providerRefundReference: _providerRefundReference,
+    ...safe
+  }=row;
+  return safe;
+}
+
 export async function adminListTransactions(ctx:TenantContext,filters:Record<string,unknown>={}){
   await requirePermission(ctx,'payments','view');
   const allowed=new Set(await accessibleOrganizationIds(ctx));
@@ -736,7 +759,8 @@ export async function adminListTransactions(ctx:TenantContext,filters:Record<str
   }
   if(Number.isFinite(minAmount)&&minAmount>=0)rows=rows.filter(row=>Number(row.amountDecimal)>=minAmount);
   if(Number.isFinite(maxAmount)&&maxAmount>=0)rows=rows.filter(row=>Number(row.amountDecimal)<=maxAmount);
-  return rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const sorted=rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  return ctx.isSuperAdmin?sorted:sorted.map(scopedTransactionProjection);
 }
 
 export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unknown){
@@ -750,17 +774,30 @@ export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unkno
     if(org&&!allowed.has(org))throw new Error('The transaction is outside your authorized scope.');
   }
   const [attempts,audit,receipt,refunds]=await Promise.all([
-    ref.collection('attempts').orderBy('createdAt','desc').limit(50).get(),
-    ref.collection('audit').orderBy('createdAt','desc').limit(100).get(),
+    ctx.isSuperAdmin?ref.collection('attempts').orderBy('createdAt','desc').limit(50).get():Promise.resolve(null),
+    ctx.isSuperAdmin?ref.collection('audit').orderBy('createdAt','desc').limit(100).get():Promise.resolve(null),
     ctx.db.doc('paymentReceipts/'+paymentId).get(),
     ctx.db.collection('paymentRefunds').where('paymentId','==',paymentId).limit(100).get(),
   ]);
+  const payment=serializePayment(paymentId,snap.data()||{});
+  const refundRows=refunds.docs.map(doc=>serializeRefund(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const receiptData=receipt.exists?{...receipt.data(),issuedAt:timestampIso(receipt.data()?.issuedAt),paidAt:timestampIso(receipt.data()?.paidAt)}:null;
+  if(!ctx.isSuperAdmin){
+    const safeReceipt=receiptData?Object.fromEntries(Object.entries(receiptData).filter(([key])=>!['provider','providerReference','providerTransactionId'].includes(key))):null;
+    return {
+      payment:scopedTransactionProjection(payment),
+      attempts:[],
+      audit:[],
+      refunds:refundRows.map(scopedRefundProjection),
+      receipt:safeReceipt,
+    };
+  }
   return {
-    payment:serializePayment(paymentId,snap.data()||{}),
-    attempts:attempts.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt),updatedAt:timestampIso(doc.data().updatedAt)})),
-    audit:audit.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt)})),
-    refunds:refunds.docs.map(doc=>serializeRefund(doc.id,doc.data())).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)),
-    receipt:receipt.exists?{...receipt.data(),issuedAt:timestampIso(receipt.data()?.issuedAt),paidAt:timestampIso(receipt.data()?.paidAt)}:null,
+    payment,
+    attempts:attempts?.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt),updatedAt:timestampIso(doc.data().updatedAt)}))||[],
+    audit:audit?.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:timestampIso(doc.data().createdAt)}))||[],
+    refunds:refundRows,
+    receipt:receiptData,
   };
 }
 
@@ -864,6 +901,7 @@ async function finalizeRefundRecord(
 
 export async function adminRequestRefund(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment refunds');
   await enforcePaymentRateLimit(ctx,'refund',6,60_000);
   const paymentId=safePaymentId(input.paymentId,'payment identifier');
   const details=await adminPaymentDetails(ctx,paymentId);
@@ -931,6 +969,7 @@ export async function adminRequestRefund(ctx:TenantContext,input:Record<string,u
 
 export async function adminCompleteManualRefund(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment refunds');
   const refundId=safePaymentId(input.refundId,'refund identifier');
   const refundRef=ctx.db.doc('paymentRefunds/'+refundId),refundSnap=await refundRef.get();
   if(!refundSnap.exists)throw new Error('The refund request was not found.');
@@ -950,6 +989,7 @@ export async function adminCompleteManualRefund(ctx:TenantContext,input:Record<s
 
 export async function adminCancelRefund(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
+  requireSuperAdminFinanceControl(ctx,'payment refunds');
   const refundId=safePaymentId(input.refundId,'refund identifier');
   const ref=ctx.db.doc('paymentRefunds/'+refundId),snap=await ref.get();
   if(!snap.exists)throw new Error('The refund request was not found.');
@@ -1159,8 +1199,17 @@ export async function adminReconcile(ctx:TenantContext,paymentIdValue?:unknown){
 
 export async function adminExportTransactions(ctx:TenantContext,filters:Record<string,unknown>={}){
   const rows=await adminListTransactions(ctx,filters);
-  const headerRow=['Reference','Date','Payer','Email','Organization','Item','Amount','Currency','Provider','Method','Status','Provider Reference','Verification','Reconciliation'];
   const escape=(value:unknown)=>'"'+String(value??'').replaceAll('"','""')+'"';
+  if(!ctx.isSuperAdmin){
+    const headerRow=['Reference','Date','Payer','Email','Organization','Item','Amount','Currency','Method','Status'];
+    const lines=[headerRow.map(escape).join(',')];
+    for(const row of rows)lines.push([
+      row.reference,row.createdAt,row.payerName,row.payerEmail,row.organizationId,row.description,
+      row.amountDecimal,row.currency,row.paymentMethod,row.status,
+    ].map(escape).join(','));
+    return lines.join('\n');
+  }
+  const headerRow=['Reference','Date','Payer','Email','Organization','Item','Amount','Currency','Provider','Method','Status','Provider Reference','Verification','Reconciliation'];
   const lines=[headerRow.map(escape).join(',')];
   for(const row of rows)lines.push([
     row.reference,row.createdAt,row.payerName,row.payerEmail,row.organizationId,row.description,
