@@ -142,6 +142,9 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
       throw new Error('The selected organization is not active.');
   }
   const input=normalizeProgramDraft(raw);
+  // A published platform program is, by definition, system-wide. Do not
+  // permit a platform publication whose visibility contradicts its scope.
+  if(!targetOrganizationId&&input.published)input.sharingScope='shared';
   if(input.sharingScope==='shared'&&!ctx.isSuperAdmin)
     throw new Error('Only VOP Super Admin may publish a cross-organization program.');
   if(!targetOrganizationId&&input.sharingScope==='organization')
