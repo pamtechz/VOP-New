@@ -303,7 +303,7 @@ export default function InboxPage({
             </article>)}</div>
             <div><h3><Send size={16}/>Sent</h3>{!sent.length?<div className="vop-inbox-empty compact">No sent invitations.</div>:sent.map(invite=><article key={'sent:'+invite.token} className="vop-invite-card">
               <div><strong>{invite.email||'Shareable member link'}</strong><span>{invite.organizationName||invite.organizationId} · {invite.role}</span><span>Opens: {invite.targetLabel||'Organization home'}</span><small>{invite.status} · expires {dateText(invite.expiresAt)}</small></div>
-              <footer>{invite.inviteUrl&&<button type="button" className="vop-secondary" onClick={()=>void navigator.clipboard?.writeText(invite.inviteUrl)}><Copy size={14}/>Copy</button>}{invite.status==='pending'?<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void cancelInvite(invite)}><Trash2 size={15}/>Cancel invite</button>:<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void dismissInvite(invite)}><Trash2 size={15}/>Delete</button>}</footer>
+              <footer>{invite.inviteUrl&&<button type="button" className="vop-secondary" onClick={()=>void navigator.clipboard?.writeText(String(invite.inviteUrl||''))}><Copy size={14}/>Copy</button>}{invite.status==='pending'?<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void cancelInvite(invite)}><Trash2 size={15}/>Cancel invite</button>:<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void dismissInvite(invite)}><Trash2 size={15}/>Delete</button>}</footer>
             </article>)}</div>
           </div>
         </section>
