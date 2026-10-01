@@ -52,9 +52,44 @@ async function mine(req:Request,res:Response){
  } else {
    certificateDocs=(await certificateQuery.limit(20).get()).docs;
  }
+ const reviewSnapshot=await db.collection('graduationRequests').where('candidateId','==',decoded.uid).limit(100).get();
+ const reviews=reviewSnapshot.docs.map(document=>({id:document.id,...document.data()}))
+   .filter(record=>!organizationId||String(record.organizationId||'')===organizationId)
+   .sort((a,b)=>Date.parse(String(dateValue(b.submittedAt)||''))-Date.parse(String(dateValue(a.submittedAt)||'')));
+ const latestReview=reviews[0]||null;
+ let automaticallyAwarded:Record<string,unknown>|null=null;
+ const alreadyCertified=certificateDocs.some(document=>document.data()?.status==='Certified');
+ if(!alreadyCertified){
+   for(const review of reviews.filter(record=>record.status==='approved')){
+     try{
+       const award=await awardApprovedCertificate(db,decoded.uid,'system:auto',String(review.guideId||''));
+       automaticallyAwarded=award.certificate as Record<string,unknown>;
+       break;
+     }catch(error){
+       console.warn('Approved certificate self-heal is not yet eligible',error);
+     }
+   }
+ }
  const configSnapshot=await db.doc('system/certification').get();
- const certificates=certificateDocs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified');const config=configSnapshot.exists?configSnapshot.data()??{}:{};
- return res.status(200).json({certificates,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??''),verificationEnabled:config.verificationEnabled===true,verificationBaseUrl:String(config.verificationBaseUrl??''),template:config.template&&typeof config.template==='object'?config.template:null}});
+ const certificateMap=new Map<string,ReturnType<typeof safe>>();
+ certificateDocs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified')
+   .forEach(record=>certificateMap.set(record.id,record));
+ if(automaticallyAwarded){
+   const record=safe(automaticallyAwarded);
+   if(record.status==='Certified')certificateMap.set(record.id,record);
+ }
+ const certificates=[...certificateMap.values()];
+ const config=configSnapshot.exists?configSnapshot.data()??{}:{};
+ const review=latestReview?{
+   id:String(latestReview.id||''),
+   status:String(latestReview.status||''),
+   guideId:String(latestReview.guideId||''),
+   guideTitle:String(latestReview.guideTitle||''),
+   submittedAt:dateValue(latestReview.submittedAt),
+   approvedAt:dateValue(latestReview.approvedAt),
+   certificateStatus:String(latestReview.certificateStatus||''),
+ }:null;
+ return res.status(200).json({certificates,review,config:{certificateTitle:String(config.certificateTitle??''),certificateBodyText:String(config.certificateBodyText??''),issuerName:String(config.issuerName??''),issuerSubtitle:String(config.issuerSubtitle??''),directorName:String(config.directorName??''),directorTitle:String(config.directorTitle??''),signatureUrl:String(config.signatureUrl??''),sealUrl:String(config.sealUrl??''),logoUrl:String(config.logoUrl??''),backgroundUrl:String(config.backgroundUrl??''),verificationEnabled:config.verificationEnabled===true,verificationBaseUrl:String(config.verificationBaseUrl??''),template:config.template&&typeof config.template==='object'?config.template:null}});
 }
 
 async function verify(req:Request,res:Response){
