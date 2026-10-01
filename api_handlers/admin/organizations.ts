@@ -248,14 +248,20 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'listInvites') {
       const email=String(ctx.auth.email||'').trim().toLowerCase();
-      const receivedSnap=email
-        ?await bootstrapDb.collection('organizationInvites').where('email','==',email).limit(200).get()
-        :null;
-      const sentSnap=await bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(200).get();
-      const rows=[
-        ...(receivedSnap?.docs||[]).map(doc=>({token:doc.id,...doc.data(),direction:'received' as const})),
-        ...sentSnap.docs.map(doc=>({token:doc.id,...doc.data(),direction:'sent' as const})),
-      ];
+      const [receivedSnap,sentSnap,acceptedSnap,declinedSnap]=await Promise.all([
+        email?bootstrapDb.collection('organizationInvites').where('email','==',email).limit(200).get():Promise.resolve(null),
+        bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(200).get(),
+        bootstrapDb.collection('organizationInvites').where('acceptedBy','==',ctx.auth.uid).limit(200).get(),
+        bootstrapDb.collection('organizationInvites').where('declinedBy','==',ctx.auth.uid).limit(200).get(),
+      ]);
+      const rowsByKey=new Map<string,Record<string,unknown>&{token:string;direction:'received'|'sent'}>();
+      for(const doc of [...(receivedSnap?.docs||[]),...acceptedSnap.docs,...declinedSnap.docs]){
+        rowsByKey.set('received:'+doc.id,{token:doc.id,...doc.data(),direction:'received'});
+      }
+      for(const doc of sentSnap.docs){
+        rowsByKey.set('sent:'+doc.id,{token:doc.id,...doc.data(),direction:'sent'});
+      }
+      const rows=[...rowsByKey.values()];
       const organizationIds=[...new Set(rows.map(item=>String(item.organizationId||'')).filter(Boolean))];
       const organizationSnaps=organizationIds.length?await bootstrapDb.getAll(...organizationIds.map(orgId=>bootstrapDb.doc('organizations/'+orgId))):[];
       const names=new Map(organizationSnaps.map(doc=>[doc.id,String(doc.data()?.name||doc.id)]));
