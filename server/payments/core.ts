@@ -4,7 +4,7 @@ import {
   PAYABLE_ITEM_TYPES, PAYMENT_METHODS, PAYMENT_STATUSES,
   amountToMinor, canTransitionPaymentStatus, minorToDecimal, normalizeCurrency,
   normalizePhone, safePaymentId, safeReference,
-  type PayableItem, type PaymentMethod, type PaymentStatus, type PaymentTransaction,
+  type PayableItem, type PaymentMethod, type PaymentRefund, type PaymentStatus, type PaymentTransaction,
 } from '../../shared/payments.js';
 import {
   accessibleOrganizationIds, authenticateTenant, organizationInHierarchyScope,
@@ -271,13 +271,27 @@ function serializePayment(id:string,data:DocumentData){
     providerReference:text(data.providerReference),verificationStatus:text(data.verificationStatus),
     webhookStatus:text(data.webhookStatus),reconciliationStatus:text(data.reconciliationStatus),
     settlementStatus:text(data.settlementStatus),fulfilmentStatus:text(data.fulfilmentStatus),
-    receiptId:text(data.receiptId),
+    receiptId:text(data.receiptId),refundedMinor:Number(data.refundedMinor||0),refundStatus:text(data.refundStatus||'none'),
     createdAt:timestampIso(data.createdAt),initiatedAt:timestampIso(data.initiatedAt),
     paidAt:timestampIso(data.paidAt),failedAt:timestampIso(data.failedAt),
     cancelledAt:timestampIso(data.cancelledAt),expiredAt:timestampIso(data.expiredAt),
     refundedAt:timestampIso(data.refundedAt),verifiedAt:timestampIso(data.verifiedAt),
     settledAt:timestampIso(data.settledAt),fulfilledAt:timestampIso(data.fulfilledAt),
     itemSnapshot:object(data.itemSnapshot),metadata:object(data.metadata),
+  };
+}
+
+function serializeRefund(id:string,data:DocumentData){
+  return {
+    id,paymentId:text(data.paymentId),paymentReference:text(data.paymentReference),
+    refundReference:text(data.refundReference),organizationId:text(data.organizationId),
+    payerUid:text(data.payerUid),currency:text(data.currency),
+    amountMinor:Number(data.amountMinor||0),amountDecimal:text(data.amountDecimal),
+    reason:text(data.reason),provider:text(data.provider),status:text(data.status),
+    providerStatus:text(data.providerStatus),providerRefundId:text(data.providerRefundId),
+    providerRefundReference:text(data.providerRefundReference),requestedBy:text(data.requestedBy),
+    completedBy:text(data.completedBy),createdAt:timestampIso(data.createdAt),
+    completedAt:timestampIso(data.completedAt),updatedAt:timestampIso(data.updatedAt),
   };
 }
 
@@ -357,7 +371,23 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     tx.create(paymentRef,payment);
     tx.set(lockRef,{paymentId,payerUid:ctx.auth.uid,payableItemId,organizationId,updatedAt:FieldValue.serverTimestamp()},{merge:true});
   });
-  if(reused)return {payment:reused,reused:true};
+  if(reused){
+    let checkout:null|Record<string,unknown>=null;
+    if(reused.status!=='paid'&&reused.paymentMethod==='card'&&provider.resumeCheckout){
+      try{
+        const resumed=await provider.resumeCheckout({
+          reference:reused.reference,amountMinor:reused.amountMinor,currency:reused.currency,
+          method:reused.paymentMethod as PaymentMethod,email:reused.payerEmail,
+          description:reused.description,
+        });
+        checkout=resumed.checkout||null;
+        await paymentAudit(ctx.db,reused.id,'checkout.resumed',ctx.auth.uid,{provider:providerKey});
+      }catch(error){
+        await paymentAudit(ctx.db,reused.id,'checkout.resume_failed',ctx.auth.uid,{provider:providerKey,error:publicError(error)});
+      }
+    }
+    return {payment:reused,reused:true,checkout};
+  }
 
   const attemptId='attempt_'+randomUUID().replaceAll('-','');
   const attemptRef=paymentRef.collection('attempts').doc(attemptId);
