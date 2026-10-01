@@ -218,6 +218,7 @@ class LencoProvider implements PaymentProviderAdapter{
       key:this.key,
       configured:this.configured(),
       environment:lencoEnvironment(),
+      callbackPath:'/api/payments/webhooks/lenco',
       methods:[...(lencoPublicKey()?['card']:[]),'airtel_money','mtn_money','zamtel_money'],
       capabilities:this.capabilities,
     };
@@ -413,6 +414,7 @@ class MtnMomoProvider implements PaymentProviderAdapter{
       configured:this.configured(),
       environment:mtnEnvironment(),
       targetEnvironment:mtnTargetEnvironment(),
+      callbackPath:'/api/payments/webhooks/mtn-momo',
       methods:['mtn_money'],
       callbackUrl:mtnCallbackUrl()?'configured':'not_configured',
       capabilities:this.capabilities,
