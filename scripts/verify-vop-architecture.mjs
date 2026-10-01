@@ -47,10 +47,10 @@ const checks = [
   ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users']],
   ['api_handlers/admin/plans.ts', ['system/plans/catalog','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId']],
   ['shared/payments.ts', ['PAYMENT_STATUSES','PAYABLE_ITEM_TYPES','amountToMinor','canTransitionPaymentStatus']],
-  ['server/payments/providers.ts', ['PaymentProviderAdapter','verifyWebhook','verifyLencoWebhookSignature','registerPaymentProvider','/collections/status/']],
+  ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','/collection/v1_0/requesttopay','registerPaymentProvider','/collections/status/']],
   ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
   ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds']],
-  ['api/payments.ts', ['webhooks/lenco','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
+  ['api/payments.ts', ['webhooks/lenco','mtn_momo','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
   ['src/pages/PaymentsPage.tsx', ['Payments & receipts','startPaymentCheckout','verifyPayment']],
   ['src/pages/PaymentManagement.tsx', ['Payments & Transactions','Payable items','Reconciliation']],
 
