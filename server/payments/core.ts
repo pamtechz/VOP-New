@@ -1069,11 +1069,6 @@ export async function processProviderWebhook(
     throw error;
   }
 }
-,{merge:true});
-    await paymentDoc.ref.set({webhookStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
-    throw error;
-  }
-}
 
 export async function reconcilePendingPayments(db:Firestore,limit=100){
   const statuses=['initiated','pending','requires_action','processing'];
