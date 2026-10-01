@@ -484,9 +484,26 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
   if(!itemSnap.exists)throw new Error('The payment item no longer exists.');
   const item=itemSnap.data()||{};
   const fulfilmentRef=db.doc('paymentFulfilments/'+paymentId);
-  const existing=await fulfilmentRef.get();
-  if(existing.data()?.status==='fulfilled'){
-    if(payment.fulfilmentStatus!=='fulfilled')await paymentRef.set({fulfilmentStatus:'fulfilled',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  const claimToken=randomUUID();
+  const claimed=await db.runTransaction(async tx=>{
+    const existing=await tx.get(fulfilmentRef);
+    const data=existing.data()||{};
+    if(data.status==='fulfilled')return false;
+    const lockUntil=new Date(text(data.lockUntil)||0).getTime();
+    if(data.status==='processing'&&Number.isFinite(lockUntil)&&lockUntil>Date.now())return false;
+    tx.set(fulfilmentRef,{
+      paymentId,status:'processing',claimToken,
+      startedAt:data.startedAt||FieldValue.serverTimestamp(),
+      lockUntil:new Date(Date.now()+120_000).toISOString(),
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return true;
+  });
+  if(!claimed){
+    const existing=await fulfilmentRef.get();
+    if(existing.data()?.status==='fulfilled'&&payment.fulfilmentStatus!=='fulfilled'){
+      await paymentRef.set({fulfilmentStatus:'fulfilled',fulfilledAt:existing.data()?.fulfilledAt||FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    }
     return;
   }
 
@@ -495,7 +512,6 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
   const receiptRef=db.doc('paymentReceipts/'+paymentId);
   const receiptNumber='RCPT-'+text(payment.reference);
   const batch=db.batch();
-  batch.set(fulfilmentRef,{paymentId,status:'processing',startedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
   batch.set(receiptRef,{
     id:paymentId,receiptNumber,paymentId,reference:text(payment.reference),
     payerUid:uid,payerEmail:text(payment.payerEmail),payerName:text(payment.payerName),
@@ -552,13 +568,18 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
     },{merge:true});
   }
 
-  batch.set(fulfilmentRef,{status:'fulfilled',fulfilledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  batch.set(fulfilmentRef,{status:'fulfilled',claimToken,lockUntil:null,fulfilledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
   batch.set(paymentRef,{
     fulfilmentStatus:'fulfilled',fulfilledAt:FieldValue.serverTimestamp(),
     receiptId:paymentId,updatedAt:FieldValue.serverTimestamp(),
   },{merge:true});
-  await batch.commit();
-  await paymentAudit(db,paymentId,'fulfilment.completed','system',{itemType});
+  try{
+    await batch.commit();
+    await paymentAudit(db,paymentId,'fulfilment.completed','system',{itemType});
+  }catch(error){
+    await fulfilmentRef.set({status:'failed',claimToken,lockUntil:null,safeError:publicError(error),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    throw error;
+  }
 }
 
 export async function paymentHistory(ctx:TenantContext){
