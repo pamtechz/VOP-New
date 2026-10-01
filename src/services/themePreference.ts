@@ -11,8 +11,9 @@ export function applyThemePreference(theme:VopTheme){
   if(typeof document==='undefined')return;
   document.documentElement.setAttribute('data-theme',theme);
   document.documentElement.style.colorScheme=theme;
+  document.documentElement.classList.toggle('dark-theme',theme==='dark');
   const meta=document.querySelector('meta[name="theme-color"]');
-  if(meta)meta.setAttribute('content',theme==='dark'?'#0c1118':'#0c2d63');
+  if(meta)meta.setAttribute('content',theme==='dark'?'#0b0c0f':'#f7f9fc');
 }
 export function persistThemePreference(theme:VopTheme){
   applyThemePreference(theme);
