@@ -17,6 +17,10 @@ function text(value: unknown) { return typeof value === 'string' ? value.trim() 
 
 function stageConfig(data: Record<string, unknown>): ApprovalStage[] {
   const raw = Array.isArray(data.approvalStages) ? data.approvalStages : [];
+  if(!raw.length)return [{
+    id:'organization',label:'Organization review',
+    approverRoles:['owner','admin','mentor'],enabled:true,
+  }];
   return raw.map(item => item && typeof item === 'object' ? item as Record<string, unknown> : null)
     .map(item => item ? ({
       id: text(item.id),
