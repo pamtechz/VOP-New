@@ -3,7 +3,7 @@ import { getPaymentProvider } from '../server/payments/providers.js';
 import {
   adminCancelRefund, adminCompleteManualRefund, adminExportTransactions, adminListTransactions,
   adminPaymentDetails, adminProviderConfig, adminReconcile, adminRequestRefund,
-  configuredPaymentStatuses, createCheckout, deletePayableItem, listCheckoutOptions, listPayableItems,
+  configuredPaymentStatuses, createCheckout, deletePayableItem, listPayableItems,
   listPaymentProviders, paymentContext, paymentHistory, paymentStatusForUser,
   processProviderWebhook, receiptForUser, reconcilePendingPayments, reconcilePendingRefunds,
   upsertPayableItem,
@@ -81,8 +81,8 @@ export default async function handler(req:Request,res:Response){
 
     if(name==='catalog'){
       if(req.method!=='GET'&&req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
-      const [items,checkoutOptions]=await Promise.all([listPayableItems(ctx,false),listCheckoutOptions(ctx)]);
-      return res.status(200).json({ok:true,items,checkoutOptions});
+      const items=await listPayableItems(ctx,false);
+      return res.status(200).json({ok:true,items});
     }
     if(name==='checkout'){
       if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
