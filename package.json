@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/repair-admin-records-panel.mjs && vite",
+    "dev": "node scripts/repair-admin-records-panel.mjs && vite --host",
     "prebuild": "node scripts/repair-admin-records-panel.mjs",
     "build": "node scripts/verify-server-esm-imports.mjs && tsc -b && vite build",
     "verify:content": "node scripts/generate-snapshots.js && node --test tests/ingestion.test.mjs tests/snapshots.test.mjs",
