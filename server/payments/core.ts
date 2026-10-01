@@ -704,6 +704,235 @@ export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unkno
   };
 }
 
+
+async function reverseFullyRefundedFulfilment(db:Firestore,paymentId:string){
+  const paymentSnap=await db.doc('paymentTransactions/'+paymentId).get();
+  if(!paymentSnap.exists)return;
+  const payment=paymentSnap.data()||{};
+  if(payment.status!=='refunded')return;
+  const uid=text(payment.payerUid),organizationId=text(payment.organizationId);
+  const itemType=text(payment.itemType),itemId=text(payment.itemId);
+  const config=object(object(payment.itemSnapshot).fulfilmentConfig);
+  const updates:Array<Promise<unknown>>=[];
+
+  if(itemType==='programme_registration'){
+    if(text(config.targetCollection)==='programs'){
+      const ref=db.doc('programEnrollments/'+hash(organizationId+':'+uid+':'+itemId));
+      updates.push(ref.get().then(snap=>snap.exists?ref.set({
+        status:'revoked_refund',revokedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true}):undefined));
+    }
+    for(const guideId of stringArray(config.guideIdsSnapshot)){
+      const ref=db.doc('courseEnrollments/'+(organizationId||'platform')+'_'+uid+'_'+guideId);
+      updates.push(ref.get().then(snap=>snap.exists?ref.set({
+        status:'revoked_refund',revokedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true}):undefined));
+    }
+  }else if(itemType==='event_registration'){
+    const ref=db.doc('eventRegistrations/'+hash(itemId+':'+uid));
+    updates.push(ref.get().then(snap=>snap.exists?ref.set({
+      status:'cancelled_refund',cancelledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true}):undefined));
+  }else if(itemType==='organization_subscription'&&organizationId){
+    const subscriptionRef=db.doc('organizations/'+organizationId+'/subscription/current');
+    updates.push(subscriptionRef.get().then(snap=>{
+      if(!snap.exists||text(snap.data()?.lastPaymentId)!==paymentId)return undefined;
+      return subscriptionRef.set({
+        status:'refunded',refundedAt:FieldValue.serverTimestamp(),
+        refundPaymentId:paymentId,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+    }));
+    // Fail closed for paid feature access after a full refund. A Super Admin can
+    // subsequently assign a complimentary/replacement plan with an audit reason.
+    updates.push(db.doc('organizations/'+organizationId).set({
+      featureEntitlements:{},billingAccessSuspended:true,
+      billingSuspendedReason:'full_refund',updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true}));
+  }else if(itemType!=='donation'){
+    const ref=db.doc('paymentEntitlements/'+hash(uid+':'+text(payment.payableItemId)));
+    updates.push(ref.get().then(snap=>snap.exists?ref.set({
+      status:'refunded',revokedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true}):undefined));
+  }
+  await Promise.all(updates);
+  await paymentAudit(db,paymentId,'fulfilment.refund_reversal','system',{itemType});
+}
+
+async function finalizeRefundRecord(
+  db:Firestore,refundIdValue:unknown,actor:string,providerRefundReferenceValue:unknown='',
+){
+  const refundId=safePaymentId(refundIdValue,'refund identifier');
+  const refundRef=db.doc('paymentRefunds/'+refundId);
+  let paymentId='';
+  let fullRefund=false;
+  await db.runTransaction(async tx=>{
+    const refundSnap=await tx.get(refundRef);
+    if(!refundSnap.exists)throw new Error('The refund request was not found.');
+    const refund=refundSnap.data()||{};
+    if(refund.status==='completed'){paymentId=text(refund.paymentId);return;}
+    if(['failed','cancelled'].includes(text(refund.status)))throw new Error('This refund request can no longer be completed.');
+    paymentId=safePaymentId(refund.paymentId,'payment identifier');
+    const paymentRef=db.doc('paymentTransactions/'+paymentId);
+    const paymentSnap=await tx.get(paymentRef);
+    if(!paymentSnap.exists)throw new Error('The original payment was not found.');
+    const payment=paymentSnap.data()||{};
+    if(!['paid','partially_refunded'].includes(text(payment.status)))throw new Error('Only paid transactions can be refunded.');
+    const amountMinor=Number(refund.amountMinor||0);
+    const alreadyRefunded=Math.max(0,Number(payment.refundedMinor||0));
+    const total=alreadyRefunded+amountMinor;
+    const paidAmount=Number(payment.amountMinor||0);
+    if(!Number.isSafeInteger(amountMinor)||amountMinor<=0||total>paidAmount)throw new Error('The refund exceeds the remaining refundable amount.');
+    fullRefund=total===paidAmount;
+    const nextStatus:PaymentStatus=fullRefund?'refunded':'partially_refunded';
+    const providerRefundReference=text(providerRefundReferenceValue)||text(refund.providerRefundReference);
+    tx.set(refundRef,{
+      status:'completed',providerStatus:'completed',providerRefundReference,
+      completedBy:actor,completedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    tx.set(paymentRef,{
+      status:nextStatus,refundedMinor:total,refundStatus:'completed',
+      refundedAt:FieldValue.serverTimestamp(),updatedBy:actor,updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+  });
+  if(paymentId){
+    await paymentAudit(db,paymentId,'refund.completed',actor,{refundId,fullRefund});
+    if(fullRefund)await reverseFullyRefundedFulfilment(db,paymentId);
+  }
+  const finalSnap=await refundRef.get();
+  return serializeRefund(refundId,finalSnap.data()||{});
+}
+
+export async function adminRequestRefund(ctx:TenantContext,input:Record<string,unknown>){
+  await requirePermission(ctx,'payments','manage');
+  await enforcePaymentRateLimit(ctx,'refund',6,60_000);
+  const paymentId=safePaymentId(input.paymentId,'payment identifier');
+  const details=await adminPaymentDetails(ctx,paymentId);
+  const payment=details.payment;
+  if(!['paid','partially_refunded'].includes(payment.status))throw new Error('Only a verified paid transaction can be refunded.');
+  const reason=text(input.reason);
+  if(reason.length<5)throw new Error('Enter a clear refund reason.');
+  const reserved=(details.refunds||[])
+    .filter(refund=>!['failed','cancelled'].includes(text(refund.status)))
+    .reduce((sum,refund)=>sum+Math.max(0,Number(refund.amountMinor||0)),0);
+  const remaining=Math.max(0,payment.amountMinor-reserved);
+  if(remaining<=0)throw new Error('This payment has no remaining refundable amount.');
+  const amountMinor=text(input.amount)
+    ?amountToMinor(input.amount,payment.currency)
+    :remaining;
+  if(amountMinor>remaining)throw new Error('The refund exceeds the remaining refundable amount.');
+
+  const provider=getPaymentProvider(payment.provider);
+  const refundId='refund_'+randomUUID().replaceAll('-','');
+  const refundReference='VOP-RF-'+Date.now().toString(36).toUpperCase()+'-'+randomBytes(5).toString('hex').toUpperCase();
+  const ref=ctx.db.doc('paymentRefunds/'+refundId);
+  const record:PaymentRefund={
+    id:refundId,paymentId,paymentReference:payment.reference,refundReference,
+    organizationId:payment.organizationId,payerUid:payment.payerUid,currency:payment.currency,
+    amountMinor,amountDecimal:minorToDecimal(amountMinor,payment.currency),reason:reason.slice(0,800),
+    provider:payment.provider,status:'requested',providerStatus:'requested',
+    providerRefundId:'',providerRefundReference:'',requestedBy:ctx.auth.uid,
+    createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+  };
+  await ref.create(record);
+  await paymentAudit(ctx.db,paymentId,'refund.requested',ctx.auth.uid,{refundId,amountMinor});
+
+  const isPartial=amountMinor<payment.amountMinor;
+  if(provider.capabilities.refunds&&provider.refundPayment&&(!isPartial||provider.capabilities.partialRefunds)){
+    try{
+      const result=await provider.refundPayment({
+        paymentReference:payment.reference,refundReference,amountMinor,currency:payment.currency,
+        reason,providerTransactionId:payment.providerTransactionId,providerReference:payment.providerReference,
+      });
+      await ref.set({
+        status:result.status==='completed'?'provider_pending':result.status==='failed'?'failed':'provider_pending',
+        providerStatus:result.providerStatus,providerRefundId:result.providerRefundId,
+        providerRefundReference:result.providerRefundReference,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      if(result.status==='completed'){
+        return finalizeRefundRecord(ctx.db,refundId,'system:provider-refund',result.providerRefundReference);
+      }
+    }catch(error){
+      const message=publicError(error,'Refund provider request failed.');
+      const ambiguous=/timed out|network|fetch failed|socket|connection|unreachable/i.test(message);
+      await ref.set({
+        status:ambiguous?'provider_pending':'failed',providerStatus:ambiguous?'provider_unreachable':'failed',
+        safeError:message,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      if(!ambiguous)throw error;
+    }
+  }else{
+    await ref.set({
+      status:'manual_action_required',providerStatus:'manual_provider_action_required',
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+  }
+  return serializeRefund(refundId,(await ref.get()).data()||{});
+}
+
+export async function adminCompleteManualRefund(ctx:TenantContext,input:Record<string,unknown>){
+  await requirePermission(ctx,'payments','manage');
+  const refundId=safePaymentId(input.refundId,'refund identifier');
+  const refundRef=ctx.db.doc('paymentRefunds/'+refundId),refundSnap=await refundRef.get();
+  if(!refundSnap.exists)throw new Error('The refund request was not found.');
+  const refund=refundSnap.data()||{};
+  const details=await adminPaymentDetails(ctx,refund.paymentId);
+  if(text(refund.status)!=='manual_action_required')throw new Error('Only refunds awaiting manual provider action can be confirmed manually.');
+  const providerRefundReference=text(input.providerRefundReference);
+  if(providerRefundReference.length<4)throw new Error('Enter the provider refund or reversal reference.');
+  const confirmationNote=text(input.confirmationNote);
+  if(confirmationNote.length<5)throw new Error('Enter a confirmation note describing the external refund action.');
+  await refundRef.set({
+    confirmationNote:confirmationNote.slice(0,800),providerRefundReference,
+    confirmedPaymentReference:details.payment.reference,updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return finalizeRefundRecord(ctx.db,refundId,ctx.auth.uid,providerRefundReference);
+}
+
+export async function adminCancelRefund(ctx:TenantContext,input:Record<string,unknown>){
+  await requirePermission(ctx,'payments','manage');
+  const refundId=safePaymentId(input.refundId,'refund identifier');
+  const ref=ctx.db.doc('paymentRefunds/'+refundId),snap=await ref.get();
+  if(!snap.exists)throw new Error('The refund request was not found.');
+  const refund=snap.data()||{};
+  await adminPaymentDetails(ctx,refund.paymentId);
+  if(refund.status==='completed')throw new Error('A completed refund cannot be cancelled.');
+  await ref.set({
+    status:'cancelled',cancelledBy:ctx.auth.uid,cancelReason:text(input.reason).slice(0,800),
+    cancelledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  await paymentAudit(ctx.db,text(refund.paymentId),'refund.cancelled',ctx.auth.uid,{refundId});
+  return serializeRefund(refundId,(await ref.get()).data()||{});
+}
+
+export async function reconcilePendingRefunds(db:Firestore,limit=100){
+  const snap=await db.collection('paymentRefunds').where('status','==','provider_pending').limit(Math.max(1,Math.min(200,limit))).get();
+  const summary={checked:0,completed:0,pending:0,failed:0,errors:0};
+  for(const doc of snap.docs){
+    summary.checked++;
+    const refund=doc.data()||{};
+    try{
+      const provider=getPaymentProvider(refund.provider);
+      if(!provider.verifyRefund){summary.pending++;continue;}
+      const result=await provider.verifyRefund(text(refund.refundReference));
+      await doc.ref.set({
+        providerStatus:result.providerStatus,providerRefundId:result.providerRefundId,
+        providerRefundReference:result.providerRefundReference,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      if(result.status==='completed'){
+        await finalizeRefundRecord(db,doc.id,'system:refund-reconciliation',result.providerRefundReference);
+        summary.completed++;
+      }else if(result.status==='failed'){
+        await doc.ref.set({status:'failed',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        summary.failed++;
+      }else summary.pending++;
+    }catch(error){
+      summary.errors++;
+      await doc.ref.set({safeError:publicError(error,'Refund reconciliation failed.'),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    }
+  }
+  return summary;
+}
+
 export async function adminProviderConfig(ctx:TenantContext,input:Record<string,unknown>){
   await requirePermission(ctx,'payments','manage');
   if(!ctx.isSuperAdmin)throw new Error('Only Super Admin can configure payment providers.');
