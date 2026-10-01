@@ -175,13 +175,17 @@ export async function upsertPayableItem(ctx:TenantContext,input:Record<string,un
 
   const providers=stringArray(input.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const methods=stringArray(input.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never)) as PaymentMethod[];
-  const target=await validateTarget(ctx.db,itemType,itemId,organizationId);
+  const [target,organizationSnap]=await Promise.all([
+    validateTarget(ctx.db,itemType,itemId,organizationId),
+    organizationId?ctx.db.doc('organizations/'+organizationId).get():Promise.resolve(null),
+  ]);
+  const organizationName=organizationSnap?.exists?text(organizationSnap.data()?.name):'';
   const name=text(input.name)||text(target.title)||'VOP payment';
   const ref=ctx.db.doc('payableItems/'+id);
   const before=(await ref.get()).data();
   const data:PayableItem={
     id,scope,tenantId:scope==='platform'?'':tenantOwnerKey(ctx),
-    organizationId,itemId,itemType:itemType as PayableItem['itemType'],
+    organizationId,organizationName,itemId,itemType:itemType as PayableItem['itemType'],
     name:name.slice(0,180),description:text(input.description).slice(0,1200),
     currency,amountMinor,amountDecimal:minorToDecimal(amountMinor,currency),
     active:input.active!==false,paymentRequired:input.paymentRequired!==false,
@@ -340,7 +344,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       payableItemId,itemId:text(item.itemId),itemType:text(item.itemType) as PaymentTransaction['itemType'],
       description:text(item.name),itemSnapshot:{
         name:text(item.name),description:text(item.description),itemId:text(item.itemId),
-        itemType:text(item.itemType),amountMinor,currency,fulfilmentConfig:object(item.fulfilmentConfig),
+        itemType:text(item.itemType),amountMinor,currency,organizationName:text(item.organizationName),fulfilmentConfig:object(item.fulfilmentConfig),
       },
       currency,amountMinor,amountDecimal:minorToDecimal(amountMinor,currency),
       provider:providerKey,paymentMethod:method,status:'initiated',providerStatus:'initiated',
