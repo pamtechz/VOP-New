@@ -122,7 +122,8 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(second.retakePolicy.attemptsUsed,2);
       assert.equal(second.retakePolicy.remainingAttempts,0);
       const blocked=await submitStarted(retakeLearner,{0:0});
-      assert.equal(blocked.status,429,JSON.stringify(blocked));
+      assert.equal(blocked.status,409,JSON.stringify(blocked));
+      assert.equal(blocked.code,'ASSESSMENT_ATTEMPT_LIMIT');
       assert.match(String(blocked.error||''),/attempt limit/i);
       assert.equal((await db.collection('users/'+retakeLearner.uid+'/assessmentAttempts').get()).size,2);
 
@@ -134,7 +135,8 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(cooldownFirst.passed,false);
       assert.ok(Date.parse(cooldownFirst.retakePolicy.retryAt)>Date.now());
       const cooldownBlocked=await submitStarted(cooldownLearner,{0:1});
-      assert.equal(cooldownBlocked.status,429,JSON.stringify(cooldownBlocked));
+      assert.equal(cooldownBlocked.status,409,JSON.stringify(cooldownBlocked));
+      assert.equal(cooldownBlocked.code,'ASSESSMENT_RETAKE_COOLDOWN');
       assert.match(String(cooldownBlocked.error||''),/available after/i);
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
