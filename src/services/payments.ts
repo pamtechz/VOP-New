@@ -48,6 +48,11 @@ export interface PaymentProviderDescriptor {
   callbackPath?:string;
 }
 
+export interface CheckoutOption {
+  key:string;
+  methods:PaymentMethod[];
+}
+
 export interface CheckoutResult {
   payment:ClientPayment;
   reused:boolean;
@@ -81,7 +86,7 @@ async function request<T>(path:string,body?:Record<string,unknown>,method:'GET'|
 }
 
 export async function loadPaymentCatalog(){
-  return request<{ok:true;items:PayableItem[];providers:PaymentProviderDescriptor[]}>('catalog',{},'POST');
+  return request<{ok:true;items:PayableItem[];checkoutOptions:CheckoutOption[]}>('catalog',{},'POST');
 }
 export async function startPaymentCheckout(input:{
   payableItemId:string;
