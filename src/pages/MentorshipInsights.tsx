@@ -28,6 +28,19 @@ async function shareApi(action: string, data: Record<string, unknown> = {}) {
   return body as { items?: any[]; item?: any };
 }
 
+async function organizationInviteApi(data: Record<string, unknown> = {}) {
+  if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/admin/organizations', {
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({action:'createMemberInvite',...data}),
+  });
+  const body=await response.json().catch(()=>({})) as {item?:Record<string,unknown>;error?:string};
+  if(!response.ok)throw new Error(body.error||'Invitation link request failed.');
+  return body;
+}
+
 type Tab = 'assignments' | 'conversations' | 'performance' | 'questions' | 'sharing' | 'messages' | 'automation';
 
 export const MentorshipInsights: React.FC = () => {
@@ -155,14 +168,20 @@ export const MentorshipInsights: React.FC = () => {
   const shareLessons = selectedShareGuide?.lessons || [];
 
   const createShare = async () => {
-    if (!shareGuideId) { setError('Select a course before creating the enrollment link.'); return; }
+    if (!shareGuideId) { setError('Select a course before creating the invitation link.'); return; }
     try {
-      const targetPath = '/?guide=' + encodeURIComponent(shareGuideId) + (shareLessonId ? '&lesson=' + encodeURIComponent(shareLessonId) : '');
-      const result = await shareApi('create', { targetPath, guideId:shareGuideId, lessonId:shareLessonId, label: shareLabel || selectedShareGuide?.title || 'Course enrollment', sharingScope:'organization' });
-      setShareResult(result.item);
-      setNotice('Tracked share link created.');
+      const selectedLesson=shareLessons.find((lesson:any)=>lesson.id===shareLessonId);
+      const result=await organizationInviteApi({
+        targetKind:shareLessonId?'lesson':'guide',
+        guideId:shareGuideId,
+        lessonId:shareLessonId,
+        targetLabel:shareLabel||selectedLesson?.title||selectedShareGuide?.title||'Bible study invitation',
+      });
+      const item=result.item||{};
+      setShareResult({...item,url:String(item.inviteUrl||''),label:String(item.targetLabel||shareLabel||'Study invitation')});
+      setNotice('Organization invitation link created. The recipient must accept before joining.');
       await loadShares();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create share link.'); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create invitation link.'); }
   };
 
   const loadShares = async () => {
@@ -245,15 +264,15 @@ export const MentorshipInsights: React.FC = () => {
       </section>}
 
       {tab==='sharing' && <section className="vop-mentoring-card">
-        <div className="vop-mentoring-card-head"><div><h2>Tracked lesson & chapter sharing</h2><p>Create a share link that returns learners to the exact lesson or chapter and records access.</p></div></div>
+        <div className="vop-mentoring-card-head"><div><h2>Lesson & chapter invitations</h2><p>Create an organization invitation that can return the learner to the selected guide or lesson after they explicitly join.</p></div></div>
         <div className="vop-share-form">
           <select value={shareGuideId} onChange={e=>{setShareGuideId(e.target.value);setShareLessonId('')}}><option value="">Select a course / guide</option>{shareGuides.map(item=><option key={item.id} value={item.id}>{item.title || item.name || item.id}</option>)}</select>
           <select value={shareLessonId} onChange={e=>setShareLessonId(e.target.value)} disabled={!shareGuideId}><option value="">Open course from the beginning</option>{shareLessons.map((lesson:any)=><option key={lesson.id} value={lesson.id}>Lesson {lesson.lessonNumber || lesson.id}: {lesson.title || ''}</option>)}</select>
           <input value={shareLabel} onChange={e=>setShareLabel(e.target.value)} placeholder="Link name (optional)"/>
-          <button className="vop-primary" type="button" onClick={()=>void createShare()} disabled={!shareGuideId}><Link2 size={16}/>Create enrollment link</button>
+          <button className="vop-primary" type="button" onClick={()=>void createShare()} disabled={!shareGuideId}><Link2 size={16}/>Create invitation link</button>
         </div>
-        <p className="vop-row-desc">Anyone opening this link can create a VOP account. After sign-in, the account is enrolled in the selected course and taken directly to the selected lesson when applicable.</p>
-        {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Course enrollment link'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy Link</button></div><div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(shareResult.url)} alt="QR code for the course enrollment link"/><small>Scan to enroll</small></div></div>}
+        <p className="vop-row-desc">Anyone opening this link can create or sign in to a VOP account. They are shown the organization invitation first; only after they accept are they joined and taken to the selected guide or lesson.</p>
+        {shareResult && <div className="vop-share-result"><div><strong>{shareResult.label || 'Study invitation link'}</strong><input readOnly value={shareResult.url}/><button type="button" onClick={()=>void navigator.clipboard?.writeText(shareResult.url)}><Copy size={16}/> Copy Link</button></div><div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(shareResult.url)} alt="QR code for the organization study invitation"/><small>Scan to open invitation</small></div></div>}
         <div className="vop-share-list">{shareLinks.map(item=><div key={item.code}><span><strong>{item.label || item.targetPath}</strong><small>{item.targetPath}</small></span><b>{Number(item.clicks||0)} opens</b><a href={item.url || '#'} target="_blank" rel="noreferrer"><ExternalLink size={15}/></a></div>)}{!shareLinks.length&&<div className="vop-empty">No tracked share links have been created.</div>}</div>
       </section>}
 

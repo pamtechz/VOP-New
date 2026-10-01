@@ -6,6 +6,7 @@ import { PublicHome } from './pages/PublicHome';
 import { BootstrapPage } from './pages/BootstrapPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
+import { InvitationLandingPage } from './pages/InvitationLandingPage';
 import { createFirestoreStudentProfile, loadFirestoreUser } from './services/firestoreData';
 import { App } from './App';
 import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
@@ -25,7 +26,9 @@ export function Root() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isBootstrapRoute = pathname === '/admin/bootstrap';
   const isKnownRoute = pathname === '/' || isBootstrapRoute;
-  const portfolioToken = pathname === '/' ? new URLSearchParams(window.location.search).get('portfolio') || '' : '';
+  const query = new URLSearchParams(window.location.search);
+  const portfolioToken = pathname === '/' ? query.get('portfolio') || '' : '';
+  const invitationToken = pathname === '/' ? query.get('invite') || '' : '';
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -152,6 +155,10 @@ export function Root() {
   }
 
   if (!account) {
+    if (authView === 'home' && invitationToken) {
+      return <InvitationLandingPage token={invitationToken}
+        onSignIn={()=>setAuthView('sign-in')} onRegister={()=>setAuthView('register')}/>;
+    }
     return authView === 'home'
       ? <PublicHome onSignIn={() => setAuthView('sign-in')} onRegister={() => setAuthView('register')}
           configurationMissing={!firebaseConfigured || !auth} />

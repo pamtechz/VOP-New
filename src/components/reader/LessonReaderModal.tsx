@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { Lesson, DiscoverGuide } from '../../types';
+import type { Lesson, DiscoverGuide, User } from '../../types';
 import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
 import { saveLessonResume } from '../../services/localStudy';
@@ -8,10 +8,12 @@ import { getActiveLanguage, getStoredSettings } from '../../services/storage';
 import { MediaPlayer } from '../media/MediaPlayer';
 import { StudyPlateContent } from './StudyPlateContent';
 import { ModalLayer } from '../layout/ModalLayer';
+import { lessonScoreForDisplay } from '../../services/lessonProgress';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
   guide: DiscoverGuide;
+  currentUser: User;
   onClose: () => void;
   onComplete: () => boolean | void | Promise<boolean | void>;
   onPreviousLesson?: () => void;
@@ -24,7 +26,7 @@ interface LessonReaderModalProps {
 }
 
 export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
-  lesson, guide, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz, onPageChange,
+  lesson, guide, currentUser, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz, onPageChange,
   hasPreviousLesson = false, hasNextLesson = false, initialPageIndex = 0,
 }) => {
   const language = getActiveLanguage();
@@ -47,9 +49,14 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const assessmentLinks=(type:'chapter'|'section'|'block'|'lesson',anchorId='')=>{
     const items=quizzesFor(type,anchorId);
     return onOpenQuiz && items.length>0?<div className="vop-lesson-anchored-quizzes">
-      {items.map(item=><button type="button" key={item.id} onClick={()=>onOpenQuiz(item)}>
-        <BookOpen size={16}/><span>{item.title||'Take '+type+' quiz'}</span><ChevronRight size={16}/>
-      </button>)}
+      {items.map(item=>{
+        const attempted=lessonScoreForDisplay(guide,item,currentUser)!==undefined;
+        const action=attempted?t('quiz.retake','Retake quiz'):t('quiz.take','Take quiz');
+        return <button type="button" key={item.id} onClick={()=>onOpenQuiz(item)}
+          aria-label={action+': '+(item.title||type+' quiz')}>
+          <BookOpen size={16}/><span><strong>{action}</strong>{item.title&&<small>{item.title}</small>}</span><ChevronRight size={16}/>
+        </button>;
+      })}
     </div>:null;
   };
 

@@ -23,6 +23,74 @@ function normalizeQuotas(value: unknown) {
 }
 
 function slug(value: unknown) { const v = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); if (!v) throw new Error('Organization name is required.'); return v.slice(0, 80); }
+const INVITE_TARGET_KINDS=['organization','program','guide','lesson','section','assessment','material','radio','event','announcement','master-guide','scripture-memory','iron-duels','prayer'] as const;
+type InviteTargetKind=typeof INVITE_TARGET_KINDS[number];
+function targetId(value:unknown,label:string){
+  const result=String(value||'').trim();
+  if(result&&!/^[A-Za-z0-9_-]{1,160}$/.test(result))throw new Error('A valid '+label+' reference is required.');
+  return result;
+}
+function inviteTarget(body:Record<string,unknown>){
+  const rawKind=String(body.targetKind||'organization').trim();
+  const kind=(INVITE_TARGET_KINDS as readonly string[]).includes(rawKind)?rawKind as InviteTargetKind:'organization';
+  const programId=targetId(body.programId,'program');
+  const guideId=targetId(body.guideId,'guide');
+  const lessonId=targetId(body.lessonId,'lesson');
+  const sectionId=targetId(body.sectionId,'section');
+  const resourceId=targetId(body.resourceId,'resource');
+  const page=Math.max(0,Math.min(9999,Math.trunc(Number(body.page||0)||0)));
+  const params=new URLSearchParams();
+  let label='Organization home';
+  if(kind==='program'){
+    if(!programId)throw new Error('A program reference is required.');
+    params.set('route','lessons');params.set('program',programId);label='Course / program';
+  }else if(kind==='guide'){
+    if(!guideId)throw new Error('A guide reference is required.');
+    params.set('route','lessons');params.set('guide',guideId);label='Guide / module';
+  }else if(kind==='lesson'||kind==='assessment'){
+    if(!guideId||!lessonId)throw new Error('Guide and lesson references are required.');
+    params.set('route','lessons');params.set('guide',guideId);params.set('lesson',lessonId);
+    if(kind==='assessment')params.set('assessment','1');
+    label=kind==='assessment'?'Assessment':'Lesson';
+  }else if(kind==='section'){
+    if(!guideId||!lessonId||!sectionId)throw new Error('Guide, lesson and section references are required.');
+    params.set('route','lessons');params.set('guide',guideId);params.set('lesson',lessonId);params.set('section',sectionId);
+    if(page>0)params.set('page',String(page));
+    label='Lesson section';
+  }else if(['material','radio','event','announcement'].includes(kind)){
+    params.set('route',kind==='material'?'resources':kind==='radio'?'radio':kind==='event'?'events':'announcements');
+    if(resourceId)params.set(kind==='material'?'material':kind,resourceId);
+    label=kind==='material'?(resourceId?'Study material':'Library')
+      :kind==='radio'?(resourceId?'Radio item':'Radio & broadcasts')
+      :kind==='event'?(resourceId?'Event':'Events')
+      :resourceId?'Announcement':'Announcements';
+  }else if(kind!=='organization'){
+    params.set('route',kind);
+    label=kind==='master-guide'?'Master Guide':kind==='scripture-memory'?'Scripture Memory':kind==='iron-duels'?'Iron Duels':'Prayer requests';
+  }
+  return {
+    targetKind:kind,targetLabel:String(body.targetLabel||label).trim().slice(0,160)||label,
+    targetPath:params.size?'/?'+params.toString():'/',
+    programId,guideId,lessonId,sectionId,resourceId,page,
+  };
+}
+function invitationPublicView(data:Record<string,unknown>,organizationName:string){
+  return {
+    organizationId:String(data.organizationId||''),organizationName,
+    role:String(data.role||'learner'),status:String(data.status||'pending'),
+    expiresAt:String(data.expiresAt||''),targetKind:String(data.targetKind||'organization'),
+    targetLabel:String(data.targetLabel||'Organization home'),
+    targetPath:String(data.targetPath||'/'),emailBound:Boolean(String(data.email||'').trim()),
+  };
+}
+function publicOrigin(req:Request){
+  const origin=String(req.headers?.origin||'').trim();
+  if(origin&&/^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?$/i.test(origin))return origin.replace(/\/$/,'');
+  const proto=String(req.headers?.['x-forwarded-proto']||'https').split(',')[0].trim()==='http'?'http':'https';
+  const host=String(req.headers?.['x-forwarded-host']||req.headers?.host||'').split(',')[0].trim();
+  if(!/^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host)||host.includes('..'))return '';
+  return proto+'://'+host;
+}
 function hierarchyRole(role: string) { return ['union_admin','conference_admin','district_admin','church_admin'].includes(role) ? role : ''; }
 function organizationInHierarchy(data: Record<string, unknown>, role: string, nodeId: string) {
   const field = role === 'union_admin' ? 'unionId' : role === 'conference_admin' ? 'conferenceId' : role === 'district_admin' ? 'districtId' : role === 'church_admin' ? 'churchId' : '';
@@ -56,6 +124,24 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || 'list');
     const requestedOrg = typeof body.organizationId === 'string' ? body.organizationId : undefined;
     const bootstrapDb = getAdminDb();
+
+    if(action==='previewInvite'){
+      const token=String(body.token||'').trim();
+      if(!/^[A-Za-z0-9]{32,128}$/.test(token))throw new Error('A valid invitation token is required.');
+      const snap=await bootstrapDb.doc('organizationInvites/'+token).get();
+      if(!snap.exists)return res.status(404).json({error:'This invitation is not valid.'});
+      const data=snap.data()||{};
+      const organizationId=String(data.organizationId||'').trim();
+      const organization=organizationId?await bootstrapDb.doc('organizations/'+organizationId).get():null;
+      if(!organization?.exists||organization.data()?.status!=='active')return res.status(404).json({error:'The organization is not available.'});
+      const expiresAt=Date.parse(String(data.expiresAt||''));
+      const expired=!Number.isFinite(expiresAt)||expiresAt<Date.now();
+      return res.status(200).json({ok:true,item:invitationPublicView(
+        {...data,status:expired&&data.status==='pending'?'expired':data.status},
+        String(organization.data()?.name||organizationId),
+      )});
+    }
+
     const authorization = req.headers?.authorization ?? req.headers?.Authorization;
     if (!authorization) throw new Error('Sign in first.');
     const ctx = await authenticateTenant(req, action === 'delete' ? undefined : requestedOrg, ['acceptInvite','declineInvite','listInvites','dismissInvite','clearInviteHistory'].includes(action));
@@ -92,7 +178,8 @@ export default async function handler(req: Request, res: Response) {
         if (data.status !== 'pending' || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
           throw new Error('This invitation has expired or has already been used.');
         }
-        if (email !== String(data.email || '').trim().toLowerCase()) {
+        const invitedEmail=String(data.email||'').trim().toLowerCase();
+        if (invitedEmail && email !== invitedEmail) {
           throw new Error('Sign in with the email address that received this invitation.');
         }
 
@@ -152,24 +239,35 @@ export default async function handler(req: Request, res: Response) {
           createdBy:ctx.auth.uid,
         });
       }
-      return res.status(200).json({ok:true,organizationId,role});
+      const acceptedInvite=await inviteRef.get();
+      const acceptedData=acceptedInvite.data()||{};
+      return res.status(200).json({ok:true,organizationId,role,
+        targetPath:String(acceptedData.targetPath||'/'),
+        targetKind:String(acceptedData.targetKind||'organization'),
+        targetLabel:String(acceptedData.targetLabel||'Organization home'),
+      });
     }
 
     if (action === 'listInvites') {
       const email=String(ctx.auth.email||'').trim().toLowerCase();
-      const receivedSnap=email
-        ?await bootstrapDb.collection('organizationInvites').where('email','==',email).limit(200).get()
-        :null;
-      const sentSnap=await bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(200).get();
-      const rows=[
-        ...(receivedSnap?.docs||[]).map(doc=>({token:doc.id,...doc.data(),direction:'received' as const})),
-        ...sentSnap.docs.map(doc=>({token:doc.id,...doc.data(),direction:'sent' as const})),
-      ];
+      const [receivedSnap,sentSnap,acceptedSnap,declinedSnap]=await Promise.all([
+        email?bootstrapDb.collection('organizationInvites').where('email','==',email).limit(200).get():Promise.resolve(null),
+        bootstrapDb.collection('organizationInvites').where('invitedBy','==',ctx.auth.uid).limit(200).get(),
+        bootstrapDb.collection('organizationInvites').where('acceptedBy','==',ctx.auth.uid).limit(200).get(),
+        bootstrapDb.collection('organizationInvites').where('declinedBy','==',ctx.auth.uid).limit(200).get(),
+      ]);
+      const rowsByKey=new Map<string,Record<string,unknown>&{token:string;direction:'received'|'sent'}>();
+      for(const doc of [...(receivedSnap?.docs||[]),...acceptedSnap.docs,...declinedSnap.docs]){
+        rowsByKey.set('received:'+doc.id,{token:doc.id,...doc.data(),direction:'received'});
+      }
+      for(const doc of sentSnap.docs){
+        rowsByKey.set('sent:'+doc.id,{token:doc.id,...doc.data(),direction:'sent'});
+      }
+      const rows=[...rowsByKey.values()];
       const organizationIds=[...new Set(rows.map(item=>String(item.organizationId||'')).filter(Boolean))];
       const organizationSnaps=organizationIds.length?await bootstrapDb.getAll(...organizationIds.map(orgId=>bootstrapDb.doc('organizations/'+orgId))):[];
       const names=new Map(organizationSnaps.map(doc=>[doc.id,String(doc.data()?.name||doc.id)]));
-      const origin=String(req.headers?.origin||'').trim()
-        || `${String(req.headers?.['x-forwarded-proto']||'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host']||req.headers?.host||'').split(',')[0]}`.replace(/\/$/,'');
+      const origin=publicOrigin(req);
       const items=rows.filter(item=>!Array.isArray(item.hiddenForUids)||!item.hiddenForUids.map(String).includes(ctx.auth.uid)).map(item=>({
         ...item,
         organizationName:names.get(String(item.organizationId||''))||String(item.organizationId||''),
@@ -185,7 +283,8 @@ export default async function handler(req: Request, res: Response) {
       const invite=await inviteRef.get();
       if(!invite.exists)throw new Error('This invitation is not valid.');
       const data=invite.data()||{};
-      if(String(data.email||'').trim().toLowerCase()!==String(ctx.auth.email||'').trim().toLowerCase())throw new Error('This invitation belongs to another account.');
+      const invitedEmail=String(data.email||'').trim().toLowerCase();
+      if(invitedEmail&&invitedEmail!==String(ctx.auth.email||'').trim().toLowerCase())throw new Error('This invitation belongs to another account.');
       if(String(data.status||'')!=='pending')throw new Error('This invitation is no longer pending.');
       await inviteRef.set({status:'declined',declinedBy:ctx.auth.uid,declinedAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
       const invitedBy=String(data.invitedBy||'').trim();
@@ -213,7 +312,8 @@ export default async function handler(req: Request, res: Response) {
       const data=snap.data()||{};
       const email=String(ctx.auth.email||'').trim().toLowerCase();
       const participant=String(data.invitedBy||'')===ctx.auth.uid
-        || (email&&String(data.email||'').trim().toLowerCase()===email);
+        || (email&&String(data.email||'').trim().toLowerCase()===email)
+        || (!String(data.email||'').trim()&&String(data.acceptedBy||data.declinedBy||'')===ctx.auth.uid);
       if(!participant)throw new Error('This invitation is not part of your invitation history.');
       if(String(data.status||'pending')==='pending')throw new Error('Respond to or cancel a pending invitation before deleting it from history.');
       await ref.set({hiddenForUids:FieldValue.arrayUnion(ctx.auth.uid),updatedAt:FieldValue.serverTimestamp()},{merge:true});
@@ -249,7 +349,8 @@ export default async function handler(req: Request, res: Response) {
       const inviteOrganizationId=String(inviteData.organizationId||'').trim();
       const managed=await resolveManagedOrganization(ctx,inviteOrganizationId);
       if(managed!==inviteOrganizationId)throw new Error('This invitation is outside your organization scope.');
-      if(!ctx.isSuperAdmin&&!hierarchyRole(String(ctx.profile.role||'')))requireOrgRole(ctx,['owner','admin']);
+      const creator=String(inviteData.invitedBy||'')===ctx.auth.uid;
+      if(!creator&&!ctx.isSuperAdmin&&!hierarchyRole(String(ctx.profile.role||'')))requireOrgRole(ctx,['owner','admin']);
       if(String(inviteData.status||'')!=='pending')throw new Error('Only a pending invitation can be cancelled.');
       await inviteRef.set({status:'cancelled',cancelledBy:ctx.auth.uid,cancelledAt:new Date().toISOString(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
       return res.status(200).json({ok:true,status:'cancelled'});
@@ -353,7 +454,11 @@ export default async function handler(req: Request, res: Response) {
 
 
     const managedOrganizationId = await resolveManagedOrganization(ctx, String(requestedOrg || '').trim());
-    if (!ctx.isSuperAdmin && !hierarchyRole(String(ctx.profile.role || ''))) requireOrgRole(ctx, ['owner','admin']);
+    // Shareable learner invitations are a member capability. All other
+    // organization-management mutations below retain the owner/admin gate.
+    if (action !== 'createMemberInvite' && !ctx.isSuperAdmin && !hierarchyRole(String(ctx.profile.role || ''))) {
+      requireOrgRole(ctx, ['owner','admin']);
+    }
     if (action === 'listAudit') {
       const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
@@ -399,17 +504,56 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true });
     }
 
+    if (action === 'createMemberInvite') {
+      const organizationId=String(requestedOrg||ctx.organizationId||'').trim();
+      if(!organizationId)throw new Error('An organization is required.');
+      const [organization,membership]=await Promise.all([
+        bootstrapDb.doc('organizations/'+organizationId).get(),
+        bootstrapDb.doc('organizations/'+organizationId+'/members/'+ctx.auth.uid).get(),
+      ]);
+      if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
+      const hierarchyAccess=ctx.isSuperAdmin||Boolean(hierarchyRole(String(ctx.profile.role||'')));
+      if(!hierarchyAccess&&(!membership.exists||membership.data()?.active!==true)){
+        throw new Error('Active organization membership is required to invite someone.');
+      }
+      const target=inviteTarget(body);
+      const requestedRole=String(body.role||'learner');
+      const canAssignRoles=hierarchyAccess||['owner','admin'].includes(String(membership.data()?.role||ctx.membership?.role||''));
+      const role=canAssignRoles&&['admin','editor','mentor','teacher','learner','viewer'].includes(requestedRole)
+        ?requestedRole:'learner';
+      const token=crypto.randomUUID().replace(/-/g,'')+crypto.randomUUID().replace(/-/g,'');
+      const now=new Date();
+      const expiresAt=new Date(now.getTime()+7*24*60*60*1000).toISOString();
+      await bootstrapDb.doc('organizationInvites/'+token).set({
+        token,email:'',organizationId,role,invitedBy:ctx.auth.uid,source:'member-link',
+        ...target,createdAt:now.toISOString(),expiresAt,status:'pending',
+      });
+      await writeTenantAudit(
+        {...ctx,organizationId} as typeof ctx,
+        'membership.invite.link','organizationInvites/'+token,undefined,
+        {role,targetKind:target.targetKind,targetPath:target.targetPath,expiresAt},
+      ).catch(()=>undefined);
+      const origin=publicOrigin(req);
+      if(!origin)throw new Error('The public host could not be determined.');
+      const inviteUrl=origin+'/?invite='+token;
+      return res.status(200).json({ok:true,item:{
+        token,organizationId,organizationName:String(organization.data()?.name||organizationId),
+        role,expiresAt,inviteUrl,...target,
+      }});
+    }
+
     if (action === 'sendInvite') {
       if (!hierarchyRole(String(ctx.profile.role || ''))) requireOrgRole(ctx, ['owner','admin']);
       const email = String(body.email || '').trim().toLowerCase();
       const inviteRole = String(body.role || 'learner');
       if (!/^\S+@\S+\.\S+$/.test(email) || !['admin','editor','mentor','teacher','learner','viewer'].includes(inviteRole)) throw new Error('A valid email and organization role are required.');
+      const target=inviteTarget(body);
       const token = crypto.randomUUID().replace(/-/g,'') + crypto.randomUUID().replace(/-/g,'');
       const now = new Date();
       const expiresAt = new Date(now.getTime()+7*24*60*60*1000).toISOString();
       await ctx.db.doc(`organizationInvites/${token}`).set({
-        token,email,organizationId:managedOrganizationId,role:inviteRole,invitedBy:ctx.auth.uid,
-        createdAt:now.toISOString(),expiresAt,status:'pending'
+        token,email,organizationId:managedOrganizationId,role:inviteRole,invitedBy:ctx.auth.uid,source:'email',
+        ...target,createdAt:now.toISOString(),expiresAt,status:'pending'
       });
       await writeTenantAudit(ctx,'membership.invite',`organizationInvites/${token}`,undefined,{email,role:inviteRole,expiresAt});
       const organization=await ctx.db.doc('organizations/'+managedOrganizationId).get();
@@ -427,7 +571,8 @@ export default async function handler(req: Request, res: Response) {
           createdBy:ctx.auth.uid,
         });
       }
-      const origin = String(req.headers?.origin || '').trim() || `${String(req.headers?.['x-forwarded-proto'] || 'https').split(',')[0]}://${String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0]}`.replace(/\/$/,'');
+      const origin=publicOrigin(req);
+      if(!origin)throw new Error('The public host could not be determined.');
       const inviteUrl = `${origin}/?invite=${token}`;
       if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
         await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
@@ -435,7 +580,7 @@ export default async function handler(req: Request, res: Response) {
           html:`<p>You have been invited to join an organization in VOP.</p><p><a href="${inviteUrl}">Accept invitation</a></p><p>This invitation expires in 7 days.</p>`
         })});
       }
-      return res.status(200).json({ok:true,item:{email,role:inviteRole,expiresAt,inviteUrl,emailSent:Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL)}});
+      return res.status(200).json({ok:true,item:{email,role:inviteRole,expiresAt,inviteUrl,...target,emailSent:Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL)}});
     }
 
     if (action === 'assignOwner') {
@@ -669,7 +814,13 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported organization action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Organization operation failed.';
-    const code = /Sign in|membership|permission|Super Admin|organization is not available|already exists/.test(message) ? 403 : 400;
+    if (/expired or has already been used|already been used/i.test(message)) {
+      return res.status(409).json({error:message});
+    }
+    const code = /expired or has already been used|already been used/.test(message)
+      ?409
+      :/Sign in|membership|permission|Super Admin|organization is not available|already exists/.test(message)
+        ?403:400;
     return res.status(code).json({ error: message });
   }
 }

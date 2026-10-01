@@ -4,7 +4,7 @@ import { initializeApp, getApps, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createServer } from 'vite';
 
-test('share enrollment: account onboarding is tenant-safe, role-preserving and idempotent', async () => {
+test('share enrollment: course access is membership-safe, role-preserving and idempotent', async () => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator required; never run against production.');
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST, 'Auth emulator required; never run against production.');
   if (process.env.FIREBASE_ADMIN_PROJECT_ID && process.env.FIREBASE_ADMIN_PROJECT_ID !== 'demo-vop-security-rules') {
@@ -72,31 +72,31 @@ test('share enrollment: account onboarding is tenant-safe, role-preserving and i
     assert.equal(created.status,200,JSON.stringify(created));
     const code=created.item.code;
 
-    const first=await api(learner,{action:'enroll',code});
-    assert.equal(first.status,200,JSON.stringify(first));
-    assert.equal(first.item.newlyEnrolled,true);
-    const learnerProfile=(await db.doc('users/'+learner.uid).get()).data();
-    assert.equal(learnerProfile.organizationId,orgA);
-    assert.equal(learnerProfile.organizationRole,'learner');
-    assert.equal((await db.doc('organizations/'+orgA+'/members/'+learner.uid).get()).data().active,true);
-    const enrollmentId=orgA+'_'+learner.uid+'_'+guideId;
+    const uninvited=await api(learner,{action:'enroll',code});
+    assert.equal(uninvited.status,409,JSON.stringify(uninvited));
+    assert.match(String(uninvited.error||''),/invitation acceptance is required/i);
+    assert.equal((await db.doc('users/'+learner.uid).get()).data()?.organizationId,undefined);
+    assert.equal((await db.doc('organizations/'+orgA+'/members/'+learner.uid).get()).exists,false);
+    assert.equal((await db.doc('courseEnrollments/'+orgA+'_'+learner.uid+'_'+guideId).get()).exists,false);
+
+    const mentorJoin=await api(existingMentor,{action:'enroll',code});
+    assert.equal(mentorJoin.status,200,JSON.stringify(mentorJoin));
+    assert.equal(mentorJoin.item.newlyEnrolled,true);
+    assert.equal((await db.doc('users/'+existingMentor.uid).get()).data().organizationRole,'mentor',
+      'Enrollment must not downgrade an existing organization role.');
+    assert.equal((await db.doc('organizations/'+orgA+'/members/'+existingMentor.uid).get()).data().role,'mentor');
+    const enrollmentId=orgA+'_'+existingMentor.uid+'_'+guideId;
     const enrollment=(await db.doc('courseEnrollments/'+enrollmentId).get()).data();
     assert.equal(enrollment.status,'active');
     assert.equal(enrollment.lessonId,lessonId);
     assert.equal((await db.doc('shareReferences/'+code).get()).data().installs,1);
 
-    const repeated=await api(learner,{action:'enroll',code});
+    const repeated=await api(existingMentor,{action:'enroll',code});
     assert.equal(repeated.status,200,JSON.stringify(repeated));
     assert.equal(repeated.item.newlyEnrolled,false);
     assert.equal((await db.doc('shareReferences/'+code).get()).data().installs,1,
       'Reloading/retrying the same share link must not duplicate an install/enrollment.');
-    assert.equal((await db.collection('courseEnrollments').where('uid','==',learner.uid).get()).size,1);
-
-    const mentorJoin=await api(existingMentor,{action:'enroll',code});
-    assert.equal(mentorJoin.status,200,JSON.stringify(mentorJoin));
-    assert.equal((await db.doc('users/'+existingMentor.uid).get()).data().organizationRole,'mentor',
-      'Enrollment must not downgrade an existing organization role.');
-    assert.equal((await db.doc('organizations/'+orgA+'/members/'+existingMentor.uid).get()).data().role,'mentor');
+    assert.equal((await db.collection('courseEnrollments').where('uid','==',existingMentor.uid).get()).size,1);
 
     const blocked=await api(foreign,{action:'enroll',code});
     assert.equal(blocked.status,409,JSON.stringify(blocked));

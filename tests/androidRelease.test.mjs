@@ -64,6 +64,27 @@ function setUp(root) {
   return { languages, lessonIds, manifestPath: join(root, 'public/lessons/manifest.json') };
 }
 
+const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+test('Android invitation links are wired to the native package and verified domain',()=>{
+  const manifest=readFileSync(join(projectRoot,'android/app/src/main/AndroidManifest.xml'),'utf8');
+  const packageJson=JSON.parse(readFileSync(join(projectRoot,'package.json'),'utf8'));
+  const assetlinks=JSON.parse(readFileSync(join(projectRoot,'public/.well-known/assetlinks.json'),'utf8'));
+  const bridge=readFileSync(join(projectRoot,'src/services/nativeDeepLinks.ts'),'utf8');
+
+  assert.equal(packageJson.dependencies['@capacitor/app'],'8.1.1');
+  assert.match(manifest,/android:autoVerify="true"/);
+  assert.match(manifest,/android:scheme="https" android:host="vopapp\.org"/);
+  assert.match(manifest,/android:scheme="vop" android:host="invite"/);
+  assert.equal(assetlinks[0].target.package_name,'com.sda.vop');
+  assert.ok(assetlinks[0].target.sha256_cert_fingerprints.some(value=>
+    /^[A-F0-9]{2}(?::[A-F0-9]{2}){31}$/.test(value)));
+  assert.match(bridge,/CapacitorApp\.getLaunchUrl/);
+  assert.match(bridge,/appUrlOpen/);
+  assert.match(bridge,/vopapp\.org/);
+  assert.match(bridge,/url\.protocol==='vop:'/);
+});
+
 test('Android release verifies deployment identity, actual source sections and hashed image assets', async () => {
   const root = mkdtempSync(join(tmpdir(), 'vop-android-release-'));
   try {

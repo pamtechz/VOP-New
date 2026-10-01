@@ -80,7 +80,9 @@
 .vop-structured-reader-image{max-width:100%;max-height:520px;object-fit:contain;border-radius:11px;background:#edf1f5}
 .vop-lesson-anchored-quizzes{display:grid;gap:7px;margin:9px 0 15px}
 .vop-lesson-anchored-quizzes button{display:flex;align-items:center;justify-content:space-between;gap:9px;min-height:47px;padding:12px 15px;border:1px solid #b9cee5;border-radius:11px;background:#f0f7ff;color:#124c91;font-size:12px;font-weight:850;text-align:left;cursor:pointer}
-.vop-lesson-anchored-quizzes button span{flex:1}
+.vop-lesson-anchored-quizzes button span{flex:1;display:grid;gap:2px}
+.vop-lesson-anchored-quizzes button span strong{font-size:11px;font-weight:900}
+.vop-lesson-anchored-quizzes button span small{font-size:10px;font-weight:650;color:inherit;opacity:.78}
 .vop-lesson-anchored-quizzes button:hover{background:#e2efff}
 .vop-lesson-anchored-quizzes button:focus-visible{outline:3px solid #edb749;outline-offset:2px}
 

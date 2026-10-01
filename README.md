@@ -36,6 +36,10 @@ FIREBASE_ADMIN_PRIVATE_KEY=...
 
 The Admin SDK variables are required for server-authoritative study progress, assessment grading, certificate issuance and administrator API actions. A newly registered learner can still create their own minimum student profile through the Firestore rules if the local Admin SDK is unavailable.
 
+The optional `VITE_ANDROID_DOWNLOAD_URL` is used only for the public invitation landing page's **Download Android app** action. Point it at the approved native Android distribution/store URL; leaving it empty hides the download action rather than falling back to PWA installation.
+
+Organization invitation URLs use the canonical HTTPS app-link domain and require an explicit **Accept & join** action after authentication. Android receives those links through `@capacitor/app`; `public/.well-known/assetlinks.json` binds the website to the signed `com.sda.vop` package.
+
 After changing environment variables, restart Vite:
 
 ```bash

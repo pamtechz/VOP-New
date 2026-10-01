@@ -48,6 +48,7 @@ import InboxPage from './pages/InboxPage';
 import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
+import { lessonScoreForDisplay } from './services/lessonProgress';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -109,16 +110,23 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const requestedRoute=String(params.get('route')||'') as AppRoute;
+    const publicRoutes:AppRoute[]=['home','resources','lessons','master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications','invites','support','certificates'];
     const hasExplicitRoute = params.has('certificate') || params.has('certificateNumber')
       || params.get('radio') === '1' || params.get('announcements') === '1'
       || params.get('events') === '1' || params.get('support') === '1'
-      || Boolean(params.get('guide') || params.get('lesson') || params.get('ref') || params.get('invite'));
+      || Boolean(params.get('route')||params.get('program')||params.get('guide')||params.get('lesson')
+        ||params.get('section')||params.get('ref')||params.get('invite'));
     explicitNavigation.current = hasExplicitRoute;
-    if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
+    if (params.get('invite')) setCurrentRoute('invites');
+    else if (params.has('certificate') || params.has('certificateNumber')) setCurrentRoute('certificate-verification');
+    else if (publicRoutes.includes(requestedRoute)) setCurrentRoute(requestedRoute);
     else if (params.get('radio') === '1') setCurrentRoute('radio');
     else if (params.get('announcements') === '1') setCurrentRoute('announcements');
     else if (params.get('events') === '1') setCurrentRoute('events');
     else if (params.get('support') === '1') setCurrentRoute('support');
+    const programId=params.get('program');
+    if(programId&&/^[A-Za-z0-9_-]{1,160}$/.test(programId))setActiveProgramId(programId);
   }, []);
 
   useEffect(() => {
@@ -136,25 +144,9 @@ export const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const inviteToken = params.get('invite');
       const shareCode = params.get('ref');
-      if (inviteToken && firebaseAuth.currentUser) {
-        try {
-          const token = await firebaseAuth.currentUser.getIdToken();
-          const response = await fetch('/api/admin/organizations', {
-            method:'POST',
-            headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-            body:JSON.stringify({action:'acceptInvite',token:inviteToken})
-          });
-          const result = await response.json().catch(()=>({}));
-          if (response.ok) {
-            await firebaseAuth.currentUser.getIdToken(true);
-            window.history.replaceState({}, '', window.location.pathname);
-            setStudyError('');
-          } else if (result?.error) setStudyError(String(result.error));
-        } catch (inviteError) {
-          console.error('Organization invitation acceptance failed', inviteError);
-          setStudyError(inviteError instanceof Error ? inviteError.message : 'The organization invitation could not be accepted.');
-        }
-      }
+      // Organization invitations require an explicit Accept action after sign-in.
+      // Keep the query token intact so the Invitations screen can preview it.
+      if(inviteToken)setCurrentRoute('invites');
       void loadFirestoreUser(firebaseUser.uid).then(async (profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
@@ -260,26 +252,37 @@ export const App: React.FC = () => {
       const deepLinkParams = new URLSearchParams(window.location.search);
       const guideParam = deepLinkParams.get('guide');
       const lessonParam = deepLinkParams.get('lesson');
-      const pageParam = Number.parseInt(deepLinkParams.get('page') || '1', 10);
+      const sectionParam=deepLinkParams.get('section');
+      const programParam=deepLinkParams.get('program');
+      const requestedStudyRoute=deepLinkParams.get('route')==='lessons'?'lessons':'home';
+      const pageParam = Number.parseInt(deepLinkParams.get('page') || '0', 10);
+      if(programParam&&/^[A-Za-z0-9_-]{1,160}$/.test(programParam))setActiveProgramId(programParam);
       if (guideParam && !appliedDeepLink.current) {
         appliedDeepLink.current = true;
         const deepGuide = snapshot.guides.find(guide => guide.id === guideParam || guide.language === guideParam);
         if (deepGuide) {
           setActiveGuide(deepGuide);
-          setCurrentRoute('home');
+          setCurrentRoute(requestedStudyRoute);
           if (lessonParam) {
             const deepLesson = deepGuide.lessons.find(lesson => lesson.id === lessonParam || lesson.lessonNumber === lessonParam);
             if (deepLesson) {
-              const restoredPage=Number.isFinite(pageParam) ? Math.max(0, pageParam - 1) : 0;
+              const sectionIndex=sectionParam
+                ?(deepLesson.contentPages||[]).findIndex(page=>page.sectionId===sectionParam)
+                :-1;
+              const restoredPage=sectionIndex>=0
+                ?sectionIndex
+                :Number.isFinite(pageParam)&&pageParam>0?Math.max(0,pageParam-1):0;
               setActiveLesson(deepLesson);
               setDeepLinkPageIndex(restoredPage);
               if(currentUser.uid)replaceLearnerLocation(currentUser.uid,{
-                route:'home',guideId:deepGuide.id,guideLanguage:deepGuide.language,
+                route:requestedStudyRoute,...(programParam?{programId:programParam}:{}),
+                guideId:deepGuide.id,guideLanguage:deepGuide.language,
                 lessonId:deepLesson.id,pageIndex:restoredPage,
               });
             } else if(currentUser.uid) {
               replaceLearnerLocation(currentUser.uid,{
-                route:'home',guideId:deepGuide.id,guideLanguage:deepGuide.language,
+                route:requestedStudyRoute,...(programParam?{programId:programParam}:{}),
+                guideId:deepGuide.id,guideLanguage:deepGuide.language,
               });
             }
           }
@@ -627,13 +630,20 @@ export const App: React.FC = () => {
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
           {(currentRoute === 'notifications' || currentRoute === 'invites') && <InboxPage
             initialTab={currentRoute === 'invites' ? 'invites' : 'notifications'}
+            inviteToken={new URLSearchParams(window.location.search).get('invite')||undefined}
+            currentUser={currentUser} guides={guides}
             onBack={goBack} onNavigate={navigate}
+            onInvitationAccepted={targetPath=>{
+              const safe=String(targetPath||'/');
+              if(!safe.startsWith('/')||safe.startsWith('//'))return;
+              window.location.assign(safe);
+            }}
             onAccountChanged={async()=>{
               if(!auth?.currentUser)return;
               const refreshed=await loadFirestoreUser(auth.currentUser.uid);
               if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
             }}/>}
-          {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
+                    {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
           {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack}/>}
 
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
@@ -651,7 +661,7 @@ export const App: React.FC = () => {
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} />
-      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} initialPageIndex={deepLinkPageIndex}
+      {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} currentUser={currentUser} initialPageIndex={deepLinkPageIndex}
         onPageChange={rememberStudyPage}
         onOpenQuiz={quiz=>openStudyItem(activeGuide,quiz,0,currentRoute)}
         onClose={goBack} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)}
@@ -671,7 +681,7 @@ export const App: React.FC = () => {
         if (!nextLesson) goBack();
         return true;
       }} />}
-      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onSubmitScore={async (answers,sessionId) => {
+      {activeLesson?.type === 'Test' && activeGuide && <QuizModal lesson={activeLesson} guide={activeGuide} previouslyAttempted={lessonScoreForDisplay(activeGuide,activeLesson,currentUser)!==undefined} passThreshold={settings.quizPassThreshold} maxAttempts={settings.quizMaxAttempts || 0} retakeCooldownMinutes={settings.quizRetakeCooldownMinutes || 0} onClose={goBack} hasNextLesson={false} onContinue={goBack} onSubmitScore={async (answers,sessionId) => {
         const result = await submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId);
         if (result === null) { setStudyError('Test results were not saved. Check your connection, sign-in status, and assessment configuration.'); return null; }
         setStudyError('');

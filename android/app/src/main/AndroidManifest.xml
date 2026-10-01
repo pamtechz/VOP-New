@@ -22,6 +22,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Verified HTTPS invitations: a normal camera can open the same
+                 URL in the installed native app or fall back to the website. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="vopapp.org" />
+                <data android:scheme="https" android:host="www.vopapp.org" />
+            </intent-filter>
+
+            <!-- Explicit in-app open action from the public invitation page. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vop" android:host="invite" />
+            </intent-filter>
+
         </activity>
 
         <provider

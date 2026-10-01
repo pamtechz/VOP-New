@@ -61,6 +61,7 @@ export interface AssessmentPolicyResult {
   expiresAt:string|null;
   assessmentPolicy:{
     threshold:number;
+    attemptsUsed:number;
     maxAttempts:number|null;
     remainingAttempts:number|null;
     cooldownMinutes:number;
