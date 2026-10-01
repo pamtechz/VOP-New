@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
@@ -59,10 +60,11 @@ export default async function handler(req: Request, res: Response) {
     if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage plans and subscriptions.');
 
     if (action === 'upsertPlan') {
-      const planId = text(body.planId);
-      if (!/^[a-zA-Z0-9_-]{2,80}$/.test(planId)) throw new Error('A valid plan identifier is required.');
       const name = text(body.name);
       if (!name) throw new Error('A plan name is required.');
+      const generatedBase=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,55)||'package';
+      const planId = text(body.planId) || (generatedBase+'-'+randomUUID().slice(0,8));
+      if (!/^[a-zA-Z0-9_-]{2,80}$/.test(planId)) throw new Error('A valid package identifier could not be generated.');
       const data = {
         id: planId,
         name,
