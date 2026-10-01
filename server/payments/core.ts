@@ -619,17 +619,32 @@ export async function adminListTransactions(ctx:TenantContext,filters:Record<str
     return ctx.isSuperAdmin||(!org&&ctx.tenantType==='hierarchy')||allowed.has(org)||(ctx.tenantType==='organization'&&org===ctx.organizationId);
   }).map(doc=>serializePayment(doc.id,doc.data()));
   const search=text(filters.search).toLowerCase();
-  const status=text(filters.status),provider=text(filters.provider),method=text(filters.paymentMethod),organizationId=text(filters.organizationId);
+  const status=text(filters.status),provider=text(filters.provider),method=text(filters.paymentMethod);
+  const organizationId=text(filters.organizationId),itemType=text(filters.itemType),payerUid=text(filters.payerUid);
+  const dateFrom=text(filters.dateFrom),dateTo=text(filters.dateTo);
+  const minAmount=Number(filters.minAmount),maxAmount=Number(filters.maxAmount);
   if(search)rows=rows.filter(row=>[
-    row.reference,row.providerReference,row.payerName,row.payerEmail,row.description,
+    row.reference,row.providerReference,row.providerTransactionId,row.payerName,row.payerEmail,row.description,
   ].some(value=>text(value).toLowerCase().includes(search)));
   if(status)rows=rows.filter(row=>row.status===status);
   if(provider)rows=rows.filter(row=>row.provider===provider);
   if(method)rows=rows.filter(row=>row.paymentMethod===method);
+  if(itemType)rows=rows.filter(row=>row.itemType===itemType);
+  if(payerUid)rows=rows.filter(row=>row.payerUid===payerUid);
   if(organizationId){
     if(!ctx.isSuperAdmin&&!allowed.has(organizationId))throw new Error('The organization is outside your scope.');
     rows=rows.filter(row=>row.organizationId===organizationId);
   }
+  if(dateFrom){
+    const from=Date.parse(dateFrom);
+    if(Number.isFinite(from))rows=rows.filter(row=>Date.parse(row.createdAt)>=from);
+  }
+  if(dateTo){
+    const through=Date.parse(dateTo+'T23:59:59.999Z');
+    if(Number.isFinite(through))rows=rows.filter(row=>Date.parse(row.createdAt)<=through);
+  }
+  if(Number.isFinite(minAmount)&&minAmount>=0)rows=rows.filter(row=>Number(row.amountDecimal)>=minAmount);
+  if(Number.isFinite(maxAmount)&&maxAmount>=0)rows=rows.filter(row=>Number(row.amountDecimal)<=maxAmount);
   return rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 }
 
