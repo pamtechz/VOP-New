@@ -2,10 +2,10 @@ export type VopTheme='dark'|'light';
 const KEY='vop_theme';
 
 export function readThemePreference():VopTheme{
-  if(typeof window==='undefined')return 'dark';
+  if(typeof window==='undefined')return 'light';
   try{
-    return window.localStorage.getItem(KEY)==='light'?'light':'dark';
-  }catch{return 'dark';}
+    return window.localStorage.getItem(KEY)==='dark'?'dark':'light';
+  }catch{return 'light';}
 }
 export function applyThemePreference(theme:VopTheme){
   if(typeof document==='undefined')return;
