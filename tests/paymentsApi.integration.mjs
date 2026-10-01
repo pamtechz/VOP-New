@@ -83,6 +83,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     providers.registerPaymentProviderForTesting({
       key:'mtn_momo',
+      callbackMethods:['POST','PUT'],
       capabilities:{checkout:true,card:false,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
       configured(){return true;},
       publicConfiguration(){return {key:'mtn_momo',configured:true,environment:'test',methods:['mtn_money'],capabilities:this.capabilities};},
