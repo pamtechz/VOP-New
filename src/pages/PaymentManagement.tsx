@@ -53,6 +53,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     name:'',description:'',itemType:'programme_registration' as PayableItemType,
     targetId:'',organizationId:'',scope:currentUser.role==='super_admin'?'platform':'organization',
     amount:'',currency:'ZMW',repeatable:false,active:true,
+    allowedProviders:['lenco'] as string[],
     allowedMethods:['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[],
   });
   const isSuperAdmin=currentUser.role==='super_admin';
@@ -98,20 +99,22 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
 
   const startCreate=()=>{
     setEditing({} as PayableItem);
-    setDraft({name:'',description:'',itemType:'programme_registration',targetId:'',organizationId:currentUser.organizationId||'',scope:isSuperAdmin?'platform':'organization',amount:'',currency:'ZMW',repeatable:false,active:true,allowedMethods:['card','airtel_money','mtn_money','zamtel_money']});
+    setDraft({name:'',description:'',itemType:'programme_registration',targetId:'',organizationId:currentUser.organizationId||'',scope:isSuperAdmin?'platform':'organization',amount:'',currency:'ZMW',repeatable:false,active:true,allowedProviders:providers.filter(provider=>provider.configured&&provider.enabled).map(provider=>provider.key),allowedMethods:['card','airtel_money','mtn_money','zamtel_money']});
   };
   const startEdit=(item:PayableItem)=>{
     setEditing(item);
     setDraft({
       name:item.name,description:item.description,itemType:item.itemType,targetId:item.itemId,
       organizationId:item.organizationId||'',scope:item.scope,amount:item.amountDecimal,currency:item.currency,
-      repeatable:item.repeatable,active:item.active,allowedMethods:item.allowedMethods||[],
+      repeatable:item.repeatable,active:item.active,allowedProviders:item.allowedProviders||[],allowedMethods:item.allowedMethods||[],
     });
   };
   const toggleMethod=(method:PaymentMethod)=>setDraft(value=>({...value,allowedMethods:value.allowedMethods.includes(method)?value.allowedMethods.filter(item=>item!==method):[...value.allowedMethods,method]}));
+  const toggleProvider=(providerKey:string)=>setDraft(value=>({...value,allowedProviders:value.allowedProviders.includes(providerKey)?value.allowedProviders.filter(item=>item!==providerKey):[...value.allowedProviders,providerKey]}));
 
   const saveItem=async()=>{
     if(!draft.name.trim()||!draft.amount.trim()){setError('Name and amount are required.');return;}
+    if(!draft.allowedProviders.length){setError('Select at least one payment provider.');return;}
     if(['programme_registration','event_registration','organization_subscription','material'].includes(draft.itemType)&&!draft.targetId){setError('Choose the linked item by name.');return;}
     setBusy(true);setError('');
     try{
@@ -119,7 +122,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
         ...(editing?.id?{id:editing.id}:{}),name:draft.name,description:draft.description,itemType:draft.itemType,
         ...(draft.targetId?{itemId:draft.targetId}:{}),organizationId:draft.organizationId||undefined,
         scope:draft.scope,amount:Number(draft.amount),currency:draft.currency,repeatable:draft.repeatable,
-        active:draft.active,paymentRequired:true,allowedProviders:['lenco'],allowedMethods:draft.allowedMethods,
+        active:draft.active,paymentRequired:true,allowedProviders:draft.allowedProviders,allowedMethods:draft.allowedMethods,
       }});
       setEditing(null);setMessage('Payable item saved.');await load();
     }catch(reason){setError(reason instanceof Error?reason.message:'The payable item could not be saved.');}
@@ -247,7 +250,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
 
     {tab==='items'&&<div className="vop-payment-admin-cards">{items.map(item=><article key={item.id}><div><span>{typeLabel(item.itemType)}</span><h3>{item.name}</h3><p>{item.description||'Configured charge'}</p></div><dl><div><dt>Amount</dt><dd>{item.currency} {item.amountDecimal}</dd></div><div><dt>Scope</dt><dd>{organizations.find(org=>org.id===item.organizationId)?.name||typeLabel(item.scope)}</dd></div><div><dt>Status</dt><dd>{item.active?'Active':'Inactive'}</dd></div></dl><footer><button className="btn btn-outline" onClick={()=>startEdit(item)}>Edit</button><button className="btn btn-danger" onClick={()=>void deleteItem(item)}>Remove</button></footer></article>)}</div>}
 
-    {tab==='providers'&&<div className="vop-payment-admin-cards">{providers.map(provider=><article key={provider.key}><div><span>{provider.environment}</span><h3>{provider.key.replace(/\b\w/g,c=>c.toUpperCase())}</h3><p>{provider.configured?'Server credentials detected.':'Credentials are not configured in the deployment environment.'}</p></div><dl><div><dt>Methods</dt><dd>{provider.methods.map(paymentMethodLabel).join(', ')}</dd></div><div><dt>Webhooks</dt><dd>{provider.capabilities.webhooks?'Supported':'Not available'}</dd></div><div><dt>Status</dt><dd>{provider.enabled&&provider.configured?'Enabled':'Unavailable'}</dd></div></dl>{isSuperAdmin&&<footer><button className="btn btn-outline" disabled={!provider.configured||busy} onClick={()=>void configureProvider(provider,!provider.enabled)}>{provider.enabled?'Disable':'Enable'} provider</button></footer>}</article>)}</div>}
+    {tab==='providers'&&<div className="vop-payment-admin-cards">{providers.map(provider=><article key={provider.key}><div><span>{provider.environment}</span><h3>{provider.key.replace(/\b\w/g,c=>c.toUpperCase())}</h3><p>{provider.configured?'Server credentials detected.':'Credentials are not configured in the deployment environment.'}</p></div><dl><div><dt>Methods</dt><dd>{provider.methods.map(paymentMethodLabel).join(', ')}</dd></div><div><dt>Webhooks</dt><dd>{provider.capabilities.webhooks?'Supported':'Not available'}</dd></div>{provider.callbackPath&&<div><dt>Callback endpoint</dt><dd><code>{provider.callbackPath}</code></dd></div>}<div><dt>Status</dt><dd>{provider.enabled&&provider.configured?'Enabled':'Unavailable'}</dd></div></dl>{isSuperAdmin&&<footer><button className="btn btn-outline" disabled={!provider.configured||busy} onClick={()=>void configureProvider(provider,!provider.enabled)}>{provider.enabled?'Disable':'Enable'} provider</button></footer>}</article>)}</div>}
 
     {tab==='reconciliation'&&<section className="vop-payment-reconciliation"><Settings2 size={34}/><div><h2>Provider reconciliation</h2><p>Webhook delivery is not treated as the only source of truth. Pending provider transactions are independently re-queried and matched against VOP reference, amount and currency before fulfilment.</p>{isSuperAdmin?<button className="btn btn-primary" disabled={busy} onClick={()=>void reconcile()}>{busy?<LoaderCircle className="spin" size={16}/>:<RefreshCw size={16}/>}Run reconciliation now</button>:<small>Platform-wide reconciliation is restricted to Super Admin. Your scoped transactions are still reconciled automatically.</small>}</div></section>}
 
@@ -258,6 +261,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       {isSuperAdmin&&<label><span>Scope</span><select value={draft.scope} onChange={e=>setDraft(v=>({...v,scope:e.target.value,organizationId:e.target.value==='platform'?'':v.organizationId}))}><option value="platform">Platform-wide</option><option value="organization">Organization</option><option value="hierarchy">Hierarchy-managed organization</option></select></label>}
       {draft.scope!=='platform'&&<label><span>Organization</span><select value={draft.organizationId} onChange={e=>setDraft(v=>({...v,organizationId:e.target.value}))}><option value="">Choose organization</option>{organizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select></label>}
       <label className="wide"><span>Description</span><textarea value={draft.description} onChange={e=>setDraft(v=>({...v,description:e.target.value}))}/></label>
+      <fieldset className="wide"><legend>Payment providers</legend><div className="vop-payment-method-checks">{providers.map(provider=><label key={provider.key}><input type="checkbox" checked={draft.allowedProviders.includes(provider.key)} onChange={()=>toggleProvider(provider.key)} disabled={!provider.configured}/>{provider.key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}{!provider.configured?' (not configured)':''}</label>)}</div></fieldset>
       <fieldset className="wide"><legend>Payment methods</legend><div className="vop-payment-method-checks">{(['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[]).map(value=><label key={value}><input type="checkbox" checked={draft.allowedMethods.includes(value)} onChange={()=>toggleMethod(value)}/>{paymentMethodLabel(value)}</label>)}</div></fieldset>
       <label className="vop-checkbox"><input type="checkbox" checked={draft.repeatable} onChange={e=>setDraft(v=>({...v,repeatable:e.target.checked}))}/>Allow repeat payments</label><label className="vop-checkbox"><input type="checkbox" checked={draft.active} onChange={e=>setDraft(v=>({...v,active:e.target.checked}))}/>Active</label></div>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void saveItem()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save payable item</button></section></div>}

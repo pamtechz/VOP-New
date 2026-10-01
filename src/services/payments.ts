@@ -45,6 +45,7 @@ export interface PaymentProviderDescriptor {
   environment:string;
   methods:PaymentMethod[];
   capabilities:Record<string,boolean>;
+  callbackPath?:string;
 }
 
 export interface CheckoutResult {

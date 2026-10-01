@@ -1,6 +1,6 @@
 # VOP Payments
 
-VOP payments are provider-neutral. Lenco is the first production adapter; direct Airtel Money, MTN MoMo, or another provider must implement the same server-side adapter contract instead of adding provider-specific logic to the UI.
+VOP payments are provider-neutral. Lenco and direct MTN MoMo Collections implement the same server-side adapter contract; future Airtel Money or other gateways plug into the same checkout, verification, receipt and fulfilment core.
 
 ## Security boundary
 
@@ -80,6 +80,7 @@ Authenticated learner/member routes:
 Provider route:
 
 - `POST /api/payments/webhooks/lenco`
+- `POST|PUT /api/payments/webhooks/mtn-momo`
 
 Protected scheduled reconciliation:
 
@@ -159,3 +160,46 @@ A provider adapter may implement automated `refundPayment` and `verifyRefund` me
 For Lenco, the current public v2 collection documentation exposes collection initiation/status, webhooks and settlement information but does not document a collection-refund endpoint. Therefore the Lenco adapter deliberately does not invent one.
 
 A full refund reverses payment-created access: programme/course enrolments are marked revoked, event registrations are cancelled, generic payment entitlements are revoked, and a refunded organization subscription is suspended until a Super Admin assigns a replacement/complimentary plan with an audit reason. Partial refunds do not automatically revoke fulfilled access.
+
+
+## Direct MTN MoMo Collections
+
+MTN's Collections API is asynchronous. VOP sends `POST /collection/v1_0/requesttopay` with an MTN UUID in `X-Reference-Id`, VOP's immutable transaction reference as `externalId`, and the configured callback URL in `X-Callback-Url`.
+
+Environment:
+
+```
+MTN_MOMO_SUBSCRIPTION_KEY=
+MTN_MOMO_API_USER=
+MTN_MOMO_API_KEY=
+MTN_MOMO_ENVIRONMENT=sandbox
+MTN_MOMO_TARGET_ENVIRONMENT=sandbox
+MTN_MOMO_CALLBACK_URL=https://vopafrica.vercel.app/api/payments/webhooks/mtn-momo
+MTN_MOMO_BASE_URL=
+```
+
+For Zambia production, the MTN target environment is `mtnzambia`. The production base URL and API credentials must come from MTN onboarding/Partner Portal rather than being guessed by VOP.
+
+### Sandbox API user and API key
+
+The sandbox API key is not displayed on the developer portal. Generate it using:
+
+```
+MTN_MOMO_SUBSCRIPTION_KEY=your_collections_primary_key npm run payments:mtn:provision-sandbox
+```
+
+On PowerShell:
+
+```powershell
+$env:MTN_MOMO_SUBSCRIPTION_KEY="your_collections_primary_key"
+$env:MTN_MOMO_CALLBACK_URL="https://vopafrica.vercel.app/api/payments/webhooks/mtn-momo"
+npm run payments:mtn:provision-sandbox
+```
+
+The script creates a UUID API user with `POST /v1_0/apiuser`, registers the callback host, then creates the secret with `POST /v1_0/apiuser/{apiUser}/apikey`. It prints `MTN_MOMO_API_USER` and `MTN_MOMO_API_KEY` once for you to place in secret storage.
+
+### Callback security model
+
+MTN RequestToPay does not document a cryptographic signature header comparable to Lenco's `X-Lenco-Signature`. VOP therefore never trusts the MTN callback status. The callback is treated only as a notification: VOP finds the transaction by its `externalId`, confirms the provider is `mtn_momo`, and independently calls MTN's authenticated GET RequestToPay status endpoint using the server-held transaction UUID before any payment or entitlement state changes.
+
+MTN documents callbacks as one-shot notifications with no retry. VOP's existing reconciliation process therefore remains mandatory as a recovery path when an MTN callback is lost.
