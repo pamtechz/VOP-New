@@ -138,6 +138,15 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       assert.equal((await db.doc('users/'+invitee.uid).get()).data()?.organizationId,orgA);
       assert.equal((await db.doc('organizations/'+orgA+'/members/'+invitee.uid).get()).data()?.role,'learner');
 
+      const firstEnrollment=await callShare(invitee,{action:'enroll',code});
+      assert.equal(firstEnrollment.status,200,JSON.stringify(firstEnrollment));
+      assert.equal(firstEnrollment.item.newlyEnrolled,true);
+      const repeatedEnrollment=await callShare(invitee,{action:'enroll',code});
+      assert.equal(repeatedEnrollment.status,200,JSON.stringify(repeatedEnrollment));
+      assert.equal(repeatedEnrollment.item.newlyEnrolled,false);
+      assert.equal((await db.collection('courseEnrollments')
+        .where('uid','==',invitee.uid).where('guideId','==',guideId).get()).size,1);
+
       const reused=await callOrganization(invitee,{action:'acceptInvite',token:createdInvite.item.token});
       assert.equal(reused.status,409,JSON.stringify(reused));
     });
@@ -153,19 +162,14 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       assert.equal((await db.doc('courseEnrollments/'+orgA+'_'+sameOrg.uid+'_'+guideId).get()).data()?.status,'active');
     });
 
-    await t.test('new learner joins the organization and repeated enrollment is idempotent',async()=>{
-      const first=await callShare(newcomer,{action:'enroll',code});
-      assert.equal(first.status,200,JSON.stringify(first));
-      assert.equal(first.item.newlyEnrolled,true);
-      assert.equal((await db.doc('users/'+newcomer.uid).get()).data()?.organizationId,orgA);
-      assert.equal((await db.doc('organizations/'+orgA+'/members/'+newcomer.uid).get()).data()?.role,'learner');
-      const second=await callShare(newcomer,{action:'enroll',code});
-      assert.equal(second.status,200,JSON.stringify(second));
-      assert.equal(second.item.newlyEnrolled,false);
-      const shareRef=await db.doc('shareReferences/'+code).get();
-      assert.equal(shareRef.data()?.installs,2,'Each distinct account is counted once.');
+    await t.test('course links cannot create organization membership for an uninvited account',async()=>{
+      const blocked=await callShare(newcomer,{action:'enroll',code});
+      assert.equal(blocked.status,409,JSON.stringify(blocked));
+      assert.match(String(blocked.error||''),/invitation acceptance is required/i);
+      assert.equal((await db.doc('users/'+newcomer.uid).get()).data()?.organizationId,'');
+      assert.equal((await db.doc('organizations/'+orgA+'/members/'+newcomer.uid).get()).exists,false);
       assert.equal((await db.collection('courseEnrollments')
-        .where('uid','==',newcomer.uid).where('guideId','==',guideId).get()).size,1);
+        .where('uid','==',newcomer.uid).where('guideId','==',guideId).get()).size,0);
     });
 
     await t.test('foreign organization account cannot use an organization-only enrollment link',async()=>{
