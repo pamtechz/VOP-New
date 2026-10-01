@@ -540,7 +540,7 @@ export const AdminRecordsPanel: React.FC<Props> = ({ kind, languages, preferredL
           <div className="vop-card vop-form-card vop-translation-entries">
             <div className="vop-section-title"><div><h2>{t('admin.detected_translation_entries','Detected Translation Entries')}</h2><p>English source text is detected automatically. Only the translated value needs administrator input.</p></div></div>
             {selectedTranslation && translations.find(item => item.id === selectedTranslation)?.canEdit === false && (
-              <div className="vop-card" style={{marginBottom:14,border:'1px solid #cfe0ff',background:'#f5f9ff'}}>
+              <div className="vop-card" style={{marginBottom:14,border:'1px solid var(--border-subtle)',background:'var(--bg-card)'}}>
                 <div className="vop-section-title"><div><h3>Suggest a translation improvement</h3><p>This canonical translation belongs to another contributor. Your suggestion will be reviewed by the VOP Super Admin.</p></div></div>
                 <div style={{display:'grid',gap:10,gridTemplateColumns:'minmax(180px,1fr) minmax(180px,1fr)'}}>
                   <select value={proposalKey} onChange={e=>{const key=e.target.value;setProposalKey(key);setProposalValue(translationValues[key] || '');}}>
