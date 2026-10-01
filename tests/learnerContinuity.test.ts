@@ -183,6 +183,37 @@ test('shared sidebar and header chrome consume canonical theme tokens',()=>{
   assert.match(header,/background:var\(--vop-error-bg\);color:var\(--vop-error\)/);
 });
 
+test('admin learning and public neutral surfaces inherit the canonical theme contract',()=>{
+  const admin=read('src/pages/admin.css');
+  const learning=read('src/pages/learning.css');
+  const publicHome=read('src/pages/public-home.css');
+
+  for(const declaration of [
+    '--vop-bg:var(--theme-bg)',
+    '--vop-text:var(--theme-title)',
+    '--vop-muted:var(--theme-muted)',
+    '--vop-border:var(--theme-border)',
+    '--vop-card:var(--theme-surface)',
+  ]) assert.ok(admin.includes(declaration),declaration);
+
+  for(const token of ['--theme-surface','--theme-surface-soft','--theme-border','--theme-border-strong','--theme-title','--theme-text','--theme-muted']){
+    assert.ok(admin.includes('var('+token+')'),token+' missing from admin');
+    assert.ok(learning.includes('var('+token+')') || token==='--theme-border-strong',token+' missing from learning');
+  }
+  for(const token of ['--theme-bg','--theme-surface','--theme-surface-soft','--theme-border','--theme-title','--theme-text','--theme-muted']){
+    assert.ok(publicHome.includes('var('+token+')'),token+' missing from public home');
+  }
+
+  for(const [name,css] of [['admin',admin],['learning',learning],['public home',publicHome]] as const){
+    assert.doesNotMatch(css,/var\([^)]*\)[0-9a-f]{2,6}\b/i,name+' contains a malformed theme color');
+  }
+  assert.doesNotMatch(learning,/#eff5fc|#edf4ff|#fcfdff|#edf3fa/i);
+  assert.doesNotMatch(publicHome,/#f8fafc|#f4f7fb|#f1f5f9|#edf4ff|#eff5fc|#fcfdff|#edf3fa/i);
+  assert.match(admin,/background:var\(--vop-error-bg\)/);
+  assert.match(admin,/background:var\(--vop-warning-bg\)/);
+  assert.match(admin,/background:var\(--vop-success-bg\)/);
+});
+
 test('legacy portals remain covered while canonical theme variables own final surfaces',()=>{
   const theme=read('src/theme.css');
   const readerModal=read('src/components/reader/LessonReaderModal.tsx');
