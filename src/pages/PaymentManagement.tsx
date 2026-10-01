@@ -5,6 +5,7 @@ import type { PayableItem, PayableItemType, PaymentMethod } from '../../shared/p
 import { PAYABLE_ITEM_TYPES, paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
 import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
 import { auth } from '../lib/firebase';
+import { appConfirm } from '../components/layout/AppDialog';
 import './payments.css';
 
 interface Props{currentUser:User}
@@ -124,7 +125,9 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   };
 
   const deleteItem=async(item:PayableItem)=>{
-    if(!window.confirm('Remove this payable item? Used items will be deactivated instead of deleting financial history.'))return;
+    if(!await appConfirm('Remove this payable item? Used items will be deactivated instead of deleting financial history.',{
+      title:'Remove payable item',confirmLabel:'Remove',tone:'danger',
+    }))return;
     setBusy(true);setError('');
     try{await adminPaymentRequest('payable-items',{action:'delete',id:item.id});setMessage('Payable item updated.');await load();}
     catch(reason){setError(reason instanceof Error?reason.message:'The payable item could not be removed.');}
