@@ -5,14 +5,15 @@ import type { PayableItem, PayableItemType, PaymentMethod } from '../../shared/p
 import { PAYABLE_ITEM_TYPES, paymentMethodLabel, paymentStatusLabel } from '../../shared/payments';
 import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
 import { auth } from '../lib/firebase';
-import { appConfirm } from '../components/layout/AppDialog';
+import { appConfirm, appPrompt } from '../components/layout/AppDialog';
 import './payments.css';
 
 interface Props{currentUser:User}
 type Tab='transactions'|'items'|'providers'|'reconciliation';
 type Organization={id:string;name:string};
 type Target={id:string;name:string};
-type PaymentDetails={payment:ClientPayment;attempts:Array<Record<string,unknown>>;audit:Array<Record<string,unknown>>;receipt:Record<string,unknown>|null};
+type RefundRecord={id:string;amountMinor:number;amountDecimal:string;currency:string;reason:string;status:string;providerStatus:string;providerRefundReference:string;createdAt:string;completedAt:string};
+type PaymentDetails={payment:ClientPayment;attempts:Array<Record<string,unknown>>;audit:Array<Record<string,unknown>>;refunds:RefundRecord[];receipt:Record<string,unknown>|null};
 
 async function adminApi(path:string,body:Record<string,unknown>){
   if(!auth?.currentUser)throw new Error('Sign in again.');
@@ -162,6 +163,52 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     finally{setBusy(false);}
   };
 
+  const requestRefund=async(payment:ClientPayment)=>{
+    const already=Math.max(0,Number(payment.refundedMinor||0))/100;
+    const remaining=Math.max(0,Number(payment.amountDecimal)-already);
+    const amount=await appPrompt('Enter the amount to refund. VOP will prevent refunds above the remaining paid amount.',{
+      title:'Refund amount',defaultValue:remaining.toFixed(2),placeholder:'0.00',
+    });
+    if(amount===null)return;
+    const reason=await appPrompt('Enter the reason for this refund. This becomes part of the immutable payment audit trail.',{
+      title:'Refund reason',placeholder:'Reason for refund',
+    });
+    if(reason===null)return;
+    setBusy(true);setError('');
+    try{
+      const result=await adminPaymentRequest<{ok:true;item:RefundRecord}>('refunds',{
+        action:'request',paymentId:payment.id,amount,reason,
+      });
+      setMessage(result.item.status==='manual_action_required'
+        ?'Refund recorded. Complete the refund in the provider dashboard, then confirm the provider reference here.'
+        :'Refund request submitted to the provider.');
+      await load();
+      await openDetails(payment);
+    }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'Refund request failed.');}
+    finally{setBusy(false);}
+  };
+
+  const completeManualRefund=async(refund:RefundRecord)=>{
+    const providerRefundReference=await appPrompt('Enter the refund/reversal reference issued by the payment provider.',{
+      title:'Confirm provider refund',placeholder:'Provider refund reference',
+    });
+    if(providerRefundReference===null)return;
+    const confirmationNote=await appPrompt('Describe how and where the refund was completed so another finance administrator can audit it.',{
+      title:'Refund confirmation note',placeholder:'Refund completed in provider dashboard…',
+    });
+    if(confirmationNote===null)return;
+    setBusy(true);setError('');
+    try{
+      await adminPaymentRequest('refunds',{
+        action:'completeManual',refundId:refund.id,providerRefundReference,confirmationNote,
+      });
+      setMessage('Refund confirmed and the VOP payment record has been updated.');
+      const payment=details?.payment;
+      if(payment){await load();await openDetails(payment);}
+    }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'Refund confirmation failed.');}
+    finally{setBusy(false);}
+  };
+
   const configureProvider=async(provider:PaymentProviderDescriptor,enabled:boolean)=>{
     setBusy(true);setError('');
     try{
@@ -216,7 +263,9 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       <label className="vop-checkbox"><input type="checkbox" checked={draft.repeatable} onChange={e=>setDraft(v=>({...v,repeatable:e.target.checked}))}/>Allow repeat payments</label><label className="vop-checkbox"><input type="checkbox" checked={draft.active} onChange={e=>setDraft(v=>({...v,active:e.target.checked}))}/>Active</label></div>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void saveItem()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save payable item</button></section></div>}
 
-    {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div><div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div></dl>
+    {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div><div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div><div><dt>Refunded</dt><dd>{details.payment.refundedMinor?details.payment.currency+' '+(details.payment.refundedMinor/100).toFixed(2):'None'}</dd></div></dl>
+      {['paid','partially_refunded'].includes(details.payment.status)&&<button className="btn btn-outline vop-payment-submit" onClick={()=>void requestRefund(details.payment)} disabled={busy}>Request refund</button>}
+      <h3>Refunds</h3><div className="vop-payment-audit">{details.refunds?.length?details.refunds.map(refund=><div key={refund.id}><strong>{refund.currency} {refund.amountDecimal} · {typeLabel(refund.status)}</strong><span>{refund.reason}</span>{refund.status==='manual_action_required'&&<button className="btn btn-outline" onClick={()=>void completeManualRefund(refund)} disabled={busy}>Confirm provider refund</button>}</div>):<div><strong>No refunds</strong><span>—</span></div>}</div>
       <h3>Payment attempts</h3><div className="vop-payment-audit">{details.attempts.length?details.attempts.map((entry,index)=><div key={String(entry.id||index)}><strong>{paymentMethodLabel(String(entry.paymentMethod||'card') as PaymentMethod)} · {paymentStatusLabel(String(entry.status||'pending') as never)}</strong><span>{entry.createdAt?new Date(String(entry.createdAt)).toLocaleString():'Recorded'}</span></div>):<div><strong>No provider attempt recorded</strong><span>—</span></div>}</div>
       <h3>Audit history</h3><div className="vop-payment-audit">{details.audit.map((entry,index)=><div key={String(entry.id||index)}><strong>{String(entry.action||'Payment update').replaceAll('.',' ')}</strong><span>{entry.createdAt?new Date(String(entry.createdAt)).toLocaleString():'Recorded'}</span></div>)}</div>
       <button className="btn btn-outline vop-payment-submit" onClick={()=>void reconcile(details.payment.id)} disabled={busy}><RefreshCw size={15}/>Verify with provider</button></section></div>}
