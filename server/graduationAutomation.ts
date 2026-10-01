@@ -21,6 +21,7 @@ function requestId(organizationId:string,candidateId:string,guideId:string){
 }
 function stagesFromConfig(data:Record<string,unknown>):ApprovalStage[]{
   const rows=Array.isArray(data.approvalStages)?data.approvalStages:[];
+  if(!rows.length)return [{id:'organization',label:'Organization review',approverRoles:['owner','admin','mentor']}];
   return rows.map(row=>row&&typeof row==='object'?row as Record<string,unknown>:null)
     .map(row=>row?{
       id:text(row.id),
