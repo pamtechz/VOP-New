@@ -31,7 +31,7 @@ Adapters declare capabilities and implement:
 - `publicConfiguration()`
 - `createPayment()`
 - `verifyPayment()`
-- `verifyWebhook()`
+- `parseWebhook()` only when that provider uses callbacks
 
 VOP checkout, verification, receipts, reconciliation, audit and fulfilment do not depend on the provider implementation.
 
@@ -81,6 +81,7 @@ Provider route:
 
 - `POST /api/payments/webhooks/lenco`
 - `POST|PUT /api/payments/webhooks/mtn-momo`
+- `POST /api/payments/webhooks/airtel-money`
 
 Protected scheduled reconciliation:
 
@@ -203,3 +204,38 @@ The script creates a UUID API user with `POST /v1_0/apiuser`, registers the call
 MTN RequestToPay does not document a cryptographic signature header comparable to Lenco's `X-Lenco-Signature`. VOP therefore never trusts the MTN callback status. The callback is treated only as a notification: VOP finds the transaction by its `externalId`, confirms the provider is `mtn_momo`, and independently calls MTN's authenticated GET RequestToPay status endpoint using the server-held transaction UUID before any payment or entitlement state changes.
 
 MTN documents callbacks as one-shot notifications with no retry. VOP's existing reconciliation process therefore remains mandatory as a recovery path when an MTN callback is lost.
+
+
+## Direct Airtel Money Zambia Collections
+
+The direct Airtel adapter is registered as `airtel_money` and supports Airtel Money only. Lenco may still be enabled separately for Airtel, MTN, Zamtel or card checkout; administrators choose which configured providers are allowed for each payable item.
+
+Environment:
+
+```
+AIRTEL_MONEY_CLIENT_ID=
+AIRTEL_MONEY_CLIENT_SECRET=
+AIRTEL_MONEY_ENVIRONMENT=staging
+AIRTEL_MONEY_COUNTRY=ZM
+AIRTEL_MONEY_CURRENCY=ZMW
+AIRTEL_MONEY_BASE_URL=
+AIRTEL_MONEY_COLLECTION_PATH=/merchant/v1/payments/
+AIRTEL_MONEY_STATUS_PATH_PREFIX=/standard/v1/payments/
+AIRTEL_MONEY_CALLBACK_AUTHORIZATION=
+```
+
+The adapter obtains an OAuth access token with the server-held client ID and client secret, then creates a collection request with a server-generated transaction UUID and the immutable VOP payment reference. It never accepts an amount or currency supplied by the browser as authoritative.
+
+Callback endpoint:
+
+```
+https://vopafrica.vercel.app/api/payments/webhooks/airtel-money
+```
+
+If Airtel merchant configuration sends an Authorization header to the callback, set the exact expected value in `AIRTEL_MONEY_CALLBACK_AUTHORIZATION`. If no callback credential is configured, VOP treats the callback as unauthenticated notification data and discards unknown/orphan notifications.
+
+Regardless of callback authentication, a callback **cannot** mark a VOP transaction paid. The callback locates the transaction using the VOP reference or Airtel transaction UUID; VOP then performs an authenticated Airtel transaction enquiry and validates the provider state against the server-created transaction before fulfilment.
+
+Airtel payment status is normalized from provider codes such as success, failure, expiry and in-progress states. Reconciliation continues checking non-terminal transactions because callbacks may be delayed or missed.
+
+Direct Airtel automated refunds are intentionally not enabled until the exact merchant refund/reversal contract supplied during Airtel onboarding is available. The existing VOP refund workflow therefore records an audited `manual_action_required` refund and requires the external provider reversal/reference before changing the internal transaction to partially refunded or refunded.
