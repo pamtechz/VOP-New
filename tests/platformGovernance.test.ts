@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const read=(path:string)=>readFileSync(root+path,'utf8');
 
-test('dark mode is applied before first paint and covers learner and admin portals',()=>{
+test('light mode is the default before first paint while dark mode remains available across portals',()=>{
   const html=read('index.html');
   const theme=read('src/services/themePreference.ts');
   const css=read('src/theme-dark.css');
