@@ -19,6 +19,7 @@ type Props={
   onBack:()=>void;
   onNavigate:(route:AppRoute)=>void;
   initialTab?:'notifications'|'invites';
+  fixedMode?:'notifications'|'invites';
   onAccountChanged?:()=>Promise<void>;
   inviteToken?:string;
   currentUser?:User;
@@ -62,10 +63,11 @@ function clearInviteFromAddress(){
 }
 
 export default function InboxPage({
-  onBack,onNavigate,initialTab='notifications',onAccountChanged,inviteToken,currentUser,guides=[],
+  onBack,onNavigate,initialTab='notifications',fixedMode,onAccountChanged,inviteToken,currentUser,guides=[],
   onInvitationAccepted,
 }:Props){
   const [tab,setTab]=useState<'notifications'|'invites'>(initialTab);
+  const activeMode=fixedMode||tab;
   const [notifications,setNotifications]=useState<NotificationItem[]>([]);
   const [invites,setInvites]=useState<InviteItem[]>([]);
   const [directInvite,setDirectInvite]=useState<InviteItem|null>(null);
@@ -82,30 +84,31 @@ export default function InboxPage({
   useEffect(()=>setTab(initialTab),[initialTab]);
 
   const load=useCallback(async()=>{
-    const token=await idToken();
     setBusy(true);setError('');
     try{
-      const [notificationResponse,inviteResult]=await Promise.all([
-        fetch('/api/admin/notifications?action=list',{headers:{Authorization:'Bearer '+token}}),
-        organizationAction<{items?:InviteItem[]}>('listInvites'),
-      ]);
-      const notificationBody=await notificationResponse.json().catch(()=>({})) as {items?:NotificationItem[];error?:string};
-      if(!notificationResponse.ok)throw new Error(notificationBody.error||'Could not load notifications.');
-      setNotifications(Array.isArray(notificationBody.items)?notificationBody.items:[]);
-      setInvites(Array.isArray(inviteResult.items)?inviteResult.items:[]);
-    }catch(reason){setError(reason instanceof Error?reason.message:'Could not load your inbox.');}
+      if(activeMode==='notifications'){
+        const token=await idToken();
+        const response=await fetch('/api/admin/notifications?action=list',{headers:{Authorization:'Bearer '+token}});
+        const body=await response.json().catch(()=>({})) as {items?:NotificationItem[];error?:string};
+        if(!response.ok)throw new Error(body.error||'Could not load notifications.');
+        setNotifications(Array.isArray(body.items)?body.items:[]);
+      }else{
+        const result=await organizationAction<{items?:InviteItem[]}>('listInvites');
+        setInvites(Array.isArray(result.items)?result.items:[]);
+      }
+    }catch(reason){setError(reason instanceof Error?reason.message:`Could not load ${activeMode}.`);}
     finally{setBusy(false);}
-  },[]);
+  },[activeMode]);
   useEffect(()=>{void load();},[load]);
 
   useEffect(()=>{
-    if(!inviteToken){setDirectInvite(null);return}
+    if(activeMode!=='invites'||!inviteToken){setDirectInvite(null);return}
     let cancelled=false;
     void organizationAction<{item?:InviteItem}>('previewInvite',{token:inviteToken},false)
       .then(result=>{if(!cancelled)setDirectInvite(result.item||null)})
       .catch(reason=>{if(!cancelled)setError(reason instanceof Error?reason.message:'Could not open this invitation.')});
     return()=>{cancelled=true};
-  },[inviteToken]);
+  },[inviteToken,activeMode]);
 
   const flash=(value:string)=>{setMessage(value);window.setTimeout(()=>setMessage(''),2800);};
   const markRead=async(item:NotificationItem,read=true)=>{
@@ -214,8 +217,11 @@ export default function InboxPage({
   return <main className="vop-inbox-page">
     <header className="vop-inbox-hero"><div className="vop-inbox-hero-inner">
       <button type="button" className="vop-materials-back" onClick={onBack}><ArrowLeft size={18}/>Back</button>
-      <div><span className="vop-inbox-kicker"><Bell size={14}/>Communication centre</span><h1>Notifications & invitations</h1>
-        <p>Review messages, requests and invitations, then take the related action from one place.</p></div>
+      <div><span className="vop-inbox-kicker">{activeMode==='notifications'?<Bell size={14}/>:<UserPlus size={14}/>}Communication centre</span>
+        <h1>{activeMode==='notifications'?'Notifications':'Invitations'}</h1>
+        <p>{activeMode==='notifications'
+          ?'Review workflow updates, messages and alerts for your VOP account.'
+          :'Review received invitations, manage sent invitations and create shareable joining links.'}</p></div>
     </div></header>
     <div className="vop-inbox-main">
       {message&&<div className="vop-inbox-alert success" role="status"><Check size={16}/>{message}</div>}
@@ -231,12 +237,12 @@ export default function InboxPage({
       </section>}
 
       <div className="vop-inbox-tabs">
-        <button type="button" className={tab==='notifications'?'active':''} onClick={()=>setTab('notifications')}><Bell size={17}/>Notifications {unread>0&&<span>{unread}</span>}</button>
-        <button type="button" className={tab==='invites'?'active':''} onClick={()=>setTab('invites')}><UserPlus size={17}/>Invitations {received.filter(item=>item.status==='pending').length>0&&<span>{received.filter(item=>item.status==='pending').length}</span>}</button>
+        {!fixedMode&&<button type="button" className={tab==='notifications'?'active':''} onClick={()=>setTab('notifications')}><Bell size={17}/>Notifications {unread>0&&<span>{unread}</span>}</button>}
+        {!fixedMode&&<button type="button" className={tab==='invites'?'active':''} onClick={()=>setTab('invites')}><UserPlus size={17}/>Invitations {received.filter(item=>item.status==='pending').length>0&&<span>{received.filter(item=>item.status==='pending').length}</span>}</button>}
         <button type="button" className="vop-inbox-refresh" onClick={()=>void load()} disabled={busy}><RefreshCw size={16}/>{busy?'Refreshing…':'Refresh'}</button>
       </div>
 
-      {tab==='notifications'?<section className="vop-inbox-panel">
+      {activeMode==='notifications'?<section className="vop-inbox-panel">
         <header><div><h2>Notification inbox</h2><p>Unread items stay highlighted until opened or marked read.</p></div>
           <div className="vop-inbox-actions"><button type="button" onClick={()=>void markAll()} disabled={!notifications.length}><CheckCheck size={15}/>Mark all read</button><button type="button" className="danger" onClick={()=>void clearAll()} disabled={!notifications.length}><Trash2 size={15}/>Delete all</button></div>
         </header>
