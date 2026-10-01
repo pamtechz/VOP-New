@@ -1,6 +1,8 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
+import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -14,11 +16,31 @@ export default async function handler(req: Request, res: Response) {
     const action = text(body.action, 'listPlans');
     const requestedOrganizationId = text(body.organizationId);
     const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
-    await requirePermission(ctx, 'billing', action === 'listPlans' || action === 'getSubscription' ? 'view' : 'manage');
+    await requirePermission(ctx, 'billing', ['listPlans','listAvailablePlans','getSubscription'].includes(action) ? 'view' : 'manage');
 
     if (action === 'listPlans') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can access subscription package administration.');
       const snapshot = await ctx.db.collection('system/plans/catalog').orderBy('sortOrder', 'asc').get();
       return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+    }
+
+    if (action === 'listAvailablePlans') {
+      const snapshot = await ctx.db.collection('system/plans/catalog').where('active', '==', true).get();
+      const items = snapshot.docs.map(doc => {
+        const data = doc.data() || {};
+        return {
+          id: doc.id,
+          name: text(data.name),
+          description: text(data.description),
+          price: Number(data.price || 0),
+          currency: text(data.currency, 'ZMW').toUpperCase(),
+          interval: text(data.interval, 'month'),
+          sortOrder: Number(data.sortOrder || 0),
+          quotas: object(data.quotas),
+          features: object(data.features),
+        };
+      }).sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name));
+      return res.status(200).json({ ok: true, items });
     }
 
     if (action === 'getSubscription') {
@@ -58,6 +80,31 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`system/plans/catalog/${planId}`);
       const before = (await ref.get()).data();
       await ref.set({ ...data, createdAt: before?.createdAt || FieldValue.serverTimestamp() }, { merge: true });
+
+      const subscriptionPayableId='subscription_'+planId;
+      if (data.active && data.price > 0) {
+        await upsertPayableItem(ctx, {
+          id:subscriptionPayableId,
+          name:data.name,
+          description:data.description || (data.name+' organization subscription'),
+          itemType:'organization_subscription',
+          itemId:planId,
+          scope:'platform',
+          amount:data.price,
+          currency:data.currency,
+          repeatable:false,
+          active:true,
+          paymentRequired:true,
+          allowedProviders:registeredPaymentProviderKeys(),
+          allowedMethods:['card','airtel_money','mtn_money','zamtel_money'],
+          metadata:{managedBy:'subscription-package'},
+        });
+      } else {
+        try { await deletePayableItem(ctx,subscriptionPayableId); } catch (error) {
+          if (!(error instanceof Error) || !/does not exist/i.test(error.message)) throw error;
+        }
+      }
+
       await writeTenantAudit(ctx, 'plan.upsert', ref.path, before, data);
       return res.status(200).json({ ok: true, item: { id: planId, ...data } });
     }
@@ -71,6 +118,9 @@ export default async function handler(req: Request, res: Response) {
       const activeOrganizations = await ctx.db.collection('organizations').where('plan', '==', planId).where('status', '==', 'active').limit(1).get();
       if (!activeOrganizations.empty) throw new Error('A plan assigned to an active organization cannot be deleted. Deactivate or migrate those organizations first.');
       await ref.delete();
+      try { await deletePayableItem(ctx,'subscription_'+planId); } catch (error) {
+        if (!(error instanceof Error) || !/does not exist/i.test(error.message)) throw error;
+      }
       await writeTenantAudit(ctx, 'plan.delete', ref.path, snapshot.data(), undefined);
       return res.status(200).json({ ok: true, deleted: planId });
     }
