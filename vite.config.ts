@@ -95,7 +95,14 @@ export function createLocalApiMiddleware(server: {
       return;
     }
 
-    const modulePath = route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
+    // Mirror production Vercel rewrites for consolidated serverless functions.
+    // Without this, localhost incorrectly tries to import files such as
+    // /api/payments/history.ts even though all payment routes live in api/payments.ts.
+    const isPaymentsRoute=route.startsWith('payments/');
+    if(isPaymentsRoute)query.__vopPaymentRoute=route.slice('payments/'.length);
+    const modulePath = isPaymentsRoute
+      ? '/api/payments.ts'
+      : route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
 
     try {
       const module = await server.ssrLoadModule(modulePath);
