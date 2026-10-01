@@ -37,6 +37,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   const [organizationFilter,setOrganizationFilter]=useState('');
   const [typeFilter,setTypeFilter]=useState('');
   const [methodFilter,setMethodFilter]=useState('');
+  const [providerFilter,setProviderFilter]=useState('');
   const [dateFrom,setDateFrom]=useState('');
   const [dateTo,setDateTo]=useState('');
   const [minAmount,setMinAmount]=useState('');
@@ -59,7 +60,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     setLoading(true);setError('');
     try{
       const [tx,itemResult,providerResult,orgResult]=await Promise.all([
-        adminPaymentRequest<{ok:true;items:ClientPayment[]}>('transactions',{filters:{search,status,organizationId:organizationFilter,itemType:typeFilter,paymentMethod:methodFilter,dateFrom,dateTo,minAmount,maxAmount}}),
+        adminPaymentRequest<{ok:true;items:ClientPayment[]}>('transactions',{filters:{search,status,organizationId:organizationFilter,itemType:typeFilter,paymentMethod:methodFilter,provider:providerFilter,dateFrom,dateTo,minAmount,maxAmount}}),
         adminPaymentRequest<{ok:true;items:PayableItem[]}>('payable-items',{action:'list'}),
         adminPaymentRequest<{ok:true;items:PaymentProviderDescriptor[]}>('providers',{action:'list'}),
         adminApi('/api/admin/organizations',{action:'list'}),
@@ -144,7 +145,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   const exportCsv=async()=>{
     setBusy(true);setError('');
     try{
-      const result=await adminPaymentRequest<{ok:true;csv:string;filename:string}>('export',{filters:{search,status,organizationId:organizationFilter,itemType:typeFilter,paymentMethod:methodFilter,dateFrom,dateTo,minAmount,maxAmount}});
+      const result=await adminPaymentRequest<{ok:true;csv:string;filename:string}>('export',{filters:{search,status,organizationId:organizationFilter,itemType:typeFilter,paymentMethod:methodFilter,provider:providerFilter,dateFrom,dateTo,minAmount,maxAmount}});
       const blob=new Blob([result.csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);
       const link=document.createElement('a');link.href=url;link.download=result.filename;link.click();URL.revokeObjectURL(url);
     }catch(reason){setError(reason instanceof Error?reason.message:'Payment export failed.');}
@@ -188,6 +189,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
         <select value={organizationFilter} onChange={e=>setOrganizationFilter(e.target.value)}><option value="">All organizations</option>{organizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}</select>
         <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="">All payment types</option>{PAYABLE_ITEM_TYPES.map(value=><option value={value} key={value}>{typeLabel(value)}</option>)}</select>
         <select value={methodFilter} onChange={e=>setMethodFilter(e.target.value)}><option value="">All methods</option>{(['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[]).map(value=><option value={value} key={value}>{paymentMethodLabel(value)}</option>)}</select>
+        <select value={providerFilter} onChange={e=>setProviderFilter(e.target.value)}><option value="">All providers</option>{providers.map(provider=><option value={provider.key} key={provider.key}>{provider.key.replace(/\b\w/g,c=>c.toUpperCase())}</option>)}</select>
         <label><span className="sr-only">From date</span><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
         <label><span className="sr-only">To date</span><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         <label><span className="sr-only">Minimum amount</span><input inputMode="decimal" value={minAmount} onChange={e=>setMinAmount(e.target.value)} placeholder="Min amount"/></label>
@@ -215,6 +217,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void saveItem()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save payable item</button></section></div>}
 
     {details&&<div className="vop-payment-modal-layer"><section className="vop-payment-modal vop-transaction-details"><header><div><span>Transaction details</span><h2>{details.payment.reference}</h2></div><button onClick={()=>setDetails(null)}><X size={18}/></button></header><dl><div><dt>Payer</dt><dd>{details.payment.payerName||details.payment.payerEmail}</dd></div><div><dt>Item</dt><dd>{details.payment.description}</dd></div><div><dt>Amount</dt><dd>{details.payment.currency} {details.payment.amountDecimal}</dd></div><div><dt>Status</dt><dd>{paymentStatusLabel(details.payment.status as never)}</dd></div><div><dt>Provider</dt><dd>{details.payment.provider}</dd></div><div><dt>Provider reference</dt><dd>{details.payment.providerReference||'Pending'}</dd></div><div><dt>Webhook</dt><dd>{details.payment.webhookStatus}</dd></div><div><dt>Reconciliation</dt><dd>{details.payment.reconciliationStatus}</dd></div><div><dt>Fulfilment</dt><dd>{details.payment.fulfilmentStatus}</dd></div></dl>
+      <h3>Payment attempts</h3><div className="vop-payment-audit">{details.attempts.length?details.attempts.map((entry,index)=><div key={String(entry.id||index)}><strong>{paymentMethodLabel(String(entry.paymentMethod||'card') as PaymentMethod)} · {paymentStatusLabel(String(entry.status||'pending') as never)}</strong><span>{entry.createdAt?new Date(String(entry.createdAt)).toLocaleString():'Recorded'}</span></div>):<div><strong>No provider attempt recorded</strong><span>—</span></div>}</div>
       <h3>Audit history</h3><div className="vop-payment-audit">{details.audit.map((entry,index)=><div key={String(entry.id||index)}><strong>{String(entry.action||'Payment update').replaceAll('.',' ')}</strong><span>{entry.createdAt?new Date(String(entry.createdAt)).toLocaleString():'Recorded'}</span></div>)}</div>
       <button className="btn btn-outline vop-payment-submit" onClick={()=>void reconcile(details.payment.id)} disabled={busy}><RefreshCw size={15}/>Verify with provider</button></section></div>}
   </div>;
