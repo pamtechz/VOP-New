@@ -433,13 +433,26 @@ export default async function handler(
     }
 
     const policyOrganizationId=candidateGuideOrganizationId||organizationId;
-    const settingsRef = policyOrganizationId ? db.doc(`organizations/${policyOrganizationId}/settings/settings`) : db.doc('system/settings');
-    const settingsSnapshot = await settingsRef.get();
-    const settingsData = settingsSnapshot.data() || {};
+    // Submission must use the same settings inheritance as startQuiz:
+    // platform defaults remain effective unless the organization explicitly
+    // overrides a key. Previously, any organization settings document masked
+    // the platform pass mark and caused a false 503 during submission.
+    const [platformSettingsSnap,scopedSettingsSnap]=await Promise.all([
+      db.doc('system/settings').get(),
+      policyOrganizationId
+        ?db.doc(`organizations/${policyOrganizationId}/settings/settings`).get()
+        :Promise.resolve(null),
+    ]);
+    const platformSettings=platformSettingsSnap.data()||{};
+    const scopedSettings=scopedSettingsSnap?.exists?scopedSettingsSnap.data()||{}:{};
+    const settingsData={...platformSettings,...scopedSettings};
     const policy=assessmentPolicy(lessonData,settingsData);
     const threshold=policy.threshold;
     if (threshold === null) {
-      return res.status(503).json({ error: 'The assessment pass mark is not configured.' });
+      return res.status(409).json({
+        error:'This assessment is unavailable until an administrator configures its pass mark.',
+        code:'ASSESSMENT_CONFIGURATION',
+      });
     }
     const maxAttempts=policy.maxAttempts;
     const retakeCooldownMinutes=policy.retakeCooldownMinutes;
@@ -634,9 +647,13 @@ export default async function handler(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
+    if (message === 'Server-side Firebase administration is not configured.') {
+      console.warn('VOP study server configuration is unavailable:', message);
+      return res.status(503).json({ error: message, code:'SERVER_CONFIGURATION' });
+    }
     if (message.includes('not configured')) {
       console.warn('VOP study configuration is unavailable:', message);
-      return res.status(503).json({ error: message, code:'ASSESSMENT_CONFIGURATION' });
+      return res.status(409).json({ error: message, code:'ASSESSMENT_CONFIGURATION' });
     }
     if (message.includes('Assessment attempt limit reached')) {
       return res.status(409).json({error:message,code:'ASSESSMENT_ATTEMPT_LIMIT'});
