@@ -578,7 +578,7 @@ export default async function handler(
     // Per-question correctness is retained for authorized mentor analytics only.
     // Exposing failed keys lets clients reconstruct the answer bank by probing.
     const remainingAttempts = maxAttempts > 0 ? Math.max(0, maxAttempts - policyResult.attemptsUsed) : null;
-    const retryAt = !passed && retakeCooldownMinutes > 0 && remainingAttempts !== 0
+    const retryAt = retakeCooldownMinutes > 0 && remainingAttempts !== 0
       ? new Date(attemptTimeMs + retakeCooldownMinutes * 60_000).toISOString()
       : null;
     return res.status(200).json({
