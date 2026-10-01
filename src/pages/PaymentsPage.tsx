@@ -178,7 +178,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {selected&&<div className="vop-payment-modal-layer" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setSelected(null)}}>
       <section className="vop-payment-modal" role="dialog" aria-modal="true" aria-labelledby="vop-payment-title">
         <header><div><span>Secure checkout</span><h2 id="vop-payment-title">{selected.name}</h2></div><button onClick={()=>setSelected(null)} disabled={busy} aria-label="Close">×</button></header>
-        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Provider</dt><dd>Lenco</dd></div></dl>
+        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}<div><dt>Provider</dt><dd>Lenco</dd></div></dl>
         {!lenco?<div className="vop-payment-alert danger"><XCircle size={17}/>Payment processing is not configured yet.</div>:<>
           <fieldset><legend>Payment method</legend><div className="vop-payment-methods">
             {availableMethods.map(value=><button type="button" key={value} className={method===value?'active':''} onClick={()=>setMethod(value)} disabled={busy}>{methodIcon(value)}<span>{paymentMethodLabel(value)}</span></button>)}
