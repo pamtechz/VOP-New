@@ -43,6 +43,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [hasAttempted,setHasAttempted]=useState(previouslyAttempted);
+  const [attemptBlocked,setAttemptBlocked]=useState(false);
   const question = questions[index];
   const remainingAttempts=submission?.retakePolicy.remainingAttempts;
   const retakeAllowed=remainingAttempts!==0;
@@ -112,14 +113,16 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setStage('intro');
   };
   const startAttempt=async()=>{
-    if(!validQuiz||!validThreshold||submitting)return;
+    if(!validQuiz||!validThreshold||submitting||attemptBlocked)return;
     setSubmitting(true);setError('');
     try{
       const started=await beginQuizAttempt(guide.id,lesson.id,guide.language);
       setAttempt(started);
       setStage('quiz');
     }catch(reason){
-      setError(reason instanceof Error?reason.message:'The assessment could not be started.');
+      const message=reason instanceof Error?reason.message:'The assessment could not be started.';
+      setError(message);
+      if(/attempt limit reached|retake is available after/i.test(message))setAttemptBlocked(true);
     }finally{setSubmitting(false);}
   };
   const assessmentLabel=lesson.assessmentKind==='final_exam'
@@ -293,21 +296,21 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
             <button
               type="button"
-              disabled={!validQuiz || !validThreshold}
+              disabled={!validQuiz || !validThreshold || attemptBlocked}
               onClick={() => void startAttempt()}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.85rem 2rem',
-                background: !validQuiz || !validThreshold ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
-                color: !validQuiz || !validThreshold ? 'var(--text-muted)' : '#fff',
+                background: !validQuiz || !validThreshold || attemptBlocked ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
+                color: !validQuiz || !validThreshold || attemptBlocked ? 'var(--text-muted)' : '#fff',
                 border: 'none', borderRadius: '9999px',
                 fontWeight: 800, fontSize: '0.9rem',
-                cursor: !validQuiz || !validThreshold ? 'not-allowed' : 'pointer',
-                boxShadow: !validQuiz || !validThreshold ? 'none' : '0 4px 14px rgba(0,45,114,0.35)',
+                cursor: !validQuiz || !validThreshold || attemptBlocked ? 'not-allowed' : 'pointer',
+                boxShadow: !validQuiz || !validThreshold || attemptBlocked ? 'none' : '0 4px 14px rgba(0,45,114,0.35)',
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?'Starting…':hasAttempted?'Retake Quiz':'Begin Test'}
+              {submitting?'Starting…':attemptBlocked?'Attempt unavailable':hasAttempted?'Retake Quiz':'Begin Test'}
               <ChevronRight size={18} />
             </button>
           </div>
