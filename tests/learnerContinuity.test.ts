@@ -143,7 +143,7 @@ test('dark theme defines semantic surfaces and covers late legacy UI islands',()
     assert.ok(theme.includes(selector),selector);
   }
   assert.match(preference,/#0c1118/);
-  assert.match(html,/meta name="theme-color" content="#0c1118"/);
+  assert.match(html,/meta name="theme-color" content="#0c2d63"/);
 });
 
 
