@@ -144,7 +144,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           maxHeight: '92dvh',
           overflowY: 'auto',
           borderRadius: '1.5rem',
-          background: '#fff',
+          background: 'var(--bg-card)',
           boxShadow: '0 25px 60px rgba(0,0,0,0.22)',
           display: 'flex',
           flexDirection: 'column',
@@ -194,7 +194,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
         {/* Quiz progress bar (visible during quiz stage) */}
         {stage === 'quiz' && (
-          <div style={{ background: '#f8fafc', padding: '0.6rem 1.25rem', borderBottom: '1px solid #e2e8f0' }}>
+          <div data-surface="progress" style={{ background: 'var(--bg-card)', padding: '0.6rem 1.25rem', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
               <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
                 Question {index + 1} of {questions.length}
@@ -203,7 +203,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 {remainingSeconds!==null?`${Math.floor(remainingSeconds/60)}:${String(remainingSeconds%60).padStart(2,'0')} remaining · `:''}{progressPercent}% done
               </span>
             </div>
-            <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
+            <div style={{ height: '6px', background: 'var(--border-strong)', borderRadius: '9999px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${((index) / questions.length) * 100}%`,
@@ -228,7 +228,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               <Trophy size={42} color="#d97706" />
             </div>
 
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.5rem' }}>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
               Ready for the Assessment?
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
@@ -236,7 +236,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             </p>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
               This {assessmentLabel.toLowerCase()} has{' '}
-              <strong style={{ color: '#0f172a' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.
+              <strong style={{ color: 'var(--text-primary)' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.
               {' '}Pass mark:{' '}
               <strong style={{ color: '#0f172a' }}>
                 {validThreshold ? `${threshold}%` : 'Not configured'}
@@ -298,8 +298,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.85rem 2rem',
-                background: !validQuiz || !validThreshold ? '#e2e8f0' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
-                color: !validQuiz || !validThreshold ? '#94a3b8' : '#fff',
+                background: !validQuiz || !validThreshold ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
+                color: !validQuiz || !validThreshold ? 'var(--text-muted)' : '#fff',
                 border: 'none', borderRadius: '9999px',
                 fontWeight: 800, fontSize: '0.9rem',
                 cursor: !validQuiz || !validThreshold ? 'not-allowed' : 'pointer',
@@ -316,13 +316,13 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         {/* QUIZ STAGE */}
         {stage === 'quiz' && validQuiz && question && (
           <div style={{ padding: '1.5rem 1.5rem 1.75rem', flex: 1 }}>
-            <div style={{
-              background: '#f8fafc', borderRadius: '1rem', padding: '1.25rem',
-              marginBottom: '1.5rem', border: '1px solid #e2e8f0',
+            <div data-surface="question" style={{
+              background: 'var(--bg-elevated)', borderRadius: '1rem', padding: '1.25rem',
+              marginBottom: '1.5rem', border: '1px solid var(--border-subtle)',
             }}>
               <h3 style={{
                 fontSize: '1.05rem', fontWeight: 700,
-                color: '#0f172a', lineHeight: 1.55,
+                color: 'var(--text-primary)', lineHeight: 1.55,
               }}>
                 {question.question}
               </h3>
@@ -345,14 +345,14 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                     style={{
                       display: 'flex', alignItems: 'center', gap: '0.75rem',
                       padding: '0.9rem 1rem',
-                      border: selected ? '2px solid #002d72' : '1.5px solid #e2e8f0',
+                      border: selected ? '2px solid #3b82f6' : '1.5px solid var(--border-strong)',
                       borderRadius: '0.85rem',
-                      background: selected ? '#eff6ff' : '#fff',
+                      background: selected ? 'var(--bg-elevated)' : 'var(--bg-card)',
                       cursor: answered ? (selected ? 'default' : 'not-allowed') : 'pointer',
                       textAlign: 'left',
                       fontWeight: selected ? 700 : 500,
                       fontSize: '0.92rem',
-                      color: selected ? '#002d72' : '#374151',
+                      color: selected ? '#60a5fa' : 'var(--text-primary)',
                       transition: 'all 0.15s',
                     }}
                   >
@@ -392,8 +392,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                   padding: '0.8rem 1.75rem',
-                  background: !Object.hasOwn(answers, index) ? '#e2e8f0' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
-                  color: !Object.hasOwn(answers, index) ? '#94a3b8' : '#fff',
+                  background: !Object.hasOwn(answers, index) ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
+                  color: !Object.hasOwn(answers, index) ? 'var(--text-muted)' : '#fff',
                   border: 'none', borderRadius: '9999px',
                   fontWeight: 700, fontSize: '0.88rem',
                   cursor: submitting || !Object.hasOwn(answers, index) ? 'not-allowed' : 'pointer',
@@ -537,9 +537,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 type="button"
                 onClick={onClose}
                 style={{
-                  padding: '0.8rem', border: '1.5px solid #e2e8f0',
-                  borderRadius: '9999px', background: '#f8fafc',
-                  color: '#475569', fontWeight: 600, fontSize: '0.88rem',
+                  padding: '0.8rem', border: '1.5px solid var(--border-strong)',
+                  borderRadius: '9999px', background: 'var(--bg-card)',
+                  color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.88rem',
                   cursor: 'pointer',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                 }}
