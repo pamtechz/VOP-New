@@ -17,11 +17,12 @@ interface QuizModalProps {
   passThreshold: number;
   maxAttempts?: number;
   retakeCooldownMinutes?: number;
+  previouslyAttempted?: boolean;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
   lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false, passThreshold,
-  maxAttempts = 0, retakeCooldownMinutes = 0,
+  maxAttempts = 0, retakeCooldownMinutes = 0, previouslyAttempted = false,
 }) => {
   const questions = lesson.questions ?? [];
   const previewThreshold = Number(lesson.assessmentPassThreshold || 0) || passThreshold;
@@ -42,6 +43,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const question = questions[index];
+  const remainingAttempts=submission?.retakePolicy.remainingAttempts;
+  const retakeAllowed=remainingAttempts!==0;
+  const hasAttempted=previouslyAttempted
+    || (attempt?.assessmentPolicy.attemptsUsed ?? 0)>1
+    || (submission?.retakePolicy.attemptsUsed ?? 0)>1;
 
   useEffect(()=>{
     const expiresAt=attempt?.expiresAt;
@@ -300,7 +306,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?'Starting…':'Begin Test'}
+              {submitting?'Starting…':hasAttempted?'Retake Quiz':'Begin Test'}
               <ChevronRight size={18} />
             </button>
           </div>
@@ -442,44 +448,53 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
             <p role="status" style={{ color:'var(--text-muted)',fontSize:'0.9rem',marginBottom:'1.5rem' }}>
               {submission.feedbackMode==='none'
-                ?'Your attempt has been securely recorded. Results are not shown under this assessment\'s feedback policy.'
+                ?remainingAttempts===0
+                  ?'Your attempt has been securely recorded. The configured attempt limit has been reached.'
+                  :submission.retakePolicy.retryAt&&!retakeReady
+                    ?`Your attempt has been securely recorded. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
+                    :'Your attempt has been securely recorded. You may retake this quiz under the configured policy.'
                 :Number(score)>=threshold
-                  ?`You met the required ${threshold}% pass mark.`
-                  :submission.retakePolicy.remainingAttempts===0
+                  ?remainingAttempts===0
+                    ?`You met the required ${threshold}% pass mark. The configured attempt limit has been reached.`
+                    :submission.retakePolicy.retryAt&&!retakeReady
+                      ?`You met the required ${threshold}% pass mark. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
+                      :`You met the required ${threshold}% pass mark. You may retake this quiz.`
+                  :remainingAttempts===0
                     ?`The pass mark is ${threshold}%. Your configured attempt limit has been reached.`
                     :submission.retakePolicy.retryAt&&!retakeReady
                       ?`The pass mark is ${threshold}%. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
-                      :`The pass mark is ${threshold}%. A retake is available under your organization's policy.`}
+                      :`The pass mark is ${threshold}%. You may retake this quiz.`}
             </p>
             {submission.feedbackMode==='after_submit'&&submission.explanations?.some(Boolean)&&<div className="vop-assessment-explanations">
               <strong>Review notes</strong>
               {submission.explanations.map((text,index)=>text?<p key={index}><b>Question {index+1}:</b> {text}</p>:null)}
             </div>}
-            {submission.feedbackMode!=='none' && (score===null || Number(score)<threshold) ? <p style={{color:'var(--text-muted)',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
+            <p style={{color:'var(--text-muted)',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
               Attempt {submission?.retakePolicy.attemptsUsed || 1}
-              {submission?.retakePolicy.maxAttempts ? ` of ${submission.retakePolicy.maxAttempts}` : ''}
-              {submission?.retakePolicy.remainingAttempts !== null && submission?.retakePolicy.remainingAttempts !== undefined
-                ? ` · ${submission.retakePolicy.remainingAttempts} remaining` : ''}
+              {submission?.retakePolicy.maxAttempts ? ` of ${submission.retakePolicy.maxAttempts}` : ' · unlimited attempts'}
+              {remainingAttempts !== null && remainingAttempts !== undefined
+                ? ` · ${remainingAttempts} remaining` : ''}
               {(submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes) > 0
-                ? ` · ${submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes} minute wait` : ''}
-            </p> : null}
+                ? ` · ${submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes} minute wait` : ' · immediate retake'}
+            </p>
 
             <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '320px', margin: '0 auto' }}>
-              {submission.feedbackMode!=='none' && score!==null && Number(score)<threshold && <button
+              <button
                 type="button"
                 onClick={restart}
-                disabled={!retakeReady || submission?.retakePolicy.remainingAttempts === 0}
+                disabled={!retakeReady || !retakeAllowed}
+                className="vop-assessment-retake"
                 style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                   padding: '0.8rem', border: '1.5px solid #002d72',
                   borderRadius: '9999px', background: 'transparent',
                   color: '#002d72', fontWeight: 700, fontSize: '0.88rem',
-                  cursor: !retakeReady || submission?.retakePolicy.remainingAttempts === 0 ? 'not-allowed' : 'pointer',
-                  opacity: !retakeReady || submission?.retakePolicy.remainingAttempts === 0 ? 0.55 : 1,
+                  cursor: !retakeReady || !retakeAllowed ? 'not-allowed' : 'pointer',
+                  opacity: !retakeReady || !retakeAllowed ? 0.55 : 1,
                 }}
               >
-                <RotateCcw size={16} /> {submission?.retakePolicy.remainingAttempts === 0 ? 'Attempt Limit Reached' : retakeReady ? 'Retake Test' : 'Retake Waiting Period'}
-              </button>}
+                <RotateCcw size={16} /> {!retakeAllowed ? 'Attempt Limit Reached' : retakeReady ? 'Retake Quiz' : 'Retake Waiting Period'}
+              </button>
 
               {submission.feedbackMode!=='none' && score!==null && Number(score)>=threshold && hasNextLesson && onContinue && (
                 <button
