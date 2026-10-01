@@ -5,6 +5,10 @@
       "destination": "/api/admin?__vopRoute=:route*"
     },
     {
+      "source": "/api/payments/:route*",
+      "destination": "/api/payments?__vopPaymentRoute=:route*"
+    },
+    {
       "source": "/((?!api(?:/|$)|\\.well-known(?:/|$)).*)",
       "destination": "/index.html"
     }
@@ -13,6 +17,10 @@
     {
       "path": "/api/mentorship-cron",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/payments/reconcile-cron",
+      "schedule": "*/30 * * * *"
     }
   ],
   "headers": [
