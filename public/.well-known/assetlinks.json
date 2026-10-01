@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.sda.vop",
+      "sha256_cert_fingerprints": [
+        "DB:19:E8:14:D4:74:BE:1B:5F:15:4B:18:35:01:C8:EE:40:52:DA:B3:10:00:70:56:4E:AF:8B:4C:39:7C:1A:27"
+      ]
+    }
+  }
+]
