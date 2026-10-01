@@ -829,6 +829,46 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Financial records are server-authoritative. Browser clients must use
+    // authenticated payment APIs; no client may forge price, status, receipts,
+    // provider events, reconciliation or entitlements.
+    match /payableItems/{id} {
+      allow read, write: if false;
+    }
+    match /paymentProviderConfigs/{providerId} {
+      allow read, write: if false;
+    }
+    match /paymentTransactions/{paymentId} {
+      allow read, write: if false;
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+    match /paymentWebhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+    match /paymentReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+    match /paymentFulfilments/{paymentId} {
+      allow read, write: if false;
+    }
+    match /paymentLocks/{lockId} {
+      allow read, write: if false;
+    }
+    match /paymentRateLimits/{bucketId} {
+      allow read, write: if false;
+    }
+    match /paymentEntitlements/{entitlementId} {
+      allow read, write: if false;
+    }
+    match /programEnrollments/{enrollmentId} {
+      allow read, write: if false;
+    }
+    match /eventRegistrations/{registrationId} {
+      allow read, write: if false;
+    }
+
     match /system/certification {
       allow get: if resource.data.get('enabled', false) == true || isSuperAdmin();
       allow list: if false;
