@@ -1,4 +1,5 @@
 import { getAdminDb } from '../server/tenant.js';
+import { getPaymentProvider } from '../server/payments/providers.js';
 import {
   adminCancelRefund, adminCompleteManualRefund, adminExportTransactions, adminListTransactions,
   adminPaymentDetails, adminProviderConfig, adminReconcile, adminRequestRefund,
@@ -53,10 +54,12 @@ export default async function handler(req:Request,res:Response){
   const name=route(req);
   try{
     if(name.startsWith('webhooks/')){
-      if(req.method!=='POST'&&req.method!=='PUT')return res.status(405).json({error:'Method not allowed.'});
       const providerKey=name.slice('webhooks/'.length).replaceAll('-','_');
-      if(!['lenco','mtn_momo'].includes(providerKey))return res.status(404).json({error:'Unknown payment callback endpoint.'});
-      if(providerKey==='lenco'&&req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
+      let provider;
+      try{provider=getPaymentProvider(providerKey);}catch{return res.status(404).json({error:'Unknown payment callback endpoint.'});}
+      if(!provider.capabilities.webhooks||!provider.parseWebhook)return res.status(404).json({error:'This provider does not use a payment callback endpoint.'});
+      const allowedMethods=provider.callbackMethods||['POST'];
+      if(!allowedMethods.includes((req.method||'').toUpperCase() as 'POST'|'PUT'))return res.status(405).json({error:'Method not allowed.'});
       const result=await processProviderWebhook(getAdminDb(),providerKey,req);
       return res.status(200).json({ok:true,...result});
     }
