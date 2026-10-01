@@ -24,7 +24,7 @@ jobs:
           path: vop-rules-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
       # Pin the verified v5 action commit. A failed action download is a runner/network
       # failure, not a Firestore-rules test failure; no runner-wide JDK is modified.
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
