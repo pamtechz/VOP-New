@@ -11,8 +11,10 @@ test('light mode is the default before first paint while dark mode remains avail
   const theme=read('src/services/themePreference.ts');
   const css=read('src/theme-dark.css');
   const app=read('src/App.tsx');
-  assert.match(html,/localStorage\.getItem\('vop_theme'\) === 'light' \? 'light' : 'dark'/);
-  assert.match(theme,/return window\.localStorage\.getItem\(KEY\)==='light'\?'light':'dark'/);
+  assert.match(html,/localStorage\.getItem\('vop_theme'\) === 'dark' \? 'dark' : 'light'/);
+  assert.match(theme,/return window\.localStorage\.getItem\(KEY\)==='dark'\?'dark':'light'/);
+  assert.match(theme,/typeof window==='undefined'\)return 'light'/);
+  assert.match(html,/setAttribute\('data-theme', 'light'\)/);
   assert.match(app,/readThemePreference\(\)==='dark'/);
   assert.match(css,/\[data-theme="dark"\] \.vop-learner-shell/);
   assert.match(css,/\.vop-admin/);
