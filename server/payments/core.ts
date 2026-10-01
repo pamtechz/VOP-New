@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { FieldValue, type DocumentData, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, type DocumentData, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import {
   PAYABLE_ITEM_TYPES, PAYMENT_METHODS, PAYMENT_STATUSES,
   amountToMinor, canTransitionPaymentStatus, minorToDecimal, normalizeCurrency,
@@ -988,7 +988,7 @@ function header(req:{headers?:Record<string,string|string[]|undeexport async fun
   const suppliedReference=text(event.reference);
   const suppliedProviderTransactionId=text(event.providerTransactionId);
 
-  let paymentDoc:null|FirebaseFirestore.QueryDocumentSnapshot=null;
+  let paymentDoc:null|QueryDocumentSnapshot=null;
   let reference='';
   if(suppliedReference){
     try{
