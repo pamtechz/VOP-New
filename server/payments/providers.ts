@@ -1,8 +1,8 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import {
   mapProviderStatus, minorToDecimal, paymentMethodOperator,
   type PaymentMethod, type PaymentStatus,
 } from '../../shared/payments.js';
+import { verifyLencoWebhookSignature } from './lencoSignature.js';
 
 export interface ProviderPaymentRequest {
   reference:string;
@@ -212,13 +212,7 @@ class LencoProvider implements PaymentProviderAdapter{
   }
 
   verifyWebhook(rawBody:Buffer,signature:string){
-    const token=lencoApiToken();
-    const supplied=text(signature).toLowerCase();
-    if(!token||!/^[a-f0-9]{128}$/.test(supplied))return false;
-    const webhookHashKey=createHash('sha256').update(token).digest('hex');
-    const expected=createHmac('sha512',webhookHashKey).update(rawBody).digest('hex');
-    const a=Buffer.from(expected,'hex'),b=Buffer.from(supplied,'hex');
-    return a.length===b.length&&timingSafeEqual(a,b);
+    return verifyLencoWebhookSignature(rawBody,signature,lencoApiToken());
   }
 }
 
