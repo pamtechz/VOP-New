@@ -6,7 +6,7 @@ export const PERMISSION_ROLES = [
 export const PERMISSION_RESOURCES = [
   'dashboard','organizations','users','hierarchy','curriculum','lessons','quizzes',
   'materials','radio','languages','translations','announcements','prayer',
-  'mentoring','portfolio','scripture','duels','certificates','analytics','audit','billing','settings',
+  'mentoring','portfolio','scripture','duels','certificates','analytics','audit','payments','payable_items','billing','settings',
 ] as const;
 
 export const PERMISSION_ACTIONS = [
@@ -35,7 +35,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
-    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
+    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, payments: billingRead, payable_items: ['view','read','create','update','delete','manage'], billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
   conference_admin: {
@@ -43,7 +43,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
-    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
+    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, payments: billingRead, payable_items: ['view','read','create','update','delete','manage'], billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
   district_admin: {
@@ -51,7 +51,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
-    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
+    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, payments: billingRead, payable_items: ['view','read','create','update','delete','manage'], billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
   church_admin: {
@@ -59,14 +59,14 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     hierarchy: manage, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contentManager, radio: contentManager, languages: contentManager, translations: contentManager,
     announcements: contentManager, prayer: ['view','read','create','update','delete','manage'], mentoring: ['view','read','create','update','delete','assign','manage'],
-    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, billing: billingRead, settings: ['view','read','update','manage'],
+    certificates: ['view','read','create','update','delete','manage'], analytics: read, audit: read, payments: billingRead, payable_items: ['view','read','create','update','delete','manage'], billing: billingRead, settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
   owner: {
     dashboard: read, organizations: ['view','read','update'], hierarchy: read, users: ['view','read','create','update','delete','assign','manage'],
     curriculum: contentManager, lessons: contentManager, quizzes: contentManager, materials: contentManager, radio: contentManager,
     languages: contentManager, translations: contributor, announcements: contentManager, prayer: ['view','read','create','update','delete','manage'],
-    mentoring: ['view','read','create','update','delete','assign','manage'], certificates: ['view','read','create','update','manage'], analytics: read, audit: read, billing: billingRead,
+    mentoring: ['view','read','create','update','delete','assign','manage'], certificates: ['view','read','create','update','manage'], analytics: read, audit: read, payments: billingRead, payable_items: ['view','read','create','update','delete','manage'], billing: billingRead,
     settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
@@ -74,14 +74,14 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = {
     dashboard: read, organizations: ['view','read'], hierarchy: read, users: ['view','read','create','update','delete','assign','manage'],
     curriculum: contentManager, lessons: contentManager, quizzes: contentManager, materials: contentManager, radio: contentManager,
     languages: contentManager, translations: contributor, announcements: contentManager, prayer: ['view','read','create','update','delete','manage'],
-    mentoring: ['view','read','create','update','delete','assign','manage'], certificates: ['view','read','create','update','manage'], analytics: read, audit: read, billing: billingRead,
+    mentoring: ['view','read','create','update','delete','assign','manage'], certificates: ['view','read','create','update','manage'], analytics: read, audit: read, payments: billingRead, payable_items: ['view','read','create','update','delete','manage'], billing: billingRead,
     settings: ['view','read','update','manage'],
     portfolio: portfolioEvaluator, scripture: contentManager, duels: contentManager,
   },
   editor: {
     dashboard: read, hierarchy: read, users: read, curriculum: contentManager, lessons: contentManager, quizzes: contentManager,
     materials: contributor, radio: contributor, languages: contentManager, translations: contributor, announcements: contributor,
-    prayer: read, mentoring: read, certificates: read, analytics: read, audit: read, settings: read,
+    prayer: read, mentoring: read, certificates: read, analytics: read, audit: read, payments: read, payable_items: read, settings: read,
     portfolio: read, scripture: read, duels: read,
   },
   mentor: {
