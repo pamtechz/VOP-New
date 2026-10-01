@@ -21,10 +21,10 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const state={nextCreateStatus:'pending',nextCreateError:''};
 
     providers.registerPaymentProviderForTesting({
-      key:'testpay',
+      key:'lenco',
       capabilities:{checkout:true,card:true,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
       configured(){return true;},
-      publicConfiguration(){return {key:'testpay',configured:true,environment:'test',methods:['card','airtel_money','mtn_money'],capabilities:this.capabilities};},
+      publicConfiguration(){return {key:'lenco',configured:true,environment:'test',methods:['card','airtel_money','mtn_money'],capabilities:this.capabilities};},
       async createPayment(input){
         if(state.nextCreateError){
           const message=state.nextCreateError;state.nextCreateError='';throw new Error(message);
@@ -33,7 +33,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         const providerStatus=state.nextCreateStatus;
         state.nextCreateStatus='pending';
         return {
-          provider:'testpay',providerStatus,status:providerStatus,
+          provider:'lenco',providerStatus,status:providerStatus,
           providerTransactionId:'provider-'+input.reference,
           providerReference:'ext-'+input.reference,
           settlementStatus:providerStatus==='paid'?'pending':'unknown',
@@ -49,7 +49,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
           providerStatus==='failed'?'failed':
           providerStatus==='pay-offline'?'requires_action':'pending';
         return {
-          provider:'testpay',providerStatus,status,
+          provider:'lenco',providerStatus,status,
           providerTransactionId:'provider-'+reference,providerReference:'ext-'+reference,
           settlementStatus:status==='paid'?'pending':'unknown',safeMessage:'Verified.',
           amount:override.amount||((input.amountMinor/100).toFixed(2)),
@@ -149,7 +149,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
           name,description:name+' charge',itemType,itemId,
           organizationId,scope:'organization',amount,currency:'ZMW',
           repeatable,active:true,paymentRequired:true,
-          allowedProviders:['testpay'],allowedMethods:['card'],
+          allowedProviders:['lenco'],allowedMethods:['card'],
         },
       });
       assert.equal(response.status,200,JSON.stringify(response));
@@ -159,11 +159,11 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await t.test('duplicate checkout is idempotent and client amount is never authoritative',async()=>{
       const item=await createItem('Duplicate safe charge','custom_charge','',{amount:250});
       state.nextCreateStatus='pending';
-      const first=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card',amount:1,currency:'USD'});
+      const first=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card',amount:1,currency:'USD'});
       assert.equal(first.status,200,JSON.stringify(first));
       assert.equal(first.payment.amountDecimal,'250.00');
       assert.equal(first.payment.currency,'ZMW');
-      const second=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card',amount:999999});
+      const second=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card',amount:999999});
       assert.equal(second.status,200,JSON.stringify(second));
       assert.equal(second.reused,true);
       assert.equal(second.payment.id,first.payment.id);
@@ -173,7 +173,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await t.test('successful verified programme payment creates receipt and programme/course access once',async()=>{
       const item=await createItem('Programme registration','programme_registration',programId,{amount:300});
       state.nextCreateStatus='pending';
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       assert.equal(started.payment.status,'pending');
       const verified=await call(learner,'verify',{reference:started.payment.reference});
       assert.equal(verified.status,200,JSON.stringify(verified));
@@ -191,7 +191,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('tampered provider amount is quarantined and cannot activate entitlement',async()=>{
       const item=await createItem('Amount integrity charge','custom_charge','',{amount:410});
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       verificationOverrides.set(started.payment.reference,{amount:'1.00'});
       const verified=await call(learner,'verify',{reference:started.payment.reference});
       assert.equal(verified.status,200,JSON.stringify(verified));
@@ -203,7 +203,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('unauthorized organization cannot pay another organization private charge',async()=>{
       const item=await createItem('Org A only charge','custom_charge','',{amount:50});
-      const blocked=await call(outsider,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const blocked=await call(outsider,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       assert.equal(blocked.status,400,JSON.stringify(blocked));
       assert.match(String(blocked.error||''),/not available|account/i);
       assert.equal((await db.collection('paymentTransactions').where('payerUid','==',outsider.uid).where('payableItemId','==',item.id).get()).size,0);
@@ -212,13 +212,13 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await t.test('failed and pending provider states remain non-entitled',async()=>{
       const failedItem=await createItem('Failed charge','custom_charge','',{amount:60});
       state.nextCreateStatus='failed';
-      const failed=await call(learner,'checkout',{payableItemId:failedItem.id,provider:'testpay',paymentMethod:'card'});
+      const failed=await call(learner,'checkout',{payableItemId:failedItem.id,provider:'lenco',paymentMethod:'card'});
       assert.equal(failed.payment.status,'failed');
       assert.equal((await db.doc('paymentFulfilments/'+failed.payment.id).get()).exists,false);
 
       const pendingItem=await createItem('Pending charge','custom_charge','',{amount:70});
       state.nextCreateStatus='pending';
-      const pending=await call(learner,'checkout',{payableItemId:pendingItem.id,provider:'testpay',paymentMethod:'card'});
+      const pending=await call(learner,'checkout',{payableItemId:pendingItem.id,provider:'lenco',paymentMethod:'card'});
       assert.equal(pending.payment.status,'pending');
       assert.equal((await db.doc('paymentFulfilments/'+pending.payment.id).get()).exists,false);
     });
@@ -226,7 +226,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await t.test('network interruption preserves an ambiguous transaction for later reconciliation',async()=>{
       const item=await createItem('Network recovery charge','custom_charge','',{amount:80});
       state.nextCreateError='The payment provider timed out. The transaction will be reconciled automatically.';
-      const ambiguous=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const ambiguous=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       assert.equal(ambiguous.status,200,JSON.stringify(ambiguous));
       assert.equal(ambiguous.payment.status,'pending');
       assert.equal(ambiguous.payment.reconciliationStatus,'pending');
@@ -240,7 +240,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('verified event payment registers the learner',async()=>{
       const item=await createItem('Event registration','event_registration',eventId,{amount:95});
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       const verified=await call(learner,'verify',{reference:started.payment.reference});
       assert.equal(verified.payment.status,'paid');
       const registrations=await db.collection('eventRegistrations').where('uid','==',learner.uid).where('eventId','==',eventId).get();
@@ -250,7 +250,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('verified subscription payment activates plan with payment provenance',async()=>{
       const item=await createItem('Organization subscription','organization_subscription',planId,{amount:99});
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       const verified=await call(learner,'verify',{reference:started.payment.reference});
       assert.equal(verified.payment.status,'paid');
       const subscription=(await db.doc('organizations/'+orgA+'/subscription/current').get()).data();
@@ -265,7 +265,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('signed webhook is idempotent and invalid webhook is rejected',async()=>{
       const item=await createItem('Webhook charge','custom_charge','',{amount:120});
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'testpay',paymentMethod:'card'});
+      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
       const body={event:'collection.successful',data:{reference:started.payment.reference,lencoReference:'ext-'+started.payment.reference,status:'successful',completedAt:'2026-10-01T12:00:00Z'}};
       const invalid=await webhook(body,'bad');
       assert.equal(invalid.status,401,JSON.stringify(invalid));
