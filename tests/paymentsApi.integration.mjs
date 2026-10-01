@@ -119,6 +119,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await db.doc('organizations/'+orgB).set({id:orgB,name:'Payment Org B',status:'active'});
     const admin=await identity('payment-super',{role:'super_admin',membershipRole:''});
     const learner=await identity('payment-learner',{organizationId:orgA,organizationRole:'learner'});
+    const subscriptionLearner=await identity('payment-subscription-learner',{organizationId:orgA,organizationRole:'learner'});
+    const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
     const outsider=await identity('payment-outsider',{organizationId:orgB,organizationRole:'learner'});
 
     const guideId='paid-guide';
@@ -250,8 +252,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('verified subscription payment activates plan with payment provenance',async()=>{
       const item=await createItem('Organization subscription','organization_subscription',planId,{amount:99});
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
-      const verified=await call(learner,'verify',{reference:started.payment.reference});
+      const started=await call(subscriptionLearner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
+      assert.equal(started.status,200,JSON.stringify(started));
+      const verified=await call(subscriptionLearner,'verify',{reference:started.payment.reference});
       assert.equal(verified.payment.status,'paid');
       const subscription=(await db.doc('organizations/'+orgA+'/subscription/current').get()).data();
       assert.equal(subscription?.status,'active');
@@ -265,7 +268,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     await t.test('signed webhook is idempotent and invalid webhook is rejected',async()=>{
       const item=await createItem('Webhook charge','custom_charge','',{amount:120});
-      const started=await call(learner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
+      const started=await call(webhookLearner,'checkout',{payableItemId:item.id,provider:'lenco',paymentMethod:'card'});
+      assert.equal(started.status,200,JSON.stringify(started));
       const body={event:'collection.successful',data:{reference:started.payment.reference,lencoReference:'ext-'+started.payment.reference,status:'successful',completedAt:'2026-10-01T12:00:00Z'}};
       const invalid=await webhook(body,'bad');
       assert.equal(invalid.status,401,JSON.stringify(invalid));
