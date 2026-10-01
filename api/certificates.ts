@@ -2,9 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { configuredPassThreshold } from '../shared/studyValidation.js';
-import { verifiedAssessmentAverage } from '../shared/graduationEvidence.js';
-import { hasRequiredFinalExam } from '../shared/curriculumStructure.js';
+import { awardApprovedCertificate } from '../server/certificateAward.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -16,8 +14,6 @@ function safe(data:Record<string,unknown>){return {id:String(data.id??''),certif
 function publicStatus(id:string,data:Record<string,unknown>){return {id,certificateNumber:String(data.certificateNumber??''),status:String(data.status??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??'')};}
 function publicConfig(data:Record<string,unknown>){return {certificateTitle:String(data.certificateTitle??''),certificateBodyText:String(data.certificateBodyText??''),issuerName:String(data.issuerName??''),issuerSubtitle:String(data.issuerSubtitle??''),courseName:String(data.courseName??''),directorName:String(data.directorName??''),directorTitle:String(data.directorTitle??''),signatureUrl:String(data.signatureUrl??''),sealUrl:String(data.sealUrl??''),logoUrl:String(data.logoUrl??''),backgroundUrl:String(data.backgroundUrl??''),verificationEnabled:data.verificationEnabled===true,verificationBaseUrl:String(data.verificationBaseUrl??''),template:data.template&&typeof data.template==='object'?data.template:null};}
 function queryValue(req:Request,key:string){const v=req.query?.[key];return Array.isArray(v)?v[0]??'':v??'';}
-function completionKey(language:string,guideId:string,lessonId:string){return language+':'+guideId+':'+lessonId;}
-function certificateDocumentId(candidateId:string,language:string,organizationId:string){return 'cert-'+createHash('sha256').update(organizationId+':'+candidateId+':'+language).digest('hex').slice(0,48);}
 function hierarchyScopeField(role:string){
  if(role==='union_admin') return 'unionId';
  if(role==='conference_admin') return 'conferenceId';
@@ -26,56 +22,6 @@ function hierarchyScopeField(role:string){
  return '';
 }
 function publicCertificate(id:string,data:Record<string,unknown>){return {...safe({...data,id})};}
-function portfolioRevision(value:Record<string,unknown>){const revision=Number(value.revision);return Number.isInteger(revision)&&revision>=1?revision:1;}
-function requiredSignatures(value:unknown){const count=Number(value);return Number.isInteger(count)&&count>=1&&count<=20?count:1;}
-function portfolioFingerprint(data:Record<string,unknown>,requirementIds:string[]){
- const ids=new Set(requirementIds);
- const pick=(value:unknown)=>Array.isArray(value)?value.filter(item=>item&&typeof item==='object'&&ids.has(String((item as Record<string,unknown>).requirementId||''))):[];
- return createHash('sha256').update(JSON.stringify({activities:pick(data.activities),evidence:pick(data.evidence),signoffs:pick(data.signoffs)})).digest('hex');
-}
-async function certificationPortfolioEvidence(
- db:FirebaseFirestore.Firestore,candidateId:string,organizationId:string,requirementIds:string[],
-){
- const portfolioRef=db.doc('masterGuidePortfolios/'+candidateId);
- if(!requirementIds.length)return {portfolioRef,fingerprint:'',reasons:[] as string[],snapshot:[] as Array<Record<string,unknown>>};
- const [portfolio,...requirements]=await Promise.all([
-   portfolioRef.get(),
-   ...requirementIds.map(id=>db.doc('masterGuideRequirements/'+id).get()),
- ]);
- const data=portfolio.data()||{};
- const activities=Array.isArray(data.activities)?data.activities as Array<Record<string,unknown>>:[];
- const evidence=Array.isArray(data.evidence)?data.evidence as Array<Record<string,unknown>>:[];
- const signoffs=Array.isArray(data.signoffs)?data.signoffs as Array<Record<string,unknown>>:[];
- const reasons:string[]=[];const snapshot:Array<Record<string,unknown>>=[];
- for(let index=0;index<requirements.length;index++){
-   const requirement=requirements[index],requirementId=requirementIds[index],value=requirement.data()||{};
-   const title=String(value.title||'Required portfolio evidence');
-   const requirementOrg=String(value.organizationId||'');
-   const platformRequirement=!requirementOrg&&String(value.scope||'')==='platform';
-   if(!requirement.exists||value.status!=='published'||(!platformRequirement&&requirementOrg!==organizationId)){
-     reasons.push(title+': the required portfolio rule is no longer published for this organization.');continue;
-   }
-   const submitted=activities.filter(item=>String(item.requirementId||'')===requirementId&&item.status==='submitted');
-   const revision=submitted.length?Math.max(...submitted.map(portfolioRevision)):0;
-   if(!revision){reasons.push(title+': submit the required activity.');continue;}
-   const currentEvidence=evidence.filter(item=>String(item.requirementId||'')===requirementId&&portfolioRevision(item)===revision);
-   const decisions=signoffs.filter(item=>String(item.requirementId||'')===requirementId&&portfolioRevision(item)===revision);
-   const change=decisions.find(item=>item.decision==='changes_requested'||item.decision==='rejected');
-   const required=requiredSignatures(value.requiredSignatures);
-   const approvers=[...new Set(decisions.filter(item=>item.decision==='approved').map(item=>String(item.evaluatorId||item.id||'')).filter(Boolean))];
-   if(change){
-     const note=String(change.notes||'').trim();
-     reasons.push(title+': changes were requested'+(note?' — '+note:'')+'.');
-   } else {
-     if(value.evidenceRequired!==false&&!currentEvidence.length)reasons.push(title+': add the required supporting evidence.');
-     if(approvers.length<required)reasons.push(title+`: ${required-approvers.length} more evaluator signature${required-approvers.length===1?' is':'s are'} required.`);
-   }
-   snapshot.push({requirementId,title,revision,evidenceRequired:value.evidenceRequired!==false,
-     evidenceCount:currentEvidence.length,requiredSignatures:required,approvalCount:approvers.length,evaluatorIds:approvers});
- }
- return {portfolioRef,fingerprint:portfolioFingerprint(data,requirementIds),reasons,snapshot};
-}
-
 async function mine(req:Request,res:Response){
  const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
  const decoded=await getAuth(admin()).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(admin());
@@ -124,94 +70,43 @@ async function verify(req:Request,res:Response){
 }
 
 async function issue(req:Request,res:Response){
- const firebaseAdmin=admin();const authorization=header(req,'authorization');if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
- const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());const db=getFirestore(firebaseAdmin);const actor=await db.doc('users/'+decoded.uid).get();
+ const firebaseAdmin=admin();
+ const authorization=header(req,'authorization');
+ if(!authorization.startsWith('Bearer '))return res.status(401).json({error:'Sign in first.'});
+ const decoded=await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());
+ const db=getFirestore(firebaseAdmin);
+ const actor=await db.doc('users/'+decoded.uid).get();
  if(!actor.exists)return res.status(403).json({error:'VOP account profile was not found.'});
  const actorData=actor.data()||{};
- const { canPermissionForProfile }=await import('../server/permissions.js');
- const hasCertPermission=await canPermissionForProfile(db,actorData,'certificates','manage');
- if(!hasCertPermission)return res.status(403).json({error:'You do not have permission to issue official certificates.'});
- const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
- if(!candidateId||candidateId.length>128||candidateId.includes('/'))return res.status(400).json({error:'A valid candidate ID is required.'});
- const [candidateSnapshot,configSnapshot,requestsSnapshot]=await Promise.all([db.doc('users/'+candidateId).get(),db.doc('system/certification').get(),db.collection('graduationRequests').where('candidateId','==',candidateId).limit(50).get()]);
+ const {canPermissionForProfile}=await import('../server/permissions.js');
+ if(!(await canPermissionForProfile(db,actorData,'certificates','manage'))){
+   return res.status(403).json({error:'You do not have permission to issue official certificates.'});
+ }
+ const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
+ const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
+ const guideId=typeof body.guideId==='string'?body.guideId.trim():'';
+ if(!candidateId||candidateId.length>128||candidateId.includes('/')){
+   return res.status(400).json({error:'A valid candidate ID is required.'});
+ }
+ const candidateSnapshot=await db.doc('users/'+candidateId).get();
  if(!candidateSnapshot.exists)return res.status(404).json({error:'Candidate account was not found.'});
- const candidate=candidateSnapshot.data()??{},config=configSnapshot.data()??{};const organizationId=String(candidate.organizationId||'').trim();if(!organizationId)return res.status(409).json({error:'The candidate is not linked to a tenant organization.'});
+ const candidate=candidateSnapshot.data()||{};
+ const organizationId=String(candidate.organizationId||'').trim();
+ if(!organizationId)return res.status(409).json({error:'The candidate is not linked to a tenant organization.'});
  const actorRole=String(actorData.role||'');
  if(actorRole!=='super_admin'){
-  const actorOrg=String(actorData.organizationId||'').trim();
-  const hField=hierarchyScopeField(actorRole);
-  const actorNodeId=String(actorData.adminNodeId||'').trim();
-  const inScope=actorOrg===organizationId||(Boolean(hField)&&Boolean(actorNodeId)&&(String(candidate[hField]||'')===actorNodeId||String((candidate.hierarchy as Record<string,unknown>||{})[hField]||'')===actorNodeId));
-  if(!inScope)return res.status(403).json({error:'The candidate is outside your authorized tenant scope.'});
+   const actorOrg=String(actorData.organizationId||'').trim();
+   const hField=hierarchyScopeField(actorRole);
+   const actorNodeId=String(actorData.adminNodeId||'').trim();
+   const hierarchy=candidate.hierarchy&&typeof candidate.hierarchy==='object'
+     ?candidate.hierarchy as Record<string,unknown>:{};
+   const inScope=actorOrg===organizationId
+     ||(Boolean(hField)&&Boolean(actorNodeId)
+       &&(String(candidate[hField]||'')===actorNodeId||String(hierarchy[hField]||'')===actorNodeId));
+   if(!inScope)return res.status(403).json({error:'The candidate is outside your authorized tenant scope.'});
  }
- if(config.enabled!==true)return res.status(409).json({error:'Official certification is disabled in certification settings.'});
- const approved=requestsSnapshot.docs.map(s=>({id:s.id,...s.data()})).filter(x=>{const approvedAt=dateValue(x.approvedAt);return String(x.organizationId||'')===organizationId&&x.status==='approved'&&Boolean(approvedAt)&&Date.parse(approvedAt)<=Date.now();}).sort((a,b)=>Date.parse(String(dateValue(b.approvedAt)||''))-Date.parse(String(dateValue(a.approvedAt)||'')))[0];
- if(!approved)return res.status(409).json({error:'The candidate does not have an approved graduation record.'});
- if(candidate.information?.graduated!==true)return res.status(409).json({error:'The candidate is not marked as graduated.'});
- const approvedGuideId=String(approved.guideId??'').trim();if(!approvedGuideId)return res.status(409).json({error:'The approved graduation record is missing its guide reference.'});
- const matching=await db.doc(`guides/${approvedGuideId}`).get();
- const gd=matching.data()??{};
- const guideOrganizationId=String(gd.organizationId||gd.ownerOrganizationId||'').trim();
- const guideShared=gd.sharingScope==='shared'&&gd.published===true;
- if(!matching.exists||(!guideShared&&guideOrganizationId!==organizationId))return res.status(409).json({error:'The approved graduation guide is not available to the candidate organization.'});
- const lang=String(gd.language??matching.id);if(gd.published!==true||gd.archived===true||gd.certificateEligible!==true)return res.status(409).json({error:'The approved graduation guide is not currently configured as a published certificate-eligible guide.'});
- const progress=(candidate.progress&&typeof candidate.progress==='object'?candidate.progress:{}) as Record<string,unknown>;const completed=new Set(Array.isArray(progress.completedLessons)?progress.completedLessons.map(String):[]);const scores=(progress.guideScores&&typeof progress.guideScores==='object'?progress.guideScores:{}) as Record<string,unknown>;
- const orgSettingsSnapshot=await db.doc('organizations/'+organizationId+'/settings/settings').get();
- const threshold=configuredPassThreshold(config.minimumScore)??configuredPassThreshold(orgSettingsSnapshot.data()?.quizPassThreshold);if(threshold===null)return res.status(503).json({error:'The certification pass mark is not configured.'});
- const guideId=String(gd.id??matching.id),lessons=(await matching.ref.collection('lessons').get()).docs.map(d=>({...d.data(),id:d.id}));if(!lessons.length)return res.status(409).json({error:'The approved guide has no published curriculum items.'});
- const published=lessons.filter(x=>x.published===true);if(published.length!==lessons.length)return res.status(409).json({error:'The approved guide contains unpublished items and cannot be certified.'});
- const study=published.filter(x=>String(x.type??'Lesson')==='Lesson'),tests=published.filter(x=>String(x.type??'')==='Test');if(!hasRequiredFinalExam(gd,published))return res.status(409).json({error:'The required published final guide examination is missing.'});if(!study.length||!tests.length)return res.status(409).json({error:'The approved guide must contain lessons and an assessment before certification.'});
- for(const lesson of study)if(!completed.has(completionKey(lang,guideId,String(lesson.id))))return res.status(409).json({error:'The candidate has not completed all required lessons.'});
- for(const test of tests)if(!Array.isArray(test.questions)||!test.questions.length)return res.status(409).json({error:'The approved guide has an invalid assessment configuration.'});
- const attestedAverage=verifiedAssessmentAverage(tests,scores,organizationId,lang,guideId,threshold);
- if(attestedAverage===null)return res.status(409).json({error:'The candidate has not passed all required assessments.'});
- const certificationRequirementIds=Array.isArray(gd.certificationRequirementIds)
-   ? gd.certificationRequirementIds.map((value:unknown)=>String(value)).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)) : [];
- const portfolioEligibility=await certificationPortfolioEvidence(db,candidateId,organizationId,certificationRequirementIds);
- if(portfolioEligibility.reasons.length)return res.status(409).json({
-   error:'Certificate eligibility is incomplete: '+portfolioEligibility.reasons.join(' '),
-   reasons:portfolioEligibility.reasons,
- });
- const [church,district,conference,union]=await Promise.all([candidate.churchId?db.doc('churches/'+candidate.churchId).get():Promise.resolve(null),candidate.districtId?db.doc('districts/'+candidate.districtId).get():Promise.resolve(null),candidate.conferenceId?db.doc('conferences/'+candidate.conferenceId).get():Promise.resolve(null),candidate.unionId?db.doc('unions/'+candidate.unionId).get():Promise.resolve(null)]);
- const certificateRef=db.collection('certificates').doc(certificateDocumentId(candidateId,lang,organizationId)),issuedAt=FieldValue.serverTimestamp(),certificateNumber='VOP-'+new Date().getUTCFullYear()+'-'+certificateRef.id.toUpperCase();
- const documentType=String(gd.certificateDocumentType||'course').trim()||'course';
- const certificateTypeName=String(gd.certificateTypeName||config.certificateTitle||gd.title||'Official Certificate').trim();
- const courseName=String(gd.title||config.courseName||'').trim();
- const completionDate=String(candidate.information?.completionDate??candidate.information?.graduationDate??'');
- const eligibilitySnapshot={
-   organizationId,candidateId,guideId,guideTitle:String(gd.title??''),language:lang,
-   documentType,certificateTypeName,guideUpdatedAt:dateValue(gd.updatedAt),
-   requiredLessonIds:study.map(item=>String(item.id)),
-   requiredAssessmentIds:tests.map(item=>String(item.id)),
-   passThreshold:threshold,assessmentAverageScore:attestedAverage,
-   graduationRequestId:String(approved.id),graduationApprovedAt:dateValue(approved.approvedAt),
-   certificationRequirements:portfolioEligibility.snapshot,
-   completionDate,capturedAt:new Date().toISOString(),
- };
- const certificate={candidateId,organizationId,unionId:String(candidate.unionId||''),conferenceId:String(candidate.conferenceId||''),districtId:String(candidate.districtId||''),churchId:String(candidate.churchId||''),candidateName:String(candidate.displayName??''),candidateEmail:String(candidate.email??''),candidatePhotoURL:String(candidate.photoURL??''),language:lang,courseName,courseCode:String(config.courseCode??''),documentType,certificateTypeName,certificateNumber,completionDate,issuedAt,churchName:church?.exists?String(church.data()?.name??''):'',districtName:district?.exists?String(district.data()?.name??''):'',conferenceName:conference?.exists?String(conference.data()?.name??''):'',unionName:union?.exists?String(union.data()?.name??''):'',guideId,guideTitle:String(gd.title??''),assessmentAverageScore:attestedAverage,eligibilitySnapshot,issuer:{name:String(config.issuerName||''),subtitle:String(config.issuerSubtitle||''),actorUid:decoded.uid,organizationId},status:'Certified',downloadCount:0,issuedBy:decoded.uid,verificationEnabled:config.verificationEnabled===true,lifecycleHistory:[{action:'issued',at:new Date().toISOString(),by:decoded.uid}],createdAt:issuedAt,updatedAt:issuedAt};
- const candidateRef=db.doc(`users/${candidateId}`);
- const approvedRequestRef=db.doc(`graduationRequests/${String(approved.id)}`);
- const result=await db.runTransaction(async tx=>{
-   const existing=await tx.get(certificateRef);
-   if(existing.exists)return {created:false};
-   const candidateFresh=await tx.get(candidateRef);
-   if(!candidateFresh.exists||String(candidateFresh.data()?.organizationId||'')!==organizationId||candidateFresh.data()?.information?.graduated!==true) throw new Error('The candidate graduation state changed before certificate issuance.');
-   const freshProgress=candidateFresh.data()?.progress || {};
-   const freshGrades=freshProgress.guideScores && typeof freshProgress.guideScores==='object' ? freshProgress.guideScores as Record<string,unknown> : {};
-   if(verifiedAssessmentAverage(tests,freshGrades,organizationId,lang,guideId,threshold)!==attestedAverage) throw new Error('The candidate assessment scores changed before certificate issuance.');
-   const requestFresh=await tx.get(approvedRequestRef);
-   if(!requestFresh.exists||requestFresh.data()?.status!=='approved'||String(requestFresh.data()?.organizationId||'')!==organizationId||String(requestFresh.data()?.guideId||'')!==approvedGuideId) throw new Error('The approved graduation record changed before certificate issuance.');
-   if(certificationRequirementIds.length){
-     const portfolioFresh=await tx.get(portfolioEligibility.portfolioRef);
-     if(portfolioFingerprint(portfolioFresh.data()||{},certificationRequirementIds)!==portfolioEligibility.fingerprint){
-       throw new Error('The candidate portfolio evidence changed before certificate issuance.');
-     }
-   }
-   tx.create(certificateRef,certificate);
-   return {created:true};
- });
- const saved=await certificateRef.get();
- return res.status(result.created?201:200).json({ok:true,created:result.created,certificate:{id:saved.id,...saved.data()}});
+ const result=await awardApprovedCertificate(db,candidateId,decoded.uid,guideId);
+ return res.status(result.created?201:200).json({ok:true,...result});
 }
 
 async function lifecycle(req:Request,res:Response,action:'revoke'|'replace'){
