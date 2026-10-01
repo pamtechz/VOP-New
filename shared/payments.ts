@@ -4,6 +4,9 @@ export const PAYMENT_STATUSES = [
 ] as const;
 export type PaymentStatus = typeof PAYMENT_STATUSES[number];
 
+export const REFUND_STATUSES = ['requested','provider_pending','manual_action_required','completed','failed','cancelled'] as const;
+export type RefundStatus = typeof REFUND_STATUSES[number];
+
 export const PAYABLE_ITEM_TYPES = [
   'programme_registration','event_registration','organization_subscription',
   'training','material','ministry_service','donation','custom_charge',
@@ -50,6 +53,29 @@ export interface PayableItem {
   updatedAt?:unknown;
 }
 
+export interface PaymentRefund {
+  id:string;
+  paymentId:string;
+  paymentReference:string;
+  refundReference:string;
+  organizationId:string;
+  payerUid:string;
+  currency:string;
+  amountMinor:number;
+  amountDecimal:string;
+  reason:string;
+  provider:string;
+  status:RefundStatus;
+  providerStatus:string;
+  providerRefundId:string;
+  providerRefundReference:string;
+  requestedBy:string;
+  completedBy?:string;
+  createdAt?:unknown;
+  completedAt?:unknown;
+  updatedAt?:unknown;
+}
+
 export interface PaymentTransaction {
   id:string;
   reference:string;
@@ -81,6 +107,8 @@ export interface PaymentTransaction {
   settlementStatus:SettlementStatus;
   fulfilmentStatus:FulfilmentStatus;
   receiptId:string;
+  refundedMinor?:number;
+  refundStatus?:RefundStatus|'none';
   createdAt?:unknown;
   initiatedAt?:unknown;
   paidAt?:unknown;
