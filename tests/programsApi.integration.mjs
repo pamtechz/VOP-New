@@ -17,6 +17,7 @@ const vite=await createServer({configFile:false,
   server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
 after(async()=>vite.close());
 const {default:content}=await vite.ssrLoadModule('/api_handlers/admin/content.ts');
+const {default:candidates}=await vite.ssrLoadModule('/api_handlers/admin/candidates.ts');
 
 async function identity(name,orgId,role='owner'){
   const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
@@ -39,6 +40,18 @@ async function identity(name,orgId,role='owner'){
 async function call(user,body){
   let status=200,value;
   await content({
+    method:'POST',
+    headers:{authorization:'Bearer '+user.token},
+    body,
+  },{
+    status(code){status=code;return this;},
+    json(result){value=result;return this;},
+  });
+  return {status,value};
+}
+async function candidateCall(user,body){
+  let status=200,value;
+  await candidates({
     method:'POST',
     headers:{authorization:'Bearer '+user.token},
     body,
@@ -221,6 +234,18 @@ await test('platform-published curriculum is inherited system-wide by organizati
   assert.ok(visibleGuide,'organization course selector should include system-wide guide');
   assert.equal(visibleGuide.published,true);
   assert.equal(visibleGuide.canEdit,false);
+
+  const enrollment=await candidateCall(outsider,{
+    action:'enroll',organizationId:b,guideId:platformGuide,
+    displayName:'Platform Course Candidate',
+    email:'platform-course-candidate@vop-test.invalid',
+    password:'local-emulator-only',
+  });
+  assert.equal(enrollment.status,200,JSON.stringify(enrollment.value));
+  assert.equal(enrollment.value.candidate.organizationId,b);
+  assert.equal(enrollment.value.candidate.guideId,platformGuide);
+  const enrollmentId=b+'_'+enrollment.value.candidate.uid+'_'+platformGuide;
+  assert.equal((await db.doc('courseEnrollments/'+enrollmentId).get()).data()?.status,'active');
 });
 
 const notesGuide='program-test-notes-guide';
