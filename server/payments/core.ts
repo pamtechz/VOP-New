@@ -975,15 +975,22 @@ export async function processProviderWebhook(
   const event=provider.parseWebhook(req);
   const reference=safeReference(event.reference);
   const eventType=text(event.eventType)||'provider.event';
-  const eventId=hash(providerKey+':'+eventType+':'+reference+':'+text(event.providerReference)+':'+text(event.providerStatus)+':'+text(event.completedAt));
+  // Dedupe on provider + event type + immutable VOP reference. Callback body
+  // status/reference fields are untrusted and must not allow a caller to force
+  // repeated provider lookups by changing arbitrary payload values.
+  const eventId=hash(providerKey+':'+eventType+':'+reference);
   const eventRef=db.doc('paymentWebhookEvents/'+eventId);
   const paymentDoc=await loadPaymentByReference(db,reference);
   if(!paymentDoc){
-    await eventRef.set({
-      provider:providerKey,eventType,reference,status:'orphaned',
-      providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
-      receivedAt:FieldValue.serverTimestamp(),
-    },{merge:false});
+    // Signed providers may retain orphan delivery evidence. Unsigned providers
+    // such as MTN are discarded to prevent public callback storage abuse.
+    if(event.authenticated){
+      await eventRef.set({
+        provider:providerKey,eventType,reference,status:'orphaned',authenticated:true,
+        providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
+        receivedAt:FieldValue.serverTimestamp(),
+      },{merge:false});
+    }
     return {duplicate:false,orphaned:true};
   }
   const payment=paymentDoc.data()||{};
@@ -999,6 +1006,7 @@ export async function processProviderWebhook(
     if(existing.exists){duplicate=true;return;}
     tx.create(eventRef,{
       provider:providerKey,eventType,reference,paymentId:paymentDoc.id,
+      authenticated:event.authenticated===true,
       providerStatus:text(event.providerStatus),providerReference:text(event.providerReference),
       providerTransactionId:text(event.providerTransactionId),
       receivedAt:FieldValue.serverTimestamp(),processingStatus:'received',
