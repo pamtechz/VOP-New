@@ -4,7 +4,7 @@ import { initializeApp, getApps, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createServer } from 'vite';
 
-test('graduation: learner self-submission and official issuance require verified scores', async t => {
+test('graduation: completion auto-queues review and final approval auto-awards the verified certificate', async t => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator required; never run against production.');
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST, 'Auth emulator required; never run against production.');
   if (process.env.FIREBASE_ADMIN_PROJECT_ID && process.env.FIREBASE_ADMIN_PROJECT_ID !== 'demo-vop-security-rules') {
@@ -17,6 +17,7 @@ test('graduation: learner self-submission and official issuance require verified
   try {
     const { default: graduation } = await vite.ssrLoadModule('/api_handlers/admin/graduations.ts');
     const { default: certificates } = await vite.ssrLoadModule('/api/certificates.ts');
+    const { ensureAutomaticGraduationReview } = await vite.ssrLoadModule('/server/graduationAutomation.ts');
     async function identity(name, organizationId, membershipRole='learner') {
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
         '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
@@ -107,19 +108,23 @@ test('graduation: learner self-submission and official issuance require verified
       progress:{completedLessons:[lang+':'+guide+':lesson-one'],guideScores:scores},
     });
 
-    await t.test('learner can submit without administrative certificate creation privilege',async()=>{
-      const unauthorized=await api(certificates,candidate,{action:'issue',candidateId:candidate.uid});
+    await t.test('verified completion creates the review automatically without learner submission',async()=>{
+      const unauthorized=await api(certificates,candidate,{action:'issue',candidateId:candidate.uid,guideId:guide});
       assert.equal(unauthorized.status,403,JSON.stringify(unauthorized));
-      const submitted=await api(graduation,candidate,{
-        action:'submit',guideId:guide,averageScore:100,
-        candidateId:outsider.uid,organizationId:'org-graduation-b',
-      });
-      assert.equal(submitted.status,201,JSON.stringify(submitted));
-      assert.equal(submitted.request.candidateId,candidate.uid);
-      assert.equal(submitted.request.organizationId,org);
-      assert.equal(submitted.request.averageScore,90,'Tampered browser average must be ignored');
-      const pending=await db.doc('graduationRequests/'+submitted.request.id).get();
+      const automatic=await ensureAutomaticGraduationReview(db,candidate.uid,guide,'test:completion');
+      assert.equal(automatic.eligible,true,JSON.stringify(automatic));
+      assert.equal(automatic.created,true,JSON.stringify(automatic));
+      assert.equal(automatic.averageScore,90);
+      const pending=await db.doc('graduationRequests/'+automatic.requestId).get();
+      assert.equal(pending.exists,true);
+      assert.equal(pending.data()?.candidateId,candidate.uid);
+      assert.equal(pending.data()?.organizationId,org);
       assert.equal(pending.data()?.averageScore,90);
+      assert.equal(pending.data()?.automatic,true);
+      assert.equal(pending.data()?.source,'completion');
+      assert.equal((await db.doc('users/'+candidate.uid).get()).data()?.information?.graduating,true);
+      const duplicate=await ensureAutomaticGraduationReview(db,candidate.uid,guide,'test:completion-retry');
+      assert.equal(duplicate.created,false,'automatic completion retries must not duplicate the review');
     });
 
     await t.test('other organizations cannot decide this graduation',async()=>{
@@ -147,18 +152,15 @@ test('graduation: learner self-submission and official issuance require verified
       await request.ref.update({averageScore:100});
     });
 
-    await t.test('authorized admin approves, learner still cannot issue, admin issues verified average',async()=>{
+    await t.test('final approval stays withheld until configured evidence is complete, then auto-awards',async()=>{
       const pending=(await db.collection('graduationRequests').where('candidateId','==',candidate.uid).get()).docs[0];
-      const approval=await api(graduation,admin,{
+
+      const missingPortfolio=await api(graduation,admin,{
         action:'decision',requestId:pending.id,revision:1,decision:'approve',
       });
-      assert.equal(approval.status,200,JSON.stringify(approval));
-      assert.equal(approval.request.status,'approved');
-      assert.equal(approval.request.averageScore,90,'Approval must recompute the authoritative average.');
-      assert.equal((await api(certificates,candidate,{action:'issue',candidateId:candidate.uid})).status,403);
-      const missingPortfolio=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
       assert.equal(missingPortfolio.status,409,JSON.stringify(missingPortfolio));
       assert.match(String(missingPortfolio.error||''),/Signed ministry evidence: submit the required activity/i);
+      assert.notEqual((await pending.ref.get()).data()?.status,'approved');
 
       await db.doc('masterGuidePortfolios/'+candidate.uid).set({
         learnerId:candidate.uid,organizationId:org,
@@ -166,37 +168,51 @@ test('graduation: learner self-submission and official issuance require verified
         evidence:[{id:'evidence-1',requirementId:'cert-req',title:'Signed log',url:'https://example.org/log',revision:1}],
         signoffs:[{id:'approval-1',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-one'}],
       });
-      const oneSignature=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
+      const oneSignature=await api(graduation,admin,{
+        action:'decision',requestId:pending.id,revision:1,decision:'approve',
+      });
       assert.equal(oneSignature.status,409,JSON.stringify(oneSignature));
       assert.match(String(oneSignature.error||''),/1 more evaluator signature is required/i);
+      assert.notEqual((await pending.ref.get()).data()?.status,'approved');
+
       await db.doc('masterGuidePortfolios/'+candidate.uid).update({
         signoffs:[
           {id:'approval-1',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-one'},
           {id:'approval-2',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-two'},
         ],
       });
-      const issued=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
-      assert.equal(issued.status,201,JSON.stringify(issued));
-      assert.equal(issued.certificate.assessmentAverageScore,90);
-      assert.equal(issued.certificate.organizationId,org);
-      assert.equal(issued.certificate.documentType,'course');
-      assert.equal(issued.certificate.certificateTypeName,'Bible Correspondence Certificate');
-      assert.equal(issued.certificate.courseName,'VOP Graduation');
-      assert.equal(issued.certificate.eligibilitySnapshot.passThreshold,80);
-      assert.equal(issued.certificate.eligibilitySnapshot.assessmentAverageScore,90);
-      assert.deepEqual(new Set(issued.certificate.eligibilitySnapshot.requiredAssessmentIds),new Set(['test-one','test-two']));
-      assert.equal(issued.certificate.eligibilitySnapshot.certificationRequirements[0].requirementId,'cert-req');
-      assert.equal(issued.certificate.eligibilitySnapshot.certificationRequirements[0].approvalCount,2);
-      assert.equal(issued.certificate.eligibilitySnapshot.certificationRequirements[0].evidenceCount,1);
-      assert.equal(issued.certificate.issuer.name,'Voice of Prophecy');
-      const valid=await verifyCertificate(issued.certificate.certificateNumber);
+      const approval=await api(graduation,admin,{
+        action:'decision',requestId:pending.id,revision:1,decision:'approve',
+      });
+      assert.equal(approval.status,200,JSON.stringify(approval));
+      assert.equal(approval.request.status,'approved');
+      assert.equal(approval.request.averageScore,90,'Approval must recompute the authoritative average.');
+      assert.equal(approval.certificateAwarded,true,JSON.stringify(approval));
+      assert.ok(approval.certificate?.certificateNumber,'final approval should publish the official certificate automatically');
+      assert.equal(approval.certificate.assessmentAverageScore,90);
+      assert.equal(approval.certificate.organizationId,org);
+      assert.equal(approval.certificate.documentType,'course');
+      assert.equal(approval.certificate.certificateTypeName,'Bible Correspondence Certificate');
+      assert.equal(approval.certificate.courseName,'VOP Graduation');
+      assert.equal(approval.certificate.eligibilitySnapshot.passThreshold,80);
+      assert.equal(approval.certificate.eligibilitySnapshot.assessmentAverageScore,90);
+      assert.deepEqual(new Set(approval.certificate.eligibilitySnapshot.requiredAssessmentIds),new Set(['test-one','test-two']));
+      assert.equal(approval.certificate.eligibilitySnapshot.certificationRequirements[0].requirementId,'cert-req');
+      assert.equal(approval.certificate.eligibilitySnapshot.certificationRequirements[0].approvalCount,2);
+      assert.equal(approval.certificate.eligibilitySnapshot.certificationRequirements[0].evidenceCount,1);
+      assert.equal(approval.certificate.issuer.name,'Voice of Prophecy');
+
+      assert.equal((await api(certificates,candidate,{action:'issue',candidateId:candidate.uid,guideId:guide})).status,403,
+        'learner must never be able to invoke privileged issuance');
+      const duplicate=await api(certificates,admin,{action:'issue',candidateId:candidate.uid,guideId:guide});
+      assert.equal(duplicate.status,200,JSON.stringify(duplicate));
+      assert.equal(duplicate.created,false);
+
+      const valid=await verifyCertificate(approval.certificate.certificateNumber);
       assert.equal(valid.status,200,JSON.stringify(valid));
       assert.equal(valid.verified,true);
       assert.equal(valid.state,'valid');
       assert.equal(valid.certificate.certificateTypeName,'Bible Correspondence Certificate');
-      const duplicate=await api(certificates,admin,{action:'issue',candidateId:candidate.uid});
-      assert.equal(duplicate.status,200,JSON.stringify(duplicate));
-      assert.equal(duplicate.created,false);
     });
 
     await t.test('certificate lifecycle exposes valid, replaced, revoked and unknown states without cross-tenant mutation',async()=>{
