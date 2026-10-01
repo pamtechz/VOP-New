@@ -1,9 +1,11 @@
 import { getAdminDb } from '../server/tenant.js';
 import {
-  adminExportTransactions, adminListTransactions, adminPaymentDetails, adminProviderConfig,
-  adminReconcile, configuredPaymentStatuses, createCheckout, deletePayableItem,
-  listPayableItems, listPaymentProviders, paymentContext, paymentHistory, paymentStatusForUser,
-  processProviderWebhook, receiptForUser, reconcilePendingPayments, upsertPayableItem,
+  adminCancelRefund, adminCompleteManualRefund, adminExportTransactions, adminListTransactions,
+  adminPaymentDetails, adminProviderConfig, adminReconcile, adminRequestRefund,
+  configuredPaymentStatuses, createCheckout, deletePayableItem, listPayableItems,
+  listPaymentProviders, paymentContext, paymentHistory, paymentStatusForUser,
+  processProviderWebhook, receiptForUser, reconcilePendingPayments, reconcilePendingRefunds,
+  upsertPayableItem,
 } from '../server/payments/core.js';
 
 type Request={
@@ -60,8 +62,11 @@ export default async function handler(req:Request,res:Response){
       if(req.method!=='GET'&&req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
       const secret=text(process.env.CRON_SECRET);
       if(!secret||header(req,'authorization')!=='Bearer '+secret)return res.status(401).json({error:'Unauthorized.'});
-      const summary=await reconcilePendingPayments(getAdminDb(),100);
-      return res.status(200).json({ok:true,summary});
+      const db=getAdminDb();
+      const [payments,refunds]=await Promise.all([
+        reconcilePendingPayments(db,100),reconcilePendingRefunds(db,100),
+      ]);
+      return res.status(200).json({ok:true,summary:{payments,refunds}});
     }
 
     const body=object(req.body);
@@ -125,6 +130,14 @@ export default async function handler(req:Request,res:Response){
     if(name==='admin/reconcile'){
       if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
       return res.status(200).json({ok:true,...await adminReconcile(ctx,body.paymentId)});
+    }
+    if(name==='admin/refunds'){
+      if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
+      const action=text(body.action||'request');
+      if(action==='request')return res.status(200).json({ok:true,item:await adminRequestRefund(ctx,body)});
+      if(action==='completeManual')return res.status(200).json({ok:true,item:await adminCompleteManualRefund(ctx,body)});
+      if(action==='cancel')return res.status(200).json({ok:true,item:await adminCancelRefund(ctx,body)});
+      return res.status(400).json({error:'Unsupported refund action.'});
     }
     if(name==='admin/export'){
       if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});
