@@ -33,6 +33,8 @@ export function normalizeLearnerLocation(value:unknown):LearnerLocation|null{
   const guideId=text(raw.guideId);
   const guideLanguage=text(raw.guideLanguage);
   const lessonId=text(raw.lessonId);
+  const hasPageIndex=Object.prototype.hasOwnProperty.call(raw,'pageIndex')
+    && Number.isFinite(Number(raw.pageIndex));
   const pageIndex=Math.max(0,Math.trunc(Number(raw.pageIndex)||0));
   return {
     route,
@@ -40,7 +42,7 @@ export function normalizeLearnerLocation(value:unknown):LearnerLocation|null{
     ...(guideId?{guideId}:{}),
     ...(guideLanguage?{guideLanguage}:{}),
     ...(lessonId?{lessonId}:{}),
-    ...(lessonId||pageIndex?{pageIndex}:{}),
+    ...(hasPageIndex?{pageIndex}:{}),
   };
 }
 
