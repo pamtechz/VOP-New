@@ -287,13 +287,18 @@ async function consumerPaymentMethods(db:Firestore,data:DocumentData,billingCurr
   return [...methods] as PaymentMethod[];
 }
 
-async function consumerPayableItem(db:Firestore,id:string,data:DocumentData,organizationId=''){
+async function consumerPayableItem(
+  db:Firestore,id:string,data:DocumentData,
+  billingTarget:{type:BillingTenantType;id:string}|null,
+  organizationId='',
+){
   let currency=text(data.currency),amountMinor=Number(data.amountMinor||0),amountDecimal=text(data.amountDecimal);
   let pricing:Record<string,unknown>={};
   if(text(data.itemType)==='organization_subscription'){
+    if(!billingTarget)throw new Error('An institutional billing tenant is required for a subscription quote.');
     const plan=await db.doc('system/plans/catalog/'+text(data.itemId)).get();
     if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
-    const quote=await quoteSubscriptionPlan(db,organizationId,plan.data()||{});
+    const quote=await quoteSubscriptionPlanForTenant(db,billingTarget.type,billingTarget.id,plan.data()||{});
     currency=quote.billingCurrency;amountMinor=quote.amountMinor;amountDecimal=quote.amountDecimal;
     pricing={
       baseCurrency:quote.baseCurrency,baseAmountDecimal:quote.baseAmountDecimal,
@@ -325,11 +330,15 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
     if(admin){
       items.push({id:doc.id,...data});
     }else if(await itemVisibleToUser(ctx,data)){
+      let billingTarget:{type:BillingTenantType;id:string}|null=null;
       if(text(data.itemType)==='organization_subscription'){
-        try{await requireOrganizationSubscriptionConsumer(ctx);}
+        try{billingTarget=await requireInstitutionalSubscriptionConsumer(ctx);}
         catch{continue;}
+        if(!billingTarget)continue;
       }
-      items.push(await consumerPayableItem(ctx.db,doc.id,data,ctx.organizationId||text(ctx.profile.organizationId)));
+      items.push(await consumerPayableItem(
+        ctx.db,doc.id,data,billingTarget,ctx.organizationId||text(ctx.profile.organizationId),
+      ));
     }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
@@ -351,6 +360,7 @@ function serializePayment(id:string,data:DocumentData){
   return {
     id,reference:text(data.reference),payerUid:text(data.payerUid),payerEmail:text(data.payerEmail),
     payerName:text(data.payerName),organizationId:text(data.organizationId),tenantId:text(data.tenantId),
+    billingTenantType:text(data.billingTenantType),billingTenantId:text(data.billingTenantId),
     payableItemId:text(data.payableItemId),itemId:text(data.itemId),itemType:text(data.itemType),
     description:text(data.description),currency:text(data.currency),amountMinor:Number(data.amountMinor||0),
     amountDecimal:text(data.amountDecimal),provider:text(data.provider),paymentMethod:text(data.paymentMethod),
@@ -372,6 +382,7 @@ function serializeRefund(id:string,data:DocumentData){
   return {
     id,paymentId:text(data.paymentId),paymentReference:text(data.paymentReference),
     refundReference:text(data.refundReference),organizationId:text(data.organizationId),
+    billingTenantType:text(data.billingTenantType),billingTenantId:text(data.billingTenantId),
     payerUid:text(data.payerUid),currency:text(data.currency),
     amountMinor:Number(data.amountMinor||0),amountDecimal:text(data.amountDecimal),
     reason:text(data.reason),provider:text(data.provider),status:text(data.status),
