@@ -151,7 +151,7 @@ test('platform finance administration is Super Admin-only while organizations co
   const serverPermissions=read('server/permissions.ts');
   const sharedPermissions=read('shared/permissions.ts');
 
-  assert.match(admin,/Subscription packages/);
+  assert.match(admin,/Plans & subscriptions/);
   assert.match(admin,/isSuperAdmin&&tab==='items'/);
   assert.match(admin,/isSuperAdmin&&tab==='providers'/);
   assert.match(admin,/isSuperAdmin&&tab==='reconciliation'/);
@@ -174,6 +174,45 @@ test('platform finance administration is Super Admin-only while organizations co
   assert.doesNotMatch(consumer,/Payment provider/);
   assert.doesNotMatch(consumer,/selectedProvider/);
   assert.doesNotMatch(consumer,/providerKey/);
+});
+
+test('organization plan limits are consolidated into the subscription entitlement domain',()=>{
+  const organizationPage=read('src/pages/OrganizationManagement.tsx');
+  const organizationApi=read('api_handlers/admin/organizations.ts');
+  const paymentAdmin=read('src/pages/PaymentManagement.tsx');
+  const workspace=read('src/components/admin/SubscriptionWorkspace.tsx');
+  const plans=read('api_handlers/admin/plans.ts');
+  const core=read('server/payments/core.ts');
+  const shared=read('shared/subscriptions.ts');
+
+  assert.doesNotMatch(organizationPage,/quotaPayload/);
+  assert.doesNotMatch(organizationPage,/api\('getUsage'/);
+  assert.doesNotMatch(organizationPage,/admin\.usage_limits/);
+  assert.match(organizationPage,/Subscription & plan/);
+  assert.match(organizationPage,/Open Billing & Subscriptions/);
+  assert.match(organizationApi,/Plan, feature entitlements and usage limits are managed through Billing & Subscriptions/);
+  assert.doesNotMatch(organizationApi,/plan: typeof data\.plan/);
+  assert.doesNotMatch(organizationApi,/quotas: ctx\.isSuperAdmin/);
+
+  assert.match(paymentAdmin,/Billing & Subscriptions/);
+  assert.match(paymentAdmin,/Plans & subscriptions/);
+  assert.match(paymentAdmin,/SubscriptionWorkspace/);
+  assert.match(workspace,/Usage against plan limits/);
+  assert.match(workspace,/Plan entitlements/);
+  assert.match(workspace,/Cancel at period end/);
+  assert.match(workspace,/Assign manually/);
+  assert.match(workspace,/Below current organization usage/);
+
+  assert.match(shared,/SUBSCRIPTION_QUOTAS/);
+  assert.match(shared,/SUBSCRIPTION_FEATURES/);
+  assert.match(plans,/organizationUsageSnapshot/);
+  assert.match(plans,/planSnapshot/);
+  assert.match(plans,/currentPeriodStart/);
+  assert.match(plans,/currentPeriodEnd/);
+  assert.match(plans,/cancelAtPeriodEnd/);
+  assert.match(core,/planVersion/);
+  assert.match(core,/planSnapshot:entitlementSnapshot/);
+  assert.match(core,/cancelled=data\.cancelAtPeriodEnd===true/);
 });
 
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
