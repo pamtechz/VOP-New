@@ -362,6 +362,67 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.ok(ownerRows.items.every(item=>item.provider===''&&item.providerReference===''&&item.reconciliationStatus===''));
     });
 
+    await t.test('free subscription plans quote zero safely and activate without checkout',async()=>{
+      const created=await planCall(admin,{
+        action:'upsertPlan',
+        name:'Community Free',
+        description:'No-cost organization access',
+        priceUsd:0,interval:'month',sortOrder:1,active:true,
+        quotas:{maxSeats:10,maxCandidates:8,maxMentors:2,maxGuides:5},
+        features:{curriculum:true,candidates:true,certification:true},
+      });
+      assert.equal(created.status,200,JSON.stringify(created));
+      const planId=created.item.id;
+      assert.equal(created.item.priceUsd,0);
+
+      const payable=await db.doc('payableItems/subscription_'+planId).get();
+      assert.equal(payable.exists,false,'free plans must not create payment checkout items');
+
+      const zambiaCatalog=await planCall(organizationOwner,{action:'listAvailablePlans'});
+      assert.equal(zambiaCatalog.status,200,JSON.stringify(zambiaCatalog));
+      const zambiaFree=zambiaCatalog.items.find(item=>item.id===planId);
+      assert.ok(zambiaFree,JSON.stringify(zambiaCatalog));
+      assert.equal(zambiaFree.billingPrice,'0.00');
+      assert.equal(zambiaFree.billingCurrency,'ZMW');
+      assert.equal(zambiaFree.exchangeRate,1);
+      assert.equal(zambiaFree.fxSource,'free-plan');
+
+      const internationalCatalog=await planCall(internationalOwner,{action:'listAvailablePlans'});
+      assert.equal(internationalCatalog.status,200,JSON.stringify(internationalCatalog));
+      const internationalFree=internationalCatalog.items.find(item=>item.id===planId);
+      assert.ok(internationalFree,JSON.stringify(internationalCatalog));
+      assert.equal(internationalFree.billingPrice,'0.00');
+      assert.equal(internationalFree.billingCurrency,'USD');
+
+      const activated=await planCall(internationalOwner,{
+        action:'activateFreePlan',organizationId:orgIntl,planId,
+      });
+      assert.equal(activated.status,200,JSON.stringify(activated));
+      assert.equal(activated.status,'active');
+      assert.equal(activated.currentPeriodEnd,null);
+
+      const subscription=(await db.doc('organizations/'+orgIntl+'/subscription/current').get()).data();
+      assert.equal(subscription?.status,'active');
+      assert.equal(subscription?.planId,planId);
+      assert.equal(subscription?.activationSource,'free_plan');
+      assert.equal(subscription?.billingProvider,'none');
+      assert.equal(subscription?.baseAmountDecimal,'0.00');
+      assert.equal(subscription?.paidAmountDecimal,'0.00');
+      assert.equal(subscription?.currentPeriodEnd,null);
+      assert.equal(subscription?.renewalMode,'none');
+
+      const organization=(await db.doc('organizations/'+orgIntl).get()).data();
+      assert.equal(organization?.plan,planId);
+      assert.equal(organization?.quotas?.maxSeats,10);
+      assert.equal(organization?.featureEntitlements?.curriculum,true);
+
+      const repeated=await planCall(internationalOwner,{
+        action:'activateFreePlan',organizationId:orgIntl,planId,
+      });
+      assert.equal(repeated.status,200,JSON.stringify(repeated));
+      assert.equal(repeated.alreadyActive,true);
+    });
+
     await t.test('SaaS subscription packages keep USD canonical pricing and localize Zambia billing',async()=>{
       const created=await planCall(admin,{
         action:'upsertPlan',
@@ -376,6 +437,12 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.match(packageId,/^growth-package-[a-f0-9]{8}$/);
       assert.equal(created.item.baseCurrency,'USD');
       assert.equal(created.item.priceUsd,10);
+
+      const directPaidActivation=await planCall(organizationOwner,{
+        action:'activateFreePlan',organizationId:orgA,planId:packageId,
+      });
+      assert.equal(directPaidActivation.status,400,JSON.stringify(directPaidActivation));
+      assert.match(String(directPaidActivation.error||''),/secure checkout/i);
 
       const payableId='subscription_'+packageId;
       const payable=(await db.doc('payableItems/'+payableId).get()).data();
