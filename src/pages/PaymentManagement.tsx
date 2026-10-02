@@ -6,7 +6,7 @@ import { PAYABLE_ITEM_TYPES, minorToDecimal, paymentMethodLabel, paymentStatusLa
 import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor } from '../services/payments';
 import { auth } from '../lib/firebase';
 import { appConfirm, appPrompt } from '../components/layout/AppDialog';
-import SubscriptionWorkspace, { type SubscriptionPackageView } from '../components/admin/SubscriptionWorkspace';
+import SubscriptionWorkspace, { type BillingTenantOption, type SubscriptionPackageView } from '../components/admin/SubscriptionWorkspace';
 import { SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS, type SubscriptionQuotaKey } from '../../shared/subscriptions';
 import './payments.css';
 
@@ -38,6 +38,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
   const [providers,setProviders]=useState<PaymentProviderDescriptor[]>([]);
   const [packages,setPackages]=useState<SubscriptionPackage[]>([]);
   const [organizations,setOrganizations]=useState<Organization[]>([]);
+  const [billingTenants,setBillingTenants]=useState<BillingTenantOption[]>([]);
   const [targets,setTargets]=useState<Target[]>([]);
   const [search,setSearch]=useState('');
   const [status,setStatus]=useState('');
@@ -72,7 +73,11 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     allowedMethods:['card','airtel_money','mtn_money','zamtel_money'] as PaymentMethod[],
   });
   const isSuperAdmin=currentUser.role==='super_admin';
-  const canManageOwnSubscription=!isSuperAdmin&&Boolean(currentUser.organizationId)&&['owner','admin'].includes(String(currentUser.organizationRole||''));
+  const isHierarchyAdmin=['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''));
+  const canManageOwnSubscription=!isSuperAdmin&&(
+    (Boolean(currentUser.organizationId)&&['owner','admin'].includes(String(currentUser.organizationRole||'')))
+    ||(isHierarchyAdmin&&Boolean(currentUser.adminNodeId))
+  );
 
   const load=async()=>{
     setLoading(true);setError('');
@@ -82,15 +87,30 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         adminApi('/api/admin/organizations',{action:'list'}),
       ]);
       setTransactions(tx.items);
-      setOrganizations((orgResult.items||[]).map(value=>{
+      const organizationRows=(orgResult.items||[]).map(value=>{
         const item=value as Record<string,unknown>;return {id:String(item.id||''),name:String(item.name||'Organization')};
-      }).filter(item=>item.id));
+      }).filter(item=>item.id);
+      setOrganizations(organizationRows);
       if(isSuperAdmin){
-        const [itemResult,providerResult,packageResult,billingResult]=await Promise.all([
+        const [itemResult,providerResult,packageResult,billingResult,unionsResult,conferencesResult,districtsResult,churchesResult]=await Promise.all([
           adminPaymentRequest<{ok:true;items:PayableItem[]}>('payable-items',{action:'list'}),
           adminPaymentRequest<{ok:true;items:PaymentProviderDescriptor[]}>('providers',{action:'list'}),
           adminApi('/api/admin/plans',{action:'listPlans'}),
           adminApi('/api/admin/plans',{action:'getBillingSettings'}),
+          adminApi('/api/admin/content',{action:'list',collection:'unions'}),
+          adminApi('/api/admin/content',{action:'list',collection:'conferences'}),
+          adminApi('/api/admin/content',{action:'list',collection:'districts'}),
+          adminApi('/api/admin/content',{action:'list',collection:'churches'}),
+        ]);
+        const hierarchyRows=([
+          ['union',unionsResult],['conference',conferencesResult],['district',districtsResult],['church',churchesResult],
+        ] as const).flatMap(([type,result])=>(result.items||[]).map(value=>{
+          const item=value as Record<string,unknown>;
+          return {id:String(item.id||''),name:String(item.name||item.title||type),type} as BillingTenantOption;
+        }).filter(item=>item.id));
+        setBillingTenants([
+          ...organizationRows.map(item=>({...item,type:'organization' as const})),
+          ...hierarchyRows,
         ]);
         setItems(itemResult.items);setProviders(providerResult.items);
         setPackages((packageResult.items||[]) as SubscriptionPackage[]);
@@ -113,6 +133,14 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
           },
         });
       }else{
+        const ownHierarchyType=isHierarchyAdmin
+          ?String(currentUser.role||'').replace('_admin','') as BillingTenantOption['type']
+          :null;
+        setBillingTenants(
+          ownHierarchyType&&currentUser.adminNodeId
+            ?[{id:String(currentUser.adminNodeId),name:'My institution',type:ownHierarchyType}]
+            :organizationRows.map(item=>({...item,type:'organization' as const})),
+        );
         setItems([]);setProviders([]);setPackages([]);
         if(!canManageOwnSubscription&&tab!=='transactions')setTab('transactions');
       }
@@ -384,7 +412,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
   const filtered=useMemo(()=>transactions,[transactions]);
 
   return <div className="vop-payment-admin">
-    <div className="vop-page-header"><div><span className="vop-page-kicker">Financial operations</span><h1>Billing & Subscriptions</h1><p>{isSuperAdmin?'Manage SaaS plans, organization subscriptions, live usage, charges, payment providers and transaction operations from one billing workspace.':canManageOwnSubscription?'Manage your organization subscription and review its payment transactions.':'Review payment transactions within your authorized organization scope.'}</p></div>
+    <div className="vop-page-header"><div><span className="vop-page-kicker">Financial operations</span><h1>Billing & Subscriptions</h1><p>{isSuperAdmin?'Manage SaaS plans, institutional subscriptions, live usage, charges, payment providers and transaction operations from one billing workspace.':canManageOwnSubscription?'Manage your institution subscription and review its payment transactions.':'Review payment transactions within your authorized tenant scope.'}</p></div>
       <div className="vop-payment-admin-actions"><button className="btn btn-outline" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/>Refresh</button>{isSuperAdmin&&tab==='items'&&<button className="btn btn-primary" onClick={startCreate}><Plus size={16}/>New payable item</button>}</div></div>
     <div className="vop-payment-admin-tabs">
       {(isSuperAdmin
@@ -418,7 +446,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
       <SubscriptionWorkspace
         currentUser={currentUser}
         isSuperAdmin={isSuperAdmin}
-        organizations={organizations}
+        billingTenants={billingTenants}
         packages={packages}
         busy={busy}
         onCreatePlan={isSuperAdmin?startPackageCreate:undefined}
