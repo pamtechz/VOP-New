@@ -266,7 +266,7 @@ export default async function handler(
         ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
         error:'This assessment belongs to a different study language. Reopen it from the current course.',
       });
-      return res.status(409).json({ error: 'The selected guide language does not match the study request.' });
+      return res.status(400).json({ error: 'The selected guide language does not match the study request.' });
     }
     if (!lessonSnapshot.exists || lessonSnapshot.data()?.published !== true || lessonSnapshot.data()?.archived === true) {
       return res.status(404).json({ error: 'The selected lesson is not published.' });
@@ -279,7 +279,7 @@ export default async function handler(
         ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
         error:'This assessment is no longer attached to the selected guide. Reopen the course to refresh the published content.',
       });
-      return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
+      return res.status(400).json({ error: 'The lesson does not belong to the selected guide.' });
     }
     const platformGuide = useTenantGuide && candidateGuideShared
       && (!candidateGuideOrganizationId || String(candidateGuideData.scope || '') === 'platform');
@@ -589,7 +589,7 @@ export default async function handler(
         return res.status(400).json({ error: 'A valid published lesson page position is required.' });
       }
       if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
-        return res.status(409).json({ error: 'Only study lessons support resume positions.' });
+        return res.status(400).json({ error: 'Only study lessons support resume positions.' });
       }
 
       const resumeKey = `${language}:${guideId}:${lessonId}`;
@@ -627,7 +627,7 @@ export default async function handler(
 
     if (action === 'completeLesson') {
       if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
-        return res.status(409).json({ error: 'Only study lessons can be marked complete.' });
+        return res.status(400).json({ error: 'Only study lessons can be marked complete.' });
       }
 
       await db.runTransaction(async transaction => {
@@ -735,7 +735,7 @@ export default async function handler(
     // server-only snapshot captured when the attempt was opened.
     if (!pinnedQuestions && sourceQuizId) {
       if (!/^[A-Za-z0-9_-]{1,120}$/.test(sourceQuizId) || !useTenantGuide) {
-        return res.status(409).json({ error: 'The assessment source is invalid.' });
+        return res.status(200).json({ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',error:'The assessment source is invalid. Reopen the course after the assessment is republished.'});
       }
       const quizSnap = await db.doc(`quizzes/${sourceQuizId}`).get();
       const quiz = quizSnap.data() || {};
@@ -745,7 +745,7 @@ export default async function handler(
         || String(quiz.assessmentPath || '') !== lessonRef.path
         || String(quiz.language || '') !== language
         || String(quiz.organizationId || '') !== candidateGuideOrganizationId
-      ) return res.status(409).json({ error: 'This assessment is not available for grading.' });
+      ) return res.status(200).json({ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',error:'This assessment is no longer available for grading. Reopen the course after it is republished.'});
       // A chapter/section/block quiz must still reference a published,
       // currently existing part of the same study lesson.
       if (['chapter','section','block'].includes(String(quiz.attachmentType||''))) {
@@ -754,13 +754,13 @@ export default async function handler(
         if (!validStudyId(parentId) || !validStudyId(anchorId) ||
             String(lessonData.attachedLessonId || '') !== parentId ||
             String(lessonData.anchorId || '') !== anchorId) {
-          return res.status(409).json({ error:'The assessment attachment has changed.' });
+          return res.status(200).json({ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',error:'The assessment attachment has changed. Reopen the course after it is republished.'});
         }
         const parent = await guideRef.collection('lessons').doc(parentId).get();
         if (!parent.exists || parent.data()?.published !== true || parent.data()?.archived === true ||
             parent.data()?.type === 'Test' ||
             !curriculumAnchorExists(parent.data()?.chapters,quiz.attachmentType,anchorId)) {
-          return res.status(409).json({ error:'The assessment chapter, section or block is no longer published.' });
+          return res.status(200).json({ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',error:'The assessment chapter, section or block is no longer published. Reopen the course after it is republished.'});
         }
       }
       gradeable = quiz;
@@ -804,7 +804,8 @@ export default async function handler(
     }
     const threshold=policy.threshold;
     if(threshold===null){
-      return res.status(409).json({
+      return res.status(200).json({
+        ok:false,available:false,
         error:'This assessment is unavailable until an administrator configures its pass mark.',
         code:'ASSESSMENT_CONFIGURATION',
       });
