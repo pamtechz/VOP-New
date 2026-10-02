@@ -47,6 +47,8 @@ test('study progress: server grades and guide paths stay within authorized tenan
     const prerequisiteLearner=await identity('study-final-prerequisite',orgA);
     const prerequisiteDriftLearner=await identity('study-final-prerequisite-drift',orgA);
     const contentDriftLearner=await identity('study-content-drift',orgA);
+    const legacySessionLearner=await identity('study-legacy-session',orgA);
+    const legacyConfigurationLearner=await identity('study-legacy-configuration',orgA);
     const configurationLearner=await identity('study-configuration',orgA);
     async function api(user,body){
       let status=200,output;
@@ -168,6 +170,68 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({
         assessmentKind:'practice',attachmentType:'guide',
       });
+    });
+
+    await t.test('non-assessment lesson actions never use HTTP 409',async()=>{
+      const completion=await api(learner,{
+        action:'completeLesson',language:'en',guideId,lessonId:testId,
+      });
+      assert.equal(completion.status,400,JSON.stringify(completion));
+      assert.match(String(completion.error||''),/study lessons/i);
+
+      const resume=await api(learner,{
+        action:'saveLessonResume',language:'en',guideId,lessonId:testId,pageIndex:0,
+      });
+      assert.equal(resume.status,400,JSON.stringify(resume));
+      assert.match(String(resume.error||''),/study lessons|resume/i);
+    });
+
+    await t.test('legacy unpinned assessment sessions return 200 content-change states',async()=>{
+      const started=await startQuiz(legacySessionLearner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.ok,true);
+      await db.doc('users/'+legacySessionLearner.uid+'/assessmentSessions/'+started.sessionId).set({
+        gradingQuestionsSnapshot:null,
+      },{merge:true});
+      await db.doc('quizzes/'+quizId).update({archived:true,published:false});
+      const changed=await api(legacySessionLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(changed.status,200,JSON.stringify(changed));
+      assert.equal(changed.ok,false);
+      assert.equal(changed.available,false);
+      assert.equal(changed.code,'ASSESSMENT_CONTENT_CHANGED');
+      await db.doc('quizzes/'+quizId).update({archived:false,published:true});
+    });
+
+    await t.test('legacy sessions without a pass-mark snapshot return 200 configuration states',async()=>{
+      const started=await startQuiz(legacyConfigurationLearner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.ok,true);
+      await db.doc('users/'+legacyConfigurationLearner.uid+'/assessmentSessions/'+started.sessionId).set({
+        assessmentPolicySnapshot:{},
+      },{merge:true});
+      await Promise.all([
+        db.doc('system/settings').set({quizPassThreshold:0},{merge:true}),
+        db.doc('organizations/'+orgA+'/settings/settings').set({
+          quizPassThreshold:0,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+        },{merge:true}),
+      ]);
+      const blocked=await api(legacyConfigurationLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(blocked.status,200,JSON.stringify(blocked));
+      assert.equal(blocked.ok,false);
+      assert.equal(blocked.available,false);
+      assert.equal(blocked.code,'ASSESSMENT_CONFIGURATION');
+      await Promise.all([
+        db.doc('system/settings').set({quizPassThreshold:80},{merge:true}),
+        db.doc('organizations/'+orgA+'/settings/settings').set({
+          quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+        },{merge:true}),
+      ]);
     });
 
     await t.test('submission content drift is a recoverable 200 assessment domain state',async()=>{
