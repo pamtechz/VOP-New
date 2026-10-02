@@ -371,6 +371,7 @@ export default async function handler(
         });
       }
       const finalExamAtStart=lessonData.assessmentKind==='final_exam'&&lessonData.attachmentType==='guide';
+      let finalRequirementsAtStart:string[]=[];
       if(finalExamAtStart){
         const publishedLessons=(await guideRef.collection('lessons').get()).docs
           .filter(doc=>doc.data().type!=='Test'&&doc.data().published===true&&doc.data().archived!==true);
@@ -380,11 +381,10 @@ export default async function handler(
             error:'This final examination cannot start because the guide has no published study lessons.',
           });
         }
+        finalRequirementsAtStart=publishedLessons.map(doc=>`${language}:${guideId}:${doc.id}`);
         const completedLessons=Array.isArray(userData.progress?.completedLessons)
           ?new Set(userData.progress.completedLessons.map((value:unknown)=>String(value))):new Set<string>();
-        const remaining=publishedLessons
-          .map(doc=>`${language}:${guideId}:${doc.id}`)
-          .filter(key=>!completedLessons.has(key));
+        const remaining=finalRequirementsAtStart.filter(key=>!completedLessons.has(key));
         if(remaining.length){
           return res.status(200).json({
             ok:false,available:false,code:'ASSESSMENT_PREREQUISITE',
@@ -477,6 +477,12 @@ export default async function handler(
         const currentData=currentUser.data()||{};
         const progress=currentData.progress&&typeof currentData.progress==='object'
           ?currentData.progress as Record<string,unknown>:{};
+        if(finalExamAtStart){
+          const completed=new Set(Array.isArray(progress.completedLessons)?progress.completedLessons.map(String):[]);
+          if(finalRequirementsAtStart.some(key=>!completed.has(key))){
+            throw new Error('Complete all published study lessons before taking the final guide examination.');
+          }
+        }
         const scores=progress.guideScores&&typeof progress.guideScores==='object'
           ?progress.guideScores as Record<string,unknown>:{};
         const currentScore=Number(scores[scoreKey]);
