@@ -44,6 +44,8 @@ test('study progress: server grades and guide paths stay within authorized tenan
     const passedRetakeLearner=await identity('study-passed-retake',orgA);
     const idempotentLearner=await identity('study-idempotent',orgA);
     const revisionLearner=await identity('study-revision-pinned',orgA);
+    const prerequisiteLearner=await identity('study-final-prerequisite',orgA);
+    const configurationLearner=await identity('study-configuration',orgA);
     async function api(user,body){
       let status=200,output;
       await study({method:'POST',headers:{authorization:'Bearer '+user.token},body},{
@@ -58,7 +60,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     }
     async function submitStarted(user,answers,{confirmRetake=false}={}){
       const started=await startQuiz(user,{confirmRetake});
-      if(started.status!==200)return started;
+      if(started.status!==200||started.ok===false||!started.sessionId)return started;
       return api(user,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,
         sessionId:started.sessionId,answers,
@@ -117,6 +119,52 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(submitted.passed,true);
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+      });
+    });
+
+    await t.test('expected assessment availability states are 200 domain responses and never consume attempts',async()=>{
+      await Promise.all([
+        db.doc('system/settings').set({quizPassThreshold:0},{merge:true}),
+        db.doc('organizations/'+orgA+'/settings/settings').set({quizPassThreshold:0},{merge:true}),
+      ]);
+      const unavailable=await startQuiz(configurationLearner);
+      assert.equal(unavailable.status,200,JSON.stringify(unavailable));
+      assert.equal(unavailable.ok,false);
+      assert.equal(unavailable.available,false);
+      assert.equal(unavailable.code,'ASSESSMENT_CONFIGURATION');
+      assert.equal((await db.collection('users/'+configurationLearner.uid+'/assessmentSessions').get()).size,0);
+      assert.equal((await db.collection('users/'+configurationLearner.uid+'/assessmentAttempts').get()).size,0);
+
+      await Promise.all([
+        db.doc('system/settings').set({quizPassThreshold:80},{merge:true}),
+        db.doc('organizations/'+orgA+'/settings/settings').set({
+          quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+        },{merge:true}),
+      ]);
+    });
+
+    await t.test('final examination prerequisites are checked before an attempt is reserved',async()=>{
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentKind:'final_exam',attachmentType:'guide',
+      });
+      const blocked=await startQuiz(prerequisiteLearner);
+      assert.equal(blocked.status,200,JSON.stringify(blocked));
+      assert.equal(blocked.ok,false);
+      assert.equal(blocked.available,false);
+      assert.equal(blocked.code,'ASSESSMENT_PREREQUISITE');
+      assert.equal(blocked.remainingPrerequisites,1);
+      assert.equal((await db.collection('users/'+prerequisiteLearner.uid+'/assessmentSessions').get()).size,0);
+
+      const completed=await api(prerequisiteLearner,{
+        action:'completeLesson',language:'en',guideId,lessonId:studyLessonId,
+      });
+      assert.equal(completed.status,200,JSON.stringify(completed));
+      const started=await startQuiz(prerequisiteLearner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.ok,true);
+      assert.ok(started.sessionId);
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentKind:'practice',attachmentType:'guide',
       });
     });
 
@@ -213,7 +261,9 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(second.retakePolicy.attemptsUsed,2);
       assert.equal(second.retakePolicy.remainingAttempts,0);
       const blocked=await submitStarted(retakeLearner,{0:0});
-      assert.equal(blocked.status,409,JSON.stringify(blocked));
+      assert.equal(blocked.status,200,JSON.stringify(blocked));
+      assert.equal(blocked.ok,false);
+      assert.equal(blocked.available,false);
       assert.equal(blocked.code,'ASSESSMENT_ATTEMPT_LIMIT');
       assert.match(String(blocked.error||''),/attempt limit/i);
       assert.equal((await db.collection('users/'+retakeLearner.uid+'/assessmentAttempts').get()).size,2);
@@ -226,7 +276,9 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(cooldownFirst.passed,false);
       assert.ok(Date.parse(cooldownFirst.retakePolicy.retryAt)>Date.now());
       const cooldownBlocked=await submitStarted(cooldownLearner,{0:1});
-      assert.equal(cooldownBlocked.status,409,JSON.stringify(cooldownBlocked));
+      assert.equal(cooldownBlocked.status,200,JSON.stringify(cooldownBlocked));
+      assert.equal(cooldownBlocked.ok,false);
+      assert.equal(cooldownBlocked.available,false);
       assert.equal(cooldownBlocked.code,'ASSESSMENT_RETAKE_COOLDOWN');
       assert.match(String(cooldownBlocked.error||''),/available after/i);
       await db.doc('organizations/'+orgA+'/settings/settings').set({
@@ -428,8 +480,11 @@ test('study progress: server grades and guide paths stay within authorized tenan
       },{merge:true});
       await db.doc('quizzes/'+quizId).update({assessmentPath:'guides/another/lessons/quiz-'+quizId});
       const response=await startQuiz(learner,{confirmRetake:true});
-      assert.equal(response.status,409,JSON.stringify(response));
-      assert.match(String(response.error||''),/not available|assessment/i);
+      assert.equal(response.status,200,JSON.stringify(response));
+      assert.equal(response.ok,false);
+      assert.equal(response.available,false);
+      assert.equal(response.code,'ASSESSMENT_CONTENT_CHANGED');
+      assert.match(String(response.error||''),/changed|republish|assessment/i);
       const profile=(await db.doc('users/'+learner.uid).get()).data();
       assert.equal(profile.progress.guideScores[orgA+':en:'+guideId+':'+testId],100);
     });
