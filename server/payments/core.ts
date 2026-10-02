@@ -25,6 +25,14 @@ function object(value:unknown){return value&&typeof value==='object'&&!Array.isA
 function bool(value:unknown,fallback=false){return typeof value==='boolean'?value:fallback;}
 function stringArray(value:unknown){return Array.isArray(value)?value.map(text).filter(Boolean):[];}
 function nowIso(){return new Date().toISOString();}
+const BILLING_TENANT_TYPES=new Set<BillingTenantType>(['organization','church','district','conference','union']);
+function paymentBillingTarget(data:DocumentData){
+  const organizationId=text(data.organizationId);
+  const candidate=text(data.billingTenantType) as BillingTenantType;
+  const type=BILLING_TENANT_TYPES.has(candidate)?candidate:(organizationId?'organization':null);
+  const id=text(data.billingTenantId)||(type==='organization'?organizationId:'');
+  return type&&id?{type,id}:null;
+}
 function timestampIso(value:unknown){
   if(!value)return '';
   if(typeof value==='string')return value;
