@@ -397,7 +397,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const activated=await planCall(internationalOwner,{
         action:'activateFreePlan',organizationId:orgIntl,planId,
       });
-      assert.equal(activated.status,200,JSON.stringify(activated));
+      assert.equal(activated.httpStatus,200,JSON.stringify(activated));
       assert.equal(activated.status,'active');
       assert.equal(activated.currentPeriodEnd,null);
 
@@ -419,7 +419,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const repeated=await planCall(internationalOwner,{
         action:'activateFreePlan',organizationId:orgIntl,planId,
       });
-      assert.equal(repeated.status,200,JSON.stringify(repeated));
+      assert.equal(repeated.httpStatus,200,JSON.stringify(repeated));
       assert.equal(repeated.alreadyActive,true);
     });
 
