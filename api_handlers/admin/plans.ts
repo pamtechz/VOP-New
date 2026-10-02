@@ -49,7 +49,9 @@ export default async function handler(req: Request, res: Response) {
     const action = text(body.action, 'listPlans');
     const requestedOrganizationId = text(body.organizationId);
     const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
-    await requirePermission(ctx, 'billing', ['listPlans','listAvailablePlans','getSubscription'].includes(action) ? 'view' : 'manage');
+    const readActions=['listPlans','listAvailablePlans','getSubscription'];
+    const selfServiceActions=['cancelSubscription','reactivateSubscription'];
+    await requirePermission(ctx, 'billing', readActions.includes(action) ? 'view' : selfServiceActions.includes(action) ? 'update' : 'manage');
 
     if (action === 'listPlans') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can access subscription package administration.');
@@ -151,6 +153,48 @@ export default async function handler(req: Request, res: Response) {
         billingAccessSuspended:organizationData.billingAccessSuspended===true,
         billingSuspendedReason:text(organizationData.billingSuspendedReason),
       });
+    }
+
+    if (!ctx.isSuperAdmin && (action === 'cancelSubscription' || action === 'reactivateSubscription')) {
+      const organizationId=requestedOrganizationId||ctx.organizationId;
+      const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+      if(!organizationId||ctx.organizationId!==organizationId||!['owner','admin'].includes(role)){
+        throw new Error('Only an organization owner or administrator can manage this subscription.');
+      }
+      const subscriptionRef=ctx.db.doc(`organizations/${organizationId}/subscription/current`);
+      const snapshot=await subscriptionRef.get();
+      if(!snapshot.exists)throw new Error('The organization has no subscription record.');
+      const before=snapshot.data()||{};
+      if(action==='cancelSubscription'){
+        if(before.status!=='active')throw new Error('Only an active subscription can be scheduled for cancellation.');
+        if(text(before.planInterval||object(before.planSnapshot).interval)==='one_time'){
+          throw new Error('One-time subscriptions do not have a recurring renewal to cancel.');
+        }
+        const reason=text(body.reason,'Requested by organization administrator');
+        await subscriptionRef.set({
+          cancelAtPeriodEnd:true,cancellationReason:reason,
+          cancellationRequestedAt:FieldValue.serverTimestamp(),cancellationRequestedBy:ctx.auth.uid,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        await writeTenantAudit(ctx,'subscription.cancel_scheduled',subscriptionRef.path,before,{
+          status:'active',cancelAtPeriodEnd:true,cancellationReason:reason,
+        });
+        return res.status(200).json({
+          ok:true,organizationId,status:'active',cancelAtPeriodEnd:true,
+          currentPeriodEnd:text(before.currentPeriodEnd)||null,
+        });
+      }
+      if(before.status!=='active'||before.cancelAtPeriodEnd!==true){
+        throw new Error('Only a scheduled cancellation can be resumed without a new payment.');
+      }
+      await subscriptionRef.set({
+        cancelAtPeriodEnd:false,cancellationReason:null,cancellationRequestedAt:null,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      await writeTenantAudit(ctx,'subscription.cancellation_resumed',subscriptionRef.path,before,{
+        status:'active',cancelAtPeriodEnd:false,
+      });
+      return res.status(200).json({ok:true,organizationId,status:'active',cancelAtPeriodEnd:false});
     }
 
     if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage plans and subscriptions.');
