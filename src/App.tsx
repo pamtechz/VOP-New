@@ -29,25 +29,44 @@ import { HomeDashboard } from './components/home/HomeDashboard';
 import { DiscoverGuideView } from './components/guide/DiscoverGuideView';
 import { LessonReaderModal } from './components/reader/LessonReaderModal';
 import { QuizModal } from './components/quiz/QuizModal';
-import { AboutPage } from './pages/AboutPage';
-import { ReferenceProfilePage } from './pages/ReferenceProfilePage';
-import { ResourcesPage } from './pages/ResourcesPage';
-import { LessonsPage } from './pages/LessonsPage';
-import { EngagementPage } from './pages/EngagementPage';
+
+
+
+
+
 import './pages/learning.css';
-import { PrayerPage } from './pages/PrayerPage';
-import { RadioPage } from './pages/RadioPage';
-import { CertificatesPage } from './pages/CertificatesPage';
-import { AdminPage } from './pages/AdminPage';
-import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
-import { AnnouncementsPage } from './pages/AnnouncementsPage';
-import { EventsPage } from './pages/EventsPage';
-import PaymentsPage from './pages/PaymentsPage';
-import { SupportPage } from './pages/SupportPage';
-import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
-import NotificationsPage from './pages/NotificationsPage';
-import InvitationsPage from './pages/InvitationsPage';
-import MentorWorkspace from './pages/MentorWorkspace';
+
+const AboutPage=React.lazy(()=>import('./pages/AboutPage').then(module=>({default:module.AboutPage})));
+const ReferenceProfilePage=React.lazy(()=>import('./pages/ReferenceProfilePage').then(module=>({default:module.ReferenceProfilePage})));
+const ResourcesPage=React.lazy(()=>import('./pages/ResourcesPage').then(module=>({default:module.ResourcesPage})));
+const LessonsPage=React.lazy(()=>import('./pages/LessonsPage').then(module=>({default:module.LessonsPage})));
+const EngagementPage=React.lazy(()=>import('./pages/EngagementPage').then(module=>({default:module.EngagementPage})));
+const PrayerPage=React.lazy(()=>import('./pages/PrayerPage').then(module=>({default:module.PrayerPage})));
+const RadioPage=React.lazy(()=>import('./pages/RadioPage').then(module=>({default:module.RadioPage})));
+const CertificatesPage=React.lazy(()=>import('./pages/CertificatesPage').then(module=>({default:module.CertificatesPage})));
+const AdminPage=React.lazy(()=>import('./pages/AdminPage').then(module=>({default:module.AdminPage})));
+const CertificateVerificationPage=React.lazy(()=>import('./pages/CertificateVerificationPage').then(module=>({default:module.CertificateVerificationPage})));
+const AnnouncementsPage=React.lazy(()=>import('./pages/AnnouncementsPage').then(module=>({default:module.AnnouncementsPage})));
+const EventsPage=React.lazy(()=>import('./pages/EventsPage').then(module=>({default:module.EventsPage})));
+const PaymentsPage=React.lazy(()=>import('./pages/PaymentsPage'));
+const SupportPage=React.lazy(()=>import('./pages/SupportPage').then(module=>({default:module.SupportPage})));
+const PersonalSettingsPage=React.lazy(()=>import('./pages/PersonalSettingsPage').then(module=>({default:module.PersonalSettingsPage})));
+const NotificationsPage=React.lazy(()=>import('./pages/NotificationsPage'));
+const InvitationsPage=React.lazy(()=>import('./pages/InvitationsPage'));
+const MentorWorkspace=React.lazy(()=>import('./pages/MentorWorkspace'));
+
+
+
+
+
+
+
+
+
+
+
+
+
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
@@ -632,6 +651,7 @@ export const App: React.FC = () => {
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
+          <React.Suspense fallback={<div className="vop-page-loading" role="status" aria-live="polite">Loading workspace…</div>}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
@@ -677,6 +697,7 @@ export const App: React.FC = () => {
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
               onLogout={() => void firebaseSignOut()} />}
+          </React.Suspense>
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
               openStudyItem(activeGuide,lesson,initialPageIndex,'home')}

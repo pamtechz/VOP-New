@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f9fc" />
+    <title>Voice of Prophecy — Offline</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin:0; min-height:100vh; display:grid; place-items:center; background:Canvas; color:CanvasText; }
+      main { width:min(34rem,calc(100% - 2rem)); padding:2rem; text-align:center; }
+      h1 { margin:.25rem 0 .75rem; }
+      p { line-height:1.6; opacity:.78; }
+      button { min-height:44px; padding:.75rem 1rem; border:1px solid currentColor; border-radius:.7rem; background:ButtonFace; color:ButtonText; font:inherit; font-weight:700; cursor:pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>You’re offline</h1>
+      <p>Previously cached Voice of Prophecy pages and static resources remain available. Reconnect to synchronize progress and receive the latest content.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>
