@@ -447,20 +447,24 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   if(!itemSnap.exists)throw new Error('The payable item was not found.');
   const item=itemSnap.data()||{};
   if(!(await itemVisibleToUser(ctx,item)))throw new Error('This charge is not available to your account.');
-  if(text(item.itemType)==='organization_subscription'){
-    await requireOrganizationSubscriptionConsumer(ctx);
-  }
+  const isSubscription=text(item.itemType)==='organization_subscription';
+  const billingTarget=isSubscription?await requireInstitutionalSubscriptionConsumer(ctx):null;
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
-  const organizationId=text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
+  const organizationId=isSubscription
+    ?billingTarget?.type==='organization'?billingTarget.id:''
+    :text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
+  const billingTenantType=billingTarget?.type||(organizationId?'organization':'');
+  const billingTenantId=billingTarget?.id||organizationId;
   let amountMinor=Number(item.amountMinor);
   let currency=normalizeCurrency(item.currency);
   let pricingSnapshot:Record<string,unknown>={};
-  if(text(item.itemType)==='organization_subscription'){
+  if(isSubscription){
+    if(!billingTarget)throw new Error('An institutional billing tenant is required for subscription checkout.');
     const plan=await ctx.db.doc('system/plans/catalog/'+text(item.itemId)).get();
     if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
-    await validateOrganizationPlanCapacity(ctx.db,organizationId,object(plan.data()?.quotas));
-    const quote=await quoteSubscriptionPlan(ctx.db,organizationId,plan.data()||{});
+    await validateBillingTenantPlanCapacity(ctx.db,billingTarget.type,billingTarget.id,object(plan.data()?.quotas));
+    const quote=await quoteSubscriptionPlanForTenant(ctx.db,billingTarget.type,billingTarget.id,plan.data()||{});
     amountMinor=quote.amountMinor;currency=quote.billingCurrency;
     if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
     pricingSnapshot={
@@ -468,22 +472,22 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
       exchangeRate:quote.exchangeRate,fxSource:quote.fxSource,fxUpdatedAt:quote.fxUpdatedAt,
     };
-    const current=await ctx.db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const current=await billingTenantSubscriptionRef(ctx.db,billingTarget.type,billingTarget.id).get();
     const currentData=current.data()||{};
     const end=Date.parse(text(currentData.currentPeriodEnd));
     const renewalWindowMs=7*24*60*60*1000;
     const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===text(item.itemId);
     const planInterval=text(plan.data()?.interval)||'month';
     if(sameActivePlan&&planInterval==='one_time'){
-      throw new Error('This organization already has this one-time subscription package active.');
+      throw new Error('This institutional tenant already has this one-time subscription package active.');
     }
     if(sameActivePlan&&Number.isFinite(end)&&end-Date.now()>renewalWindowMs){
-      throw new Error('This organization already has this subscription package active. Renewal opens seven days before the current period ends.');
+      throw new Error('This institutional tenant already has this subscription package active. Renewal opens seven days before the current period ends.');
     }
   }
   if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
   const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
-  const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+organizationId);
+  const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+billingTenantType+':'+billingTenantId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
   const paymentId='pay_'+randomUUID().replaceAll('-','');
   const paymentRef=ctx.db.doc('paymentTransactions/'+paymentId);
@@ -508,10 +512,12 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       id:paymentId,reference,payerUid:ctx.auth.uid,payerEmail:text(ctx.auth.email)||text(ctx.profile.email),
       payerName:text(ctx.profile.displayName)||text(ctx.auth.name)||text(ctx.auth.email),
       scope:text(item.scope) as PaymentTransaction['scope'],organizationId,tenantId:text(item.tenantId),
+      billingTenantType,billingTenantId,
       payableItemId,itemId:text(item.itemId),itemType:text(item.itemType) as PaymentTransaction['itemType'],
       description:text(item.name),itemSnapshot:{
         name:text(item.name),description:text(item.description),itemId:text(item.itemId),
         itemType:text(item.itemType),amountMinor,currency,organizationName:text(item.organizationName),
+        billingTenantType,billingTenantId,
         pricing:pricingSnapshot,fulfilmentConfig:object(item.fulfilmentConfig),
       },
       currency,amountMinor,amountDecimal:minorToDecimal(amountMinor,currency),
@@ -523,7 +529,10 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       createdAt:FieldValue.serverTimestamp(),initiatedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
     };
     tx.create(paymentRef,payment);
-    tx.set(lockRef,{paymentId,payerUid:ctx.auth.uid,payableItemId,organizationId,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.set(lockRef,{
+      paymentId,payerUid:ctx.auth.uid,payableItemId,organizationId,billingTenantType,billingTenantId,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
   });
   if(reused){
     let checkout:null|Record<string,unknown>=null;
