@@ -3,10 +3,11 @@ import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  getRedirectResult,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from 'firebase/auth';
 import { auth, authPersistenceReady } from '../lib/firebase';
@@ -31,18 +32,23 @@ export const emailSignUp = async (email: string, password: string) => {
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(requireAuth(), email.trim());
 
-/** Android Google sign-in uses native account selection; the Web SDK consumes the returned ID token. */
+/** Complete a pending web redirect before the root auth observer decides which screen to render. */
+export async function completeGoogleRedirectSignIn() {
+  if (Capacitor.isNativePlatform()) return null;
+  const firebaseAuth = requireAuth();
+  await authPersistenceReady;
+  return getRedirectResult(firebaseAuth);
+}
+
+/** Android uses native account selection; web uses Firebase redirect to avoid COOP popup-window polling. */
 export async function googleSignIn() {
   const firebaseAuth = requireAuth();
   await authPersistenceReady;
   if (!Capacitor.isNativePlatform()) {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    // Web sign-in uses a popup so the Firebase Auth state stays in the
-    // current application context. This avoids the redirect race that could
-    // return the user to the login screen before the Auth observer restored
-    // the Google session.
-    return signInWithPopup(firebaseAuth, provider);
+    await signInWithRedirect(firebaseAuth, provider);
+    return null;
   }
   const result = await FirebaseAuthentication.signInWithGoogle();
   const idToken = result.credential?.idToken;
