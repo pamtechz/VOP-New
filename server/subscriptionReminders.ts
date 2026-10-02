@@ -1,3 +1,4 @@
+import { ensureOrganizationDefaultSubscription } from './tenant.js';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 
 const RECIPIENT_ROLES=new Set(['owner','admin']);
@@ -81,6 +82,7 @@ export async function remindFreeTierOrganizations(db:Firestore,limit=200){
   const organizations=await db.collection('organizations').where('status','==','active').limit(Math.max(1,Math.min(500,limit))).get();
   let freeTierOrganizations=0,delivered=0,recipients=0;
   for(const organization of organizations.docs){
+    await ensureOrganizationDefaultSubscription(db,organization.id,'system:subscription-reconciliation');
     const result=await sendFreeTierUpgradeReminder(db,organization.id);
     if(!result.freeTier)continue;
     freeTierOrganizations+=1;
