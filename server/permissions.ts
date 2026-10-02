@@ -107,7 +107,7 @@ async function permissionMatrixAllows(
   if(ctx.isSuperAdmin)return true;
   // Payable-item administration is a platform finance control. Never allow an
   // organization/hierarchy role to recover it through a legacy/custom matrix.
-  if(resource==='payable_items')return false;
+  if (resource === 'payable_items') return false;
   const matrix=await loadPermissionMatrix(ctx);
   const role=roleForPermission({
     role:ctx.profile.role,
