@@ -3,7 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceOrganizationMembershipQuotas, organizationUsageSnapshot } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { createNotification } from '../../server/notifications.js';
-import { normalizeCountryCode, organizationBillingProfile } from '../../server/billing.js';
+import { normalizedBillingCountryName, organizationBillingProfile } from '../../server/billing.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -152,17 +152,18 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
       const name = String(body.name || '').trim();
       const organizationId = id(body.id || slug(name));
-      const countryCode=normalizeCountryCode(body.countryCode||'ZM');
+      const billingCountry=normalizedBillingCountryName(body.billingCountry||'Zambia');
+      const billingProfile=organizationBillingProfile({billingCountry});
       const ref = bootstrapDb.doc(`organizations/${organizationId}`);
       if ((await ref.get()).exists) throw new Error('That organization already exists.');
       const now = new Date().toISOString();
-      const billingProfile=organizationBillingProfile({countryCode});
       await ref.set({
-        id:organizationId,name,slug:slug(name),status:'active',ownerUid:'',countryCode,billingProfile,
+        id:organizationId,name,slug:slug(name),status:'active',ownerUid:'',
+        billingCountry,countryCode:billingProfile.countryCode,billingProfile,
         plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
         createdAt:now,updatedAt:now,
       });
-      return res.status(200).json({ ok:true,item:{id:organizationId,name,status:'active',countryCode,billingProfile} });
+      return res.status(200).json({ ok:true,item:{id:organizationId,name,status:'active',billingCountry,countryCode:billingProfile.countryCode,billingProfile} });
     }
     if (action === 'acceptInvite') {
       const token = String(body.token || '').trim();
@@ -431,7 +432,7 @@ export default async function handler(req: Request, res: Response) {
         const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId) || inferredOrganizationIds.has(doc.id)).map(async organization => {
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -443,7 +444,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
           status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'),
-          quotas:data.quotas || {}, countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
+          quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
         }]});
       }
       const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
@@ -458,6 +459,7 @@ export default async function handler(req: Request, res: Response) {
           ownerUid: String(data.ownerUid || ''),
           plan: String(data.plan || 'standard'),
           quotas: data.quotas || {},
+          billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')),
           countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'),
           billingProfile:data.billingProfile||organizationBillingProfile(data),
           createdAt: String(data.createdAt || ''),
@@ -488,14 +490,16 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'update') {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       if (!ctx.isSuperAdmin && data.plan !== undefined) throw new Error('Only the VOP Super Admin can change organization plans.');
-      if (!ctx.isSuperAdmin && data.countryCode !== undefined) throw new Error('Only the VOP Super Admin can change an organization billing country.');
-      const nextCountryCode=data.countryCode!==undefined?normalizeCountryCode(data.countryCode):undefined;
+      if (!ctx.isSuperAdmin && data.billingCountry !== undefined) throw new Error('Only the VOP Super Admin can change an organization billing country.');
+      const nextBillingCountry=data.billingCountry!==undefined?normalizedBillingCountryName(data.billingCountry):undefined;
+      const nextBillingProfile=nextBillingCountry?organizationBillingProfile({billingCountry:nextBillingCountry}):undefined;
       const allowed: Record<string, unknown> = {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
         plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
-        countryCode:nextCountryCode,
-        billingProfile:nextCountryCode?organizationBillingProfile({countryCode:nextCountryCode}):undefined,
+        billingCountry:nextBillingCountry,
+        countryCode:nextBillingProfile?.countryCode,
+        billingProfile:nextBillingProfile,
         quotas: ctx.isSuperAdmin && data.quotas !== undefined ? normalizeQuotas(data.quotas) : undefined,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
         updatedAt: FieldValue.serverTimestamp(),
