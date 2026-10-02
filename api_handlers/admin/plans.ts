@@ -11,6 +11,14 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 function text(value: unknown, fallback = '') { return String(value ?? fallback).trim(); }
 function object(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function planErrorStatus(error:unknown){
+  const message=error instanceof Error?error.message:'';
+  if(/sign in|authentication/i.test(message))return 401;
+  if(/only the VOP Super Admin|outside your|cannot access|permission|authorized/i.test(message))return 403;
+  if(/does not exist|not found|no subscription record|organization is not available/i.test(message))return 404;
+  if(/below the organization|already has|already active|only an active|one-time subscription|scheduled cancellation|cannot be deleted/i.test(message))return 409;
+  return 400;
+}
 function timestampIso(value: unknown) {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -407,6 +415,6 @@ export default async function handler(req: Request, res: Response) {
 
     throw new Error('Unsupported plan action.');
   } catch (error) {
-    return res.status(403).json({ error: error instanceof Error ? error.message : 'Plan request failed.' });
+    return res.status(planErrorStatus(error)).json({ error: error instanceof Error ? error.message : 'Plan request failed.' });
   }
 }
