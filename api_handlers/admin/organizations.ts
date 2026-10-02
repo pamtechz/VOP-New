@@ -104,6 +104,16 @@ async function resolveManagedOrganization(ctx: Awaited<ReturnType<typeof authent
   return requestedOrg;
 }
 
+const CANDIDATE_ROLES=new Set(['learner','student','candidate']);
+function organizationPeopleCounts(documents:Array<{data:()=>Record<string,unknown>}>){
+  let candidates=0;
+  for(const document of documents){
+    const role=String(document.data()?.role||'').trim().toLowerCase();
+    if(CANDIDATE_ROLES.has(role))candidates+=1;
+  }
+  return {memberCount:documents.length-candidates,candidateCount:candidates};
+}
+
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
   try {
@@ -427,7 +437,8 @@ export default async function handler(req: Request, res: Response) {
         const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId) || inferredOrganizationIds.has(doc.id)).map(async organization => {
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
+          const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -436,16 +447,18 @@ export default async function handler(req: Request, res: Response) {
         const organization = await bootstrapDb.doc(`organizations/${ctx.organizationId}`).get();
         const data = organization.data() || {};
         const members = await organization.ref.collection('members').where('active','==',true).get();
+        const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
           status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'),
-          quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
+          quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), ...people
         }]});
       }
       const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
       const items = await Promise.all(snap.docs.map(async organization => {
         const data = organization.data() || {};
         const members = await organization.ref.collection('members').where('active','==',true).get();
+        const people=organizationPeopleCounts(members.docs as unknown as Array<{data:()=>Record<string,unknown>}>);
         return {
           id: organization.id,
           name: String(data.name || organization.id),
@@ -459,7 +472,7 @@ export default async function handler(req: Request, res: Response) {
           billingProfile:data.billingProfile||organizationBillingProfile(data),
           createdAt: String(data.createdAt || ''),
           updatedAt: String(data.updatedAt || ''),
-          memberCount: members.size,
+          ...people,
         };
       }));
       return res.status(200).json({ ok: true, items });
