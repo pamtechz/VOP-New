@@ -302,9 +302,6 @@
   .vop-guide-completion-card{grid-template-columns:34px minmax(0,1fr)}
   .vop-guide-completion-card button{grid-column:1/-1;width:100%}
 }
-[data-theme="dark"] .vop-guide-hero{background:#050505!important;background-image:none!important;border-bottom:1px solid #292929}
-[data-theme="dark"] .vop-guide-module-badge{background:#111!important;border-color:#3a3a3a!important;color:#f2c15d!important}
-[data-theme="dark"] .vop-guide-completion-card{box-shadow:none}
 
 /* Retake confirmation ------------------------------------------------------ */
 .vop-retake-summary{
@@ -337,4 +334,3 @@
 .vop-retake-cancel{border:1px solid var(--theme-border-strong);background:var(--theme-surface);color:var(--theme-text)}
 .vop-retake-confirm-button{border:1px solid #b45309;background:#b45309;color:#fff}
 .vop-retake-confirm-button:disabled,.vop-retake-cancel:disabled{opacity:.55;cursor:not-allowed}
-[data-theme="dark"] .vop-retake-confirm-button{background:#f2c15d;color:#050505;border-color:#f2c15d}
