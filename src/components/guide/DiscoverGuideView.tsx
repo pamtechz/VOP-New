@@ -61,7 +61,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     lessonIsComplete(guide,lesson,currentUser,threshold)).length;
   const progressPercent=studyLessons.length
     ?Math.round(completedCount*100/studyLessons.length):0;
-  const allGuideAssessmentsPassed=guideAssessments.length>0&&guideAssessments.every(item=>{
+  const allGuideAssessmentsPassed=guideAssessments.length===0||guideAssessments.every(item=>{
     const score=lessonScoreForDisplay(guide,item,currentUser);
     const configured=Number(item.assessmentPassThreshold);
     const passMark=Number.isFinite(configured)&&configured>=1&&configured<=100?configured:threshold;
