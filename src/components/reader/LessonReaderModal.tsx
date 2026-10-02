@@ -34,7 +34,8 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   const t = (key: string, fallback: string) => getTranslation(key, getUiLocale(), settings.customTranslations, fallback, 'LessonReaderModal');
   const configured = isLessonConfigured(lesson);
   const pages = configured ? lesson.contentPages! : [];
-  const [currentPageIndex, setCurrentPageIndex] = useState(() => Math.max(0, initialPageIndex));
+  const clampPageIndex=(value:number)=>Math.max(0,Math.min(Math.max(0,pages.length-1),Math.trunc(value)||0));
+  const [currentPageIndex, setCurrentPageIndex] = useState(() => clampPageIndex(initialPageIndex));
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [notice, setNotice] = useState('');
   const currentPage = pages[currentPageIndex];
@@ -60,7 +61,7 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
     </div>:null;
   };
 
-  useEffect(() => { setCurrentPageIndex(Math.max(0, initialPageIndex)); }, [lesson.id, initialPageIndex]);
+  useEffect(() => { setCurrentPageIndex(clampPageIndex(initialPageIndex)); }, [lesson.id, initialPageIndex, pages.length]);
 
   useEffect(() => {
     onPageChange?.(currentPageIndex);
@@ -99,8 +100,9 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
   };
 
   const persistResume = async (pageIndex: number) => {
-    if (!configured || pages.length < 1) return;
-    const saved=await saveLessonResume(guide.id,lesson.id,pageIndex,guide.language);
+    if (lesson.type!=='Lesson' || !configured || pages.length < 1) return;
+    const safePageIndex=clampPageIndex(pageIndex);
+    const saved=await saveLessonResume(guide.id,lesson.id,safePageIndex,guide.language);
     if (saved === 'queued') setNotice('Reading position saved on this device and will synchronize when you reconnect.');
   };
 
