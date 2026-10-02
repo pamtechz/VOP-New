@@ -4,7 +4,7 @@ import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSourc
 import { FieldValue } from 'firebase-admin/firestore';
 import {
   authenticateTenant, billingTenantFromContext, canEditCanonicalContent, enforceBillingTenantQuota,
-  enforceQuota, enforceOrganizationQuota, requireOrgRole, writeTenantAudit, tenantOwnerKey,
+  ensureBillingTenantDefaultSubscription, enforceQuota, enforceOrganizationQuota, requireOrgRole, writeTenantAudit, tenantOwnerKey,
   organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent,
 } from '../../server/tenant.js';
 import { requireOrganizationSubscriptionFeature, requirePermission, requireSubscriptionFeature, resourceForCollection } from '../../server/permissions.js';
@@ -1093,6 +1093,13 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Only the assigned Union administrator or VOP Super Admin can manage this union profile.');
         }
         await ref.set({ ...candidate, id, updatedAt: FieldValue.serverTimestamp(), createdAt: existing.data()?.createdAt || new Date().toISOString() }, { merge:true });
+        if(!existing.exists&&ctx.isSuperAdmin){
+          const billingType=collection==='unions'?'union'
+            :collection==='conferences'?'conference'
+            :collection==='districts'?'district'
+            :'church';
+          await ensureBillingTenantDefaultSubscription(ctx.db,billingType,id,ctx.auth.uid);
+        }
         return res.status(200).json({ ok:true, id });
       }
       throw new Error('Unsupported hierarchy action.');
