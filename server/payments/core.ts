@@ -434,6 +434,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   if(text(item.itemType)==='organization_subscription'){
     const plan=await ctx.db.doc('system/plans/catalog/'+text(item.itemId)).get();
     if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
+    await validateOrganizationPlanCapacity(ctx.db,organizationId,object(plan.data()?.quotas));
     const quote=await quoteSubscriptionPlan(ctx.db,organizationId,plan.data()||{});
     amountMinor=quote.amountMinor;currency=quote.billingCurrency;
     if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
