@@ -60,7 +60,10 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     name:'',description:'',price:'',interval:'month',sortOrder:'0',active:true,defaultForUnsubscribed:false,
     quotas:emptyPackageQuotas(),features:defaultPackageFeatures(),
   });
-  const [billingSettings,setBillingSettings]=useState({usdToZmwRate:'',fxSource:'frankfurter',fxQuoteTtlMinutes:'1440',fxUpdatedAt:'',fxProviderDate:''});
+  const [billingSettings,setBillingSettings]=useState({
+    usdToZmwRate:'',fxSource:'frankfurter',fxQuoteTtlMinutes:'1440',fxUpdatedAt:'',fxProviderDate:'',
+    subscriptionAudience:{learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true},
+  });
   const [draft,setDraft]=useState({
     name:'',description:'',itemType:'programme_registration' as PayableItemType,
     targetId:'',organizationId:'',scope:currentUser.role==='super_admin'?'platform':'organization',
@@ -92,12 +95,22 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         setItems(itemResult.items);setProviders(providerResult.items);
         setPackages((packageResult.items||[]) as SubscriptionPackage[]);
         const settings=(billingResult.item||{}) as Record<string,unknown>;
+        const subscriptionAudience=settings.subscriptionAudience&&typeof settings.subscriptionAudience==='object'
+          ?settings.subscriptionAudience as Record<string,unknown>:{};
         setBillingSettings({
           usdToZmwRate:Number(settings.usdToZmwRate||0)>0?String(settings.usdToZmwRate):'',
           fxSource:String(settings.fxSource||'frankfurter'),
           fxQuoteTtlMinutes:String(settings.fxQuoteTtlMinutes||1440),
           fxUpdatedAt:String(settings.fxUpdatedAt||''),
           fxProviderDate:String(settings.fxProviderDate||''),
+          subscriptionAudience:{
+            learnersCandidates:subscriptionAudience.learnersCandidates===true,
+            organizations:subscriptionAudience.organizations!==false,
+            churches:subscriptionAudience.churches!==false,
+            districts:subscriptionAudience.districts!==false,
+            conferences:subscriptionAudience.conferences!==false,
+            unions:subscriptionAudience.unions!==false,
+          },
         });
       }else{
         setItems([]);setProviders([]);setPackages([]);
@@ -313,13 +326,14 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     try{
       const result=await adminApi('/api/admin/plans',{action:'refreshBillingRate'});
       const settings=(result.item||{}) as Record<string,unknown>;
-      setBillingSettings({
+      setBillingSettings(previous=>({
+        ...previous,
         usdToZmwRate:Number(settings.usdToZmwRate||0)>0?String(settings.usdToZmwRate):'',
         fxSource:String(settings.fxSource||'frankfurter'),
         fxQuoteTtlMinutes:String(settings.fxQuoteTtlMinutes||1440),
         fxUpdatedAt:String(settings.fxUpdatedAt||''),
         fxProviderDate:String(settings.fxProviderDate||''),
-      });
+      }));
       setMessage('Daily USD → ZMW rate refreshed from Frankfurter.');
     }catch(reason){setError(reason instanceof Error?reason.message:'The daily exchange rate could not be refreshed.');}
     finally{setBusy(false);}
@@ -327,16 +341,19 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
 
   const saveBillingSettings=async()=>{
     if(!isSuperAdmin)return;
-    const rate=Number(billingSettings.usdToZmwRate);
-    if(!Number.isFinite(rate)||rate<=0){setError('Enter the current USD to ZMW exchange rate.');return;}
+    const rawRate=billingSettings.usdToZmwRate.trim();
+    const rate=rawRate?Number(rawRate):0;
+    if(rawRate&&(!Number.isFinite(rate)||rate<=0)){setError('Enter a valid USD to ZMW exchange rate or leave it blank and refresh later.');return;}
     setBusy(true);setError('');
     try{
       await adminApi('/api/admin/plans',{
-        action:'updateBillingSettings',usdToZmwRate:rate,
+        action:'updateBillingSettings',
+        ...(rawRate?{usdToZmwRate:rate}:{}),
         fxSource:billingSettings.fxSource.trim()||'platform-configured',
         fxQuoteTtlMinutes:Math.max(15,Math.trunc(Number(billingSettings.fxQuoteTtlMinutes)||1440)),
+        subscriptionAudience:billingSettings.subscriptionAudience,
       });
-      setMessage('Platform exchange-rate policy updated. Zambia subscription quotes will use the new rate.');
+      setMessage('Platform billing and subscription audience policy updated.');
       await load();
     }catch(reason){setError(reason instanceof Error?reason.message:'Billing settings could not be saved.');}
     finally{setBusy(false);}
@@ -409,7 +426,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         onDeletePlan={isSuperAdmin?deletePackage:undefined}
         onOpenCheckout={onOpenCheckout}
       />
-      {isSuperAdmin&&<section className="vop-payment-reconciliation vop-billing-policy-card"><Settings2 size={34}/><div><h2>Billing currency policy</h2><p>Plans have one canonical USD price. Zambia organizations receive a locked ZMW quote from the daily Frankfurter USD→ZMW rate. VOP caches the rate server-side and can fall back to a recently verified rate if the upstream feed is temporarily unavailable.</p><div className="vop-payable-editor-grid"><label><span>USD → ZMW rate</span><input inputMode="decimal" value={billingSettings.usdToZmwRate} onChange={e=>setBillingSettings(v=>({...v,usdToZmwRate:e.target.value,fxSource:'manual'}))} placeholder="Daily rate"/></label><label><span>Rate source</span><input value={billingSettings.fxSource} readOnly disabled/></label><label><span>Quote validity (minutes)</span><input inputMode="numeric" value={billingSettings.fxQuoteTtlMinutes} onChange={e=>setBillingSettings(v=>({...v,fxQuoteTtlMinutes:e.target.value}))}/></label></div><div className="vop-payment-admin-actions"><button className="btn btn-primary" disabled={busy} onClick={()=>void refreshBillingRate()}><RefreshCw size={16}/>Refresh daily rate</button><button className="btn btn-outline" disabled={busy} onClick={()=>void saveBillingSettings()}><Settings2 size={16}/>Save manual override</button></div>{billingSettings.fxUpdatedAt&&<small>Last refreshed: {new Date(billingSettings.fxUpdatedAt).toLocaleString()}{billingSettings.fxProviderDate?' · provider date '+billingSettings.fxProviderDate:''}</small>}</div></section>}
+      {isSuperAdmin&&<section className="vop-payment-reconciliation vop-billing-policy-card"><Settings2 size={34}/><div><h2>Billing & subscription policy</h2><p>Plans have one canonical USD price. Zambia organizations receive a locked ZMW quote from the daily Frankfurter USD→ZMW rate. Subscription policy is institutional by default; learners/candidates are excluded from individual subscription billing unless Super Admin explicitly enables it.</p><div className="vop-payable-editor-grid"><label><span>USD → ZMW rate</span><input inputMode="decimal" value={billingSettings.usdToZmwRate} onChange={e=>setBillingSettings(v=>({...v,usdToZmwRate:e.target.value,fxSource:'manual'}))} placeholder="Daily rate"/></label><label><span>Rate source</span><input value={billingSettings.fxSource} readOnly disabled/></label><label><span>Quote validity (minutes)</span><input inputMode="numeric" value={billingSettings.fxQuoteTtlMinutes} onChange={e=>setBillingSettings(v=>({...v,fxQuoteTtlMinutes:e.target.value}))}/></label></div><fieldset className="vop-billing-audience"><legend>Subscription-bearing accounts</legend><label className="vop-checkbox"><input type="checkbox" checked={billingSettings.subscriptionAudience.learnersCandidates} onChange={e=>setBillingSettings(v=>({...v,subscriptionAudience:{...v.subscriptionAudience,learnersCandidates:e.target.checked}}))}/>Learners / candidates require subscription billing</label><p className="vop-payment-security">Currently off: learner, student and candidate accounts do not require an individual subscription and do not consume member/staff seats. Institutional subscription policy remains enabled for organizations, churches, districts, conferences and unions.</p></fieldset><div className="vop-payment-admin-actions"><button className="btn btn-primary" disabled={busy} onClick={()=>void refreshBillingRate()}><RefreshCw size={16}/>Refresh daily rate</button><button className="btn btn-outline" disabled={busy} onClick={()=>void saveBillingSettings()}><Settings2 size={16}/>Save billing policy</button></div>{billingSettings.fxUpdatedAt&&<small>Last refreshed: {new Date(billingSettings.fxUpdatedAt).toLocaleString()}{billingSettings.fxProviderDate?' · provider date '+billingSettings.fxProviderDate:''}</small>}</div></section>}
     </>}
 
     {isSuperAdmin&&tab==='items'&&<div className="vop-payment-admin-cards">{items.map(item=><article key={item.id}><div><span>{typeLabel(item.itemType)}</span><h3>{item.name}</h3><p>{item.description||'Configured charge'}</p></div><dl><div><dt>Amount</dt><dd>{item.currency} {item.amountDecimal}</dd></div><div><dt>Scope</dt><dd>{organizations.find(org=>org.id===item.organizationId)?.name||typeLabel(item.scope)}</dd></div><div><dt>Status</dt><dd>{item.active?'Active':'Inactive'}</dd></div></dl><footer><button className="btn btn-outline" onClick={()=>startEdit(item)}>Edit</button><button className="btn btn-danger" onClick={()=>void deleteItem(item)}>Remove</button></footer></article>)}</div>}
@@ -431,7 +448,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         <fieldset className="wide"><legend>Organization limits</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_QUOTAS.map(({key,label,description})=><label key={key} title={description}><span>{label}</span><input type="number" min="0" step="1" value={packageDraft.quotas[key]} inputMode="numeric" placeholder="Unlimited" aria-label={label+' limit; leave blank for Unlimited'} onChange={e=>setPackageDraft(v=>({...v,quotas:{...v.quotas,[key]:e.target.value}}))}/></label>)}</div></fieldset>
         <fieldset className="wide"><legend>Included capabilities</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_FEATURES.map(({key,label})=><label key={key}><input type="checkbox" checked={packageDraft.features[key]===true} onChange={e=>setPackageDraft(v=>({...v,features:{...v.features,[key]:e.target.checked}}))}/>{label}</label>)}</div></fieldset>
       </div>
-      <p className="vop-payment-security">Leave a limit blank for Unlimited; enter 0 to disable new usage of that resource. Limits count active, non-archived resources. A $0 active package can be marked as the default free plan; organizations without a plan are subscribed automatically. The package identifier and matching organization-subscription payable item are generated automatically for paid plans only. Seat limits apply to the whole organization: owners, admins, staff, mentors, teachers, candidates and learners all consume active seats. Candidate and mentor limits are additional caps inside the total seat allowance.</p>
+      <p className="vop-payment-security">Leave a limit blank for Unlimited; enter 0 to disable new usage of that resource. Limits count active, non-archived resources. A $0 active package can be marked as the default free plan; organizations without a plan are subscribed automatically. The package identifier and matching organization-subscription payable item are generated automatically for paid plans only. Member/staff seats cover owners, organization admins, editors, teachers, mentors and other institutional staff. Learners, students and candidates are tracked separately and never consume member/staff seats; their candidate limit is enforced only when Super Admin enables learner/candidate subscription billing.</p>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void savePackage()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save subscription package</button>
     </section></div>}
 

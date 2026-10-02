@@ -250,7 +250,9 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
   assert.match(contentApi,/required\|subscription\|organization/);
 
-  assert.match(admin,/loadOrganizationSubscriptionFeatures/);
+  assert.match(admin,/loadOrganizationSubscriptionState/);
+  assert.match(admin,/exhaustedQuotaKeys/);
+  assert.match(admin,/freeTier/);
   assert.match(admin,/SUBSCRIPTION_FEATURES\.map\(feature=>\[feature\.key,false\]\)/);
   assert.match(admin,/subscriptionFeatureForTab/);
   assert.match(admin,/candidates:'candidates'/);
@@ -477,6 +479,56 @@ test('organization records open as read-only browser-navigable pages and require
   assert.match(admin,/addEventListener\('popstate'/);
   assert.match(css,/\.vop-org-detail-page/);
   assert.match(css,/\.vop-org-detail-card/);
+});
+
+test('candidate billing, free-tier reminders and Super Admin exemption are enforced as separate concerns',()=>{
+  const shared=read('shared/subscriptions.ts');
+  const tenant=read('server/tenant.ts');
+  const permissions=read('server/permissions.ts');
+  const billing=read('server/billing.ts');
+  const plans=read('api_handlers/admin/plans.ts');
+  const payments=read('src/pages/PaymentManagement.tsx');
+  const workspace=read('src/components/admin/SubscriptionWorkspace.tsx');
+  const organizations=read('src/pages/OrganizationManagement.tsx');
+  const organizationApi=read('api_handlers/admin/organizations.ts');
+  const admin=read('src/pages/AdminPage.tsx');
+  const reminders=read('server/subscriptionReminders.ts');
+  const paymentApi=read('api/payments.ts');
+
+  assert.match(shared,/label:'Member \/ staff seats'/);
+  assert.match(shared,/Learners\/candidates do not consume member seats/);
+  assert.match(tenant,/const memberSeats=roles\.filter\(role=>!CANDIDATE_MEMBERSHIP_ROLES\.has\(role\)\)\.length/);
+  assert.match(tenant,/seats:memberSeats/);
+  assert.match(tenant,/nextConsumesMemberSeat=!CANDIDATE_MEMBERSHIP_ROLES\.has\(normalizedRole\)/);
+  assert.match(tenant,/audience\.learnersCandidates&&usage\.candidates\+candidateDelta>maxCandidates/);
+  assert.match(tenant,/if\(!audience\.organizations\|\|ctx\.isSuperAdmin\)return/);
+  assert.match(permissions,/if\(!audience\.organizations\)return null/);
+
+  assert.match(billing,/learnersCandidates:audience\.learnersCandidates===true/);
+  assert.match(billing,/organizations:audience\.organizations!==false/);
+  assert.match(payments,/Learners \/ candidates require subscription billing/);
+  assert.match(payments,/do not require an individual subscription and do not consume member\/staff seats/);
+  assert.match(workspace,/Not billed/);
+  assert.match(workspace,/Free version active/);
+  assert.match(plans,/exhaustedQuotaKeys/);
+  assert.match(plans,/freeTier/);
+
+  assert.match(reminders,/RECIPIENT_ROLES=new Set\(\['owner','admin'\]\)/);
+  assert.match(reminders,/subscription_free_/);
+  assert.match(reminders,/free_subscription_upgrade/);
+  assert.match(paymentApi,/remindFreeTierOrganizations\(db,200\)/);
+
+  assert.match(organizationApi,/candidateCount/);
+  assert.match(organizationApi,/memberCount:documents\.length-candidates/);
+  assert.match(organizations,/const institutionalMembers=members\.filter/);
+  assert.match(organizations,/Candidates \/ learners/);
+  assert.match(organizations,/Open Candidates workspace/);
+  assert.doesNotMatch(organizations,/\['learner','Learner'\].*memberRoleOptions/);
+
+  assert.match(admin,/vop-free-tier-banner/);
+  assert.match(admin,/Free plan limit reached/);
+  assert.match(admin,/New usage in those categories is blocked/);
+  assert.match(admin,/if\(isSuperAdmin\|\|isHierarchyAdmin/);
 });
 
 test('notification actions preserve exact admin destinations',()=>{

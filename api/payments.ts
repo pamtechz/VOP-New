@@ -1,6 +1,7 @@
 import { getAdminDb } from '../server/tenant.js';
 import { getPaymentProvider } from '../server/payments/providers.js';
 import { refreshPlatformBillingRate } from '../server/billing.js';
+import { remindFreeTierOrganizations } from '../server/subscriptionReminders.js';
 import {
   adminCancelRefund, adminCompleteManualRefund, adminExportTransactions, adminListTransactions,
   adminPaymentDetails, adminProviderConfig, adminReconcile, adminRequestRefund,
@@ -71,8 +72,13 @@ export default async function handler(req:Request,res:Response){
       if(!secret||header(req,'authorization')!=='Bearer '+secret)return res.status(401).json({error:'Unauthorized.'});
       const db=getAdminDb();
       const [payments,refunds,subscriptions]=await Promise.all([
-        reconcilePendingPayments(db,100),reconcilePendingRefunds(db,100),reconcileExpiredOrganizationSubscriptions(db,200),
+        reconcilePendingPayments(db,100),
+        reconcilePendingRefunds(db,100),
+        reconcileExpiredOrganizationSubscriptions(db,200),
       ]);
+      // Subscription lifecycle must settle before deciding who belongs on the
+      // free tier and who should receive the daily upgrade reminder.
+      const freeTierReminders=await remindFreeTierOrganizations(db,200);
       let fx:Record<string,unknown>;
       try{
         const refreshed=await refreshPlatformBillingRate(db);
@@ -81,7 +87,7 @@ export default async function handler(req:Request,res:Response){
         // FX refresh must not prevent transaction/refund/subscription reconciliation.
         fx={ok:false,error:error instanceof Error?error.message:'Daily FX refresh failed.'};
       }
-      return res.status(200).json({ok:true,summary:{payments,refunds,subscriptions,fx}});
+      return res.status(200).json({ok:true,summary:{payments,refunds,subscriptions,freeTierReminders,fx}});
     }
 
     const body=object(req.body);

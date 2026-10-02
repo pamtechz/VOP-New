@@ -1654,3 +1654,9 @@
 .vop-org-invite-result{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:14px;align-items:center;padding:14px;border:1px solid var(--theme-border);border-radius:12px;background:var(--theme-surface-soft)}
 .vop-org-invite-result>div:first-child{display:grid;gap:7px}.vop-org-invite-result input{width:100%;min-height:39px;padding:8px 10px;border:1px solid var(--theme-border-strong);border-radius:9px;background:var(--theme-input);color:var(--theme-title)}.vop-org-invite-result>div:last-child{display:grid;place-items:center;gap:5px}.vop-org-invite-result img{width:170px;height:170px;padding:6px;border-radius:9px;background:var(--qr-paper,#fff)}.vop-org-invite-result small{display:flex;align-items:center;gap:4px;color:var(--theme-muted);font-size:9px}
 @media(max-width:700px){.vop-org-invite-result{grid-template-columns:1fr}.vop-org-invite-result img{width:160px;height:160px}}
+
+
+/* Subscription state banners */
+.vop-free-tier-banner{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;margin-bottom:16px;padding:13px 15px;border:1px solid var(--theme-border-strong);border-radius:12px;background:var(--theme-surface-soft);color:var(--theme-title)}
+.vop-free-tier-banner>svg{color:var(--vop-gold-600);flex:none}.vop-free-tier-banner>div{display:grid;gap:3px}.vop-free-tier-banner strong{font-size:13px}.vop-free-tier-banner span{font-size:11px;line-height:1.5;color:var(--theme-muted)}.vop-free-tier-banner.limit-reached{border-color:var(--danger-border,#f4b4b4);background:var(--danger-soft,#fff3f3)}.vop-free-tier-banner.limit-reached>svg{color:var(--danger,#b42318)}
+@media(max-width:700px){.vop-free-tier-banner{grid-template-columns:auto minmax(0,1fr)}.vop-free-tier-banner>button{grid-column:1/-1;width:100%;justify-content:center}}

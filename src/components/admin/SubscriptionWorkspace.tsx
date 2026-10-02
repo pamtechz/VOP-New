@@ -24,6 +24,10 @@ type Overview={
   featureEntitlements:Record<string,unknown>;
   usage:Usage;
   billingProfile:Record<string,unknown>;
+  subscriptionAudience?:{learnersCandidates?:boolean;organizations?:boolean;churches?:boolean;districts?:boolean;conferences?:boolean;unions?:boolean};
+  freeTier?:boolean;
+  paidPlanActive?:boolean;
+  exhaustedQuotaKeys?:string[];
   billingAccessSuspended:boolean;
   billingSuspendedReason:string;
 };
@@ -66,8 +70,9 @@ function reasonLabel(value:unknown){
   return String(value||'').replaceAll('_',' ').replace(/\b\w/g,character=>character.toUpperCase())||'Not recorded';
 }
 
-function planFitsUsage(plan:SubscriptionPackageView,usage:Usage){
+function planFitsUsage(plan:SubscriptionPackageView,usage:Usage,learnersCandidatesBilled:boolean){
   return SUBSCRIPTION_QUOTAS.every(definition=>{
+    if(definition.key==='maxCandidates'&&!learnersCandidatesBilled)return true;
     const limit=subscriptionQuotaLimit(plan.quotas,definition.key);
     return limit===null||Number(usage[definition.usageKey]||0)<=limit;
   });
@@ -240,6 +245,7 @@ export default function SubscriptionWorkspace({
             <div><dt>Activation</dt><dd>{reasonLabel(subscription.activationSource)}</dd></div>
             <div><dt>Billing currency</dt><dd>{String(subscription.billingCurrency||overview.billingProfile?.billingCurrency||currentPlan?.billingCurrency||'—')}</dd></div>
           </dl>
+          {overview.freeTier&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Free version active</strong><span>Your organization is using the free VOP plan. Upgrade for higher institutional limits and paid-plan capacity.</span></div></div>}
           {overview.billingAccessSuspended&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Paid access is suspended</strong><span>{reasonLabel(overview.billingSuspendedReason)}</span></div></div>}
           {cancelAtPeriodEnd&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Cancellation scheduled</strong><span>Access remains available until {formatDate(subscription.currentPeriodEnd)}.</span></div></div>}
           <div className="vop-subscription-actions">
@@ -265,13 +271,14 @@ export default function SubscriptionWorkspace({
         <div className="vop-subscription-section-head"><div><span>Live consumption</span><h3>Usage against plan limits</h3><p>Limits are enforced server-side before new members or resources are created.</p></div><Gauge size={24}/></div>
         <div className="vop-subscription-usage-grid">{SUBSCRIPTION_QUOTAS.map(definition=>{
           const used=Math.max(0,Number(usage[definition.usageKey]||0));
-          const limit=subscriptionQuotaLimit(overview.quotas,definition.key);
+          const excludedFromBilling=definition.key==='maxCandidates'&&overview.subscriptionAudience?.learnersCandidates!==true;
+          const limit=excludedFromBilling?null:subscriptionQuotaLimit(overview.quotas,definition.key);
           const percent=limit===null?0:limit===0?(used>0?100:0):Math.min(100,Math.round((used/limit)*100));
           const level=limit!==null&&used>=limit?'danger':limit!==null&&percent>=80?'warning':'normal';
           return <article key={definition.key} className={'vop-subscription-usage-card '+level}>
-            <div><strong>{definition.label}</strong><span>{used} / {limit===null?'Unlimited':limit}</span></div>
+            <div><strong>{definition.label}</strong><span>{used} / {excludedFromBilling?'Not billed':limit===null?'Unlimited':limit}</span></div>
             <div className="vop-subscription-meter" aria-label={definition.label+' usage'}><span style={{width:(limit===null?0:percent)+'%'}}/></div>
-            <small>{definition.description}</small>
+            <small>{excludedFromBilling?'Learners/candidates are currently excluded from subscription billing by Super Admin policy.':definition.description}</small>
           </article>;
         })}</div>
       </section>
@@ -280,7 +287,7 @@ export default function SubscriptionWorkspace({
         <div className="vop-subscription-section-head"><div><span>Plan catalog</span><h3>{isSuperAdmin?'Available plans for this organization':'Upgrade, downgrade or renew'}</h3><p>{isSuperAdmin?'Manual assignment requires an audit reason. Paid changes should be completed through checkout.':'Prices are quoted for your organization’s billing country. Checkout performs final capacity and payment validation.'}</p></div></div>
         <div className="vop-subscription-plan-grid">{planOptions.map(plan=>{
           const isCurrent=plan.id===currentPlanId;
-          const fits=planFitsUsage(plan,usage);
+          const fits=planFitsUsage(plan,usage,overview.subscriptionAudience?.learnersCandidates===true);
           const freePlan=Number(plan.priceUsd??plan.price??0)===0;
           const enabledFeatures=SUBSCRIPTION_FEATURES.filter(feature=>plan.features?.[feature.key]===true);
           return <article key={plan.id} className={'vop-subscription-plan-card '+(isCurrent?'current':'')+(fits?'':' incompatible')}>

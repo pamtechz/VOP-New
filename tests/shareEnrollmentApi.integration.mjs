@@ -100,6 +100,13 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     const quotaMentor=await identity('quota-mentor');
     const quotaAdmin=await identity('quota-admin');
     const quotaExtra=await identity('quota-extra');
+    const quotaExtraTwo=await identity('quota-extra-two');
+    const quotaCandidateThree=await identity('quota-candidate-three');
+    await db.doc('system/billing').set({
+      subscriptionAudience:{
+        learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
+      },
+    },{merge:true});
 
     const guideId='share-enroll-guide',lessonId='share-enroll-lesson';
     await db.doc('guides/'+guideId).set({
@@ -128,7 +135,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     assert.equal(created.status,200,JSON.stringify(created));
     const code=created.item.code;
 
-    await t.test('subscription seats include candidates, mentors and administrators for the whole organization',async()=>{
+    await t.test('candidates are separate from institutional member seats and learner billing is switchable',async()=>{
       const candidate=await callOrganization(quotaOwner,{
         action:'setMember',organizationId:quotaOrg,uid:quotaCandidate.uid,role:'learner',active:true,
       });
@@ -137,8 +144,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       const secondCandidate=await callOrganization(quotaOwner,{
         action:'setMember',organizationId:quotaOrg,uid:quotaCandidateTwo.uid,role:'learner',active:true,
       });
-      assert.equal(secondCandidate.status,400,JSON.stringify(secondCandidate));
-      assert.match(String(secondCandidate.error||''),/candidate limit/i);
+      assert.equal(secondCandidate.status,200,JSON.stringify(secondCandidate));
 
       const mentor=await callOrganization(quotaOwner,{
         action:'setMember',organizationId:quotaOrg,uid:quotaMentor.uid,role:'mentor',active:true,
@@ -150,18 +156,52 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       });
       assert.equal(adminMember.status,200,JSON.stringify(adminMember));
 
-      const overSeat=await callOrganization(quotaOwner,{
+      const fourthSeat=await callOrganization(quotaOwner,{
         action:'setMember',organizationId:quotaOrg,uid:quotaExtra.uid,role:'editor',active:true,
       });
+      assert.equal(fourthSeat.status,200,JSON.stringify(fourthSeat));
+
+      const overSeat=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaExtraTwo.uid,role:'viewer',active:true,
+      });
       assert.equal(overSeat.status,400,JSON.stringify(overSeat));
-      assert.match(String(overSeat.error||''),/seat limit/i);
+      assert.match(String(overSeat.error||''),/member\/staff seat limit|seat limit/i);
 
       const usage=await callOrganization(quotaOwner,{action:'getUsage',organizationId:quotaOrg});
       assert.equal(usage.status,200,JSON.stringify(usage));
       assert.equal(usage.usage.seats,4);
-      assert.equal(usage.usage.candidates,1);
+      assert.equal(usage.usage.memberSeats,4);
+      assert.equal(usage.usage.candidates,2);
       assert.equal(usage.usage.mentors,1);
       assert.equal(usage.usage.administrators,2);
+
+      await db.doc('system/billing').set({
+        subscriptionAudience:{
+          learnersCandidates:true,organizations:true,churches:true,districts:true,conferences:true,unions:true,
+        },
+      },{merge:true});
+      const billedCandidate=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaCandidateThree.uid,role:'learner',active:true,
+      });
+      assert.equal(billedCandidate.status,400,JSON.stringify(billedCandidate));
+      assert.match(String(billedCandidate.error||''),/candidate limit/i);
+
+      const superAdminOverride=await callOrganization(platformAdmin,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaCandidateThree.uid,role:'learner',active:true,
+      });
+      assert.equal(superAdminOverride.status,200,JSON.stringify(superAdminOverride));
+
+      await db.doc('system/billing').set({
+        subscriptionAudience:{
+          learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
+        },
+      },{merge:true});
+
+      const listed=await callOrganization(quotaOwner,{action:'list'});
+      assert.equal(listed.status,200,JSON.stringify(listed));
+      const quotaSummary=listed.items.find(item=>item.id===quotaOrg);
+      assert.equal(quotaSummary.memberCount,4);
+      assert.equal(quotaSummary.candidateCount,3);
     });
 
     await t.test('active members create explicit lesson invitations and the recipient joins only after accepting',async()=>{

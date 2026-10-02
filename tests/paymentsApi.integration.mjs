@@ -175,6 +175,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const {default:organizationsApi}=await vite.ssrLoadModule('/api_handlers/admin/organizations.ts');
     const {requireOrganizationSubscriptionFeature}=await vite.ssrLoadModule('/server/permissions.ts');
     const {enforceOrganizationQuota}=await vite.ssrLoadModule('/server/tenant.ts');
+    const {sendFreeTierUpgradeReminder}=await vite.ssrLoadModule('/server/subscriptionReminders.ts');
 
     async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner'}={}){
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
@@ -282,6 +283,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     await db.doc('system/billing').set({
       baseCurrency:'USD',zambiaCurrency:'ZMW',usdToZmwRate:25,fxSource:'integration-test',
       fxUpdatedAt:new Date().toISOString(),fxQuoteTtlMinutes:1440,
+      subscriptionAudience:{
+        learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
+      },
     });
     await db.doc('organizations/'+orgA).set({
       id:orgA,name:'Payment Org A',status:'active',billingCountry:'Zambia',countryCode:'ZM',
@@ -300,6 +304,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const organizationOwner=await identity('payment-org-owner',{organizationId:orgA,organizationRole:'owner',membershipRole:'owner'});
     const organizationAdmin=await identity('payment-org-admin',{organizationId:orgA,organizationRole:'admin',membershipRole:'admin'});
     const internationalOwner=await identity('payment-intl-owner',{organizationId:orgIntl,organizationRole:'owner',membershipRole:'owner'});
+    const internationalAdmin=await identity('payment-intl-admin',{organizationId:orgIntl,organizationRole:'admin',membershipRole:'admin'});
+    const internationalLearner=await identity('payment-intl-learner',{organizationId:orgIntl,organizationRole:'learner',membershipRole:'learner'});
     const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
     const refundLearner=await identity('payment-refund-learner',{organizationId:orgA,organizationRole:'learner'});
     const mtnLearner=await identity('payment-mtn-learner',{organizationId:orgA,organizationRole:'learner'});
@@ -379,7 +385,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         name:'Community Free',
         description:'No-cost organization access',
         priceUsd:0,interval:'month',sortOrder:10,active:true,defaultForUnsubscribed:true,
-        quotas:{maxSeats:10,maxCandidates:8,maxMentors:2,maxGuides:5},
+        quotas:{maxSeats:2,maxCandidates:0,maxMentors:2,maxGuides:5},
         features:{curriculum:true,candidates:true,certification:true},
       });
       assert.equal(created.status,200,JSON.stringify(created));
@@ -456,8 +462,32 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
       const organization=(await db.doc('organizations/'+orgIntl).get()).data();
       assert.equal(organization?.plan,planId);
-      assert.equal(organization?.quotas?.maxSeats,10);
+      assert.equal(organization?.quotas?.maxSeats,2);
       assert.equal(organization?.featureEntitlements?.curriculum,true);
+
+      const reminder=await sendFreeTierUpgradeReminder(db,orgIntl,new Date('2026-10-02T12:00:00.000Z'));
+      assert.equal(reminder.recipients,2);
+      assert.equal(reminder.delivered,2);
+
+      const overview=await planCall(internationalOwner,{action:'getSubscription',organizationId:orgIntl});
+      assert.equal(overview.status,200,JSON.stringify(overview));
+      assert.equal(overview.freeTier,true);
+      assert.equal(overview.paidPlanActive,false);
+      assert.equal(overview.usage.seats,2,'owner and organization admin consume institutional seats');
+      assert.equal(overview.usage.candidates,1,'learner remains separate candidate usage');
+      assert.equal(overview.subscriptionAudience.learnersCandidates,false);
+      assert.ok(overview.exhaustedQuotaKeys.includes('maxSeats'),JSON.stringify(overview));
+      assert.equal(overview.exhaustedQuotaKeys.includes('maxCandidates'),false,'candidate limits are not billing gates while learners are excluded');
+
+      const repeatedReminder=await sendFreeTierUpgradeReminder(db,orgIntl,new Date('2026-10-02T18:00:00.000Z'));
+      assert.equal(repeatedReminder.delivered,0,'free-tier reminders are idempotent within a day');
+      const reminderNotifications=await db.collection('notifications').where('organizationId','==',orgIntl).get();
+      const reminderRecipients=new Set(reminderNotifications.docs
+        .filter(document=>document.data()?.metadata?.kind==='free_subscription_upgrade')
+        .map(document=>String(document.data()?.recipientId||'')));
+      assert.equal(reminderRecipients.has(internationalOwner.uid),true);
+      assert.equal(reminderRecipients.has(internationalAdmin.uid),true);
+      assert.equal(reminderRecipients.has(internationalLearner.uid),false,'learners are never payment-upgrade reminder recipients');
 
       const repeated=await planCall(internationalOwner,{
         action:'activateFreePlan',organizationId:orgIntl,planId,
@@ -565,7 +595,13 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(overview.catalogPlan.id,packageId);
       assert.equal(overview.subscription.planSnapshot.quotas.maxSeats,100);
       assert.equal(overview.quotas.maxSeats,100);
-      assert.equal(overview.usage.seats>=3,true);
+      const activeOrgMembers=await db.collection('organizations/'+orgA+'/members').where('active','==',true).get();
+      const expectedCandidateUsage=activeOrgMembers.docs
+        .filter(document=>['learner','student','candidate'].includes(String(document.data()?.role||'').toLowerCase())).length;
+      assert.equal(overview.usage.seats,2,'only owner and organization admin consume member/staff seats');
+      assert.equal(overview.usage.memberSeats,2);
+      assert.equal(expectedCandidateUsage>0,true,'the fixture must include learner/candidate memberships');
+      assert.equal(overview.usage.candidates,expectedCandidateUsage,'candidate usage must equal active candidate-role memberships and remain separate from seats');
       assert.equal(overview.billingAccessSuspended,false);
 
       // Authorization must honor the subscription term immediately, even before
