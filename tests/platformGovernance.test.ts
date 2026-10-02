@@ -321,13 +321,12 @@ test('subscription quota editor preserves unlimited values and usage counts only
 
 test('study progress reserves HTTP 409 for assessment session state conflicts',()=>{
   const progress=read('api/study/progress.ts');
-  const conflictLines=progress.split('\n').filter(line=>line.includes('status(409)'));
-  assert.ok(conflictLines.length>0);
-  for(const line of conflictLines){
-    assert.match(line,/ASSESSMENT_SESSION_|session/);
-  }
-  assert.doesNotMatch(progress,/status\(409\).*ASSESSMENT_CONTENT_CHANGED/);
-  assert.doesNotMatch(progress,/status\(409\).*ASSESSMENT_CONFIGURATION/);
+  const conflictCount=(progress.match(/status\(409\)/g)||[]).length;
+  const sessionConflictCount=(progress.match(/code:'ASSESSMENT_SESSION_[A-Z_]+'/g)||[]).length;
+  assert.ok(conflictCount>0);
+  assert.equal(conflictCount,sessionConflictCount);
+  assert.doesNotMatch(progress,/status\(409\)[\s\S]{0,200}ASSESSMENT_CONTENT_CHANGED/);
+  assert.doesNotMatch(progress,/status\(409\)[\s\S]{0,200}ASSESSMENT_CONFIGURATION/);
   assert.match(progress,/Only study lessons support resume positions/);
   assert.match(progress,/Only study lessons can be marked complete/);
 });
