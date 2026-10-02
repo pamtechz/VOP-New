@@ -452,6 +452,11 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(inbox,/dismissInvite/);
   assert.match(inbox,/clearInviteHistory/);
   assert.match(notifications,/action==='clearAll'/);
+  assert.match(notifications,/authenticateNotificationAccount/);
+  assert.match(notifications,/const ownAction=\['list','markRead','markUnread','delete','markAllRead','clearAll'\]/);
+  assert.match(notifications,/const account=await authenticateNotificationAccount\(req\)/);
+  assert.match(notifications,/const ctx=await authenticateTenant\(req,requestedOrganization\|\|undefined,true\)/);
+  assert.match(notifications,/\?401/);
   assert.match(organizations,/action === 'listInvites'/);
   assert.match(organizations,/action === 'dismissInvite'/);
   assert.match(organizations,/action === 'clearInviteHistory'/);
@@ -462,6 +467,18 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(localization,/Localization application approved/);
   assert.match(prayer,/title:'New prayer request'/);
   assert.match(graduation,/Graduation approval required/);
+});
+
+test('web Google authentication uses redirect flow and restores redirect state before the root auth observer',()=>{
+  const firebaseAuth=read('src/services/firebaseAuth.ts');
+  const root=read('src/Root.tsx');
+
+  assert.match(firebaseAuth,/signInWithRedirect/);
+  assert.match(firebaseAuth,/getRedirectResult/);
+  assert.match(firebaseAuth,/completeGoogleRedirectSignIn/);
+  assert.doesNotMatch(firebaseAuth,/signInWithPopup/);
+  assert.match(root,/await completeGoogleRedirectSignIn\(\)/);
+  assert.match(root,/unsubscribe = onAuthStateChanged/);
 });
 
 test('organization records open as read-only browser-navigable pages and require explicit edit mode',()=>{
