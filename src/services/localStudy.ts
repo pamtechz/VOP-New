@@ -155,16 +155,9 @@ export async function submitQuizAnswers(
   const hidden=feedbackMode==='none';
   const score=hidden?null:Number(body?.score);
   if (hidden || (Number.isFinite(score) && Number(score) >= 0 && Number(score) <= 100)) {
-    // Graduation eligibility is re-evaluated server-side; a 409 simply means the learner has not completed every requirement yet.
-    try {
-      await fetch('/api/admin/graduations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'submit', guideId, ...(score===null?{}:{averageScore:score}) }),
-      });
-    } catch {
-      // Quiz results remain authoritative even when graduation submission is not yet eligible or temporarily unavailable.
-    }
+    // Graduation eligibility is already re-evaluated atomically by /api/study/progress.
+    // Do not issue a second learner graduation POST: an incomplete curriculum is
+    // a normal state and the duplicate request previously surfaced as a noisy 409.
     const policy = body?.retakePolicy || {};
     return {
       score,
