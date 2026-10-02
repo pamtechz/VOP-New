@@ -595,7 +595,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(overview.catalogPlan.id,packageId);
       assert.equal(overview.subscription.planSnapshot.quotas.maxSeats,100);
       assert.equal(overview.quotas.maxSeats,100);
-      assert.equal(overview.usage.seats>=3,true);
+      assert.equal(overview.usage.seats,2,'only owner and organization admin consume member/staff seats');
+      assert.equal(overview.usage.memberSeats,2);
+      assert.equal(overview.usage.candidates>=5,true,'learner payment accounts remain candidate usage only');
       assert.equal(overview.billingAccessSuspended,false);
 
       // Authorization must honor the subscription term immediately, even before
