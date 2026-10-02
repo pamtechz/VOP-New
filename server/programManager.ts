@@ -3,9 +3,9 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {normalizeProgramDraft} from '../shared/programModel.js';
 import {assertMutableTenantResource,platformStewardedResource} from '../shared/platformStewardship.js';
 import {canEditCanonicalContent,canManageOrganizationContent,
-  accessibleOrganizationIds,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
+  accessibleOrganizationIds,billingTenantFromContext,enforceBillingTenantQuota,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
   type TenantContext} from './tenant.js';
-import {requireOrganizationSubscriptionFeature,requirePermission} from './permissions.js';
+import {requireOrganizationSubscriptionFeature,requirePermission,requireSubscriptionFeature} from './permissions.js';
 
 type Reply={status:(code:number)=>Reply;json:(data:unknown)=>void};
 const validId=(raw:unknown)=>{
@@ -111,10 +111,17 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   await requirePermission(ctx,'curriculum',
     action==='delete'?'delete':previous.exists?'update':'create');
   if(!ctx.isSuperAdmin&&targetOrganizationId&&action!=='delete'){
-    await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',targetOrganizationId);
+    if(ctx.tenantType==='hierarchy')await requireSubscriptionFeature(ctx,'curriculum','');
+    else await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',targetOrganizationId);
   }
   if(!ctx.isSuperAdmin&&targetOrganizationId&&action==='upsert'&&!previous.exists){
-    await enforceOrganizationQuota(ctx.db,targetOrganizationId,'programs','maxPrograms');
+    if(ctx.tenantType==='hierarchy'){
+      const billingTarget=billingTenantFromContext(ctx);
+      if(!billingTarget)throw new Error('This hierarchy administrator is not linked to a billing tenant.');
+      await enforceBillingTenantQuota(ctx.db,billingTarget.type,billingTarget.id,'programs','maxPrograms');
+    }else{
+      await enforceOrganizationQuota(ctx.db,targetOrganizationId,'programs','maxPrograms');
+    }
   }
   if(previous.exists){
     if(!(await mayEdit(ctx,current)))

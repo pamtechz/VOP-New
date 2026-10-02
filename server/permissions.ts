@@ -9,7 +9,11 @@ import {
   type PermissionResource,
   type PermissionRole,
 } from '../shared/permissions.js';
-import { ensureOrganizationDefaultSubscription, organizationSubscriptionTermBlockReason, subscriptionAudiencePolicy, type TenantContext } from './tenant.js';
+import {
+  billingTenantAudienceEnabled, billingTenantFromContext, billingTenantRef,
+  billingTenantSubscriptionTermBlockReason, ensureBillingTenantDefaultSubscription,
+  type BillingTenantType, type TenantContext,
+} from './tenant.js';
 import { decidePermission } from '../shared/authorization.js';
 import { SUBSCRIPTION_FEATURES, type SubscriptionFeatureKey } from '../shared/subscriptions.js';
 
@@ -38,34 +42,40 @@ function entitlementRecord(value:unknown):Record<string,unknown>{
     :{};
 }
 
+export async function billingTenantSubscriptionFeatureBlockReason(
+  db:Firestore,
+  feature:SubscriptionFeatureKey,
+  billingTenantType:BillingTenantType,
+  billingTenantId:string,
+){
+  if(!billingTenantId)return 'An institutional billing tenant is required for subscription entitlement checks.';
+  if(!(await billingTenantAudienceEnabled(db,billingTenantType)))return null;
+  await ensureBillingTenantDefaultSubscription(db,billingTenantType,billingTenantId);
+  const tenant=await billingTenantRef(db,billingTenantType,billingTenantId).get();
+  if(!tenant.exists)return 'The institutional billing tenant is not available.';
+  const data=tenant.data()||{};
+  if(data.billingAccessSuspended===true){
+    return 'This '+billingTenantType+' subscription is inactive. Renew or activate a subscription package to make changes.';
+  }
+  if(String(data.plan||'').trim()==='unsubscribed'){
+    return 'This '+billingTenantType+' does not have an active subscription package. Choose a plan before using this capability.';
+  }
+  const termBlock=await billingTenantSubscriptionTermBlockReason(db,billingTenantType,billingTenantId);
+  if(termBlock)return termBlock;
+  const entitlements=entitlementRecord(data.featureEntitlements);
+  if(Object.hasOwn(entitlements,feature)&&entitlements[feature]!==true){
+    const label=SUBSCRIPTION_FEATURE_LABELS[feature]||feature;
+    return 'This '+billingTenantType+' subscription plan does not include '+label+'. Upgrade the subscription package to use this capability.';
+  }
+  return null;
+}
+
 export async function organizationSubscriptionFeatureBlockReason(
   db:Firestore,
   feature:SubscriptionFeatureKey,
   organizationId:string,
 ){
-  if(!organizationId)return 'An organization is required for subscription entitlement checks.';
-  const audience=await subscriptionAudiencePolicy(db);
-  if(!audience.organizations)return null;
-  await ensureOrganizationDefaultSubscription(db,organizationId);
-  const organization=await db.doc('organizations/'+organizationId).get();
-  if(!organization.exists)return 'The organization is not available.';
-  const data=organization.data()||{};
-  if(data.billingAccessSuspended===true){
-    return 'This organization subscription is inactive. Renew or activate a subscription package to make changes.';
-  }
-  if(String(data.plan||'').trim()==='unsubscribed'){
-    return 'This organization does not have an active subscription package. Choose a plan before using this capability.';
-  }
-  const termBlock=await organizationSubscriptionTermBlockReason(db,organizationId);
-  if(termBlock)return termBlock;
-  const entitlements=entitlementRecord(data.featureEntitlements);
-  // Legacy organizations may predate plan snapshots. Fail closed only when a
-  // current entitlement record explicitly excludes the capability.
-  if(Object.hasOwn(entitlements,feature)&&entitlements[feature]!==true){
-    const label=SUBSCRIPTION_FEATURE_LABELS[feature]||feature;
-    return `This organization's subscription plan does not include ${label}. Upgrade the subscription package to use this capability.`;
-  }
-  return null;
+  return billingTenantSubscriptionFeatureBlockReason(db,feature,'organization',organizationId);
 }
 
 export async function requireOrganizationSubscriptionFeature(
@@ -80,15 +90,18 @@ export async function requireOrganizationSubscriptionFeature(
 async function subscriptionMutationBlockReason(
   ctx:TenantContext,resource:PermissionResource,action:PermissionAction,
 ){
-  if(ctx.isSuperAdmin||ctx.tenantType!=='organization'||!ctx.organizationId)return null;
+  if(ctx.isSuperAdmin)return null;
   if(NON_EXPANSIVE_ACTIONS.has(action)||!SUBSCRIPTION_MUTATION_RESOURCES.has(resource))return null;
+  const target=billingTenantFromContext(ctx);
+  if(!target||!(await billingTenantAudienceEnabled(ctx.db,target.type)))return null;
   const feature=SUBSCRIPTION_FEATURE_BY_RESOURCE[resource];
-  if(feature)return organizationSubscriptionFeatureBlockReason(ctx.db,feature,ctx.organizationId);
-  const organization=await ctx.db.doc('organizations/'+ctx.organizationId).get();
-  if(organization.exists&&organization.data()?.billingAccessSuspended===true){
-    return 'This organization subscription is inactive. Renew or activate a subscription package to make changes.';
+  if(feature)return billingTenantSubscriptionFeatureBlockReason(ctx.db,feature,target.type,target.id);
+  await ensureBillingTenantDefaultSubscription(ctx.db,target.type,target.id,ctx.auth.uid);
+  const tenant=await billingTenantRef(ctx.db,target.type,target.id).get();
+  if(tenant.exists&&tenant.data()?.billingAccessSuspended===true){
+    return 'This '+target.type+' subscription is inactive. Renew or activate a subscription package to make changes.';
   }
-  return organizationSubscriptionTermBlockReason(ctx.db,ctx.organizationId);
+  return billingTenantSubscriptionTermBlockReason(ctx.db,target.type,target.id);
 }
 
 export async function requireSubscriptionFeature(
@@ -97,7 +110,14 @@ export async function requireSubscriptionFeature(
   organizationId=ctx.organizationId,
 ){
   if(ctx.isSuperAdmin)return;
-  await requireOrganizationSubscriptionFeature(ctx.db,feature,organizationId);
+  if(organizationId){
+    await requireOrganizationSubscriptionFeature(ctx.db,feature,organizationId);
+    return;
+  }
+  const target=billingTenantFromContext(ctx);
+  if(!target)return;
+  const reason=await billingTenantSubscriptionFeatureBlockReason(ctx.db,feature,target.type,target.id);
+  if(reason)throw new Error(reason);
 }
 
 export async function loadPermissionMatrix(ctx: TenantContext): Promise<PermissionMatrix> {

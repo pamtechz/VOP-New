@@ -163,7 +163,8 @@ test('platform finance administration is Super Admin-only while organizations co
   assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payable item administration'\)/);
   assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payment provider administration'\)/);
   assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payment reconciliation'\)/);
-  assert.match(core,/requireOrganizationSubscriptionConsumer/);
+  assert.match(core,/requireInstitutionalSubscriptionConsumer/);
+  assert.match(core,/billingTenantSubscriptionRef/);
   assert.match(core,/selectProviderForMethod/);
   assert.match(core,/scopedTransactionProjection/);
   assert.match(serverPermissions,/resource === 'payable_items'/);
@@ -205,11 +206,11 @@ test('organization plan limits are consolidated into the subscription entitlemen
   assert.match(workspace,/Plan entitlements/);
   assert.match(workspace,/Cancel at period end/);
   assert.match(workspace,/Assign manually/);
-  assert.match(workspace,/Below current organization usage/);
+  assert.match(workspace,/Below current institutional usage/);
 
   assert.match(shared,/SUBSCRIPTION_QUOTAS/);
   assert.match(shared,/SUBSCRIPTION_FEATURES/);
-  assert.match(plans,/organizationUsageSnapshot/);
+  assert.match(plans,/billingTenantUsageSnapshot/);
   assert.match(plans,/planSnapshot/);
   assert.match(plans,/currentPeriodStart/);
   assert.match(plans,/currentPeriodEnd/);
@@ -219,7 +220,7 @@ test('organization plan limits are consolidated into the subscription entitlemen
   assert.match(core,/cancelled=data\.cancelAtPeriodEnd===true/);
 });
 
-test('subscription capabilities are enforced server-side and reflected in organization admin navigation',()=>{
+test('subscription capabilities are enforced server-side and reflected in institutional admin navigation',()=>{
   const permissions=read('server/permissions.ts');
   const admin=read('src/pages/AdminPage.tsx');
   const enrollCandidate=read('api_handlers/admin/enrollCandidate.ts');
@@ -250,7 +251,8 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
   assert.match(contentApi,/required\|subscription\|organization/);
 
-  assert.match(admin,/loadOrganizationSubscriptionState/);
+  assert.match(admin,/loadInstitutionalSubscriptionState/);
+  assert.match(admin,/currentUser\.adminNodeId/);
   assert.match(admin,/exhaustedQuotaKeys/);
   assert.match(admin,/freeTier/);
   assert.match(admin,/SUBSCRIPTION_FEATURES\.map\(feature=>\[feature\.key,false\]\)/);
@@ -261,7 +263,7 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(admin,/Object\.hasOwn\(subscriptionFeatures,subscriptionFeature\)/);
 });
 
-test('subscription metering is based on the resource-owning organization and exposes all plan quotas',()=>{
+test('subscription metering follows the resource-owning institutional tenant and exposes all plan quotas',()=>{
   const shared=read('shared/subscriptions.ts');
   const tenant=read('server/tenant.ts');
   const content=read('api_handlers/admin/content.ts');
@@ -274,35 +276,43 @@ test('subscription metering is based on the resource-owning organization and exp
   assert.match(shared,/maxSeasons/);
   assert.match(shared,/maxEvents/);
 
-  assert.match(tenant,/ownedCollectionCount\(db,organizationId,'programs'\)/);
-  assert.match(tenant,/ownedCollectionCount\(db,organizationId,'events'\)/);
-  assert.match(tenant,/enforceOrganizationQuota/);
+  assert.match(tenant,/billingTenantFromContext/);
+  assert.match(tenant,/ownedBillingTenantCollectionCount/);
+  assert.match(tenant,/ownerTenantId','==',ownerTenantId/);
+  assert.match(tenant,/enforceBillingTenantQuota/);
+  assert.match(tenant,/billingTenantUsageSnapshot/);
   assert.match(tenant,/maxPrograms/);
   assert.match(tenant,/maxEvents/);
 
   assert.match(content,/SUBSCRIPTION_FEATURE_BY_COLLECTION/);
-  assert.match(content,/requireOrganizationSubscriptionFeature\(ctx\.db,subscriptionFeature,effectiveOrganizationId\)/);
-  assert.match(content,/enforceOrganizationQuota\(ctx\.db,effectiveOrganizationId,collection,quotaKey\)/);
+  assert.match(content,/const enforceOwnedQuota=/);
+  assert.match(content,/enforceBillingTenantQuota\(ctx\.db,target\.type,target\.id,collectionName,quotaKey,increment\)/);
+  assert.match(content,/const requireOwnedFeature=/);
+  assert.match(content,/requireSubscriptionFeature\(ctx,feature,''\)/);
   assert.match(content,/collection==='events'\?'maxEvents'/);
 
-  assert.match(programs,/requireOrganizationSubscriptionFeature\(ctx\.db,'curriculum',targetOrganizationId\)/);
-  assert.match(programs,/enforceOrganizationQuota\(ctx\.db,targetOrganizationId,'programs','maxPrograms'\)/);
+  assert.match(programs,/billingTenantFromContext/);
+  assert.match(programs,/requireSubscriptionFeature\(ctx,'curriculum',''\)/);
+  assert.match(programs,/enforceBillingTenantQuota\(ctx\.db,billingTarget\.type,billingTarget\.id,'programs','maxPrograms'\)/);
 
+  assert.match(permissions,/billingTenantSubscriptionFeatureBlockReason/);
+  assert.match(permissions,/billingTenantFromContext/);
   assert.match(permissions,/NON_EXPANSIVE_ACTIONS/);
   assert.match(permissions,/\['view','read','delete'\]/);
 });
 
-test('hierarchy curriculum writes consume descendant guide and quiz entitlements',()=>{
+test('hierarchy curriculum writes consume the hierarchy tenant plan while retaining descendant delivery scope',()=>{
   const content=read('api_handlers/admin/content.ts');
   const quizzes=read('api/quizzes.ts');
 
-  assert.match(content,/enforceOrganizationQuota\(ctx\.db, effectiveOrganizationId, 'guides', 'maxGuides'\)/);
+  assert.match(content,/enforceBillingTenantQuota/);
+  assert.match(content,/requireSubscriptionFeature\(ctx,feature,''\)/);
   assert.match(content,/organizationId:effectiveOrganizationId/);
   assert.match(content,/organizationId:effectiveOrganizationId, copiedLessons:lessons\.size/);
 
-  assert.match(quizzes,/requireOrganizationSubscriptionFeature\(ctx\.db,'curriculum',target\.organizationId\)/);
-  assert.match(quizzes,/enforceOrganizationQuota\(ctx\.db,target\.organizationId,'quizzes','maxQuizzes'\)/);
-  assert.doesNotMatch(quizzes,/enforceQuota\(ctx, 'quizzes', 'maxQuizzes'\)/);
+  assert.match(quizzes,/requireSubscriptionFeature\(ctx,'curriculum',''\)/);
+  assert.match(quizzes,/enforceBillingTenantQuota\(ctx\.db,billingTarget\.type,billingTarget\.id,'quizzes','maxQuizzes'\)/);
+  assert.match(quizzes,/organizationId:current\.organizationId \|\| target\.organizationId/);
 });
 
 test('subscription quota editor preserves unlimited values and usage counts only active resources',()=>{
@@ -345,8 +355,8 @@ test('subscription authorization checks the live term instead of waiting for the
   assert.match(tenant,/enforceOrganizationQuota[\s\S]*organizationSubscriptionTermBlockReason/);
   assert.match(tenant,/enforceOrganizationMembershipQuotas[\s\S]*organizationSubscriptionTermBlockReason/);
 
-  assert.match(permissions,/organizationSubscriptionTermBlockReason/);
-  assert.match(permissions,/organizationSubscriptionFeatureBlockReason[\s\S]*organizationSubscriptionTermBlockReason/);
+  assert.match(permissions,/billingTenantSubscriptionTermBlockReason/);
+  assert.match(permissions,/billingTenantSubscriptionFeatureBlockReason[\s\S]*billingTenantSubscriptionTermBlockReason/);
   assert.match(plans,/billingAccessSuspended:storedSuspended\|\|Boolean\(liveTermBlock\)/);
   assert.match(plans,/effectiveSubscriptionStatus=liveExpired\?'expired'/);
   assert.match(vercel,/\/api\/payments\/reconcile-cron/);
@@ -388,12 +398,12 @@ test('organizations without a plan automatically receive the default free subscr
   assert.match(tenant,/renewalMode:'none'/);
 
   assert.match(organizations,/ensureOrganizationDefaultSubscription\(bootstrapDb,organizationId,ctx\.auth\.uid\)/);
-  assert.match(permissions,/ensureOrganizationDefaultSubscription\(db,organizationId\)/);
-  assert.match(plans,/await ensureOrganizationDefaultSubscription\(ctx\.db,organizationId,ctx\.auth\.uid\)/);
+  assert.match(permissions,/ensureBillingTenantDefaultSubscription\(db,billingTenantType,billingTenantId\)/);
+  assert.match(plans,/await ensureBillingTenantDefaultSubscription\(ctx\.db,target\.type,target\.id,ctx\.auth\.uid\)/);
   assert.match(plans,/defaultForUnsubscribed:priceUsd===0/);
   assert.match(plans,/where\('defaultForUnsubscribed','==',true\)/);
 
-  assert.match(payments,/Default free plan for organizations without a subscription/);
+  assert.match(payments,/Default free plan for institutions without a subscription/);
   assert.match(payments,/defaultForUnsubscribed:price===0&&packageDraft\.active/);
 });
 
@@ -442,6 +452,11 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(inbox,/dismissInvite/);
   assert.match(inbox,/clearInviteHistory/);
   assert.match(notifications,/action==='clearAll'/);
+  assert.match(notifications,/authenticateNotificationAccount/);
+  assert.match(notifications,/const ownAction=\['list','markRead','markUnread','delete','markAllRead','clearAll'\]/);
+  assert.match(notifications,/const account=await authenticateNotificationAccount\(req\)/);
+  assert.match(notifications,/const ctx=await authenticateTenant\(req,requestedOrganization\|\|undefined,true\)/);
+  assert.match(notifications,/\?401/);
   assert.match(organizations,/action === 'listInvites'/);
   assert.match(organizations,/action === 'dismissInvite'/);
   assert.match(organizations,/action === 'clearInviteHistory'/);
@@ -452,6 +467,18 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(localization,/Localization application approved/);
   assert.match(prayer,/title:'New prayer request'/);
   assert.match(graduation,/Graduation approval required/);
+});
+
+test('web Google authentication uses redirect flow and restores redirect state before the root auth observer',()=>{
+  const firebaseAuth=read('src/services/firebaseAuth.ts');
+  const root=read('src/Root.tsx');
+
+  assert.match(firebaseAuth,/signInWithRedirect/);
+  assert.match(firebaseAuth,/getRedirectResult/);
+  assert.match(firebaseAuth,/completeGoogleRedirectSignIn/);
+  assert.doesNotMatch(firebaseAuth,/signInWithPopup/);
+  assert.match(root,/await completeGoogleRedirectSignIn\(\)/);
+  assert.match(root,/unsubscribe = onAuthStateChanged/);
 });
 
 test('organization records open as read-only browser-navigable pages and require explicit edit mode',()=>{
@@ -502,7 +529,8 @@ test('candidate billing, free-tier reminders and Super Admin exemption are enfor
   assert.match(tenant,/nextConsumesMemberSeat=!CANDIDATE_MEMBERSHIP_ROLES\.has\(normalizedRole\)/);
   assert.match(tenant,/audience\.learnersCandidates&&usage\.candidates\+candidateDelta>maxCandidates/);
   assert.match(tenant,/if\(!audience\.organizations\|\|ctx\.isSuperAdmin\)return/);
-  assert.match(permissions,/if\(!audience\.organizations\)return null/);
+  assert.match(permissions,/billingTenantAudienceEnabled/);
+  assert.match(permissions,/billingTenantFromContext/);
 
   assert.match(billing,/learnersCandidates:audience\.learnersCandidates===true/);
   assert.match(billing,/organizations:audience\.organizations!==false/);
@@ -528,7 +556,51 @@ test('candidate billing, free-tier reminders and Super Admin exemption are enfor
   assert.match(admin,/vop-free-tier-banner/);
   assert.match(admin,/Free plan limit reached/);
   assert.match(admin,/New usage in those categories is blocked/);
-  assert.match(admin,/if\(isSuperAdmin\|\|isHierarchyAdmin/);
+  assert.match(admin,/loadInstitutionalSubscriptionState/);
+  assert.match(admin,/isHierarchyAdmin&&hierarchyId/);
+});
+
+test('unions, conferences, districts and churches are first-class subscription owners',()=>{
+  const tenant=read('server/tenant.ts');
+  const billing=read('server/billing.ts');
+  const plans=read('api_handlers/admin/plans.ts');
+  const payments=read('server/payments/core.ts');
+  const reminders=read('server/subscriptionReminders.ts');
+  const workspace=read('src/components/admin/SubscriptionWorkspace.tsx');
+  const management=read('src/pages/PaymentManagement.tsx');
+
+  assert.match(tenant,/BillingTenantType='organization'\|'church'\|'district'\|'conference'\|'union'/);
+  assert.match(tenant,/billingTenantSubscriptionRef/);
+  assert.match(tenant,/ensureHierarchyDefaultSubscription/);
+  assert.match(tenant,/ensureBillingTenantDefaultSubscription/);
+  assert.match(tenant,/billingTenantUsageSnapshot/);
+  assert.match(tenant,/billingTenantSubscriptionTermBlockReason/);
+
+  assert.match(billing,/quoteSubscriptionPlanForTenant/);
+  assert.match(plans,/targetFromRequest/);
+  assert.match(plans,/billingTenantType/);
+  assert.match(plans,/billingTenantId/);
+  assert.match(plans,/validateBillingTenantPlanCapacity/);
+  assert.match(plans,/A plan assigned to an active institutional tenant cannot be deleted/);
+
+  assert.match(payments,/requireInstitutionalSubscriptionConsumer/);
+  assert.match(payments,/paymentBillingTarget/);
+  assert.match(payments,/billingTenantSubscriptionRef/);
+  assert.match(payments,/billingTenantRef/);
+  assert.match(payments,/billingTenantType,billingTenantId/);
+  assert.doesNotMatch(payments,/\(!org&&ctx\.tenantType==='hierarchy'\)/);
+
+  assert.match(reminders,/INSTITUTIONAL_TENANTS/);
+  assert.match(reminders,/sendBillingTenantFreeTierUpgradeReminder/);
+  assert.match(reminders,/role=billingTenantType\+'_admin'/);
+
+  assert.match(workspace,/BillingTenantOption/);
+  assert.match(workspace,/Choose institution/);
+  assert.match(workspace,/billingTenantType:selectedTarget\.type/);
+  assert.match(management,/billingTenants/);
+  assert.match(management,/union_admin/);
+  assert.match(management,/collection:'unions'/);
+  assert.match(management,/collection:'churches'/);
 });
 
 test('notification actions preserve exact admin destinations',()=>{

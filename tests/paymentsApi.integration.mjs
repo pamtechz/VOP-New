@@ -175,9 +175,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const {default:organizationsApi}=await vite.ssrLoadModule('/api_handlers/admin/organizations.ts');
     const {requireOrganizationSubscriptionFeature}=await vite.ssrLoadModule('/server/permissions.ts');
     const {enforceOrganizationQuota}=await vite.ssrLoadModule('/server/tenant.ts');
-    const {sendFreeTierUpgradeReminder}=await vite.ssrLoadModule('/server/subscriptionReminders.ts');
+    const {sendFreeTierUpgradeReminder,sendBillingTenantFreeTierUpgradeReminder}=await vite.ssrLoadModule('/server/subscriptionReminders.ts');
 
-    async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner'}={}){
+    async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner',adminNodeId='',adminNodeType=''}={}){
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
         '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
           method:'POST',headers:{'Content-Type':'application/json'},
@@ -186,7 +186,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const account=await response.json();
       assert.equal(response.status,200,JSON.stringify(account));
       await db.doc('users/'+account.localId).set({
-        uid:account.localId,role,organizationId,organizationRole,
+        uid:account.localId,role,organizationId,organizationRole,adminNodeId,adminNodeType,
         displayName:name,email:name+'@payments.invalid',progress:{},
       });
       if(organizationId){
@@ -299,6 +299,11 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       id:orgIntl,name:'International Payment Org',status:'active',billingCountry:'United States',countryCode:'US',
       billingProfile:{countryCode:'US',countryName:'United States',billingCurrency:'USD',pricingRegion:'international'},
     });
+    const unionA='pay-union-a';
+    await db.doc('unions/'+unionA).set({
+      id:unionA,name:'Payment Union A',status:'active',billingCountry:'Zambia',countryCode:'ZM',
+      billingProfile:{countryCode:'ZM',countryName:'Zambia',billingCurrency:'ZMW',pricingRegion:'zambia'},
+    });
     const admin=await identity('payment-super',{role:'super_admin',membershipRole:''});
     const learner=await identity('payment-learner',{organizationId:orgA,organizationRole:'learner'});
     const organizationOwner=await identity('payment-org-owner',{organizationId:orgA,organizationRole:'owner',membershipRole:'owner'});
@@ -311,6 +316,9 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const mtnLearner=await identity('payment-mtn-learner',{organizationId:orgA,organizationRole:'learner'});
     const airtelLearner=await identity('payment-airtel-learner',{organizationId:orgA,organizationRole:'learner'});
     const outsider=await identity('payment-outsider',{organizationId:orgB,organizationRole:'learner'});
+    const unionAdmin=await identity('payment-union-admin',{
+      role:'union_admin',adminNodeId:unionA,adminNodeType:'union',membershipRole:'',
+    });
 
     const guideId='paid-guide';
     const programId='paid-program';
@@ -647,6 +655,63 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
       const adminCatalog=await call(organizationAdmin,'catalog',{});
       assert.ok(adminCatalog.items.some(item=>item.id===payableId));
+
+      const unionFreeOverview=await planCall(unionAdmin,{action:'getSubscription'});
+      assert.equal(unionFreeOverview.status,200,JSON.stringify(unionFreeOverview));
+      assert.equal(unionFreeOverview.billingTenantType,'union');
+      assert.equal(unionFreeOverview.billingTenantId,unionA);
+      assert.equal(unionFreeOverview.freeTier,true);
+      assert.equal(unionFreeOverview.organizationId,'');
+      assert.equal((await db.doc('unions/'+unionA+'/subscription/current').get()).exists,true);
+
+      const unionReminder=await sendBillingTenantFreeTierUpgradeReminder(
+        db,'union',unionA,new Date('2026-10-02T12:00:00.000Z'),
+      );
+      assert.equal(unionReminder.freeTier,true);
+      assert.equal(unionReminder.recipients,1);
+      assert.equal(unionReminder.delivered,1);
+
+      const unionPlans=await planCall(unionAdmin,{action:'listAvailablePlans'});
+      assert.equal(unionPlans.status,200,JSON.stringify(unionPlans));
+      const unionGrowth=unionPlans.items.find(item=>item.id===packageId);
+      assert.ok(unionGrowth,JSON.stringify(unionPlans));
+      assert.equal(unionGrowth.billingCurrency,'ZMW');
+      assert.equal(unionGrowth.billingPrice,'250.00');
+
+      const unionCatalog=await call(unionAdmin,'catalog',{});
+      const unionOffer=unionCatalog.items.find(item=>item.id===payableId);
+      assert.ok(unionOffer,JSON.stringify(unionCatalog));
+      assert.equal(unionOffer.currency,'ZMW');
+      assert.equal(unionOffer.amountDecimal,'250.00');
+
+      const unionCheckout=await call(unionAdmin,'checkout',{
+        payableItemId:payableId,paymentMethod:'card',
+      });
+      assert.equal(unionCheckout.status,200,JSON.stringify(unionCheckout));
+      assert.equal(unionCheckout.payment.billingTenantType,'union');
+      assert.equal(unionCheckout.payment.billingTenantId,unionA);
+      assert.equal(unionCheckout.payment.organizationId,'');
+
+      const unionVerified=await call(unionAdmin,'verify',{reference:unionCheckout.payment.reference});
+      assert.equal(unionVerified.status,200,JSON.stringify(unionVerified));
+      assert.equal(unionVerified.payment.status,'paid');
+      const paidUnion=(await db.doc('unions/'+unionA).get()).data();
+      const paidUnionSubscription=(await db.doc('unions/'+unionA+'/subscription/current').get()).data();
+      assert.equal(paidUnion?.plan,packageId);
+      assert.equal(paidUnion?.featureEntitlements?.curriculum,true);
+      assert.equal(paidUnionSubscription?.planId,packageId);
+      assert.equal(paidUnionSubscription?.activationSource,'payment');
+      assert.equal(paidUnionSubscription?.billingTenantType,'union');
+      assert.equal(paidUnionSubscription?.billingTenantId,unionA);
+      assert.equal(paidUnionSubscription?.organizationId,'');
+      assert.equal(paidUnionSubscription?.lastPaymentId,unionCheckout.payment.id);
+
+      const unionTransactions=await call(unionAdmin,'admin/transactions',{filters:{}});
+      assert.equal(unionTransactions.status,200,JSON.stringify(unionTransactions));
+      assert.equal(unionTransactions.items.some(item=>item.id===unionCheckout.payment.id),true);
+      assert.equal(unionTransactions.items
+        .filter(item=>item.billingTenantType&&item.billingTenantType!=='organization')
+        .every(item=>item.billingTenantType==='union'&&item.billingTenantId===unionA),true);
 
       const internationalPlans=await planCall(internationalOwner,{action:'listAvailablePlans'});
       const internationalPlan=internationalPlans.items.find(item=>item.id===packageId);

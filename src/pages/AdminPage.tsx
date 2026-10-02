@@ -145,7 +145,7 @@ async function adminContent(action: string, collection: string, id?: string, dat
   return body;
 }
 
-type OrganizationSubscriptionState={
+type InstitutionalSubscriptionState={
   features:Partial<Record<SubscriptionFeatureKey,boolean>>;
   freeTier:boolean;
   paidPlanActive:boolean;
@@ -153,13 +153,16 @@ type OrganizationSubscriptionState={
   planName:string;
 };
 
-async function loadOrganizationSubscriptionState(organizationId:string):Promise<OrganizationSubscriptionState>{
+async function loadInstitutionalSubscriptionState(
+  billingTenantType:'organization'|'church'|'district'|'conference'|'union',
+  billingTenantId:string,
+):Promise<InstitutionalSubscriptionState>{
   if(!auth?.currentUser)throw new Error('Your session has expired. Sign in again.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch('/api/admin/plans',{
     method:'POST',
     headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-    body:JSON.stringify({action:'getSubscription',organizationId}),
+    body:JSON.stringify({action:'getSubscription',billingTenantType,billingTenantId}),
   });
   const body=await response.json().catch(()=>({})) as {
     error?:string;plan?:unknown;featureEntitlements?:unknown;freeTier?:unknown;paidPlanActive?:unknown;
@@ -212,7 +215,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [permissionSaving, setPermissionSaving] = useState(false);
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [subscriptionFeatures,setSubscriptionFeatures]=useState<Partial<Record<SubscriptionFeatureKey,boolean>>|null>(null);
-  const [subscriptionState,setSubscriptionState]=useState<OrganizationSubscriptionState|null>(null);
+  const [subscriptionState,setSubscriptionState]=useState<InstitutionalSubscriptionState|null>(null);
 
   const navigateAdminTab=(tab:AdminTab,mode:'push'|'replace'='push')=>{
     setActiveTab(tab);
@@ -300,14 +303,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   useEffect(()=>{
     const organizationId=String(currentUser.organizationId||'').trim();
     const organizationRole=String(currentUser.organizationRole||'');
-    const canManageSubscription=['owner','admin'].includes(organizationRole);
-    if(isSuperAdmin||isHierarchyAdmin||!organizationId||!canManageSubscription){
+    const canManageOrganizationSubscription=['owner','admin'].includes(organizationRole);
+    const hierarchyType=String(currentUser.role||'').replace('_admin','') as 'church'|'district'|'conference'|'union';
+    const hierarchyId=String(currentUser.adminNodeId||'').trim();
+    const target=isHierarchyAdmin&&hierarchyId
+      ?{type:hierarchyType,id:hierarchyId}
+      :organizationId&&canManageOrganizationSubscription
+        ?{type:'organization' as const,id:organizationId}
+        :null;
+    if(isSuperAdmin||!target){
       setSubscriptionFeatures(null);
       setSubscriptionState(null);
       return;
     }
     let active=true;
-    void loadOrganizationSubscriptionState(organizationId)
+    void loadInstitutionalSubscriptionState(target.type,target.id)
       .then(state=>{
         if(!active)return;
         setSubscriptionFeatures(state.features);
@@ -319,7 +329,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         setSubscriptionState(null);
       });
     return()=>{active=false;};
-  },[currentUser.uid,currentUser.organizationId,currentUser.organizationRole,isSuperAdmin,isHierarchyAdmin]);
+  },[
+    currentUser.uid,currentUser.organizationId,currentUser.organizationRole,
+    currentUser.role,currentUser.adminNodeId,isSuperAdmin,isHierarchyAdmin,
+  ]);
 
   const showMessage = (value: string) => {
     setMessage(value);
@@ -1299,8 +1312,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <div>
             <strong>{subscriptionState.exhaustedQuotaKeys.length?'Free plan limit reached':'Free version active'}</strong>
             <span>{subscriptionState.exhaustedQuotaKeys.length
-              ?'Your organization has reached '+subscriptionState.exhaustedQuotaKeys.map(key=>SUBSCRIPTION_QUOTAS.find(item=>item.key===key)?.label||key).join(', ')+'. New usage in those categories is blocked until usage is reduced or the organization upgrades.'
-              :'Your organization is using '+subscriptionState.planName+'. Free-plan limits remain enforced until a paid plan is activated.'}</span>
+              ?'Your institution has reached '+subscriptionState.exhaustedQuotaKeys.map(key=>SUBSCRIPTION_QUOTAS.find(item=>item.key===key)?.label||key).join(', ')+'. New usage in those categories is blocked until usage is reduced or the institution upgrades.'
+              :'Your institution is using '+subscriptionState.planName+'. Free-plan limits remain enforced until a paid plan is activated.'}</span>
           </div>
           <button className="vop-secondary" type="button" onClick={()=>navigateAdminTab('payments')}>View plans</button>
         </section>}

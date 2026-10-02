@@ -218,6 +218,71 @@ export async function subscriptionAudiencePolicy(db:Firestore){
   };
 }
 
+export type BillingTenantType='organization'|'church'|'district'|'conference'|'union';
+
+const BILLING_TENANT_COLLECTION:Record<BillingTenantType,string>={
+  organization:'organizations',
+  church:'churches',
+  district:'districts',
+  conference:'conferences',
+  union:'unions',
+};
+
+const HIERARCHY_ROLE_TO_BILLING_TENANT:Record<string,Exclude<BillingTenantType,'organization'>>={
+  church_admin:'church',
+  district_admin:'district',
+  conference_admin:'conference',
+  union_admin:'union',
+};
+
+function hierarchyOwnerKey(type:Exclude<BillingTenantType,'organization'>,tenantId:string){
+  return type+'_admin:'+tenantId;
+}
+
+export function billingTenantCollection(type:BillingTenantType){
+  return BILLING_TENANT_COLLECTION[type];
+}
+
+export function billingTenantRef(db:Firestore,type:BillingTenantType,tenantId:string){
+  if(!tenantId)throw new Error('A billing tenant identifier is required.');
+  return db.doc(BILLING_TENANT_COLLECTION[type]+'/'+tenantId);
+}
+
+export function billingTenantSubscriptionRef(db:Firestore,type:BillingTenantType,tenantId:string){
+  return billingTenantRef(db,type,tenantId).collection('subscription').doc('current');
+}
+
+export function billingTenantFromContext(ctx:TenantContext):{type:BillingTenantType;id:string}|null{
+  if(ctx.isSuperAdmin)return null;
+  if(ctx.tenantType==='organization'&&ctx.organizationId)return {type:'organization',id:ctx.organizationId};
+  if(ctx.tenantType==='hierarchy'){
+    const type=HIERARCHY_ROLE_TO_BILLING_TENANT[String(ctx.profile.role||'')];
+    const id=String(ctx.profile.adminNodeId||'').trim();
+    return type&&id?{type,id}:null;
+  }
+  return null;
+}
+
+export function billingTenantAudienceKey(type:BillingTenantType){
+  return type==='organization'?'organizations':type==='church'?'churches':type==='district'?'districts':type==='conference'?'conferences':'unions';
+}
+
+export async function billingTenantAudienceEnabled(db:Firestore,type:BillingTenantType){
+  const audience=await subscriptionAudiencePolicy(db);
+  return audience[billingTenantAudienceKey(type)]!==false;
+}
+
+export function billingTenantOwnerKey(type:BillingTenantType,tenantId:string){
+  return type==='organization'?tenantId:hierarchyOwnerKey(type,tenantId);
+}
+
+function billingTenantAvailable(type:BillingTenantType,data:DocumentData|undefined){
+  if(!data)return false;
+  const status=String(data.status||'').trim().toLowerCase();
+  if(type==='organization')return status==='active';
+  return !['inactive','disabled','archived','deleted'].includes(status);
+}
+
 function freePlanPrice(data:DocumentData){
   const value=Number(data.priceUsd??data.price??NaN);
   return Number.isFinite(value)?value:NaN;
@@ -257,6 +322,122 @@ export async function defaultFreeSubscriptionPlan(db:Firestore){
       return name||left.id.localeCompare(right.id);
     });
   return candidates[0]||null;
+}
+
+async function ensureHierarchyDefaultSubscription(
+  db:Firestore,
+  type:Exclude<BillingTenantType,'organization'>,
+  tenantId:string,
+  actorUid='system:auto-free-plan',
+){
+  if(!tenantId)return null;
+  const tenantRef=billingTenantRef(db,type,tenantId);
+  const subscriptionRef=billingTenantSubscriptionRef(db,type,tenantId);
+  const [tenant,subscription]=await Promise.all([tenantRef.get(),subscriptionRef.get()]);
+  if(!tenant.exists||!billingTenantAvailable(type,tenant.data()))return null;
+  const tenantData=tenant.data()||{};
+  const assignedPlan=String(tenantData.plan||'').trim();
+  const subscriptionData=subscription.data()||{};
+  const existingStatus=String(subscriptionData.status||'').trim().toLowerCase();
+  const existingPlanId=String(subscriptionData.planId||'').trim();
+  if(subscription.exists&&['active','trialing'].includes(existingStatus)&&existingPlanId)return null;
+  if(assignedPlan&&assignedPlan!=='unsubscribed'&&!subscription.exists)return null;
+  const legacyQuotas=subscriptionObject(tenantData.quotas);
+  const legacyFeatures=subscriptionObject(tenantData.featureEntitlements);
+  if(!assignedPlan&&(Object.keys(legacyQuotas).length>0||Object.keys(legacyFeatures).length>0))return null;
+
+  const selected=await defaultFreeSubscriptionPlan(db);
+  if(!selected)return null;
+  const selectedPlanRef=db.doc('system/plans/catalog/'+selected.id);
+  const startedAt=new Date().toISOString();
+  let assigned=false;
+  let assignedSnapshot:ReturnType<typeof freePlanSnapshot>|null=null;
+  await db.runTransaction(async transaction=>{
+    const [currentTenant,currentSubscription,currentPlanSnapshot]=await Promise.all([
+      transaction.get(tenantRef),
+      transaction.get(subscriptionRef),
+      transaction.get(selectedPlanRef),
+    ]);
+    if(!currentTenant.exists||!billingTenantAvailable(type,currentTenant.data()))return;
+    const currentData=currentTenant.data()||{};
+    const currentPlan=String(currentData.plan||'').trim();
+    const currentSubscriptionData=currentSubscription.data()||{};
+    const currentStatus=String(currentSubscriptionData.status||'').trim().toLowerCase();
+    const currentSubscriptionPlanId=String(currentSubscriptionData.planId||'').trim();
+    if(currentSubscription.exists&&['active','trialing'].includes(currentStatus)&&currentSubscriptionPlanId)return;
+    if(currentPlan&&currentPlan!=='unsubscribed'&&!currentSubscription.exists)return;
+    const currentLegacyQuotas=subscriptionObject(currentData.quotas);
+    const currentLegacyFeatures=subscriptionObject(currentData.featureEntitlements);
+    if(!currentPlan&&(Object.keys(currentLegacyQuotas).length>0||Object.keys(currentLegacyFeatures).length>0))return;
+    if(!currentPlanSnapshot.exists||currentPlanSnapshot.data()?.active!==true||freePlanPrice(currentPlanSnapshot.data()||{})!==0)return;
+    const snapshot=freePlanSnapshot(selected.id,currentPlanSnapshot.data()||{});
+    assignedSnapshot=snapshot;
+    transaction.set(tenantRef,{
+      plan:selected.id,
+      quotas:snapshot.quotas,
+      featureEntitlements:snapshot.features,
+      billingAccessSuspended:false,
+      billingSuspendedReason:null,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    transaction.set(subscriptionRef,{
+      billingTenantType:type,
+      billingTenantId:tenantId,
+      organizationId:'',
+      planId:selected.id,
+      planName:snapshot.name,
+      planInterval:snapshot.interval,
+      planVersion:snapshot.version,
+      planSnapshot:snapshot,
+      status:'active',
+      activationSource:'automatic_free_plan',
+      autoProvisioned:true,
+      billingProvider:'none',
+      externalCustomerId:null,
+      externalSubscriptionId:null,
+      baseCurrency:'USD',
+      baseAmountDecimal:'0.00',
+      billingCurrency:'USD',
+      paidAmountDecimal:'0.00',
+      exchangeRate:1,
+      currentPeriodStart:startedAt,
+      currentPeriodEnd:null,
+      renewalMode:'none',
+      cancelAtPeriodEnd:false,
+      previousPlanId:String(currentSubscriptionData.planId||'').trim()||null,
+      startedAt:FieldValue.serverTimestamp(),
+      activatedAt:FieldValue.serverTimestamp(),
+      activatedBy:actorUid,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:false});
+    assigned=true;
+  });
+  if(!assigned)return null;
+  await db.collection('tenantAudit').doc(hierarchyOwnerKey(type,tenantId)).collection('entries').add({
+    actorUid,
+    action:'subscription.auto_free_assign',
+    target:subscriptionRef.path,
+    organizationId:'',
+    tenantType:'hierarchy',
+    tenantId:hierarchyOwnerKey(type,tenantId),
+    billingTenantType:type,
+    billingTenantId:tenantId,
+    before:subscription.exists?subscriptionData:null,
+    after:{planId:selected.id,status:'active',activationSource:'automatic_free_plan',currentPeriodEnd:null},
+    timestamp:FieldValue.serverTimestamp(),
+  });
+  return assignedSnapshot?{planId:selected.id,planSnapshot:assignedSnapshot}:null;
+}
+
+export async function ensureBillingTenantDefaultSubscription(
+  db:Firestore,
+  type:BillingTenantType,
+  tenantId:string,
+  actorUid='system:auto-free-plan',
+){
+  return type==='organization'
+    ?ensureOrganizationDefaultSubscription(db,tenantId,actorUid)
+    :ensureHierarchyDefaultSubscription(db,type,tenantId,actorUid);
 }
 
 export async function ensureOrganizationDefaultSubscription(
@@ -543,6 +724,136 @@ export async function enforceOrganizationQuota(
   const currentUsage=await ownedCollectionCount(db,organizationId,collectionName);
   if(currentUsage+increment>limit){
     throw new Error(`The organization has reached its configured ${quotaKey} limit. Upgrade the subscription package or reduce existing usage before creating another resource.`);
+  }
+}
+
+async function ownedBillingTenantCollectionCount(
+  db:Firestore,
+  type:BillingTenantType,
+  tenantId:string,
+  collectionName:string,
+){
+  if(type==='organization')return ownedCollectionCount(db,tenantId,collectionName);
+  const ownerTenantId=billingTenantOwnerKey(type,tenantId);
+  const snapshot=await db.collection(collectionName).where('ownerTenantId','==',ownerTenantId).get();
+  return snapshot.docs.filter(document=>document.data()?.archived!==true).length;
+}
+
+export async function billingTenantUsageSnapshot(
+  db:Firestore,
+  type:BillingTenantType,
+  tenantId:string,
+){
+  if(type==='organization')return organizationUsageSnapshot(db,tenantId);
+  const role=type+'_admin';
+  const users=await db.collection('users').where('role','==',role).limit(500).get();
+  const directAdmins=users.docs.filter(document=>String(document.data()?.adminNodeId||'').trim()===tenantId);
+  const [guides,programs,learningPaths,bibleTopics,seasons,quizzes,announcements,events,radio,radioPlaylists,materials]=await Promise.all([
+    ownedBillingTenantCollectionCount(db,type,tenantId,'guides'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'programs'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'learningPaths'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'bibleTopics'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'seasons'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'quizzes'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'announcements'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'events'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'radioBroadcasts'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'playlists'),
+    ownedBillingTenantCollectionCount(db,type,tenantId,'books'),
+  ]);
+  return {
+    seats:directAdmins.length,
+    memberSeats:directAdmins.length,
+    candidates:0,
+    mentors:0,
+    administrators:directAdmins.length,
+    staff:0,
+    guides,programs,learningPaths,bibleTopics,seasons,quizzes,announcements,events,radio,radioPlaylists,materials,
+  };
+}
+
+export async function billingTenantSubscriptionTermBlockReason(
+  db:Firestore,
+  type:BillingTenantType,
+  tenantId:string,
+){
+  if(type==='organization')return organizationSubscriptionTermBlockReason(db,tenantId);
+  if(!tenantId)return 'A hierarchy tenant is required for subscription access checks.';
+  const subscription=await billingTenantSubscriptionRef(db,type,tenantId).get();
+  if(!subscription.exists)return null;
+  const data=subscription.data()||{};
+  const status=String(data.status||'').trim().toLowerCase();
+  if(status&&!['active','trialing'].includes(status)){
+    return 'This '+type+' subscription is inactive. Renew or activate a subscription package to make changes.';
+  }
+  const interval=String(data.planInterval||data.interval||data.planSnapshot?.interval||'').trim().toLowerCase();
+  if(interval==='one_time')return null;
+  const end=Date.parse(String(data.currentPeriodEnd||'').trim());
+  if((status==='active'||status==='trialing')&&Number.isFinite(end)&&end<=Date.now()){
+    return 'This '+type+' subscription term has ended. Renew the subscription package to make changes.';
+  }
+  return null;
+}
+
+export async function validateBillingTenantPlanCapacity(
+  db:Firestore,
+  type:BillingTenantType,
+  tenantId:string,
+  quotas:Record<string,unknown>,
+){
+  if(type==='organization')return validateOrganizationPlanCapacity(db,tenantId,quotas);
+  const usage=await billingTenantUsageSnapshot(db,type,tenantId);
+  const checks:Array<[string,number,number]>=[
+    ['member / staff seats',usage.seats,quotaLimit(quotas,'maxSeats','maxUsers')],
+    ['guides',usage.guides,quotaLimit(quotas,'maxGuides')],
+    ['programs / courses',usage.programs,quotaLimit(quotas,'maxPrograms')],
+    ['learning paths',usage.learningPaths,quotaLimit(quotas,'maxLearningPaths')],
+    ['Bible topics',usage.bibleTopics,quotaLimit(quotas,'maxBibleTopics')],
+    ['seasons / quarters',usage.seasons,quotaLimit(quotas,'maxSeasons')],
+    ['quizzes',usage.quizzes,quotaLimit(quotas,'maxQuizzes')],
+    ['announcements',usage.announcements,quotaLimit(quotas,'maxAnnouncements')],
+    ['events & programmes',usage.events,quotaLimit(quotas,'maxEvents')],
+    ['radio items',usage.radio,quotaLimit(quotas,'maxRadioItems')],
+    ['radio playlists',usage.radioPlaylists,quotaLimit(quotas,'maxRadioPlaylists')],
+    ['materials',usage.materials,quotaLimit(quotas,'maxMaterials')],
+  ];
+  const violations=checks.filter(([,used,limit])=>Number.isFinite(limit)&&used>limit)
+    .map(([label,used,limit])=>label+': '+used+' in use / '+limit+' allowed');
+  if(violations.length){
+    throw new Error('This package is below the '+type+' tenant’s current usage. Reduce usage first or choose a larger package. '+violations.join('; ')+'.');
+  }
+  return usage;
+}
+
+export async function enforceBillingTenantQuota(
+  db:Firestore,
+  type:BillingTenantType,
+  tenantId:string,
+  collectionName:string,
+  quotaKey:string,
+  increment=1,
+){
+  if(type==='organization')return enforceOrganizationQuota(db,tenantId,collectionName,quotaKey,increment);
+  if(!tenantId)throw new Error('A hierarchy tenant is required for quota enforcement.');
+  if(!(await billingTenantAudienceEnabled(db,type)))return;
+  await ensureBillingTenantDefaultSubscription(db,type,tenantId);
+  const tenantRef=billingTenantRef(db,type,tenantId);
+  const tenant=await tenantRef.get();
+  if(!tenant.exists||!billingTenantAvailable(type,tenant.data()))throw new Error('The '+type+' tenant is not available.');
+  if(tenant.data()?.billingAccessSuspended===true){
+    throw new Error('This '+type+' subscription is inactive. Renew or activate a subscription package before creating additional resources.');
+  }
+  if(String(tenant.data()?.plan||'').trim()==='unsubscribed'){
+    throw new Error('This '+type+' does not have an active subscription package. Choose a plan before creating additional resources.');
+  }
+  const termBlock=await billingTenantSubscriptionTermBlockReason(db,type,tenantId);
+  if(termBlock)throw new Error(termBlock);
+  const quotas=tenant.data()?.quotas;
+  const limit=Number(quotas&&typeof quotas==='object'?(quotas as Record<string,unknown>)[quotaKey]:NaN);
+  if(!Number.isFinite(limit)||limit<0)return;
+  const currentUsage=await ownedBillingTenantCollectionCount(db,type,tenantId,collectionName);
+  if(currentUsage+increment>limit){
+    throw new Error('The '+type+' tenant has reached its configured '+quotaKey+' limit. Upgrade the subscription package or reduce existing usage before creating another resource.');
   }
 }
 

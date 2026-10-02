@@ -14,10 +14,13 @@ export type SubscriptionPackageView={
   billingPrice?:string;billingCurrency?:string;exchangeRate?:number;billingCountryCode?:string;
 };
 
-type Organization={id:string;name:string};
+export type BillingTenantOption={
+  id:string;name:string;type:'organization'|'church'|'district'|'conference'|'union';
+};
 type Usage=Record<string,number>;
 type Overview={
-  organizationId:string;organizationName:string;plan:string|null;
+  billingTenantType:'organization'|'church'|'district'|'conference'|'union';
+  billingTenantId:string;tenantName:string;organizationId:string;organizationName:string;plan:string|null;
   catalogPlan:SubscriptionPackageView|null;
   subscription:Record<string,unknown>|null;
   quotas:Record<string,unknown>;
@@ -30,12 +33,13 @@ type Overview={
   exhaustedQuotaKeys?:string[];
   billingAccessSuspended:boolean;
   billingSuspendedReason:string;
+  subscriptionRequired?:boolean;
 };
 
 interface Props{
   currentUser:User;
   isSuperAdmin:boolean;
-  organizations:Organization[];
+  billingTenants:BillingTenantOption[];
   packages:SubscriptionPackageView[];
   busy?:boolean;
   onCreatePlan?:()=>void;
@@ -79,12 +83,29 @@ function planFitsUsage(plan:SubscriptionPackageView,usage:Usage,learnersCandidat
 }
 
 export default function SubscriptionWorkspace({
-  currentUser,isSuperAdmin,organizations,packages,busy=false,
+  currentUser,isSuperAdmin,billingTenants,packages,busy=false,
   onCreatePlan,onEditPlan,onDeletePlan,onOpenCheckout,
 }:Props){
   const organizationRole=String(currentUser.organizationRole||'');
-  const selfService=!isSuperAdmin&&['owner','admin'].includes(organizationRole)&&Boolean(currentUser.organizationId);
-  const [organizationId,setOrganizationId]=useState(isSuperAdmin?'':String(currentUser.organizationId||''));
+  const hierarchyType=String(currentUser.role||'').replace('_admin','') as BillingTenantOption['type'];
+  const isHierarchyAdmin=['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''));
+  const ownTarget:BillingTenantOption|null=isHierarchyAdmin&&currentUser.adminNodeId
+    ?{id:String(currentUser.adminNodeId),name:'My institution',type:hierarchyType}
+    :Boolean(currentUser.organizationId)&&['owner','admin'].includes(organizationRole)
+      ?{id:String(currentUser.organizationId),name:'My organization',type:'organization'}
+      :null;
+  const selfService=!isSuperAdmin&&Boolean(ownTarget);
+  const [billingTargetKey,setBillingTargetKey]=useState(
+    isSuperAdmin?'':ownTarget?ownTarget.type+':'+ownTarget.id:'',
+  );
+  const selectedTarget=useMemo(()=>{
+    if(!billingTargetKey)return null;
+    const separator=billingTargetKey.indexOf(':');
+    if(separator<1)return null;
+    const type=billingTargetKey.slice(0,separator) as BillingTenantOption['type'];
+    const id=billingTargetKey.slice(separator+1);
+    return {type,id,name:billingTenants.find(item=>item.type===type&&item.id===id)?.name||id};
+  },[billingTargetKey,billingTenants]);
   const [overview,setOverview]=useState<Overview|null>(null);
   const [availablePlans,setAvailablePlans]=useState<SubscriptionPackageView[]>([]);
   const [loading,setLoading]=useState(false);
@@ -94,20 +115,24 @@ export default function SubscriptionWorkspace({
 
   useEffect(()=>{
     if(!isSuperAdmin){
-      setOrganizationId(String(currentUser.organizationId||''));
+      setBillingTargetKey(ownTarget?ownTarget.type+':'+ownTarget.id:'');
       return;
     }
-    if(organizationId&&organizations.some(item=>item.id===organizationId))return;
-    setOrganizationId(organizations[0]?.id||'');
-  },[isSuperAdmin,currentUser.organizationId,organizations,organizationId]);
+    if(billingTargetKey&&billingTenants.some(item=>item.type+':'+item.id===billingTargetKey))return;
+    const first=billingTenants[0];
+    setBillingTargetKey(first?first.type+':'+first.id:'');
+  },[
+    isSuperAdmin,currentUser.organizationId,currentUser.organizationRole,currentUser.role,currentUser.adminNodeId,
+    billingTenants,billingTargetKey,
+  ]);
 
   const refresh=async()=>{
-    if(!organizationId){setOverview(null);setAvailablePlans([]);return;}
+    if(!selectedTarget){setOverview(null);setAvailablePlans([]);return;}
     setLoading(true);setError('');
     try{
       const [current,catalog]=await Promise.all([
-        planApi({action:'getSubscription',organizationId}),
-        planApi({action:'listAvailablePlans',organizationId}),
+        planApi({action:'getSubscription',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id}),
+        planApi({action:'listAvailablePlans',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id}),
       ]);
       setOverview(current as unknown as Overview);
       setAvailablePlans((catalog.items||[]) as SubscriptionPackageView[]);
@@ -116,7 +141,7 @@ export default function SubscriptionWorkspace({
       setOverview(null);
     }finally{setLoading(false);}
   };
-  useEffect(()=>{void refresh();},[organizationId]);
+  useEffect(()=>{void refresh();},[billingTargetKey]);
 
   const usage=overview?.usage||{};
   const subscription=overview?.subscription||{};
@@ -140,25 +165,30 @@ export default function SubscriptionWorkspace({
   },[availablePlans,packages,isSuperAdmin]);
 
   const assign=async(plan:SubscriptionPackageView)=>{
-    if(!isSuperAdmin||!organizationId)return;
+    if(!isSuperAdmin||!selectedTarget)return;
     const reason=await appPrompt('Record why this subscription is being activated without a customer payment.',{
       title:'Assign subscription plan',placeholder:'Complimentary access, migration, support adjustment…',
     });
     if(reason===null||!reason.trim())return;
     setWorking(true);setError('');
     try{
-      await planApi({action:'assignPlan',organizationId,planId:plan.id,activationSource:'manual_override',overrideReason:reason.trim()});
-      setMessage(plan.name+' assigned. The organization now uses this plan’s entitlement snapshot.');
+      await planApi({
+        action:'assignPlan',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,
+        planId:plan.id,activationSource:'manual_override',overrideReason:reason.trim(),
+      });
+      setMessage(plan.name+' assigned. The institution now uses this plan’s entitlement snapshot.');
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be assigned.');}
     finally{setWorking(false);}
   };
 
   const activateFreePlan=async(plan:SubscriptionPackageView)=>{
-    if(isSuperAdmin||!organizationId)return;
+    if(isSuperAdmin||!selectedTarget)return;
     setWorking(true);setError('');
     try{
-      const result=await planApi({action:'activateFreePlan',organizationId,planId:plan.id});
+      const result=await planApi({
+        action:'activateFreePlan',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,planId:plan.id,
+      });
       setMessage(result.alreadyActive===true
         ?plan.name+' is already active.'
         :plan.name+' activated. No payment is required for this plan.');
@@ -169,7 +199,7 @@ export default function SubscriptionWorkspace({
   };
 
   const cancel=async(mode:'period_end'|'immediate')=>{
-    if(!organizationId||(!isSuperAdmin&&mode==='immediate'))return;
+    if(!selectedTarget||(!isSuperAdmin&&mode==='immediate'))return;
     const confirmed=await appConfirm(
       mode==='period_end'
         ?'Schedule this subscription to end after the current paid term? Access remains active until the period ends.'
@@ -177,11 +207,14 @@ export default function SubscriptionWorkspace({
       {title:mode==='period_end'?'Cancel at period end':'Cancel subscription now',confirmLabel:mode==='period_end'?'Schedule cancellation':'Cancel now',tone:'danger'},
     );
     if(!confirmed)return;
-    const reason=await appPrompt('Record the cancellation reason.',{title:'Cancellation reason',placeholder:'Requested by organization, billing correction…'});
+    const reason=await appPrompt('Record the cancellation reason.',{title:'Cancellation reason',placeholder:'Requested by institution, billing correction…'});
     if(reason===null||!reason.trim())return;
     setWorking(true);setError('');
     try{
-      await planApi({action:'cancelSubscription',organizationId,mode,reason:reason.trim()});
+      await planApi({
+        action:'cancelSubscription',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,
+        mode,reason:reason.trim(),
+      });
       setMessage(mode==='period_end'?'Cancellation scheduled for the end of the current term.':'Subscription cancelled and paid feature access suspended.');
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be cancelled.');}
@@ -189,7 +222,7 @@ export default function SubscriptionWorkspace({
   };
 
   const reactivate=async()=>{
-    if(!organizationId)return;
+    if(!selectedTarget)return;
     let overrideReason='';
     if(isSuperAdmin){
       const reason=await appPrompt('Record why this subscription is being reactivated without a new payment.',{
@@ -200,7 +233,10 @@ export default function SubscriptionWorkspace({
     }
     setWorking(true);setError('');
     try{
-      await planApi({action:'reactivateSubscription',organizationId,...(overrideReason?{overrideReason}:{})});
+      await planApi({
+        action:'reactivateSubscription',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,
+        ...(overrideReason?{overrideReason}:{}),
+      });
       setMessage(cancelAtPeriodEnd?'Scheduled cancellation removed.':'Subscription reactivated.');
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be reactivated.');}
@@ -212,7 +248,7 @@ export default function SubscriptionWorkspace({
   };
 
   if(!isSuperAdmin&&!selfService){
-    return <div className="vop-payment-empty">Subscription administration is available to the organization owner and administrators.</div>;
+    return <div className="vop-payment-empty">Subscription administration is available to the institution’s authorized administrators.</div>;
   }
 
   return <div className="vop-subscription-workspace">
@@ -220,11 +256,11 @@ export default function SubscriptionWorkspace({
       <div>
         <span className="vop-page-kicker">SaaS subscription</span>
         <h2>Plan, subscription & usage</h2>
-        <p>One entitlement model controls commercial plan limits, subscription lifecycle and live organization consumption.</p>
+        <p>One entitlement model controls commercial plan limits, subscription lifecycle and live institutional consumption.</p>
       </div>
       <div className="vop-subscription-toolbar-actions">
-        {isSuperAdmin&&<label><span>Organization</span><select value={organizationId} onChange={event=>setOrganizationId(event.target.value)}><option value="">Choose organization</option>{organizations.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-        <button className="btn btn-outline" type="button" disabled={loading||!organizationId} onClick={()=>void refresh()}><RefreshCw size={16}/>Refresh</button>
+        {isSuperAdmin&&<label><span>Institution</span><select value={billingTargetKey} onChange={event=>setBillingTargetKey(event.target.value)}><option value="">Choose institution</option>{billingTenants.map(item=><option key={item.type+':'+item.id} value={item.type+':'+item.id}>{item.name} · {item.type}</option>)}</select></label>}
+        <button className="btn btn-outline" type="button" disabled={loading||!selectedTarget} onClick={()=>void refresh()}><RefreshCw size={16}/>Refresh</button>
         {isSuperAdmin&&onCreatePlan&&<button className="btn btn-primary" type="button" onClick={onCreatePlan}><Sparkles size={16}/>New plan</button>}
       </div>
     </section>
@@ -232,7 +268,7 @@ export default function SubscriptionWorkspace({
     {error&&<div className="vop-payment-alert danger"><XCircle size={17}/><span>{error}</span><button onClick={()=>setError('')}>×</button></div>}
     {message&&<div className="vop-payment-alert success"><Check size={17}/><span>{message}</span><button onClick={()=>setMessage('')}>×</button></div>}
 
-    {!organizationId?<div className="vop-payment-empty">Choose an organization to inspect its subscription and usage.</div>
+    {!selectedTarget?<div className="vop-payment-empty">Choose an institution to inspect its subscription and usage.</div>
     :loading&&!overview?<div className="vop-payment-empty">Loading subscription…</div>
     :overview&&<>
       <div className="vop-subscription-summary-grid">
@@ -245,7 +281,7 @@ export default function SubscriptionWorkspace({
             <div><dt>Activation</dt><dd>{reasonLabel(subscription.activationSource)}</dd></div>
             <div><dt>Billing currency</dt><dd>{String(subscription.billingCurrency||overview.billingProfile?.billingCurrency||currentPlan?.billingCurrency||'—')}</dd></div>
           </dl>
-          {overview.freeTier&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Free version active</strong><span>Your organization is using the free VOP plan. Upgrade for higher institutional limits and paid-plan capacity.</span></div></div>}
+          {overview.freeTier&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Free version active</strong><span>Your institution is using the free VOP plan. Upgrade for higher institutional limits and paid-plan capacity.</span></div></div>}
           {overview.billingAccessSuspended&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Paid access is suspended</strong><span>{reasonLabel(overview.billingSuspendedReason)}</span></div></div>}
           {cancelAtPeriodEnd&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Cancellation scheduled</strong><span>Access remains available until {formatDate(subscription.currentPeriodEnd)}.</span></div></div>}
           <div className="vop-subscription-actions">
@@ -263,7 +299,7 @@ export default function SubscriptionWorkspace({
             const included=overview.featureEntitlements?.[feature.key]===true;
             return <span key={feature.key} className={'vop-subscription-feature '+(included?'included':'excluded')}>{included?<Check size={14}/>:<XCircle size={14}/>} {feature.label}</span>;
           })}</div>
-          <p className="vop-subscription-footnote">Entitlements are snapshotted when the subscription is activated. Editing the catalog plan does not silently change an organization mid-term.</p>
+          <p className="vop-subscription-footnote">Entitlements are snapshotted when the subscription is activated. Editing the catalog plan does not silently change an institution mid-term.</p>
         </article>
       </div>
 
@@ -284,7 +320,7 @@ export default function SubscriptionWorkspace({
       </section>
 
       <section className="vop-subscription-plans-section">
-        <div className="vop-subscription-section-head"><div><span>Plan catalog</span><h3>{isSuperAdmin?'Available plans for this organization':'Upgrade, downgrade or renew'}</h3><p>{isSuperAdmin?'Manual assignment requires an audit reason. Paid changes should be completed through checkout.':'Prices are quoted for your organization’s billing country. Checkout performs final capacity and payment validation.'}</p></div></div>
+        <div className="vop-subscription-section-head"><div><span>Plan catalog</span><h3>{isSuperAdmin?'Available plans for this institution':'Upgrade, downgrade or renew'}</h3><p>{isSuperAdmin?'Manual assignment requires an audit reason. Paid changes should be completed through checkout.':'Prices are quoted for your institution’s billing country. Checkout performs final capacity and payment validation.'}</p></div></div>
         <div className="vop-subscription-plan-grid">{planOptions.map(plan=>{
           const isCurrent=plan.id===currentPlanId;
           const fits=planFitsUsage(plan,usage,overview.subscriptionAudience?.learnersCandidates===true);
@@ -292,14 +328,14 @@ export default function SubscriptionWorkspace({
           const enabledFeatures=SUBSCRIPTION_FEATURES.filter(feature=>plan.features?.[feature.key]===true);
           return <article key={plan.id} className={'vop-subscription-plan-card '+(isCurrent?'current':'')+(fits?'':' incompatible')}>
             <header><div><span>{subscriptionIntervalLabel(plan.interval)}</span><h4>{plan.name}</h4></div>{isCurrent&&<span className="vop-subscription-current-chip">Current</span>}</header>
-            <p>{plan.description||'Organization subscription plan'}</p>
+            <p>{plan.description||'Institutional subscription plan'}</p>
             <div className="vop-subscription-price">{freePlan?<strong>Free</strong>:<>{plan.billingCurrency||'USD'} <strong>{plan.billingPrice||Number(plan.priceUsd??plan.price??0).toFixed(2)}</strong><span> / {plan.interval==='year'?'year':plan.interval==='one_time'?'one-time':'month'}</span></>}</div>
             <div className="vop-subscription-plan-limits">{SUBSCRIPTION_QUOTAS.slice(0,3).map(definition=>{
               const limit=subscriptionQuotaLimit(plan.quotas,definition.key);
               return <span key={definition.key}>{definition.label}: <strong>{limit===null?'Unlimited':limit}</strong></span>;
             })}</div>
             <div className="vop-subscription-feature-summary">{enabledFeatures.slice(0,5).map(feature=><span key={feature.key}><Check size={13}/>{feature.label}</span>)}</div>
-            {!fits&&<div className="vop-subscription-plan-warning"><AlertTriangle size={15}/>Below current organization usage</div>}
+            {!fits&&<div className="vop-subscription-plan-warning"><AlertTriangle size={15}/>Below current institutional usage</div>}
             <footer>
               {isSuperAdmin&&onEditPlan&&<button className="btn btn-outline" type="button" onClick={()=>onEditPlan(plan)}>Edit plan</button>}
               {isSuperAdmin&&onDeletePlan&&<button className="btn btn-outline" type="button" disabled={isCurrent||busy} onClick={()=>void onDeletePlan(plan)}>Delete</button>}

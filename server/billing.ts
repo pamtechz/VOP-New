@@ -1,5 +1,6 @@
 import { FieldValue, type DocumentData, type Firestore } from 'firebase-admin/firestore';
 import { amountToMinor, minorToDecimal } from '../shared/payments.js';
+import { billingTenantRef, type BillingTenantType } from './tenant.js';
 
 export const SAAS_BASE_CURRENCY='USD';
 export const ZAMBIA_COUNTRY_CODE='ZM';
@@ -171,16 +172,22 @@ export interface SubscriptionBillingQuote{
   fxUpdatedAt:string;
 }
 
-export async function quoteSubscriptionPlan(
+export async function quoteSubscriptionPlanForTenant(
   db:Firestore,
-  organizationId:string,
+  billingTenantType:BillingTenantType,
+  billingTenantId:string,
   plan:DocumentData,
 ):Promise<SubscriptionBillingQuote>{
-  if(!organizationId)throw new Error('An organization is required to price a subscription package.');
-  const organization=await db.doc('organizations/'+organizationId).get();
+  if(!billingTenantId)throw new Error('An institutional billing tenant is required to price a subscription package.');
+  const tenant=await billingTenantRef(db,billingTenantType,billingTenantId).get();
   let settings=await loadPlatformBillingSettings(db);
-  if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
-  const profile=organizationBillingProfile(organization.data());
+  if(!tenant.exists)throw new Error('The institutional billing tenant is not available.');
+  const status=text(tenant.data()?.status).toLowerCase();
+  if(billingTenantType==='organization'&&status!=='active')throw new Error('The organization is not available.');
+  if(billingTenantType!=='organization'&&['inactive','disabled','archived','deleted'].includes(status)){
+    throw new Error('The institutional billing tenant is not available.');
+  }
+  const profile=organizationBillingProfile(tenant.data());
   const priceUsd=planUsdPrice(plan,settings);
   if(priceUsd===0){
     return {
@@ -223,4 +230,12 @@ export async function quoteSubscriptionPlan(
     billingCurrency:'ZMW',amountMinor,amountDecimal:minorToDecimal(amountMinor,'ZMW'),
     exchangeRate:settings.usdToZmwRate,fxSource:settings.fxSource,fxUpdatedAt:settings.fxUpdatedAt,
   };
+}
+
+export async function quoteSubscriptionPlan(
+  db:Firestore,
+  organizationId:string,
+  plan:DocumentData,
+):Promise<SubscriptionBillingQuote>{
+  return quoteSubscriptionPlanForTenant(db,'organization',organizationId,plan);
 }

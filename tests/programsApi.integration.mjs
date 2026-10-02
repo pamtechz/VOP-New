@@ -219,21 +219,29 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
   });
 });
 
-await test('hierarchy administrators cannot bypass descendant subscription entitlements or quotas',async()=>{
+await test('hierarchy-owned resources use the hierarchy tenant subscription instead of descendant organization limits',async()=>{
   const unionId='program-test-union-metering';
   const orgId='program-test-org-metering';
   const guideId='program-test-guide-metering';
-  await db.doc('unions/'+unionId).set({id:unionId,name:'Metering Union'});
-  await db.doc('organizations/'+orgId).set({
-    id:orgId,name:'Metered Organization',status:'active',unionId,
-    plan:'metered-plan',
+  const ownerTenantId='union_admin:'+unionId;
+  await db.doc('unions/'+unionId).set({
+    id:unionId,name:'Metering Union',status:'active',
+    plan:'metered-union-plan',
     featureEntitlements:{curriculum:false},
     quotas:{maxPrograms:1,maxGuides:1,maxQuizzes:1},
+  });
+  // The descendant organization is deliberately permissive. It must not be
+  // charged for resources owned and authored by the Union tenant.
+  await db.doc('organizations/'+orgId).set({
+    id:orgId,name:'Metered Organization',status:'active',unionId,
+    plan:'permissive-org-plan',
+    featureEntitlements:{curriculum:true},
+    quotas:{maxPrograms:99,maxGuides:99,maxQuizzes:99},
   });
   const unionAdmin=await hierarchyIdentity('program-test-union-admin','union_admin',unionId);
   await db.doc('guides/'+guideId).set({
     id:guideId,organizationId:orgId,ownerOrganizationId:orgId,ownerUid:unionAdmin.uid,
-    language:'en',title:'Metered Guide',published:true,archived:false,
+    ownerTenantId,language:'en',title:'Metered Guide',published:true,archived:false,
     sharingScope:'organization',canonical:true,
   });
   const draft={
@@ -245,7 +253,7 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   const excluded=await call(unionAdmin,{
     collection:'programs',action:'upsert',organizationId:orgId,data:draft,
   });
-  assert.notEqual(excluded.status,200,'excluded curriculum capability must block hierarchy writes');
+  assert.notEqual(excluded.status,200,'Union plan exclusion must block Union-owned programme writes');
   assert.match(String(excluded.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
 
   const excludedQuiz=await quizCall(unionAdmin,{
@@ -255,17 +263,16 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
       questions:[{question:'Ready?',options:['No','Yes'],correctOptionIndex:1}],
     },
   });
-  assert.notEqual(excludedQuiz.status,200,'excluded curriculum capability must block hierarchy quiz writes');
+  assert.notEqual(excludedQuiz.status,200,'Union plan exclusion must block Union-owned quiz writes');
   assert.match(String(excludedQuiz.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
 
-  await db.doc('organizations/'+orgId).update({
-    featureEntitlements:{curriculum:true},
-  });
+  await db.doc('unions/'+unionId).update({featureEntitlements:{curriculum:true}});
+
   const guideOverLimit=await call(unionAdmin,{
     collection:'guides',action:'upsertGuide',organizationId:orgId,
     data:{title:'Second Guide',language:'en',published:false,archived:false},
   });
-  assert.notEqual(guideOverLimit.status,200,'hierarchy actor must consume descendant maxGuides');
+  assert.notEqual(guideOverLimit.status,200,'Union-owned guide must consume Union maxGuides');
   assert.match(String(guideOverLimit.value?.error||''),/maxGuides|limit|usage/i);
 
   await db.doc('guides/'+guideId).update({archived:true,published:false});
@@ -275,9 +282,9 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   });
   assert.equal(secondGuide.status,200,JSON.stringify(secondGuide.value));
   assert.equal(secondGuide.value.item.organizationId,orgId);
-  await db.doc('organizations/'+orgId).update({
-    quotas:{maxPrograms:1,maxGuides:2,maxQuizzes:1},
-  });
+  assert.equal((await db.doc('guides/'+secondGuide.value.item.id).get()).data()?.ownerTenantId,ownerTenantId);
+
+  await db.doc('unions/'+unionId).update({quotas:{maxPrograms:1,maxGuides:2,maxQuizzes:1}});
   await db.doc('guides/'+guideId).update({archived:false,published:true});
 
   const quizPayload={
@@ -285,22 +292,20 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
     published:true,sharingScope:'organization',
     questions:[{question:'Ready?',options:['No','Yes'],correctOptionIndex:1}],
   };
-  const firstQuiz=await quizCall(unionAdmin,{
-    action:'upsert',organizationId:orgId,data:quizPayload,
-  });
+  const firstQuiz=await quizCall(unionAdmin,{action:'upsert',organizationId:orgId,data:quizPayload});
   assert.equal(firstQuiz.status,200,JSON.stringify(firstQuiz.value));
   assert.equal(firstQuiz.value.item.organizationId,orgId);
+  assert.equal((await db.doc('quizzes/'+firstQuiz.value.item.id).get()).data()?.ownerTenantId,ownerTenantId);
 
   const secondQuiz=await quizCall(unionAdmin,{
-    action:'upsert',organizationId:orgId,
-    data:{...quizPayload,title:'Second hierarchy assessment'},
+    action:'upsert',organizationId:orgId,data:{...quizPayload,title:'Second hierarchy assessment'},
   });
-  assert.notEqual(secondQuiz.status,200,'hierarchy actor must consume descendant maxQuizzes');
+  assert.notEqual(secondQuiz.status,200,'Union-owned quiz must consume Union maxQuizzes');
   assert.match(String(secondQuiz.value?.error||''),/maxQuizzes|limit|usage/i);
+
   await db.doc('quizzes/'+firstQuiz.value.item.id).update({archived:true,published:false});
   const replacementQuiz=await quizCall(unionAdmin,{
-    action:'upsert',organizationId:orgId,
-    data:{...quizPayload,title:'Replacement hierarchy assessment'},
+    action:'upsert',organizationId:orgId,data:{...quizPayload,title:'Replacement hierarchy assessment'},
   });
   assert.equal(replacementQuiz.status,200,JSON.stringify(replacementQuiz.value));
 
@@ -308,13 +313,15 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
     collection:'programs',action:'upsert',organizationId:orgId,data:draft,
   });
   assert.equal(first.status,200,JSON.stringify(first.value));
+  assert.equal((await db.doc('programs/'+first.value.item.id).get()).data()?.ownerTenantId,ownerTenantId);
 
   const overLimit=await call(unionAdmin,{
     collection:'programs',action:'upsert',organizationId:orgId,
     data:{...draft,title:'Second metered program'},
   });
-  assert.notEqual(overLimit.status,200,'hierarchy actor must consume the descendant organization quota');
+  assert.notEqual(overLimit.status,200,'Union-owned programme must consume Union maxPrograms');
   assert.match(String(overLimit.value?.error||''),/maxPrograms|limit|usage/i);
+
   const archived=await call(unionAdmin,{
     collection:'programs',action:'delete',organizationId:orgId,id:first.value.item.id,
   });

@@ -30,6 +30,8 @@ export interface PayableItem {
   scope:PaymentScope;
   tenantId:string;
   organizationId:string;
+  billingTenantType?:string;
+  billingTenantId?:string;
   organizationName?:string;
   itemId:string;
   itemType:PayableItemType;
@@ -68,6 +70,8 @@ export interface PaymentRefund {
   paymentReference:string;
   refundReference:string;
   organizationId:string;
+  billingTenantType?:string;
+  billingTenantId?:string;
   payerUid:string;
   currency:string;
   amountMinor:number;
@@ -94,6 +98,8 @@ export interface PaymentTransaction {
   scope:PaymentScope;
   organizationId:string;
   tenantId:string;
+  billingTenantType:string;
+  billingTenantId:string;
   payableItemId:string;
   itemId:string;
   itemType:PayableItemType;

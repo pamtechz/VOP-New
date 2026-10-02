@@ -1,7 +1,17 @@
-import { ensureOrganizationDefaultSubscription } from './tenant.js';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import {
+  billingTenantAudienceEnabled, billingTenantRef, billingTenantSubscriptionRef,
+  ensureBillingTenantDefaultSubscription, type BillingTenantType,
+} from './tenant.js';
 
 const RECIPIENT_ROLES=new Set(['owner','admin']);
+const INSTITUTIONAL_TENANTS:Array<{type:BillingTenantType;collection:string}>=[
+  {type:'organization',collection:'organizations'},
+  {type:'church',collection:'churches'},
+  {type:'district',collection:'districts'},
+  {type:'conference',collection:'conferences'},
+  {type:'union',collection:'unions'},
+];
 
 function safe(value:unknown){
   return String(value||'').replace(/[^A-Za-z0-9_-]/g,'_').slice(0,120);
@@ -18,35 +28,66 @@ function planPrice(data:Record<string,unknown>){
   return Number.isFinite(value)?value:NaN;
 }
 
-export async function organizationUsesFreeTier(db:Firestore,organizationId:string){
-  if(!organizationId)return false;
-  const subscription=await db.doc(`organizations/${organizationId}/subscription/current`).get();
+export async function billingTenantUsesFreeTier(
+  db:Firestore,
+  billingTenantType:BillingTenantType,
+  billingTenantId:string,
+){
+  if(!billingTenantId||!(await billingTenantAudienceEnabled(db,billingTenantType)))return false;
+  const subscription=await billingTenantSubscriptionRef(db,billingTenantType,billingTenantId).get();
   if(!subscription.exists)return false;
   const data=subscription.data()||{};
   const status=String(data.status||'').trim().toLowerCase();
   return ['active','trialing'].includes(status)&&planPrice(data)===0;
 }
 
-export async function sendFreeTierUpgradeReminder(
+async function billingTenantReminderRecipients(
   db:Firestore,
-  organizationId:string,
-  now=new Date(),
+  billingTenantType:BillingTenantType,
+  billingTenantId:string,
 ){
-  if(!(await organizationUsesFreeTier(db,organizationId)))return {organizationId,recipients:0,delivered:0,freeTier:false};
-  const organization=await db.doc(`organizations/${organizationId}`).get();
-  if(!organization.exists||organization.data()?.status!=='active')return {organizationId,recipients:0,delivered:0,freeTier:false};
-  const members=await db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
-  const recipients=members.docs
-    .filter(document=>RECIPIENT_ROLES.has(String(document.data()?.role||'').trim().toLowerCase()))
+  if(billingTenantType==='organization'){
+    const members=await db.collection(`organizations/${billingTenantId}/members`).where('active','==',true).get();
+    return members.docs
+      .filter(document=>RECIPIENT_ROLES.has(String(document.data()?.role||'').trim().toLowerCase()))
+      .map(document=>String(document.data()?.uid||document.id).trim())
+      .filter(Boolean);
+  }
+  const role=billingTenantType+'_admin';
+  const users=await db.collection('users').where('role','==',role).limit(500).get();
+  return users.docs
+    .filter(document=>String(document.data()?.adminNodeId||'').trim()===billingTenantId)
     .map(document=>String(document.data()?.uid||document.id).trim())
     .filter(Boolean);
+}
+
+export async function sendBillingTenantFreeTierUpgradeReminder(
+  db:Firestore,
+  billingTenantType:BillingTenantType,
+  billingTenantId:string,
+  now=new Date(),
+){
+  const base={
+    billingTenantType,billingTenantId,
+    organizationId:billingTenantType==='organization'?billingTenantId:'',
+  };
+  if(!(await billingTenantUsesFreeTier(db,billingTenantType,billingTenantId))){
+    return {...base,recipients:0,delivered:0,freeTier:false};
+  }
+  const tenant=await billingTenantRef(db,billingTenantType,billingTenantId).get();
+  if(!tenant.exists)return {...base,recipients:0,delivered:0,freeTier:false};
+  const status=String(tenant.data()?.status||'').trim().toLowerCase();
+  if(['inactive','disabled','archived','deleted'].includes(status)){
+    return {...base,recipients:0,delivered:0,freeTier:false};
+  }
+  const recipients=await billingTenantReminderRecipients(db,billingTenantType,billingTenantId);
   const key=dayKey(now);
-  const name=String(organization.data()?.name||'your organization').trim();
+  const name=String(tenant.data()?.name||tenant.data()?.title||'your institution').trim();
   let delivered=0;
   for(let offset=0;offset<recipients.length;offset+=400){
     const chunk=recipients.slice(offset,offset+400);
     const refs=chunk.map(uid=>db.collection('notifications').doc(
-      `subscription_free_${safe(organizationId)}_${key}_${safe(uid)}`.slice(0,500),
+      `subscription_free_${safe(billingTenantType)}_${safe(billingTenantId)}_${key}_${safe(uid)}`.slice(0,500),
     ));
     const existing=await db.getAll(...refs);
     const batch=db.batch();
@@ -57,14 +98,19 @@ export async function sendFreeTierUpgradeReminder(
       batch.create(refs[index],{
         recipientId:uid,
         userId:uid,
-        organizationId,
-        hierarchyId:'',
+        organizationId:billingTenantType==='organization'?billingTenantId:'',
+        hierarchyId:billingTenantType==='organization'?'':billingTenantId,
         title:'Free plan active — upgrade when ready',
-        body:`${name} is currently using the free VOP plan. Paid plans provide higher limits and additional capacity. Your free limits remain enforced until the organization upgrades.`,
+        body:`${name} is currently using the free VOP plan. Paid plans provide higher limits and additional capacity. Free-plan limits remain enforced until the institution upgrades.`,
         type:'system',
         channel:'in_app',
         actionUrl:'/?route=payments',
-        metadata:{kind:'free_subscription_upgrade',organizationId,reminderDate:now.toISOString().slice(0,10)},
+        metadata:{
+          kind:'free_subscription_upgrade',
+          billingTenantType,billingTenantId,
+          organizationId:billingTenantType==='organization'?billingTenantId:'',
+          reminderDate:now.toISOString().slice(0,10),
+        },
         createdBy:'system:subscription-reminder',
         createdAt:FieldValue.serverTimestamp(),
         read:false,
@@ -75,19 +121,41 @@ export async function sendFreeTierUpgradeReminder(
     }
     if(writes)await batch.commit();
   }
-  return {organizationId,recipients:recipients.length,delivered,freeTier:true};
+  return {...base,recipients:recipients.length,delivered,freeTier:true};
 }
 
+export async function organizationUsesFreeTier(db:Firestore,organizationId:string){
+  return billingTenantUsesFreeTier(db,'organization',organizationId);
+}
+
+export async function sendFreeTierUpgradeReminder(
+  db:Firestore,
+  organizationId:string,
+  now=new Date(),
+){
+  return sendBillingTenantFreeTierUpgradeReminder(db,'organization',organizationId,now);
+}
+
+// Legacy function name retained for the scheduled payment reconciliation caller.
+// It now reconciles and reminds every subscription-bearing institutional tenant.
 export async function remindFreeTierOrganizations(db:Firestore,limit=200){
-  const organizations=await db.collection('organizations').where('status','==','active').limit(Math.max(1,Math.min(500,limit))).get();
-  let freeTierOrganizations=0,delivered=0,recipients=0;
-  for(const organization of organizations.docs){
-    await ensureOrganizationDefaultSubscription(db,organization.id,'system:subscription-reconciliation');
-    const result=await sendFreeTierUpgradeReminder(db,organization.id);
-    if(!result.freeTier)continue;
-    freeTierOrganizations+=1;
-    delivered+=result.delivered;
-    recipients+=result.recipients;
+  let checked=0,freeTierOrganizations=0,freeTierTenants=0,delivered=0,recipients=0;
+  for(const definition of INSTITUTIONAL_TENANTS){
+    if(!(await billingTenantAudienceEnabled(db,definition.type)))continue;
+    const snapshot=await db.collection(definition.collection).limit(Math.max(1,Math.min(500,limit))).get();
+    for(const tenant of snapshot.docs){
+      if(checked>=limit*INSTITUTIONAL_TENANTS.length)break;
+      checked+=1;
+      await ensureBillingTenantDefaultSubscription(
+        db,definition.type,tenant.id,'system:subscription-reconciliation',
+      );
+      const result=await sendBillingTenantFreeTierUpgradeReminder(db,definition.type,tenant.id);
+      if(!result.freeTier)continue;
+      freeTierTenants+=1;
+      if(definition.type==='organization')freeTierOrganizations+=1;
+      delivered+=result.delivered;
+      recipients+=result.recipients;
+    }
   }
-  return {checked:organizations.size,freeTierOrganizations,recipients,delivered};
+  return {checked,freeTierOrganizations,freeTierTenants,recipients,delivered};
 }

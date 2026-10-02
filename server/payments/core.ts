@@ -8,11 +8,12 @@ import {
 } from '../../shared/payments.js';
 import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 import {
-  accessibleOrganizationIds, authenticateTenant, organizationInHierarchyScope,
-  tenantOwnerKey, validateOrganizationPlanCapacity, writeTenantAudit, type TenantContext,
+  accessibleOrganizationIds, authenticateTenant, billingTenantAudienceEnabled, billingTenantFromContext,
+  billingTenantRef, billingTenantSubscriptionRef, organizationInHierarchyScope, tenantOwnerKey,
+  validateBillingTenantPlanCapacity, writeTenantAudit, type BillingTenantType, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
-import { quoteSubscriptionPlan } from '../billing.js';
+import { quoteSubscriptionPlanForTenant } from '../billing.js';
 import {
   getPaymentProvider, paymentProviderCatalog, registeredPaymentProviderKeys,
   type ProviderVerification,
@@ -24,6 +25,14 @@ function object(value:unknown){return value&&typeof value==='object'&&!Array.isA
 function bool(value:unknown,fallback=false){return typeof value==='boolean'?value:fallback;}
 function stringArray(value:unknown){return Array.isArray(value)?value.map(text).filter(Boolean):[];}
 function nowIso(){return new Date().toISOString();}
+const BILLING_TENANT_TYPES=new Set<BillingTenantType>(['organization','church','district','conference','union']);
+function paymentBillingTarget(data:DocumentData){
+  const organizationId=text(data.organizationId);
+  const candidate=text(data.billingTenantType) as BillingTenantType;
+  const type=BILLING_TENANT_TYPES.has(candidate)?candidate:(organizationId?'organization':null);
+  const id=text(data.billingTenantId)||(type==='organization'?organizationId:'');
+  return type&&id?{type,id}:null;
+}
 function timestampIso(value:unknown){
   if(!value)return '';
   if(typeof value==='string')return value;
@@ -165,13 +174,23 @@ function requireSuperAdminFinanceControl(ctx:TenantContext,resource:string){
   if(!ctx.isSuperAdmin)throw new Error(`Only Super Admin can access ${resource}.`);
 }
 
-async function requireOrganizationSubscriptionConsumer(ctx:TenantContext){
-  if(ctx.isSuperAdmin)return;
+async function requireInstitutionalSubscriptionConsumer(ctx:TenantContext){
+  if(ctx.isSuperAdmin)return null;
   await requirePermission(ctx,'billing','view');
-  const role=text(ctx.membership?.role||ctx.profile.organizationRole);
-  if(ctx.tenantType!=='organization'||!ctx.organizationId||!['owner','admin'].includes(role)){
-    throw new Error('Only an organization owner or administrator can manage the organization subscription.');
+  const target=billingTenantFromContext(ctx);
+  if(!target)throw new Error('This account is not linked to an institutional billing tenant.');
+  if(target.type==='organization'){
+    const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+    if(!['owner','admin'].includes(role)){
+      throw new Error('Only an organization owner or administrator can manage the organization subscription.');
+    }
+  }else if(ctx.tenantType!=='hierarchy'){
+    throw new Error('Only an institutional tenant administrator can manage this subscription.');
   }
+  if(!(await billingTenantAudienceEnabled(ctx.db,target.type))){
+    throw new Error('Subscription billing is not required for this institutional tenant type.');
+  }
+  return target;
 }
 
 export async function upsertPayableItem(ctx:TenantContext,input:Record<string,unknown>){
@@ -276,13 +295,18 @@ async function consumerPaymentMethods(db:Firestore,data:DocumentData,billingCurr
   return [...methods] as PaymentMethod[];
 }
 
-async function consumerPayableItem(db:Firestore,id:string,data:DocumentData,organizationId=''){
+async function consumerPayableItem(
+  db:Firestore,id:string,data:DocumentData,
+  billingTarget:{type:BillingTenantType;id:string}|null,
+  organizationId='',
+){
   let currency=text(data.currency),amountMinor=Number(data.amountMinor||0),amountDecimal=text(data.amountDecimal);
   let pricing:Record<string,unknown>={};
   if(text(data.itemType)==='organization_subscription'){
+    if(!billingTarget)throw new Error('An institutional billing tenant is required for a subscription quote.');
     const plan=await db.doc('system/plans/catalog/'+text(data.itemId)).get();
     if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
-    const quote=await quoteSubscriptionPlan(db,organizationId,plan.data()||{});
+    const quote=await quoteSubscriptionPlanForTenant(db,billingTarget.type,billingTarget.id,plan.data()||{});
     currency=quote.billingCurrency;amountMinor=quote.amountMinor;amountDecimal=quote.amountDecimal;
     pricing={
       baseCurrency:quote.baseCurrency,baseAmountDecimal:quote.baseAmountDecimal,
@@ -314,11 +338,15 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
     if(admin){
       items.push({id:doc.id,...data});
     }else if(await itemVisibleToUser(ctx,data)){
+      let billingTarget:{type:BillingTenantType;id:string}|null=null;
       if(text(data.itemType)==='organization_subscription'){
-        try{await requireOrganizationSubscriptionConsumer(ctx);}
+        try{billingTarget=await requireInstitutionalSubscriptionConsumer(ctx);}
         catch{continue;}
+        if(!billingTarget)continue;
       }
-      items.push(await consumerPayableItem(ctx.db,doc.id,data,ctx.organizationId||text(ctx.profile.organizationId)));
+      items.push(await consumerPayableItem(
+        ctx.db,doc.id,data,billingTarget,ctx.organizationId||text(ctx.profile.organizationId),
+      ));
     }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
@@ -340,6 +368,7 @@ function serializePayment(id:string,data:DocumentData){
   return {
     id,reference:text(data.reference),payerUid:text(data.payerUid),payerEmail:text(data.payerEmail),
     payerName:text(data.payerName),organizationId:text(data.organizationId),tenantId:text(data.tenantId),
+    billingTenantType:text(data.billingTenantType),billingTenantId:text(data.billingTenantId),
     payableItemId:text(data.payableItemId),itemId:text(data.itemId),itemType:text(data.itemType),
     description:text(data.description),currency:text(data.currency),amountMinor:Number(data.amountMinor||0),
     amountDecimal:text(data.amountDecimal),provider:text(data.provider),paymentMethod:text(data.paymentMethod),
@@ -361,6 +390,7 @@ function serializeRefund(id:string,data:DocumentData){
   return {
     id,paymentId:text(data.paymentId),paymentReference:text(data.paymentReference),
     refundReference:text(data.refundReference),organizationId:text(data.organizationId),
+    billingTenantType:text(data.billingTenantType),billingTenantId:text(data.billingTenantId),
     payerUid:text(data.payerUid),currency:text(data.currency),
     amountMinor:Number(data.amountMinor||0),amountDecimal:text(data.amountDecimal),
     reason:text(data.reason),provider:text(data.provider),status:text(data.status),
@@ -425,20 +455,24 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   if(!itemSnap.exists)throw new Error('The payable item was not found.');
   const item=itemSnap.data()||{};
   if(!(await itemVisibleToUser(ctx,item)))throw new Error('This charge is not available to your account.');
-  if(text(item.itemType)==='organization_subscription'){
-    await requireOrganizationSubscriptionConsumer(ctx);
-  }
+  const isSubscription=text(item.itemType)==='organization_subscription';
+  const billingTarget=isSubscription?await requireInstitutionalSubscriptionConsumer(ctx):null;
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
-  const organizationId=text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
+  const organizationId=isSubscription
+    ?billingTarget?.type==='organization'?billingTarget.id:''
+    :text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
+  const billingTenantType=billingTarget?.type||(organizationId?'organization':'');
+  const billingTenantId=billingTarget?.id||organizationId;
   let amountMinor=Number(item.amountMinor);
   let currency=normalizeCurrency(item.currency);
   let pricingSnapshot:Record<string,unknown>={};
-  if(text(item.itemType)==='organization_subscription'){
+  if(isSubscription){
+    if(!billingTarget)throw new Error('An institutional billing tenant is required for subscription checkout.');
     const plan=await ctx.db.doc('system/plans/catalog/'+text(item.itemId)).get();
     if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
-    await validateOrganizationPlanCapacity(ctx.db,organizationId,object(plan.data()?.quotas));
-    const quote=await quoteSubscriptionPlan(ctx.db,organizationId,plan.data()||{});
+    await validateBillingTenantPlanCapacity(ctx.db,billingTarget.type,billingTarget.id,object(plan.data()?.quotas));
+    const quote=await quoteSubscriptionPlanForTenant(ctx.db,billingTarget.type,billingTarget.id,plan.data()||{});
     amountMinor=quote.amountMinor;currency=quote.billingCurrency;
     if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
     pricingSnapshot={
@@ -446,22 +480,22 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
       exchangeRate:quote.exchangeRate,fxSource:quote.fxSource,fxUpdatedAt:quote.fxUpdatedAt,
     };
-    const current=await ctx.db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const current=await billingTenantSubscriptionRef(ctx.db,billingTarget.type,billingTarget.id).get();
     const currentData=current.data()||{};
     const end=Date.parse(text(currentData.currentPeriodEnd));
     const renewalWindowMs=7*24*60*60*1000;
     const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===text(item.itemId);
     const planInterval=text(plan.data()?.interval)||'month';
     if(sameActivePlan&&planInterval==='one_time'){
-      throw new Error('This organization already has this one-time subscription package active.');
+      throw new Error('This institutional tenant already has this one-time subscription package active.');
     }
     if(sameActivePlan&&Number.isFinite(end)&&end-Date.now()>renewalWindowMs){
-      throw new Error('This organization already has this subscription package active. Renewal opens seven days before the current period ends.');
+      throw new Error('This institutional tenant already has this subscription package active. Renewal opens seven days before the current period ends.');
     }
   }
   if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
   const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
-  const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+organizationId);
+  const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+billingTenantType+':'+billingTenantId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
   const paymentId='pay_'+randomUUID().replaceAll('-','');
   const paymentRef=ctx.db.doc('paymentTransactions/'+paymentId);
@@ -486,10 +520,12 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       id:paymentId,reference,payerUid:ctx.auth.uid,payerEmail:text(ctx.auth.email)||text(ctx.profile.email),
       payerName:text(ctx.profile.displayName)||text(ctx.auth.name)||text(ctx.auth.email),
       scope:text(item.scope) as PaymentTransaction['scope'],organizationId,tenantId:text(item.tenantId),
+      billingTenantType,billingTenantId,
       payableItemId,itemId:text(item.itemId),itemType:text(item.itemType) as PaymentTransaction['itemType'],
       description:text(item.name),itemSnapshot:{
         name:text(item.name),description:text(item.description),itemId:text(item.itemId),
         itemType:text(item.itemType),amountMinor,currency,organizationName:text(item.organizationName),
+        billingTenantType,billingTenantId,
         pricing:pricingSnapshot,fulfilmentConfig:object(item.fulfilmentConfig),
       },
       currency,amountMinor,amountDecimal:minorToDecimal(amountMinor,currency),
@@ -501,7 +537,10 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       createdAt:FieldValue.serverTimestamp(),initiatedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
     };
     tx.create(paymentRef,payment);
-    tx.set(lockRef,{paymentId,payerUid:ctx.auth.uid,payableItemId,organizationId,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.set(lockRef,{
+      paymentId,payerUid:ctx.auth.uid,payableItemId,organizationId,billingTenantType,billingTenantId,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
   });
   if(reused){
     let checkout:null|Record<string,unknown>=null;
@@ -679,13 +718,17 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
 
   const config=object(item.fulfilmentConfig);
   const uid=text(payment.payerUid),organizationId=text(payment.organizationId);
+  const billingTarget=paymentBillingTarget(payment);
   const receiptRef=db.doc('paymentReceipts/'+paymentId);
   const receiptNumber='RCPT-'+text(payment.reference);
   const batch=db.batch();
   batch.set(receiptRef,{
     id:paymentId,receiptNumber,paymentId,reference:text(payment.reference),
     payerUid:uid,payerEmail:text(payment.payerEmail),payerName:text(payment.payerName),
-    organizationId,itemSnapshot:object(payment.itemSnapshot),amountMinor:Number(payment.amountMinor),
+    organizationId,
+    billingTenantType:billingTarget?.type||'',
+    billingTenantId:billingTarget?.id||'',
+    itemSnapshot:object(payment.itemSnapshot),amountMinor:Number(payment.amountMinor),
     amountDecimal:text(payment.amountDecimal),currency:text(payment.currency),
     provider:text(payment.provider),paymentMethod:text(payment.paymentMethod),
     paidAt:payment.paidAt||FieldValue.serverTimestamp(),issuedAt:FieldValue.serverTimestamp(),
@@ -713,7 +756,7 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
       registeredAt:FieldValue.serverTimestamp(),source:'verified-payment',
     },{merge:true});
   }else if(itemType==='organization_subscription'){
-    if(!organizationId)throw new Error('A subscription payment requires an organization.');
+    if(!billingTarget)throw new Error('A subscription payment requires an institutional billing tenant.');
     const plan=object(config.planSnapshot);
     const planId=text(plan.id)||text(payment.itemId);
     const interval=text(plan.interval)||'month';
@@ -724,7 +767,9 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
       quotas:normalizeSubscriptionQuotas(plan.quotas),features:normalizeSubscriptionFeatures(plan.features),
     };
     const now=new Date();
-    const currentSubscription=await db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const tenantRef=billingTenantRef(db,billingTarget.type,billingTarget.id);
+    const subscriptionRef=billingTenantSubscriptionRef(db,billingTarget.type,billingTarget.id);
+    const currentSubscription=await subscriptionRef.get();
     const currentData=currentSubscription.data()||{};
     const existingEnd=Date.parse(text(currentData.currentPeriodEnd));
     const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===planId
@@ -737,12 +782,15 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
     if(end&&interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
     else if(end&&interval==='month')end.setUTCMonth(end.getUTCMonth()+1);
     const pricing=object(object(payment.itemSnapshot).pricing);
-    batch.set(db.doc('organizations/'+organizationId),{
+    batch.set(tenantRef,{
       plan:planId,quotas:entitlementSnapshot.quotas,featureEntitlements:entitlementSnapshot.features,
       billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
-    batch.set(db.doc('organizations/'+organizationId+'/subscription/current'),{
-      organizationId,planId,planName:entitlementSnapshot.name,planInterval:interval,
+    batch.set(subscriptionRef,{
+      billingTenantType:billingTarget.type,
+      billingTenantId:billingTarget.id,
+      organizationId:billingTarget.type==='organization'?billingTarget.id:'',
+      planId,planName:entitlementSnapshot.name,planInterval:interval,
       planVersion:entitlementSnapshot.version,planSnapshot:entitlementSnapshot,status:'active',
       activationSource:'payment',billingProvider:text(payment.provider),lastPaymentId:paymentId,
       lastPaidAt:FieldValue.serverTimestamp(),currentPeriodStart:start.toISOString(),
@@ -829,9 +877,14 @@ export async function adminListTransactions(ctx:TenantContext,filters:Record<str
   await requirePermission(ctx,'payments','view');
   const allowed=new Set(await accessibleOrganizationIds(ctx));
   const snap=await ctx.db.collection('paymentTransactions').limit(500).get();
+  const ownBillingTarget=billingTenantFromContext(ctx);
   let rows=snap.docs.filter(doc=>{
     const data=doc.data(),org=text(data.organizationId);
-    return ctx.isSuperAdmin||(!org&&ctx.tenantType==='hierarchy')||allowed.has(org)||(ctx.tenantType==='organization'&&org===ctx.organizationId);
+    const billingTarget=paymentBillingTarget(data);
+    if(ctx.isSuperAdmin)return true;
+    if(billingTarget&&ownBillingTarget
+        &&billingTarget.type===ownBillingTarget.type&&billingTarget.id===ownBillingTarget.id)return true;
+    return Boolean(org&&(allowed.has(org)||(ctx.tenantType==='organization'&&org===ctx.organizationId)));
   }).map(doc=>serializePayment(doc.id,doc.data()));
   const search=text(filters.search).toLowerCase();
   const status=text(filters.status),provider=text(filters.provider),method=text(filters.paymentMethod);
@@ -873,7 +926,15 @@ export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unkno
   const org=text(snap.data()?.organizationId);
   if(!ctx.isSuperAdmin){
     const allowed=new Set(await accessibleOrganizationIds(ctx));
-    if(org&&!allowed.has(org))throw new Error('The transaction is outside your authorized scope.');
+    const ownBillingTarget=billingTenantFromContext(ctx);
+    const billingTarget=paymentBillingTarget(snap.data()||{});
+    const ownInstitutionalPayment=Boolean(
+      billingTarget&&ownBillingTarget
+      &&billingTarget.type===ownBillingTarget.type&&billingTarget.id===ownBillingTarget.id
+    );
+    if(!ownInstitutionalPayment&&(!org||!allowed.has(org))){
+      throw new Error('The transaction is outside your authorized scope.');
+    }
   }
   const [attempts,audit,receipt,refunds]=await Promise.all([
     ctx.isSuperAdmin?ref.collection('attempts').orderBy('createdAt','desc').limit(50).get():Promise.resolve(null),
@@ -932,21 +993,25 @@ async function reverseFullyRefundedFulfilment(db:Firestore,paymentId:string){
     updates.push(ref.get().then(snap=>snap.exists?ref.set({
       status:'cancelled_refund',cancelledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
     },{merge:true}):undefined));
-  }else if(itemType==='organization_subscription'&&organizationId){
-    const subscriptionRef=db.doc('organizations/'+organizationId+'/subscription/current');
-    updates.push(subscriptionRef.get().then(snap=>{
-      if(!snap.exists||text(snap.data()?.lastPaymentId)!==paymentId)return undefined;
-      return subscriptionRef.set({
-        status:'refunded',refundedAt:FieldValue.serverTimestamp(),
-        refundPaymentId:paymentId,updatedAt:FieldValue.serverTimestamp(),
-      },{merge:true});
-    }));
-    // Fail closed for paid feature access after a full refund. A Super Admin can
-    // subsequently assign a complimentary/replacement plan with an audit reason.
-    updates.push(db.doc('organizations/'+organizationId).set({
-      featureEntitlements:{},billingAccessSuspended:true,
-      billingSuspendedReason:'full_refund',updatedAt:FieldValue.serverTimestamp(),
-    },{merge:true}));
+  }else if(itemType==='organization_subscription'){
+    const billingTarget=paymentBillingTarget(payment);
+    if(billingTarget){
+      const subscriptionRef=billingTenantSubscriptionRef(db,billingTarget.type,billingTarget.id);
+      const tenantRef=billingTenantRef(db,billingTarget.type,billingTarget.id);
+      updates.push(subscriptionRef.get().then(snap=>{
+        if(!snap.exists||text(snap.data()?.lastPaymentId)!==paymentId)return undefined;
+        return subscriptionRef.set({
+          status:'refunded',refundedAt:FieldValue.serverTimestamp(),
+          refundPaymentId:paymentId,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      }));
+      // Fail closed for paid feature access after a full refund. Super Admin can
+      // subsequently assign a complimentary/replacement plan with an audit reason.
+      updates.push(tenantRef.set({
+        featureEntitlements:{},billingAccessSuspended:true,
+        billingSuspendedReason:'full_refund',updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true}));
+    }
   }else if(itemType!=='donation'){
     const ref=db.doc('paymentEntitlements/'+hash(uid+':'+text(payment.payableItemId)));
     updates.push(ref.get().then(snap=>snap.exists?ref.set({
@@ -1027,7 +1092,9 @@ export async function adminRequestRefund(ctx:TenantContext,input:Record<string,u
   const ref=ctx.db.doc('paymentRefunds/'+refundId);
   const record:PaymentRefund={
     id:refundId,paymentId,paymentReference:payment.reference,refundReference,
-    organizationId:payment.organizationId,payerUid:payment.payerUid,currency:payment.currency,
+    organizationId:payment.organizationId,
+    billingTenantType:payment.billingTenantType,billingTenantId:payment.billingTenantId,
+    payerUid:payment.payerUid,currency:payment.currency,
     amountMinor,amountDecimal:minorToDecimal(amountMinor,payment.currency),reason:reason.slice(0,800),
     provider:payment.provider,status:'requested',providerStatus:'requested',
     providerRefundId:'',providerRefundReference:'',requestedBy:ctx.auth.uid,
