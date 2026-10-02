@@ -307,15 +307,25 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               </div>
             </div>
 
-            {!validQuiz && (
+            {!canStartFromServer && (
               <div role="alert" style={{
                 padding: '0.85rem 1rem', borderRadius: '0.75rem',
-                background: '#fef2f2', border: '1px solid #fecaca',
-                color: '#991b1b', fontSize: '0.85rem', marginBottom: '1rem',
+                background: 'var(--vop-danger-bg,#fef2f2)', border: '1px solid color-mix(in srgb,var(--vop-danger,#dc2626) 30%,var(--theme-border))',
+                color: 'var(--vop-danger,#b42318)', fontSize: '0.85rem', marginBottom: '1rem',
               }}>
-                This assessment has missing or invalid questions. An administrator must complete it before it can be taken.
+                This assessment has no usable published questions. Ask the course administrator to republish it.
               </div>
             )}
+            {hasAttempted&&<div className="vop-retake-summary">
+              <div><span>Current recorded result</span><strong>{knownPreviousScore!==null?`${Math.round(knownPreviousScore)}%`:'Previous attempt'}</strong></div>
+              <span className={previousPassed?'passed':'attempted'}>{knownPreviousScore!==null?(previousPassed?'Passed':'Recorded'):'Attempted'}</span>
+            </div>}
+            {hasAttempted&&<div className="vop-retake-warning" role="note">
+              <AlertTriangle size={19}/>
+              <div><strong>Retake replaces the current assessment credit</strong>
+                <p>When you start the retake, the previous score{knownPreviousScore!==null?` of ${Math.round(knownPreviousScore)}%`:''} and all credit earned from this assessment are revoked immediately. The new attempt becomes the authoritative result. If you leave after starting, the previous credit is not restored automatically.</p>
+              </div>
+            </div>}
             {!validThreshold && (
               <div role="alert" style={{
                 padding: '0.85rem 1rem', borderRadius: '0.75rem',
@@ -326,25 +336,34 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               </div>
             )}
 
-            <button
+            {confirmingRetake?<div className="vop-retake-confirm">
+              <strong>Confirm retake</strong>
+              <p>This action revokes the current score and assessment credit before the new attempt opens.</p>
+              <div>
+                <button type="button" className="vop-retake-cancel" disabled={submitting} onClick={()=>setConfirmingRetake(false)}>Keep current result</button>
+                <button type="button" className="vop-retake-confirm-button" disabled={submitting||!canStartFromServer||!validThreshold||attemptBlocked} onClick={()=>void startAttempt(true)}>
+                  {submitting?'Starting retake…':`Revoke result & ${retakeLabel.toLowerCase()}`}
+                </button>
+              </div>
+            </div>:<button
               type="button"
-              disabled={!validQuiz || !validThreshold || attemptBlocked}
-              onClick={() => void startAttempt()}
+              disabled={!canStartFromServer || !validThreshold || attemptBlocked}
+              onClick={requestStart}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.85rem 2rem',
-                background: !validQuiz || !validThreshold || attemptBlocked ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
-                color: !validQuiz || !validThreshold || attemptBlocked ? 'var(--text-muted)' : '#fff',
+                background: !canStartFromServer || !validThreshold || attemptBlocked ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
+                color: !canStartFromServer || !validThreshold || attemptBlocked ? 'var(--text-muted)' : '#fff',
                 border: 'none', borderRadius: '9999px',
                 fontWeight: 800, fontSize: '0.9rem',
-                cursor: !validQuiz || !validThreshold || attemptBlocked ? 'not-allowed' : 'pointer',
-                boxShadow: !validQuiz || !validThreshold || attemptBlocked ? 'none' : '0 4px 14px rgba(0,45,114,0.35)',
+                cursor: !canStartFromServer || !validThreshold || attemptBlocked ? 'not-allowed' : 'pointer',
+                boxShadow: !canStartFromServer || !validThreshold || attemptBlocked ? 'none' : '0 4px 14px rgba(0,45,114,0.35)',
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?'Starting…':attemptBlocked?'Attempt unavailable':hasAttempted?'Retake Quiz':'Begin Test'}
+              {submitting?'Starting…':attemptBlocked?'Attempt unavailable':hasAttempted?retakeLabel:'Begin assessment'}
               <ChevronRight size={18} />
-            </button>
+            </button>}
           </div>
         )}
 
@@ -529,7 +548,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                   opacity: !retakeReady || !retakeAllowed ? 0.55 : 1,
                 }}
               >
-                <RotateCcw size={16} /> {!retakeAllowed ? 'Attempt Limit Reached' : retakeReady ? 'Retake Quiz' : 'Retake Waiting Period'}
+                <RotateCcw size={16} /> {!retakeAllowed ? 'Attempt Limit Reached' : retakeReady ? retakeLabel : 'Retake Waiting Period'}
               </button>
 
               {submission.feedbackMode!=='none' && score!==null && Number(score)>=threshold && hasNextLesson && onContinue && (
