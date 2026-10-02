@@ -173,6 +173,8 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
     const {default:payments}=await vite.ssrLoadModule('/api/payments.ts');
     const {default:plans}=await vite.ssrLoadModule('/api_handlers/admin/plans.ts');
     const {default:organizationsApi}=await vite.ssrLoadModule('/api_handlers/admin/organizations.ts');
+    const {requireOrganizationSubscriptionFeature}=await vite.ssrLoadModule('/server/permissions.ts');
+    const {enforceOrganizationQuota}=await vite.ssrLoadModule('/server/tenant.ts');
 
     async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner'}={}){
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
@@ -455,6 +457,33 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(overview.quotas.maxSeats,100);
       assert.equal(overview.usage.seats>=3,true);
       assert.equal(overview.billingAccessSuspended,false);
+
+      // Authorization must honor the subscription term immediately, even before
+      // the daily reconciliation cron persists the expired lifecycle state.
+      const activePeriodEnd=String(subscription?.currentPeriodEnd||'');
+      await db.doc('organizations/'+orgA+'/subscription/current').update({
+        status:'active',currentPeriodEnd:new Date(Date.now()-60_000).toISOString(),
+      });
+      await db.doc('organizations/'+orgA).set({
+        billingAccessSuspended:false,billingSuspendedReason:null,
+      },{merge:true});
+      await assert.rejects(
+        ()=>requireOrganizationSubscriptionFeature(db,'curriculum',orgA),
+        /subscription term has ended/i,
+      );
+      await assert.rejects(
+        ()=>enforceOrganizationQuota(db,orgA,'guides','maxGuides'),
+        /subscription term has ended/i,
+      );
+      const expiredOverview=await planCall(organizationOwner,{action:'getSubscription'});
+      assert.equal(expiredOverview.status,200,JSON.stringify(expiredOverview));
+      assert.equal(expiredOverview.billingAccessSuspended,true);
+      assert.equal(expiredOverview.subscription.status,'expired');
+      assert.equal(expiredOverview.billingSuspendedReason,'subscription_expired');
+      assert.match(String(expiredOverview.billingSuspendedMessage||''),/term has ended/i);
+      await db.doc('organizations/'+orgA+'/subscription/current').update({
+        status:'active',currentPeriodEnd:activePeriodEnd,
+      });
 
       const scheduled=await planCall(organizationOwner,{
         action:'cancelSubscription',mode:'period_end',reason:'Owner requested end-of-term cancellation',

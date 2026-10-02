@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot } from '../../server/tenant.js';
+import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot, organizationSubscriptionTermBlockReason } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
@@ -149,6 +149,11 @@ export default async function handler(req: Request, res: Response) {
       const currentPlanId=text(organizationData.plan);
       const catalogPlan=currentPlanId?await ctx.db.doc(`system/plans/catalog/${currentPlanId}`).get():null;
       const subscriptionData=subscription.exists?subscription.data()||{}:null;
+      const liveTermBlock=await organizationSubscriptionTermBlockReason(ctx.db,organizationId);
+      const storedSuspended=organizationData.billingAccessSuspended===true;
+      const storedSubscriptionStatus=text(subscriptionData?.status).toLowerCase();
+      const liveExpired=Boolean(liveTermBlock&&['active','trialing'].includes(storedSubscriptionStatus));
+      const effectiveSubscriptionStatus=liveExpired?'expired':storedSubscriptionStatus;
       return res.status(200).json({
         ok:true,
         organizationId,
@@ -157,6 +162,7 @@ export default async function handler(req: Request, res: Response) {
         catalogPlan:catalogPlan?.exists?{id:catalogPlan.id,...catalogPlan.data()}:null,
         subscription:subscriptionData?{
           ...subscriptionData,
+          status:effectiveSubscriptionStatus||subscriptionData.status,
           currentPeriodStart:text(subscriptionData.currentPeriodStart)||timestampIso(subscriptionData.startedAt),
           currentPeriodEnd:text(subscriptionData.currentPeriodEnd)||null,
           activatedAt:timestampIso(subscriptionData.activatedAt)||text(subscriptionData.activatedAt),
@@ -168,8 +174,10 @@ export default async function handler(req: Request, res: Response) {
         featureEntitlements:organizationData.featureEntitlements||{},
         usage,
         billingProfile:organizationData.billingProfile||{},
-        billingAccessSuspended:organizationData.billingAccessSuspended===true,
-        billingSuspendedReason:text(organizationData.billingSuspendedReason),
+        billingAccessSuspended:storedSuspended||Boolean(liveTermBlock),
+        billingSuspendedReason:text(organizationData.billingSuspendedReason)
+          ||(liveExpired?'subscription_expired':liveTermBlock?'subscription_inactive':''),
+        billingSuspendedMessage:liveTermBlock||'',
       });
     }
 
