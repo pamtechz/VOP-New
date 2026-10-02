@@ -619,6 +619,10 @@ export default async function handler(request: Request, response: Response) {
               ? { role: 'mentor' }
               : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
+      const nextMembershipRole=type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner';
+      if(membershipOrganizationId&&profile.organizationRole){
+        await enforceOrganizationMembershipQuotas(tenant,membershipOrganizationId,nextMembershipRole,uid);
+      }
       const previousOrganizationId = String(existingData.organizationId || '').trim();
       if ((hierarchyReassignment || platformReassignment || organizationReassignment)
         && previousOrganizationId && previousOrganizationId !== membershipOrganizationId) {
@@ -629,7 +633,7 @@ export default async function handler(request: Request, response: Response) {
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
           uid, organizationId:membershipOrganizationId,
-          role:type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner',
+          role:nextMembershipRole,
           active:true, updatedAt:new Date().toISOString(),
         }, {merge:true});
       }
