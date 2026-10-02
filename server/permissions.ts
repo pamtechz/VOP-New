@@ -9,7 +9,7 @@ import {
   type PermissionResource,
   type PermissionRole,
 } from '../shared/permissions.js';
-import { ensureOrganizationDefaultSubscription, organizationSubscriptionTermBlockReason, type TenantContext } from './tenant.js';
+import { ensureOrganizationDefaultSubscription, organizationSubscriptionTermBlockReason, subscriptionAudiencePolicy, type TenantContext } from './tenant.js';
 import { decidePermission } from '../shared/authorization.js';
 import { SUBSCRIPTION_FEATURES, type SubscriptionFeatureKey } from '../shared/subscriptions.js';
 
@@ -44,6 +44,8 @@ export async function organizationSubscriptionFeatureBlockReason(
   organizationId:string,
 ){
   if(!organizationId)return 'An organization is required for subscription entitlement checks.';
+  const audience=await subscriptionAudiencePolicy(db);
+  if(!audience.organizations)return null;
   await ensureOrganizationDefaultSubscription(db,organizationId);
   const organization=await db.doc('organizations/'+organizationId).get();
   if(!organization.exists)return 'The organization is not available.';
