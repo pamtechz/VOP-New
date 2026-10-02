@@ -3,9 +3,9 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {normalizeProgramDraft} from '../shared/programModel.js';
 import {assertMutableTenantResource,platformStewardedResource} from '../shared/platformStewardship.js';
 import {canEditCanonicalContent,canManageOrganizationContent,
-  accessibleOrganizationIds,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
+  accessibleOrganizationIds,enforceOrganizationQuota,organizationInHierarchyScope,tenantOwnerKey,writeTenantAudit,
   type TenantContext} from './tenant.js';
-import {requirePermission} from './permissions.js';
+import {requireOrganizationSubscriptionFeature,requirePermission} from './permissions.js';
 
 type Reply={status:(code:number)=>Reply;json:(data:unknown)=>void};
 const validId=(raw:unknown)=>{
@@ -110,6 +110,12 @@ export async function handleCurriculumPrograms(ctx:TenantContext,
   const current=previous.data()||{};
   await requirePermission(ctx,'curriculum',
     action==='delete'?'delete':previous.exists?'update':'create');
+  if(!ctx.isSuperAdmin&&targetOrganizationId&&action!=='delete'){
+    await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',targetOrganizationId);
+  }
+  if(!ctx.isSuperAdmin&&targetOrganizationId&&action==='upsert'&&!previous.exists){
+    await enforceOrganizationQuota(ctx.db,targetOrganizationId,'programs','maxPrograms');
+  }
   if(previous.exists){
     if(!(await mayEdit(ctx,current)))
       throw new Error('Only the owning contributor or VOP Super Admin may edit this program.');
