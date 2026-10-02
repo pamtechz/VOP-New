@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
-import { requirePermission } from '../../server/permissions.js';
+import { requirePermission, requireSubscriptionFeature } from '../../server/permissions.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { revalidateAssessmentEvidence, verifiedAssessmentEvidence, type AssessmentEvidence } from '../../server/assessmentEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
@@ -125,6 +125,7 @@ async function submit(req: Request, res: Response) {
   if (!guideId || guideId.includes('/') || guideId.length > 160) return res.status(400).json({ error: 'A valid guide ID is required.' });
   const candidate = ctx.profile;
   if (text(candidate.role) !== 'student') return res.status(403).json({ error: 'Only learner accounts can submit graduation requests.' });
+  await requireSubscriptionFeature(ctx,'certification',ctx.organizationId);
 
   const [guideSnapshot, organizationSnapshot] = await Promise.all([
     ctx.db.doc(`guides/${guideId}`).get(), ctx.db.doc(`organizations/${ctx.organizationId}`).get(),
@@ -258,6 +259,7 @@ async function decide(req: Request, res: Response) {
       return res.status(403).json({ error: 'An authorized tenant is required to approve graduation requests.' });
     }
   }
+  await requireSubscriptionFeature(ctx,'certification',requestOrganizationId);
   const stages = await loadWorkflow(ctx);
   if (['approved', 'rejected'].includes(text(current.status))) return res.status(409).json({ error: 'This graduation request has already reached a final decision.' });
 
