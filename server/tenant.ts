@@ -271,17 +271,19 @@ export async function ensureOrganizationDefaultSubscription(
   if(!organization.exists||organization.data()?.status!=='active')return null;
   const organizationData=organization.data()||{};
   const assignedPlan=String(organizationData.plan||'').trim();
-  if(assignedPlan&&assignedPlan!=='unsubscribed')return null;
-  const legacyQuotas=subscriptionObject(organizationData.quotas);
-  const legacyFeatures=subscriptionObject(organizationData.featureEntitlements);
-  // Older tenants may have explicit limits/entitlements without a plan id.
-  // Preserve that deliberate configuration; only truly unconfigured tenants
-  // or tenants explicitly marked "unsubscribed" receive the automatic free tier.
-  if(!assignedPlan&&(Object.keys(legacyQuotas).length>0||Object.keys(legacyFeatures).length>0))return null;
   const subscriptionData=subscription.data()||{};
   const existingStatus=String(subscriptionData.status||'').trim().toLowerCase();
   const existingPlanId=String(subscriptionData.planId||'').trim();
   if(subscription.exists&&['active','trialing'].includes(existingStatus)&&existingPlanId)return null;
+  // A legacy tenant may have an assigned plan id but no lifecycle record.
+  // Do not rewrite that tenant implicitly; only inactive lifecycle records fall back.
+  if(assignedPlan&&assignedPlan!=='unsubscribed'&&!subscription.exists)return null;
+  const legacyQuotas=subscriptionObject(organizationData.quotas);
+  const legacyFeatures=subscriptionObject(organizationData.featureEntitlements);
+  // Older tenants may have explicit limits/entitlements without a plan id.
+  // Preserve that deliberate configuration; only truly unconfigured tenants,
+  // explicitly unsubscribed tenants, or tenants whose paid lifecycle ended fall back.
+  if(!assignedPlan&&(Object.keys(legacyQuotas).length>0||Object.keys(legacyFeatures).length>0))return null;
 
   const selected=await defaultFreeSubscriptionPlan(db);
   if(!selected)return null;
@@ -298,14 +300,14 @@ export async function ensureOrganizationDefaultSubscription(
     if(!currentOrganization.exists||currentOrganization.data()?.status!=='active')return;
     const currentData=currentOrganization.data()||{};
     const currentPlan=String(currentData.plan||'').trim();
-    if(currentPlan&&currentPlan!=='unsubscribed')return;
-    const currentLegacyQuotas=subscriptionObject(currentData.quotas);
-    const currentLegacyFeatures=subscriptionObject(currentData.featureEntitlements);
-    if(!currentPlan&&(Object.keys(currentLegacyQuotas).length>0||Object.keys(currentLegacyFeatures).length>0))return;
     const currentSubscriptionData=currentSubscription.data()||{};
     const currentStatus=String(currentSubscriptionData.status||'').trim().toLowerCase();
     const currentSubscriptionPlanId=String(currentSubscriptionData.planId||'').trim();
     if(currentSubscription.exists&&['active','trialing'].includes(currentStatus)&&currentSubscriptionPlanId)return;
+    if(currentPlan&&currentPlan!=='unsubscribed'&&!currentSubscription.exists)return;
+    const currentLegacyQuotas=subscriptionObject(currentData.quotas);
+    const currentLegacyFeatures=subscriptionObject(currentData.featureEntitlements);
+    if(!currentPlan&&(Object.keys(currentLegacyQuotas).length>0||Object.keys(currentLegacyFeatures).length>0))return;
     if(!currentPlanSnapshot.exists||currentPlanSnapshot.data()?.active!==true||freePlanPrice(currentPlanSnapshot.data()||{})!==0)return;
     const snapshot=freePlanSnapshot(selected.id,currentPlanSnapshot.data()||{});
     assignedSnapshot=snapshot;
