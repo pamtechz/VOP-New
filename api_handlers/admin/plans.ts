@@ -5,7 +5,8 @@ import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
 import { loadPlatformBillingSettings, quoteSubscriptionPlan, refreshPlatformBillingRate, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
-import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
+import { sendFreeTierUpgradeReminder } from '../../server/subscriptionReminders.js';
+import { SUBSCRIPTION_QUOTAS, normalizeSubscriptionFeatures, normalizeSubscriptionQuotas, subscriptionQuotaLimit } from '../../shared/subscriptions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -122,9 +123,18 @@ export default async function handler(req: Request, res: Response) {
       if(!Number.isFinite(usdToZmwRate)||usdToZmwRate<=0)throw new Error('Enter a valid USD to ZMW exchange rate.');
       const fxQuoteTtlMinutes=Math.max(15,Math.min(10080,Math.trunc(Number(body.fxQuoteTtlMinutes)||1440)));
       const fxSource=text(body.fxSource,'platform-configured');
+      const audienceInput=object(body.subscriptionAudience);
       const data={
         baseCurrency:SAAS_BASE_CURRENCY,zambiaCurrency:ZAMBIA_BILLING_CURRENCY,
         usdToZmwRate,fxSource,fxUpdatedAt:new Date().toISOString(),fxQuoteTtlMinutes,
+        subscriptionAudience:{
+          learnersCandidates:audienceInput.learnersCandidates===true,
+          organizations:audienceInput.organizations!==false,
+          churches:audienceInput.churches!==false,
+          districts:audienceInput.districts!==false,
+          conferences:audienceInput.conferences!==false,
+          unions:audienceInput.unions!==false,
+        },
         updatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
       };
       const ref=ctx.db.doc('system/billing');
@@ -140,10 +150,11 @@ export default async function handler(req: Request, res: Response) {
       await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
       if (!ctx.isSuperAdmin && !ctx.organizationId && !(await accessibleOrganizationIds(ctx)).includes(organizationId)) throw new Error('The organization is outside your scope.');
       if (!ctx.isSuperAdmin && ctx.organizationId !== organizationId) throw new Error('You cannot access another organization subscription.');
-      const [organization, subscription, usage] = await Promise.all([
+      const [organization, subscription, usage, billingSettings] = await Promise.all([
         ctx.db.doc(`organizations/${organizationId}`).get(),
         ctx.db.doc(`organizations/${organizationId}/subscription/current`).get(),
         organizationUsageSnapshot(ctx.db,organizationId),
+        loadPlatformBillingSettings(ctx.db),
       ]);
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
       const organizationData=organization.data()||{};
@@ -155,6 +166,21 @@ export default async function handler(req: Request, res: Response) {
       const storedSubscriptionStatus=text(subscriptionData?.status).toLowerCase();
       const liveExpired=Boolean(liveTermBlock&&['active','trialing'].includes(storedSubscriptionStatus));
       const effectiveSubscriptionStatus=liveExpired?'expired':storedSubscriptionStatus;
+      const subscriptionSnapshot=subscriptionData?.planSnapshot&&typeof subscriptionData.planSnapshot==='object'
+        ?subscriptionData.planSnapshot as Record<string,unknown>:{};
+      const planPriceUsd=Number(subscriptionSnapshot.priceUsd??catalogPlan?.data()?.priceUsd??catalogPlan?.data()?.price??NaN);
+      const freeTier=['active','trialing'].includes(effectiveSubscriptionStatus)&&Number.isFinite(planPriceUsd)&&planPriceUsd===0;
+      const exhaustedQuotaKeys=SUBSCRIPTION_QUOTAS
+        .filter(definition=>{
+          if(definition.key==='maxCandidates'&&!billingSettings.subscriptionAudience.learnersCandidates)return false;
+          const limit=subscriptionQuotaLimit(organizationData.quotas||{},definition.key);
+          const used=Math.max(0,Number((usage as Record<string,unknown>)[definition.usageKey]||0));
+          return limit!==null&&used>=limit;
+        })
+        .map(definition=>definition.key);
+      if(!ctx.isSuperAdmin&&freeTier&&['owner','admin'].includes(text(ctx.membership?.role||ctx.profile.organizationRole))){
+        await sendFreeTierUpgradeReminder(ctx.db,organizationId).catch(()=>undefined);
+      }
       return res.status(200).json({
         ok:true,
         organizationId,
@@ -175,6 +201,10 @@ export default async function handler(req: Request, res: Response) {
         featureEntitlements:organizationData.featureEntitlements||{},
         usage,
         billingProfile:organizationData.billingProfile||{},
+        subscriptionAudience:billingSettings.subscriptionAudience,
+        freeTier,
+        paidPlanActive:['active','trialing'].includes(effectiveSubscriptionStatus)&&Number.isFinite(planPriceUsd)&&planPriceUsd>0,
+        exhaustedQuotaKeys,
         billingAccessSuspended:storedSuspended||Boolean(liveTermBlock),
         billingSuspendedReason:text(organizationData.billingSuspendedReason)
           ||(liveExpired?'subscription_expired':liveTermBlock?'subscription_inactive':''),
