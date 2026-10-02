@@ -248,6 +248,16 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   assert.notEqual(excluded.status,200,'excluded curriculum capability must block hierarchy writes');
   assert.match(String(excluded.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
 
+  const excludedQuiz=await quizCall(unionAdmin,{
+    action:'upsert',organizationId:orgId,data:{
+      attachmentType:'guide',guideId,language:'en',title:'Excluded hierarchy assessment',
+      published:true,sharingScope:'organization',
+      questions:[{question:'Ready?',options:['No','Yes'],correctOptionIndex:1}],
+    },
+  });
+  assert.notEqual(excludedQuiz.status,200,'excluded curriculum capability must block hierarchy quiz writes');
+  assert.match(String(excludedQuiz.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
+
   await db.doc('organizations/'+orgId).update({
     featureEntitlements:{curriculum:true},
   });
