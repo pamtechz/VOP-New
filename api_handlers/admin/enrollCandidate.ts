@@ -35,8 +35,6 @@ export default async function handler(request:Request,response:Response){
     if(String(guideData.organizationId||'')!==organizationId) throw new Error('The selected course does not belong to this organization.');
     if(guideData.published!==true||guideData.archived===true) throw new Error('Only a published active course can be used for enrollment.');
 
-    await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner');
-
     const authService=getAuth(getApps()[0]);
     let account;
     let created=false;
@@ -44,9 +42,11 @@ export default async function handler(request:Request,response:Response){
     catch(error){
       const code=String((error as {code?:unknown})?.code||'');
       if(code!=='auth/user-not-found') throw error;
+      await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner');
       account=await authService.createUser({email,displayName,...(phoneNumber?{phoneNumber}:{}),...(password?{password}:{}) ,disabled:false});
       created=true;
     }
+    await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner',account.uid);
 
     const profileRef=ctx.db.doc(`users/${account.uid}`);
     const profileSnapshot=await profileRef.get();
