@@ -1,6 +1,6 @@
 export const SUBSCRIPTION_QUOTAS = [
-  { key:'maxSeats', usageKey:'seats', label:'Active seats', description:'All active organization members, including owners, administrators, staff, mentors and learners.' },
-  { key:'maxCandidates', usageKey:'candidates', label:'Candidates / learners', description:'Active learner, student and candidate memberships.' },
+  { key:'maxSeats', usageKey:'seats', label:'Member / staff seats', description:'Active institutional members such as owners, organization administrators, editors, teachers, mentors and staff. Learners/candidates do not consume member seats.' },
+  { key:'maxCandidates', usageKey:'candidates', label:'Candidates / learners', description:'Active learner, student and candidate records. These are tracked separately and never consume member/staff seats.' },
   { key:'maxMentors', usageKey:'mentors', label:'Mentors', description:'Active mentor memberships.' },
   { key:'maxGuides', usageKey:'guides', label:'Guides', description:'Active, non-archived organization-owned curriculum guides.' },
   { key:'maxPrograms', usageKey:'programs', label:'Programs / courses', description:'Active, non-archived organization-owned program and course containers.' },
