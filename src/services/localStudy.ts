@@ -58,6 +58,7 @@ export async function saveLessonResume(
 
 export interface AssessmentPolicyResult {
   sessionId:string;
+  resumed:boolean;
   startedAt:string;
   expiresAt:string|null;
   questions:Question[];
@@ -78,15 +79,33 @@ export interface AssessmentPolicyResult {
 export class AssessmentStartConditionError extends Error {
   code:string;
   previousScore:number|null;
-  constructor(message:string,code:string,previousScore:number|null=null){
+  retryAt:string|null;
+  maxAttempts:number|null;
+  constructor(
+    message:string,code:string,previousScore:number|null=null,
+    details:{retryAt?:string|null;maxAttempts?:number|null}={},
+  ){
     super(message);
     this.name='AssessmentStartConditionError';
     this.code=code;
     this.previousScore=previousScore;
+    this.retryAt=details.retryAt||null;
+    this.maxAttempts=Number.isInteger(Number(details.maxAttempts))&&Number(details.maxAttempts)>0
+      ?Number(details.maxAttempts):null;
+  }
+}
+
+export class AssessmentSubmissionConditionError extends Error {
+  code:string;
+  constructor(message:string,code:string){
+    super(message);
+    this.name='AssessmentSubmissionConditionError';
+    this.code=code;
   }
 }
 
 export interface AssessmentSubmissionResult {
+  replayed?:boolean;
   score: number | null;
   passed: boolean | null;
   threshold:number;
@@ -114,21 +133,45 @@ export async function beginQuizAttempt(
   });
   const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{
     ok?:unknown;error?:unknown;code?:unknown;confirmationRequired?:unknown;previousScore?:unknown;
+    retryAt?:unknown;maxAttempts?:unknown;
   };
   const code=typeof body.code==='string'?body.code:'';
-  if(code==='ASSESSMENT_RETAKE_CONFIRMATION'&&body.confirmationRequired===true){
+  const conditionDetails={
+    retryAt:typeof body.retryAt==='string'&&body.retryAt?body.retryAt:null,
+    maxAttempts:Number.isInteger(Number(body.maxAttempts))&&Number(body.maxAttempts)>0?Number(body.maxAttempts):null,
+  };
+  const conditionMessage=typeof body.error==='string'&&body.error.trim()
+    ?body.error
+    :code==='ASSESSMENT_RETAKE_CONFIRMATION'
+      ?'Confirm the retake before replacing the current result.'
+      :'The assessment cannot be started yet.';
+  // Assessment availability is a domain decision, not an HTTP failure.
+  // The server returns 200 + ok:false for expected blocked states so browsers
+  // do not report normal policy outcomes as failed network requests.
+  if(body.ok===false&&code.startsWith('ASSESSMENT_')){
     throw new AssessmentStartConditionError(
-      typeof body.error==='string'?body.error:'Confirm the retake before replacing the current result.',
+      conditionMessage,
       code,
       Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
+      conditionDetails,
     );
   }
-  if(!response.ok)throw new Error(typeof body.error==='string'?body.error:'The assessment could not be started.');
+  if(!response.ok){
+    if(code.startsWith('ASSESSMENT_')){
+      throw new AssessmentStartConditionError(
+        conditionMessage,code,
+        Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
+        conditionDetails,
+      );
+    }
+    throw new Error(conditionMessage);
+  }
   if(!body.sessionId||!body.assessmentPolicy||!Array.isArray(body.questions)||!body.questions.length){
     throw new Error('The assessment could not load its published questions.');
   }
   return {
     ...(body as AssessmentPolicyResult),
+    resumed:body.resumed===true,
     previousScore:Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
     previousScoreRevoked:body.previousScoreRevoked===true,
     questions:body.questions as Question[],
@@ -163,13 +206,16 @@ export async function submitQuizAnswers(
   });
 
   const body = await response.json().catch(() => null) as {
-    error?:unknown; score?:unknown; passed?:unknown; threshold?:unknown;
+    error?:unknown; code?:unknown; replayed?:unknown; score?:unknown; passed?:unknown; threshold?:unknown;
     feedbackMode?:unknown; explanations?:unknown;
     retakePolicy?:Partial<AssessmentSubmissionResult['retakePolicy']>;
   } | null;
   if (!response.ok) {
-    throw new Error(typeof body?.error === 'string' && body.error.trim()
-      ? body.error : 'The assessment could not be verified and saved.');
+    const message=typeof body?.error === 'string' && body.error.trim()
+      ? body.error : 'The assessment could not be verified and saved.';
+    const code=typeof body?.code==='string'?body.code:'';
+    if(code.startsWith('ASSESSMENT_'))throw new AssessmentSubmissionConditionError(message,code);
+    throw new Error(message);
   }
   const feedbackMode=['score_only','after_submit','none'].includes(String(body?.feedbackMode||''))
     ?String(body?.feedbackMode) as AssessmentSubmissionResult['feedbackMode']:'score_only';
@@ -181,6 +227,7 @@ export async function submitQuizAnswers(
     // a normal state and the duplicate request previously surfaced as a noisy 409.
     const policy = body?.retakePolicy || {};
     return {
+      replayed:body?.replayed===true,
       score,
       passed:hidden?null:body?.passed === true,
       threshold:Number(body?.threshold)||0,

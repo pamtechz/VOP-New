@@ -4,13 +4,21 @@ import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, valida
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
-import { loadPlatformBillingSettings, quoteSubscriptionPlan, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
+import { loadPlatformBillingSettings, quoteSubscriptionPlan, refreshPlatformBillingRate, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
 import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 function text(value: unknown, fallback = '') { return String(value ?? fallback).trim(); }
 function object(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function planErrorStatus(error:unknown){
+  const message=error instanceof Error?error.message:'';
+  if(/sign in|authentication/i.test(message))return 401;
+  if(/only the VOP Super Admin|outside your|cannot access|permission|authorized/i.test(message))return 403;
+  if(/does not exist|not found|no subscription record|organization is not available/i.test(message))return 404;
+  if(/below the organization|already has|already active|only an active|one-time subscription|scheduled cancellation|cannot be deleted/i.test(message))return 409;
+  return 400;
+}
 function timestampIso(value: unknown) {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -49,7 +57,7 @@ export default async function handler(req: Request, res: Response) {
     const action = text(body.action, 'listPlans');
     const requestedOrganizationId = text(body.organizationId);
     const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
-    const readActions=['listPlans','listAvailablePlans','getSubscription'];
+    const readActions=['listPlans','listAvailablePlans','getSubscription','getBillingSettings'];
     const selfServiceActions=['cancelSubscription','reactivateSubscription'];
     await requirePermission(ctx, 'billing', readActions.includes(action) ? 'view' : selfServiceActions.includes(action) ? 'update' : 'manage');
 
@@ -96,6 +104,16 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can access platform billing settings.');
       const settings=await loadPlatformBillingSettings(ctx.db);
       return res.status(200).json({ok:true,item:settings});
+    }
+
+    if (action === 'refreshBillingRate') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can refresh platform billing rates.');
+      const before=await loadPlatformBillingSettings(ctx.db);
+      const rate=await refreshPlatformBillingRate(ctx.db);
+      await writeTenantAudit(ctx,'billing.fx.refresh','system/billing',before,{
+        usdToZmwRate:rate.rate,fxSource:rate.source,fxUpdatedAt:rate.fetchedAt,fxProviderDate:rate.providerDate,
+      });
+      return res.status(200).json({ok:true,item:await loadPlatformBillingSettings(ctx.db)});
     }
 
     if (action === 'updateBillingSettings') {
@@ -397,6 +415,6 @@ export default async function handler(req: Request, res: Response) {
 
     throw new Error('Unsupported plan action.');
   } catch (error) {
-    return res.status(403).json({ error: error instanceof Error ? error.message : 'Plan request failed.' });
+    return res.status(planErrorStatus(error)).json({ error: error instanceof Error ? error.message : 'Plan request failed.' });
   }
 }

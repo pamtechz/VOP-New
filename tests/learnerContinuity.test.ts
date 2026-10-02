@@ -310,6 +310,13 @@ test('assessment completion relies on server graduation automation without a dup
   assert.match(api,/ensureAutomaticGraduationReview/);
   assert.match(api,/confirmationRequired:true/);
   assert.match(study,/AssessmentStartConditionError/);
+  assert.match(study,/body\.ok===false&&code\.startsWith\('ASSESSMENT_'\)/);
+  assert.match(api,/requestedAction==='startQuiz'\?200:409/);
+  assert.match(api,/ASSESSMENT_PREREQUISITE/);
+  assert.match(api,/ASSESSMENT_CONTENT_CHANGED/);
   assert.match(modal,/ASSESSMENT_RETAKE_CONFIRMATION/);
+  assert.match(modal,/ASSESSMENT_PREREQUISITE/);
+  assert.match(modal,/ASSESSMENT_CONTENT_CHANGED/);
+  assert.doesNotMatch(modal,/Attempt unavailable/);
   assert.match(modal,/setConfirmingRetake\(true\)/);
 });
