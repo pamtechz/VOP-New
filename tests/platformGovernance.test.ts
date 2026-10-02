@@ -319,6 +319,24 @@ test('subscription quota editor preserves unlimited values and usage counts only
   assert.match(shared,/Active, non-archived organization-owned assessment records/);
 });
 
+test('subscription authorization checks the live term instead of waiting for the daily cron',()=>{
+  const tenant=read('server/tenant.ts');
+  const permissions=read('server/permissions.ts');
+  const plans=read('api_handlers/admin/plans.ts');
+  const vercel=read('vercel.json');
+
+  assert.match(tenant,/organizationSubscriptionTermBlockReason/);
+  assert.match(tenant,/currentPeriodEnd/);
+  assert.match(tenant,/subscription term has ended/);
+  assert.match(tenant,/enforceOrganizationQuota[\s\S]*organizationSubscriptionTermBlockReason/);
+  assert.match(tenant,/enforceOrganizationMembershipQuotas[\s\S]*organizationSubscriptionTermBlockReason/);
+
+  assert.match(permissions,/organizationSubscriptionTermBlockReason/);
+  assert.match(permissions,/organizationSubscriptionFeatureBlockReason[\s\S]*organizationSubscriptionTermBlockReason/);
+  assert.match(plans,/billingAccessSuspended:storedSuspended\|\|Boolean\(liveTermBlock\)/);
+  assert.match(vercel,/\/api\/payments\/reconcile-cron/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');
