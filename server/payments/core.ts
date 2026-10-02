@@ -980,21 +980,25 @@ async function reverseFullyRefundedFulfilment(db:Firestore,paymentId:string){
     updates.push(ref.get().then(snap=>snap.exists?ref.set({
       status:'cancelled_refund',cancelledAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
     },{merge:true}):undefined));
-  }else if(itemType==='organization_subscription'&&organizationId){
-    const subscriptionRef=db.doc('organizations/'+organizationId+'/subscription/current');
-    updates.push(subscriptionRef.get().then(snap=>{
-      if(!snap.exists||text(snap.data()?.lastPaymentId)!==paymentId)return undefined;
-      return subscriptionRef.set({
-        status:'refunded',refundedAt:FieldValue.serverTimestamp(),
-        refundPaymentId:paymentId,updatedAt:FieldValue.serverTimestamp(),
-      },{merge:true});
-    }));
-    // Fail closed for paid feature access after a full refund. A Super Admin can
-    // subsequently assign a complimentary/replacement plan with an audit reason.
-    updates.push(db.doc('organizations/'+organizationId).set({
-      featureEntitlements:{},billingAccessSuspended:true,
-      billingSuspendedReason:'full_refund',updatedAt:FieldValue.serverTimestamp(),
-    },{merge:true}));
+  }else if(itemType==='organization_subscription'){
+    const billingTarget=paymentBillingTarget(payment);
+    if(billingTarget){
+      const subscriptionRef=billingTenantSubscriptionRef(db,billingTarget.type,billingTarget.id);
+      const tenantRef=billingTenantRef(db,billingTarget.type,billingTarget.id);
+      updates.push(subscriptionRef.get().then(snap=>{
+        if(!snap.exists||text(snap.data()?.lastPaymentId)!==paymentId)return undefined;
+        return subscriptionRef.set({
+          status:'refunded',refundedAt:FieldValue.serverTimestamp(),
+          refundPaymentId:paymentId,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      }));
+      // Fail closed for paid feature access after a full refund. Super Admin can
+      // subsequently assign a complimentary/replacement plan with an audit reason.
+      updates.push(tenantRef.set({
+        featureEntitlements:{},billingAccessSuspended:true,
+        billingSuspendedReason:'full_refund',updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true}));
+    }
   }else if(itemType!=='donation'){
     const ref=db.doc('paymentEntitlements/'+hash(uid+':'+text(payment.payableItemId)));
     updates.push(ref.get().then(snap=>snap.exists?ref.set({
