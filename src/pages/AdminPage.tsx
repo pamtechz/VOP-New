@@ -36,7 +36,7 @@ import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../servi
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
 import { consumeNotificationAdminTarget } from '../services/notificationRouting';
-import type { SubscriptionFeatureKey } from '../../shared/subscriptions';
+import { SUBSCRIPTION_FEATURES, type SubscriptionFeatureKey } from '../../shared/subscriptions';
 
 interface AdminPageProps {
   currentUser: User;
@@ -153,8 +153,12 @@ async function loadOrganizationSubscriptionFeatures(organizationId:string){
     headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
     body:JSON.stringify({action:'getSubscription',organizationId}),
   });
-  const body=await response.json().catch(()=>({})) as {error?:string;featureEntitlements?:unknown};
+  const body=await response.json().catch(()=>({})) as {error?:string;plan?:unknown;featureEntitlements?:unknown};
   if(!response.ok)throw new Error(body.error||'Subscription entitlements could not be loaded.');
+  if(String(body.plan||'').trim()==='unsubscribed'){
+    return Object.fromEntries(SUBSCRIPTION_FEATURES.map(feature=>[feature.key,false]))
+      as Partial<Record<SubscriptionFeatureKey,boolean>>;
+  }
   return body.featureEntitlements&&typeof body.featureEntitlements==='object'&&!Array.isArray(body.featureEntitlements)
     ?body.featureEntitlements as Partial<Record<SubscriptionFeatureKey,boolean>>
     :{};
