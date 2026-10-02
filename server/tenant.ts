@@ -215,7 +215,11 @@ async function ownedCollectionCount(db:Firestore,organizationId:string,collectio
     db.collection(collectionName).where('organizationId','==',organizationId).get(),
     db.collection(collectionName).where('ownerOrganizationId','==',organizationId).get(),
   ]);
-  return new Set([...organizationScoped.docs,...ownerScoped.docs].map(doc=>doc.id)).size;
+  const documents=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
+  for(const document of [...organizationScoped.docs,...ownerScoped.docs]){
+    documents.set(document.id,document);
+  }
+  return [...documents.values()].filter(document=>document.data()?.archived!==true).length;
 }
 
 export async function organizationUsageSnapshot(db:Firestore,organizationId:string){
@@ -326,14 +330,8 @@ export async function enforceOrganizationQuota(
   const quotas=organization.data()?.quotas;
   const limit=Number(quotas&&typeof quotas==='object'?(quotas as Record<string,unknown>)[quotaKey]:NaN);
   if(!Number.isFinite(limit)||limit<0)return;
-  const [organizationScoped,ownerScoped]=await Promise.all([
-    db.collection(collectionName).where('organizationId','==',organizationId).get(),
-    db.collection(collectionName).where('ownerOrganizationId','==',organizationId).get(),
-  ]);
-  const ids=new Set<string>();
-  organizationScoped.docs.forEach(doc=>ids.add(doc.id));
-  ownerScoped.docs.forEach(doc=>ids.add(doc.id));
-  if(ids.size+increment>limit){
+  const currentUsage=await ownedCollectionCount(db,organizationId,collectionName);
+  if(currentUsage+increment>limit){
     throw new Error(`The organization has reached its configured ${quotaKey} limit. Upgrade the subscription package or reduce existing usage before creating another resource.`);
   }
 }

@@ -257,7 +257,10 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     const quotas=emptyPackageQuotas();
     for(const {key} of SUBSCRIPTION_QUOTAS){
       const value=item.quotas?.[key];
-      quotas[key]=value===undefined||value===null?'':String(value);
+      // The plan editor uses a blank value as the explicit "Unlimited" UX.
+      // Legacy -1 values are normalized to that representation instead of
+      // silently becoming zero when the plan is saved again.
+      quotas[key]=value===undefined||value===null||Number(value)<0?'':String(value);
     }
     if(!quotas.maxSeats&&item.quotas?.maxUsers!==undefined&&item.quotas?.maxUsers!==null){
       quotas.maxSeats=String(item.quotas.maxUsers);
@@ -277,9 +280,17 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     if(!packageDraft.name.trim()){setError('Package name is required.');return;}
     const price=Number(packageDraft.price);
     if(!Number.isFinite(price)||price<0){setError('Enter a valid package price.');return;}
-    const quotas=Object.fromEntries(Object.entries(packageDraft.quotas)
-      .filter(([,value])=>String(value).trim()!=='')
-      .map(([key,value])=>[key,Math.max(0,Math.trunc(Number(value)||0))]));
+    const quotas:Record<string,number>={};
+    for(const definition of SUBSCRIPTION_QUOTAS){
+      const raw=String(packageDraft.quotas[definition.key]??'').trim();
+      if(!raw)continue;
+      const value=Number(raw);
+      if(!Number.isInteger(value)||value<0){
+        setError(definition.label+' must be a whole number of 0 or greater, or left blank for Unlimited.');
+        return;
+      }
+      quotas[definition.key]=value;
+    }
     setBusy(true);setError('');
     try{
       await adminApi('/api/admin/plans',{
@@ -414,10 +425,10 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         <label><span>Display order</span><input value={packageDraft.sortOrder} inputMode="numeric" onChange={e=>setPackageDraft(v=>({...v,sortOrder:e.target.value}))}/></label>
         <label className="vop-checkbox"><input type="checkbox" checked={packageDraft.active} onChange={e=>setPackageDraft(v=>({...v,active:e.target.checked}))}/>Available to organizations</label>
         <label className="wide"><span>Description</span><textarea value={packageDraft.description} onChange={e=>setPackageDraft(v=>({...v,description:e.target.value}))}/></label>
-        <fieldset className="wide"><legend>Organization limits</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_QUOTAS.map(({key,label})=><label key={key}><span>{label}</span><input value={packageDraft.quotas[key]} inputMode="numeric" placeholder="Unlimited" onChange={e=>setPackageDraft(v=>({...v,quotas:{...v.quotas,[key]:e.target.value}}))}/></label>)}</div></fieldset>
+        <fieldset className="wide"><legend>Organization limits</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_QUOTAS.map(({key,label,description})=><label key={key} title={description}><span>{label}</span><input type="number" min="0" step="1" value={packageDraft.quotas[key]} inputMode="numeric" placeholder="Unlimited" aria-label={label+' limit; leave blank for Unlimited'} onChange={e=>setPackageDraft(v=>({...v,quotas:{...v.quotas,[key]:e.target.value}}))}/></label>)}</div></fieldset>
         <fieldset className="wide"><legend>Included capabilities</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_FEATURES.map(({key,label})=><label key={key}><input type="checkbox" checked={packageDraft.features[key]===true} onChange={e=>setPackageDraft(v=>({...v,features:{...v.features,[key]:e.target.checked}}))}/>{label}</label>)}</div></fieldset>
       </div>
-      <p className="vop-payment-security">The package identifier and matching organization-subscription payable item are generated automatically. Seat limits apply to the whole organization: owners, admins, staff, mentors, teachers, candidates and learners all consume active seats. Candidate and mentor limits are additional caps inside the total seat allowance.</p>
+      <p className="vop-payment-security">Leave a limit blank for Unlimited; enter 0 to disable new usage of that resource. Limits count active, non-archived resources. The package identifier and matching organization-subscription payable item are generated automatically. Seat limits apply to the whole organization: owners, admins, staff, mentors, teachers, candidates and learners all consume active seats. Candidate and mentor limits are additional caps inside the total seat allowance.</p>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void savePackage()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save subscription package</button>
     </section></div>}
 

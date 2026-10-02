@@ -303,6 +303,22 @@ test('hierarchy curriculum writes consume descendant guide and quiz entitlements
   assert.doesNotMatch(quizzes,/enforceQuota\(ctx, 'quizzes', 'maxQuizzes'\)/);
 });
 
+test('subscription quota editor preserves unlimited values and usage counts only active resources',()=>{
+  const payment=read('src/pages/PaymentManagement.tsx');
+  const tenant=read('server/tenant.ts');
+  const shared=read('shared/subscriptions.ts');
+
+  assert.match(payment,/Number\(value\)<0\?'':String\(value\)/);
+  assert.match(payment,/left blank for Unlimited/);
+  assert.match(payment,/type="number" min="0" step="1"/);
+  assert.doesNotMatch(payment,/Math\.max\(0,Math\.trunc\(Number\(value\)\|\|0\)\)/);
+
+  assert.match(tenant,/document\.data\(\)\?\.archived!==true/);
+  assert.match(tenant,/currentUsage=await ownedCollectionCount/);
+  assert.match(shared,/Active, non-archived organization-owned curriculum guides/);
+  assert.match(shared,/Active, non-archived organization-owned assessment records/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');

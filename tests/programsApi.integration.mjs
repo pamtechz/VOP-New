@@ -268,15 +268,17 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   assert.notEqual(guideOverLimit.status,200,'hierarchy actor must consume descendant maxGuides');
   assert.match(String(guideOverLimit.value?.error||''),/maxGuides|limit|usage/i);
 
-  await db.doc('organizations/'+orgId).update({
-    quotas:{maxPrograms:1,maxGuides:2,maxQuizzes:1},
-  });
+  await db.doc('guides/'+guideId).update({archived:true,published:false});
   const secondGuide=await call(unionAdmin,{
     collection:'guides',action:'upsertGuide',organizationId:orgId,
     data:{title:'Second Guide',language:'en',published:false,archived:false},
   });
   assert.equal(secondGuide.status,200,JSON.stringify(secondGuide.value));
   assert.equal(secondGuide.value.item.organizationId,orgId);
+  await db.doc('organizations/'+orgId).update({
+    quotas:{maxPrograms:1,maxGuides:2,maxQuizzes:1},
+  });
+  await db.doc('guides/'+guideId).update({archived:false,published:true});
 
   const quizPayload={
     attachmentType:'guide',guideId,language:'en',title:'Hierarchy assessment',
@@ -295,6 +297,12 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   });
   assert.notEqual(secondQuiz.status,200,'hierarchy actor must consume descendant maxQuizzes');
   assert.match(String(secondQuiz.value?.error||''),/maxQuizzes|limit|usage/i);
+  await db.doc('quizzes/'+firstQuiz.value.item.id).update({archived:true,published:false});
+  const replacementQuiz=await quizCall(unionAdmin,{
+    action:'upsert',organizationId:orgId,
+    data:{...quizPayload,title:'Replacement hierarchy assessment'},
+  });
+  assert.equal(replacementQuiz.status,200,JSON.stringify(replacementQuiz.value));
 
   const first=await call(unionAdmin,{
     collection:'programs',action:'upsert',organizationId:orgId,data:draft,
@@ -307,6 +315,15 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   });
   assert.notEqual(overLimit.status,200,'hierarchy actor must consume the descendant organization quota');
   assert.match(String(overLimit.value?.error||''),/maxPrograms|limit|usage/i);
+  const archived=await call(unionAdmin,{
+    collection:'programs',action:'delete',organizationId:orgId,id:first.value.item.id,
+  });
+  assert.equal(archived.status,200,JSON.stringify(archived.value));
+  const replacementProgram=await call(unionAdmin,{
+    collection:'programs',action:'upsert',organizationId:orgId,
+    data:{...draft,title:'Replacement metered program'},
+  });
+  assert.equal(replacementProgram.status,200,JSON.stringify(replacementProgram.value));
 });
 
 await test('platform-published curriculum is inherited system-wide by organizations',async()=>{
