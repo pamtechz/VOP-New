@@ -25,7 +25,7 @@ test('service worker has versioned cache lifecycle and excludes API authority', 
   assert.match(source, /offline\.html/);
   assert.match(source, /SKIP_WAITING/);
   assert.match(source, /url\.pathname\.startsWith\('\/assets\/'\)/);
-  assert.match(source, /Never\s+cache account data/);
+  assert.match(source, /if \(!url\.pathname\.startsWith\('\/assets\/'\) && !APP_SHELL\.includes\(url\.pathname\)\) return;/);
 });
 
 test('document advertises the manifest and an explicit offline fallback exists', () => {
