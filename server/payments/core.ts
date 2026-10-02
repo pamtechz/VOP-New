@@ -877,9 +877,14 @@ export async function adminListTransactions(ctx:TenantContext,filters:Record<str
   await requirePermission(ctx,'payments','view');
   const allowed=new Set(await accessibleOrganizationIds(ctx));
   const snap=await ctx.db.collection('paymentTransactions').limit(500).get();
+  const ownBillingTarget=billingTenantFromContext(ctx);
   let rows=snap.docs.filter(doc=>{
     const data=doc.data(),org=text(data.organizationId);
-    return ctx.isSuperAdmin||(!org&&ctx.tenantType==='hierarchy')||allowed.has(org)||(ctx.tenantType==='organization'&&org===ctx.organizationId);
+    const billingTarget=paymentBillingTarget(data);
+    if(ctx.isSuperAdmin)return true;
+    if(billingTarget&&ownBillingTarget
+        &&billingTarget.type===ownBillingTarget.type&&billingTarget.id===ownBillingTarget.id)return true;
+    return Boolean(org&&(allowed.has(org)||(ctx.tenantType==='organization'&&org===ctx.organizationId)));
   }).map(doc=>serializePayment(doc.id,doc.data()));
   const search=text(filters.search).toLowerCase();
   const status=text(filters.status),provider=text(filters.provider),method=text(filters.paymentMethod);
@@ -921,7 +926,15 @@ export async function adminPaymentDetails(ctx:TenantContext,paymentIdValue:unkno
   const org=text(snap.data()?.organizationId);
   if(!ctx.isSuperAdmin){
     const allowed=new Set(await accessibleOrganizationIds(ctx));
-    if(org&&!allowed.has(org))throw new Error('The transaction is outside your authorized scope.');
+    const ownBillingTarget=billingTenantFromContext(ctx);
+    const billingTarget=paymentBillingTarget(snap.data()||{});
+    const ownInstitutionalPayment=Boolean(
+      billingTarget&&ownBillingTarget
+      &&billingTarget.type===ownBillingTarget.type&&billingTarget.id===ownBillingTarget.id
+    );
+    if(!ownInstitutionalPayment&&(!org||!allowed.has(org))){
+      throw new Error('The transaction is outside your authorized scope.');
+    }
   }
   const [attempts,audit,receipt,refunds]=await Promise.all([
     ctx.isSuperAdmin?ref.collection('attempts').orderBy('createdAt','desc').limit(50).get():Promise.resolve(null),
