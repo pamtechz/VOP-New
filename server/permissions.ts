@@ -9,7 +9,7 @@ import {
   type PermissionResource,
   type PermissionRole,
 } from '../shared/permissions.js';
-import type { TenantContext } from './tenant.js';
+import { organizationSubscriptionTermBlockReason, type TenantContext } from './tenant.js';
 import { decidePermission } from '../shared/authorization.js';
 import { SUBSCRIPTION_FEATURES, type SubscriptionFeatureKey } from '../shared/subscriptions.js';
 
@@ -53,6 +53,8 @@ export async function organizationSubscriptionFeatureBlockReason(
   if(String(data.plan||'').trim()==='unsubscribed'){
     return 'This organization does not have an active subscription package. Choose a plan before using this capability.';
   }
+  const termBlock=await organizationSubscriptionTermBlockReason(db,organizationId);
+  if(termBlock)return termBlock;
   const entitlements=entitlementRecord(data.featureEntitlements);
   // Legacy organizations may predate plan snapshots. Fail closed only when a
   // current entitlement record explicitly excludes the capability.
@@ -80,9 +82,10 @@ async function subscriptionMutationBlockReason(
   const feature=SUBSCRIPTION_FEATURE_BY_RESOURCE[resource];
   if(feature)return organizationSubscriptionFeatureBlockReason(ctx.db,feature,ctx.organizationId);
   const organization=await ctx.db.doc('organizations/'+ctx.organizationId).get();
-  return organization.exists&&organization.data()?.billingAccessSuspended===true
-    ?'This organization subscription is inactive. Renew or activate a subscription package to make changes.'
-    :null;
+  if(organization.exists&&organization.data()?.billingAccessSuspended===true){
+    return 'This organization subscription is inactive. Renew or activate a subscription package to make changes.';
+  }
+  return organizationSubscriptionTermBlockReason(ctx.db,ctx.organizationId);
 }
 
 export async function requireSubscriptionFeature(
