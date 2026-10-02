@@ -1591,3 +1591,22 @@ hr,
     transition: none !important;
   }
 }
+
+/* Learner guide and retake controls consume the canonical dark theme here,
+   keeping component stylesheets theme-neutral. */
+[data-theme="dark"] .vop-guide-hero{
+  background:#050505!important;
+  background-image:none!important;
+  border-bottom:1px solid var(--theme-border)!important;
+}
+[data-theme="dark"] .vop-guide-module-badge{
+  background:#111!important;
+  border-color:var(--theme-border-strong)!important;
+  color:#f2c15d!important;
+}
+[data-theme="dark"] .vop-guide-completion-card{box-shadow:none!important}
+[data-theme="dark"] .vop-retake-confirm-button{
+  background:#f2c15d!important;
+  color:#050505!important;
+  border-color:#f2c15d!important;
+}
