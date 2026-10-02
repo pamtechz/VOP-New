@@ -206,11 +206,11 @@ test('organization plan limits are consolidated into the subscription entitlemen
   assert.match(workspace,/Plan entitlements/);
   assert.match(workspace,/Cancel at period end/);
   assert.match(workspace,/Assign manually/);
-  assert.match(workspace,/Below current organization usage/);
+  assert.match(workspace,/Below current institutional usage/);
 
   assert.match(shared,/SUBSCRIPTION_QUOTAS/);
   assert.match(shared,/SUBSCRIPTION_FEATURES/);
-  assert.match(plans,/organizationUsageSnapshot/);
+  assert.match(plans,/billingTenantUsageSnapshot/);
   assert.match(plans,/planSnapshot/);
   assert.match(plans,/currentPeriodStart/);
   assert.match(plans,/currentPeriodEnd/);
@@ -355,8 +355,8 @@ test('subscription authorization checks the live term instead of waiting for the
   assert.match(tenant,/enforceOrganizationQuota[\s\S]*organizationSubscriptionTermBlockReason/);
   assert.match(tenant,/enforceOrganizationMembershipQuotas[\s\S]*organizationSubscriptionTermBlockReason/);
 
-  assert.match(permissions,/organizationSubscriptionTermBlockReason/);
-  assert.match(permissions,/organizationSubscriptionFeatureBlockReason[\s\S]*organizationSubscriptionTermBlockReason/);
+  assert.match(permissions,/billingTenantSubscriptionTermBlockReason/);
+  assert.match(permissions,/billingTenantSubscriptionFeatureBlockReason[\s\S]*billingTenantSubscriptionTermBlockReason/);
   assert.match(plans,/billingAccessSuspended:storedSuspended\|\|Boolean\(liveTermBlock\)/);
   assert.match(plans,/effectiveSubscriptionStatus=liveExpired\?'expired'/);
   assert.match(vercel,/\/api\/payments\/reconcile-cron/);
@@ -398,12 +398,12 @@ test('organizations without a plan automatically receive the default free subscr
   assert.match(tenant,/renewalMode:'none'/);
 
   assert.match(organizations,/ensureOrganizationDefaultSubscription\(bootstrapDb,organizationId,ctx\.auth\.uid\)/);
-  assert.match(permissions,/ensureOrganizationDefaultSubscription\(db,organizationId\)/);
-  assert.match(plans,/await ensureOrganizationDefaultSubscription\(ctx\.db,organizationId,ctx\.auth\.uid\)/);
+  assert.match(permissions,/ensureBillingTenantDefaultSubscription\(db,billingTenantType,billingTenantId\)/);
+  assert.match(plans,/await ensureBillingTenantDefaultSubscription\(ctx\.db,target\.type,target\.id,ctx\.auth\.uid\)/);
   assert.match(plans,/defaultForUnsubscribed:priceUsd===0/);
   assert.match(plans,/where\('defaultForUnsubscribed','==',true\)/);
 
-  assert.match(payments,/Default free plan for organizations without a subscription/);
+  assert.match(payments,/Default free plan for institutions without a subscription/);
   assert.match(payments,/defaultForUnsubscribed:price===0&&packageDraft\.active/);
 });
 
