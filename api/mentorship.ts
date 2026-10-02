@@ -3,7 +3,7 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { organizationInHierarchyScope } from '../server/tenant.js';
-import { requirePermissionForProfile } from '../server/permissions.js';
+import { requirePermissionForProfile, requireOrganizationSubscriptionFeature } from '../server/permissions.js';
 import { createNotification } from '../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
@@ -272,6 +272,9 @@ export default async function handler(req: Request, res: Response) {
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
+    if(permissionAction&&!['view','read'].includes(permissionAction)&&organizationId&&String(actor.role||'')!=='super_admin'){
+      await requireOrganizationSubscriptionFeature(db,'mentorship',organizationId);
+    }
 
     if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
@@ -611,7 +614,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Unsupported mentorship action.' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Mentorship operation failed.';
-    if (message.includes('Sign in') || message.includes('Administrator privileges') || message.includes('not allowed') || message.includes('not configured') || message.includes('not assigned') || message.includes('not found') || message.includes('cannot manage')) return res.status(403).json({ error: message });
+    if (message.includes('Sign in') || message.includes('Administrator privileges') || message.includes('not allowed') || message.includes('not configured') || message.includes('not assigned') || message.includes('not found') || message.includes('cannot manage') || message.includes('subscription')) return res.status(403).json({ error: message });
     console.error('VOP mentorship operation failed', error);
     return res.status(500).json({ error: message });
   }
