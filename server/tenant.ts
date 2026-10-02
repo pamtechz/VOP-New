@@ -240,6 +240,31 @@ export async function organizationUsageSnapshot(db:Firestore,organizationId:stri
   };
 }
 
+export async function validateOrganizationPlanCapacity(
+  db:Firestore,
+  organizationId:string,
+  quotas:Record<string,unknown>,
+){
+  const usage=await organizationUsageSnapshot(db,organizationId);
+  const checks:Array<[string,number,number]>=[
+    ['active seats',usage.seats,quotaLimit(quotas,'maxSeats','maxUsers')],
+    ['candidates / learners',usage.candidates,quotaLimit(quotas,'maxCandidates')],
+    ['mentors',usage.mentors,quotaLimit(quotas,'maxMentors')],
+    ['guides',usage.guides,quotaLimit(quotas,'maxGuides')],
+    ['quizzes',usage.quizzes,quotaLimit(quotas,'maxQuizzes')],
+    ['announcements',usage.announcements,quotaLimit(quotas,'maxAnnouncements')],
+    ['radio items',usage.radio,quotaLimit(quotas,'maxRadioItems')],
+    ['radio playlists',usage.radioPlaylists,quotaLimit(quotas,'maxRadioPlaylists')],
+    ['materials',usage.materials,quotaLimit(quotas,'maxMaterials')],
+  ];
+  const violations=checks.filter(([,used,limit])=>Number.isFinite(limit)&&used>limit)
+    .map(([label,used,limit])=>`${label}: ${used} in use / ${limit} allowed`);
+  if(violations.length){
+    throw new Error('This package is below the organization’s current usage. Reduce usage first or choose a larger package. '+violations.join('; ')+'.');
+  }
+  return usage;
+}
+
 export async function enforceOrganizationMembershipQuotas(
   ctx:TenantContext,
   organizationId:string,
