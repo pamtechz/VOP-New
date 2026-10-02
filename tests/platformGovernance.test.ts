@@ -290,6 +290,19 @@ test('subscription metering is based on the resource-owning organization and exp
   assert.match(permissions,/\['view','read','delete'\]/);
 });
 
+test('hierarchy curriculum writes consume descendant guide and quiz entitlements',()=>{
+  const content=read('api_handlers/admin/content.ts');
+  const quizzes=read('api/quizzes.ts');
+
+  assert.match(content,/enforceOrganizationQuota\(ctx\.db, effectiveOrganizationId, 'guides', 'maxGuides'\)/);
+  assert.match(content,/organizationId:effectiveOrganizationId/);
+  assert.match(content,/organizationId:effectiveOrganizationId, copiedLessons:lessons\.size/);
+
+  assert.match(quizzes,/requireOrganizationSubscriptionFeature\(ctx\.db,'curriculum',target\.organizationId\)/);
+  assert.match(quizzes,/enforceOrganizationQuota\(ctx\.db,target\.organizationId,'quizzes','maxQuizzes'\)/);
+  assert.doesNotMatch(quizzes,/enforceQuota\(ctx, 'quizzes', 'maxQuizzes'\)/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');
