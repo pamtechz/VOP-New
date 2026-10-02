@@ -188,7 +188,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           setError('');
           return;
         }
-        const permanentlyBlocked=['ASSESSMENT_ATTEMPT_LIMIT','ASSESSMENT_CONFIGURATION'].includes(reason.code);
+        const permanentlyBlocked=[
+          'ASSESSMENT_ATTEMPT_LIMIT','ASSESSMENT_CONFIGURATION','ASSESSMENT_PREREQUISITE',
+          'ASSESSMENT_CONTENT_CHANGED','ASSESSMENT_TYPE',
+        ].includes(reason.code);
         const cooldownBlocked=reason.code==='ASSESSMENT_RETAKE_COOLDOWN'&&Boolean(reason.retryAt);
         setAttemptBlockCode(reason.code);
         setAttemptRetryAt(cooldownBlocked?reason.retryAt:null);
@@ -223,9 +226,15 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     ?t('quiz.attempt_limit_reached','Attempt limit reached')
     :attemptBlockCode==='ASSESSMENT_RETAKE_COOLDOWN'&&attemptRetryAt
       ?t('quiz.retake_available_at','Retake available {time}',{time:new Date(attemptRetryAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})})
-      :attemptBlockCode==='ASSESSMENT_CONFIGURATION'
-        ?t('quiz.assessment_unavailable','Assessment unavailable')
-        :t('quiz.attempt_unavailable','Attempt unavailable');
+      :attemptBlockCode==='ASSESSMENT_PREREQUISITE'
+        ?t('quiz.complete_required_lessons','Complete required lessons')
+        :attemptBlockCode==='ASSESSMENT_CONTENT_CHANGED'
+          ?t('quiz.course_update_required','Course update required')
+          :attemptBlockCode==='ASSESSMENT_CONFIGURATION'
+            ?t('quiz.assessment_not_configured','Assessment not configured')
+            :attemptBlockCode==='ASSESSMENT_TYPE'
+              ?t('quiz.assessment_unavailable','Assessment unavailable')
+              :t('quiz.cannot_start_yet','Cannot start yet');
   const knownPreviousScore=serverPreviousScore;
   const previousPassed=knownPreviousScore!==null&&validThreshold&&knownPreviousScore>=threshold;
   const instructions=lesson.assessmentInstructions?.trim()
