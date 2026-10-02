@@ -259,6 +259,37 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(admin,/Object\.hasOwn\(subscriptionFeatures,subscriptionFeature\)/);
 });
 
+test('subscription metering is based on the resource-owning organization and exposes all plan quotas',()=>{
+  const shared=read('shared/subscriptions.ts');
+  const tenant=read('server/tenant.ts');
+  const content=read('api_handlers/admin/content.ts');
+  const programs=read('server/programManager.ts');
+  const permissions=read('server/permissions.ts');
+
+  assert.match(shared,/maxPrograms/);
+  assert.match(shared,/maxLearningPaths/);
+  assert.match(shared,/maxBibleTopics/);
+  assert.match(shared,/maxSeasons/);
+  assert.match(shared,/maxEvents/);
+
+  assert.match(tenant,/ownedCollectionCount\(db,organizationId,'programs'\)/);
+  assert.match(tenant,/ownedCollectionCount\(db,organizationId,'events'\)/);
+  assert.match(tenant,/enforceOrganizationQuota/);
+  assert.match(tenant,/maxPrograms/);
+  assert.match(tenant,/maxEvents/);
+
+  assert.match(content,/SUBSCRIPTION_FEATURE_BY_COLLECTION/);
+  assert.match(content,/requireOrganizationSubscriptionFeature\(ctx\.db,subscriptionFeature,effectiveOrganizationId\)/);
+  assert.match(content,/enforceOrganizationQuota\(ctx\.db,effectiveOrganizationId,collection,quotaKey\)/);
+  assert.match(content,/collection==='events'\?'maxEvents'/);
+
+  assert.match(programs,/requireOrganizationSubscriptionFeature\(ctx\.db,'curriculum',targetOrganizationId\)/);
+  assert.match(programs,/enforceOrganizationQuota\(ctx\.db,targetOrganizationId,'programs','maxPrograms'\)/);
+
+  assert.match(permissions,/NON_EXPANSIVE_ACTIONS/);
+  assert.match(permissions,/\['view','read','delete'\]/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');

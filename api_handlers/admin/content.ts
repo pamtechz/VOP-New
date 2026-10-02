@@ -2,8 +2,9 @@ import { isEnglishLocale } from '../../shared/locales.js';
 import { randomUUID } from 'node:crypto';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
-import { requirePermission, resourceForCollection } from '../../server/permissions.js';
+import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, enforceOrganizationQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
+import { requireOrganizationSubscriptionFeature, requirePermission, resourceForCollection } from '../../server/permissions.js';
+import type { SubscriptionFeatureKey } from '../../shared/subscriptions.js';
 import { assertMutableTenantResource, platformStewardedResource } from '../../shared/platformStewardship.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
@@ -28,6 +29,29 @@ const ORG_COLLECTIONS = new Set([
   'announcements','events','programs','learningPaths','bibleTopics','seasons',
   'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
 ]);
+
+const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatureKey>>={
+  curriculum:'curriculum',
+  guides:'curriculum',
+  programs:'curriculum',
+  learningPaths:'curriculum',
+  bibleTopics:'curriculum',
+  seasons:'curriculum',
+  announcements:'announcements',
+  events:'announcements',
+  candidates:'candidates',
+  certificates:'certification',
+  graduationRequests:'certification',
+};
+const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide']);
+function quotaKeyForCollection(collection:string){
+  return collection==='announcements'?'maxAnnouncements'
+    :collection==='events'?'maxEvents'
+    :collection==='learningPaths'?'maxLearningPaths'
+    :collection==='bibleTopics'?'maxBibleTopics'
+    :collection==='seasons'?'maxSeasons'
+    :'';
+}
 
 const HIERARCHY_COLLECTIONS = new Set(['unions','conferences','districts','churches']);
 
@@ -99,6 +123,10 @@ export default async function handler(req: Request, res: Response) {
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
+    if(ctx.tenantType==='hierarchy'&&effectiveOrganizationId&&!NON_EXPANSIVE_CONTENT_ACTIONS.has(action)){
+      const subscriptionFeature=SUBSCRIPTION_FEATURE_BY_COLLECTION[collection];
+      if(subscriptionFeature)await requireOrganizationSubscriptionFeature(ctx.db,subscriptionFeature,effectiveOrganizationId);
+    }
     const curriculum = ['curriculum','guides','programs','learningPaths','bibleTopics','seasons'].includes(collection);
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
       ? ['owner','admin','editor','union_admin','conference_admin','district_admin','church_admin']
@@ -1224,9 +1252,9 @@ export default async function handler(req: Request, res: Response) {
         const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
         if (existing.exists) await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'update');
         else await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'create');
-        if (!existing.exists) {
-          const quotaKey = collection === 'announcements' ? 'maxAnnouncements' : collection === 'books' ? 'maxMaterials' : collection === 'radioBroadcasts' ? 'maxRadioItems' : collection === 'playlists' ? 'maxRadioPlaylists' : collection === 'learningPaths' ? 'maxLearningPaths' : collection === 'bibleTopics' ? 'maxBibleTopics' : collection === 'seasons' ? 'maxSeasons' : '';
-          if (quotaKey) await enforceQuota(ctx, collection, quotaKey);
+        if(!existing.exists&&!ctx.isSuperAdmin){
+          const quotaKey=quotaKeyForCollection(collection);
+          if(quotaKey)await enforceOrganizationQuota(ctx.db,effectiveOrganizationId,collection,quotaKey);
         }
         if (existing.exists && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
         if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');

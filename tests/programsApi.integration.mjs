@@ -37,6 +37,21 @@ async function identity(name,orgId,role='owner'){
     .set({uid:data.localId,role,organizationId:orgId,active:true});
   return {uid:data.localId,token:data.idToken};
 }
+async function hierarchyIdentity(name,role,nodeId){
+  const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
+    '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:name+'@vop-test.invalid',
+        password:'local-emulator-only',returnSecureToken:true}),
+    });
+  const data=await response.json();
+  assert.equal(response.status,200,JSON.stringify(data));
+  await db.doc('users/'+data.localId).set({
+    uid:data.localId,role,adminNodeId:nodeId,
+    adminNodeType:role.replace('_admin',''),organizationId:'',
+  });
+  return {uid:data.localId,token:data.idToken};
+}
 async function call(user,body){
   let status=200,value;
   await content({
@@ -189,6 +204,51 @@ await test('program ownership, tenant scope, and read permissions',async t=>{
     assert.equal(restored.status,200,JSON.stringify(restored.value));
     assert.equal((await db.doc('programs/'+programId).get()).data()?.adoptedByPlatform,true);
   });
+});
+
+await test('hierarchy administrators cannot bypass descendant subscription entitlements or quotas',async()=>{
+  const unionId='program-test-union-metering';
+  const orgId='program-test-org-metering';
+  const guideId='program-test-guide-metering';
+  await db.doc('unions/'+unionId).set({id:unionId,name:'Metering Union'});
+  await db.doc('organizations/'+orgId).set({
+    id:orgId,name:'Metered Organization',status:'active',unionId,
+    plan:'metered-plan',
+    featureEntitlements:{curriculum:false},
+    quotas:{maxPrograms:1},
+  });
+  const unionAdmin=await hierarchyIdentity('program-test-union-admin','union_admin',unionId);
+  await db.doc('guides/'+guideId).set({
+    id:guideId,organizationId:orgId,ownerOrganizationId:orgId,ownerUid:unionAdmin.uid,
+    language:'en',title:'Metered Guide',published:true,archived:false,
+    sharingScope:'organization',canonical:true,
+  });
+  const draft={
+    title:'Metered Program',description:'Hierarchy-managed curriculum',
+    coverImageUrl:'',entryMode:'lessons',guideIds:[guideId],
+    sharingScope:'organization',published:true,archived:false,
+  };
+
+  const excluded=await call(unionAdmin,{
+    collection:'programs',action:'upsert',organizationId:orgId,data:draft,
+  });
+  assert.notEqual(excluded.status,200,'excluded curriculum capability must block hierarchy writes');
+  assert.match(String(excluded.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
+
+  await db.doc('organizations/'+orgId).update({
+    featureEntitlements:{curriculum:true},
+  });
+  const first=await call(unionAdmin,{
+    collection:'programs',action:'upsert',organizationId:orgId,data:draft,
+  });
+  assert.equal(first.status,200,JSON.stringify(first.value));
+
+  const overLimit=await call(unionAdmin,{
+    collection:'programs',action:'upsert',organizationId:orgId,
+    data:{...draft,title:'Second metered program'},
+  });
+  assert.notEqual(overLimit.status,200,'hierarchy actor must consume the descendant organization quota');
+  assert.match(String(overLimit.value?.error||''),/maxPrograms|limit|usage/i);
 });
 
 await test('platform-published curriculum is inherited system-wide by organizations',async()=>{
