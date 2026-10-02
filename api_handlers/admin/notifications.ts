@@ -142,7 +142,7 @@ export default async function handler(req:Request,res:Response){
   }catch(error){
     const message=error instanceof Error?error.message:'Notification operation failed.';
     const status=/sign in|auth\/|token|credential/i.test(message)?401
-      :/scope|permission|not found|does not belong|outside|member/i.test(message)?403
+      :/scope|permission|not found|does not exist|does not belong|outside|member|administrator account is not linked/i.test(message)?403
       :400;
     return res.status(status).json({error:message});
   }
