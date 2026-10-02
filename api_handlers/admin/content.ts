@@ -2,8 +2,12 @@ import { isEnglishLocale } from '../../shared/locales.js';
 import { randomUUID } from 'node:crypto';
 import { isSafeHttpsMediaUrl, resolveMediaSource } from '../../shared/mediaSources.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, canEditCanonicalContent, enforceQuota, enforceOrganizationQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent } from '../../server/tenant.js';
-import { requireOrganizationSubscriptionFeature, requirePermission, resourceForCollection } from '../../server/permissions.js';
+import {
+  authenticateTenant, billingTenantFromContext, canEditCanonicalContent, enforceBillingTenantQuota,
+  enforceQuota, enforceOrganizationQuota, requireOrgRole, writeTenantAudit, tenantOwnerKey,
+  organizationInHierarchyScope, accessibleOrganizationIds, canManageOrganizationContent,
+} from '../../server/tenant.js';
+import { requireOrganizationSubscriptionFeature, requirePermission, requireSubscriptionFeature, resourceForCollection } from '../../server/permissions.js';
 import type { SubscriptionFeatureKey } from '../../shared/subscriptions.js';
 import { assertMutableTenantResource, platformStewardedResource } from '../../shared/platformStewardship.js';
 import { notifyOrganizationMembers, normalizePublicationAudience } from '../../server/notifications.js';
@@ -123,9 +127,27 @@ export default async function handler(req: Request, res: Response) {
     if (permissionResource && permissionAction) await requirePermission(ctx, permissionResource, permissionAction);
     const hierarchyOrganizationId = ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '';
     const effectiveOrganizationId = ctx.organizationId || hierarchyOrganizationId;
+    const enforceOwnedQuota=async(collectionName:string,quotaKey:string,increment=1)=>{
+      if(ctx.isSuperAdmin)return;
+      if(ctx.tenantType==='hierarchy'){
+        const target=billingTenantFromContext(ctx);
+        if(!target)throw new Error('This hierarchy administrator is not linked to a billing tenant.');
+        await enforceBillingTenantQuota(ctx.db,target.type,target.id,collectionName,quotaKey,increment);
+        return;
+      }
+      await enforceOrganizationQuota(ctx.db,effectiveOrganizationId,collectionName,quotaKey,increment);
+    };
+    const requireOwnedFeature=async(feature:Parameters<typeof requireSubscriptionFeature>[1])=>{
+      if(ctx.isSuperAdmin)return;
+      if(ctx.tenantType==='hierarchy'){
+        await requireSubscriptionFeature(ctx,feature,'');
+        return;
+      }
+      await requireOrganizationSubscriptionFeature(ctx.db,feature,effectiveOrganizationId);
+    };
     if(ctx.tenantType==='hierarchy'&&effectiveOrganizationId&&!NON_EXPANSIVE_CONTENT_ACTIONS.has(action)){
       const subscriptionFeature=SUBSCRIPTION_FEATURE_BY_COLLECTION[collection];
-      if(subscriptionFeature)await requireOrganizationSubscriptionFeature(ctx.db,subscriptionFeature,effectiveOrganizationId);
+      if(subscriptionFeature)await requireOwnedFeature(subscriptionFeature);
     }
     const curriculum = ['curriculum','guides','programs','learningPaths','bibleTopics','seasons'].includes(collection);
     const editorRoles = curriculum || GLOBAL_COLLECTIONS.has(collection)
@@ -269,7 +291,7 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && String(current.organizationId || '').trim() !== effectiveOrganizationId) {
         throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
       }
-      if (!existing.exists && !ctx.isSuperAdmin) await enforceOrganizationQuota(ctx.db, effectiveOrganizationId, 'guides', 'maxGuides');
+      if (!existing.exists && !ctx.isSuperAdmin) await enforceOwnedQuota('guides','maxGuides');
       await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
@@ -392,7 +414,7 @@ export default async function handler(req: Request, res: Response) {
       const source = await ctx.db.doc(`guides/${sourceId}`).get();
       const sourceData = source.data() || {};
       if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared guides can be copied.');
-      if (!ctx.isSuperAdmin) await enforceOrganizationQuota(ctx.db, effectiveOrganizationId, 'guides', 'maxGuides');
+      if (!ctx.isSuperAdmin) await enforceOwnedQuota('guides','maxGuides');
       const id = safeId(body.targetId || `${effectiveOrganizationId}__${String(sourceData.language || 'en')}__copy-${Date.now().toString(36)}`);
       const now = new Date().toISOString();
       const target = ctx.db.doc(`guides/${id}`);
@@ -1254,7 +1276,7 @@ export default async function handler(req: Request, res: Response) {
         else await requirePermission(ctx, resourceForCollection(collection) || 'curriculum', 'create');
         if(!existing.exists&&!ctx.isSuperAdmin){
           const quotaKey=quotaKeyForCollection(collection);
-          if(quotaKey)await enforceOrganizationQuota(ctx.db,effectiveOrganizationId,collection,quotaKey);
+          if(quotaKey)await enforceOwnedQuota(collection,quotaKey);
         }
         if (existing.exists && !ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy' && !canEditCanonicalContent(ctx, existing.data())) throw new Error('Only the owning organization or VOP Super Admin can edit this content.');
         if (existing.exists) assertMutableTenantResource(ctx.isSuperAdmin, existing.data(), 'edit');
