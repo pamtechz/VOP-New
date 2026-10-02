@@ -440,7 +440,7 @@ export default async function handler(req: Request, res: Response) {
         await upsertPayableItem(ctx, {
           id:subscriptionPayableId,
           name:data.name,
-          description:data.description || (data.name+' organization subscription'),
+          description:data.description || (data.name+' institutional subscription'),
           itemType:'organization_subscription',
           itemId:planId,
           scope:'platform',
@@ -469,8 +469,16 @@ export default async function handler(req: Request, res: Response) {
       const ref = ctx.db.doc(`system/plans/catalog/${planId}`);
       const snapshot = await ref.get();
       if (!snapshot.exists) throw new Error('The plan does not exist.');
-      const activeOrganizations = await ctx.db.collection('organizations').where('plan', '==', planId).where('status', '==', 'active').limit(1).get();
-      if (!activeOrganizations.empty) throw new Error('A plan assigned to an active organization cannot be deleted. Deactivate or migrate those organizations first.');
+      const collections:Array<[BillingTenantType,string]>=[
+        ['organization','organizations'],['church','churches'],['district','districts'],
+        ['conference','conferences'],['union','unions'],
+      ];
+      for(const [type,collection] of collections){
+        const assigned=await ctx.db.collection(collection).where('plan','==',planId).limit(1).get();
+        if(!assigned.empty){
+          throw new Error('A plan assigned to an active institutional tenant cannot be deleted. Migrate those tenants first.');
+        }
+      }
       await ref.delete();
       try { await deletePayableItem(ctx,'subscription_'+planId); } catch (error) {
         if (!(error instanceof Error) || !/does not exist/i.test(error.message)) throw error;
@@ -480,18 +488,18 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'assignPlan') {
-      const organizationId = text(body.organizationId);
-      const planId = text(body.planId);
-      if (!organizationId || !planId) throw new Error('Organization and plan are required.');
-      const [organizationRef, planRef] = [ctx.db.doc(`organizations/${organizationId}`), ctx.db.doc(`system/plans/catalog/${planId}`)];
-      const [organization, plan] = await Promise.all([organizationRef.get(), planRef.get()]);
-      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
-      if (!plan.exists || plan.data()?.active !== true) throw new Error('The selected plan is not active.');
-      const planData = plan.data() || {};
-      const snapshot=planSnapshot(planId,planData);
-      await validateOrganizationPlanCapacity(ctx.db,organizationId,snapshot.quotas);
-      const before = organization.data();
-      const previousSubscription=await organizationRef.collection('subscription').doc('current').get();
+      const target=targetFromRequest(ctx,body);
+      const planId=text(body.planId);
+      if(!planId)throw new Error('Institutional tenant and plan are required.');
+      const [{ref:tenantRef,data:tenantData},plan]=await Promise.all([
+        tenantSnapshotOrThrow(ctx,target),
+        ctx.db.doc(`system/plans/catalog/${planId}`).get(),
+      ]);
+      if(!plan.exists||plan.data()?.active!==true)throw new Error('The selected plan is not active.');
+      const snapshot=planSnapshot(planId,plan.data()||{});
+      await validateBillingTenantPlanCapacity(ctx.db,target.type,target.id,snapshot.quotas);
+      const subscriptionRef=billingTenantSubscriptionRef(ctx.db,target.type,target.id);
+      const previousSubscription=await subscriptionRef.get();
       const activationSource=['complimentary','manual_override','migration'].includes(text(body.activationSource))
         ?text(body.activationSource):'manual_override';
       const overrideReason=text(body.overrideReason);
@@ -499,12 +507,13 @@ export default async function handler(req: Request, res: Response) {
       const period=snapshot.priceUsd===0
         ?{interval:snapshot.interval,start:new Date().toISOString(),end:null as string|null}
         :periodFor(snapshot.interval);
-      await organizationRef.set({
+      await tenantRef.set({
         plan:planId,quotas:snapshot.quotas,featureEntitlements:snapshot.features,
         billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
-      }, { merge: true });
-      await organizationRef.collection('subscription').doc('current').set({
-        organizationId,planId,planName:snapshot.name,planInterval:snapshot.interval,planVersion:snapshot.version,
+      },{merge:true});
+      await subscriptionRef.set({
+        ...targetResponse(target),
+        planId,planName:snapshot.name,planInterval:snapshot.interval,planVersion:snapshot.version,
         planSnapshot:snapshot,status:'active',activationSource,overrideReason,
         billingProvider:text(body.billingProvider)||'manual',
         externalCustomerId:text(body.externalCustomerId)||null,
@@ -514,28 +523,28 @@ export default async function handler(req: Request, res: Response) {
         previousPlanId:text(previousSubscription.data()?.planId)||null,
         startedAt:FieldValue.serverTimestamp(),activatedAt:FieldValue.serverTimestamp(),
         activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
-      }, { merge: false });
-      await writeTenantAudit(ctx, 'subscription.assign', organizationRef.path, before, {
-        plan:planId,activationSource,overrideReason,planSnapshot:snapshot,
+      },{merge:false});
+      await writeTenantAudit(ctx,'subscription.assign',tenantRef.path,tenantData,{
+        ...targetResponse(target),plan:planId,activationSource,overrideReason,planSnapshot:snapshot,
         currentPeriodStart:period.start,currentPeriodEnd:period.end,
       });
-      return res.status(200).json({ ok: true, organizationId, planId, status: 'active', currentPeriodEnd:period.end });
+      return res.status(200).json({
+        ok:true,...targetResponse(target),planId,status:'active',currentPeriodEnd:period.end,
+      });
     }
 
     if (action === 'activateSubscription' || action === 'reactivateSubscription') {
-      const organizationId = text(body.organizationId);
-      if (!organizationId) throw new Error('Organization is required.');
-      const organizationRef=ctx.db.doc(`organizations/${organizationId}`);
-      const subscriptionRef = organizationRef.collection('subscription').doc('current');
-      const [organization,snapshot]=await Promise.all([organizationRef.get(),subscriptionRef.get()]);
-      if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
-      if (!snapshot.exists) throw new Error('The organization has no subscription record.');
-      const before = snapshot.data()||{};
-      const planId=text(before.planId||organization.data()?.plan);
+      const target=targetFromRequest(ctx,body);
+      const {ref:tenantRef,data:tenantData}=await tenantSnapshotOrThrow(ctx,target);
+      const subscriptionRef=billingTenantSubscriptionRef(ctx.db,target.type,target.id);
+      const snapshot=await subscriptionRef.get();
+      if(!snapshot.exists)throw new Error('This institutional tenant has no subscription record.');
+      const before=snapshot.data()||{};
+      const planId=text(before.planId||tenantData.plan);
       const plan=planId?await ctx.db.doc(`system/plans/catalog/${planId}`).get():null;
       if(!plan?.exists||plan.data()?.active!==true)throw new Error('The subscription plan is not active.');
       const snapshotPlan=planSnapshot(planId,plan.data()||{});
-      await validateOrganizationPlanCapacity(ctx.db,organizationId,snapshotPlan.quotas);
+      await validateBillingTenantPlanCapacity(ctx.db,target.type,target.id,snapshotPlan.quotas);
       const overrideReason=text(body.overrideReason);
       if(!overrideReason)throw new Error('A reason is required for a non-payment subscription activation.');
       const wasScheduled=before.status==='active'&&before.cancelAtPeriodEnd===true;
@@ -546,31 +555,33 @@ export default async function handler(req: Request, res: Response) {
         :keepCurrentTerm
           ?{interval:snapshotPlan.interval,start:text(before.currentPeriodStart)||new Date().toISOString(),end:text(before.currentPeriodEnd)||null}
           :periodFor(snapshotPlan.interval);
-      await organizationRef.set({
+      await tenantRef.set({
         plan:planId,quotas:snapshotPlan.quotas,featureEntitlements:snapshotPlan.features,
         billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
       await subscriptionRef.set({
+        ...targetResponse(target),
         planId,planName:snapshotPlan.name,planInterval:snapshotPlan.interval,planVersion:snapshotPlan.version,
         planSnapshot:snapshotPlan,status:'active',activationSource:'manual_override',overrideReason,
         currentPeriodStart:period.start,currentPeriodEnd:period.end,
         cancelAtPeriodEnd:false,cancellationReason:null,cancellationRequestedAt:null,
         activatedAt:FieldValue.serverTimestamp(),activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
-      }, { merge: true });
-      await writeTenantAudit(ctx, `subscription.${action === 'activateSubscription' ? 'activate' : 'reactivate'}`, subscriptionRef.path, before, {
-        status:'active',activationSource:'manual_override',overrideReason,planId,
+      },{merge:true});
+      await writeTenantAudit(ctx,`subscription.${action==='activateSubscription'?'activate':'reactivate'}`,subscriptionRef.path,before,{
+        ...targetResponse(target),status:'active',activationSource:'manual_override',overrideReason,planId,
         currentPeriodStart:period.start,currentPeriodEnd:period.end,cancelAtPeriodEnd:false,
       });
-      return res.status(200).json({ ok: true, organizationId, status: 'active', currentPeriodEnd:period.end });
+      return res.status(200).json({
+        ok:true,...targetResponse(target),status:'active',currentPeriodEnd:period.end,
+      });
     }
 
     if (action === 'cancelSubscription') {
-      const organizationId = text(body.organizationId);
-      if (!organizationId) throw new Error('Organization is required.');
-      const organizationRef=ctx.db.doc(`organizations/${organizationId}`);
-      const subscriptionRef = organizationRef.collection('subscription').doc('current');
+      const target=targetFromRequest(ctx,body);
+      const {ref:tenantRef}=await tenantSnapshotOrThrow(ctx,target);
+      const subscriptionRef=billingTenantSubscriptionRef(ctx.db,target.type,target.id);
       const snapshot=await subscriptionRef.get();
-      if(!snapshot.exists)throw new Error('The organization has no subscription record.');
+      if(!snapshot.exists)throw new Error('This institutional tenant has no subscription record.');
       const before=snapshot.data()||{};
       const mode=text(body.mode)==='immediate'?'immediate':'period_end';
       const reason=text(body.reason);
@@ -582,10 +593,10 @@ export default async function handler(req: Request, res: Response) {
           cancellationRequestedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
         },{merge:true});
         await writeTenantAudit(ctx,'subscription.cancel_scheduled',subscriptionRef.path,before,{
-          status:text(before.status,'active'),cancelAtPeriodEnd:true,cancellationReason:reason,
+          ...targetResponse(target),status:text(before.status,'active'),cancelAtPeriodEnd:true,cancellationReason:reason,
         });
         return res.status(200).json({
-          ok:true,organizationId,status:text(before.status,'active'),cancelAtPeriodEnd:true,
+          ok:true,...targetResponse(target),status:text(before.status,'active'),cancelAtPeriodEnd:true,
           currentPeriodEnd:text(before.currentPeriodEnd)||null,
         });
       }
@@ -594,15 +605,17 @@ export default async function handler(req: Request, res: Response) {
           status:'cancelled',cancelAtPeriodEnd:false,cancellationReason:reason,
           cancelledAt:FieldValue.serverTimestamp(),cancelledBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
         },{merge:true}),
-        organizationRef.set({
+        tenantRef.set({
           billingAccessSuspended:true,billingSuspendedReason:'subscription_cancelled',
           updatedAt:FieldValue.serverTimestamp(),
         },{merge:true}),
       ]);
-      await writeTenantAudit(ctx, 'subscription.cancel', subscriptionRef.path, before, {
-        status:'cancelled',cancelAtPeriodEnd:false,cancellationReason:reason,
+      await writeTenantAudit(ctx,'subscription.cancel',subscriptionRef.path,before,{
+        ...targetResponse(target),status:'cancelled',cancelAtPeriodEnd:false,cancellationReason:reason,
       });
-      return res.status(200).json({ ok: true, organizationId, status: 'cancelled', cancelAtPeriodEnd:false });
+      return res.status(200).json({
+        ok:true,...targetResponse(target),status:'cancelled',cancelAtPeriodEnd:false,
+      });
     }
 
     throw new Error('Unsupported plan action.');
