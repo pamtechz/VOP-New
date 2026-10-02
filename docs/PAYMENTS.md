@@ -130,6 +130,17 @@ When Super Admin saves an active paid package, VOP automatically synchronizes an
 
 Only an organization's **owner or administrator** can see and purchase an organization subscription offer. Ordinary learners do not see those offers. After a server-verified payment, VOP applies the package plan, quotas and feature entitlements to that organization and records the current subscription period and payment provenance. Provider choice remains invisible to the organization and is selected server-side.
 
+The SaaS domain has one source of truth:
+- **Plan** — the platform catalog template: price, interval, limits and capabilities.
+- **Subscription** — the organization's active commercial term, payment/manual activation provenance and an immutable entitlement snapshot for that term.
+- **Usage** — live server-measured consumption checked against the subscription snapshot.
+
+Organization settings cannot directly edit `plan`, `quotas` or `featureEntitlements`. A plan edit changes future activations; it does not silently shrink an already-active organization's current entitlement snapshot. Downgrades and manual assignments are rejected when current usage is above the target plan. Cancellation defaults to end-of-period; immediate cancellation is a Super Admin operation and suspends paid feature access.
+
+### Subscription currency and daily FX
+
+Plan catalog prices are canonical USD. For organizations billed in Zambia, the server obtains the daily USD→ZMW rate from the public Frankfurter API and caches the verified rate in `system/billing`; there is no browser-side FX calculation and no Frankfurter API key. A stale rate is refreshed before a ZMW quote is created. If the upstream service is temporarily unavailable, VOP may use only a previously verified rate no more than 72 hours old; otherwise checkout fails closed rather than inventing a rate. The existing reconciliation cron also refreshes the daily rate, and Super Admin has an audited manual refresh/override control.
+
 ## Payment lifecycle
 
 Internal statuses:
