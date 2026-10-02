@@ -78,7 +78,7 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'certification', label: 'Certification', icon: Award },
   { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
-  { id: 'payments', label: 'Payments & Transactions', icon: WalletCards },
+  { id: 'payments', label: 'Billing & Subscriptions', icon: WalletCards },
 ];
 
 const ADMIN_TAB_IDS=new Set<AdminTab>(NAV.map(item=>item.id));
@@ -1229,8 +1229,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='prayer'&&<PrayerManagementPanel />}
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights />}
-        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} />}
-        {activeTab==='payments'&&<PaymentManagement currentUser={currentUser}/>}
+        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>setActiveTab('payments')} />}
+        {activeTab==='payments'&&<PaymentManagement currentUser={currentUser} onOpenCheckout={planId=>{
+          try{
+            if(planId)sessionStorage.setItem('vop-subscription-checkout-plan',planId);
+            else sessionStorage.removeItem('vop-subscription-checkout-plan');
+          }catch{/* storage may be unavailable */}
+          onNavigate('payments');
+        }}/>}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && activeTab!=='translations' && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}

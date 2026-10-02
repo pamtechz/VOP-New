@@ -53,7 +53,9 @@ const checks = [
   ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds','requireSuperAdminFinanceControl','requireOrganizationSubscriptionConsumer','selectProviderForMethod','scopedTransactionProjection']],
   ['api/payments.ts', ["name.startsWith('webhooks/')",'getPaymentProvider','callbackMethods','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
   ['src/pages/PaymentsPage.tsx', ['Payments & receipts','Subscription packages','startPaymentCheckout','verifyPayment']],
-  ['src/pages/PaymentManagement.tsx', ['Payments & Transactions','Subscription packages','Payable items','Providers','Reconciliation','isSuperAdmin']],
+  ['src/pages/PaymentManagement.tsx', ['Billing & Subscriptions','Plans & subscriptions','SubscriptionWorkspace','Payable items','Providers','Reconciliation','isSuperAdmin']],
+  ['src/components/admin/SubscriptionWorkspace.tsx', ['Plan, subscription & usage','Usage against plan limits','Plan entitlements','Cancel at period end','Assign manually']],
+  ['shared/subscriptions.ts', ['SUBSCRIPTION_QUOTAS','SUBSCRIPTION_FEATURES','normalizeSubscriptionQuotas','subscriptionQuotaLimit']],
 
 ];
 const errors = [];

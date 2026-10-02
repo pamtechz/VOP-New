@@ -1,15 +1,46 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity } from '../../server/tenant.js';
+import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
 import { loadPlatformBillingSettings, quoteSubscriptionPlan, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
+import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 function text(value: unknown, fallback = '') { return String(value ?? fallback).trim(); }
 function object(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function timestampIso(value: unknown) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  const candidate=value as { toDate?:()=>Date; seconds?:number };
+  if (typeof candidate.toDate === 'function') return candidate.toDate().toISOString();
+  if (typeof candidate.seconds === 'number') return new Date(candidate.seconds*1000).toISOString();
+  return '';
+}
+function periodFor(intervalValue:unknown,startValue:Date=new Date()){
+  const interval=['month','year','one_time'].includes(text(intervalValue))?text(intervalValue):'month';
+  const start=new Date(startValue);
+  if(interval==='one_time')return {interval,start:start.toISOString(),end:null as string|null};
+  const end=new Date(start);
+  if(interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
+  else end.setUTCMonth(end.getUTCMonth()+1);
+  return {interval,start:start.toISOString(),end:end.toISOString()};
+}
+function planSnapshot(planId:string,data:Record<string,unknown>){
+  return {
+    id:planId,
+    name:text(data.name),
+    description:text(data.description),
+    interval:text(data.interval,'month'),
+    version:Math.max(1,Math.trunc(Number(data.version)||1)),
+    priceUsd:Number(data.priceUsd ?? data.price ?? 0),
+    baseCurrency:text(data.baseCurrency,SAAS_BASE_CURRENCY),
+    quotas:normalizeSubscriptionQuotas(data.quotas),
+    features:normalizeSubscriptionFeatures(data.features),
+  };
+}
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
@@ -18,7 +49,9 @@ export default async function handler(req: Request, res: Response) {
     const action = text(body.action, 'listPlans');
     const requestedOrganizationId = text(body.organizationId);
     const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
-    await requirePermission(ctx, 'billing', ['listPlans','listAvailablePlans','getSubscription'].includes(action) ? 'view' : 'manage');
+    const readActions=['listPlans','listAvailablePlans','getSubscription'];
+    const selfServiceActions=['cancelSubscription','reactivateSubscription'];
+    await requirePermission(ctx, 'billing', readActions.includes(action) ? 'view' : selfServiceActions.includes(action) ? 'update' : 'manage');
 
     if (action === 'listPlans') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can access subscription package administration.');
@@ -88,18 +121,80 @@ export default async function handler(req: Request, res: Response) {
       if (!organizationId) throw new Error('An organization is required.');
       if (!ctx.isSuperAdmin && !ctx.organizationId && !(await accessibleOrganizationIds(ctx)).includes(organizationId)) throw new Error('The organization is outside your scope.');
       if (!ctx.isSuperAdmin && ctx.organizationId !== organizationId) throw new Error('You cannot access another organization subscription.');
-      const [organization, subscription] = await Promise.all([
+      const [organization, subscription, usage] = await Promise.all([
         ctx.db.doc(`organizations/${organizationId}`).get(),
         ctx.db.doc(`organizations/${organizationId}/subscription/current`).get(),
+        organizationUsageSnapshot(ctx.db,organizationId),
       ]);
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
+      const organizationData=organization.data()||{};
+      const currentPlanId=text(organizationData.plan);
+      const catalogPlan=currentPlanId?await ctx.db.doc(`system/plans/catalog/${currentPlanId}`).get():null;
+      const subscriptionData=subscription.exists?subscription.data()||{}:null;
       return res.status(200).json({
-        ok:true,organizationId,plan:organization.data()?.plan||null,
-        subscription:subscription.exists?subscription.data():null,
-        quotas:organization.data()?.quotas||{},
-        featureEntitlements:organization.data()?.featureEntitlements||{},
-        billingProfile:organization.data()?.billingProfile||{},
+        ok:true,
+        organizationId,
+        organizationName:text(organizationData.name,organizationId),
+        plan:currentPlanId||null,
+        catalogPlan:catalogPlan?.exists?{id:catalogPlan.id,...catalogPlan.data()}:null,
+        subscription:subscriptionData?{
+          ...subscriptionData,
+          currentPeriodStart:text(subscriptionData.currentPeriodStart)||timestampIso(subscriptionData.startedAt),
+          currentPeriodEnd:text(subscriptionData.currentPeriodEnd)||null,
+          activatedAt:timestampIso(subscriptionData.activatedAt)||text(subscriptionData.activatedAt),
+          cancelledAt:timestampIso(subscriptionData.cancelledAt)||text(subscriptionData.cancelledAt),
+          cancellationRequestedAt:timestampIso(subscriptionData.cancellationRequestedAt)||text(subscriptionData.cancellationRequestedAt),
+          updatedAt:timestampIso(subscriptionData.updatedAt)||text(subscriptionData.updatedAt),
+        }:null,
+        quotas:organizationData.quotas||{},
+        featureEntitlements:organizationData.featureEntitlements||{},
+        usage,
+        billingProfile:organizationData.billingProfile||{},
+        billingAccessSuspended:organizationData.billingAccessSuspended===true,
+        billingSuspendedReason:text(organizationData.billingSuspendedReason),
       });
+    }
+
+    if (!ctx.isSuperAdmin && (action === 'cancelSubscription' || action === 'reactivateSubscription')) {
+      const organizationId=requestedOrganizationId||ctx.organizationId;
+      const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+      if(!organizationId||ctx.organizationId!==organizationId||!['owner','admin'].includes(role)){
+        throw new Error('Only an organization owner or administrator can manage this subscription.');
+      }
+      const subscriptionRef=ctx.db.doc(`organizations/${organizationId}/subscription/current`);
+      const snapshot=await subscriptionRef.get();
+      if(!snapshot.exists)throw new Error('The organization has no subscription record.');
+      const before=snapshot.data()||{};
+      if(action==='cancelSubscription'){
+        if(before.status!=='active')throw new Error('Only an active subscription can be scheduled for cancellation.');
+        if(text(before.planInterval||object(before.planSnapshot).interval)==='one_time'){
+          throw new Error('One-time subscriptions do not have a recurring renewal to cancel.');
+        }
+        const reason=text(body.reason,'Requested by organization administrator');
+        await subscriptionRef.set({
+          cancelAtPeriodEnd:true,cancellationReason:reason,
+          cancellationRequestedAt:FieldValue.serverTimestamp(),cancellationRequestedBy:ctx.auth.uid,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        await writeTenantAudit(ctx,'subscription.cancel_scheduled',subscriptionRef.path,before,{
+          status:'active',cancelAtPeriodEnd:true,cancellationReason:reason,
+        });
+        return res.status(200).json({
+          ok:true,organizationId,status:'active',cancelAtPeriodEnd:true,
+          currentPeriodEnd:text(before.currentPeriodEnd)||null,
+        });
+      }
+      if(before.status!=='active'||before.cancelAtPeriodEnd!==true){
+        throw new Error('Only a scheduled cancellation can be resumed without a new payment.');
+      }
+      await subscriptionRef.set({
+        cancelAtPeriodEnd:false,cancellationReason:null,cancellationRequestedAt:null,
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      await writeTenantAudit(ctx,'subscription.cancellation_resumed',subscriptionRef.path,before,{
+        status:'active',cancelAtPeriodEnd:false,
+      });
+      return res.status(200).json({ok:true,organizationId,status:'active',cancelAtPeriodEnd:false});
     }
 
     if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can manage plans and subscriptions.');
@@ -112,6 +207,8 @@ export default async function handler(req: Request, res: Response) {
       if (!/^[a-zA-Z0-9_-]{2,80}$/.test(planId)) throw new Error('A valid package identifier could not be generated.');
       const priceUsd=Number(body.priceUsd ?? body.price);
       if(!Number.isFinite(priceUsd)||priceUsd<0)throw new Error('Enter a valid USD subscription price.');
+      const ref = ctx.db.doc(`system/plans/catalog/${planId}`);
+      const before = (await ref.get()).data();
       const data = {
         id: planId,
         name,
@@ -124,13 +221,12 @@ export default async function handler(req: Request, res: Response) {
         currency:SAAS_BASE_CURRENCY,
         interval: ['month','year','one_time'].includes(text(body.interval)) ? text(body.interval) : 'month',
         sortOrder: Number.isInteger(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
-        quotas: object(body.quotas),
-        features: object(body.features),
+        quotas: normalizeSubscriptionQuotas(body.quotas),
+        features: normalizeSubscriptionFeatures(body.features),
+        version:Math.max(1,Math.trunc(Number(before?.version)||0)+1),
         externalPriceId: text(body.externalPriceId) || null,
         updatedAt: FieldValue.serverTimestamp(),
       };
-      const ref = ctx.db.doc(`system/plans/catalog/${planId}`);
-      const before = (await ref.get()).data();
       await ref.set({ ...data, createdAt: before?.createdAt || FieldValue.serverTimestamp() }, { merge: true });
 
       const subscriptionPayableId='subscription_'+planId;
@@ -186,57 +282,117 @@ export default async function handler(req: Request, res: Response) {
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
       if (!plan.exists || plan.data()?.active !== true) throw new Error('The selected plan is not active.');
       const planData = plan.data() || {};
-      await validateOrganizationPlanCapacity(ctx.db,organizationId,object(planData.quotas));
+      const snapshot=planSnapshot(planId,planData);
+      await validateOrganizationPlanCapacity(ctx.db,organizationId,snapshot.quotas);
       const before = organization.data();
+      const previousSubscription=await organizationRef.collection('subscription').doc('current').get();
       const activationSource=['complimentary','manual_override','migration'].includes(text(body.activationSource))
         ?text(body.activationSource):'manual_override';
       const overrideReason=text(body.overrideReason);
       if(!overrideReason)throw new Error('A reason is required for a non-payment subscription activation.');
+      const period=periodFor(snapshot.interval);
       await organizationRef.set({
-        plan:planId,quotas:planData.quotas||{},featureEntitlements:planData.features||{},
+        plan:planId,quotas:snapshot.quotas,featureEntitlements:snapshot.features,
         billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
       }, { merge: true });
       await organizationRef.collection('subscription').doc('current').set({
-        organizationId,planId,status:'active',activationSource,overrideReason,
+        organizationId,planId,planName:snapshot.name,planInterval:snapshot.interval,planVersion:snapshot.version,
+        planSnapshot:snapshot,status:'active',activationSource,overrideReason,
         billingProvider:text(body.billingProvider)||'manual',
         externalCustomerId:text(body.externalCustomerId)||null,
         externalSubscriptionId:text(body.externalSubscriptionId)||null,
+        currentPeriodStart:period.start,currentPeriodEnd:period.end,
+        renewalMode:'manual',cancelAtPeriodEnd:false,
+        previousPlanId:text(previousSubscription.data()?.planId)||null,
         startedAt:FieldValue.serverTimestamp(),activatedAt:FieldValue.serverTimestamp(),
         activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
-      }, { merge: true });
+      }, { merge: false });
       await writeTenantAudit(ctx, 'subscription.assign', organizationRef.path, before, {
-        plan:planId,activationSource,overrideReason,quotas:planData.quotas||{},featureEntitlements:planData.features||{},
+        plan:planId,activationSource,overrideReason,planSnapshot:snapshot,
+        currentPeriodStart:period.start,currentPeriodEnd:period.end,
       });
-      return res.status(200).json({ ok: true, organizationId, planId, status: 'active' });
+      return res.status(200).json({ ok: true, organizationId, planId, status: 'active', currentPeriodEnd:period.end });
     }
 
     if (action === 'activateSubscription' || action === 'reactivateSubscription') {
       const organizationId = text(body.organizationId);
       if (!organizationId) throw new Error('Organization is required.');
-      const subscriptionRef = ctx.db.doc(`organizations/${organizationId}/subscription/current`);
-      const snapshot = await subscriptionRef.get();
+      const organizationRef=ctx.db.doc(`organizations/${organizationId}`);
+      const subscriptionRef = organizationRef.collection('subscription').doc('current');
+      const [organization,snapshot]=await Promise.all([organizationRef.get(),subscriptionRef.get()]);
+      if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
       if (!snapshot.exists) throw new Error('The organization has no subscription record.');
-      const before = snapshot.data();
+      const before = snapshot.data()||{};
+      const planId=text(before.planId||organization.data()?.plan);
+      const plan=planId?await ctx.db.doc(`system/plans/catalog/${planId}`).get():null;
+      if(!plan?.exists||plan.data()?.active!==true)throw new Error('The subscription plan is not active.');
+      const snapshotPlan=planSnapshot(planId,plan.data()||{});
+      await validateOrganizationPlanCapacity(ctx.db,organizationId,snapshotPlan.quotas);
       const overrideReason=text(body.overrideReason);
       if(!overrideReason)throw new Error('A reason is required for a non-payment subscription activation.');
+      const wasScheduled=before.status==='active'&&before.cancelAtPeriodEnd===true;
+      const existingEnd=Date.parse(text(before.currentPeriodEnd));
+      const keepCurrentTerm=wasScheduled&&(!Number.isFinite(existingEnd)||existingEnd>Date.now());
+      const period=keepCurrentTerm
+        ?{interval:snapshotPlan.interval,start:text(before.currentPeriodStart)||new Date().toISOString(),end:text(before.currentPeriodEnd)||null}
+        :periodFor(snapshotPlan.interval);
+      await organizationRef.set({
+        plan:planId,quotas:snapshotPlan.quotas,featureEntitlements:snapshotPlan.features,
+        billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
       await subscriptionRef.set({
-        status:'active',activationSource:'manual_override',overrideReason,
+        planId,planName:snapshotPlan.name,planInterval:snapshotPlan.interval,planVersion:snapshotPlan.version,
+        planSnapshot:snapshotPlan,status:'active',activationSource:'manual_override',overrideReason,
+        currentPeriodStart:period.start,currentPeriodEnd:period.end,
+        cancelAtPeriodEnd:false,cancellationReason:null,cancellationRequestedAt:null,
         activatedAt:FieldValue.serverTimestamp(),activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
       }, { merge: true });
       await writeTenantAudit(ctx, `subscription.${action === 'activateSubscription' ? 'activate' : 'reactivate'}`, subscriptionRef.path, before, {
-        status:'active',activationSource:'manual_override',overrideReason,
+        status:'active',activationSource:'manual_override',overrideReason,planId,
+        currentPeriodStart:period.start,currentPeriodEnd:period.end,cancelAtPeriodEnd:false,
       });
-      return res.status(200).json({ ok: true, organizationId, status: 'active' });
+      return res.status(200).json({ ok: true, organizationId, status: 'active', currentPeriodEnd:period.end });
     }
 
     if (action === 'cancelSubscription') {
       const organizationId = text(body.organizationId);
       if (!organizationId) throw new Error('Organization is required.');
-      const subscriptionRef = ctx.db.doc(`organizations/${organizationId}/subscription/current`);
-      const before = (await subscriptionRef.get()).data();
-      await subscriptionRef.set({ status: 'cancelled', cancelledAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      await writeTenantAudit(ctx, 'subscription.cancel', subscriptionRef.path, before, { status: 'cancelled' });
-      return res.status(200).json({ ok: true, organizationId, status: 'cancelled' });
+      const organizationRef=ctx.db.doc(`organizations/${organizationId}`);
+      const subscriptionRef = organizationRef.collection('subscription').doc('current');
+      const snapshot=await subscriptionRef.get();
+      if(!snapshot.exists)throw new Error('The organization has no subscription record.');
+      const before=snapshot.data()||{};
+      const mode=text(body.mode)==='immediate'?'immediate':'period_end';
+      const reason=text(body.reason);
+      if(!reason)throw new Error('A cancellation reason is required.');
+      const interval=text(before.planInterval||object(before.planSnapshot).interval);
+      if(mode==='period_end'&&interval!=='one_time'){
+        await subscriptionRef.set({
+          cancelAtPeriodEnd:true,cancellationReason:reason,cancellationRequestedAt:FieldValue.serverTimestamp(),
+          cancellationRequestedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        await writeTenantAudit(ctx,'subscription.cancel_scheduled',subscriptionRef.path,before,{
+          status:text(before.status,'active'),cancelAtPeriodEnd:true,cancellationReason:reason,
+        });
+        return res.status(200).json({
+          ok:true,organizationId,status:text(before.status,'active'),cancelAtPeriodEnd:true,
+          currentPeriodEnd:text(before.currentPeriodEnd)||null,
+        });
+      }
+      await Promise.all([
+        subscriptionRef.set({
+          status:'cancelled',cancelAtPeriodEnd:false,cancellationReason:reason,
+          cancelledAt:FieldValue.serverTimestamp(),cancelledBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+        organizationRef.set({
+          billingAccessSuspended:true,billingSuspendedReason:'subscription_cancelled',
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+      ]);
+      await writeTenantAudit(ctx, 'subscription.cancel', subscriptionRef.path, before, {
+        status:'cancelled',cancelAtPeriodEnd:false,cancellationReason:reason,
+      });
+      return res.status(200).json({ ok: true, organizationId, status: 'cancelled', cancelAtPeriodEnd:false });
     }
 
     throw new Error('Unsupported plan action.');

@@ -172,6 +172,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
 
     const {default:payments}=await vite.ssrLoadModule('/api/payments.ts');
     const {default:plans}=await vite.ssrLoadModule('/api_handlers/admin/plans.ts');
+    const {default:organizationsApi}=await vite.ssrLoadModule('/api_handlers/admin/organizations.ts');
 
     async function identity(name,{organizationId='',organizationRole='',role='student',membershipRole='learner'}={}){
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
@@ -217,6 +218,18 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         json(data){output=data;return this;},
       });
       assert.ok(output&&typeof output==='object','Plan API must return JSON');
+      return {status,...output,httpStatus:status};
+    }
+
+    async function organizationCall(user,body={}){
+      let status=200,output;
+      await organizationsApi({
+        method:'POST',headers:{authorization:'Bearer '+user.token},body,
+      },{
+        status(code){status=code;return this;},
+        json(data){output=data;return this;},
+      });
+      assert.ok(output&&typeof output==='object','Organization API must return JSON');
       return {status,...output};
     }
 
@@ -427,6 +440,35 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(organization?.plan,packageId);
       assert.equal(organization?.quotas?.maxSeats,100);
       assert.equal(organization?.featureEntitlements?.radio,true);
+      assert.equal(subscription?.planName,'Growth Package');
+      assert.equal(subscription?.planInterval,'month');
+      assert.equal(subscription?.planSnapshot?.quotas?.maxSeats,100);
+      assert.equal(subscription?.planSnapshot?.features?.radio,true);
+      assert.equal(subscription?.cancelAtPeriodEnd,false);
+      assert.ok(Date.parse(subscription?.currentPeriodEnd)>Date.now());
+
+      const overview=await planCall(organizationOwner,{action:'getSubscription'});
+      assert.equal(overview.status,200,JSON.stringify(overview));
+      assert.equal(overview.plan,packageId);
+      assert.equal(overview.catalogPlan.id,packageId);
+      assert.equal(overview.subscription.planSnapshot.quotas.maxSeats,100);
+      assert.equal(overview.quotas.maxSeats,100);
+      assert.equal(overview.usage.seats>=3,true);
+      assert.equal(overview.billingAccessSuspended,false);
+
+      const scheduled=await planCall(organizationOwner,{
+        action:'cancelSubscription',mode:'period_end',reason:'Owner requested end-of-term cancellation',
+      });
+      assert.equal(scheduled.httpStatus,200,JSON.stringify(scheduled));
+      assert.equal(scheduled.status,'active');
+      assert.equal(scheduled.cancelAtPeriodEnd,true);
+      assert.notEqual((await db.doc('organizations/'+orgA).get()).data()?.billingAccessSuspended,true);
+      assert.equal((await db.doc('organizations/'+orgA+'/subscription/current').get()).data()?.cancelAtPeriodEnd,true);
+
+      const resumed=await planCall(organizationAdmin,{action:'reactivateSubscription'});
+      assert.equal(resumed.httpStatus,200,JSON.stringify(resumed));
+      assert.equal(resumed.cancelAtPeriodEnd,false);
+      assert.equal((await db.doc('organizations/'+orgA+'/subscription/current').get()).data()?.cancelAtPeriodEnd,false);
 
       const adminCatalog=await call(organizationAdmin,'catalog',{});
       assert.ok(adminCatalog.items.some(item=>item.id===payableId));
@@ -447,6 +489,64 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const mobileMoneyBlocked=await call(internationalOwner,'checkout',{payableItemId:payableId,paymentMethod:'airtel_money',phone:'0977000000'});
       assert.equal(mobileMoneyBlocked.status,400,JSON.stringify(mobileMoneyBlocked));
       assert.match(String(mobileMoneyBlocked.error||''),/USD by card|payment method/i);
+    });
+
+    await t.test('manual plan assignment, cancellation and reactivation preserve one subscription entitlement model',async()=>{
+      const created=await planCall(admin,{
+        action:'upsertPlan',name:'Manual Operations',description:'Administrative entitlement test',
+        priceUsd:20,interval:'year',active:true,
+        quotas:{maxSeats:10,maxCandidates:8,maxMentors:2,maxGuides:5},
+        features:{curriculum:true,candidates:true,certification:true,payments:true},
+      });
+      assert.equal(created.status,200,JSON.stringify(created));
+      const planId=created.item.id;
+
+      const assigned=await planCall(admin,{
+        action:'assignPlan',organizationId:orgB,planId,
+        activationSource:'complimentary',overrideReason:'Integration test complimentary entitlement',
+      });
+      assert.equal(assigned.httpStatus,200,JSON.stringify(assigned));
+      const assignedSubscription=(await db.doc('organizations/'+orgB+'/subscription/current').get()).data();
+      assert.equal(assignedSubscription?.status,'active');
+      assert.equal(assignedSubscription?.planInterval,'year');
+      assert.equal(assignedSubscription?.planSnapshot?.id,planId);
+      assert.equal(assignedSubscription?.planSnapshot?.quotas?.maxSeats,10);
+      assert.equal(assignedSubscription?.cancelAtPeriodEnd,false);
+      assert.ok(Date.parse(assignedSubscription?.currentPeriodStart)<=Date.now());
+      assert.ok(Date.parse(assignedSubscription?.currentPeriodEnd)>Date.now());
+      assert.notEqual((await db.doc('organizations/'+orgB).get()).data()?.billingAccessSuspended,true);
+
+      const directQuotaEdit=await organizationCall(admin,{
+        action:'update',organizationId:orgB,data:{quotas:{maxSeats:999}},
+      });
+      assert.equal(directQuotaEdit.status,400,JSON.stringify(directQuotaEdit));
+      assert.match(String(directQuotaEdit.error||''),/Billing & Subscriptions/i);
+      assert.equal((await db.doc('organizations/'+orgB).get()).data()?.quotas?.maxSeats,10);
+
+      const scheduled=await planCall(admin,{
+        action:'cancelSubscription',organizationId:orgB,mode:'period_end',reason:'End after current term',
+      });
+      assert.equal(scheduled.httpStatus,200,JSON.stringify(scheduled));
+      assert.equal(scheduled.cancelAtPeriodEnd,true);
+      assert.notEqual((await db.doc('organizations/'+orgB).get()).data()?.billingAccessSuspended,true);
+
+      const immediate=await planCall(admin,{
+        action:'cancelSubscription',organizationId:orgB,mode:'immediate',reason:'Immediate administrative cancellation',
+      });
+      assert.equal(immediate.httpStatus,200,JSON.stringify(immediate));
+      assert.equal(immediate.status,'cancelled');
+      assert.equal((await db.doc('organizations/'+orgB).get()).data()?.billingAccessSuspended,true);
+      assert.equal((await db.doc('organizations/'+orgB).get()).data()?.billingSuspendedReason,'subscription_cancelled');
+
+      const reactivated=await planCall(admin,{
+        action:'reactivateSubscription',organizationId:orgB,overrideReason:'Restore complimentary entitlement',
+      });
+      assert.equal(reactivated.httpStatus,200,JSON.stringify(reactivated));
+      assert.equal(reactivated.status,'active');
+      const restoredOrg=(await db.doc('organizations/'+orgB).get()).data();
+      assert.notEqual(restoredOrg?.billingAccessSuspended,true);
+      assert.equal(restoredOrg?.quotas?.maxSeats,10);
+      assert.equal(restoredOrg?.featureEntitlements?.certification,true);
     });
 
     await t.test('duplicate checkout is idempotent and client amount is never authoritative',async()=>{
