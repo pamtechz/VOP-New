@@ -162,7 +162,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {subscriptionItems.length>0&&<section className="vop-payment-section">
       <div className="vop-payment-section-title"><div><span>Organization billing</span><h2>Subscription packages</h2></div><WalletCards size={24}/></div>
       <div className="vop-payable-grid">{subscriptionItems.map(item=><article key={item.id} className="vop-payable-card">
-        <div><span className="vop-payment-type">Organization subscription</span><h3>{item.name}</h3><p>{item.description||'VOP organization subscription package'}</p></div>
+        <div><span className="vop-payment-type">Organization subscription</span><h3>{item.name}</h3><p>{item.description||'VOP organization subscription package'}</p>{item.pricing?.baseAmountDecimal&&item.currency!=='USD'&&<small>Base price: USD {item.pricing.baseAmountDecimal} · billed in {item.currency} for this organization</small>}{item.currency==='USD'&&<small>International billing · canonical USD price</small>}</div>
         <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
           <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Choose package</button></div>
       </article>)}</div>
@@ -191,13 +191,13 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {selected&&<div className="vop-payment-modal-layer" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setSelected(null)}}>
       <section className="vop-payment-modal" role="dialog" aria-modal="true" aria-labelledby="vop-payment-title">
         <header><div><span>Secure checkout</span><h2 id="vop-payment-title">{selected.name}</h2></div><button onClick={()=>setSelected(null)} disabled={busy} aria-label="Close">×</button></header>
-        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div><div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
+        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div>{selected.itemType==='organization_subscription'&&selected.pricing?.baseAmountDecimal&&selected.currency!=='USD'&&<div><dt>Canonical price</dt><dd>USD {selected.pricing.baseAmountDecimal}</dd></div>}{selected.itemType==='organization_subscription'&&selected.pricing?.exchangeRate&&selected.currency!=='USD'&&<div><dt>Exchange rate</dt><dd>1 USD = {Number(selected.pricing.exchangeRate).toFixed(4)} {selected.currency}</dd></div>}<div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
         {!availableMethods.length?<div className="vop-payment-alert danger"><XCircle size={17}/>No payment method is currently available for this charge.</div>:<>
           <fieldset><legend>Payment method</legend><div className="vop-payment-methods">
             {availableMethods.map(value=><button type="button" key={value} className={method===value?'active':''} onClick={()=>setMethod(value)} disabled={busy}>{methodIcon(value)}<span>{paymentMethodLabel(value)}</span></button>)}
           </div></fieldset>
           {method!=='card'&&<label className="vop-payment-phone"><span>Mobile money number</span><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="097..." inputMode="tel" disabled={busy}/><small>You will approve the request on this phone.</small></label>}
-          <div className="vop-payment-security"><CreditCard size={18}/><p>VOP never marks a payment successful from the browser. Access is activated only after independent server-side verification.</p></div>
+          <div className="vop-payment-security"><CreditCard size={18}/><p>{selected.itemType==='organization_subscription'&&selected.currency!=='USD'?'The subscription has a canonical USD price. This organization is billed in ZMW using the server-issued exchange-rate quote shown above. ':selected.itemType==='organization_subscription'?'This organization is billed at the canonical USD subscription price. ':''}VOP activates access only after independent server-side payment verification.</p></div>
           <button type="button" className="btn btn-primary vop-payment-submit" onClick={()=>void pay()} disabled={busy||!availableMethods.length}>{busy?<><LoaderCircle className="spin" size={17}/>Starting secure payment…</>:<>Pay {selected.currency} {selected.amountDecimal}</>}</button>
         </>}
       </section>
