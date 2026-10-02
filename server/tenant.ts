@@ -222,10 +222,15 @@ export async function organizationUsageSnapshot(db:Firestore,organizationId:stri
   if(!organizationId)throw new Error('An organization is required.');
   const members=await db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
   const roles=members.docs.map(doc=>String(doc.data()?.role||'').trim().toLowerCase());
-  const [guides,quizzes,announcements,radio,radioPlaylists,materials]=await Promise.all([
+  const [guides,programs,learningPaths,bibleTopics,seasons,quizzes,announcements,events,radio,radioPlaylists,materials]=await Promise.all([
     ownedCollectionCount(db,organizationId,'guides'),
+    ownedCollectionCount(db,organizationId,'programs'),
+    ownedCollectionCount(db,organizationId,'learningPaths'),
+    ownedCollectionCount(db,organizationId,'bibleTopics'),
+    ownedCollectionCount(db,organizationId,'seasons'),
     ownedCollectionCount(db,organizationId,'quizzes'),
     ownedCollectionCount(db,organizationId,'announcements'),
+    ownedCollectionCount(db,organizationId,'events'),
     ownedCollectionCount(db,organizationId,'radioBroadcasts'),
     ownedCollectionCount(db,organizationId,'playlists'),
     ownedCollectionCount(db,organizationId,'books'),
@@ -236,7 +241,7 @@ export async function organizationUsageSnapshot(db:Firestore,organizationId:stri
     mentors:roles.filter(role=>MENTOR_MEMBERSHIP_ROLES.has(role)).length,
     administrators:roles.filter(role=>['owner','admin'].includes(role)).length,
     staff:roles.filter(role=>!CANDIDATE_MEMBERSHIP_ROLES.has(role)&&!MENTOR_MEMBERSHIP_ROLES.has(role)&&!['owner','admin'].includes(role)).length,
-    guides,quizzes,announcements,radio,radioPlaylists,materials,
+    guides,programs,learningPaths,bibleTopics,seasons,quizzes,announcements,events,radio,radioPlaylists,materials,
   };
 }
 
@@ -251,8 +256,13 @@ export async function validateOrganizationPlanCapacity(
     ['candidates / learners',usage.candidates,quotaLimit(quotas,'maxCandidates')],
     ['mentors',usage.mentors,quotaLimit(quotas,'maxMentors')],
     ['guides',usage.guides,quotaLimit(quotas,'maxGuides')],
+    ['programs / courses',usage.programs,quotaLimit(quotas,'maxPrograms')],
+    ['learning paths',usage.learningPaths,quotaLimit(quotas,'maxLearningPaths')],
+    ['Bible topics',usage.bibleTopics,quotaLimit(quotas,'maxBibleTopics')],
+    ['seasons / quarters',usage.seasons,quotaLimit(quotas,'maxSeasons')],
     ['quizzes',usage.quizzes,quotaLimit(quotas,'maxQuizzes')],
     ['announcements',usage.announcements,quotaLimit(quotas,'maxAnnouncements')],
+    ['events & programmes',usage.events,quotaLimit(quotas,'maxEvents')],
     ['radio items',usage.radio,quotaLimit(quotas,'maxRadioItems')],
     ['radio playlists',usage.radioPlaylists,quotaLimit(quotas,'maxRadioPlaylists')],
     ['materials',usage.materials,quotaLimit(quotas,'maxMaterials')],
@@ -297,23 +307,40 @@ export async function enforceOrganizationMembershipQuotas(
   if(usage.mentors+mentorDelta>maxMentors)throw new Error('This organization has reached its mentor limit. Upgrade the subscription package or deactivate a mentor before adding another mentor.');
 }
 
-export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
-  if (ctx.isSuperAdmin || !ctx.organizationId) return;
-  const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+export async function enforceOrganizationQuota(
+  db:Firestore,
+  organizationId:string,
+  collectionName:string,
+  quotaKey:string,
+  increment=1,
+){
+  if(!organizationId)throw new Error('An organization is required for quota enforcement.');
+  const organization=await db.doc(`organizations/${organizationId}`).get();
+  if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
   if(organization.data()?.billingAccessSuspended===true){
     throw new Error('This organization subscription is inactive. Renew or activate a subscription package before creating additional resources.');
   }
-  const quotas = organization.data()?.quotas;
-  const limit = Number(quotas && typeof quotas === 'object' ? (quotas as Record<string, unknown>)[quotaKey] : NaN);
-  if (!Number.isFinite(limit) || limit < 0) return;
-  const [organizationScoped, ownerScoped] = await Promise.all([
-    ctx.db.collection(collectionName).where('organizationId','==',ctx.organizationId).get(),
-    ctx.db.collection(collectionName).where('ownerOrganizationId','==',ctx.organizationId).get(),
+  if(String(organization.data()?.plan||'').trim()==='unsubscribed'){
+    throw new Error('This organization does not have an active subscription package. Choose a plan before creating additional resources.');
+  }
+  const quotas=organization.data()?.quotas;
+  const limit=Number(quotas&&typeof quotas==='object'?(quotas as Record<string,unknown>)[quotaKey]:NaN);
+  if(!Number.isFinite(limit)||limit<0)return;
+  const [organizationScoped,ownerScoped]=await Promise.all([
+    db.collection(collectionName).where('organizationId','==',organizationId).get(),
+    db.collection(collectionName).where('ownerOrganizationId','==',organizationId).get(),
   ]);
-  const ids = new Set<string>();
-  organizationScoped.docs.forEach(doc => ids.add(doc.id));
-  ownerScoped.docs.forEach(doc => ids.add(doc.id));
-  if (ids.size + increment > limit) throw new Error(`The organization has reached its configured ${quotaKey} limit.`);
+  const ids=new Set<string>();
+  organizationScoped.docs.forEach(doc=>ids.add(doc.id));
+  ownerScoped.docs.forEach(doc=>ids.add(doc.id));
+  if(ids.size+increment>limit){
+    throw new Error(`The organization has reached its configured ${quotaKey} limit. Upgrade the subscription package or reduce existing usage before creating another resource.`);
+  }
+}
+
+export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
+  if(ctx.isSuperAdmin||!ctx.organizationId)return;
+  await enforceOrganizationQuota(ctx.db,ctx.organizationId,collectionName,quotaKey,increment);
 }
 
 export async function writeTenantAudit(ctx: TenantContext, action: string, target: string, before?: DocumentData, after?: DocumentData) {
