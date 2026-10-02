@@ -308,11 +308,12 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({questions:publicQuestions});
     });
 
-    await t.test('submission requires a server-started single-use attempt session',async()=>{
+    await t.test('submission requires a server-started session and safely replays the committed result',async()=>{
       const direct=await api(learner,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
       });
       assert.equal(direct.status,409,JSON.stringify(direct));
+      assert.equal(direct.code,'ASSESSMENT_SESSION_REQUIRED');
       assert.match(String(direct.error||''),/start|instructions/i);
 
       const started=await startQuiz(learner,{confirmRetake:true});
@@ -321,11 +322,14 @@ test('study progress: server grades and guide paths stay within authorized tenan
         action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
       });
       assert.equal(accepted.status,200,JSON.stringify(accepted));
+      assert.equal(accepted.replayed,false);
       const replay=await api(learner,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
       });
-      assert.equal(replay.status,409,JSON.stringify(replay));
-      assert.match(String(replay.error||''),/already|valid/i);
+      assert.equal(replay.status,200,JSON.stringify(replay));
+      assert.equal(replay.replayed,true);
+      assert.equal(replay.score,accepted.score);
+      assert.deepEqual(replay.retakePolicy,accepted.retakePolicy);
     });
 
     await t.test('per-assessment policy overrides organization defaults and hidden feedback does not leak score',async()=>{
