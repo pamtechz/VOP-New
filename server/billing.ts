@@ -118,6 +118,11 @@ export async function quoteSubscriptionPlan(
   if(!settings.usdToZmwRate){
     throw new Error('Zambian subscription billing is temporarily unavailable because the USD to ZMW exchange rate has not been configured.');
   }
+  const updatedAt=Date.parse(settings.fxUpdatedAt);
+  const maxAgeMs=settings.fxQuoteTtlMinutes*60_000;
+  if(!Number.isFinite(updatedAt)||Date.now()-updatedAt>maxAgeMs){
+    throw new Error('Zambian subscription billing is temporarily unavailable because the USD to ZMW exchange rate is stale. A Super Admin must refresh the billing rate.');
+  }
   const amountMinor=amountToMinor(priceUsd*settings.usdToZmwRate,'ZMW');
   return {
     countryCode:profile.countryCode,pricingRegion:profile.pricingRegion,
