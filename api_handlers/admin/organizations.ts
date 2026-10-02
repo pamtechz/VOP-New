@@ -418,7 +418,7 @@ export default async function handler(req: Request, res: Response) {
         const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId) || inferredOrganizationIds.has(doc.id)).map(async organization => {
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -429,7 +429,7 @@ export default async function handler(req: Request, res: Response) {
         const members = await organization.ref.collection('members').where('active','==',true).get();
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
-          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'),
+          status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'unsubscribed'),
           quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
         }]});
       }
@@ -443,7 +443,7 @@ export default async function handler(req: Request, res: Response) {
           slug: String(data.slug || organization.id),
           status: String(data.status || 'active'),
           ownerUid: String(data.ownerUid || ''),
-          plan: String(data.plan || 'standard'),
+          plan: String(data.plan || 'unsubscribed'),
           quotas: data.quotas || {},
           billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')),
           countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'),
