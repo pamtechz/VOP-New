@@ -108,6 +108,10 @@ export async function fetchFrankfurterUsdToZmwRate():Promise<FrankfurterRateResu
 export async function refreshPlatformBillingRate(db:Firestore){
   const result=await fetchFrankfurterUsdToZmwRate();
   const ref=db.doc('system/billing');
+  const current=await ref.get();
+  const configuredTtl=Number(current.data()?.fxQuoteTtlMinutes);
+  const fxQuoteTtlMinutes=Number.isFinite(configuredTtl)&&configuredTtl>=15&&configuredTtl<=10080
+    ?Math.trunc(configuredTtl):1440;
   await ref.set({
     baseCurrency:SAAS_BASE_CURRENCY,
     zambiaCurrency:ZAMBIA_BILLING_CURRENCY,
@@ -115,7 +119,7 @@ export async function refreshPlatformBillingRate(db:Firestore){
     fxSource:result.source,
     fxUpdatedAt:result.fetchedAt,
     fxProviderDate:result.providerDate,
-    fxQuoteTtlMinutes:1440,
+    fxQuoteTtlMinutes,
     updatedAt:FieldValue.serverTimestamp(),
   },{merge:true});
   return result;
