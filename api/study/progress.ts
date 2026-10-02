@@ -187,6 +187,7 @@ export default async function handler(
 ) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
 
+  let requestedAction='';
   try {
     const firebaseAdmin = admin();
     const authorization = header(req, 'authorization');
@@ -195,6 +196,7 @@ export default async function handler(
     const decoded = await getAuth(firebaseAdmin).verifyIdToken(authorization.slice(7).trim());
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action ?? '').trim();
+    requestedAction=action;
     const language = String(body.language ?? '').trim();
     const guideId = String(body.guideId ?? '').trim();
     const lessonId = String(body.lessonId ?? '').trim();
@@ -260,6 +262,10 @@ export default async function handler(
       return res.status(403).json({ error: 'The selected guide is outside your organization.' });
     }
     if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
+      if(action==='startQuiz')return res.status(200).json({
+        ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
+        error:'This assessment belongs to a different study language. Reopen it from the current course.',
+      });
       return res.status(409).json({ error: 'The selected guide language does not match the study request.' });
     }
     if (!lessonSnapshot.exists || lessonSnapshot.data()?.published !== true || lessonSnapshot.data()?.archived === true) {
@@ -269,6 +275,10 @@ export default async function handler(
     const lessonData = lessonSnapshot.data() ?? {};
     const legacyStudyGuide = !useTenantGuide && guideId === 'discover';
     if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
+      if(action==='startQuiz')return res.status(200).json({
+        ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
+        error:'This assessment is no longer attached to the selected guide. Reopen the course to refresh the published content.',
+      });
       return res.status(409).json({ error: 'The lesson does not belong to the selected guide.' });
     }
     const platformGuide = useTenantGuide && candidateGuideShared
@@ -280,7 +290,10 @@ export default async function handler(
 
     if (action === 'startQuiz') {
       if (String(lessonData.type ?? '') !== 'Test') {
-        return res.status(409).json({ error:'The selected item is not an assessment.' });
+        return res.status(200).json({
+          ok:false,available:false,code:'ASSESSMENT_TYPE',
+          error:'The selected item is not an assessment.',
+        });
       }
       const policyOrganizationId=candidateGuideOrganizationId||organizationId;
       const [platformSettingsSnap,scopedSettingsSnap]=await Promise.all([
@@ -295,7 +308,8 @@ export default async function handler(
       // keys that actually exist; otherwise the platform setting remains effective.
       const settingsData={...platformSettings,...scopedSettings};
       const policy=assessmentPolicy(lessonData,settingsData);
-      if(policy.threshold===null)return res.status(409).json({
+      if(policy.threshold===null)return res.status(200).json({
+        ok:false,available:false,
         error:'This assessment is unavailable until an administrator configures its pass mark.',
         code:'ASSESSMENT_CONFIGURATION',
       });
@@ -306,7 +320,10 @@ export default async function handler(
         :Array.isArray(lessonData.quiz)?lessonData.quiz as QuestionRecord[]:[];
       if(sourceQuizId){
         if(!/^[A-Za-z0-9_-]{1,120}$/.test(sourceQuizId)||!useTenantGuide){
-          return res.status(409).json({error:'The assessment source is invalid.'});
+          return res.status(200).json({
+            ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
+            error:'The published assessment source is invalid. Ask the course administrator to republish the assessment.',
+          });
         }
         const quizSnap=await db.doc(`quizzes/${sourceQuizId}`).get();
         const quiz=quizSnap.data()||{};
@@ -315,7 +332,10 @@ export default async function handler(
           ||String(quiz.assessmentPath||'')!==lessonRef.path
           ||String(quiz.language||'')!==language
           ||String(quiz.organizationId||'')!==candidateGuideOrganizationId){
-          return res.status(409).json({error:'This assessment is not available for a new attempt.'});
+          return res.status(200).json({
+            ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
+            error:'This assessment changed after the course was published. Ask the course administrator to republish it before starting a new attempt.',
+          });
         }
         if(['chapter','section','block'].includes(String(quiz.attachmentType||''))){
           const parentId=String(quiz.lessonId||'');
@@ -323,13 +343,19 @@ export default async function handler(
           if(!validStudyId(parentId)||!validStudyId(anchorId)
             ||String(lessonData.attachedLessonId||'')!==parentId
             ||String(lessonData.anchorId||'')!==anchorId){
-            return res.status(409).json({error:'The assessment attachment has changed.'});
+            return res.status(200).json({
+              ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
+              error:'The assessment attachment changed after publication. Ask the course administrator to republish it.',
+            });
           }
           const parent=await guideRef.collection('lessons').doc(parentId).get();
           if(!parent.exists||parent.data()?.published!==true||parent.data()?.archived===true
             ||parent.data()?.type==='Test'
             ||!curriculumAnchorExists(parent.data()?.chapters,quiz.attachmentType,anchorId)){
-            return res.status(409).json({error:'The assessment chapter, section or block is no longer published.'});
+            return res.status(200).json({
+              ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
+              error:'The chapter, section or block for this assessment is no longer published. Reopen the course after it is republished.',
+            });
           }
         }
         attemptQuestionSource=Array.isArray(quiz.questions)
@@ -338,11 +364,36 @@ export default async function handler(
       }
       const attemptQuestions=publicAttemptQuestions(attemptQuestionSource);
       if(!attemptQuestions){
-        return res.status(409).json({
+        return res.status(200).json({
+          ok:false,available:false,
           error:'This assessment has no valid published questions. Ask the course administrator to republish the assessment.',
           code:'ASSESSMENT_CONFIGURATION',
         });
       }
+      const finalExamAtStart=lessonData.assessmentKind==='final_exam'&&lessonData.attachmentType==='guide';
+      if(finalExamAtStart){
+        const publishedLessons=(await guideRef.collection('lessons').get()).docs
+          .filter(doc=>doc.data().type!=='Test'&&doc.data().published===true&&doc.data().archived!==true);
+        if(!publishedLessons.length){
+          return res.status(200).json({
+            ok:false,available:false,code:'ASSESSMENT_CONFIGURATION',
+            error:'This final examination cannot start because the guide has no published study lessons.',
+          });
+        }
+        const completedLessons=Array.isArray(userData.progress?.completedLessons)
+          ?new Set(userData.progress.completedLessons.map((value:unknown)=>String(value))):new Set<string>();
+        const remaining=publishedLessons
+          .map(doc=>`${language}:${guideId}:${doc.id}`)
+          .filter(key=>!completedLessons.has(key));
+        if(remaining.length){
+          return res.status(200).json({
+            ok:false,available:false,code:'ASSESSMENT_PREREQUISITE',
+            error:`Complete all published study lessons before taking the final guide examination. ${remaining.length} lesson${remaining.length===1?' remains':'s remain'}.`,
+            remainingPrerequisites:remaining.length,totalPrerequisites:publishedLessons.length,
+          });
+        }
+      }
+
       const scoreKey=`${policyOrganizationId||'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
       const graduationRef=policyOrganizationId&&useTenantGuide&&guideId!=='discover'
         ?db.doc('graduationRequests/grad-'+createHash('sha256')
@@ -929,11 +980,17 @@ export default async function handler(
     }
     if (message.includes('not configured')) {
       console.warn('VOP study configuration is unavailable:', message);
-      return res.status(409).json({ error: message, code:'ASSESSMENT_CONFIGURATION' });
+      return res.status(requestedAction==='startQuiz'?200:409).json({
+        ok:requestedAction==='startQuiz'?false:undefined,
+        available:requestedAction==='startQuiz'?false:undefined,
+        error: message, code:'ASSESSMENT_CONFIGURATION',
+      });
     }
     if (message.includes('Assessment attempt limit reached')) {
       const maxMatch=message.match(/\(([0-9]+) attempt/i);
-      return res.status(409).json({
+      return res.status(requestedAction==='startQuiz'?200:409).json({
+        ok:requestedAction==='startQuiz'?false:undefined,
+        available:requestedAction==='startQuiz'?false:undefined,
         error:message,code:'ASSESSMENT_ATTEMPT_LIMIT',
         maxAttempts:maxMatch?Number(maxMatch[1]):null,
       });
@@ -941,7 +998,7 @@ export default async function handler(
     if (message.includes('Assessment retake confirmation required')) {
       const scoreMatch=message.match(/current score of ([0-9]+(?:\.[0-9]+)?)%/i);
       return res.status(200).json({
-        ok:false,
+        ok:false,available:false,
         error:message,
         code:'ASSESSMENT_RETAKE_CONFIRMATION',
         confirmationRequired:true,
@@ -950,13 +1007,19 @@ export default async function handler(
     }
     if (message.includes('Assessment retake is available after')) {
       const retryMatch=message.match(/available after ([^\.]+(?:\.[0-9]{3}Z)?)/i);
-      return res.status(409).json({
+      return res.status(requestedAction==='startQuiz'?200:409).json({
+        ok:requestedAction==='startQuiz'?false:undefined,
+        available:requestedAction==='startQuiz'?false:undefined,
         error:message,code:'ASSESSMENT_RETAKE_COOLDOWN',
         retryAt:retryMatch?retryMatch[1]:null,
       });
     }
     if (message.includes('Complete all published study lessons')) {
-      return res.status(409).json({error:message,code:'ASSESSMENT_PREREQUISITE'});
+      return res.status(requestedAction==='startQuiz'?200:409).json({
+        ok:requestedAction==='startQuiz'?false:undefined,
+        available:requestedAction==='startQuiz'?false:undefined,
+        error:message,code:'ASSESSMENT_PREREQUISITE',
+      });
     }
     if (message.includes('session has expired')) {
       return res.status(409).json({error:message,code:'ASSESSMENT_SESSION_EXPIRED'});
