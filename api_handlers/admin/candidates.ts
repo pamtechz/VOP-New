@@ -54,6 +54,7 @@ export default async function handler(request: Request, response: Response) {
         && (guideData.sharingScope==='shared' || String(guideData.scope||'')==='platform' || !guideOrganizationId);
       if (guideOrganizationId !== organizationId && !systemWide) throw new Error('The selected course is not available to this organization.');
       if (guideData.published !== true || guideData.archived === true) throw new Error('Only a published active course can be used for enrollment.');
+      await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner');
       const authService = getAuth(getApps()[0]);
       let account;
       let created = false;
