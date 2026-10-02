@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
@@ -186,6 +186,7 @@ export default async function handler(req: Request, res: Response) {
       if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
       if (!plan.exists || plan.data()?.active !== true) throw new Error('The selected plan is not active.');
       const planData = plan.data() || {};
+      await validateOrganizationPlanCapacity(ctx.db,organizationId,object(planData.quotas));
       const before = organization.data();
       const activationSource=['complimentary','manual_override','migration'].includes(text(body.activationSource))
         ?text(body.activationSource):'manual_override';
