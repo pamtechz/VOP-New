@@ -236,10 +236,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           <div data-surface="progress" style={{ background: 'var(--bg-card)', padding: '0.6rem 1.25rem', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
               <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
-                Question {index + 1} of {questions.length}
+                {t('quiz.question_progress','Question {current} of {total}',{current:index+1,total:questions.length})}
               </span>
               <span style={{ fontSize: '0.75rem', color: '#002d72', fontWeight: 700 }}>
-                {remainingSeconds!==null?`${Math.floor(remainingSeconds/60)}:${String(remainingSeconds%60).padStart(2,'0')} remaining · `:''}{progressPercent}% done
+                {remainingSeconds!==null?t('quiz.time_remaining','{time} remaining · ',{time:`${Math.floor(remainingSeconds/60)}:${String(remainingSeconds%60).padStart(2,'0')}`}):''}
+                {t('quiz.percent_done','{percent}% done',{percent:progressPercent})}
               </span>
             </div>
             <div style={{ height: '6px', background: 'var(--border-strong)', borderRadius: '9999px', overflow: 'hidden' }}>
@@ -276,17 +277,27 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
               {secureQuestionRefresh
                 ?<>{t('quiz.secure_question_refresh','Questions are refreshed securely when the attempt starts.')}</>
-                :<>This {assessmentLabel.toLowerCase()} has{' '}
-                  <strong style={{ color: 'var(--text-primary)' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.</>}
-              {' '}Pass mark:{' '}
+                :<>{t('quiz.question_count','This {assessment} has {count} {questions}.',{
+                  assessment:assessmentLabel,count:questions.length,
+                  questions:questions.length===1?t('quiz.question_singular','question'):t('quiz.question_plural','questions'),
+                })}</>}
+              {' '}{t('quiz.pass_mark_label','Pass mark:')}{' '}
               <strong style={{ color: '#0f172a' }}>
                 {validThreshold ? `${threshold}%` : t('quiz.not_configured','Not configured')}
               </strong>
             </p>
             {(previewMaxAttempts > 0 || previewCooldown > 0 || previewTimeLimit > 0) && <p style={{color:'var(--text-muted)',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
-              {previewTimeLimit>0?`Time limit: ${previewTimeLimit} min · `:''}
-              Retake policy: {previewMaxAttempts > 0 ? `maximum ${previewMaxAttempts} attempt${previewMaxAttempts === 1 ? '' : 's'}` : 'unlimited attempts'}
-              {previewCooldown > 0 ? ` · ${previewCooldown} minute waiting period` : ' · no waiting period'}.
+              {previewTimeLimit>0?t('quiz.time_limit_summary','Time limit: {minutes} min · ',{minutes:previewTimeLimit}):''}
+              {t('quiz.retake_policy_label','Retake policy:')}{' '}
+              {previewMaxAttempts > 0
+                ?t('quiz.maximum_attempts','maximum {count} {attempts}',{
+                  count:previewMaxAttempts,
+                  attempts:previewMaxAttempts===1?t('quiz.attempt_singular','attempt'):t('quiz.attempt_plural','attempts'),
+                })
+                :t('quiz.unlimited_attempts','unlimited attempts')}
+              {previewCooldown > 0
+                ?t('quiz.waiting_period_summary',' · {minutes} minute waiting period',{minutes:previewCooldown})
+                :t('quiz.no_waiting_period',' · no waiting period')}.
             </p>}
 
             <div style={{
@@ -329,7 +340,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             {hasAttempted&&<div className="vop-retake-warning" role="note">
               <AlertTriangle size={19}/>
               <div><strong>{t('quiz.retake_warning_title','Retake replaces the current assessment credit')}</strong>
-                <p>When you start the retake, the previous score{knownPreviousScore!==null?` of ${Math.round(knownPreviousScore)}%`:''} and all credit earned from this assessment are revoked immediately. The new attempt becomes the authoritative result. If you leave after starting, the previous credit is not restored automatically.</p>
+                <p>{knownPreviousScore!==null
+                  ?t('quiz.retake_warning_with_score','When you start the retake, the previous score of {score}% and all credit earned from this assessment are revoked immediately. The new attempt becomes the authoritative result. If you leave after starting, the previous credit is not restored automatically.',{score:Math.round(knownPreviousScore)})
+                  :t('quiz.retake_warning','When you start the retake, the previous score and all credit earned from this assessment are revoked immediately. The new attempt becomes the authoritative result. If you leave after starting, the previous credit is not restored automatically.')}</p>
               </div>
             </div>}
             {!validThreshold && (
@@ -348,7 +361,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               <div>
                 <button type="button" className="vop-retake-cancel" disabled={submitting} onClick={()=>setConfirmingRetake(false)}>{t('quiz.keep_current_result','Keep current result')}</button>
                 <button type="button" className="vop-retake-confirm-button" disabled={submitting||!canStartFromServer||!validThreshold||attemptBlocked} onClick={()=>void startAttempt(true)}>
-                  {submitting?t('quiz.starting_retake','Starting retake…'):`Revoke result & ${retakeLabel.toLowerCase()}`}
+                  {submitting
+                    ?t('quiz.starting_retake','Starting retake…')
+                    :t('quiz.revoke_and_retake','Revoke result & {action}',{action:retakeLabel})}
                 </button>
               </div>
             </div>:<button
@@ -510,33 +525,36 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <p role="status" style={{ color:'var(--text-muted)',fontSize:'0.9rem',marginBottom:'1.5rem' }}>
               {submission.feedbackMode==='none'
                 ?remainingAttempts===0
-                  ?'Your attempt has been securely recorded. The configured attempt limit has been reached.'
+                  ?t('quiz.submitted_limit_reached','Your attempt has been securely recorded. The configured attempt limit has been reached.')
                   :submission.retakePolicy.retryAt&&!retakeReady
-                    ?`Your attempt has been securely recorded. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
-                    :'Your attempt has been securely recorded. You may retake this quiz under the configured policy.'
+                    ?t('quiz.submitted_retake_at','Your attempt has been securely recorded. Your next retake is available at {time}.',{time:new Date(submission.retakePolicy.retryAt).toLocaleString()})
+                    :t('quiz.submitted_can_retake','Your attempt has been securely recorded. You may retake this assessment under the configured policy.')
                 :Number(score)>=threshold
                   ?remainingAttempts===0
-                    ?`You met the required ${threshold}% pass mark. The configured attempt limit has been reached.`
+                    ?t('quiz.passed_limit_reached','You met the required {threshold}% pass mark. The configured attempt limit has been reached.',{threshold})
                     :submission.retakePolicy.retryAt&&!retakeReady
-                      ?`You met the required ${threshold}% pass mark. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
-                      :`You met the required ${threshold}% pass mark. You may retake this quiz.`
+                      ?t('quiz.passed_retake_at','You met the required {threshold}% pass mark. Your next retake is available at {time}.',{threshold,time:new Date(submission.retakePolicy.retryAt).toLocaleString()})
+                      :t('quiz.passed_can_retake','You met the required {threshold}% pass mark. You may retake this assessment.',{threshold})
                   :remainingAttempts===0
-                    ?`The pass mark is ${threshold}%. Your configured attempt limit has been reached.`
+                    ?t('quiz.failed_limit_reached','The pass mark is {threshold}%. Your configured attempt limit has been reached.',{threshold})
                     :submission.retakePolicy.retryAt&&!retakeReady
-                      ?`The pass mark is ${threshold}%. Your next retake is available at ${new Date(submission.retakePolicy.retryAt).toLocaleString()}.`
-                      :`The pass mark is ${threshold}%. You may retake this quiz.`}
+                      ?t('quiz.failed_retake_at','The pass mark is {threshold}%. Your next retake is available at {time}.',{threshold,time:new Date(submission.retakePolicy.retryAt).toLocaleString()})
+                      :t('quiz.failed_can_retake','The pass mark is {threshold}%. You may retake this assessment.',{threshold})}
             </p>
             {submission.feedbackMode==='after_submit'&&submission.explanations?.some(Boolean)&&<div className="vop-assessment-explanations">
               <strong>{t('quiz.review_notes','Review notes')}</strong>
               {submission.explanations.map((text,index)=>text?<p key={index}><b>{t('quiz.question_number','Question {number}:',{number:index+1})}</b> {text}</p>:null)}
             </div>}
             <p style={{color:'var(--text-muted)',fontSize:'0.8rem',marginTop:'-0.9rem',marginBottom:'1.25rem'}}>
-              Attempt {submission?.retakePolicy.attemptsUsed || 1}
-              {submission?.retakePolicy.maxAttempts ? ` of ${submission.retakePolicy.maxAttempts}` : ' · unlimited attempts'}
+              {t('quiz.attempt_number','Attempt {number}',{number:submission?.retakePolicy.attemptsUsed || 1})}
+              {submission?.retakePolicy.maxAttempts
+                ?t('quiz.of_attempts',' of {count}',{count:submission.retakePolicy.maxAttempts})
+                :t('quiz.unlimited_attempts_suffix',' · unlimited attempts')}
               {remainingAttempts !== null && remainingAttempts !== undefined
-                ? ` · ${remainingAttempts} remaining` : ''}
+                ?t('quiz.remaining_attempts',' · {count} remaining',{count:remainingAttempts}) : ''}
               {(submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes) > 0
-                ? ` · ${submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes} minute wait` : ' · immediate retake'}
+                ?t('quiz.minute_wait',' · {minutes} minute wait',{minutes:submission?.retakePolicy.cooldownMinutes ?? retakeCooldownMinutes})
+                :t('quiz.immediate_retake',' · immediate retake')}
             </p>
 
             <div style={{ display: 'grid', gap: '0.75rem', maxWidth: '320px', margin: '0 auto' }}>
