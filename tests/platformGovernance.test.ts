@@ -319,6 +319,18 @@ test('subscription quota editor preserves unlimited values and usage counts only
   assert.match(shared,/Active, non-archived organization-owned assessment records/);
 });
 
+test('study progress reserves HTTP 409 for assessment session state conflicts',()=>{
+  const progress=read('api/study/progress.ts');
+  const conflictCount=(progress.match(/status\(409\)/g)||[]).length;
+  const sessionConflictCount=(progress.match(/code:'ASSESSMENT_SESSION_[A-Z_]+'/g)||[]).length;
+  assert.ok(conflictCount>0);
+  assert.equal(conflictCount,sessionConflictCount);
+  assert.doesNotMatch(progress,/status\(409\)[\s\S]{0,200}ASSESSMENT_CONTENT_CHANGED/);
+  assert.doesNotMatch(progress,/status\(409\)[\s\S]{0,200}ASSESSMENT_CONFIGURATION/);
+  assert.match(progress,/Only study lessons support resume positions/);
+  assert.match(progress,/Only study lessons can be marked complete/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');
