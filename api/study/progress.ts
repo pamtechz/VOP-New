@@ -134,6 +134,52 @@ function publicAttemptQuestions(questions:QuestionRecord[]){
   return result;
 }
 
+function object(value:unknown):Record<string,unknown>{
+  return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
+}
+
+function activeAssessmentSession(
+  value:Record<string,unknown>,
+  expected:{organizationId:string;language:string;guideId:string;lessonId:string},
+  now:number,
+){
+  if(value.consumed===true||String(value.status||'active')!=='active')return false;
+  if(String(value.organizationId||'')!==expected.organizationId
+    ||String(value.language||'')!==expected.language
+    ||String(value.guideId||'')!==expected.guideId
+    ||String(value.lessonId||'')!==expected.lessonId)return false;
+  const resumeUntil=timestampMs(value.resumeUntil)||timestampMs(value.expiresAt);
+  return resumeUntil<=0||resumeUntil>now;
+}
+
+function storedSubmissionPayload(value:unknown){
+  const stored=object(value);
+  const score=Number(stored.score);
+  const threshold=Number(stored.threshold);
+  const feedbackMode=['score_only','after_submit','none'].includes(String(stored.feedbackMode||''))
+    ?String(stored.feedbackMode):'score_only';
+  const attemptsUsed=Math.max(1,Math.trunc(Number(stored.attemptsUsed)||1));
+  const maxAttempts=Number.isInteger(Number(stored.maxAttempts))&&Number(stored.maxAttempts)>0
+    ?Number(stored.maxAttempts):null;
+  const remainingAttempts=Number.isInteger(Number(stored.remainingAttempts))&&Number(stored.remainingAttempts)>=0
+    ?Number(stored.remainingAttempts):null;
+  if(!Number.isFinite(score)||score<0||score>100||!Number.isFinite(threshold)||threshold<1||threshold>100)return null;
+  return {
+    score:feedbackMode==='none'?null:score,
+    passed:feedbackMode==='none'?null:stored.passed===true,
+    threshold,
+    timeLimitMinutes:Math.max(0,Math.trunc(Number(stored.timeLimitMinutes)||0)),
+    feedbackMode,
+    explanations:feedbackMode==='after_submit'&&Array.isArray(stored.explanations)
+      ?stored.explanations.map(String):undefined,
+    retakePolicy:{
+      attemptsUsed,maxAttempts,remainingAttempts,
+      cooldownMinutes:Math.max(0,Math.trunc(Number(stored.cooldownMinutes)||0)),
+      retryAt:typeof stored.retryAt==='string'&&stored.retryAt?stored.retryAt:null,
+    },
+  };
+}
+
 export default async function handler(
   req: { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown },
   res: { status: (n: number) => unknown; json: (v: unknown) => void },
