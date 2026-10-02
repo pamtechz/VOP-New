@@ -268,18 +268,21 @@ export const App: React.FC = () => {
           if (lessonParam) {
             const deepLesson = deepGuide.lessons.find(lesson => lesson.id === lessonParam || lesson.lessonNumber === lessonParam);
             if (deepLesson) {
-              const sectionIndex=sectionParam
+              const isStudyLesson=deepLesson.type==='Lesson';
+              const pageCount=isStudyLesson?Math.max(1,deepLesson.contentPages?.length||1):1;
+              const sectionIndex=isStudyLesson&&sectionParam
                 ?(deepLesson.contentPages||[]).findIndex(page=>page.sectionId===sectionParam)
                 :-1;
-              const restoredPage=sectionIndex>=0
+              const requestedPage=sectionIndex>=0
                 ?sectionIndex
-                :Number.isFinite(pageParam)&&pageParam>0?Math.max(0,pageParam-1):0;
+                :Number.isFinite(pageParam)&&pageParam>0?pageParam-1:0;
+              const restoredPage=isStudyLesson?Math.max(0,Math.min(pageCount-1,requestedPage)):0;
               setActiveLesson(deepLesson);
               setDeepLinkPageIndex(restoredPage);
               if(currentUser.uid)replaceLearnerLocation(currentUser.uid,{
                 route:requestedStudyRoute,...(programParam?{programId:programParam}:{}),
                 guideId:deepGuide.id,guideLanguage:deepGuide.language,
-                lessonId:deepLesson.id,pageIndex:restoredPage,
+                lessonId:deepLesson.id,...(isStudyLesson?{pageIndex:restoredPage}:{}),
               });
             } else if(currentUser.uid) {
               replaceLearnerLocation(currentUser.uid,{
@@ -424,8 +427,9 @@ export const App: React.FC = () => {
     setActiveProgramId(location.programId||'');
     setActiveGuide(guide);
     setActiveLesson(lesson);
-    setDeepLinkPageIndex(lesson
-      ?Math.max(0,Math.min((lesson.contentPages?.length||1)-1,Math.trunc(location.pageIndex||0)))
+    const pageCount=lesson?.type==='Lesson'?Math.max(1,lesson.contentPages?.length||1):1;
+    setDeepLinkPageIndex(lesson?.type==='Lesson'
+      ?Math.max(0,Math.min(pageCount-1,Math.trunc(location.pageIndex||0)))
       :0);
     setStudyError('');
     setIsMenuOpen(false);
@@ -505,10 +509,15 @@ export const App: React.FC = () => {
   },[rememberLocation]);
 
   const openStudyItem=useCallback((guide:DiscoverGuide,lesson:Lesson,pageIndex?:number,route?:AppRoute)=>{
+    const isStudyLesson=lesson.type==='Lesson';
+    const pageCount=isStudyLesson?Math.max(1,lesson.contentPages?.length||1):1;
     const resumeKey=`${guide.language}:${guide.id}:${lesson.id}`;
-    const desired=pageIndex===undefined
-      ?Math.max(0,Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex??0)||0)
-      :Math.max(0,Math.min((lesson.contentPages?.length||1)-1,Math.trunc(pageIndex)));
+    const storedPage=isStudyLesson
+      ?Math.max(0,Math.trunc(Number(currentUser.progress.lessonResume?.[resumeKey]?.pageIndex??0)||0))
+      :0;
+    const desired=isStudyLesson
+      ?Math.max(0,Math.min(pageCount-1,pageIndex===undefined?storedPage:Math.trunc(pageIndex)))
+      :0;
     const destination=route||currentRoute;
     setStudyError('');
     if(destination!=='lessons')setActiveProgramId('');
@@ -519,17 +528,20 @@ export const App: React.FC = () => {
       route:destination,
       ...(destination==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
       guideId:guide.id,guideLanguage:guide.language,
-      lessonId:lesson.id,pageIndex:desired,
+      lessonId:lesson.id,
+      ...(isStudyLesson?{pageIndex:desired}:{}),
     });
   },[activeProgramId,currentRoute,currentUser.progress.lessonResume,rememberLocation]);
 
   const rememberStudyPage=useCallback((pageIndex:number)=>{
-    if(!activeGuide||!activeLesson)return;
+    if(!activeGuide||!activeLesson||activeLesson.type!=='Lesson')return;
+    const pageCount=Math.max(1,activeLesson.contentPages?.length||1);
     rememberLocation({
       route:currentRoute,
       ...(currentRoute==='lessons'&&activeProgramId?{programId:activeProgramId}:{}),
       guideId:activeGuide.id,guideLanguage:activeGuide.language,
-      lessonId:activeLesson.id,pageIndex:Math.max(0,Math.trunc(pageIndex)),
+      lessonId:activeLesson.id,
+      pageIndex:Math.max(0,Math.min(pageCount-1,Math.trunc(pageIndex))),
     },true);
   },[activeGuide,activeLesson,activeProgramId,currentRoute,rememberLocation]);
 
