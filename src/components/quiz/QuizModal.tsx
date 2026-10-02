@@ -120,15 +120,22 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     if (!retakeReady || submission?.retakePolicy.remainingAttempts === 0) return;
     setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setStage('intro');
   };
-  const startAttempt=async()=>{
+  const startAttempt=async(confirmRetake=false)=>{
     // React state updates are asynchronous; a fast double-click can otherwise
     // dispatch two startQuiz requests before the button re-renders disabled.
-    if(attemptStartLock.current||!validQuiz||!validThreshold||submitting||attemptBlocked)return;
+    if(attemptStartLock.current||!canStartFromServer||!validThreshold||submitting||attemptBlocked)return;
     attemptStartLock.current=true;
     setSubmitting(true);setError('');
     try{
-      const started=await beginQuizAttempt(guide.id,lesson.id,guide.language);
+      const started=await beginQuizAttempt(guide.id,lesson.id,guide.language,confirmRetake);
+      if(!isPlayableQuizConfigured(started.questions)){
+        setError('The server could not provide a valid published question set. Ask the course administrator to republish this assessment.');
+        return;
+      }
+      setQuestions(started.questions);
       setAttempt(started);
+      setConfirmingRetake(false);
+      if(started.previousScoreRevoked&&onAttemptStarted)await onAttemptStarted();
       setStage('quiz');
     }catch(reason){
       const message=reason instanceof Error?reason.message:'The assessment could not be started.';
@@ -139,8 +146,19 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setSubmitting(false);
     }
   };
+  const requestStart=()=>{
+    if(hasAttempted){
+      setConfirmingRetake(true);
+      setError('');
+      return;
+    }
+    void startAttempt(false);
+  };
   const assessmentLabel=lesson.assessmentKind==='final_exam'
     ?'Final examination':lesson.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice assessment';
+  const retakeLabel=lesson.assessmentKind==='final_exam'?'Retake exam':'Retake quiz';
+  const knownPreviousScore=Number.isFinite(Number(previousScore))?Number(previousScore):null;
+  const previousPassed=knownPreviousScore!==null&&validThreshold&&knownPreviousScore>=threshold;
   const instructions=lesson.assessmentInstructions?.trim()
     ||'Answer every question before submitting. Your attempt is recorded when you select Begin Test below.';
 
