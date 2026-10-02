@@ -793,7 +793,14 @@ export default async function handler(
       return res.status(409).json({error:message,code:'ASSESSMENT_ATTEMPT_LIMIT'});
     }
     if (message.includes('Assessment retake confirmation required')) {
-      return res.status(409).json({error:message,code:'ASSESSMENT_RETAKE_CONFIRMATION'});
+      const scoreMatch=message.match(/current score of ([0-9]+(?:\.[0-9]+)?)%/i);
+      return res.status(200).json({
+        ok:false,
+        error:message,
+        code:'ASSESSMENT_RETAKE_CONFIRMATION',
+        confirmationRequired:true,
+        previousScore:scoreMatch?Number(scoreMatch[1]):null,
+      });
     }
     if (message.includes('Assessment retake is available after')) {
       return res.status(409).json({error:message,code:'ASSESSMENT_RETAKE_COOLDOWN'});

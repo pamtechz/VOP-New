@@ -75,6 +75,17 @@ export interface AssessmentPolicyResult {
   };
 }
 
+export class AssessmentStartConditionError extends Error {
+  code:string;
+  previousScore:number|null;
+  constructor(message:string,code:string,previousScore:number|null=null){
+    super(message);
+    this.name='AssessmentStartConditionError';
+    this.code=code;
+    this.previousScore=previousScore;
+  }
+}
+
 export interface AssessmentSubmissionResult {
   score: number | null;
   passed: boolean | null;
@@ -101,7 +112,17 @@ export async function beginQuizAttempt(
     headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
     body:JSON.stringify({action:'startQuiz',language,guideId,lessonId:testId,confirmRetake}),
   });
-  const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{error?:unknown};
+  const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{
+    ok?:unknown;error?:unknown;code?:unknown;confirmationRequired?:unknown;previousScore?:unknown;
+  };
+  const code=typeof body.code==='string'?body.code:'';
+  if(code==='ASSESSMENT_RETAKE_CONFIRMATION'&&body.confirmationRequired===true){
+    throw new AssessmentStartConditionError(
+      typeof body.error==='string'?body.error:'Confirm the retake before replacing the current result.',
+      code,
+      Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
+    );
+  }
   if(!response.ok)throw new Error(typeof body.error==='string'?body.error:'The assessment could not be started.');
   if(!body.sessionId||!body.assessmentPolicy||!Array.isArray(body.questions)||!body.questions.length){
     throw new Error('The assessment could not load its published questions.');
@@ -155,16 +176,9 @@ export async function submitQuizAnswers(
   const hidden=feedbackMode==='none';
   const score=hidden?null:Number(body?.score);
   if (hidden || (Number.isFinite(score) && Number(score) >= 0 && Number(score) <= 100)) {
-    // Graduation eligibility is re-evaluated server-side; a 409 simply means the learner has not completed every requirement yet.
-    try {
-      await fetch('/api/admin/graduations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'submit', guideId, ...(score===null?{}:{averageScore:score}) }),
-      });
-    } catch {
-      // Quiz results remain authoritative even when graduation submission is not yet eligible or temporarily unavailable.
-    }
+    // Graduation eligibility is already re-evaluated atomically by /api/study/progress.
+    // Do not issue a second learner graduation POST: an incomplete curriculum is
+    // a normal state and the duplicate request previously surfaced as a noisy 409.
     const policy = body?.retakePolicy || {};
     return {
       score,

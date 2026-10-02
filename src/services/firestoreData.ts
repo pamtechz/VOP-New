@@ -303,6 +303,27 @@ export async function loadFirestoreUser(uid: string): Promise<User | null> {
   return normalizeUserProfile(uid, snapshot.data() as Record<string, unknown>);
 }
 
+function normalizeLessonResume(value: unknown): User['progress']['lessonResume'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value as Record<string, unknown>).flatMap(([key, raw]) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+    const item = raw as Record<string, unknown>;
+    const language = String(item.language ?? '').trim();
+    const guideId = String(item.guideId ?? '').trim();
+    const lessonId = String(item.lessonId ?? '').trim();
+    const pageIndex = Math.max(0, Math.trunc(Number(item.pageIndex) || 0));
+    if (!language || !guideId || !lessonId) return [];
+    return [[key, {
+      language,
+      guideId,
+      lessonId,
+      pageIndex,
+      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : undefined,
+    }] as const];
+  });
+  return Object.fromEntries(entries);
+}
+
 function normalizeUserProfile(uid: string, data: Record<string, any>): User {
   return {
     uid,
@@ -351,6 +372,7 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
       totalGuidesCount: Number(data.progress?.totalGuidesCount ?? 0),
       guideScores: data.progress?.guideScores ?? {},
       completedLessons: Array.isArray(data.progress?.completedLessons) ? data.progress.completedLessons : [],
+      lessonResume: normalizeLessonResume(data.progress?.lessonResume),
     },
   };
 }

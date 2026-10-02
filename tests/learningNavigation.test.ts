@@ -84,3 +84,23 @@ test('published lesson and guide status share server-scoped completion checks',(
   assert.match(progress,/if \(lesson.sourceQuizId\) return undefined/);
   assert.match(progress,/organizationId \|\| 'platform'/);
 });
+
+
+test('learner assessment and module status use localization keys, and the inventory scans TypeScript UI files',()=>{
+  const quiz=source('src/components/quiz/QuizModal.tsx');
+  const guide=source('src/components/guide/DiscoverGuideView.tsx');
+  const inventory=source('scripts/inventory-ui-localization.mjs');
+  assert.match(quiz,/getTranslation/);
+  for(const key of [
+    'quiz.retake_warning_title','quiz.retake_warning_with_score','quiz.confirm_retake',
+    'quiz.revoke_and_retake','quiz.current_recorded_result','quiz.question_progress',
+    'quiz.passed_retake_at','quiz.failed_retake_at','quiz.return_to_guide',
+  ]) assert.ok(quiz.includes("'"+key+"'"),key);
+  for(const key of [
+    'guide.lessons_progress','guide.section_count','guide.lesson_count',
+    'guide.page_count','guide.read_minutes','guide.final_exam_locked_label',
+  ]) assert.ok(guide.includes("'"+key+"'"),key);
+  assert.match(inventory,/const EXT = \/\\\.\(tsx\|jsx\|ts\|js\)\$\//);
+  assert.match(inventory,/split\(\/\\r\?\\n\/\)/);
+  assert.doesNotMatch(inventory,/const EXT = \/\\\\\\\.\(tsx\|jsx\|ts\|js\)\$\//);
+});
