@@ -22,7 +22,9 @@ function header(req: { headers?: Record<string, string | string[] | undefined> }
 
 type QuestionRecord = {
   key?: unknown;
+  id?: unknown;
   question?: unknown;
+  prompt?: unknown;
   answer?: unknown;
   options?: unknown;
   correctOptionIndex?: unknown;
