@@ -1,5 +1,6 @@
 import { getActiveLanguage } from './storage';
 import { auth } from '../lib/firebase';
+import type { Question } from '../types';
 import { queueCompletion, dropCompletion, queueResume, dropResume, type PendingCompletion, type PendingResume } from './offlineStudyQueue';
 
 /**
@@ -59,6 +60,9 @@ export interface AssessmentPolicyResult {
   sessionId:string;
   startedAt:string;
   expiresAt:string|null;
+  questions:Question[];
+  previousScore:number|null;
+  previousScoreRevoked:boolean;
   assessmentPolicy:{
     threshold:number;
     attemptsUsed:number;
@@ -87,7 +91,7 @@ export interface AssessmentSubmissionResult {
 }
 
 export async function beginQuizAttempt(
-  guideId:string,testId:string,language:string=getActiveLanguage(),
+  guideId:string,testId:string,language:string=getActiveLanguage(),confirmRetake=false,
 ):Promise<AssessmentPolicyResult>{
   const firebaseUser=auth?.currentUser;
   if(!firebaseUser)throw new Error('Sign in before starting an assessment.');
@@ -95,12 +99,19 @@ export async function beginQuizAttempt(
   const response=await fetch('/api/study/progress',{
     method:'POST',
     headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-    body:JSON.stringify({action:'startQuiz',language,guideId,lessonId:testId}),
+    body:JSON.stringify({action:'startQuiz',language,guideId,lessonId:testId,confirmRetake}),
   });
   const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{error?:unknown};
   if(!response.ok)throw new Error(typeof body.error==='string'?body.error:'The assessment could not be started.');
-  if(!body.sessionId||!body.assessmentPolicy)throw new Error('The assessment policy could not be loaded.');
-  return body as AssessmentPolicyResult;
+  if(!body.sessionId||!body.assessmentPolicy||!Array.isArray(body.questions)||!body.questions.length){
+    throw new Error('The assessment could not load its published questions.');
+  }
+  return {
+    ...(body as AssessmentPolicyResult),
+    previousScore:Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
+    previousScoreRevoked:body.previousScoreRevoked===true,
+    questions:body.questions as Question[],
+  };
 }
 
 export async function submitQuizAnswers(

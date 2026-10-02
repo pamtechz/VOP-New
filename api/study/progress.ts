@@ -22,7 +22,9 @@ function header(req: { headers?: Record<string, string | string[] | undefined> }
 
 type QuestionRecord = {
   key?: unknown;
+  id?: unknown;
   question?: unknown;
+  prompt?: unknown;
   answer?: unknown;
   options?: unknown;
   correctOptionIndex?: unknown;
@@ -105,6 +107,31 @@ function gradeServerQuiz(questions: QuestionRecord[], answers: Record<string, un
   }
 
   return correct * 100 / questions.length;
+}
+
+function publicAttemptQuestions(questions:QuestionRecord[]){
+  if(!Array.isArray(questions)||questions.length===0)return null;
+  const keys=new Set<string>();
+  const result:Array<Record<string,unknown>>=[];
+  for(let index=0;index<questions.length;index+=1){
+    const item=questions[index];
+    const key=typeof item?.key==='string'?item.key.trim():typeof item?.id==='string'?item.id.trim():'';
+    const question=typeof item?.question==='string'?item.question.trim():typeof item?.prompt==='string'?item.prompt.trim():'';
+    if(!key||!question||keys.has(key))return null;
+    keys.add(key);
+    if(Array.isArray(item.options)){
+      const options=item.options.map(value=>typeof value==='string'?value.trim():'');
+      if(options.length<2||options.some(value=>!value))return null;
+      result.push({key,question,options,questionType:'single_select'});
+      continue;
+    }
+    if(typeof item.answer==='boolean'){
+      result.push({key,question,questionType:'true_false'});
+      continue;
+    }
+    return null;
+  }
+  return result;
 }
 
 export default async function handler(
@@ -223,6 +250,54 @@ export default async function handler(
       const policy=assessmentPolicy(lessonData,settingsData);
       if(policy.threshold===null)return res.status(409).json({error:'This assessment is unavailable until an administrator configures its pass mark.'});
       const effectiveGuideId=legacyStudyGuide?'discover':guideId;
+      const sourceQuizId=String(lessonData.sourceQuizId||'').trim();
+      let attemptQuestionSource=Array.isArray(lessonData.questions)
+        ?lessonData.questions as QuestionRecord[]
+        :Array.isArray(lessonData.quiz)?lessonData.quiz as QuestionRecord[]:[];
+      if(sourceQuizId){
+        if(!/^[A-Za-z0-9_-]{1,120}$/.test(sourceQuizId)||!useTenantGuide){
+          return res.status(409).json({error:'The assessment source is invalid.'});
+        }
+        const quizSnap=await db.doc(`quizzes/${sourceQuizId}`).get();
+        const quiz=quizSnap.data()||{};
+        if(!quizSnap.exists||quiz.published!==true||quiz.archived===true
+          ||String(quiz.guideId||'')!==guideId
+          ||String(quiz.assessmentPath||'')!==lessonRef.path
+          ||String(quiz.language||'')!==language
+          ||String(quiz.organizationId||'')!==candidateGuideOrganizationId){
+          return res.status(409).json({error:'This assessment is not available for a new attempt.'});
+        }
+        if(['chapter','section','block'].includes(String(quiz.attachmentType||''))){
+          const parentId=String(quiz.lessonId||'');
+          const anchorId=String(quiz.anchorId||'');
+          if(!validStudyId(parentId)||!validStudyId(anchorId)
+            ||String(lessonData.attachedLessonId||'')!==parentId
+            ||String(lessonData.anchorId||'')!==anchorId){
+            return res.status(409).json({error:'The assessment attachment has changed.'});
+          }
+          const parent=await guideRef.collection('lessons').doc(parentId).get();
+          if(!parent.exists||parent.data()?.published!==true||parent.data()?.archived===true
+            ||parent.data()?.type==='Test'
+            ||!curriculumAnchorExists(parent.data()?.chapters,quiz.attachmentType,anchorId)){
+            return res.status(409).json({error:'The assessment chapter, section or block is no longer published.'});
+          }
+        }
+        attemptQuestionSource=Array.isArray(quiz.questions)
+          ?quiz.questions as QuestionRecord[]
+          :Array.isArray(quiz.quiz)?quiz.quiz as QuestionRecord[]:[];
+      }
+      const attemptQuestions=publicAttemptQuestions(attemptQuestionSource);
+      if(!attemptQuestions){
+        return res.status(409).json({
+          error:'This assessment has no valid published questions. Ask the course administrator to republish the assessment.',
+          code:'ASSESSMENT_CONFIGURATION',
+        });
+      }
+      const scoreKey=`${policyOrganizationId||'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
+      const graduationRef=policyOrganizationId&&useTenantGuide&&guideId!=='discover'
+        ?db.doc('graduationRequests/grad-'+createHash('sha256')
+          .update(policyOrganizationId+':'+decoded.uid+':'+guideId).digest('hex').slice(0,48))
+        :null;
       const policyRef=userRef.collection('assessmentAttemptPolicy').doc(
         retakePolicyKey(policyOrganizationId,language,effectiveGuideId,lessonId));
       const historical=await userRef.collection('assessmentAttempts').where('lessonId','==',lessonId).limit(500).get();
@@ -237,8 +312,14 @@ export default async function handler(
       const startedAtIso=new Date(startedAt).toISOString();
       const expiresAt=policy.timeLimitMinutes>0?startedAt+policy.timeLimitMinutes*60_000:0;
       const historicalLastAttemptMs=relevant.reduce((latest,doc)=>Math.max(latest,timestampMs(doc.data()?.createdAt)),0);
+      const latestAttempt=relevant.reduce((latest,doc)=>{
+        if(!latest)return doc;
+        return timestampMs(doc.data()?.createdAt)>timestampMs(latest.data()?.createdAt)?doc:latest;
+      },null as (typeof relevant)[number]|null);
       const reserved=await db.runTransaction(async transaction=>{
         const currentPolicy=await transaction.get(policyRef);
+        const currentUser=await transaction.get(userRef);
+        const graduationRequest=graduationRef?await transaction.get(graduationRef):null;
         const policyData=currentPolicy.data()||{};
         const priorAttempts=currentPolicy.exists
           ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
@@ -250,6 +331,54 @@ export default async function handler(
         if(policy.retakeCooldownMinutes>0&&priorAttempts>0&&retryAtMs>startedAt){
           throw new Error(`Assessment retake is available after ${new Date(retryAtMs).toISOString()}.`);
         }
+        const currentData=currentUser.data()||{};
+        const progress=currentData.progress&&typeof currentData.progress==='object'
+          ?currentData.progress as Record<string,unknown>:{};
+        const scores=progress.guideScores&&typeof progress.guideScores==='object'
+          ?progress.guideScores as Record<string,unknown>:{};
+        const currentScore=Number(scores[scoreKey]);
+        const hasCurrentScore=Number.isFinite(currentScore)&&currentScore>=0&&currentScore<=100;
+        const isRetake=priorAttempts>0||hasCurrentScore;
+        if(isRetake&&hasCurrentScore&&body.confirmRetake!==true){
+          throw new Error(`Assessment retake confirmation required. The current score of ${Math.round(currentScore*100)/100}% and its earned credit will be revoked when the retake starts.`);
+        }
+        if(isRetake&&hasCurrentScore){
+          const nextScores={...scores};
+          delete nextScores[scoreKey];
+          const information=currentData.information&&typeof currentData.information==='object'
+            ?currentData.information as Record<string,unknown>:{};
+          transaction.set(userRef,{
+            progress:{...progress,guideScores:nextScores,updatedAt:FieldValue.serverTimestamp()},
+            information:{...information,graduating:false},
+            updatedAt:FieldValue.serverTimestamp(),
+          },{merge:true});
+          if(latestAttempt){
+            transaction.set(latestAttempt.ref,{
+              creditStatus:'revoked_for_retake',creditRevokedAt:FieldValue.serverTimestamp(),
+              supersededBySessionId:sessionId,updatedAt:FieldValue.serverTimestamp(),
+            },{merge:true});
+          }
+          if(graduationRequest?.exists){
+            const review=graduationRequest.data()||{};
+            const reviewStatus=String(review.status||'').trim();
+            if(reviewStatus&&reviewStatus!=='approved'&&reviewStatus!=='rejected'){
+              const decisions=Array.isArray(review.decisions)?review.decisions.slice():[];
+              decisions.push({
+                stageId:'system_retake',stageLabel:'Assessment retake',
+                decision:'rejected',
+                notes:'Eligibility was revoked automatically because the learner started a new assessment attempt.',
+                approverUid:'system:retake',approverRole:'system',decidedAt:startedAtIso,
+              });
+              transaction.set(graduationRequest.ref,{
+                status:'rejected',rejectionReason:'assessment_retake',
+                eligibilityRevokedAt:FieldValue.serverTimestamp(),
+                supersededBySessionId:sessionId,approverNotes:'Eligibility revoked by assessment retake.',
+                decisions,revision:Math.max(1,Number(review.revision||0)+1),
+                approvedAt:null,updatedAt:FieldValue.serverTimestamp(),
+              },{merge:true});
+            }
+          }
+        }
         const attemptNumber=priorAttempts+1;
         transaction.set(policyRef,{
           organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
@@ -259,13 +388,18 @@ export default async function handler(
           sessionId,organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
           attemptNumber,startedAt:startedAtIso,
           expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+          previousScore:hasCurrentScore?currentScore:null,
+          previousScoreRevoked:isRetake&&hasCurrentScore,
           consumed:false,createdAt:FieldValue.serverTimestamp(),
         });
-        return {attemptNumber,priorAttempts};
+        return {attemptNumber,priorAttempts,previousScore:hasCurrentScore?currentScore:null,previousScoreRevoked:isRetake&&hasCurrentScore};
       });
       return res.status(200).json({
         ok:true,sessionId,startedAt:startedAtIso,
         expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+        questions:attemptQuestions,
+        previousScore:reserved.previousScore,
+        previousScoreRevoked:reserved.previousScoreRevoked,
         assessmentPolicy:{
           threshold:policy.threshold,maxAttempts:policy.maxAttempts||null,
           remainingAttempts:policy.maxAttempts>0?Math.max(0,policy.maxAttempts-reserved.attemptNumber):null,
@@ -657,6 +791,9 @@ export default async function handler(
     }
     if (message.includes('Assessment attempt limit reached')) {
       return res.status(409).json({error:message,code:'ASSESSMENT_ATTEMPT_LIMIT'});
+    }
+    if (message.includes('Assessment retake confirmation required')) {
+      return res.status(409).json({error:message,code:'ASSESSMENT_RETAKE_CONFIRMATION'});
     }
     if (message.includes('Assessment retake is available after')) {
       return res.status(409).json({error:message,code:'ASSESSMENT_RETAKE_COOLDOWN'});

@@ -200,9 +200,109 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
     && Boolean(data?.ownerUid) && String(data?.ownerUid) === ctx.auth.uid;
 }
 
+const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);
+const MENTOR_MEMBERSHIP_ROLES=new Set(['mentor']);
+
+function quotaLimit(quotas:unknown,key:string,legacyKey=''){
+  const data=quotas&&typeof quotas==='object'?quotas as Record<string,unknown>:{};
+  const raw=data[key]??(legacyKey?data[legacyKey]:undefined);
+  const value=Number(raw);
+  return Number.isFinite(value)&&value>=0?value:Number.POSITIVE_INFINITY;
+}
+
+async function ownedCollectionCount(db:Firestore,organizationId:string,collectionName:string){
+  const [organizationScoped,ownerScoped]=await Promise.all([
+    db.collection(collectionName).where('organizationId','==',organizationId).get(),
+    db.collection(collectionName).where('ownerOrganizationId','==',organizationId).get(),
+  ]);
+  return new Set([...organizationScoped.docs,...ownerScoped.docs].map(doc=>doc.id)).size;
+}
+
+export async function organizationUsageSnapshot(db:Firestore,organizationId:string){
+  if(!organizationId)throw new Error('An organization is required.');
+  const members=await db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
+  const roles=members.docs.map(doc=>String(doc.data()?.role||'').trim().toLowerCase());
+  const [guides,quizzes,announcements,radio,radioPlaylists,materials]=await Promise.all([
+    ownedCollectionCount(db,organizationId,'guides'),
+    ownedCollectionCount(db,organizationId,'quizzes'),
+    ownedCollectionCount(db,organizationId,'announcements'),
+    ownedCollectionCount(db,organizationId,'radioBroadcasts'),
+    ownedCollectionCount(db,organizationId,'playlists'),
+    ownedCollectionCount(db,organizationId,'books'),
+  ]);
+  return {
+    seats:members.size,
+    candidates:roles.filter(role=>CANDIDATE_MEMBERSHIP_ROLES.has(role)).length,
+    mentors:roles.filter(role=>MENTOR_MEMBERSHIP_ROLES.has(role)).length,
+    administrators:roles.filter(role=>['owner','admin'].includes(role)).length,
+    staff:roles.filter(role=>!CANDIDATE_MEMBERSHIP_ROLES.has(role)&&!MENTOR_MEMBERSHIP_ROLES.has(role)&&!['owner','admin'].includes(role)).length,
+    guides,quizzes,announcements,radio,radioPlaylists,materials,
+  };
+}
+
+export async function validateOrganizationPlanCapacity(
+  db:Firestore,
+  organizationId:string,
+  quotas:Record<string,unknown>,
+){
+  const usage=await organizationUsageSnapshot(db,organizationId);
+  const checks:Array<[string,number,number]>=[
+    ['active seats',usage.seats,quotaLimit(quotas,'maxSeats','maxUsers')],
+    ['candidates / learners',usage.candidates,quotaLimit(quotas,'maxCandidates')],
+    ['mentors',usage.mentors,quotaLimit(quotas,'maxMentors')],
+    ['guides',usage.guides,quotaLimit(quotas,'maxGuides')],
+    ['quizzes',usage.quizzes,quotaLimit(quotas,'maxQuizzes')],
+    ['announcements',usage.announcements,quotaLimit(quotas,'maxAnnouncements')],
+    ['radio items',usage.radio,quotaLimit(quotas,'maxRadioItems')],
+    ['radio playlists',usage.radioPlaylists,quotaLimit(quotas,'maxRadioPlaylists')],
+    ['materials',usage.materials,quotaLimit(quotas,'maxMaterials')],
+  ];
+  const violations=checks.filter(([,used,limit])=>Number.isFinite(limit)&&used>limit)
+    .map(([label,used,limit])=>`${label}: ${used} in use / ${limit} allowed`);
+  if(violations.length){
+    throw new Error('This package is below the organization’s current usage. Reduce usage first or choose a larger package. '+violations.join('; ')+'.');
+  }
+  return usage;
+}
+
+export async function enforceOrganizationMembershipQuotas(
+  ctx:TenantContext,
+  organizationId:string,
+  nextRole:string,
+  uid='',
+){
+  const organization=await ctx.db.doc(`organizations/${organizationId}`).get();
+  if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
+  if(organization.data()?.billingAccessSuspended===true&&!ctx.isSuperAdmin){
+    throw new Error('This organization subscription is inactive. Renew or activate a subscription package before adding members.');
+  }
+  const quotas=organization.data()?.quotas;
+  const normalizedRole=String(nextRole||'learner').trim().toLowerCase();
+  const existing=uid?await ctx.db.doc(`organizations/${organizationId}/members/${uid}`).get():null;
+  const existingActive=existing?.exists&&existing.data()?.active===true;
+  const existingRole=String(existing?.data()?.role||'').trim().toLowerCase();
+  const usage=await organizationUsageSnapshot(ctx.db,organizationId);
+
+  const seatDelta=existingActive?0:1;
+  const candidateDelta=CANDIDATE_MEMBERSHIP_ROLES.has(normalizedRole)
+    &&!(existingActive&&CANDIDATE_MEMBERSHIP_ROLES.has(existingRole))?1:0;
+  const mentorDelta=MENTOR_MEMBERSHIP_ROLES.has(normalizedRole)
+    &&!(existingActive&&MENTOR_MEMBERSHIP_ROLES.has(existingRole))?1:0;
+
+  const maxSeats=quotaLimit(quotas,'maxSeats','maxUsers');
+  const maxCandidates=quotaLimit(quotas,'maxCandidates');
+  const maxMentors=quotaLimit(quotas,'maxMentors');
+  if(usage.seats+seatDelta>maxSeats)throw new Error('This organization has reached its active seat limit. Upgrade the subscription package or deactivate a member before adding another user.');
+  if(usage.candidates+candidateDelta>maxCandidates)throw new Error('This organization has reached its candidate limit. Upgrade the subscription package or deactivate a candidate before adding another learner.');
+  if(usage.mentors+mentorDelta>maxMentors)throw new Error('This organization has reached its mentor limit. Upgrade the subscription package or deactivate a mentor before adding another mentor.');
+}
+
 export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
   if (ctx.isSuperAdmin || !ctx.organizationId) return;
   const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+  if(organization.data()?.billingAccessSuspended===true){
+    throw new Error('This organization subscription is inactive. Renew or activate a subscription package before creating additional resources.');
+  }
   const quotas = organization.data()?.quotas;
   const limit = Number(quotas && typeof quotas === 'object' ? (quotas as Record<string, unknown>)[quotaKey] : NaN);
   if (!Number.isFinite(limit) || limit < 0) return;

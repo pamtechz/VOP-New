@@ -8,9 +8,10 @@ import {
 } from '../../shared/payments.js';
 import {
   accessibleOrganizationIds, authenticateTenant, organizationInHierarchyScope,
-  tenantOwnerKey, writeTenantAudit, type TenantContext,
+  tenantOwnerKey, validateOrganizationPlanCapacity, writeTenantAudit, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
+import { quoteSubscriptionPlan } from '../billing.js';
 import {
   getPaymentProvider, paymentProviderCatalog, registeredPaymentProviderKeys,
   type ProviderVerification,
@@ -255,7 +256,7 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
-async function consumerPaymentMethods(db:Firestore,data:DocumentData){
+async function consumerPaymentMethods(db:Firestore,data:DocumentData,billingCurrency=''){
   const allowedMethods=stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never));
   const configuredProviders=stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const providerKeys=configuredProviders.length?configuredProviders:registeredPaymentProviderKeys();
@@ -264,6 +265,7 @@ async function consumerPaymentMethods(db:Firestore,data:DocumentData){
     const config=await providerConfig(db,key);
     if(!config.enabled||!config.configured)continue;
     for(const method of config.methods){
+      if(billingCurrency&&billingCurrency!=='ZMW'&&method!=='card')continue;
       if((!allowedMethods.length||allowedMethods.includes(method))&&PAYMENT_METHODS.includes(method as never)
         &&method!=='manual'&&method!=='bank')methods.add(method);
     }
@@ -271,18 +273,29 @@ async function consumerPaymentMethods(db:Firestore,data:DocumentData){
   return [...methods] as PaymentMethod[];
 }
 
-async function consumerPayableItem(db:Firestore,id:string,data:DocumentData){
+async function consumerPayableItem(db:Firestore,id:string,data:DocumentData,organizationId=''){
+  let currency=text(data.currency),amountMinor=Number(data.amountMinor||0),amountDecimal=text(data.amountDecimal);
+  let pricing:Record<string,unknown>={};
+  if(text(data.itemType)==='organization_subscription'){
+    const plan=await db.doc('system/plans/catalog/'+text(data.itemId)).get();
+    if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
+    const quote=await quoteSubscriptionPlan(db,organizationId,plan.data()||{});
+    currency=quote.billingCurrency;amountMinor=quote.amountMinor;amountDecimal=quote.amountDecimal;
+    pricing={
+      baseCurrency:quote.baseCurrency,baseAmountDecimal:quote.baseAmountDecimal,
+      billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
+      exchangeRate:quote.exchangeRate,fxSource:quote.fxSource,fxUpdatedAt:quote.fxUpdatedAt,
+    };
+  }
   return {
     id,
     name:text(data.name),
     description:text(data.description),
     itemType:text(data.itemType),
     organizationName:text(data.organizationName),
-    currency:text(data.currency),
-    amountMinor:Number(data.amountMinor||0),
-    amountDecimal:text(data.amountDecimal),
+    currency,amountMinor,amountDecimal,pricing,
     repeatable:bool(data.repeatable,false),
-    allowedMethods:await consumerPaymentMethods(db,data),
+    allowedMethods:await consumerPaymentMethods(db,data,currency),
   };
 }
 
@@ -302,7 +315,7 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
         try{await requireOrganizationSubscriptionConsumer(ctx);}
         catch{continue;}
       }
-      items.push(await consumerPayableItem(ctx.db,doc.id,data));
+      items.push(await consumerPayableItem(ctx.db,doc.id,data,ctx.organizationId||text(ctx.profile.organizationId)));
     }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
@@ -414,16 +427,38 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   }
   if(item.paymentRequired===false)throw new Error('This item does not require payment.');
   if(!activeWindow(item))throw new Error('This payment is not currently available.');
-  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
   const organizationId=text(item.organizationId)||text(ctx.profile.organizationId)||ctx.organizationId;
+  let amountMinor=Number(item.amountMinor);
+  let currency=normalizeCurrency(item.currency);
+  let pricingSnapshot:Record<string,unknown>={};
+  if(text(item.itemType)==='organization_subscription'){
+    const plan=await ctx.db.doc('system/plans/catalog/'+text(item.itemId)).get();
+    if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
+    await validateOrganizationPlanCapacity(ctx.db,organizationId,object(plan.data()?.quotas));
+    const quote=await quoteSubscriptionPlan(ctx.db,organizationId,plan.data()||{});
+    amountMinor=quote.amountMinor;currency=quote.billingCurrency;
+    if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
+    pricingSnapshot={
+      baseCurrency:quote.baseCurrency,baseAmountMinor:quote.baseAmountMinor,baseAmountDecimal:quote.baseAmountDecimal,
+      billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
+      exchangeRate:quote.exchangeRate,fxSource:quote.fxSource,fxUpdatedAt:quote.fxUpdatedAt,
+    };
+    const current=await ctx.db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const currentData=current.data()||{};
+    const end=Date.parse(text(currentData.currentPeriodEnd));
+    const renewalWindowMs=7*24*60*60*1000;
+    if(currentData.status==='active'&&text(currentData.planId)===text(item.itemId)
+      &&Number.isFinite(end)&&end-Date.now()>renewalWindowMs){
+      throw new Error('This organization already has this subscription package active. Renewal opens seven days before the current period ends.');
+    }
+  }
+  if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
+  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
   const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
   const paymentId='pay_'+randomUUID().replaceAll('-','');
   const paymentRef=ctx.db.doc('paymentTransactions/'+paymentId);
   const reference=newReference();
-  const amountMinor=Number(item.amountMinor);
-  const currency=normalizeCurrency(item.currency);
-  if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
 
   let reused:ReturnType<typeof serializePayment>|null=null;
   await ctx.db.runTransaction(async tx=>{
@@ -447,7 +482,8 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
       payableItemId,itemId:text(item.itemId),itemType:text(item.itemType) as PaymentTransaction['itemType'],
       description:text(item.name),itemSnapshot:{
         name:text(item.name),description:text(item.description),itemId:text(item.itemId),
-        itemType:text(item.itemType),amountMinor,currency,organizationName:text(item.organizationName),fulfilmentConfig:object(item.fulfilmentConfig),
+        itemType:text(item.itemType),amountMinor,currency,organizationName:text(item.organizationName),
+        pricing:pricingSnapshot,fulfilmentConfig:object(item.fulfilmentConfig),
       },
       currency,amountMinor,amountDecimal:minorToDecimal(amountMinor,currency),
       provider:providerKey,paymentMethod:method,status:'initiated',providerStatus:'initiated',
@@ -672,20 +708,38 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
   }else if(itemType==='organization_subscription'){
     if(!organizationId)throw new Error('A subscription payment requires an organization.');
     const plan=object(config.planSnapshot);
+    const planId=text(plan.id)||text(payment.itemId);
     const interval=text(plan.interval)||'month';
-    const start=new Date(),end=new Date(start);
+    const now=new Date();
+    const currentSubscription=await db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const currentData=currentSubscription.data()||{};
+    const existingEnd=Date.parse(text(currentData.currentPeriodEnd));
+    const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===planId
+      &&Number.isFinite(existingEnd)&&existingEnd>now.getTime();
+    const start=sameActivePlan&&text(currentData.currentPeriodStart)
+      ?new Date(text(currentData.currentPeriodStart))
+      :now;
+    const extensionBase=sameActivePlan?new Date(existingEnd):now;
+    const end=new Date(extensionBase);
     if(interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
     else if(interval==='month')end.setUTCMonth(end.getUTCMonth()+1);
     else end.setUTCFullYear(end.getUTCFullYear()+100);
+    const pricing=object(object(payment.itemSnapshot).pricing);
     batch.set(db.doc('organizations/'+organizationId),{
-      plan:text(plan.id)||text(payment.itemId),quotas:object(plan.quotas),featureEntitlements:object(plan.features),
-      updatedAt:FieldValue.serverTimestamp(),
+      plan:planId,quotas:object(plan.quotas),featureEntitlements:object(plan.features),
+      billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
     batch.set(db.doc('organizations/'+organizationId+'/subscription/current'),{
-      organizationId,planId:text(plan.id)||text(payment.itemId),status:'active',
+      organizationId,planId,status:'active',
       activationSource:'payment',billingProvider:text(payment.provider),lastPaymentId:paymentId,
       lastPaidAt:FieldValue.serverTimestamp(),currentPeriodStart:start.toISOString(),
       currentPeriodEnd:end.toISOString(),renewalMode:'manual',
+      renewalCount:Number(currentData.renewalCount||0)+(sameActivePlan?1:0),
+      ...(sameActivePlan?{renewedAt:FieldValue.serverTimestamp(),previousPeriodEnd:new Date(existingEnd).toISOString()}:{}),
+      baseCurrency:text(pricing.baseCurrency)||'USD',baseAmountDecimal:text(pricing.baseAmountDecimal),
+      billingCountryCode:text(pricing.billingCountryCode),billingCurrency:text(payment.currency),
+      paidAmountDecimal:text(payment.amountDecimal),exchangeRate:Number(pricing.exchangeRate||1),
+      fxSource:text(pricing.fxSource),fxUpdatedAt:text(pricing.fxUpdatedAt),
       activatedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
   }else if(!['donation'].includes(itemType)){
@@ -1195,6 +1249,33 @@ export async function processProviderWebhook(
     await paymentDoc.ref.set({webhookStatus:'rejected',updatedAt:FieldValue.serverTimestamp()},{merge:true});
     throw error;
   }
+}
+
+export async function reconcileExpiredOrganizationSubscriptions(db:Firestore,limit=200){
+  const snap=await db.collectionGroup('subscription').where('status','==','active').limit(Math.max(1,Math.min(500,limit))).get();
+  const now=Date.now();
+  const summary={checked:0,expired:0};
+  for(const doc of snap.docs){
+    if(doc.id!=='current')continue;
+    summary.checked++;
+    const data=doc.data()||{};
+    const interval=text(data.interval||data.planInterval);
+    if(interval==='one_time')continue;
+    const end=Date.parse(text(data.currentPeriodEnd));
+    if(!Number.isFinite(end)||end>now)continue;
+    const organizationRef=doc.ref.parent.parent;
+    if(!organizationRef)continue;
+    const batch=db.batch();
+    batch.set(doc.ref,{
+      status:'expired',expiredAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    batch.set(organizationRef,{
+      billingAccessSuspended:true,billingSuspendedReason:'subscription_expired',updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    await batch.commit();
+    summary.expired++;
+  }
+  return summary;
 }
 
 export async function reconcilePendingPayments(db:Firestore,limit=100){

@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getApps } from 'firebase-admin/app';
-import { authenticateTenant, requireOrgRole, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, writeTenantAudit, organizationInHierarchyScope, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 
 type Request = {
@@ -62,9 +62,11 @@ export default async function handler(request: Request, response: Response) {
       } catch (error) {
         const code = String((error as {code?:unknown})?.code || '');
         if (code !== 'auth/user-not-found') throw error;
+        await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner');
         account = await authService.createUser({ email, displayName, ...(phoneNumber ? { phoneNumber } : {}), ...(password ? { password } : {}), disabled:false });
         created = true;
       }
+      await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner',account.uid);
       const candidateRef = ctx.db.doc('users/' + account.uid);
       const existingSnapshot = await candidateRef.get();
       const existing = existingSnapshot.exists ? existingSnapshot.data() || {} : {};

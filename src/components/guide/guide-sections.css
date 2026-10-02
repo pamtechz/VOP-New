@@ -250,3 +250,87 @@
   .vop-section-study-marker{min-width:62px}
   .vop-section-study-meta{padding-left:72px}
 }
+
+
+/* Learner guide polish ------------------------------------------------------
+ * Keep the study page compact, theme-safe and explicit about assessment
+ * state. These rules also neutralize legacy/global button styles that caused
+ * the Back action to render as a large white rectangle. */
+.vop-guide-page{background:var(--theme-bg)!important;color:var(--theme-text)}
+.vop-guide-hero{background:linear-gradient(135deg,#082e68 0%,#123d76 100%)!important}
+.vop-guide-hero-inner,.vop-guide-content{width:min(100%,980px);max-width:980px!important}
+.vop-guide-back-button{
+  appearance:none!important;border:0!important;background:transparent!important;
+  color:#fff!important;box-shadow:none!important;border-radius:9px!important;
+  min-height:40px;padding:6px 9px!important;
+}
+.vop-guide-back-button:hover{background:rgba(255,255,255,.09)!important;color:#fff!important}
+.vop-guide-module-badge{background:rgba(255,255,255,.08)!important;border-color:rgba(255,255,255,.22)!important}
+.vop-guide-assessment-copy{grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+.vop-guide-assessment-copy>small,.vop-guide-assessment-copy>strong,.vop-guide-assessment-copy>em{grid-column:1}
+.vop-guide-assessment-action{
+  grid-column:2;grid-row:1/4;align-self:center;justify-self:end;
+  padding:6px 9px;border-radius:999px;background:var(--theme-surface);
+  border:1px solid var(--theme-border);color:var(--theme-accent);
+  font-size:9px;font-weight:850;white-space:nowrap;
+}
+.vop-guide-assessment.passed .vop-guide-assessment-action{
+  color:var(--vop-success);border-color:color-mix(in srgb,var(--vop-success) 35%,var(--theme-border));
+}
+.vop-guide-completion-card{
+  display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:13px;
+  margin-top:18px;padding:15px 16px;border:1px solid var(--theme-border);border-radius:15px;
+  background:var(--theme-surface);box-shadow:0 5px 18px rgba(15,43,78,.05);
+}
+.vop-guide-completion-card>svg{color:var(--vop-warning)}
+.vop-guide-completion-card.complete{border-color:color-mix(in srgb,var(--vop-success) 35%,var(--theme-border));background:var(--vop-success-bg)}
+.vop-guide-completion-card.complete>svg{color:var(--vop-success)}
+.vop-guide-completion-card h3{margin:0;color:var(--theme-title);font-size:14px;font-weight:850}
+.vop-guide-completion-card p{margin:3px 0 0;color:var(--theme-muted);font-size:10.5px;line-height:1.45}
+.vop-guide-completion-card button{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:36px;padding:7px 12px;border:1px solid var(--theme-border-strong);
+  border-radius:999px;background:var(--theme-surface);color:var(--theme-accent);
+  font:800 10.5px/1 inherit;cursor:pointer;
+}
+.vop-guide-completion-card button:hover{border-color:var(--theme-accent);background:var(--theme-surface-soft)}
+@media(max-width:640px){
+  .vop-guide-hero{padding-top:13px!important;padding-bottom:20px!important}
+  .vop-guide-content{padding-top:17px!important}
+  .vop-guide-assessment-copy{grid-template-columns:minmax(0,1fr)}
+  .vop-guide-assessment-action{grid-column:1;grid-row:auto;justify-self:start;margin-top:3px}
+  .vop-guide-completion-card{grid-template-columns:34px minmax(0,1fr)}
+  .vop-guide-completion-card button{grid-column:1/-1;width:100%}
+}
+
+/* Retake confirmation ------------------------------------------------------ */
+.vop-retake-summary{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  max-width:460px;margin:0 auto 12px;padding:11px 13px;border:1px solid var(--theme-border);
+  border-radius:12px;background:var(--theme-surface-soft);text-align:left;
+}
+.vop-retake-summary>div{display:grid;gap:2px}
+.vop-retake-summary>div>span{font-size:10px;color:var(--theme-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.vop-retake-summary>div>strong{font-size:17px;color:var(--theme-title)}
+.vop-retake-summary>span{padding:5px 8px;border-radius:999px;font-size:10px;font-weight:850}
+.vop-retake-summary>span.passed{background:var(--vop-success-bg);color:var(--vop-success)}
+.vop-retake-summary>span.attempted{background:var(--vop-warning-bg);color:var(--vop-warning)}
+.vop-retake-warning{
+  display:flex;align-items:flex-start;gap:10px;max-width:520px;margin:0 auto 16px;
+  padding:12px 13px;border:1px solid color-mix(in srgb,var(--vop-warning) 40%,var(--theme-border));
+  border-radius:12px;background:var(--vop-warning-bg);color:var(--theme-text);text-align:left;
+}
+.vop-retake-warning>svg{flex:none;color:var(--vop-warning);margin-top:1px}
+.vop-retake-warning strong{display:block;color:var(--theme-title);font-size:12px}
+.vop-retake-warning p{margin:3px 0 0;color:var(--theme-text);font-size:10.5px;line-height:1.5}
+.vop-retake-confirm{
+  max-width:520px;margin:0 auto;padding:13px;border:1px solid color-mix(in srgb,var(--vop-warning) 45%,var(--theme-border));
+  border-radius:13px;background:var(--theme-surface-soft);text-align:left;
+}
+.vop-retake-confirm>strong{color:var(--theme-title);font-size:13px}
+.vop-retake-confirm>p{margin:4px 0 11px;color:var(--theme-muted);font-size:10.5px;line-height:1.45}
+.vop-retake-confirm>div{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.vop-retake-confirm button{min-height:38px;padding:8px 12px;border-radius:999px;font:800 10.5px/1 inherit;cursor:pointer}
+.vop-retake-cancel{border:1px solid var(--theme-border-strong);background:var(--theme-surface);color:var(--theme-text)}
+.vop-retake-confirm-button{border:1px solid #b45309;background:#b45309;color:#fff}
+.vop-retake-confirm-button:disabled,.vop-retake-cancel:disabled{opacity:.55;cursor:not-allowed}

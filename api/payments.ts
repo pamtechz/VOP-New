@@ -5,7 +5,7 @@ import {
   adminPaymentDetails, adminProviderConfig, adminReconcile, adminRequestRefund,
   configuredPaymentStatuses, createCheckout, deletePayableItem, listPayableItems,
   listPaymentProviders, paymentContext, paymentHistory, paymentStatusForUser,
-  processProviderWebhook, receiptForUser, reconcilePendingPayments, reconcilePendingRefunds,
+  processProviderWebhook, receiptForUser, reconcileExpiredOrganizationSubscriptions, reconcilePendingPayments, reconcilePendingRefunds,
   upsertPayableItem,
 } from '../server/payments/core.js';
 
@@ -69,10 +69,10 @@ export default async function handler(req:Request,res:Response){
       const secret=text(process.env.CRON_SECRET);
       if(!secret||header(req,'authorization')!=='Bearer '+secret)return res.status(401).json({error:'Unauthorized.'});
       const db=getAdminDb();
-      const [payments,refunds]=await Promise.all([
-        reconcilePendingPayments(db,100),reconcilePendingRefunds(db,100),
+      const [payments,refunds,subscriptions]=await Promise.all([
+        reconcilePendingPayments(db,100),reconcilePendingRefunds(db,100),reconcileExpiredOrganizationSubscriptions(db,200),
       ]);
-      return res.status(200).json({ok:true,summary:{payments,refunds}});
+      return res.status(200).json({ok:true,summary:{payments,refunds,subscriptions}});
     }
 
     const body=object(req.body);

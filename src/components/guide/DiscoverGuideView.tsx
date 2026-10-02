@@ -61,6 +61,12 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     lessonIsComplete(guide,lesson,currentUser,threshold)).length;
   const progressPercent=studyLessons.length
     ?Math.round(completedCount*100/studyLessons.length):0;
+  const allGuideAssessmentsPassed=guideAssessments.length===0||guideAssessments.every(item=>{
+    const score=lessonScoreForDisplay(guide,item,currentUser);
+    const configured=Number(item.assessmentPassThreshold);
+    const passMark=Number.isFinite(configured)&&configured>=1&&configured<=100?configured:threshold;
+    return typeof score==='number'&&Number.isFinite(score)&&Number.isFinite(passMark)&&passMark>=1&&passMark<=100&&score>=passMark;
+  });
 
   const attachedAssessments=(lesson:Lesson,type:'lesson'|'chapter'|'section'|'block',anchorId='')=>
     assessments.filter(item=>item.attachedLessonId===lesson.id
@@ -86,7 +92,10 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     const locked=isFinal&&guide.requiresFinalExam===true&&!finalExamReady;
     const score=lessonScoreForDisplay(guide,assessment,currentUser);
     const hasScore=typeof score==='number'&&Number.isFinite(score);
-    const passed=hasScore&&Number.isFinite(threshold)&&threshold>=1&&threshold<=100&&score!>=threshold;
+    const configured=Number(assessment.assessmentPassThreshold);
+    const passMark=Number.isFinite(configured)&&configured>=1&&configured<=100?configured:threshold;
+    const passed=hasScore&&Number.isFinite(passMark)&&passMark>=1&&passMark<=100&&score!>=passMark;
+    const retakeText=isFinal?t('guide.retake_exam','Retake exam'):t('guide.retake_quiz','Retake quiz');
     return <button type="button" key={assessment.id}
       className={'vop-guide-assessment '+(locked?'locked':passed?'passed':hasScore?'attempted':'')}
       onClick={()=>onSelectLesson(assessment)} disabled={locked}
@@ -100,23 +109,24 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         <em>{locked
           ?t('guide.exam_locked','Complete all lessons to unlock')
           :hasScore
-            ?`${isFinal?t('guide.retake_exam','Retake exam'):t('guide.retake_quiz','Retake quiz')} · ${passed?t('guide.passed','Passed'):t('guide.score','Score')} ${Math.round(score!)}%`
+            ?`${passed?t('guide.passed','Passed'):t('guide.score','Previous score')} · ${Math.round(score!)}%`
             :assessment.estimatedMinutes>0?`${assessment.estimatedMinutes} min`:t('guide.ready','Ready')}</em>
+        {!locked&&<span className="vop-guide-assessment-action">{hasScore?retakeText:t('guide.start_assessment','Start assessment')}</span>}
       </span>
-      <ChevronRight size={17}/>
+            <ChevronRight size={17}/>
     </button>;
   };
 
-  return <div className="min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
-    <div className="bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
+  return <div className="vop-guide-page min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
+    <div className="vop-guide-hero bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
       <div className="vop-guide-orb" aria-hidden="true"/>
-      <div className="max-w-4xl mx-auto relative">
+      <div className="vop-guide-hero-inner max-w-4xl mx-auto relative">
         <div className="flex items-center justify-between gap-4 mb-5">
           <button onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
+            className="vop-guide-back-button inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
             <ArrowLeft size={22}/><span className="font-bold text-base sm:text-lg">{t('common.back','Back')}</span>
           </button>
-          <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
+          <span className="vop-guide-module-badge text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
             {t('guide.module_label','Module')} {guide.discoverNumber}
           </span>
         </div>
@@ -155,7 +165,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
       </div>
     </div>
 
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+    <div className="vop-guide-content max-w-4xl mx-auto px-4 sm:px-6 py-6">
       {studyLessons.length===0
         ?<div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
           <BookOpen size={36} className="text-slate-300 mx-auto mb-3"/>
@@ -246,17 +256,16 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         <div>{guideAssessments.map(assessmentCard)}</div>
       </section>}
 
-      {progressPercent===100&&studyLessons.length>0&&<div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-center shadow-lg">
-        <Award size={40} className="mx-auto mb-2 text-amber-300"/>
-        <h3 className="text-lg font-black mb-1">{t('guide.lessons_completed','All lessons completed')}</h3>
-        <p className="text-sm text-emerald-100 mb-4">
-          {guideAssessments.some(item=>item.assessmentKind==='final_exam')&&!certificateEligible
-            ?t('guide.exam_next','Your study lessons are complete. Finish the required assessment steps to become certificate-eligible.')
-            :t('guide.completed_desc',`You have completed all ${studyLessons.length} lessons in this module.`)}
-        </p>
-        {certificateEligible&&<button onClick={onOpenCertificate}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-colors cursor-pointer">
-          <Award size={16}/>{t('certificates.view_your','View Your Certificate')}
+      {progressPercent===100&&studyLessons.length>0&&<div className={'vop-guide-completion-card '+(allGuideAssessmentsPassed?'complete':'study-complete')}>
+        <Award size={30}/>
+        <div>
+          <h3>{allGuideAssessmentsPassed?t('guide.module_completed','Module completed'):t('guide.lessons_completed','Study lessons completed')}</h3>
+          <p>{allGuideAssessmentsPassed
+            ?t('guide.module_completed_desc','All study lessons and required assessments for this module are complete.')
+            :t('guide.exam_next','Your study lessons are complete. Finish the required assessment steps to complete this module.')}</p>
+        </div>
+        {certificateEligible&&<button onClick={onOpenCertificate}>
+          <Award size={16}/>{t('certificates.view_your','View certificate')}
         </button>}
       </div>}
     </div>

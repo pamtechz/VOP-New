@@ -263,13 +263,28 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       return {status,...output};
     }
 
-    const orgA='pay-org-a',orgB='pay-org-b';
-    await db.doc('organizations/'+orgA).set({id:orgA,name:'Payment Org A',status:'active'});
-    await db.doc('organizations/'+orgB).set({id:orgB,name:'Payment Org B',status:'active'});
+    const orgA='pay-org-a',orgB='pay-org-b',orgIntl='pay-org-intl';
+    await db.doc('system/billing').set({
+      baseCurrency:'USD',zambiaCurrency:'ZMW',usdToZmwRate:25,fxSource:'integration-test',
+      fxUpdatedAt:new Date().toISOString(),fxQuoteTtlMinutes:1440,
+    });
+    await db.doc('organizations/'+orgA).set({
+      id:orgA,name:'Payment Org A',status:'active',billingCountry:'Zambia',countryCode:'ZM',
+      billingProfile:{countryCode:'ZM',countryName:'Zambia',billingCurrency:'ZMW',pricingRegion:'zambia'},
+    });
+    await db.doc('organizations/'+orgB).set({
+      id:orgB,name:'Payment Org B',status:'active',billingCountry:'Zambia',countryCode:'ZM',
+      billingProfile:{countryCode:'ZM',countryName:'Zambia',billingCurrency:'ZMW',pricingRegion:'zambia'},
+    });
+    await db.doc('organizations/'+orgIntl).set({
+      id:orgIntl,name:'International Payment Org',status:'active',billingCountry:'United States',countryCode:'US',
+      billingProfile:{countryCode:'US',countryName:'United States',billingCurrency:'USD',pricingRegion:'international'},
+    });
     const admin=await identity('payment-super',{role:'super_admin',membershipRole:''});
     const learner=await identity('payment-learner',{organizationId:orgA,organizationRole:'learner'});
     const organizationOwner=await identity('payment-org-owner',{organizationId:orgA,organizationRole:'owner',membershipRole:'owner'});
     const organizationAdmin=await identity('payment-org-admin',{organizationId:orgA,organizationRole:'admin',membershipRole:'admin'});
+    const internationalOwner=await identity('payment-intl-owner',{organizationId:orgIntl,organizationRole:'owner',membershipRole:'owner'});
     const webhookLearner=await identity('payment-webhook-learner',{organizationId:orgA,organizationRole:'learner'});
     const refundLearner=await identity('payment-refund-learner',{organizationId:orgA,organizationRole:'learner'});
     const mtnLearner=await identity('payment-mtn-learner',{organizationId:orgA,organizationRole:'learner'});
@@ -332,32 +347,43 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.ok(ownerRows.items.every(item=>item.provider===''&&item.providerReference===''&&item.reconciliationStatus===''));
     });
 
-    await t.test('Super Admin subscription packages are auto-published for organization owner consumption',async()=>{
+    await t.test('SaaS subscription packages keep USD canonical pricing and localize Zambia billing',async()=>{
       const created=await planCall(admin,{
         action:'upsertPlan',
         name:'Growth Package',
         description:'Expanded organization capacity',
-        price:99,currency:'ZMW',interval:'month',sortOrder:2,active:true,
-        quotas:{maxUsers:100,maxGuides:50},
+        priceUsd:10,interval:'month',sortOrder:2,active:true,
+        quotas:{maxSeats:100,maxCandidates:80,maxMentors:10,maxGuides:50},
         features:{payments:true,radio:true,curriculum:true},
       });
       assert.equal(created.status,200,JSON.stringify(created));
       const packageId=created.item.id;
       assert.match(packageId,/^growth-package-[a-f0-9]{8}$/);
+      assert.equal(created.item.baseCurrency,'USD');
+      assert.equal(created.item.priceUsd,10);
 
       const payableId='subscription_'+packageId;
       const payable=(await db.doc('payableItems/'+payableId).get()).data();
       assert.equal(payable?.itemType,'organization_subscription');
       assert.equal(payable?.itemId,packageId);
       assert.equal(payable?.scope,'platform');
-      assert.equal(payable?.amountDecimal,'99.00');
+      assert.equal(payable?.currency,'USD');
+      assert.equal(payable?.amountDecimal,'10.00');
+      assert.equal(payable?.repeatable,true);
 
       const learnerCatalog=await call(learner,'catalog',{});
       assert.equal(learnerCatalog.items.some(item=>item.id===payableId),false);
 
       const available=await planCall(organizationOwner,{action:'listAvailablePlans'});
       assert.equal(available.status,200,JSON.stringify(available));
-      assert.ok(available.items.some(item=>item.id===packageId));
+      const availablePlan=available.items.find(item=>item.id===packageId);
+      assert.ok(availablePlan);
+      assert.equal(availablePlan.baseCurrency,'USD');
+      assert.equal(availablePlan.priceUsd,10);
+      assert.equal(availablePlan.billingCurrency,'ZMW');
+      assert.equal(availablePlan.billingPrice,'250.00');
+      assert.equal(availablePlan.exchangeRate,25);
+
       const blockedFullCatalog=await planCall(organizationOwner,{action:'listPlans'});
       assert.equal(blockedFullCatalog.status,403,JSON.stringify(blockedFullCatalog));
 
@@ -365,12 +391,24 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const offer=ownerCatalog.items.find(item=>item.id===payableId);
       assert.ok(offer,JSON.stringify(ownerCatalog));
       assert.equal(Object.hasOwn(offer,'allowedProviders'),false);
+      assert.equal(offer.currency,'ZMW');
+      assert.equal(offer.amountDecimal,'250.00');
+      assert.equal(offer.pricing.baseCurrency,'USD');
+      assert.equal(offer.pricing.baseAmountDecimal,'10.00');
+      assert.equal(offer.pricing.exchangeRate,25);
       assert.ok(offer.allowedMethods.includes('card'));
 
       const started=await call(organizationOwner,'checkout',{payableItemId:payableId,paymentMethod:'card'});
       assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.payment.currency,'ZMW');
+      assert.equal(started.payment.amountDecimal,'250.00');
       assert.equal(started.payment.provider,'');
       assert.equal(started.payment.providerReference,'');
+      const storedPayment=(await db.doc('paymentTransactions/'+started.payment.id).get()).data();
+      assert.equal(storedPayment?.itemSnapshot?.pricing?.baseCurrency,'USD');
+      assert.equal(storedPayment?.itemSnapshot?.pricing?.baseAmountDecimal,'10.00');
+      assert.equal(storedPayment?.itemSnapshot?.pricing?.exchangeRate,25);
+
       const verified=await call(organizationOwner,'verify',{reference:started.payment.reference});
       assert.equal(verified.status,200,JSON.stringify(verified));
       assert.equal(verified.payment.status,'paid');
@@ -380,12 +418,35 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(subscription?.planId,packageId);
       assert.equal(subscription?.activationSource,'payment');
       assert.equal(subscription?.lastPaymentId,started.payment.id);
+      assert.equal(subscription?.baseCurrency,'USD');
+      assert.equal(subscription?.baseAmountDecimal,'10.00');
+      assert.equal(subscription?.billingCurrency,'ZMW');
+      assert.equal(subscription?.paidAmountDecimal,'250.00');
+      assert.equal(subscription?.exchangeRate,25);
       const organization=(await db.doc('organizations/'+orgA).get()).data();
       assert.equal(organization?.plan,packageId);
+      assert.equal(organization?.quotas?.maxSeats,100);
       assert.equal(organization?.featureEntitlements?.radio,true);
 
       const adminCatalog=await call(organizationAdmin,'catalog',{});
       assert.ok(adminCatalog.items.some(item=>item.id===payableId));
+
+      const internationalPlans=await planCall(internationalOwner,{action:'listAvailablePlans'});
+      const internationalPlan=internationalPlans.items.find(item=>item.id===packageId);
+      assert.ok(internationalPlan);
+      assert.equal(internationalPlan.billingCurrency,'USD');
+      assert.equal(internationalPlan.billingPrice,'10.00');
+      assert.equal(internationalPlan.exchangeRate,1);
+
+      const internationalCatalog=await call(internationalOwner,'catalog',{});
+      const internationalOffer=internationalCatalog.items.find(item=>item.id===payableId);
+      assert.ok(internationalOffer,JSON.stringify(internationalCatalog));
+      assert.equal(internationalOffer.currency,'USD');
+      assert.equal(internationalOffer.amountDecimal,'10.00');
+      assert.deepEqual(internationalOffer.allowedMethods,['card']);
+      const mobileMoneyBlocked=await call(internationalOwner,'checkout',{payableItemId:payableId,paymentMethod:'airtel_money',phone:'0977000000'});
+      assert.equal(mobileMoneyBlocked.status,400,JSON.stringify(mobileMoneyBlocked));
+      assert.match(String(mobileMoneyBlocked.error||''),/USD by card|payment method/i);
     });
 
     await t.test('duplicate checkout is idempotent and client amount is never authoritative',async()=>{

@@ -12,6 +12,21 @@ import {
 import type { TenantContext } from './tenant.js';
 import { decidePermission } from '../shared/authorization.js';
 
+const SUBSCRIPTION_MUTATION_RESOURCES=new Set<PermissionResource>([
+  'curriculum','lessons','quizzes','materials','radio','announcements','prayer',
+  'mentoring','portfolio','scripture','duels','certificates','translations',
+]);
+const READ_ACTIONS=new Set<PermissionAction>(['view','read']);
+
+async function subscriptionBlocksMutation(
+  ctx:TenantContext,resource:PermissionResource,action:PermissionAction,
+){
+  if(ctx.isSuperAdmin||ctx.tenantType!=='organization'||!ctx.organizationId)return false;
+  if(READ_ACTIONS.has(action)||!SUBSCRIPTION_MUTATION_RESOURCES.has(resource))return false;
+  const organization=await ctx.db.doc('organizations/'+ctx.organizationId).get();
+  return organization.exists&&organization.data()?.billingAccessSuspended===true;
+}
+
 export async function loadPermissionMatrix(ctx: TenantContext): Promise<PermissionMatrix> {
   const snapshot = await ctx.db.doc('system/permissions').get();
   return normalizePermissionMatrix(snapshot.exists ? snapshot.data()?.matrix : DEFAULT_PERMISSION_MATRIX);
@@ -26,6 +41,7 @@ export async function canPermission(
   // Payable-item administration is a platform finance control. Never allow an
   // organization/hierarchy role to recover it through a legacy/custom matrix.
   if (resource === 'payable_items') return false;
+  if(await subscriptionBlocksMutation(ctx,resource,action))return false;
   const matrix = await loadPermissionMatrix(ctx);
   const role = roleForPermission({
     role: ctx.profile.role,
@@ -46,6 +62,9 @@ export async function requirePermission(
   resource: PermissionResource,
   action: PermissionAction,
 ) {
+  if(await subscriptionBlocksMutation(ctx,resource,action)){
+    throw new Error('This organization subscription is inactive. Renew or activate a subscription package to make changes.');
+  }
   if (!(await canPermission(ctx, resource, action))) {
     throw new Error('You do not have permission to perform this action.');
   }

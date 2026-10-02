@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { initializeApp, getApps, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createServer } from 'vite';
+import { createHash } from 'node:crypto';
 
 test('study progress: server grades and guide paths stay within authorized tenants', async t => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator required; never run against production.');
@@ -50,11 +51,11 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.ok(output && typeof output==='object','Study API must return JSON');
       return {status,...output};
     }
-    async function startQuiz(user){
-      return api(user,{action:'startQuiz',language:'en',guideId,lessonId:testId});
+    async function startQuiz(user,{confirmRetake=false}={}){
+      return api(user,{action:'startQuiz',language:'en',guideId,lessonId:testId,confirmRetake});
     }
-    async function submitStarted(user,answers){
-      const started=await startQuiz(user);
+    async function submitStarted(user,answers,{confirmRetake=false}={}){
+      const started=await startQuiz(user,{confirmRetake});
       if(started.status!==200)return started;
       return api(user,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,
@@ -142,7 +143,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(first.passed,false);
       assert.equal(first.retakePolicy.attemptsUsed,1);
       assert.equal(first.retakePolicy.remainingAttempts,1);
-      const second=await submitStarted(retakeLearner,{0:1});
+      const second=await submitStarted(retakeLearner,{0:1},{confirmRetake:true});
       assert.equal(second.status,200,JSON.stringify(second));
       assert.equal(second.passed,true);
       assert.equal(second.retakePolicy.attemptsUsed,2);
@@ -169,7 +170,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
       },{merge:true});
     });
 
-    await t.test('passed and failed quizzes remain retakeable when no attempt limit is configured',async()=>{
+    await t.test('passed retake requires confirmation, revokes prior credit, and replaces it with the new result',async()=>{
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
       },{merge:true});
@@ -180,17 +181,64 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(passed.retakePolicy.maxAttempts,null);
       assert.equal(passed.retakePolicy.remainingAttempts,null);
       assert.equal(passed.retakePolicy.retryAt,null);
+      const scoreKey=orgA+':en:'+guideId+':'+testId;
+      assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],100);
+      const graduationId='grad-'+createHash('sha256').update(orgA+':'+passedRetakeLearner.uid+':'+guideId).digest('hex').slice(0,48);
+      await db.doc('graduationRequests/'+graduationId).set({
+        candidateId:passedRetakeLearner.uid,organizationId:orgA,guideId,
+        status:'pending_organization',revision:1,decisions:[],
+      });
+      await db.doc('users/'+passedRetakeLearner.uid).set({information:{graduating:true,graduated:false}},{merge:true});
 
-      const failedRetake=await submitStarted(passedRetakeLearner,{0:0});
+      // A normal click must not destroy a passed mark. The server requires
+      // explicit destructive-retake confirmation and leaves the score intact.
+      const warning=await startQuiz(passedRetakeLearner);
+      assert.equal(warning.status,409,JSON.stringify(warning));
+      assert.equal(warning.code,'ASSESSMENT_RETAKE_CONFIRMATION');
+      assert.match(String(warning.error||''),/current score of 100%|credit will be revoked/i);
+      assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],100);
+      assert.equal((await db.doc('graduationRequests/'+graduationId).get()).data()?.status,'pending_organization');
+
+      // The lesson's cached/public question payload may be stale or missing.
+      // A confirmed retake must refresh from the authoritative private bank
+      // without exposing its answer key to the learner.
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({questions:[]});
+      const retakeStart=await startQuiz(passedRetakeLearner,{confirmRetake:true});
+      assert.equal(retakeStart.status,200,JSON.stringify(retakeStart));
+      assert.equal(retakeStart.previousScore,100);
+      assert.equal(retakeStart.previousScoreRevoked,true);
+      assert.equal(retakeStart.questions.length,1);
+      assert.equal(retakeStart.questions[0].question,'What is the answer?');
+      assert.deepEqual(retakeStart.questions[0].options,['Wrong','Right']);
+      assert.equal(Object.hasOwn(retakeStart.questions[0],'correctOptionIndex'),false);
+      assert.equal(Object.hasOwn(retakeStart.questions[0],'answer'),false);
+      assert.equal(Object.hasOwn(retakeStart.questions[0],'explanation'),false);
+      const revokedProfile=(await db.doc('users/'+passedRetakeLearner.uid).get()).data();
+      assert.equal(revokedProfile?.progress?.guideScores?.[scoreKey],undefined);
+      assert.equal(revokedProfile?.information?.graduating,false);
+      const revokedReview=(await db.doc('graduationRequests/'+graduationId).get()).data();
+      assert.equal(revokedReview?.status,'rejected');
+      assert.equal(revokedReview?.rejectionReason,'assessment_retake');
+      assert.equal(revokedReview?.supersededBySessionId,retakeStart.sessionId);
+
+      const priorAttempts=await db.collection('users/'+passedRetakeLearner.uid+'/assessmentAttempts').where('lessonId','==',testId).get();
+      assert.ok(priorAttempts.docs.some(doc=>doc.data()?.creditStatus==='revoked_for_retake'));
+
+      const failedRetake=await api(passedRetakeLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:retakeStart.sessionId,answers:{0:0},
+      });
       assert.equal(failedRetake.status,200,JSON.stringify(failedRetake));
       assert.equal(failedRetake.passed,false);
       assert.equal(failedRetake.retakePolicy.attemptsUsed,2);
-      assert.equal(failedRetake.retakePolicy.remainingAttempts,null);
+      assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],0);
 
-      const third=await submitStarted(passedRetakeLearner,{0:1});
+      const third=await submitStarted(passedRetakeLearner,{0:1},{confirmRetake:true});
       assert.equal(third.status,200,JSON.stringify(third));
       assert.equal(third.retakePolicy.attemptsUsed,3);
+      assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],100);
       assert.equal((await db.collection('users/'+passedRetakeLearner.uid+'/assessmentAttempts').get()).size,3);
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({questions:publicQuestions});
     });
 
     await t.test('submission requires a server-started single-use attempt session',async()=>{
@@ -200,7 +248,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(direct.status,409,JSON.stringify(direct));
       assert.match(String(direct.error||''),/start|instructions/i);
 
-      const started=await startQuiz(learner);
+      const started=await startQuiz(learner,{confirmRetake:true});
       assert.equal(started.status,200,JSON.stringify(started));
       const accepted=await api(learner,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
@@ -221,7 +269,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
         assessmentTimeLimitMinutes:10,
         assessmentFeedbackMode:'none',
       });
-      const started=await startQuiz(learner);
+      const started=await startQuiz(learner,{confirmRetake:true});
       assert.equal(started.status,200,JSON.stringify(started));
       assert.equal(started.assessmentPolicy.threshold,75);
       assert.equal(started.assessmentPolicy.maxAttempts,4);
@@ -246,7 +294,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
 
     await t.test('expired timed attempt is rejected by the server',async()=>{
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({assessmentTimeLimitMinutes:5});
-      const started=await startQuiz(learner);
+      const started=await startQuiz(learner,{confirmRetake:true});
       assert.equal(started.status,200,JSON.stringify(started));
       await db.doc('users/'+learner.uid+'/assessmentSessions/'+started.sessionId).update({
         expiresAt:new Date(Date.now()-60_000).toISOString(),
@@ -299,14 +347,18 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('organizations/'+orgA+'/members/'+learner.uid).update({active:true});
     });
 
-    await t.test('quiz-bank path mismatch fails without changing an existing mark',async()=>{
+    await t.test('quiz-bank path mismatch fails before revoking an existing mark',async()=>{
+      const profileBeforeMismatch=(await db.doc('users/'+learner.uid).get()).data()||{};
+      const progressBeforeMismatch=profileBeforeMismatch.progress&&typeof profileBeforeMismatch.progress==='object'
+        ?profileBeforeMismatch.progress:{};
+      const scoreKey=orgA+':en:'+guideId+':'+testId;
+      await db.doc('users/'+learner.uid).set({
+        progress:{...progressBeforeMismatch,guideScores:{...(progressBeforeMismatch.guideScores||{}),[scoreKey]:100}},
+      },{merge:true});
       await db.doc('quizzes/'+quizId).update({assessmentPath:'guides/another/lessons/quiz-'+quizId});
-      const started=await startQuiz(learner);
-      assert.equal(started.status,200,JSON.stringify(started));
-      const response=await api(learner,{
-        action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:0},
-      });
+      const response=await startQuiz(learner,{confirmRetake:true});
       assert.equal(response.status,409,JSON.stringify(response));
+      assert.match(String(response.error||''),/not available|assessment/i);
       const profile=(await db.doc('users/'+learner.uid).get()).data();
       assert.equal(profile.progress.guideScores[orgA+':en:'+guideId+':'+testId],100);
     });

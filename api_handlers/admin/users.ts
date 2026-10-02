@@ -1,7 +1,7 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore, type DocumentSnapshot } from 'firebase-admin/firestore';
-import { authenticateTenant, enforceQuota } from '../../server/tenant.js';
+import { authenticateTenant, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
@@ -426,7 +426,10 @@ export default async function handler(request: Request, response: Response) {
         throw new Error('Only an organization owner or administrator can create organization administrators.');
       }
 
-      if (managedOrganizationId && tenantOrganizationId) await enforceQuota(tenant, 'users', 'maxUsers');
+      if (managedOrganizationId) {
+        const seatRole=type==='admin'?'admin':type==='mentor'?'mentor':type==='teacher'?'teacher':'learner';
+        await enforceOrganizationMembershipQuotas(tenant,managedOrganizationId,seatRole);
+      }
       const created = await authService.createUser({
         email,
         displayName,
@@ -485,6 +488,7 @@ export default async function handler(request: Request, response: Response) {
       if (!targetProfile.exists) throw new Error('The selected user account does not exist.');
       const existingData = targetProfile.data() || {};
       const previousOrganizationId = String(existingData.organizationId || '').trim();
+      await enforceOrganizationMembershipQuotas(tenant,targetOrganizationId,memberRole,uid);
       const now = new Date().toISOString();
       await db.runTransaction(async transaction => {
         if (previousOrganizationId && previousOrganizationId !== targetOrganizationId) {
@@ -615,6 +619,10 @@ export default async function handler(request: Request, response: Response) {
               ? { role: 'mentor' }
               : { role: 'student' };
       const membershipOrganizationId = effectiveOrganizationId;
+      const nextMembershipRole=type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner';
+      if(membershipOrganizationId&&profile.organizationRole){
+        await enforceOrganizationMembershipQuotas(tenant,membershipOrganizationId,nextMembershipRole,uid);
+      }
       const previousOrganizationId = String(existingData.organizationId || '').trim();
       if ((hierarchyReassignment || platformReassignment || organizationReassignment)
         && previousOrganizationId && previousOrganizationId !== membershipOrganizationId) {
@@ -625,7 +633,7 @@ export default async function handler(request: Request, response: Response) {
       if (membershipOrganizationId && profile.organizationRole) {
         await db.doc(`organizations/${membershipOrganizationId}/members/${uid}`).set({
           uid, organizationId:membershipOrganizationId,
-          role:type === 'admin' ? 'admin' : type === 'mentor' ? 'mentor' : type === 'teacher' ? 'teacher' : 'learner',
+          role:nextMembershipRole,
           active:true, updatedAt:new Date().toISOString(),
         }, {merge:true});
       }

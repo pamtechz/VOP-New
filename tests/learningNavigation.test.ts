@@ -64,10 +64,13 @@ test('lesson reader, grading and offline completion follow each guide language',
   assert.ok(app.includes('submitQuizAnswers(activeGuide.id, activeLesson.id, answers, activeGuide.language,sessionId)'));
   const quizModal=source('src/components/quiz/QuizModal.tsx');
   const localStudy=source('src/services/localStudy.ts');
-  assert.match(quizModal,/beginQuizAttempt\(guide\.id,lesson\.id,guide\.language\)/);
+  assert.match(quizModal,/beginQuizAttempt\(guide\.id,lesson\.id,guide\.language,confirmRetake\)/);
   assert.match(localStudy,/action:'startQuiz'/);
   assert.match(localStudy,/sessionId/);
   assert.match(quizModal,/attemptStartLock/);
+  assert.match(quizModal,/previousScore/);
+  assert.match(quizModal,/Revoke result/);
+  assert.match(localStudy,/confirmRetake/);
   assert.ok(study.includes('uid:firebaseUser.uid, language, guideId, lessonId'));
   assert.ok(app.includes('${guide.language}:${guide.id}:${lesson.id}'));
   assert.match(app,/openStudyItem\(activeGuide,lesson/);

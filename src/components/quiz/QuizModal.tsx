@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
-import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
+import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
 import { beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
@@ -18,13 +18,16 @@ interface QuizModalProps {
   maxAttempts?: number;
   retakeCooldownMinutes?: number;
   previouslyAttempted?: boolean;
+  previousScore?: number;
+  onAttemptStarted?: () => void | Promise<void>;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
   lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false, passThreshold,
-  maxAttempts = 0, retakeCooldownMinutes = 0, previouslyAttempted = false,
+  maxAttempts = 0, retakeCooldownMinutes = 0, previouslyAttempted = false, previousScore, onAttemptStarted,
 }) => {
-  const questions = lesson.questions ?? [];
+  const previewQuestions = lesson.questions ?? [];
+  const [questions,setQuestions]=useState(previewQuestions);
   const previewThreshold = Number(lesson.assessmentPassThreshold || 0) || passThreshold;
   const [attempt,setAttempt]=useState<AssessmentPolicyResult|null>(null);
   const threshold=attempt?.assessmentPolicy.threshold||previewThreshold;
@@ -33,7 +36,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const previewCooldown=Number(lesson.assessmentRetakeCooldownMinutes||0)||retakeCooldownMinutes;
   const previewTimeLimit=Math.max(0,Math.trunc(Number(lesson.assessmentTimeLimitMinutes||0)));
   const [remainingSeconds,setRemainingSeconds]=useState<number|null>(null);
+  const previewQuizValid = isPlayableQuizConfigured(previewQuestions);
   const validQuiz = isPlayableQuizConfigured(questions);
+  const canStartFromServer = Boolean(lesson.sourceQuizId) || previewQuizValid;
+  const secureQuestionRefresh = Boolean(lesson.sourceQuizId) && !previewQuizValid;
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
@@ -44,12 +50,14 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [hasAttempted,setHasAttempted]=useState(previouslyAttempted);
   const [attemptBlocked,setAttemptBlocked]=useState(false);
+  const [confirmingRetake,setConfirmingRetake]=useState(false);
   const attemptStartLock=useRef(false);
   const question = questions[index];
   const remainingAttempts=submission?.retakePolicy.remainingAttempts;
   const retakeAllowed=remainingAttempts!==0;
 
   useEffect(()=>{if(previouslyAttempted)setHasAttempted(true)},[previouslyAttempted]);
+  useEffect(()=>{setQuestions(previewQuestions)},[lesson.id]);
 
   useEffect(()=>{
     const expiresAt=attempt?.expiresAt;
@@ -113,15 +121,22 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     if (!retakeReady || submission?.retakePolicy.remainingAttempts === 0) return;
     setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setStage('intro');
   };
-  const startAttempt=async()=>{
+  const startAttempt=async(confirmRetake=false)=>{
     // React state updates are asynchronous; a fast double-click can otherwise
     // dispatch two startQuiz requests before the button re-renders disabled.
-    if(attemptStartLock.current||!validQuiz||!validThreshold||submitting||attemptBlocked)return;
+    if(attemptStartLock.current||!canStartFromServer||!validThreshold||submitting||attemptBlocked)return;
     attemptStartLock.current=true;
     setSubmitting(true);setError('');
     try{
-      const started=await beginQuizAttempt(guide.id,lesson.id,guide.language);
+      const started=await beginQuizAttempt(guide.id,lesson.id,guide.language,confirmRetake);
+      if(!isPlayableQuizConfigured(started.questions)){
+        setError('The server could not provide a valid published question set. Ask the course administrator to republish this assessment.');
+        return;
+      }
+      setQuestions(started.questions);
       setAttempt(started);
+      setConfirmingRetake(false);
+      if(started.previousScoreRevoked&&onAttemptStarted)await onAttemptStarted();
       setStage('quiz');
     }catch(reason){
       const message=reason instanceof Error?reason.message:'The assessment could not be started.';
@@ -132,8 +147,19 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setSubmitting(false);
     }
   };
+  const requestStart=()=>{
+    if(hasAttempted){
+      setConfirmingRetake(true);
+      setError('');
+      return;
+    }
+    void startAttempt(false);
+  };
   const assessmentLabel=lesson.assessmentKind==='final_exam'
     ?'Final examination':lesson.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice assessment';
+  const retakeLabel=lesson.assessmentKind==='final_exam'?'Retake exam':'Retake quiz';
+  const knownPreviousScore=Number.isFinite(Number(previousScore))?Number(previousScore):null;
+  const previousPassed=knownPreviousScore!==null&&validThreshold&&knownPreviousScore>=threshold;
   const instructions=lesson.assessmentInstructions?.trim()
     ||'Answer every question before submitting. Your attempt is recorded when you select Begin Test below.';
 
@@ -245,8 +271,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               {instructions}
             </p>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-              This {assessmentLabel.toLowerCase()} has{' '}
-              <strong style={{ color: 'var(--text-primary)' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.
+              {secureQuestionRefresh
+                ?<>Questions are refreshed securely when the attempt starts.</>
+                :<>This {assessmentLabel.toLowerCase()} has{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.</>}
               {' '}Pass mark:{' '}
               <strong style={{ color: '#0f172a' }}>
                 {validThreshold ? `${threshold}%` : 'Not configured'}
@@ -267,8 +295,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 background: '#f0f9ff', border: '1px solid #bae6fd',
                 textAlign: 'center',
               }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0284c7' }}>{questions.length}</div>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Questions</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0284c7' }}>{secureQuestionRefresh?'—':questions.length}</div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>{secureQuestionRefresh?'Loaded at start':'Questions'}</div>
               </div>
               <div style={{
                 padding: '0.85rem', borderRadius: '1rem',
@@ -282,15 +310,25 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               </div>
             </div>
 
-            {!validQuiz && (
+            {!canStartFromServer && (
               <div role="alert" style={{
                 padding: '0.85rem 1rem', borderRadius: '0.75rem',
-                background: '#fef2f2', border: '1px solid #fecaca',
-                color: '#991b1b', fontSize: '0.85rem', marginBottom: '1rem',
+                background: 'var(--vop-danger-bg,#fef2f2)', border: '1px solid color-mix(in srgb,var(--vop-danger,#dc2626) 30%,var(--theme-border))',
+                color: 'var(--vop-danger,#b42318)', fontSize: '0.85rem', marginBottom: '1rem',
               }}>
-                This assessment has missing or invalid questions. An administrator must complete it before it can be taken.
+                This assessment has no usable published questions. Ask the course administrator to republish it.
               </div>
             )}
+            {hasAttempted&&<div className="vop-retake-summary">
+              <div><span>Current recorded result</span><strong>{knownPreviousScore!==null?`${Math.round(knownPreviousScore)}%`:'Previous attempt'}</strong></div>
+              <span className={previousPassed?'passed':'attempted'}>{knownPreviousScore!==null?(previousPassed?'Passed':'Recorded'):'Attempted'}</span>
+            </div>}
+            {hasAttempted&&<div className="vop-retake-warning" role="note">
+              <AlertTriangle size={19}/>
+              <div><strong>Retake replaces the current assessment credit</strong>
+                <p>When you start the retake, the previous score{knownPreviousScore!==null?` of ${Math.round(knownPreviousScore)}%`:''} and all credit earned from this assessment are revoked immediately. The new attempt becomes the authoritative result. If you leave after starting, the previous credit is not restored automatically.</p>
+              </div>
+            </div>}
             {!validThreshold && (
               <div role="alert" style={{
                 padding: '0.85rem 1rem', borderRadius: '0.75rem',
@@ -301,25 +339,34 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               </div>
             )}
 
-            <button
+            {confirmingRetake?<div className="vop-retake-confirm">
+              <strong>Confirm retake</strong>
+              <p>This action revokes the current score and assessment credit before the new attempt opens.</p>
+              <div>
+                <button type="button" className="vop-retake-cancel" disabled={submitting} onClick={()=>setConfirmingRetake(false)}>Keep current result</button>
+                <button type="button" className="vop-retake-confirm-button" disabled={submitting||!canStartFromServer||!validThreshold||attemptBlocked} onClick={()=>void startAttempt(true)}>
+                  {submitting?'Starting retake…':`Revoke result & ${retakeLabel.toLowerCase()}`}
+                </button>
+              </div>
+            </div>:<button
               type="button"
-              disabled={!validQuiz || !validThreshold || attemptBlocked}
-              onClick={() => void startAttempt()}
+              disabled={!canStartFromServer || !validThreshold || attemptBlocked}
+              onClick={requestStart}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.85rem 2rem',
-                background: !validQuiz || !validThreshold || attemptBlocked ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
-                color: !validQuiz || !validThreshold || attemptBlocked ? 'var(--text-muted)' : '#fff',
+                background: !canStartFromServer || !validThreshold || attemptBlocked ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #002d72, #1d4ed8)',
+                color: !canStartFromServer || !validThreshold || attemptBlocked ? 'var(--text-muted)' : '#fff',
                 border: 'none', borderRadius: '9999px',
                 fontWeight: 800, fontSize: '0.9rem',
-                cursor: !validQuiz || !validThreshold || attemptBlocked ? 'not-allowed' : 'pointer',
-                boxShadow: !validQuiz || !validThreshold || attemptBlocked ? 'none' : '0 4px 14px rgba(0,45,114,0.35)',
+                cursor: !canStartFromServer || !validThreshold || attemptBlocked ? 'not-allowed' : 'pointer',
+                boxShadow: !canStartFromServer || !validThreshold || attemptBlocked ? 'none' : '0 4px 14px rgba(0,45,114,0.35)',
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?'Starting…':attemptBlocked?'Attempt unavailable':hasAttempted?'Retake Quiz':'Begin Test'}
+              {submitting?'Starting…':attemptBlocked?'Attempt unavailable':hasAttempted?retakeLabel:'Begin assessment'}
               <ChevronRight size={18} />
-            </button>
+            </button>}
           </div>
         )}
 
@@ -504,7 +551,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                   opacity: !retakeReady || !retakeAllowed ? 0.55 : 1,
                 }}
               >
-                <RotateCcw size={16} /> {!retakeAllowed ? 'Attempt Limit Reached' : retakeReady ? 'Retake Quiz' : 'Retake Waiting Period'}
+                <RotateCcw size={16} /> {!retakeAllowed ? 'Attempt Limit Reached' : retakeReady ? retakeLabel : 'Retake Waiting Period'}
               </button>
 
               {submission.feedbackMode!=='none' && score!==null && Number(score)>=threshold && hasNextLesson && onContinue && (

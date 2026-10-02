@@ -125,9 +125,16 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(modal,/instructions/);
   assert.match(modal,/remainingSeconds/);
   assert.match(modal,/previouslyAttempted/);
-  assert.match(modal,/Retake Quiz/);
+  assert.match(modal,/previousScore/);
+  assert.match(modal,/Retake quiz/);
+  assert.match(modal,/Retake exam/);
   assert.match(modal,/Retake Waiting Period/);
+  assert.match(modal,/Retake replaces the current assessment credit/);
+  assert.match(modal,/Revoke result/);
   assert.match(modal,/attemptStartLock/);
+  assert.match(study,/ASSESSMENT_RETAKE_CONFIRMATION/);
+  assert.match(study,/creditStatus:'revoked_for_retake'/);
+  assert.match(study,/questions:attemptQuestions/);
   assert.match(study,/platformSettingsSnap/);
   assert.match(study,/settingsData=\{\.\.\.platformSettings,\.\.\.scopedSettings\}/);
   assert.match(study,/maxAttempts>0&&priorAttempts>=policy\.maxAttempts/);

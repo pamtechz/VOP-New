@@ -1,14 +1,15 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceQuota } from '../../server/tenant.js';
+import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceOrganizationMembershipQuotas, organizationUsageSnapshot } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { createNotification } from '../../server/notifications.js';
+import { normalizedBillingCountryName, organizationBillingProfile } from '../../server/billing.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 function id(value: unknown) { const v = String(value || '').trim(); if (!/^[a-zA-Z0-9_-]{2,80}$/.test(v)) throw new Error('A valid organization identifier is required.'); return v; }
-const QUOTA_KEYS = ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials'] as const;
+const QUOTA_KEYS = ['maxSeats','maxCandidates','maxMentors','maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials'] as const;
 function normalizeQuotas(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid usage limits.');
   const input = value as Record<string, unknown>;
@@ -151,11 +152,18 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can create organizations.');
       const name = String(body.name || '').trim();
       const organizationId = id(body.id || slug(name));
+      const billingCountry=normalizedBillingCountryName(body.billingCountry||'Zambia');
+      const billingProfile=organizationBillingProfile({billingCountry});
       const ref = bootstrapDb.doc(`organizations/${organizationId}`);
       if ((await ref.get()).exists) throw new Error('That organization already exists.');
       const now = new Date().toISOString();
-      await ref.set({ id: organizationId, name, slug: slug(name), status: 'active', ownerUid: '', createdAt: now, updatedAt: now });
-      return res.status(200).json({ ok: true, item: { id: organizationId, name, status: 'active' } });
+      await ref.set({
+        id:organizationId,name,slug:slug(name),status:'active',ownerUid:'',
+        billingCountry,countryCode:billingProfile.countryCode,billingProfile,
+        plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
+        createdAt:now,updatedAt:now,
+      });
+      return res.status(200).json({ ok:true,item:{id:organizationId,name,status:'active',billingCountry,countryCode:billingProfile.countryCode,billingProfile} });
     }
     if (action === 'acceptInvite') {
       const token = String(body.token || '').trim();
@@ -167,6 +175,13 @@ export default async function handler(req: Request, res: Response) {
       let organizationId = '';
       let role = 'learner';
       let invitedBy = '';
+
+      const invitePreflight=await inviteRef.get();
+      if(!invitePreflight.exists)throw new Error('This invitation is not valid.');
+      const invitePreflightData=invitePreflight.data()||{};
+      const preflightOrganizationId=String(invitePreflightData.organizationId||'').trim();
+      const preflightRole=String(invitePreflightData.role||'learner');
+      if(preflightOrganizationId)await enforceOrganizationMembershipQuotas(ctx,preflightOrganizationId,preflightRole,ctx.auth.uid);
 
       // Read and consume the invitation in the same transaction so the same
       // invitation cannot be accepted concurrently by two browser sessions.
@@ -417,7 +432,7 @@ export default async function handler(req: Request, res: Response) {
         const items = await Promise.all(snap.docs.filter(doc => organizationInHierarchy(doc.data() || {}, role, nodeId) || inferredOrganizationIds.has(doc.id)).map(async organization => {
           const data = organization.data() || {};
           const members = await organization.ref.collection('members').where('active','==',true).get();
-          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
+          return { id:organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id), status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'), quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size };
         }));
         return res.status(200).json({ok:true,items:items.filter(item => item.status === 'active')});
       }
@@ -429,7 +444,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(200).json({ ok:true, items:[{
           id: organization.id, name:String(data.name || organization.id), slug:String(data.slug || organization.id),
           status:String(data.status || 'active'), ownerUid:String(data.ownerUid || ''), plan:String(data.plan || 'standard'),
-          quotas:data.quotas || {}, createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
+          quotas:data.quotas || {}, billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')), countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'), billingProfile:data.billingProfile||organizationBillingProfile(data), createdAt:String(data.createdAt || ''), updatedAt:String(data.updatedAt || ''), memberCount:members.size
         }]});
       }
       const snap = await bootstrapDb.collection('organizations').orderBy('name').get();
@@ -444,6 +459,9 @@ export default async function handler(req: Request, res: Response) {
           ownerUid: String(data.ownerUid || ''),
           plan: String(data.plan || 'standard'),
           quotas: data.quotas || {},
+          billingCountry:String(data.billingCountry||data.billingProfile?.countryName||(String(data.countryCode||'ZM')==='ZM'?'Zambia':'International')),
+          countryCode:String(data.countryCode||data.billingProfile?.countryCode||'ZM'),
+          billingProfile:data.billingProfile||organizationBillingProfile(data),
           createdAt: String(data.createdAt || ''),
           updatedAt: String(data.updatedAt || ''),
           memberCount: members.size,
@@ -465,22 +483,23 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'getUsage') {
-      const orgId = managedOrganizationId;
-      const count = async (collection: string) => (await ctx.db.collection(collection).where('organizationId','==',orgId).get()).size;
-      const [members, guides, quizzes, announcements, radio, books] = await Promise.all([
-        ctx.db.collection(`organizations/${orgId}/members`).where('active','==',true).get(),
-        count('guides'), count('quizzes'), count('announcements'), count('radioBroadcasts'), count('books'),
-      ]);
-      return res.status(200).json({ ok:true, usage:{ members:members.size, guides, quizzes, announcements, radio, books } });
+      const usage=await organizationUsageSnapshot(ctx.db,managedOrganizationId);
+      return res.status(200).json({ok:true,usage});
     }
 
     if (action === 'update') {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       if (!ctx.isSuperAdmin && data.plan !== undefined) throw new Error('Only the VOP Super Admin can change organization plans.');
+      if (!ctx.isSuperAdmin && data.billingCountry !== undefined) throw new Error('Only the VOP Super Admin can change an organization billing country.');
+      const nextBillingCountry=data.billingCountry!==undefined?normalizedBillingCountryName(data.billingCountry):undefined;
+      const nextBillingProfile=nextBillingCountry?organizationBillingProfile({billingCountry:nextBillingCountry}):undefined;
       const allowed: Record<string, unknown> = {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
         plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
+        billingCountry:nextBillingCountry,
+        countryCode:nextBillingProfile?.countryCode,
+        billingProfile:nextBillingProfile,
         quotas: ctx.isSuperAdmin && data.quotas !== undefined ? normalizeQuotas(data.quotas) : undefined,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
         updatedAt: FieldValue.serverTimestamp(),
@@ -491,7 +510,7 @@ export default async function handler(req: Request, res: Response) {
       if (allowed.quotas !== undefined) {
         const raw = allowed.quotas as Record<string, unknown>;
         const normalized: Record<string, number> = {};
-        for (const key of ['maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials']) {
+        for (const key of ['maxSeats','maxCandidates','maxMentors','maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials']) {
           if (raw[key] === undefined || raw[key] === null || raw[key] === '') continue;
           const value = Number(raw[key]);
           if (!Number.isInteger(value) || value < -1) throw new Error('Organization limits must be whole numbers of -1 or greater.');
@@ -607,6 +626,7 @@ export default async function handler(req: Request, res: Response) {
       const previousOwnerProfileRef = previousOwnerUid ? bootstrapDb.doc(`users/${previousOwnerUid}`) : null;
       const previousOwnerMemberRef = previousOwnerUid ? organizationRef.collection('members').doc(previousOwnerUid) : null;
       const targetMemberRef = organizationRef.collection('members').doc(uid);
+      await enforceOrganizationMembershipQuotas(ctx,organizationId,'owner',uid);
       const now = new Date().toISOString();
 
       await bootstrapDb.runTransaction(async transaction => {
@@ -693,7 +713,7 @@ export default async function handler(req: Request, res: Response) {
       if (!/^\S+@\S+\.\S+$/.test(email) || !displayName) throw new Error('A valid name and email are required.');
       if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) throw new Error('A valid organization role is required.');
       if (password && password.length < 6) throw new Error('Password must contain at least 6 characters.');
-      if (ctx.organizationId) await enforceQuota(ctx, 'users', 'maxUsers');
+      await enforceOrganizationMembershipQuotas(ctx,managedOrganizationId,role);
       const authService = getAuth(ctx.db.app);
       let created;
       try {
@@ -742,6 +762,7 @@ export default async function handler(req: Request, res: Response) {
       const existingOrganizationId = String(existingData.organizationId || '').trim();
       const targetMemberRef = ctx.db.doc(`organizations/${managedOrganizationId}/members/${uid}`);
       const existingMember = await targetMemberRef.get();
+      if(body.active!==false)await enforceOrganizationMembershipQuotas(ctx,managedOrganizationId,memberRole,uid);
       if (String(existingMember.data()?.role || '') === 'owner' || String(existingData.organizationRole || '') === 'owner') {
         throw new Error('The organization owner cannot be changed from the member manager.');
       }

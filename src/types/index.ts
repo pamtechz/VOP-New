@@ -249,10 +249,13 @@ export interface User {
 export interface Question {
   key: string;
   question: string;
-  answer: boolean; // true / false
-  options?: string[]; // optional multiple choice
+  /** Answer keys are server-only for canonical assessments. Legacy local
+   * true/false content may still include this field. */
+  answer?: boolean;
+  questionType?: 'single_select' | 'true_false';
+  options?: string[];
   correctOptionIndex?: number;
-  explanation: string;
+  explanation?: string;
   scriptureRef?: string;
 }
 

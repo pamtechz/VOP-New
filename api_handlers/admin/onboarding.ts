@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
+import { normalizedBillingCountryName, organizationBillingProfile } from '../../server/billing.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -26,6 +27,8 @@ export default async function handler(req: Request, res: Response) {
     const profile = object(body.profile);
     const settings = object(body.settings);
     const branding = object(body.branding);
+    const billingCountry=normalizedBillingCountryName(body.billingCountry||profile.billingCountry||'Zambia');
+    const billingProfile=organizationBillingProfile({billingCountry});
 
     const data = {
       id: organizationId,
@@ -33,7 +36,11 @@ export default async function handler(req: Request, res: Response) {
       slug: text(body.slug) || organizationId,
       status: 'active',
       ownerUid: text(body.ownerUid),
-      plan: text(body.plan) || 'standard',
+      plan: text(body.plan) || 'unsubscribed',
+      billingCountry,
+      countryCode:billingProfile.countryCode,
+      billingProfile,
+      billingAccessSuspended:false,
       branding,
       timezone: text(body.timezone) || 'UTC',
       defaultLanguage: text(body.defaultLanguage) || '',
