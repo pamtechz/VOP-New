@@ -42,6 +42,8 @@ test('study progress: server grades and guide paths stay within authorized tenan
     const retakeLearner=await identity('study-retake',orgA);
     const cooldownLearner=await identity('study-cooldown',orgA);
     const passedRetakeLearner=await identity('study-passed-retake',orgA);
+    const idempotentLearner=await identity('study-idempotent',orgA);
+    const revisionLearner=await identity('study-revision-pinned',orgA);
     async function api(user,body){
       let status=200,output;
       await study({method:'POST',headers:{authorization:'Bearer '+user.token},body},{
@@ -126,6 +128,68 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(response.scoreKey,orgA+':en:'+guideId+':'+testId);
       const profile=(await db.doc('users/'+learner.uid).get()).data();
       assert.equal(profile.progress.guideScores[response.scoreKey],100);
+    });
+
+    await t.test('duplicate starts resume one active session and duplicate submissions replay one saved result',async()=>{
+      const first=await startQuiz(idempotentLearner);
+      assert.equal(first.status,200,JSON.stringify(first));
+      assert.equal(first.resumed,false);
+      const retryStart=await startQuiz(idempotentLearner);
+      assert.equal(retryStart.status,200,JSON.stringify(retryStart));
+      assert.equal(retryStart.resumed,true);
+      assert.equal(retryStart.sessionId,first.sessionId);
+      assert.equal(retryStart.assessmentPolicy.attemptsUsed,1);
+      const policyId=createHash('sha256').update([orgA,'en',guideId,testId].join(':')).digest('hex');
+      const reservedPolicy=(await db.doc('users/'+idempotentLearner.uid+'/assessmentAttemptPolicy/'+policyId).get()).data();
+      assert.equal(reservedPolicy?.attemptCount,1);
+      assert.equal(reservedPolicy?.activeSessionId,first.sessionId);
+
+      const submitted=await api(idempotentLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:first.sessionId,answers:{0:1},
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+      assert.equal(submitted.replayed,false);
+      assert.equal(submitted.score,100);
+
+      // Simulate a browser retry after the first 200 response was lost.
+      const replay=await api(idempotentLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:first.sessionId,answers:{0:1},
+      });
+      assert.equal(replay.status,200,JSON.stringify(replay));
+      assert.equal(replay.replayed,true);
+      assert.equal(replay.score,100);
+      assert.equal(replay.retakePolicy.attemptsUsed,1);
+      const attempts=await db.collection('users/'+idempotentLearner.uid+'/assessmentAttempts').where('lessonId','==',testId).get();
+      assert.equal(attempts.size,1);
+      const completedPolicy=(await db.doc('users/'+idempotentLearner.uid+'/assessmentAttemptPolicy/'+policyId).get()).data();
+      assert.equal(completedPolicy?.attemptCount,1);
+      assert.equal(completedPolicy?.activeSessionId,null);
+    });
+
+    await t.test('an active attempt is graded against its pinned private quiz revision',async()=>{
+      const started=await startQuiz(revisionLearner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.questions.length,1);
+      assert.deepEqual(started.questions[0].options,['Wrong','Right']);
+      const session=(await db.doc('users/'+revisionLearner.uid+'/assessmentSessions/'+started.sessionId).get()).data();
+      assert.equal(session?.gradingQuestionsSnapshot?.[0]?.correctOptionIndex,1);
+      // Republish/edit the bank while the learner is still answering. The open
+      // attempt must not silently change underneath the learner.
+      await db.doc('quizzes/'+quizId).update({
+        questions:[{...publicQuestions[0],correctOptionIndex:0,answer:false,explanation:'Changed after attempt start'}],
+      });
+      const submitted=await api(revisionLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+      assert.equal(submitted.score,100);
+      assert.equal(submitted.passed,true);
+      await db.doc('quizzes/'+quizId).update({
+        questions:[{...publicQuestions[0],correctOptionIndex:1,answer:false,explanation:'Server-only rationale'}],
+      });
     });
 
     await t.test('a foreign member cannot grade against another organization private guide',async()=>{
@@ -244,11 +308,12 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({questions:publicQuestions});
     });
 
-    await t.test('submission requires a server-started single-use attempt session',async()=>{
+    await t.test('submission requires a server-started session and safely replays the committed result',async()=>{
       const direct=await api(learner,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,answers:{0:1},
       });
       assert.equal(direct.status,409,JSON.stringify(direct));
+      assert.equal(direct.code,'ASSESSMENT_SESSION_REQUIRED');
       assert.match(String(direct.error||''),/start|instructions/i);
 
       const started=await startQuiz(learner,{confirmRetake:true});
@@ -257,11 +322,14 @@ test('study progress: server grades and guide paths stay within authorized tenan
         action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
       });
       assert.equal(accepted.status,200,JSON.stringify(accepted));
+      assert.equal(accepted.replayed,false);
       const replay=await api(learner,{
         action:'submitQuiz',language:'en',guideId,lessonId:testId,sessionId:started.sessionId,answers:{0:1},
       });
-      assert.equal(replay.status,409,JSON.stringify(replay));
-      assert.match(String(replay.error||''),/already|valid/i);
+      assert.equal(replay.status,200,JSON.stringify(replay));
+      assert.equal(replay.replayed,true);
+      assert.equal(replay.score,accepted.score);
+      assert.deepEqual(replay.retakePolicy,accepted.retakePolicy);
     });
 
     await t.test('per-assessment policy overrides organization defaults and hidden feedback does not leak score',async()=>{
