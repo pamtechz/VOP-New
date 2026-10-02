@@ -4,7 +4,7 @@ import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, valida
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
-import { loadPlatformBillingSettings, quoteSubscriptionPlan, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
+import { loadPlatformBillingSettings, quoteSubscriptionPlan, refreshPlatformBillingRate, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
 import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
@@ -49,7 +49,7 @@ export default async function handler(req: Request, res: Response) {
     const action = text(body.action, 'listPlans');
     const requestedOrganizationId = text(body.organizationId);
     const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
-    const readActions=['listPlans','listAvailablePlans','getSubscription'];
+    const readActions=['listPlans','listAvailablePlans','getSubscription','getBillingSettings'];
     const selfServiceActions=['cancelSubscription','reactivateSubscription'];
     await requirePermission(ctx, 'billing', readActions.includes(action) ? 'view' : selfServiceActions.includes(action) ? 'update' : 'manage');
 
@@ -96,6 +96,16 @@ export default async function handler(req: Request, res: Response) {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can access platform billing settings.');
       const settings=await loadPlatformBillingSettings(ctx.db);
       return res.status(200).json({ok:true,item:settings});
+    }
+
+    if (action === 'refreshBillingRate') {
+      if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can refresh platform billing rates.');
+      const before=await loadPlatformBillingSettings(ctx.db);
+      const rate=await refreshPlatformBillingRate(ctx.db);
+      await writeTenantAudit(ctx,'billing.fx.refresh','system/billing',before,{
+        usdToZmwRate:rate.rate,fxSource:rate.source,fxUpdatedAt:rate.fetchedAt,fxProviderDate:rate.providerDate,
+      });
+      return res.status(200).json({ok:true,item:await loadPlatformBillingSettings(ctx.db)});
     }
 
     if (action === 'updateBillingSettings') {
