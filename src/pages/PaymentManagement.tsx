@@ -13,12 +13,14 @@ type Tab='transactions'|'subscriptions'|'items'|'providers'|'reconciliation';
 type Organization={id:string;name:string};
 type Target={id:string;name:string};
 type SubscriptionPackage={
-  id:string;name:string;description:string;active:boolean;price:number;currency:string;
+  id:string;name:string;description:string;active:boolean;price:number;priceUsd?:number;baseCurrency?:string;currency:string;
   interval:string;sortOrder:number;quotas:Record<string,unknown>;features:Record<string,unknown>;
 };
-type PackageQuotaKey='maxUsers'|'maxGuides'|'maxQuizzes'|'maxAnnouncements'|'maxRadioItems'|'maxRadioPlaylists'|'maxMaterials';
+type PackageQuotaKey='maxSeats'|'maxCandidates'|'maxMentors'|'maxGuides'|'maxQuizzes'|'maxAnnouncements'|'maxRadioItems'|'maxRadioPlaylists'|'maxMaterials';
 const PACKAGE_QUOTAS:Array<{key:PackageQuotaKey;label:string}>=[
-  {key:'maxUsers',label:'Maximum users'},
+  {key:'maxSeats',label:'Active seats (all organization users)'},
+  {key:'maxCandidates',label:'Candidates / learners'},
+  {key:'maxMentors',label:'Mentors'},
   {key:'maxGuides',label:'Maximum guides'},
   {key:'maxQuizzes',label:'Maximum quizzes'},
   {key:'maxAnnouncements',label:'Maximum announcements'},
@@ -39,7 +41,7 @@ async function adminApi(path:string,body:Record<string,unknown>){
   if(!auth?.currentUser)throw new Error('Sign in again.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)});
-  const payload=await response.json().catch(()=>({})) as {error?:string;items?:unknown[]};
+  const payload=await response.json().catch(()=>({})) as {error?:string;items?:unknown[];item?:unknown};
   if(!response.ok)throw new Error(payload.error||'Administration request failed.');
   return payload;
 }
@@ -72,9 +74,10 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
   const [editingPackage,setEditingPackage]=useState<SubscriptionPackage|null|undefined>(undefined);
   const [details,setDetails]=useState<PaymentDetails|null>(null);
   const [packageDraft,setPackageDraft]=useState({
-    name:'',description:'',price:'',currency:'ZMW',interval:'month',sortOrder:'0',active:true,
+    name:'',description:'',price:'',interval:'month',sortOrder:'0',active:true,
     quotas:emptyPackageQuotas(),features:defaultPackageFeatures(),
   });
+  const [billingSettings,setBillingSettings]=useState({usdToZmwRate:'',fxSource:'platform-configured',fxQuoteTtlMinutes:'1440'});
   const [draft,setDraft]=useState({
     name:'',description:'',itemType:'programme_registration' as PayableItemType,
     targetId:'',organizationId:'',scope:currentUser.role==='super_admin'?'platform':'organization',
@@ -96,13 +99,20 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
         const item=value as Record<string,unknown>;return {id:String(item.id||''),name:String(item.name||'Organization')};
       }).filter(item=>item.id));
       if(isSuperAdmin){
-        const [itemResult,providerResult,packageResult]=await Promise.all([
+        const [itemResult,providerResult,packageResult,billingResult]=await Promise.all([
           adminPaymentRequest<{ok:true;items:PayableItem[]}>('payable-items',{action:'list'}),
           adminPaymentRequest<{ok:true;items:PaymentProviderDescriptor[]}>('providers',{action:'list'}),
           adminApi('/api/admin/plans',{action:'listPlans'}),
+          adminApi('/api/admin/plans',{action:'getBillingSettings'}),
         ]);
         setItems(itemResult.items);setProviders(providerResult.items);
         setPackages((packageResult.items||[]) as SubscriptionPackage[]);
+        const settings=(billingResult.item||{}) as Record<string,unknown>;
+        setBillingSettings({
+          usdToZmwRate:Number(settings.usdToZmwRate||0)>0?String(settings.usdToZmwRate):'',
+          fxSource:String(settings.fxSource||'platform-configured'),
+          fxQuoteTtlMinutes:String(settings.fxQuoteTtlMinutes||1440),
+        });
       }else{
         setItems([]);setProviders([]);setPackages([]);
         if(tab!=='transactions')setTab('transactions');
@@ -252,7 +262,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     if(!isSuperAdmin)return;
     setEditingPackage(null);
     setPackageDraft({
-      name:'',description:'',price:'',currency:'ZMW',interval:'month',sortOrder:String(packages.length),active:true,
+      name:'',description:'',price:'',interval:'month',sortOrder:String(packages.length),active:true,
       quotas:emptyPackageQuotas(),features:defaultPackageFeatures(),
     });
   };
@@ -269,7 +279,7 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     }
     setEditingPackage(item);
     setPackageDraft({
-      name:item.name||'',description:item.description||'',price:String(item.price??''),currency:item.currency||'ZMW',
+      name:item.name||'',description:item.description||'',price:String(item.priceUsd??item.price??''),
       interval:item.interval||'month',sortOrder:String(item.sortOrder??0),active:item.active!==false,quotas,features,
     });
   };
@@ -286,8 +296,8 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       await adminApi('/api/admin/plans',{
         action:'upsertPlan',
         ...(editingPackage?.id?{planId:editingPackage.id}:{}),
-        name:packageDraft.name.trim(),description:packageDraft.description.trim(),price,
-        currency:packageDraft.currency.trim().toUpperCase()||'ZMW',interval:packageDraft.interval,
+        name:packageDraft.name.trim(),description:packageDraft.description.trim(),priceUsd:price,
+        interval:packageDraft.interval,
         sortOrder:Math.trunc(Number(packageDraft.sortOrder)||0),active:packageDraft.active,
         quotas,features:packageDraft.features,
       });
@@ -295,6 +305,23 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
     }catch(reason){setError(reason instanceof Error?reason.message:'Subscription package could not be saved.');}
     finally{setBusy(false);}
   };
+  const saveBillingSettings=async()=>{
+    if(!isSuperAdmin)return;
+    const rate=Number(billingSettings.usdToZmwRate);
+    if(!Number.isFinite(rate)||rate<=0){setError('Enter the current USD to ZMW exchange rate.');return;}
+    setBusy(true);setError('');
+    try{
+      await adminApi('/api/admin/plans',{
+        action:'updateBillingSettings',usdToZmwRate:rate,
+        fxSource:billingSettings.fxSource.trim()||'platform-configured',
+        fxQuoteTtlMinutes:Math.max(15,Math.trunc(Number(billingSettings.fxQuoteTtlMinutes)||1440)),
+      });
+      setMessage('Platform exchange-rate policy updated. Zambia subscription quotes will use the new rate.');
+      await load();
+    }catch(reason){setError(reason instanceof Error?reason.message:'Billing settings could not be saved.');}
+    finally{setBusy(false);}
+  };
+
   const deletePackage=async(item:SubscriptionPackage)=>{
     if(!isSuperAdmin)return;
     if(!await appConfirm('Delete this subscription package? Packages assigned to active organizations cannot be deleted.',{
@@ -348,9 +375,11 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       {loading?<div className="vop-payment-empty"><LoaderCircle className="spin" size={26}/>Loading transactions…</div>:<div className="vop-payment-admin-table-wrap"><table className="vop-payment-admin-table"><thead><tr><th>Reference</th><th>Payer</th><th>Organization</th><th>Item</th><th>Amount</th><th>Method</th><th>Status</th>{isSuperAdmin&&<th>Verification</th>}</tr></thead><tbody>{filtered.map(payment=><tr key={payment.id} onClick={()=>void openDetails(payment)}><td><strong>{payment.reference}</strong>{isSuperAdmin&&<small>{payment.providerReference||'Provider reference pending'}</small>}</td><td>{payment.payerName||payment.payerEmail}<small>{payment.payerEmail}</small></td><td>{organizations.find(org=>org.id===payment.organizationId)?.name|| (payment.organizationId?'Authorized organization':'Platform')}</td><td>{payment.description}</td><td>{payment.currency} {payment.amountDecimal}</td><td>{paymentMethodLabel(payment.paymentMethod)}</td><td><span className={'vop-payment-status '+statusClass(payment.status)}>{paymentStatusLabel(payment.status as never)}</span></td>{isSuperAdmin&&<td>{payment.verificationStatus}</td>}</tr>)}</tbody></table></div>}
     </>}
 
-    {isSuperAdmin&&tab==='subscriptions'&&<div className="vop-payment-admin-cards">{packages.map(item=><article key={item.id}><div><span>{item.interval==='year'?'Annual':item.interval==='one_time'?'One-time':'Monthly'} package</span><h3>{item.name}</h3><p>{item.description||'Organization subscription package'}</p></div><dl><div><dt>Price</dt><dd>{item.currency} {Number(item.price||0).toFixed(2)}</dd></div><div><dt>Status</dt><dd>{item.active?'Available':'Inactive'}</dd></div><div><dt>Organization limits</dt><dd>{Object.values(item.quotas||{}).some(value=>Number(value)>0)?'Configured':'No limits configured'}</dd></div></dl><footer><button className="btn btn-outline" onClick={()=>startPackageEdit(item)}>Edit</button><button className="btn btn-danger" onClick={()=>void deletePackage(item)}>Delete</button></footer></article>)}
-      {!packages.length&&!loading&&<div className="vop-payment-empty">No subscription packages have been created. Create a package to publish an organization checkout offer.</div>}
-    </div>}
+    {isSuperAdmin&&tab==='subscriptions'&&<>
+      <section className="vop-payment-reconciliation"><Settings2 size={34}/><div><h2>Billing currency policy</h2><p>Subscription packages have one canonical USD price. International organizations pay that USD amount. Organizations billed in Zambia receive a locked ZMW quote using the platform USD→ZMW rate below.</p><div className="vop-payable-editor-grid"><label><span>USD → ZMW rate</span><input inputMode="decimal" value={billingSettings.usdToZmwRate} onChange={e=>setBillingSettings(v=>({...v,usdToZmwRate:e.target.value}))} placeholder="e.g. 24.50"/></label><label><span>Rate source</span><input value={billingSettings.fxSource} onChange={e=>setBillingSettings(v=>({...v,fxSource:e.target.value}))} placeholder="Provider / treasury source"/></label><label><span>Quote policy (minutes)</span><input inputMode="numeric" value={billingSettings.fxQuoteTtlMinutes} onChange={e=>setBillingSettings(v=>({...v,fxQuoteTtlMinutes:e.target.value}))}/></label></div><button className="btn btn-primary" disabled={busy} onClick={()=>void saveBillingSettings()}><Settings2 size={16}/>Save billing policy</button></div></section>
+      <div className="vop-payment-admin-cards">{packages.map(item=><article key={item.id}><div><span>{item.interval==='year'?'Annual':item.interval==='one_time'?'One-time':'Monthly'} package</span><h3>{item.name}</h3><p>{item.description||'Organization subscription package'}</p></div><dl><div><dt>Canonical price</dt><dd>USD {Number(item.priceUsd??item.price||0).toFixed(2)}</dd></div><div><dt>Status</dt><dd>{item.active?'Available':'Inactive'}</dd></div><div><dt>Organization limits</dt><dd>{Object.values(item.quotas||{}).some(value=>Number(value)>0)?'Configured':'No limits configured'}</dd></div></dl><footer><button className="btn btn-outline" onClick={()=>startPackageEdit(item)}>Edit</button><button className="btn btn-danger" onClick={()=>void deletePackage(item)}>Delete</button></footer></article>)}
+      {!packages.length&&!loading&&<div className="vop-payment-empty">No subscription packages have been created. Create a package to publish an organization checkout offer.</div>}</div>
+    </>}
 
     {isSuperAdmin&&tab==='items'&&<div className="vop-payment-admin-cards">{items.map(item=><article key={item.id}><div><span>{typeLabel(item.itemType)}</span><h3>{item.name}</h3><p>{item.description||'Configured charge'}</p></div><dl><div><dt>Amount</dt><dd>{item.currency} {item.amountDecimal}</dd></div><div><dt>Scope</dt><dd>{organizations.find(org=>org.id===item.organizationId)?.name||typeLabel(item.scope)}</dd></div><div><dt>Status</dt><dd>{item.active?'Active':'Inactive'}</dd></div></dl><footer><button className="btn btn-outline" onClick={()=>startEdit(item)}>Edit</button><button className="btn btn-danger" onClick={()=>void deleteItem(item)}>Remove</button></footer></article>)}</div>}
 
@@ -362,15 +391,15 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       <div className="vop-payable-editor-grid">
         <label><span>Package name</span><input value={packageDraft.name} onChange={e=>setPackageDraft(v=>({...v,name:e.target.value}))} placeholder="e.g. Growth"/></label>
         <label><span>Billing interval</span><select value={packageDraft.interval} onChange={e=>setPackageDraft(v=>({...v,interval:e.target.value}))}><option value="month">Monthly</option><option value="year">Yearly</option><option value="one_time">One-time</option></select></label>
-        <label><span>Price</span><input value={packageDraft.price} inputMode="decimal" onChange={e=>setPackageDraft(v=>({...v,price:e.target.value}))} placeholder="0.00"/></label>
-        <label><span>Currency</span><input value={packageDraft.currency} maxLength={3} onChange={e=>setPackageDraft(v=>({...v,currency:e.target.value.toUpperCase()}))}/></label>
+        <label><span>Canonical price (USD)</span><input value={packageDraft.price} inputMode="decimal" onChange={e=>setPackageDraft(v=>({...v,price:e.target.value}))} placeholder="0.00"/></label>
+        <label><span>Base currency</span><input value="USD" disabled readOnly/></label>
         <label><span>Display order</span><input value={packageDraft.sortOrder} inputMode="numeric" onChange={e=>setPackageDraft(v=>({...v,sortOrder:e.target.value}))}/></label>
         <label className="vop-checkbox"><input type="checkbox" checked={packageDraft.active} onChange={e=>setPackageDraft(v=>({...v,active:e.target.checked}))}/>Available to organizations</label>
         <label className="wide"><span>Description</span><textarea value={packageDraft.description} onChange={e=>setPackageDraft(v=>({...v,description:e.target.value}))}/></label>
         <fieldset className="wide"><legend>Organization limits</legend><div className="vop-payment-method-checks">{PACKAGE_QUOTAS.map(({key,label})=><label key={key}><span>{label}</span><input value={packageDraft.quotas[key]} inputMode="numeric" placeholder="Unlimited" onChange={e=>setPackageDraft(v=>({...v,quotas:{...v.quotas,[key]:e.target.value}}))}/></label>)}</div></fieldset>
         <fieldset className="wide"><legend>Included capabilities</legend><div className="vop-payment-method-checks">{PACKAGE_FEATURES.map(([key,label])=><label key={key}><input type="checkbox" checked={packageDraft.features[key]===true} onChange={e=>setPackageDraft(v=>({...v,features:{...v.features,[key]:e.target.checked}}))}/>{label}</label>)}</div></fieldset>
       </div>
-      <p className="vop-payment-security">The package identifier and matching organization-subscription payable item are generated and synchronized automatically.</p>
+      <p className="vop-payment-security">The package identifier and matching organization-subscription payable item are generated automatically. Seat limits apply to the whole organization: owners, admins, staff, mentors, teachers, candidates and learners all consume active seats. Candidate and mentor limits are additional caps inside the total seat allowance.</p>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void savePackage()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save subscription package</button>
     </section></div>}
 
