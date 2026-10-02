@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, canEditCanonicalContent, enforceOrganizationQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
-import { requireOrganizationSubscriptionFeature, requirePermission } from '../server/permissions.js';
+import {
+  authenticateTenant, billingTenantFromContext, canEditCanonicalContent, enforceBillingTenantQuota,
+  enforceOrganizationQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds,
+} from '../server/tenant.js';
+import { requireOrganizationSubscriptionFeature, requirePermission, requireSubscriptionFeature } from '../server/permissions.js';
 import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 import { quizManagementItem } from '../shared/quizManagementVisibility.js';
 import { curriculumAnchorExists } from '../shared/curriculumStructure.js';
