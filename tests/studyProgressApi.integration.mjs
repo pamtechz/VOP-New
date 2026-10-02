@@ -45,6 +45,8 @@ test('study progress: server grades and guide paths stay within authorized tenan
     const idempotentLearner=await identity('study-idempotent',orgA);
     const revisionLearner=await identity('study-revision-pinned',orgA);
     const prerequisiteLearner=await identity('study-final-prerequisite',orgA);
+    const prerequisiteDriftLearner=await identity('study-final-prerequisite-drift',orgA);
+    const contentDriftLearner=await identity('study-content-drift',orgA);
     const configurationLearner=await identity('study-configuration',orgA);
     async function api(user,body){
       let status=200,output;
@@ -163,6 +165,51 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(started.status,200,JSON.stringify(started));
       assert.equal(started.ok,true);
       assert.ok(started.sessionId);
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentKind:'practice',attachmentType:'guide',
+      });
+    });
+
+    await t.test('submission content drift is a recoverable 200 assessment domain state',async()=>{
+      const started=await startQuiz(contentDriftLearner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.ok,true);
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({guideId:'different-guide'});
+      const changed=await api(contentDriftLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(changed.status,200,JSON.stringify(changed));
+      assert.equal(changed.ok,false);
+      assert.equal(changed.available,false);
+      assert.equal(changed.code,'ASSESSMENT_CONTENT_CHANGED');
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({guideId});
+    });
+
+    await t.test('final-exam prerequisite drift after start is a recoverable 200 domain state',async()=>{
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentKind:'final_exam',attachmentType:'guide',
+      });
+      const completed=await api(prerequisiteDriftLearner,{
+        action:'completeLesson',language:'en',guideId,lessonId:studyLessonId,
+      });
+      assert.equal(completed.status,200,JSON.stringify(completed));
+      const started=await startQuiz(prerequisiteDriftLearner);
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.ok,true);
+      const profileRef=db.doc('users/'+prerequisiteDriftLearner.uid);
+      const profile=(await profileRef.get()).data()||{};
+      await profileRef.set({
+        progress:{...(profile.progress||{}),completedLessons:[]},
+      },{merge:true});
+      const blocked=await api(prerequisiteDriftLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:started.sessionId,answers:{0:1},
+      });
+      assert.equal(blocked.status,200,JSON.stringify(blocked));
+      assert.equal(blocked.ok,false);
+      assert.equal(blocked.available,false);
+      assert.equal(blocked.code,'ASSESSMENT_PREREQUISITE');
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({
         assessmentKind:'practice',attachmentType:'guide',
       });

@@ -138,7 +138,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       if (result.passed) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (reason) {
       if(reason instanceof AssessmentSubmissionConditionError
-        &&['ASSESSMENT_SESSION_EXPIRED','ASSESSMENT_SESSION_INVALID','ASSESSMENT_SESSION_REQUIRED'].includes(reason.code)){
+        &&['ASSESSMENT_SESSION_EXPIRED','ASSESSMENT_SESSION_INVALID','ASSESSMENT_SESSION_REQUIRED','ASSESSMENT_CONTENT_CHANGED','ASSESSMENT_TYPE','ASSESSMENT_PREREQUISITE'].includes(reason.code)){
         setAttempt(null);
         setQuestions(previewQuestions);
         setAnswers({});

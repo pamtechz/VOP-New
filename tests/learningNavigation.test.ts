@@ -70,6 +70,9 @@ test('lesson reader, grading and offline completion follow each guide language',
   assert.match(quizModal,/attemptStartLock/);
   assert.match(quizModal,/previousScore/);
   assert.match(quizModal,/Revoke result/);
+  assert.match(quizModal,/ASSESSMENT_CONTENT_CHANGED/);
+  assert.match(quizModal,/ASSESSMENT_PREREQUISITE/);
+  assert.match(localStudy,/body\?\.ok===false/);
   assert.match(localStudy,/confirmRetake/);
   assert.ok(study.includes('uid:firebaseUser.uid, language, guideId, lessonId'));
   assert.ok(app.includes('${guide.language}:${guide.id}:${lesson.id}'));

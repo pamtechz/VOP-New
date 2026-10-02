@@ -262,7 +262,7 @@ export default async function handler(
       return res.status(403).json({ error: 'The selected guide is outside your organization.' });
     }
     if (useTenantGuide && guideSnapshot.data()?.language && String(guideSnapshot.data()?.language) !== language) {
-      if(action==='startQuiz')return res.status(200).json({
+      if(action==='startQuiz'||action==='submitQuiz')return res.status(200).json({
         ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
         error:'This assessment belongs to a different study language. Reopen it from the current course.',
       });
@@ -275,7 +275,7 @@ export default async function handler(
     const lessonData = lessonSnapshot.data() ?? {};
     const legacyStudyGuide = !useTenantGuide && guideId === 'discover';
     if (!legacyStudyGuide && String(lessonData.guideId ?? '') !== guideId) {
-      if(action==='startQuiz')return res.status(200).json({
+      if(action==='startQuiz'||action==='submitQuiz')return res.status(200).json({
         ok:false,available:false,code:'ASSESSMENT_CONTENT_CHANGED',
         error:'This assessment is no longer attached to the selected guide. Reopen the course to refresh the published content.',
       });
@@ -681,7 +681,7 @@ export default async function handler(
     }
 
     if (String(lessonData.type ?? '') !== 'Test') {
-      return res.status(409).json({ error: 'The selected item is not an assessment.', code:'ASSESSMENT_TYPE' });
+      return res.status(200).json({ ok:false,available:false,error:'The selected item is not an assessment.',code:'ASSESSMENT_TYPE' });
     }
 
     const policyOrganizationId=candidateGuideOrganizationId||organizationId;
@@ -819,7 +819,10 @@ export default async function handler(
       .map(doc => `${language}:${guideId}:${doc.id}`) : [];
     if (finalExam && (!finalRequirements.length || finalRequirements.some(key =>
       !Array.isArray(userData.progress?.completedLessons) || !userData.progress.completedLessons.includes(key)))) {
-      return res.status(409).json({ error:'Complete all published study lessons before taking the final guide examination.' });
+      return res.status(200).json({
+        ok:false,available:false,code:'ASSESSMENT_PREREQUISITE',
+        error:'Complete all published study lessons before taking the final guide examination.',
+      });
     }
     const passed = score >= threshold;
     // One attempt document per server-started session makes submission
