@@ -1,7 +1,7 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getApps } from 'firebase-admin/app';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, requireOrgRole, organizationInHierarchyScope, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, requireOrgRole, organizationInHierarchyScope, writeTenantAudit, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; body?: unknown };
@@ -34,6 +34,8 @@ export default async function handler(request:Request,response:Response){
     const guideData=guide.data()||{};
     if(String(guideData.organizationId||'')!==organizationId) throw new Error('The selected course does not belong to this organization.');
     if(guideData.published!==true||guideData.archived===true) throw new Error('Only a published active course can be used for enrollment.');
+
+    await enforceOrganizationMembershipQuotas(ctx,organizationId,'learner');
 
     const authService=getAuth(getApps()[0]);
     let account;
