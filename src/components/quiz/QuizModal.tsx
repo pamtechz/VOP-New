@@ -3,7 +3,7 @@ import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
-import { beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
+import { AssessmentStartConditionError, beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
 import { ModalLayer } from '../layout/ModalLayer';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 
@@ -52,6 +52,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [hasAttempted,setHasAttempted]=useState(previouslyAttempted);
+  const [serverPreviousScore,setServerPreviousScore]=useState<number|null>(
+    Number.isFinite(Number(previousScore))?Number(previousScore):null,
+  );
   const [attemptBlocked,setAttemptBlocked]=useState(false);
   const [confirmingRetake,setConfirmingRetake]=useState(false);
   const attemptStartLock=useRef(false);
@@ -60,6 +63,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const retakeAllowed=remainingAttempts!==0;
 
   useEffect(()=>{if(previouslyAttempted)setHasAttempted(true)},[previouslyAttempted]);
+  useEffect(()=>{
+    if(Number.isFinite(Number(previousScore)))setServerPreviousScore(Number(previousScore));
+  },[previousScore]);
   useEffect(()=>{setQuestions(previewQuestions)},[lesson.id]);
 
   useEffect(()=>{
@@ -142,6 +148,13 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       if(started.previousScoreRevoked&&onAttemptStarted)await onAttemptStarted();
       setStage('quiz');
     }catch(reason){
+      if(reason instanceof AssessmentStartConditionError&&reason.code==='ASSESSMENT_RETAKE_CONFIRMATION'){
+        setHasAttempted(true);
+        if(reason.previousScore!==null)setServerPreviousScore(reason.previousScore);
+        setConfirmingRetake(true);
+        setError('');
+        return;
+      }
       const message=reason instanceof Error?reason.message:t('quiz.start_failed','The assessment could not be started.');
       setError(message);
       if(/attempt limit reached|retake is available after/i.test(message))setAttemptBlocked(true);
@@ -161,7 +174,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const assessmentLabel=lesson.assessmentKind==='final_exam'
     ?t('quiz.final_exam','Final examination'):lesson.assessmentKind==='chapter_quiz'?t('quiz.chapter_quiz','Chapter quiz'):t('quiz.practice_assessment','Practice assessment');
   const retakeLabel=lesson.assessmentKind==='final_exam'?t('quiz.retake_exam','Retake exam'):t('quiz.retake_quiz','Retake quiz');
-  const knownPreviousScore=Number.isFinite(Number(previousScore))?Number(previousScore):null;
+  const knownPreviousScore=serverPreviousScore;
   const previousPassed=knownPreviousScore!==null&&validThreshold&&knownPreviousScore>=threshold;
   const instructions=lesson.assessmentInstructions?.trim()
     ||t('quiz.instructions_fallback','Answer every question before submitting. Your attempt is recorded when you select Begin assessment below.');
