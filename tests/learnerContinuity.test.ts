@@ -75,6 +75,11 @@ test('learner navigation state validates route and preserves nested study locati
   });
   assert.equal(sameLearnerLocation(location,{...location}),true);
   assert.equal(sameLearnerLocation(location,{...location,pageIndex:5}),false);
+  assert.deepEqual(normalizeLearnerLocation({
+    route:'lessons',guideId:'guide-a',guideLanguage:'bem',lessonId:'quiz-a',
+  }),{
+    route:'lessons',guideId:'guide-a',guideLanguage:'bem',lessonId:'quiz-a',
+  });
   assert.equal(normalizeLearnerLocation({route:'not-a-route'}),null);
 });
 
@@ -106,6 +111,8 @@ test('App restores route, guide, lesson and page and uses browser history for pr
   const app=read('src/App.tsx');
   const reader=read('src/components/reader/LessonReaderModal.tsx');
   assert.match(app,/readLearnerLocation\(uid\)/);
+  assert.match(app,/const restored=stored\?applyLearnerLocation\(stored\.location\):null/);
+  assert.match(app,/replaceLearnerLocation\(uid,restored,stored\.depth\)/);
   assert.match(app,/learnerLocationFromHistory\(uid,event\.state\)/);
   assert.match(app,/pushLearnerLocation\(currentUser\.uid,location\)/);
   assert.match(app,/replaceLearnerLocation\(currentUser\.uid,location\)/);
