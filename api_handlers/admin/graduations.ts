@@ -3,7 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, writeTenantAudit, organizationInHierarchyScope } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { configuredPassThreshold } from '../../shared/studyValidation.js';
-import { verifiedAssessmentAverage } from '../../shared/graduationEvidence.js';
+import { revalidateAssessmentEvidence, verifiedAssessmentEvidence, type AssessmentEvidence } from '../../server/assessmentEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 import { createNotification } from '../../server/notifications.js';
 import { awardApprovedCertificate, certificationPortfolioEvidence } from '../../server/certificateAward.js';
@@ -168,7 +168,10 @@ async function submit(req: Request, res: Response) {
     const key = `${language}:${guideId}:${String(lesson.id)}`;
     if (!completedLessons.has(key)) return res.status(409).json({ error: 'The candidate has not completed all required lessons.' });
   }
-  if (verifiedAssessmentAverage(testLessons, scores, ctx.organizationId, language, guideId, threshold) === null) {
+  const assessmentEvidence=await verifiedAssessmentEvidence(
+    ctx.db,ctx.auth.uid,testLessons,scores,ctx.organizationId,language,guideId,threshold,
+  );
+  if (!assessmentEvidence) {
     return res.status(409).json({ error: 'The candidate has not passed all required assessments.' });
   }
 
@@ -203,10 +206,12 @@ async function submit(req: Request, res: Response) {
     }
     const freshScores = freshProgress.guideScores && typeof freshProgress.guideScores === 'object'
       ? freshProgress.guideScores as Record<string, unknown> : {};
-    const authoritativeAverage = verifiedAssessmentAverage(testLessons, freshScores, ctx.organizationId, language, guideId, threshold);
-    if (authoritativeAverage === null) {
+    if(!(await revalidateAssessmentEvidence(
+      transaction,userRef,assessmentEvidence,freshScores,ctx.organizationId,language,guideId,
+    ))){
       throw new Error('The candidate no longer has all required passing assessments.');
     }
+    const authoritativeAverage=assessmentEvidence.averageScore;
     const firstStage = stages[0];
     const data = {
       candidateId: ctx.auth.uid, candidateName: text(candidate.displayName), candidateEmail: text(candidate.email || ctx.auth.email),
@@ -276,8 +281,9 @@ async function decide(req: Request, res: Response) {
   // client-supplied average. Fetch authoritative requirements before deciding;
   // the candidate's current progress is checked inside the transaction.
   let approvalEvidence: {
-    guideId: string; language: string; threshold: number;
-    studyLessons: { id: string }[]; testLessons: { id: string }[];
+    guideId:string;language:string;threshold:number;
+    studyLessons:{id:string}[];testLessons:{id:string}[];
+    assessmentEvidence:AssessmentEvidence;
   } | null = null;
   if (decision === 'approve') {
     const guideId = text(current.guideId);
@@ -326,7 +332,20 @@ async function decide(req: Request, res: Response) {
         });
       }
     }
-    approvalEvidence = { guideId, language, threshold, studyLessons, testLessons };
+    const candidateId=text(current.candidateId);
+    const candidateSnapshot=await ctx.db.doc(`users/${candidateId}`).get();
+    const candidateData=candidateSnapshot.data()||{};
+    const candidateProgress=candidateData.progress&&typeof candidateData.progress==='object'
+      ?candidateData.progress as Record<string,unknown>:{};
+    const candidateScores=candidateProgress.guideScores&&typeof candidateProgress.guideScores==='object'
+      ?candidateProgress.guideScores as Record<string,unknown>:{};
+    const currentAssessmentEvidence=await verifiedAssessmentEvidence(
+      ctx.db,candidateId,testLessons,candidateScores,requestOrganizationId,language,guideId,threshold,
+    );
+    if(!currentAssessmentEvidence){
+      return res.status(409).json({error:'The candidate has not passed all required assessments.'});
+    }
+    approvalEvidence={guideId,language,threshold,studyLessons,testLessons,assessmentEvidence:currentAssessmentEvidence};
   }
 
   const result = await ctx.db.runTransaction(async transaction => {
@@ -360,14 +379,13 @@ async function decide(req: Request, res: Response) {
       }
       const scores = progress.guideScores && typeof progress.guideScores === 'object'
         ? progress.guideScores as Record<string, unknown> : {};
-      const verifiedAverage = verifiedAssessmentAverage(
-        approvalEvidence.testLessons, scores, requestOrganizationId,
-        approvalEvidence.language, approvalEvidence.guideId, approvalEvidence.threshold,
-      );
-      if (verifiedAverage === null) throw new Error('The candidate no longer has all required passing assessments.');
-      // Repair historical pending requests with an untrusted average as each
-      // approval stage is saved. This does not overwrite completed decisions.
-      nextData.averageScore = verifiedAverage;
+      if(!(await revalidateAssessmentEvidence(
+        transaction,candidateRef,approvalEvidence.assessmentEvidence,scores,
+        requestOrganizationId,approvalEvidence.language,approvalEvidence.guideId,
+      )))throw new Error('The candidate no longer has all required passing assessments.');
+      // Repair historical pending requests with authoritative server evidence
+      // as each approval stage is saved.
+      nextData.averageScore=approvalEvidence.assessmentEvidence.averageScore;
     }
     if (decision === 'reject') {
       nextData.status = 'rejected'; nextData.workflowStageId = stage.id; nextData.workflowStageIndex = stageIndex;
