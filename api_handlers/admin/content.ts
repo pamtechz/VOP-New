@@ -318,6 +318,7 @@ export default async function handler(req: Request, res: Response) {
         id,
         organizationId: effectiveOrganizationId,
         ownerOrganizationId: current.ownerOrganizationId || effectiveOrganizationId,
+        ownerTenantId: current.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: current.ownerUid || ctx.auth.uid,
         scope: effectiveOrganizationId ? 'organization' : 'platform',
         canonical: true,
