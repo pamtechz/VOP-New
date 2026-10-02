@@ -15,3 +15,59 @@
 .vop-payment-reconciliation{display:flex;gap:14px;align-items:flex-start;padding:18px;border:1px solid var(--theme-border);border-radius:14px;background:var(--theme-surface)}.vop-payment-reconciliation>svg{color:var(--theme-accent);flex:none}.vop-payment-reconciliation h2{margin:0 0 5px;color:var(--theme-title);font-size:17px}.vop-payment-reconciliation p{margin:0 0 12px;color:var(--theme-muted);font-size:11px;line-height:1.6}.vop-payment-reconciliation small{color:var(--theme-muted)}
 .vop-payable-editor{width:min(650px,100%)}.vop-payable-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}.vop-payable-editor-grid label{display:grid;gap:5px}.vop-payable-editor-grid label>span,.vop-payable-editor-grid legend{color:var(--theme-title);font-size:10px;font-weight:800}.vop-payable-editor-grid input,.vop-payable-editor-grid select,.vop-payable-editor-grid textarea{width:100%;min-height:40px;border:1px solid var(--theme-border);border-radius:9px;background:var(--theme-input);color:var(--theme-title);padding:8px 10px}.vop-payable-editor-grid textarea{min-height:85px;resize:vertical}.vop-payable-editor-grid .wide{grid-column:1/-1}.vop-payable-editor-grid fieldset{border:1px solid var(--theme-border);border-radius:10px;padding:10px}.vop-payment-method-checks{display:flex;flex-wrap:wrap;gap:9px}.vop-payment-method-checks label,.vop-payable-editor-grid .vop-checkbox{display:flex;align-items:center;gap:6px;color:var(--theme-text);font-size:10px}.vop-payment-method-checks input,.vop-payable-editor-grid .vop-checkbox input{width:auto;min-height:auto}.vop-transaction-details h3{color:var(--theme-title);font-size:12px}.vop-payment-audit{display:grid;gap:6px;margin:8px 0 14px;max-height:190px;overflow:auto}.vop-payment-audit>div{display:flex;justify-content:space-between;gap:10px;padding:8px 9px;border-radius:8px;background:var(--theme-surface-soft)}.vop-payment-audit strong{color:var(--theme-title);font-size:9.5px;text-transform:capitalize}.vop-payment-audit span{color:var(--theme-muted);font-size:8.5px}
 @media(max-width:760px){.vop-payment-admin .vop-page-header{display:grid}.vop-payment-admin-toolbar{grid-template-columns:1fr 1fr}.vop-payment-admin-toolbar label{grid-column:1/-1}.vop-payable-editor-grid{grid-template-columns:1fr}.vop-payable-editor-grid .wide{grid-column:auto}}
+
+
+/* Consolidated SaaS plan, subscription and usage workspace */
+.vop-subscription-workspace{display:grid;gap:14px}
+.vop-subscription-toolbar,.vop-subscription-current,.vop-subscription-entitlements,.vop-subscription-usage-section,.vop-subscription-plans-section{border:1px solid var(--theme-border);border-radius:14px;background:var(--theme-surface)}
+.vop-subscription-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:16px}
+.vop-subscription-toolbar h2,.vop-subscription-current h3,.vop-subscription-entitlements h3,.vop-subscription-section-head h3,.vop-subscription-plan-card h4{margin:3px 0;color:var(--theme-title)}
+.vop-subscription-toolbar p,.vop-subscription-section-head p,.vop-subscription-current>p,.vop-subscription-footnote,.vop-subscription-plan-card>p{margin:0;color:var(--theme-muted);font-size:10.5px;line-height:1.55}
+.vop-subscription-toolbar-actions{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.vop-subscription-toolbar-actions label{display:grid;gap:5px;min-width:220px}
+.vop-subscription-toolbar-actions label>span{font-size:9px;font-weight:850;color:var(--theme-muted);text-transform:uppercase;letter-spacing:.04em}
+.vop-subscription-toolbar-actions select{min-height:38px;border:1px solid var(--theme-border);border-radius:9px;background:var(--theme-input);color:var(--theme-title);padding:0 10px}
+.vop-subscription-summary-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:12px}
+.vop-subscription-current,.vop-subscription-entitlements{padding:16px}
+.vop-subscription-card-head,.vop-subscription-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.vop-subscription-card-head>div>span,.vop-subscription-section-head>div>span,.vop-subscription-plan-card header span:first-child{color:var(--theme-muted);font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+.vop-subscription-card-head>svg,.vop-subscription-section-head>svg{color:var(--theme-accent)}
+.vop-subscription-status,.vop-subscription-current-chip{display:inline-flex;align-items:center;width:max-content;border:1px solid var(--theme-border);border-radius:999px;padding:5px 8px;background:var(--theme-surface-soft);color:var(--theme-text);font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}
+.vop-subscription-status.active,.vop-subscription-current-chip{border-color:var(--vop-success);background:var(--vop-success-bg);color:var(--vop-success)}
+.vop-subscription-status.inactive{border-color:var(--vop-warning);background:var(--vop-warning-bg);color:var(--vop-warning)}
+.vop-subscription-current dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:14px 0;border:1px solid var(--theme-border);border-radius:10px;overflow:hidden}
+.vop-subscription-current dl>div{padding:9px 10px;border-bottom:1px solid var(--theme-border)}
+.vop-subscription-current dl>div:nth-last-child(-n+2){border-bottom:0}
+.vop-subscription-current dt{color:var(--theme-muted);font-size:8.5px}
+.vop-subscription-current dd{margin:3px 0 0;color:var(--theme-title);font-size:10px;font-weight:850}
+.vop-subscription-warning{display:flex;align-items:flex-start;gap:9px;margin-top:9px;padding:10px;border:1px solid var(--vop-warning);border-radius:10px;background:var(--vop-warning-bg);color:var(--vop-warning)}
+.vop-subscription-warning div{display:grid;gap:2px}.vop-subscription-warning strong{font-size:10px}.vop-subscription-warning span{font-size:9px}
+.vop-subscription-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+.vop-subscription-feature-grid{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}
+.vop-subscription-feature{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--theme-border);border-radius:999px;padding:6px 8px;background:var(--theme-surface-soft);color:var(--theme-muted);font-size:9px;font-weight:750}
+.vop-subscription-feature.included{border-color:var(--vop-success);background:var(--vop-success-bg);color:var(--vop-success)}
+.vop-subscription-feature.excluded{opacity:.72}
+.vop-subscription-usage-section,.vop-subscription-plans-section{padding:16px}
+.vop-subscription-usage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:13px}
+.vop-subscription-usage-card{display:grid;gap:8px;padding:11px;border:1px solid var(--theme-border);border-radius:11px;background:var(--theme-surface-soft)}
+.vop-subscription-usage-card>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.vop-subscription-usage-card strong{color:var(--theme-title);font-size:9.5px}.vop-subscription-usage-card>div:first-child>span{color:var(--theme-text);font-size:9px;font-weight:800}
+.vop-subscription-usage-card small{color:var(--theme-muted);font-size:8.5px;line-height:1.45}
+.vop-subscription-meter{height:6px;overflow:hidden;border-radius:999px;background:var(--theme-border)}
+.vop-subscription-meter>span{display:block;height:100%;border-radius:inherit;background:var(--theme-accent);transition:width .25s ease}
+.vop-subscription-usage-card.warning .vop-subscription-meter>span{background:var(--vop-warning)}
+.vop-subscription-usage-card.danger .vop-subscription-meter>span{background:var(--vop-error)}
+.vop-subscription-plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:13px}
+.vop-subscription-plan-card{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--theme-border);border-radius:12px;background:var(--theme-surface-soft)}
+.vop-subscription-plan-card.current{box-shadow:inset 3px 0 var(--theme-accent);border-color:var(--theme-accent)}
+.vop-subscription-plan-card.incompatible{opacity:.78}
+.vop-subscription-plan-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:9px}
+.vop-subscription-price{color:var(--theme-muted);font-size:10px}.vop-subscription-price strong{color:var(--theme-title);font-size:20px}.vop-subscription-price span{font-size:8.5px}
+.vop-subscription-plan-limits,.vop-subscription-feature-summary{display:flex;flex-wrap:wrap;gap:6px}
+.vop-subscription-plan-limits span,.vop-subscription-feature-summary span{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:8px;background:var(--theme-surface);color:var(--theme-text);font-size:8.5px}
+.vop-subscription-plan-warning{display:flex;align-items:center;gap:6px;color:var(--vop-warning);font-size:9px;font-weight:800}
+.vop-subscription-plan-card footer{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:3px}
+.vop-billing-policy-card{margin-top:0}
+.vop-org-subscription-callout{border-color:var(--theme-border)!important;background:var(--theme-surface-soft)!important}
+@media(max-width:920px){.vop-subscription-summary-grid{grid-template-columns:1fr}.vop-subscription-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.vop-subscription-toolbar{display:grid}.vop-subscription-toolbar-actions,.vop-subscription-toolbar-actions label{width:100%}.vop-subscription-toolbar-actions .btn{flex:1}.vop-subscription-current dl{grid-template-columns:1fr}.vop-subscription-current dl>div{border-bottom:1px solid var(--theme-border)!important}.vop-subscription-current dl>div:last-child{border-bottom:0!important}.vop-subscription-usage-grid{grid-template-columns:1fr}.vop-subscription-plan-grid{grid-template-columns:1fr}}
