@@ -163,7 +163,8 @@ test('platform finance administration is Super Admin-only while organizations co
   assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payable item administration'\)/);
   assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payment provider administration'\)/);
   assert.match(core,/requireSuperAdminFinanceControl\(ctx,'payment reconciliation'\)/);
-  assert.match(core,/requireOrganizationSubscriptionConsumer/);
+  assert.match(core,/requireInstitutionalSubscriptionConsumer/);
+  assert.match(core,/billingTenantSubscriptionRef/);
   assert.match(core,/selectProviderForMethod/);
   assert.match(core,/scopedTransactionProjection/);
   assert.match(serverPermissions,/resource === 'payable_items'/);
