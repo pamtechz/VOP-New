@@ -57,7 +57,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
   const [editingPackage,setEditingPackage]=useState<SubscriptionPackage|null|undefined>(undefined);
   const [details,setDetails]=useState<PaymentDetails|null>(null);
   const [packageDraft,setPackageDraft]=useState({
-    name:'',description:'',price:'',interval:'month',sortOrder:'0',active:true,
+    name:'',description:'',price:'',interval:'month',sortOrder:'0',active:true,defaultForUnsubscribed:false,
     quotas:emptyPackageQuotas(),features:defaultPackageFeatures(),
   });
   const [billingSettings,setBillingSettings]=useState({usdToZmwRate:'',fxSource:'frankfurter',fxQuoteTtlMinutes:'1440',fxUpdatedAt:'',fxProviderDate:''});
@@ -248,7 +248,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     if(!isSuperAdmin)return;
     setEditingPackage(null);
     setPackageDraft({
-      name:'',description:'',price:'',interval:'month',sortOrder:String(packages.length),active:true,
+      name:'',description:'',price:'',interval:'month',sortOrder:String(packages.length),active:true,defaultForUnsubscribed:false,
       quotas:emptyPackageQuotas(),features:defaultPackageFeatures(),
     });
   };
@@ -272,7 +272,8 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
     setEditingPackage(item);
     setPackageDraft({
       name:item.name||'',description:item.description||'',price:String(item.priceUsd??item.price??''),
-      interval:item.interval||'month',sortOrder:String(item.sortOrder??0),active:item.active!==false,quotas,features,
+      interval:item.interval||'month',sortOrder:String(item.sortOrder??0),active:item.active!==false,
+      defaultForUnsubscribed:item.defaultForUnsubscribed===true,quotas,features,
     });
   };
   const savePackage=async()=>{
@@ -299,6 +300,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         name:packageDraft.name.trim(),description:packageDraft.description.trim(),priceUsd:price,
         interval:packageDraft.interval,
         sortOrder:Math.trunc(Number(packageDraft.sortOrder)||0),active:packageDraft.active,
+        defaultForUnsubscribed:price===0&&packageDraft.active&&packageDraft.defaultForUnsubscribed,
         quotas,features:packageDraft.features,
       });
       setEditingPackage(undefined);setMessage('Subscription package saved and checkout offer synchronized.');await load();
@@ -423,12 +425,13 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         <label><span>Canonical price (USD)</span><input value={packageDraft.price} inputMode="decimal" onChange={e=>setPackageDraft(v=>({...v,price:e.target.value}))} placeholder="0.00"/></label>
         <label><span>Base currency</span><input value="USD" disabled readOnly/></label>
         <label><span>Display order</span><input value={packageDraft.sortOrder} inputMode="numeric" onChange={e=>setPackageDraft(v=>({...v,sortOrder:e.target.value}))}/></label>
-        <label className="vop-checkbox"><input type="checkbox" checked={packageDraft.active} onChange={e=>setPackageDraft(v=>({...v,active:e.target.checked}))}/>Available to organizations</label>
+        <label className="vop-checkbox"><input type="checkbox" checked={packageDraft.active} onChange={e=>setPackageDraft(v=>({...v,active:e.target.checked,defaultForUnsubscribed:e.target.checked?v.defaultForUnsubscribed:false}))}/>Available to organizations</label>
+        <label className="vop-checkbox wide"><input type="checkbox" checked={packageDraft.defaultForUnsubscribed} disabled={!packageDraft.active||Number(packageDraft.price)!==0} onChange={e=>setPackageDraft(v=>({...v,defaultForUnsubscribed:e.target.checked}))}/>Default free plan for organizations without a subscription</label>
         <label className="wide"><span>Description</span><textarea value={packageDraft.description} onChange={e=>setPackageDraft(v=>({...v,description:e.target.value}))}/></label>
         <fieldset className="wide"><legend>Organization limits</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_QUOTAS.map(({key,label,description})=><label key={key} title={description}><span>{label}</span><input type="number" min="0" step="1" value={packageDraft.quotas[key]} inputMode="numeric" placeholder="Unlimited" aria-label={label+' limit; leave blank for Unlimited'} onChange={e=>setPackageDraft(v=>({...v,quotas:{...v.quotas,[key]:e.target.value}}))}/></label>)}</div></fieldset>
         <fieldset className="wide"><legend>Included capabilities</legend><div className="vop-payment-method-checks">{SUBSCRIPTION_FEATURES.map(({key,label})=><label key={key}><input type="checkbox" checked={packageDraft.features[key]===true} onChange={e=>setPackageDraft(v=>({...v,features:{...v.features,[key]:e.target.checked}}))}/>{label}</label>)}</div></fieldset>
       </div>
-      <p className="vop-payment-security">Leave a limit blank for Unlimited; enter 0 to disable new usage of that resource. Limits count active, non-archived resources. The package identifier and matching organization-subscription payable item are generated automatically. Seat limits apply to the whole organization: owners, admins, staff, mentors, teachers, candidates and learners all consume active seats. Candidate and mentor limits are additional caps inside the total seat allowance.</p>
+      <p className="vop-payment-security">Leave a limit blank for Unlimited; enter 0 to disable new usage of that resource. Limits count active, non-archived resources. A $0 active package can be marked as the default free plan; organizations without a plan are subscribed automatically. The package identifier and matching organization-subscription payable item are generated automatically for paid plans only. Seat limits apply to the whole organization: owners, admins, staff, mentors, teachers, candidates and learners all consume active seats. Candidate and mentor limits are additional caps inside the total seat allowance.</p>
       <button className="btn btn-primary vop-payment-submit" onClick={()=>void savePackage()} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<CreditCard size={16}/>}Save subscription package</button>
     </section></div>}
 
