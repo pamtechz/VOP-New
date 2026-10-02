@@ -273,6 +273,9 @@ const PaymentManagement:React.FC<Props>=({currentUser})=>{
       const value=item.quotas?.[key];
       quotas[key]=value===undefined||value===null?'':String(value);
     }
+    if(!quotas.maxSeats&&item.quotas?.maxUsers!==undefined&&item.quotas?.maxUsers!==null){
+      quotas.maxSeats=String(item.quotas.maxUsers);
+    }
     const features=defaultPackageFeatures();
     for(const [key] of PACKAGE_FEATURES){
       if(Object.hasOwn(item.features||{},key))features[key]=item.features[key]===true;
