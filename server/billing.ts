@@ -162,6 +162,14 @@ export async function quoteSubscriptionPlan(
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
   const profile=organizationBillingProfile(organization.data());
   const priceUsd=planUsdPrice(plan,settings);
+  if(priceUsd===0){
+    return {
+      countryCode:profile.countryCode,pricingRegion:profile.pricingRegion,
+      baseCurrency:'USD',baseAmountMinor:0,baseAmountDecimal:'0.00',
+      billingCurrency:profile.billingCurrency,amountMinor:0,amountDecimal:'0.00',
+      exchangeRate:1,fxSource:'free-plan',fxUpdatedAt:'',
+    };
+  }
   const baseAmountMinor=amountToMinor(priceUsd,'USD');
   if(profile.billingCurrency==='USD'){
     return {

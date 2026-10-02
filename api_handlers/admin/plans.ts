@@ -58,7 +58,7 @@ export default async function handler(req: Request, res: Response) {
     const requestedOrganizationId = text(body.organizationId);
     const ctx = await authenticateTenant(req, requestedOrganizationId || undefined);
     const readActions=['listPlans','listAvailablePlans','getSubscription','getBillingSettings'];
-    const selfServiceActions=['cancelSubscription','reactivateSubscription'];
+    const selfServiceActions=['activateFreePlan','cancelSubscription','reactivateSubscription'];
     await requirePermission(ctx, 'billing', readActions.includes(action) ? 'view' : selfServiceActions.includes(action) ? 'update' : 'manage');
 
     if (action === 'listPlans') {
@@ -179,6 +179,56 @@ export default async function handler(req: Request, res: Response) {
           ||(liveExpired?'subscription_expired':liveTermBlock?'subscription_inactive':''),
         billingSuspendedMessage:liveTermBlock||'',
       });
+    }
+
+    if (!ctx.isSuperAdmin && action === 'activateFreePlan') {
+      const organizationId=requestedOrganizationId||ctx.organizationId;
+      const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+      if(!organizationId||ctx.organizationId!==organizationId||!['owner','admin'].includes(role)){
+        throw new Error('Only an organization owner or administrator can activate a free subscription package.');
+      }
+      const planId=text(body.planId);
+      if(!planId)throw new Error('Choose a subscription plan.');
+      const organizationRef=ctx.db.doc(`organizations/${organizationId}`);
+      const planRef=ctx.db.doc(`system/plans/catalog/${planId}`);
+      const [organization,plan]=await Promise.all([organizationRef.get(),planRef.get()]);
+      if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
+      if(!plan.exists||plan.data()?.active!==true)throw new Error('The selected plan is not active.');
+      const planData=plan.data()||{};
+      const priceUsd=Number(planData.priceUsd??planData.price??0);
+      if(!Number.isFinite(priceUsd)||priceUsd!==0){
+        throw new Error('Paid subscription packages must be activated through secure checkout.');
+      }
+      const snapshot=planSnapshot(planId,planData);
+      await validateOrganizationPlanCapacity(ctx.db,organizationId,snapshot.quotas);
+      const subscriptionRef=organizationRef.collection('subscription').doc('current');
+      const previousSubscription=await subscriptionRef.get();
+      const previous=previousSubscription.data()||{};
+      if(previousSubscription.exists&&previous.status==='active'&&text(previous.planId)===planId
+          &&!previous.currentPeriodEnd&&organization.data()?.billingAccessSuspended!==true){
+        return res.status(200).json({ok:true,organizationId,planId,status:'active',alreadyActive:true,currentPeriodEnd:null});
+      }
+      const startedAt=new Date().toISOString();
+      await organizationRef.set({
+        plan:planId,quotas:snapshot.quotas,featureEntitlements:snapshot.features,
+        billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      await subscriptionRef.set({
+        organizationId,planId,planName:snapshot.name,planInterval:snapshot.interval,planVersion:snapshot.version,
+        planSnapshot:snapshot,status:'active',activationSource:'free_plan',
+        billingProvider:'none',externalCustomerId:null,externalSubscriptionId:null,
+        baseCurrency:SAAS_BASE_CURRENCY,baseAmountDecimal:'0.00',
+        billingCurrency:SAAS_BASE_CURRENCY,paidAmountDecimal:'0.00',exchangeRate:1,
+        currentPeriodStart:startedAt,currentPeriodEnd:null,
+        renewalMode:'none',cancelAtPeriodEnd:false,
+        previousPlanId:text(previous.planId)||null,
+        startedAt:FieldValue.serverTimestamp(),activatedAt:FieldValue.serverTimestamp(),
+        activatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
+      },{merge:false});
+      await writeTenantAudit(ctx,'subscription.free_activate',subscriptionRef.path,previous,{
+        planId,activationSource:'free_plan',planSnapshot:snapshot,currentPeriodStart:startedAt,currentPeriodEnd:null,
+      });
+      return res.status(200).json({ok:true,organizationId,planId,status:'active',currentPeriodEnd:null});
     }
 
     if (!ctx.isSuperAdmin && (action === 'cancelSubscription' || action === 'reactivateSubscription')) {
@@ -316,7 +366,9 @@ export default async function handler(req: Request, res: Response) {
         ?text(body.activationSource):'manual_override';
       const overrideReason=text(body.overrideReason);
       if(!overrideReason)throw new Error('A reason is required for a non-payment subscription activation.');
-      const period=periodFor(snapshot.interval);
+      const period=snapshot.priceUsd===0
+        ?{interval:snapshot.interval,start:new Date().toISOString(),end:null as string|null}
+        :periodFor(snapshot.interval);
       await organizationRef.set({
         plan:planId,quotas:snapshot.quotas,featureEntitlements:snapshot.features,
         billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
@@ -359,9 +411,11 @@ export default async function handler(req: Request, res: Response) {
       const wasScheduled=before.status==='active'&&before.cancelAtPeriodEnd===true;
       const existingEnd=Date.parse(text(before.currentPeriodEnd));
       const keepCurrentTerm=wasScheduled&&(!Number.isFinite(existingEnd)||existingEnd>Date.now());
-      const period=keepCurrentTerm
-        ?{interval:snapshotPlan.interval,start:text(before.currentPeriodStart)||new Date().toISOString(),end:text(before.currentPeriodEnd)||null}
-        :periodFor(snapshotPlan.interval);
+      const period=snapshotPlan.priceUsd===0
+        ?{interval:snapshotPlan.interval,start:text(before.currentPeriodStart)||new Date().toISOString(),end:null as string|null}
+        :keepCurrentTerm
+          ?{interval:snapshotPlan.interval,start:text(before.currentPeriodStart)||new Date().toISOString(),end:text(before.currentPeriodEnd)||null}
+          :periodFor(snapshotPlan.interval);
       await organizationRef.set({
         plan:planId,quotas:snapshotPlan.quotas,featureEntitlements:snapshotPlan.features,
         billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),

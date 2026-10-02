@@ -350,6 +350,27 @@ test('subscription authorization checks the live term instead of waiting for the
   assert.match(vercel,/\/api\/payments\/reconcile-cron/);
 });
 
+test('free subscription plans never enter the positive-amount payment pipeline',()=>{
+  const billing=read('server/billing.ts');
+  const plans=read('api_handlers/admin/plans.ts');
+  const workspace=read('src/components/admin/SubscriptionWorkspace.tsx');
+
+  assert.match(billing,/if\(priceUsd===0\)/);
+  assert.match(billing,/amountMinor:0,amountDecimal:'0\.00'/);
+  assert.match(billing,/fxSource:'free-plan'/);
+
+  assert.match(plans,/action === 'activateFreePlan'/);
+  assert.match(plans,/Paid subscription packages must be activated through secure checkout/);
+  assert.match(plans,/activationSource:'free_plan'/);
+  assert.match(plans,/currentPeriodStart:startedAt,currentPeriodEnd:null/);
+  assert.match(plans,/if \(data\.active && data\.priceUsd > 0\)/);
+
+  assert.match(workspace,/Activate free plan/);
+  assert.match(workspace,/action:'activateFreePlan'/);
+  assert.match(workspace,/const freePlan=Number\(plan\.priceUsd\?\?plan\.price\?\?0\)===0/);
+  assert.match(workspace,/>Free<\/strong>/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');
