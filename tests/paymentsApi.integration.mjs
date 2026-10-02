@@ -595,9 +595,13 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(overview.catalogPlan.id,packageId);
       assert.equal(overview.subscription.planSnapshot.quotas.maxSeats,100);
       assert.equal(overview.quotas.maxSeats,100);
+      const activeOrgMembers=await db.collection('organizations/'+orgA+'/members').where('active','==',true).get();
+      const expectedCandidateUsage=activeOrgMembers.docs
+        .filter(document=>['learner','student','candidate'].includes(String(document.data()?.role||'').toLowerCase())).length;
       assert.equal(overview.usage.seats,2,'only owner and organization admin consume member/staff seats');
       assert.equal(overview.usage.memberSeats,2);
-      assert.equal(overview.usage.candidates>=5,true,'learner payment accounts remain candidate usage only');
+      assert.equal(expectedCandidateUsage>0,true,'the fixture must include learner/candidate memberships');
+      assert.equal(overview.usage.candidates,expectedCandidateUsage,'candidate usage must equal active candidate-role memberships and remain separate from seats');
       assert.equal(overview.billingAccessSuspended,false);
 
       // Authorization must honor the subscription term immediately, even before
