@@ -294,7 +294,10 @@ export default async function handler(
       // keys that actually exist; otherwise the platform setting remains effective.
       const settingsData={...platformSettings,...scopedSettings};
       const policy=assessmentPolicy(lessonData,settingsData);
-      if(policy.threshold===null)return res.status(409).json({error:'This assessment is unavailable until an administrator configures its pass mark.'});
+      if(policy.threshold===null)return res.status(409).json({
+        error:'This assessment is unavailable until an administrator configures its pass mark.',
+        code:'ASSESSMENT_CONFIGURATION',
+      });
       const effectiveGuideId=legacyStudyGuide?'discover':guideId;
       const sourceQuizId=String(lessonData.sourceQuizId||'').trim();
       let attemptQuestionSource=Array.isArray(lessonData.questions)
@@ -927,7 +930,11 @@ export default async function handler(
       return res.status(409).json({ error: message, code:'ASSESSMENT_CONFIGURATION' });
     }
     if (message.includes('Assessment attempt limit reached')) {
-      return res.status(409).json({error:message,code:'ASSESSMENT_ATTEMPT_LIMIT'});
+      const maxMatch=message.match(/\(([0-9]+) attempt/i);
+      return res.status(409).json({
+        error:message,code:'ASSESSMENT_ATTEMPT_LIMIT',
+        maxAttempts:maxMatch?Number(maxMatch[1]):null,
+      });
     }
     if (message.includes('Assessment retake confirmation required')) {
       const scoreMatch=message.match(/current score of ([0-9]+(?:\.[0-9]+)?)%/i);
@@ -940,11 +947,21 @@ export default async function handler(
       });
     }
     if (message.includes('Assessment retake is available after')) {
-      return res.status(409).json({error:message,code:'ASSESSMENT_RETAKE_COOLDOWN'});
+      const retryMatch=message.match(/available after ([^\.]+(?:\.[0-9]{3}Z)?)/i);
+      return res.status(409).json({
+        error:message,code:'ASSESSMENT_RETAKE_COOLDOWN',
+        retryAt:retryMatch?retryMatch[1]:null,
+      });
     }
-    if (message.includes('Complete all published study lessons')
-        || message.includes('already been submitted')
-        || message.includes('attempt session')) return res.status(409).json({error:message,code:'ASSESSMENT_POLICY'});
+    if (message.includes('Complete all published study lessons')) {
+      return res.status(409).json({error:message,code:'ASSESSMENT_PREREQUISITE'});
+    }
+    if (message.includes('session has expired')) {
+      return res.status(409).json({error:message,code:'ASSESSMENT_SESSION_EXPIRED'});
+    }
+    if (message.includes('already been submitted')||message.includes('attempt session')) {
+      return res.status(409).json({error:message,code:'ASSESSMENT_SESSION_INVALID'});
+    }
     if (message.includes('profile was not found')) return res.status(404).json({ error: message });
     console.error('VOP study progress sync failed', error);
     return res.status(500).json({ error: 'Study progress could not be saved.' });
