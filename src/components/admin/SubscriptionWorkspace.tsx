@@ -116,7 +116,10 @@ export default function SubscriptionWorkspace({
   const usage=overview?.usage||{};
   const subscription=overview?.subscription||{};
   const currentPlanId=String(overview?.plan||subscription.planId||'');
-  const currentPlan=availablePlans.find(plan=>plan.id===currentPlanId)
+  const snapshotPlan=subscription.planSnapshot&&typeof subscription.planSnapshot==='object'
+    ?subscription.planSnapshot as SubscriptionPackageView:null;
+  const currentPlan=snapshotPlan
+    ||availablePlans.find(plan=>plan.id===currentPlanId)
     ||overview?.catalogPlan
     ||packages.find(plan=>plan.id===currentPlanId)
     ||null;
@@ -214,10 +217,10 @@ export default function SubscriptionWorkspace({
     :overview&&<>
       <div className="vop-subscription-summary-grid">
         <article className="vop-subscription-current">
-          <div className="vop-subscription-card-head"><div><span>Current plan</span><h3>{currentPlan?.name||String(subscription.planName||'No active plan')}</h3></div><span className={'vop-subscription-status '+(active?'active':'inactive')}>{subscriptionStatusLabel(status)}</span></div>
+          <div className="vop-subscription-card-head"><div><span>Current plan</span><h3>{String(subscription.planName||currentPlan?.name||'No active plan')}</h3></div><span className={'vop-subscription-status '+(active?'active':'inactive')}>{subscriptionStatusLabel(status)}</span></div>
           <p>{currentPlan?.description||'No subscription package is currently assigned.'}</p>
           <dl>
-            <div><dt>Billing interval</dt><dd>{currentPlan?subscriptionIntervalLabel(currentPlan.interval||subscription.planInterval):'—'}</dd></div>
+            <div><dt>Billing interval</dt><dd>{currentPlan||subscription.planInterval?subscriptionIntervalLabel(subscription.planInterval||currentPlan?.interval):'—'}</dd></div>
             <div><dt>Current term ends</dt><dd>{formatDate(subscription.currentPeriodEnd)}</dd></div>
             <div><dt>Activation</dt><dd>{reasonLabel(subscription.activationSource)}</dd></div>
             <div><dt>Billing currency</dt><dd>{String(subscription.billingCurrency||overview.billingProfile?.billingCurrency||currentPlan?.billingCurrency||'—')}</dd></div>
