@@ -14,10 +14,13 @@ export type SubscriptionPackageView={
   billingPrice?:string;billingCurrency?:string;exchangeRate?:number;billingCountryCode?:string;
 };
 
-type Organization={id:string;name:string};
+export type BillingTenantOption={
+  id:string;name:string;type:'organization'|'church'|'district'|'conference'|'union';
+};
 type Usage=Record<string,number>;
 type Overview={
-  organizationId:string;organizationName:string;plan:string|null;
+  billingTenantType:'organization'|'church'|'district'|'conference'|'union';
+  billingTenantId:string;tenantName:string;organizationId:string;organizationName:string;plan:string|null;
   catalogPlan:SubscriptionPackageView|null;
   subscription:Record<string,unknown>|null;
   quotas:Record<string,unknown>;
@@ -30,12 +33,13 @@ type Overview={
   exhaustedQuotaKeys?:string[];
   billingAccessSuspended:boolean;
   billingSuspendedReason:string;
+  subscriptionRequired?:boolean;
 };
 
 interface Props{
   currentUser:User;
   isSuperAdmin:boolean;
-  organizations:Organization[];
+  billingTenants:BillingTenantOption[];
   packages:SubscriptionPackageView[];
   busy?:boolean;
   onCreatePlan?:()=>void;
@@ -79,12 +83,29 @@ function planFitsUsage(plan:SubscriptionPackageView,usage:Usage,learnersCandidat
 }
 
 export default function SubscriptionWorkspace({
-  currentUser,isSuperAdmin,organizations,packages,busy=false,
+  currentUser,isSuperAdmin,billingTenants,packages,busy=false,
   onCreatePlan,onEditPlan,onDeletePlan,onOpenCheckout,
 }:Props){
   const organizationRole=String(currentUser.organizationRole||'');
-  const selfService=!isSuperAdmin&&['owner','admin'].includes(organizationRole)&&Boolean(currentUser.organizationId);
-  const [organizationId,setOrganizationId]=useState(isSuperAdmin?'':String(currentUser.organizationId||''));
+  const hierarchyType=String(currentUser.role||'').replace('_admin','') as BillingTenantOption['type'];
+  const isHierarchyAdmin=['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''));
+  const ownTarget:BillingTenantOption|null=isHierarchyAdmin&&currentUser.adminNodeId
+    ?{id:String(currentUser.adminNodeId),name:'My institution',type:hierarchyType}
+    :Boolean(currentUser.organizationId)&&['owner','admin'].includes(organizationRole)
+      ?{id:String(currentUser.organizationId),name:'My organization',type:'organization'}
+      :null;
+  const selfService=!isSuperAdmin&&Boolean(ownTarget);
+  const [billingTargetKey,setBillingTargetKey]=useState(
+    isSuperAdmin?'':ownTarget?ownTarget.type+':'+ownTarget.id:'',
+  );
+  const selectedTarget=useMemo(()=>{
+    if(!billingTargetKey)return null;
+    const separator=billingTargetKey.indexOf(':');
+    if(separator<1)return null;
+    const type=billingTargetKey.slice(0,separator) as BillingTenantOption['type'];
+    const id=billingTargetKey.slice(separator+1);
+    return {type,id,name:billingTenants.find(item=>item.type===type&&item.id===id)?.name||overview?.tenantName||id};
+  },[billingTargetKey,billingTenants,overview?.tenantName]);
   const [overview,setOverview]=useState<Overview|null>(null);
   const [availablePlans,setAvailablePlans]=useState<SubscriptionPackageView[]>([]);
   const [loading,setLoading]=useState(false);
@@ -94,20 +115,24 @@ export default function SubscriptionWorkspace({
 
   useEffect(()=>{
     if(!isSuperAdmin){
-      setOrganizationId(String(currentUser.organizationId||''));
+      setBillingTargetKey(ownTarget?ownTarget.type+':'+ownTarget.id:'');
       return;
     }
-    if(organizationId&&organizations.some(item=>item.id===organizationId))return;
-    setOrganizationId(organizations[0]?.id||'');
-  },[isSuperAdmin,currentUser.organizationId,organizations,organizationId]);
+    if(billingTargetKey&&billingTenants.some(item=>item.type+':'+item.id===billingTargetKey))return;
+    const first=billingTenants[0];
+    setBillingTargetKey(first?first.type+':'+first.id:'');
+  },[
+    isSuperAdmin,currentUser.organizationId,currentUser.organizationRole,currentUser.role,currentUser.adminNodeId,
+    billingTenants,billingTargetKey,
+  ]);
 
   const refresh=async()=>{
-    if(!organizationId){setOverview(null);setAvailablePlans([]);return;}
+    if(!selectedTarget){setOverview(null);setAvailablePlans([]);return;}
     setLoading(true);setError('');
     try{
       const [current,catalog]=await Promise.all([
-        planApi({action:'getSubscription',organizationId}),
-        planApi({action:'listAvailablePlans',organizationId}),
+        planApi({action:'getSubscription',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id}),
+        planApi({action:'listAvailablePlans',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id}),
       ]);
       setOverview(current as unknown as Overview);
       setAvailablePlans((catalog.items||[]) as SubscriptionPackageView[]);
@@ -116,7 +141,7 @@ export default function SubscriptionWorkspace({
       setOverview(null);
     }finally{setLoading(false);}
   };
-  useEffect(()=>{void refresh();},[organizationId]);
+  useEffect(()=>{void refresh();},[billingTargetKey]);
 
   const usage=overview?.usage||{};
   const subscription=overview?.subscription||{};
@@ -140,25 +165,30 @@ export default function SubscriptionWorkspace({
   },[availablePlans,packages,isSuperAdmin]);
 
   const assign=async(plan:SubscriptionPackageView)=>{
-    if(!isSuperAdmin||!organizationId)return;
+    if(!isSuperAdmin||!selectedTarget)return;
     const reason=await appPrompt('Record why this subscription is being activated without a customer payment.',{
       title:'Assign subscription plan',placeholder:'Complimentary access, migration, support adjustment…',
     });
     if(reason===null||!reason.trim())return;
     setWorking(true);setError('');
     try{
-      await planApi({action:'assignPlan',organizationId,planId:plan.id,activationSource:'manual_override',overrideReason:reason.trim()});
-      setMessage(plan.name+' assigned. The organization now uses this plan’s entitlement snapshot.');
+      await planApi({
+        action:'assignPlan',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,
+        planId:plan.id,activationSource:'manual_override',overrideReason:reason.trim(),
+      });
+      setMessage(plan.name+' assigned. The institution now uses this plan’s entitlement snapshot.');
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be assigned.');}
     finally{setWorking(false);}
   };
 
   const activateFreePlan=async(plan:SubscriptionPackageView)=>{
-    if(isSuperAdmin||!organizationId)return;
+    if(isSuperAdmin||!selectedTarget)return;
     setWorking(true);setError('');
     try{
-      const result=await planApi({action:'activateFreePlan',organizationId,planId:plan.id});
+      const result=await planApi({
+        action:'activateFreePlan',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,planId:plan.id,
+      });
       setMessage(result.alreadyActive===true
         ?plan.name+' is already active.'
         :plan.name+' activated. No payment is required for this plan.');
@@ -169,7 +199,7 @@ export default function SubscriptionWorkspace({
   };
 
   const cancel=async(mode:'period_end'|'immediate')=>{
-    if(!organizationId||(!isSuperAdmin&&mode==='immediate'))return;
+    if(!selectedTarget||(!isSuperAdmin&&mode==='immediate'))return;
     const confirmed=await appConfirm(
       mode==='period_end'
         ?'Schedule this subscription to end after the current paid term? Access remains active until the period ends.'
@@ -177,11 +207,14 @@ export default function SubscriptionWorkspace({
       {title:mode==='period_end'?'Cancel at period end':'Cancel subscription now',confirmLabel:mode==='period_end'?'Schedule cancellation':'Cancel now',tone:'danger'},
     );
     if(!confirmed)return;
-    const reason=await appPrompt('Record the cancellation reason.',{title:'Cancellation reason',placeholder:'Requested by organization, billing correction…'});
+    const reason=await appPrompt('Record the cancellation reason.',{title:'Cancellation reason',placeholder:'Requested by institution, billing correction…'});
     if(reason===null||!reason.trim())return;
     setWorking(true);setError('');
     try{
-      await planApi({action:'cancelSubscription',organizationId,mode,reason:reason.trim()});
+      await planApi({
+        action:'cancelSubscription',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,
+        mode,reason:reason.trim(),
+      });
       setMessage(mode==='period_end'?'Cancellation scheduled for the end of the current term.':'Subscription cancelled and paid feature access suspended.');
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be cancelled.');}
@@ -189,7 +222,7 @@ export default function SubscriptionWorkspace({
   };
 
   const reactivate=async()=>{
-    if(!organizationId)return;
+    if(!selectedTarget)return;
     let overrideReason='';
     if(isSuperAdmin){
       const reason=await appPrompt('Record why this subscription is being reactivated without a new payment.',{
@@ -200,7 +233,10 @@ export default function SubscriptionWorkspace({
     }
     setWorking(true);setError('');
     try{
-      await planApi({action:'reactivateSubscription',organizationId,...(overrideReason?{overrideReason}:{})});
+      await planApi({
+        action:'reactivateSubscription',billingTenantType:selectedTarget.type,billingTenantId:selectedTarget.id,
+        ...(overrideReason?{overrideReason}:{}),
+      });
       setMessage(cancelAtPeriodEnd?'Scheduled cancellation removed.':'Subscription reactivated.');
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be reactivated.');}
