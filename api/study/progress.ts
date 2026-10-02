@@ -294,6 +294,10 @@ export default async function handler(
         });
       }
       const scoreKey=`${policyOrganizationId||'platform'}:${language}:${effectiveGuideId}:${lessonId}`;
+      const graduationRef=policyOrganizationId&&useTenantGuide&&guideId!=='discover'
+        ?db.doc('graduationRequests/grad-'+createHash('sha256')
+          .update(policyOrganizationId+':'+decoded.uid+':'+guideId).digest('hex').slice(0,48))
+        :null;
       const policyRef=userRef.collection('assessmentAttemptPolicy').doc(
         retakePolicyKey(policyOrganizationId,language,effectiveGuideId,lessonId));
       const historical=await userRef.collection('assessmentAttempts').where('lessonId','==',lessonId).limit(500).get();
@@ -313,9 +317,9 @@ export default async function handler(
         return timestampMs(doc.data()?.createdAt)>timestampMs(latest.data()?.createdAt)?doc:latest;
       },null as (typeof relevant)[number]|null);
       const reserved=await db.runTransaction(async transaction=>{
-        const [currentPolicy,currentUser]=await Promise.all([
-          transaction.get(policyRef),transaction.get(userRef),
-        ]);
+        const currentPolicy=await transaction.get(policyRef);
+        const currentUser=await transaction.get(userRef);
+        const graduationRequest=graduationRef?await transaction.get(graduationRef):null;
         const policyData=currentPolicy.data()||{};
         const priorAttempts=currentPolicy.exists
           ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
@@ -341,8 +345,11 @@ export default async function handler(
         if(isRetake&&hasCurrentScore){
           const nextScores={...scores};
           delete nextScores[scoreKey];
+          const information=currentData.information&&typeof currentData.information==='object'
+            ?currentData.information as Record<string,unknown>:{};
           transaction.set(userRef,{
             progress:{...progress,guideScores:nextScores,updatedAt:FieldValue.serverTimestamp()},
+            information:{...information,graduating:false},
             updatedAt:FieldValue.serverTimestamp(),
           },{merge:true});
           if(latestAttempt){
@@ -350,6 +357,26 @@ export default async function handler(
               creditStatus:'revoked_for_retake',creditRevokedAt:FieldValue.serverTimestamp(),
               supersededBySessionId:sessionId,updatedAt:FieldValue.serverTimestamp(),
             },{merge:true});
+          }
+          if(graduationRequest?.exists){
+            const review=graduationRequest.data()||{};
+            const reviewStatus=String(review.status||'').trim();
+            if(reviewStatus&&reviewStatus!=='approved'&&reviewStatus!=='rejected'){
+              const decisions=Array.isArray(review.decisions)?review.decisions.slice():[];
+              decisions.push({
+                stageId:'system_retake',stageLabel:'Assessment retake',
+                decision:'rejected',
+                notes:'Eligibility was revoked automatically because the learner started a new assessment attempt.',
+                approverUid:'system:retake',approverRole:'system',decidedAt:startedAtIso,
+              });
+              transaction.set(graduationRequest.ref,{
+                status:'rejected',rejectionReason:'assessment_retake',
+                eligibilityRevokedAt:FieldValue.serverTimestamp(),
+                supersededBySessionId:sessionId,approverNotes:'Eligibility revoked by assessment retake.',
+                decisions,revision:Math.max(1,Number(review.revision||0)+1),
+                approvedAt:null,updatedAt:FieldValue.serverTimestamp(),
+              },{merge:true});
+            }
           }
         }
         const attemptNumber=priorAttempts+1;
