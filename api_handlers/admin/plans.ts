@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, accessibleOrganizationIds, ensureOrganizationDefaultSubscription, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot, organizationSubscriptionTermBlockReason } from '../../server/tenant.js';
+import {
+  authenticateTenant, billingTenantAudienceEnabled, billingTenantFromContext, billingTenantRef,
+  billingTenantSubscriptionRef, billingTenantSubscriptionTermBlockReason, billingTenantUsageSnapshot,
+  ensureBillingTenantDefaultSubscription, validateBillingTenantPlanCapacity, writeTenantAudit,
+  type BillingTenantType,
+} from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
-import { loadPlatformBillingSettings, quoteSubscriptionPlan, refreshPlatformBillingRate, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
+import { loadPlatformBillingSettings, quoteSubscriptionPlanForTenant, refreshPlatformBillingRate, SAAS_BASE_CURRENCY, ZAMBIA_BILLING_CURRENCY } from '../../server/billing.js';
 import { sendFreeTierUpgradeReminder } from '../../server/subscriptionReminders.js';
 import { SUBSCRIPTION_QUOTAS, normalizeSubscriptionFeatures, normalizeSubscriptionQuotas, subscriptionQuotaLimit } from '../../shared/subscriptions.js';
 
@@ -48,6 +53,75 @@ function planSnapshot(planId:string,data:Record<string,unknown>){
     baseCurrency:text(data.baseCurrency,SAAS_BASE_CURRENCY),
     quotas:normalizeSubscriptionQuotas(data.quotas),
     features:normalizeSubscriptionFeatures(data.features),
+  };
+}
+
+const BILLING_TENANT_TYPES=new Set<BillingTenantType>(['organization','church','district','conference','union']);
+
+function normalizedBillingTenantType(value:unknown):BillingTenantType{
+  const candidate=text(value) as BillingTenantType;
+  if(!BILLING_TENANT_TYPES.has(candidate))throw new Error('Choose a valid institutional billing tenant type.');
+  return candidate;
+}
+
+function targetFromRequest(
+  ctx:Awaited<ReturnType<typeof authenticateTenant>>,
+  body:Record<string,unknown>,
+){
+  if(!ctx.isSuperAdmin){
+    const inferred=billingTenantFromContext(ctx);
+    if(!inferred)throw new Error('This account is not linked to an institutional billing tenant.');
+    return inferred;
+  }
+  const organizationId=text(body.organizationId);
+  const explicitId=text(body.billingTenantId);
+  const type=body.billingTenantType!==undefined
+    ?normalizedBillingTenantType(body.billingTenantType)
+    :organizationId?'organization':explicitId?normalizedBillingTenantType(body.billingTenantType||'organization'):'organization';
+  const id=explicitId||organizationId;
+  if(!id)throw new Error('Choose an institutional billing tenant.');
+  return {type,id};
+}
+
+function selfServiceManager(
+  ctx:Awaited<ReturnType<typeof authenticateTenant>>,
+  target:{type:BillingTenantType;id:string},
+){
+  if(ctx.isSuperAdmin)return true;
+  const own=billingTenantFromContext(ctx);
+  if(!own||own.type!==target.type||own.id!==target.id)return false;
+  if(target.type==='organization'){
+    const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+    return ['owner','admin'].includes(role);
+  }
+  return ctx.tenantType==='hierarchy';
+}
+
+function tenantLabel(type:BillingTenantType){
+  return type==='organization'?'organization':type;
+}
+
+async function tenantSnapshotOrThrow(
+  ctx:Awaited<ReturnType<typeof authenticateTenant>>,
+  target:{type:BillingTenantType;id:string},
+){
+  const ref=billingTenantRef(ctx.db,target.type,target.id);
+  const snapshot=await ref.get();
+  if(!snapshot.exists)throw new Error('The '+tenantLabel(target.type)+' billing tenant is not available.');
+  const data=snapshot.data()||{};
+  const status=text(data.status).toLowerCase();
+  if(target.type==='organization'&&status!=='active')throw new Error('The organization is not available.');
+  if(target.type!=='organization'&&['inactive','disabled','archived','deleted'].includes(status)){
+    throw new Error('The '+target.type+' billing tenant is not available.');
+  }
+  return {ref,snapshot,data};
+}
+
+function targetResponse(target:{type:BillingTenantType;id:string}){
+  return {
+    billingTenantType:target.type,
+    billingTenantId:target.id,
+    organizationId:target.type==='organization'?target.id:'',
   };
 }
 
