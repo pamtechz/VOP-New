@@ -371,6 +371,30 @@ test('free subscription plans never enter the positive-amount payment pipeline',
   assert.match(workspace,/>Free<\/strong>/);
 });
 
+test('organizations without a plan automatically receive the default free subscription',()=>{
+  const tenant=read('server/tenant.ts');
+  const organizations=read('api_handlers/admin/organizations.ts');
+  const permissions=read('server/permissions.ts');
+  const plans=read('api_handlers/admin/plans.ts');
+  const payments=read('src/pages/PaymentManagement.tsx');
+
+  assert.match(tenant,/defaultFreeSubscriptionPlan/);
+  assert.match(tenant,/ensureOrganizationDefaultSubscription/);
+  assert.match(tenant,/defaultForUnsubscribed===true/);
+  assert.match(tenant,/activationSource:'automatic_free_plan'/);
+  assert.match(tenant,/currentPeriodEnd:null/);
+  assert.match(tenant,/renewalMode:'none'/);
+
+  assert.match(organizations,/ensureOrganizationDefaultSubscription\(bootstrapDb,organizationId,ctx\.auth\.uid\)/);
+  assert.match(permissions,/ensureOrganizationDefaultSubscription\(db,organizationId\)/);
+  assert.match(plans,/await ensureOrganizationDefaultSubscription\(ctx\.db,organizationId,ctx\.auth\.uid\)/);
+  assert.match(plans,/defaultForUnsubscribed:priceUsd===0/);
+  assert.match(plans,/where\('defaultForUnsubscribed','==',true\)/);
+
+  assert.match(payments,/Default free plan for organizations without a subscription/);
+  assert.match(payments,/defaultForUnsubscribed:price===0&&packageDraft\.active/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');
