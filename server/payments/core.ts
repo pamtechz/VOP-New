@@ -6,6 +6,7 @@ import {
   normalizePhone, safePaymentId, safeReference,
   type PayableItem, type PaymentMethod, type PaymentRefund, type PaymentStatus, type PaymentTransaction,
 } from '../../shared/payments.js';
+import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 import {
   accessibleOrganizationIds, authenticateTenant, organizationInHierarchyScope,
   tenantOwnerKey, validateOrganizationPlanCapacity, writeTenantAudit, type TenantContext,
@@ -112,8 +113,10 @@ async function validateTarget(
     return {
       targetCollection:'plans',title:text(data.name)||itemId,
       planSnapshot:{
-        id:itemId,name:text(data.name),interval:text(data.interval)||'month',
-        quotas:object(data.quotas),features:object(data.features),
+        id:itemId,name:text(data.name),description:text(data.description),interval:text(data.interval)||'month',
+        version:Math.max(1,Math.trunc(Number(data.version)||1)),
+        priceUsd:Number(data.priceUsd ?? data.price ?? 0),baseCurrency:text(data.baseCurrency)||'USD',
+        quotas:normalizeSubscriptionQuotas(data.quotas),features:normalizeSubscriptionFeatures(data.features),
       },
     };
   }
@@ -447,8 +450,12 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     const currentData=current.data()||{};
     const end=Date.parse(text(currentData.currentPeriodEnd));
     const renewalWindowMs=7*24*60*60*1000;
-    if(currentData.status==='active'&&text(currentData.planId)===text(item.itemId)
-      &&Number.isFinite(end)&&end-Date.now()>renewalWindowMs){
+    const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===text(item.itemId);
+    const planInterval=text(plan.data()?.interval)||'month';
+    if(sameActivePlan&&planInterval==='one_time'){
+      throw new Error('This organization already has this one-time subscription package active.');
+    }
+    if(sameActivePlan&&Number.isFinite(end)&&end-Date.now()>renewalWindowMs){
       throw new Error('This organization already has this subscription package active. Renewal opens seven days before the current period ends.');
     }
   }
@@ -710,30 +717,38 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
     const plan=object(config.planSnapshot);
     const planId=text(plan.id)||text(payment.itemId);
     const interval=text(plan.interval)||'month';
+    const entitlementSnapshot={
+      id:planId,name:text(plan.name),description:text(plan.description),interval,
+      version:Math.max(1,Math.trunc(Number(plan.version)||1)),
+      priceUsd:Number(plan.priceUsd||0),baseCurrency:text(plan.baseCurrency)||'USD',
+      quotas:normalizeSubscriptionQuotas(plan.quotas),features:normalizeSubscriptionFeatures(plan.features),
+    };
     const now=new Date();
     const currentSubscription=await db.doc('organizations/'+organizationId+'/subscription/current').get();
     const currentData=currentSubscription.data()||{};
     const existingEnd=Date.parse(text(currentData.currentPeriodEnd));
     const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===planId
-      &&Number.isFinite(existingEnd)&&existingEnd>now.getTime();
+      &&interval!=='one_time'&&Number.isFinite(existingEnd)&&existingEnd>now.getTime();
     const start=sameActivePlan&&text(currentData.currentPeriodStart)
       ?new Date(text(currentData.currentPeriodStart))
       :now;
     const extensionBase=sameActivePlan?new Date(existingEnd):now;
-    const end=new Date(extensionBase);
-    if(interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
-    else if(interval==='month')end.setUTCMonth(end.getUTCMonth()+1);
-    else end.setUTCFullYear(end.getUTCFullYear()+100);
+    const end=interval==='one_time'?null:new Date(extensionBase);
+    if(end&&interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
+    else if(end&&interval==='month')end.setUTCMonth(end.getUTCMonth()+1);
     const pricing=object(object(payment.itemSnapshot).pricing);
     batch.set(db.doc('organizations/'+organizationId),{
-      plan:planId,quotas:object(plan.quotas),featureEntitlements:object(plan.features),
+      plan:planId,quotas:entitlementSnapshot.quotas,featureEntitlements:entitlementSnapshot.features,
       billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
     batch.set(db.doc('organizations/'+organizationId+'/subscription/current'),{
-      organizationId,planId,status:'active',
+      organizationId,planId,planName:entitlementSnapshot.name,planInterval:interval,
+      planVersion:entitlementSnapshot.version,planSnapshot:entitlementSnapshot,status:'active',
       activationSource:'payment',billingProvider:text(payment.provider),lastPaymentId:paymentId,
       lastPaidAt:FieldValue.serverTimestamp(),currentPeriodStart:start.toISOString(),
-      currentPeriodEnd:end.toISOString(),renewalMode:'manual',
+      currentPeriodEnd:end?end.toISOString():null,renewalMode:'manual',cancelAtPeriodEnd:false,
+      cancellationReason:null,cancellationRequestedAt:null,
+      previousPlanId:text(currentData.planId)&&text(currentData.planId)!==planId?text(currentData.planId):null,
       renewalCount:Number(currentData.renewalCount||0)+(sameActivePlan?1:0),
       ...(sameActivePlan?{renewedAt:FieldValue.serverTimestamp(),previousPeriodEnd:new Date(existingEnd).toISOString()}:{}),
       baseCurrency:text(pricing.baseCurrency)||'USD',baseAmountDecimal:text(pricing.baseAmountDecimal),
@@ -1265,12 +1280,18 @@ export async function reconcileExpiredOrganizationSubscriptions(db:Firestore,lim
     if(!Number.isFinite(end)||end>now)continue;
     const organizationRef=doc.ref.parent.parent;
     if(!organizationRef)continue;
+    const cancelled=data.cancelAtPeriodEnd===true;
     const batch=db.batch();
     batch.set(doc.ref,{
-      status:'expired',expiredAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      status:cancelled?'cancelled':'expired',
+      cancelAtPeriodEnd:false,
+      ...(cancelled?{cancelledAt:FieldValue.serverTimestamp()}:{expiredAt:FieldValue.serverTimestamp()}),
+      updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
     batch.set(organizationRef,{
-      billingAccessSuspended:true,billingSuspendedReason:'subscription_expired',updatedAt:FieldValue.serverTimestamp(),
+      billingAccessSuspended:true,
+      billingSuspendedReason:cancelled?'subscription_cancelled':'subscription_expired',
+      updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
     await batch.commit();
     summary.expired++;
