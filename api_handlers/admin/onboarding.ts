@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, writeTenantAudit } from '../../server/tenant.js';
+import { authenticateTenant, ensureOrganizationDefaultSubscription, writeTenantAudit } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { normalizedBillingCountryName, organizationBillingProfile } from '../../server/billing.js';
 
@@ -57,9 +57,23 @@ export default async function handler(req: Request, res: Response) {
     batch.set(ref.collection('settings').doc('organization'), { ...settings, organizationId, updatedAt: now }, { merge: true });
     batch.set(ref.collection('onboarding').doc('state'), { status: 'initialized', profile, branding, settings, completedSteps: [], updatedAt: now }, { merge: true });
     await batch.commit();
-    await writeTenantAudit(ctx, 'organization.initialize', ref.path, undefined, data);
+    const defaultSubscription=await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
+    const created=await ref.get();
+    const effectivePlan=text(created.data()?.plan)||data.plan;
+    await writeTenantAudit(ctx, 'organization.initialize', ref.path, undefined, {
+      ...data,
+      plan:effectivePlan,
+      defaultSubscriptionPlanId:defaultSubscription?.planId||null,
+    });
 
-    return res.status(200).json({ ok: true, organization: { id: organizationId, name, status: 'active', plan: data.plan }, next: ['owner_assignment','branding','settings','content','invite_users'] });
+    return res.status(200).json({
+      ok:true,
+      organization:{
+        id:organizationId,name,status:'active',plan:effectivePlan,
+        defaultSubscriptionPlanId:defaultSubscription?.planId||null,
+      },
+      next:['owner_assignment','branding','settings','content','invite_users'],
+    });
   } catch (error) {
     return res.status(403).json({ error: error instanceof Error ? error.message : 'Organization onboarding failed.' });
   }
