@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot } from '../../server/tenant.js';
+import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot, organizationSubscriptionTermBlockReason } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
@@ -149,6 +149,8 @@ export default async function handler(req: Request, res: Response) {
       const currentPlanId=text(organizationData.plan);
       const catalogPlan=currentPlanId?await ctx.db.doc(`system/plans/catalog/${currentPlanId}`).get():null;
       const subscriptionData=subscription.exists?subscription.data()||{}:null;
+      const liveTermBlock=await organizationSubscriptionTermBlockReason(ctx.db,organizationId);
+      const storedSuspended=organizationData.billingAccessSuspended===true;
       return res.status(200).json({
         ok:true,
         organizationId,
@@ -168,8 +170,10 @@ export default async function handler(req: Request, res: Response) {
         featureEntitlements:organizationData.featureEntitlements||{},
         usage,
         billingProfile:organizationData.billingProfile||{},
-        billingAccessSuspended:organizationData.billingAccessSuspended===true,
-        billingSuspendedReason:text(organizationData.billingSuspendedReason),
+        billingAccessSuspended:storedSuspended||Boolean(liveTermBlock),
+        billingSuspendedReason:text(organizationData.billingSuspendedReason)
+          ||(liveTermBlock?'subscription_inactive':''),
+        billingSuspendedMessage:liveTermBlock||'',
       });
     }
 
