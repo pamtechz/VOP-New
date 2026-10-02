@@ -1251,6 +1251,33 @@ export async function processProviderWebhook(
   }
 }
 
+export async function reconcileExpiredOrganizationSubscriptions(db:Firestore,limit=200){
+  const snap=await db.collectionGroup('subscription').where('status','==','active').limit(Math.max(1,Math.min(500,limit))).get();
+  const now=Date.now();
+  const summary={checked:0,expired:0};
+  for(const doc of snap.docs){
+    if(doc.id!=='current')continue;
+    summary.checked++;
+    const data=doc.data()||{};
+    const interval=text(data.interval||data.planInterval);
+    if(interval==='one_time')continue;
+    const end=Date.parse(text(data.currentPeriodEnd));
+    if(!Number.isFinite(end)||end>now)continue;
+    const organizationRef=doc.ref.parent.parent;
+    if(!organizationRef)continue;
+    const batch=db.batch();
+    batch.set(doc.ref,{
+      status:'expired',expiredAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    batch.set(organizationRef,{
+      billingAccessSuspended:true,billingSuspendedReason:'subscription_expired',updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    await batch.commit();
+    summary.expired++;
+  }
+  return summary;
+}
+
 export async function reconcilePendingPayments(db:Firestore,limit=100){
   const statuses=['initiated','pending','requires_action','processing'];
   const snap=await db.collection('paymentTransactions').where('status','in',statuses).limit(Math.max(1,Math.min(200,limit))).get();
