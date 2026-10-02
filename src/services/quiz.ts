@@ -69,9 +69,11 @@ export function isPlayableQuizConfigured(questions: Question[]): boolean {
     if (question.options !== undefined) {
       if (!Array.isArray(question.options) || question.options.length < 2
           || !question.options.every(option => typeof option === 'string' && Boolean(option.trim()))) return false;
+    } else if (question.questionType === 'true_false') {
+      // Canonical true/false answer keys are deliberately server-only.
     } else if (typeof question.answer !== 'boolean') {
-      // Optionless assessments must be explicit legacy true/false questions;
-      // never guess question type from missing keys.
+      // Legacy optionless questions without an explicit safe type remain
+      // invalid rather than guessing their shape.
       return false;
     }
   }
@@ -88,6 +90,6 @@ export function areQuizResponsesComplete(
     const answer = responses[index];
     return Array.isArray(question.options)
       ? typeof answer === 'number' && Number.isInteger(answer) && answer >= 0 && answer < question.options.length
-      : typeof answer === 'boolean';
+      : (question.questionType === 'true_false' || typeof question.answer === 'boolean') && typeof answer === 'boolean';
   });
 }
