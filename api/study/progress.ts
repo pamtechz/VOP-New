@@ -579,6 +579,9 @@ export default async function handler(
     }
 
     if (action === 'saveLessonResume') {
+      if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
+        return res.status(400).json({ error: 'Only study lessons support resume positions.' });
+      }
       const pageIndex = Number(body.pageIndex);
       const structuredPages = Array.isArray(lessonData.chapters)
         ? curriculumPages(lessonData.chapters as Parameters<typeof curriculumPages>[0])
@@ -587,9 +590,6 @@ export default async function handler(
       const maxPageIndex = canonicalPageCount - 1;
       if (!Number.isInteger(pageIndex) || pageIndex < 0 || canonicalPageCount < 1 || pageIndex > maxPageIndex) {
         return res.status(400).json({ error: 'A valid published lesson page position is required.' });
-      }
-      if (String(lessonData.type ?? 'Lesson') !== 'Lesson') {
-        return res.status(400).json({ error: 'Only study lessons support resume positions.' });
       }
 
       const resumeKey = `${language}:${guideId}:${lessonId}`;
