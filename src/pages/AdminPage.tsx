@@ -156,8 +156,7 @@ async function loadOrganizationSubscriptionFeatures(organizationId:string){
   const body=await response.json().catch(()=>({})) as {error?:string;plan?:unknown;featureEntitlements?:unknown};
   if(!response.ok)throw new Error(body.error||'Subscription entitlements could not be loaded.');
   if(String(body.plan||'').trim()==='unsubscribed'){
-    return Object.fromEntries(SUBSCRIPTION_FEATURES.map(feature=>[feature.key,false]))
-      as Partial<Record<SubscriptionFeatureKey,boolean>>;
+    return Object.fromEntries(SUBSCRIPTION_FEATURES.map(feature=>[feature.key,false])) as Partial<Record<SubscriptionFeatureKey,boolean>>;
   }
   return body.featureEntitlements&&typeof body.featureEntitlements==='object'&&!Array.isArray(body.featureEntitlements)
     ?body.featureEntitlements as Partial<Record<SubscriptionFeatureKey,boolean>>
