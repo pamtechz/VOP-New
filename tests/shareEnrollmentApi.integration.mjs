@@ -185,6 +185,12 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       });
       assert.equal(billedCandidate.status,400,JSON.stringify(billedCandidate));
       assert.match(String(billedCandidate.error||''),/candidate limit/i);
+
+      const superAdminOverride=await callOrganization(platformAdmin,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaCandidateThree.uid,role:'learner',active:true,
+      });
+      assert.equal(superAdminOverride.status,200,JSON.stringify(superAdminOverride));
+
       await db.doc('system/billing').set({
         subscriptionAudience:{
           learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
@@ -195,7 +201,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       assert.equal(listed.status,200,JSON.stringify(listed));
       const quotaSummary=listed.items.find(item=>item.id===quotaOrg);
       assert.equal(quotaSummary.memberCount,4);
-      assert.equal(quotaSummary.candidateCount,2);
+      assert.equal(quotaSummary.candidateCount,3);
     });
 
     await t.test('active members create explicit lesson invitations and the recipient joins only after accepting',async()=>{
