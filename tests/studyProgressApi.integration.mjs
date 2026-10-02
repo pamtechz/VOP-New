@@ -193,8 +193,11 @@ test('study progress: server grades and guide paths stay within authorized tenan
       // A normal click must not destroy a passed mark. The server requires
       // explicit destructive-retake confirmation and leaves the score intact.
       const warning=await startQuiz(passedRetakeLearner);
-      assert.equal(warning.status,409,JSON.stringify(warning));
+      assert.equal(warning.status,200,JSON.stringify(warning));
+      assert.equal(warning.ok,false);
       assert.equal(warning.code,'ASSESSMENT_RETAKE_CONFIRMATION');
+      assert.equal(warning.confirmationRequired,true);
+      assert.equal(warning.previousScore,100);
       assert.match(String(warning.error||''),/current score of 100%|credit will be revoked/i);
       assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],100);
       assert.equal((await db.doc('graduationRequests/'+graduationId).get()).data()?.status,'pending_organization');
