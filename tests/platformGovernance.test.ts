@@ -233,6 +233,7 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(permissions,/mentoring:'mentorship'/);
   assert.match(permissions,/Object\.hasOwn\(entitlements,feature\)/);
   assert.match(permissions,/subscription plan does not include/);
+  assert.match(permissions,/plan\|\|'\'\)\.trim\(\)==='unsubscribed'/);
   assert.match(permissions,/requireSubscriptionFeature/);
 
   assert.match(enrollCandidate,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
@@ -240,6 +241,7 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',candidateOrganizationId\)/);
 
   assert.match(admin,/loadOrganizationSubscriptionFeatures/);
+  assert.match(admin,/SUBSCRIPTION_FEATURES\.map\(feature=>\[feature\.key,false\]\)/);
   assert.match(admin,/subscriptionFeatureForTab/);
   assert.match(admin,/candidates:'candidates'/);
   assert.match(admin,/certification:'certification'/);
