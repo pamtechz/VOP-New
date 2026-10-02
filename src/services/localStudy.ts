@@ -75,6 +75,17 @@ export interface AssessmentPolicyResult {
   };
 }
 
+export class AssessmentStartConditionError extends Error {
+  code:string;
+  previousScore:number|null;
+  constructor(message:string,code:string,previousScore:number|null=null){
+    super(message);
+    this.name='AssessmentStartConditionError';
+    this.code=code;
+    this.previousScore=previousScore;
+  }
+}
+
 export interface AssessmentSubmissionResult {
   score: number | null;
   passed: boolean | null;
@@ -101,7 +112,17 @@ export async function beginQuizAttempt(
     headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
     body:JSON.stringify({action:'startQuiz',language,guideId,lessonId:testId,confirmRetake}),
   });
-  const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{error?:unknown};
+  const body=await response.json().catch(()=>({})) as Partial<AssessmentPolicyResult>&{
+    ok?:unknown;error?:unknown;code?:unknown;confirmationRequired?:unknown;previousScore?:unknown;
+  };
+  const code=typeof body.code==='string'?body.code:'';
+  if(code==='ASSESSMENT_RETAKE_CONFIRMATION'&&body.confirmationRequired===true){
+    throw new AssessmentStartConditionError(
+      typeof body.error==='string'?body.error:'Confirm the retake before replacing the current result.',
+      code,
+      Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
+    );
+  }
   if(!response.ok)throw new Error(typeof body.error==='string'?body.error:'The assessment could not be started.');
   if(!body.sessionId||!body.assessmentPolicy||!Array.isArray(body.questions)||!body.questions.length){
     throw new Error('The assessment could not load its published questions.');
