@@ -99,8 +99,9 @@ export async function verifiedAssessmentEvidence(
       const threshold=configuredPassThreshold(attempt.data.threshold)
         ??configuredPassThreshold(assessment.assessmentPassThreshold)
         ??configuredPassThreshold(fallbackPassMark);
-      if(threshold===null||!validScore(attemptScore)||attemptScore!==currentScore
-        ||attempt.data.passed!==true||attemptScore<threshold)return null;
+      const certificationMinimum=configuredPassThreshold(fallbackPassMark);
+      if(threshold===null||certificationMinimum===null||!validScore(attemptScore)||attemptScore!==currentScore
+        ||attempt.data.passed!==true||attemptScore<threshold||attemptScore<certificationMinimum)return null;
       rows.push({
         assessmentId,score:attemptScore,threshold,attemptId:attempt.id,
         attemptNumber:Number.isInteger(Number(attempt.data.attemptNumber))
@@ -112,9 +113,12 @@ export async function verifiedAssessmentEvidence(
 
     // Migration compatibility: historical records created before detailed
     // attempts existed can use the authoritative server-written guide score.
-    const legacyThreshold=configuredPassThreshold(assessment.assessmentPassThreshold)
-      ??configuredPassThreshold(fallbackPassMark);
-    if(legacyThreshold===null||currentScore<legacyThreshold)return null;
+    const assessmentThreshold=configuredPassThreshold(assessment.assessmentPassThreshold);
+    const certificationMinimum=configuredPassThreshold(fallbackPassMark);
+    if(certificationMinimum===null)return null;
+    const legacyThreshold=assessmentThreshold===null
+      ?certificationMinimum:Math.max(certificationMinimum,assessmentThreshold);
+    if(currentScore<legacyThreshold)return null;
     rows.push({
       assessmentId,score:currentScore,threshold:legacyThreshold,
       attemptId:null,attemptNumber:null,source:'legacy_score',
