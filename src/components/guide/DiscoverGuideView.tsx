@@ -37,8 +37,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   guide,currentUser,onBack,onSelectLesson,onOpenCertificate,
 }) => {
   const settings=getStoredSettings();
-  const t=(key:string,fallback:string)=>
-    getTranslation(key,getUiLocale(),settings.customTranslations,fallback,'DiscoverGuideView');
+  const t=(key:string,fallback:string,vars?:Record<string,string|number>)=>
+    getTranslation(key,getUiLocale(),settings.customTranslations,fallback,'DiscoverGuideView',vars);
   const threshold=settings.quizPassThreshold;
   const studyLessons=useMemo(()=>ordered(guide.lessons.filter(item=>item.type==='Lesson')),[guide.lessons]);
   const assessments=useMemo(()=>ordered(guide.lessons.filter(item=>item.type==='Test')),[guide.lessons]);
@@ -83,7 +83,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     return <button type="button" key={assessment.id} className={'vop-section-test '+(passed?'passed':hasScore?'attempted':'')}
       onClick={()=>onSelectLesson(assessment)} aria-label={actionLabel+': '+assessment.title}>
       <FileQuestion size={14}/><span>{actionLabel}</span>
-      {hasScore&&<em>{passed?'Passed':'Score'} {Math.round(score!)}%</em>}
+      {hasScore&&<em>{passed?t('guide.passed','Passed'):t('guide.score','Score')} {Math.round(score!)}%</em>}
     </button>;
   };
 
@@ -100,8 +100,8 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
       className={'vop-guide-assessment '+(locked?'locked':passed?'passed':hasScore?'attempted':'')}
       onClick={()=>onSelectLesson(assessment)} disabled={locked}
       aria-label={locked
-        ?`Final examination locked. Complete all lessons before taking ${assessment.title}.`
-        :`Open assessment ${assessment.title}`}>
+        ?t('guide.final_exam_locked_label','Final examination locked. Complete all lessons before taking {title}.',{title:assessment.title})
+        :t('guide.open_assessment_label','Open assessment {title}',{title:assessment.title})}>
       <span className="vop-guide-assessment-icon">{locked?<Lock size={18}/>:<Trophy size={18}/>}</span>
       <span className="vop-guide-assessment-copy">
         <small>{isFinal?t('guide.final_exam','Final examination'):t('guide.assessment','Assessment')}</small>
@@ -151,7 +151,10 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         <div className="mt-5 pt-4 border-t border-white/15">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-blue-100/80 font-semibold">
-              {completedCount} of {studyLessons.length} {studyLessons.length===1?'lesson':'lessons'} completed
+              {t('guide.lessons_progress','{completed} of {total} {lessons} completed',{
+                completed:completedCount,total:studyLessons.length,
+                lessons:studyLessons.length===1?t('guide.lesson_singular','lesson'):t('guide.lesson_plural','lessons'),
+              })}
             </span>
             <span className="text-xs font-bold text-amber-300">{progressPercent}%</span>
           </div>
@@ -179,8 +182,12 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 ?t('guide.sections','Study sections')
                 :t('guide.lessons','Lessons')}</h2></div>
             <span>{guide.learnerEntryMode==='sections'
-              ?totalSections+' '+(totalSections===1?'section':'sections')
-              :studyLessons.length+' '+(studyLessons.length===1?'lesson':'lessons')}</span>
+              ?t('guide.section_count','{count} {sections}',{
+                count:totalSections,sections:totalSections===1?t('guide.section_singular','section'):t('guide.section_plural','sections'),
+              })
+              :t('guide.lesson_count','{count} {lessons}',{
+                count:studyLessons.length,lessons:studyLessons.length===1?t('guide.lesson_singular','lesson'):t('guide.lesson_plural','lessons'),
+              })}</span>
           </div>
 
           {studyLessons.flatMap((lesson,lessonIndex)=>{
@@ -214,8 +221,11 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                     <ChevronRight size={19}/>
                   </button>
                   <div className="vop-section-study-meta">
-                    <span><BookOpen size={14}/>{Math.max(1,sectionPages.length)} {sectionPages.length===1?'page':'pages'}</span>
-                    <span><Clock size={14}/>~{readMinutes(sectionPages,fallbackMinutes)} min read</span>
+                    <span><BookOpen size={14}/>{t('guide.page_count','{count} {pages}',{
+                      count:Math.max(1,sectionPages.length),
+                      pages:sectionPages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
+                    })}</span>
+                    <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(sectionPages,fallbackMinutes)})}</span>
                     <div className="vop-section-study-tests">
                       {sectionTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
                       {chapterTests.map(item=>inlineAssessment(item,t('guide.chapter_test','Chapter test')))}
@@ -237,8 +247,11 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
                 <ChevronRight size={19}/>
               </button>
               <div className="vop-section-study-meta">
-                <span><BookOpen size={14}/>{Math.max(1,pages.length)} {pages.length===1?'page':'pages'}</span>
-                <span><Clock size={14}/>~{readMinutes(pages,lesson.estimatedMinutes||15)} min read</span>
+                <span><BookOpen size={14}/>{t('guide.page_count','{count} {pages}',{
+                  count:Math.max(1,pages.length),
+                  pages:pages.length===1?t('guide.page_singular','page'):t('guide.page_plural','pages'),
+                })}</span>
+                <span><Clock size={14}/>{t('guide.read_minutes','~{minutes} min read',{minutes:readMinutes(pages,lesson.estimatedMinutes||15)})}</span>
                 <div className="vop-section-study-tests">
                   {lessonTests.map(item=>inlineAssessment(item,t('guide.take_test','Take test')))}
                 </div>
