@@ -256,17 +256,16 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         <div>{guideAssessments.map(assessmentCard)}</div>
       </section>}
 
-      {progressPercent===100&&studyLessons.length>0&&<div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-center shadow-lg">
-        <Award size={40} className="mx-auto mb-2 text-amber-300"/>
-        <h3 className="text-lg font-black mb-1">{t('guide.lessons_completed','All lessons completed')}</h3>
-        <p className="text-sm text-emerald-100 mb-4">
-          {guideAssessments.some(item=>item.assessmentKind==='final_exam')&&!certificateEligible
-            ?t('guide.exam_next','Your study lessons are complete. Finish the required assessment steps to become certificate-eligible.')
-            :t('guide.completed_desc',`You have completed all ${studyLessons.length} lessons in this module.`)}
-        </p>
-        {certificateEligible&&<button onClick={onOpenCertificate}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition-colors cursor-pointer">
-          <Award size={16}/>{t('certificates.view_your','View Your Certificate')}
+      {progressPercent===100&&studyLessons.length>0&&<div className={'vop-guide-completion-card '+(allGuideAssessmentsPassed?'complete':'study-complete')}>
+        <Award size={30}/>
+        <div>
+          <h3>{allGuideAssessmentsPassed?t('guide.module_completed','Module completed'):t('guide.lessons_completed','Study lessons completed')}</h3>
+          <p>{allGuideAssessmentsPassed
+            ?t('guide.module_completed_desc','All study lessons and required assessments for this module are complete.')
+            :t('guide.exam_next','Your study lessons are complete. Finish the required assessment steps to complete this module.')}</p>
+        </div>
+        {certificateEligible&&<button onClick={onOpenCertificate}>
+          <Award size={16}/>{t('certificates.view_your','View certificate')}
         </button>}
       </div>}
     </div>
