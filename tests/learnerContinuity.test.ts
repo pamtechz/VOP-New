@@ -279,3 +279,30 @@ test('legacy portals remain covered while canonical theme variables own final su
   assert.doesNotMatch(contentStudio,/bg-blue-50/);
   assert.doesNotMatch(adminRecords,/#f5f9ff/);
 });
+
+
+test('page resume restoration is lesson-only, bounded and server-backed',()=>{
+  const app=read('src/App.tsx');
+  const reader=read('src/components/reader/LessonReaderModal.tsx');
+  const firestore=read('src/services/firestoreData.ts');
+  assert.match(firestore,/normalizeLessonResume/);
+  assert.match(firestore,/lessonResume:\s*normalizeLessonResume\(data\.progress\?\.lessonResume\)/);
+  assert.match(app,/const isStudyLesson=lesson\.type==='Lesson'/);
+  assert.match(app,/Math\.min\(pageCount-1/);
+  assert.match(app,/activeLesson\.type!=='Lesson'/);
+  assert.match(app,/\.\.\.\(isStudyLesson\?\{pageIndex:desired\}:\{\}\)/);
+  assert.match(reader,/lesson\.type!=='Lesson'/);
+  assert.match(reader,/const safePageIndex=clampPageIndex\(pageIndex\)/);
+});
+
+test('assessment completion relies on server graduation automation without a duplicate learner graduation POST',()=>{
+  const study=read('src/services/localStudy.ts');
+  const api=read('api/study/progress.ts');
+  const modal=read('src/components/quiz/QuizModal.tsx');
+  assert.doesNotMatch(study,/fetch\('\/api\/admin\/graduations'/);
+  assert.match(api,/ensureAutomaticGraduationReview/);
+  assert.match(api,/confirmationRequired:true/);
+  assert.match(study,/AssessmentStartConditionError/);
+  assert.match(modal,/ASSESSMENT_RETAKE_CONFIRMATION/);
+  assert.match(modal,/setConfirmingRetake\(true\)/);
+});
