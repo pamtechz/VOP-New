@@ -250,7 +250,9 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
   assert.match(contentApi,/required\|subscription\|organization/);
 
-  assert.match(admin,/loadOrganizationSubscriptionFeatures/);
+  assert.match(admin,/loadOrganizationSubscriptionState/);
+  assert.match(admin,/exhaustedQuotaKeys/);
+  assert.match(admin,/freeTier/);
   assert.match(admin,/SUBSCRIPTION_FEATURES\.map\(feature=>\[feature\.key,false\]\)/);
   assert.match(admin,/subscriptionFeatureForTab/);
   assert.match(admin,/candidates:'candidates'/);
