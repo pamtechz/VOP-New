@@ -161,7 +161,8 @@ function storedSubmissionPayload(value:unknown){
   const attemptsUsed=Math.max(1,Math.trunc(Number(stored.attemptsUsed)||1));
   const maxAttempts=Number.isInteger(Number(stored.maxAttempts))&&Number(stored.maxAttempts)>0
     ?Number(stored.maxAttempts):null;
-  const remainingAttempts=Number.isInteger(Number(stored.remainingAttempts))&&Number(stored.remainingAttempts)>=0
+  const hasRemainingAttempts=stored.remainingAttempts!==null&&stored.remainingAttempts!==undefined&&stored.remainingAttempts!=='';
+  const remainingAttempts=hasRemainingAttempts&&Number.isInteger(Number(stored.remainingAttempts))&&Number(stored.remainingAttempts)>=0
     ?Number(stored.remainingAttempts):null;
   if(!Number.isFinite(score)||score<0||score>100||!Number.isFinite(threshold)||threshold<1||threshold>100)return null;
   return {
