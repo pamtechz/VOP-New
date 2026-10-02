@@ -50,6 +50,9 @@ async function subscriptionFeatureBlockReason(
   if(data.billingAccessSuspended===true){
     return 'This organization subscription is inactive. Renew or activate a subscription package to make changes.';
   }
+  if(String(data.plan||'').trim()==='unsubscribed'){
+    return 'This organization does not have an active subscription package. Choose a plan before using this capability.';
+  }
   const entitlements=entitlementRecord(data.featureEntitlements);
   // Legacy organizations may predate plan snapshots. Fail closed only when a
   // current entitlement record explicitly excludes the capability.
