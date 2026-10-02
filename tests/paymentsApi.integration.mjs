@@ -465,6 +465,10 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(organization?.quotas?.maxSeats,2);
       assert.equal(organization?.featureEntitlements?.curriculum,true);
 
+      const reminder=await sendFreeTierUpgradeReminder(db,orgIntl,new Date('2026-10-02T12:00:00.000Z'));
+      assert.equal(reminder.recipients,2);
+      assert.equal(reminder.delivered,2);
+
       const overview=await planCall(internationalOwner,{action:'getSubscription',organizationId:orgIntl});
       assert.equal(overview.status,200,JSON.stringify(overview));
       assert.equal(overview.freeTier,true);
@@ -475,9 +479,6 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.ok(overview.exhaustedQuotaKeys.includes('maxSeats'),JSON.stringify(overview));
       assert.equal(overview.exhaustedQuotaKeys.includes('maxCandidates'),false,'candidate limits are not billing gates while learners are excluded');
 
-      const reminder=await sendFreeTierUpgradeReminder(db,orgIntl,new Date('2026-10-02T12:00:00.000Z'));
-      assert.equal(reminder.recipients,2);
-      assert.equal(reminder.delivered,2);
       const repeatedReminder=await sendFreeTierUpgradeReminder(db,orgIntl,new Date('2026-10-02T18:00:00.000Z'));
       assert.equal(repeatedReminder.delivered,0,'free-tier reminders are idempotent within a day');
       const reminderNotifications=await db.collection('notifications').where('organizationId','==',orgIntl).get();
