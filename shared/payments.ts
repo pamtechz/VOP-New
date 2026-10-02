@@ -38,6 +38,15 @@ export interface PayableItem {
   currency:string;
   amountMinor:number;
   amountDecimal:string;
+  pricing?:{
+    baseCurrency?:string;
+    baseAmountDecimal?:string;
+    billingCountryCode?:string;
+    billingCurrency?:string;
+    exchangeRate?:number;
+    fxSource?:string;
+    fxUpdatedAt?:string;
+  };
   active:boolean;
   paymentRequired:boolean;
   repeatable:boolean;
