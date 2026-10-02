@@ -138,7 +138,11 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(study,/platformSettingsSnap/);
   assert.match(study,/settingsData=\{\.\.\.platformSettings,\.\.\.scopedSettings\}/);
   assert.match(study,/maxAttempts>0&&priorAttempts>=policy\.maxAttempts/);
-  assert.match(study,/const retryAt = retakeCooldownMinutes > 0/);
+  assert.match(study,/const retryAtForAttempt=retakeCooldownMinutes>0/);
+  assert.match(study,/activeSessionId/);
+  assert.match(study,/gradingQuestionsSnapshot/);
+  assert.match(study,/submissionResult/);
+  assert.match(study,/replayed:true/);
 });
 
 
