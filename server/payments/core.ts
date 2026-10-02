@@ -8,7 +8,7 @@ import {
 } from '../../shared/payments.js';
 import {
   accessibleOrganizationIds, authenticateTenant, organizationInHierarchyScope,
-  tenantOwnerKey, writeTenantAudit, type TenantContext,
+  tenantOwnerKey, validateOrganizationPlanCapacity, writeTenantAudit, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
 import { quoteSubscriptionPlan } from '../billing.js';
