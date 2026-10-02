@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {FieldValue} from 'firebase-admin/firestore';
 import {configuredPassThreshold} from '../shared/studyValidation.js';
-import {verifiedAssessmentAverage} from '../shared/graduationEvidence.js';
+import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
@@ -176,8 +176,11 @@ export async function awardApprovedCertificate(
       throw new Error('The approved guide has an invalid assessment configuration.');
     }
   }
-  const average=verifiedAssessmentAverage(tests,scores,organizationId,language,guideId,threshold);
-  if(average===null)throw new Error('The candidate has not passed all required assessments.');
+  const assessmentEvidence=await verifiedAssessmentEvidence(
+    db,candidateId,tests,scores,organizationId,language,guideId,threshold,
+  );
+  if(!assessmentEvidence)throw new Error('The candidate has not passed all required assessments.');
+  const average=assessmentEvidence.averageScore;
 
   const requirementIds=Array.isArray(guide.certificationRequirementIds)
     ?guide.certificationRequirementIds.map(String).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)):[];
@@ -210,6 +213,10 @@ export async function awardApprovedCertificate(
     requiredLessonIds:study.map(item=>String(item.id)),
     requiredAssessmentIds:tests.map(item=>String(item.id)),
     passThreshold:threshold,assessmentAverageScore:average,
+    assessmentEvidence:assessmentEvidence.rows.map(row=>({
+      assessmentId:row.assessmentId,score:row.score,threshold:row.threshold,
+      attemptId:row.attemptId,attemptNumber:row.attemptNumber,source:row.source,
+    })),
     graduationRequestId:String(approved.id),
     graduationApprovedAt:certificateDateValue(approved.approvedAt),
     certificationRequirements:portfolio.snapshot,
@@ -253,8 +260,10 @@ export async function awardApprovedCertificate(
     const freshProgress=candidateFresh.data()?.progress||{};
     const freshGrades=freshProgress.guideScores&&typeof freshProgress.guideScores==='object'
       ?freshProgress.guideScores as Record<string,unknown>:{};
-    if(verifiedAssessmentAverage(tests,freshGrades,organizationId,language,guideId,threshold)!==average){
-      throw new Error('The candidate assessment scores changed before certificate issuance.');
+    if(!(await revalidateAssessmentEvidence(
+      transaction,candidateRef,assessmentEvidence,freshGrades,organizationId,language,guideId,
+    ))){
+      throw new Error('The candidate assessment evidence changed before certificate issuance.');
     }
     if(!requestFresh.exists||requestFresh.data()?.status!=='approved'
       ||text(requestFresh.data()?.organizationId)!==organizationId
