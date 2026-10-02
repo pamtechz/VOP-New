@@ -144,7 +144,7 @@ export default async function handler(req: Request, res: Response) {
           scope:'platform',
           amount:data.priceUsd,
           currency:SAAS_BASE_CURRENCY,
-          repeatable:false,
+          repeatable:true,
           active:true,
           paymentRequired:true,
           allowedProviders:registeredPaymentProviderKeys(),
