@@ -2,7 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getApps } from 'firebase-admin/app';
 import { authenticateTenant, requireOrgRole, writeTenantAudit, organizationInHierarchyScope, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
-import { requirePermission } from '../../server/permissions.js';
+import { requirePermission, requireSubscriptionFeature } from '../../server/permissions.js';
 
 type Request = {
   method?: string;
@@ -38,6 +38,7 @@ export default async function handler(request: Request, response: Response) {
       }
       const organizationId = ctx.organizationId || requestedOrganizationId;
       if (!organizationId) throw new Error('An organization is required for candidate enrollment.');
+      await requireSubscriptionFeature(ctx,'candidates',organizationId);
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
@@ -131,6 +132,7 @@ export default async function handler(request: Request, response: Response) {
     if (!candidateSnapshot.exists) return response.status(404).json({ error: 'Candidate was not found.' });
     const candidateOrganizationId = String(candidateSnapshot.data()?.organizationId || '').trim();
     if (!ctx.isSuperAdmin && (ctx.tenantType === 'organization' ? candidateOrganizationId !== ctx.organizationId : !(await organizationInHierarchyScope(ctx, candidateOrganizationId)))) return response.status(403).json({ error: 'This candidate belongs outside your authorized organization scope.' });
+    await requireSubscriptionFeature(ctx,'candidates',candidateOrganizationId);
 
     const information = (candidateSnapshot.data()?.information || {}) as Record<string, unknown>;
     const retainedScheduledDate = baptismStatus === 'not_marked'
@@ -169,6 +171,7 @@ export default async function handler(request: Request, response: Response) {
     const message = error instanceof Error ? error.message : 'Candidate baptism update failed.';
     if (message.includes('Firebase Admin') || message.includes('not configured')) return response.status(503).json({ error: message });
     if (message.includes('auth/id-token') || message.includes('argument-error')) return response.status(401).json({ error: 'Your session is invalid. Sign in again.' });
+    if (/permission|authorized|outside|subscription plan|subscription is inactive/i.test(message)) return response.status(403).json({ error: message });
     console.error('VOP candidate baptism update failed', error);
     return response.status(500).json({ error: 'Candidate baptism update failed.' });
   }
