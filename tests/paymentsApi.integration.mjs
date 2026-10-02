@@ -362,18 +362,61 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.ok(ownerRows.items.every(item=>item.provider===''&&item.providerReference===''&&item.reconciliationStatus===''));
     });
 
-    await t.test('free subscription plans quote zero safely and activate without checkout',async()=>{
+    await t.test('free subscription plans quote zero safely, auto-provision organizations and activate without checkout',async()=>{
+      const fallback=await planCall(admin,{
+        action:'upsertPlan',
+        name:'Starter Free',
+        description:'Fallback free tier',
+        priceUsd:0,interval:'month',sortOrder:0,active:true,defaultForUnsubscribed:true,
+        quotas:{maxSeats:3,maxCandidates:2,maxMentors:1,maxGuides:1},
+        features:{curriculum:true},
+      });
+      assert.equal(fallback.status,200,JSON.stringify(fallback));
+      assert.equal(fallback.item.defaultForUnsubscribed,true);
+
       const created=await planCall(admin,{
         action:'upsertPlan',
         name:'Community Free',
         description:'No-cost organization access',
-        priceUsd:0,interval:'month',sortOrder:1,active:true,
+        priceUsd:0,interval:'month',sortOrder:10,active:true,defaultForUnsubscribed:true,
         quotas:{maxSeats:10,maxCandidates:8,maxMentors:2,maxGuides:5},
         features:{curriculum:true,candidates:true,certification:true},
       });
       assert.equal(created.status,200,JSON.stringify(created));
       const planId=created.item.id;
       assert.equal(created.item.priceUsd,0);
+      assert.equal(created.item.defaultForUnsubscribed,true);
+      const oldDefault=(await db.doc('system/plans/catalog/'+fallback.item.id).get()).data();
+      assert.equal(oldDefault?.defaultForUnsubscribed,false,'saving a new explicit default must demote the previous default');
+
+      const autoOrgId='pay-org-auto-free';
+      const autoCreated=await organizationCall(admin,{
+        action:'create',id:autoOrgId,name:'Automatically Free Organization',billingCountry:'Zambia',
+      });
+      assert.equal(autoCreated.status,200,JSON.stringify(autoCreated));
+      assert.equal(autoCreated.item.plan,planId);
+      assert.equal(autoCreated.item.defaultSubscriptionPlanId,planId);
+      const autoSubscription=(await db.doc('organizations/'+autoOrgId+'/subscription/current').get()).data();
+      assert.equal(autoSubscription?.planId,planId);
+      assert.equal(autoSubscription?.status,'active');
+      assert.equal(autoSubscription?.activationSource,'automatic_free_plan');
+      assert.equal(autoSubscription?.autoProvisioned,true);
+      assert.equal(autoSubscription?.currentPeriodEnd,null);
+      assert.equal(autoSubscription?.renewalMode,'none');
+
+      const legacyOrgId='pay-org-legacy-unsubscribed';
+      await db.doc('organizations/'+legacyOrgId).set({
+        id:legacyOrgId,name:'Legacy Unsubscribed Organization',status:'active',
+        plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
+        billingCountry:'Zambia',countryCode:'ZM',
+        billingProfile:{countryCode:'ZM',countryName:'Zambia',billingCurrency:'ZMW',pricingRegion:'zambia'},
+      });
+      await requireOrganizationSubscriptionFeature(db,'curriculum',legacyOrgId);
+      const legacyOrganization=(await db.doc('organizations/'+legacyOrgId).get()).data();
+      const legacySubscription=(await db.doc('organizations/'+legacyOrgId+'/subscription/current').get()).data();
+      assert.equal(legacyOrganization?.plan,planId);
+      assert.equal(legacySubscription?.activationSource,'automatic_free_plan');
+      assert.equal(legacySubscription?.planId,planId);
 
       const payable=await db.doc('payableItems/subscription_'+planId).get();
       assert.equal(payable.exists,false,'free plans must not create payment checkout items');
