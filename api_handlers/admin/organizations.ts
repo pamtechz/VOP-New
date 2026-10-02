@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { authenticateTenant, getAdminDb, requireOrgRole, writeTenantAudit, enforceOrganizationMembershipQuotas, organizationUsageSnapshot } from '../../server/tenant.js';
+import { authenticateTenant, ensureOrganizationDefaultSubscription, getAdminDb, requireOrgRole, writeTenantAudit, enforceOrganizationMembershipQuotas, organizationUsageSnapshot } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { createNotification } from '../../server/notifications.js';
 import { normalizedBillingCountryName, organizationBillingProfile } from '../../server/billing.js';
@@ -149,7 +149,16 @@ export default async function handler(req: Request, res: Response) {
         plan:'unsubscribed',quotas:{},featureEntitlements:{},billingAccessSuspended:false,
         createdAt:now,updatedAt:now,
       });
-      return res.status(200).json({ ok:true,item:{id:organizationId,name,status:'active',billingCountry,countryCode:billingProfile.countryCode,billingProfile} });
+      const defaultSubscription=await ensureOrganizationDefaultSubscription(bootstrapDb,organizationId,ctx.auth.uid);
+      const created=await ref.get();
+      return res.status(200).json({
+        ok:true,
+        item:{
+          id:organizationId,name,status:'active',billingCountry,countryCode:billingProfile.countryCode,billingProfile,
+          plan:String(created.data()?.plan||'unsubscribed'),
+          defaultSubscriptionPlanId:defaultSubscription?.planId||null,
+        },
+      });
     }
     if (action === 'acceptInvite') {
       const token = String(body.token || '').trim();

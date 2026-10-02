@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, accessibleOrganizationIds, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot, organizationSubscriptionTermBlockReason } from '../../server/tenant.js';
+import { authenticateTenant, accessibleOrganizationIds, ensureOrganizationDefaultSubscription, writeTenantAudit, validateOrganizationPlanCapacity, organizationUsageSnapshot, organizationSubscriptionTermBlockReason } from '../../server/tenant.js';
 import { requirePermission } from '../../server/permissions.js';
 import { deletePayableItem, upsertPayableItem } from '../../server/payments/core.js';
 import { registeredPaymentProviderKeys } from '../../server/payments/providers.js';
@@ -137,6 +137,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'getSubscription') {
       const organizationId = requestedOrganizationId || ctx.organizationId;
       if (!organizationId) throw new Error('An organization is required.');
+      await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
       if (!ctx.isSuperAdmin && !ctx.organizationId && !(await accessibleOrganizationIds(ctx)).includes(organizationId)) throw new Error('The organization is outside your scope.');
       if (!ctx.isSuperAdmin && ctx.organizationId !== organizationId) throw new Error('You cannot access another organization subscription.');
       const [organization, subscription, usage] = await Promise.all([
@@ -297,6 +298,7 @@ export default async function handler(req: Request, res: Response) {
         currency:SAAS_BASE_CURRENCY,
         interval: ['month','year','one_time'].includes(text(body.interval)) ? text(body.interval) : 'month',
         sortOrder: Number.isInteger(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
+        defaultForUnsubscribed:priceUsd===0 && body.active!==false && body.defaultForUnsubscribed===true,
         quotas: normalizeSubscriptionQuotas(body.quotas),
         features: normalizeSubscriptionFeatures(body.features),
         version:Math.max(1,Math.trunc(Number(before?.version)||0)+1),
@@ -304,6 +306,17 @@ export default async function handler(req: Request, res: Response) {
         updatedAt: FieldValue.serverTimestamp(),
       };
       await ref.set({ ...data, createdAt: before?.createdAt || FieldValue.serverTimestamp() }, { merge: true });
+      if(data.defaultForUnsubscribed){
+        const defaults=await ctx.db.collection('system/plans/catalog').where('defaultForUnsubscribed','==',true).get();
+        const batch=ctx.db.batch();
+        let changed=false;
+        for(const document of defaults.docs){
+          if(document.id===planId)continue;
+          batch.set(document.ref,{defaultForUnsubscribed:false,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+          changed=true;
+        }
+        if(changed)await batch.commit();
+      }
 
       const subscriptionPayableId='subscription_'+planId;
       if (data.active && data.priceUsd > 0) {

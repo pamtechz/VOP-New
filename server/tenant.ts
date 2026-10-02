@@ -203,6 +203,156 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
 const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);
 const MENTOR_MEMBERSHIP_ROLES=new Set(['mentor']);
 
+function freePlanPrice(data:DocumentData){
+  const value=Number(data.priceUsd??data.price??NaN);
+  return Number.isFinite(value)?value:NaN;
+}
+
+function subscriptionObject(value:unknown):Record<string,unknown>{
+  return value&&typeof value==='object'&&!Array.isArray(value)
+    ?{...(value as Record<string,unknown>)}
+    :{};
+}
+
+function freePlanSnapshot(planId:string,data:DocumentData){
+  return {
+    id:planId,
+    name:String(data.name||planId).trim(),
+    description:String(data.description||'').trim(),
+    interval:String(data.interval||'month').trim()||'month',
+    version:Math.max(1,Math.trunc(Number(data.version)||1)),
+    priceUsd:0,
+    baseCurrency:String(data.baseCurrency||'USD').trim()||'USD',
+    quotas:subscriptionObject(data.quotas),
+    features:subscriptionObject(data.features),
+  };
+}
+
+export async function defaultFreeSubscriptionPlan(db:Firestore){
+  const snapshot=await db.collection('system/plans/catalog').where('active','==',true).get();
+  const candidates=snapshot.docs
+    .map(document=>({id:document.id,data:document.data()}))
+    .filter(item=>freePlanPrice(item.data)===0)
+    .sort((left,right)=>{
+      const preferred=Number(right.data.defaultForUnsubscribed===true)-Number(left.data.defaultForUnsubscribed===true);
+      if(preferred)return preferred;
+      const order=Number(left.data.sortOrder||0)-Number(right.data.sortOrder||0);
+      if(order)return order;
+      const name=String(left.data.name||left.id).localeCompare(String(right.data.name||right.id));
+      return name||left.id.localeCompare(right.id);
+    });
+  return candidates[0]||null;
+}
+
+export async function ensureOrganizationDefaultSubscription(
+  db:Firestore,
+  organizationId:string,
+  actorUid='system:auto-free-plan',
+){
+  if(!organizationId)return null;
+  const organizationRef=db.doc(`organizations/${organizationId}`);
+  const subscriptionRef=organizationRef.collection('subscription').doc('current');
+  const [organization,subscription]=await Promise.all([organizationRef.get(),subscriptionRef.get()]);
+  if(!organization.exists||organization.data()?.status!=='active')return null;
+  const organizationData=organization.data()||{};
+  const assignedPlan=String(organizationData.plan||'').trim();
+  if(assignedPlan&&assignedPlan!=='unsubscribed')return null;
+  const legacyQuotas=subscriptionObject(organizationData.quotas);
+  const legacyFeatures=subscriptionObject(organizationData.featureEntitlements);
+  // Older tenants may have explicit limits/entitlements without a plan id.
+  // Preserve that deliberate configuration; only truly unconfigured tenants
+  // or tenants explicitly marked "unsubscribed" receive the automatic free tier.
+  if(!assignedPlan&&(Object.keys(legacyQuotas).length>0||Object.keys(legacyFeatures).length>0))return null;
+  const subscriptionData=subscription.data()||{};
+  const existingStatus=String(subscriptionData.status||'').trim().toLowerCase();
+  const existingPlanId=String(subscriptionData.planId||'').trim();
+  if(subscription.exists&&['active','trialing'].includes(existingStatus)&&existingPlanId)return null;
+
+  const selected=await defaultFreeSubscriptionPlan(db);
+  if(!selected)return null;
+  const selectedPlanRef=db.doc('system/plans/catalog/'+selected.id);
+  const startedAt=new Date().toISOString();
+  let assigned=false;
+  let assignedSnapshot:ReturnType<typeof freePlanSnapshot>|null=null;
+  await db.runTransaction(async transaction=>{
+    const [currentOrganization,currentSubscription,currentPlanSnapshot]=await Promise.all([
+      transaction.get(organizationRef),
+      transaction.get(subscriptionRef),
+      transaction.get(selectedPlanRef),
+    ]);
+    if(!currentOrganization.exists||currentOrganization.data()?.status!=='active')return;
+    const currentData=currentOrganization.data()||{};
+    const currentPlan=String(currentData.plan||'').trim();
+    if(currentPlan&&currentPlan!=='unsubscribed')return;
+    const currentLegacyQuotas=subscriptionObject(currentData.quotas);
+    const currentLegacyFeatures=subscriptionObject(currentData.featureEntitlements);
+    if(!currentPlan&&(Object.keys(currentLegacyQuotas).length>0||Object.keys(currentLegacyFeatures).length>0))return;
+    const currentSubscriptionData=currentSubscription.data()||{};
+    const currentStatus=String(currentSubscriptionData.status||'').trim().toLowerCase();
+    const currentSubscriptionPlanId=String(currentSubscriptionData.planId||'').trim();
+    if(currentSubscription.exists&&['active','trialing'].includes(currentStatus)&&currentSubscriptionPlanId)return;
+    if(!currentPlanSnapshot.exists||currentPlanSnapshot.data()?.active!==true||freePlanPrice(currentPlanSnapshot.data()||{})!==0)return;
+    const snapshot=freePlanSnapshot(selected.id,currentPlanSnapshot.data()||{});
+    assignedSnapshot=snapshot;
+
+    transaction.set(organizationRef,{
+      plan:selected.id,
+      quotas:snapshot.quotas,
+      featureEntitlements:snapshot.features,
+      billingAccessSuspended:false,
+      billingSuspendedReason:null,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    transaction.set(subscriptionRef,{
+      organizationId,
+      planId:selected.id,
+      planName:snapshot.name,
+      planInterval:snapshot.interval,
+      planVersion:snapshot.version,
+      planSnapshot:snapshot,
+      status:'active',
+      activationSource:'automatic_free_plan',
+      autoProvisioned:true,
+      billingProvider:'none',
+      externalCustomerId:null,
+      externalSubscriptionId:null,
+      baseCurrency:'USD',
+      baseAmountDecimal:'0.00',
+      billingCurrency:'USD',
+      paidAmountDecimal:'0.00',
+      exchangeRate:1,
+      currentPeriodStart:startedAt,
+      currentPeriodEnd:null,
+      renewalMode:'none',
+      cancelAtPeriodEnd:false,
+      previousPlanId:String(currentSubscriptionData.planId||'').trim()||null,
+      startedAt:FieldValue.serverTimestamp(),
+      activatedAt:FieldValue.serverTimestamp(),
+      activatedBy:actorUid,
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:false});
+    assigned=true;
+  });
+  if(!assigned)return null;
+  await db.collection(`organizations/${organizationId}/audit`).add({
+    actorUid,
+    action:'subscription.auto_free_assign',
+    target:subscriptionRef.path,
+    organizationId,
+    tenantType:'organization',
+    tenantId:organizationId,
+    before:subscription.exists?subscriptionData:null,
+    after:{
+      planId:selected.id,
+      status:'active',
+      activationSource:'automatic_free_plan',
+      currentPeriodEnd:null,
+    },
+    timestamp:FieldValue.serverTimestamp(),
+  });
+  return assignedSnapshot?{planId:selected.id,planSnapshot:assignedSnapshot}:null;
+}
+
 export async function organizationSubscriptionTermBlockReason(
   db:Firestore,
   organizationId:string,
@@ -306,6 +456,7 @@ export async function enforceOrganizationMembershipQuotas(
   nextRole:string,
   uid='',
 ){
+  await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
   const organization=await ctx.db.doc(`organizations/${organizationId}`).get();
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
   if(organization.data()?.billingAccessSuspended===true&&!ctx.isSuperAdmin){
@@ -344,6 +495,7 @@ export async function enforceOrganizationQuota(
   increment=1,
 ){
   if(!organizationId)throw new Error('An organization is required for quota enforcement.');
+  await ensureOrganizationDefaultSubscription(db,organizationId);
   const organization=await db.doc(`organizations/${organizationId}`).get();
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
   if(organization.data()?.billingAccessSuspended===true){
