@@ -1,4 +1,4 @@
-import type { DocumentData, Firestore } from 'firebase-admin/firestore';
+import { FieldValue, type DocumentData, type Firestore } from 'firebase-admin/firestore';
 import { amountToMinor, minorToDecimal } from '../shared/payments.js';
 
 export const SAAS_BASE_CURRENCY='USD';
@@ -50,6 +50,7 @@ export interface PlatformBillingSettings{
   fxSource:string;
   fxUpdatedAt:string;
   fxQuoteTtlMinutes:number;
+  fxProviderDate:string;
 }
 
 export async function loadPlatformBillingSettings(db:Firestore):Promise<PlatformBillingSettings>{
@@ -64,7 +65,60 @@ export async function loadPlatformBillingSettings(db:Firestore):Promise<Platform
     fxSource:text(data.fxSource,'platform-configured'),
     fxUpdatedAt:text(data.fxUpdatedAt),
     fxQuoteTtlMinutes:Number.isFinite(ttl)&&ttl>0?Math.trunc(ttl):1440,
+    fxProviderDate:text(data.fxProviderDate),
   };
+}
+
+export interface FrankfurterRateResult{
+  rate:number;
+  providerDate:string;
+  fetchedAt:string;
+  source:'frankfurter';
+}
+
+export async function fetchFrankfurterUsdToZmwRate():Promise<FrankfurterRateResult>{
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+  try{
+    const response=await fetch('https://api.frankfurter.dev/v2/rate/USD/ZMW',{
+      headers:{Accept:'application/json'},
+      signal:controller.signal,
+    });
+    if(!response.ok)throw new Error('Frankfurter exchange-rate service is unavailable.');
+    const payload=await response.json() as {date?:unknown;base?:unknown;quote?:unknown;rate?:unknown};
+    const rate=Number(payload.rate);
+    if(!Number.isFinite(rate)||rate<=0)throw new Error('Frankfurter returned an invalid USD to ZMW exchange rate.');
+    if(text(payload.base).toUpperCase()!=='USD'||text(payload.quote).toUpperCase()!=='ZMW'){
+      throw new Error('Frankfurter returned an unexpected currency pair.');
+    }
+    return {
+      rate,
+      providerDate:text(payload.date),
+      fetchedAt:new Date().toISOString(),
+      source:'frankfurter',
+    };
+  }catch(error){
+    if(error instanceof Error&&error.name==='AbortError')throw new Error('Frankfurter exchange-rate request timed out.');
+    throw error;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+export async function refreshPlatformBillingRate(db:Firestore){
+  const result=await fetchFrankfurterUsdToZmwRate();
+  const ref=db.doc('system/billing');
+  await ref.set({
+    baseCurrency:SAAS_BASE_CURRENCY,
+    zambiaCurrency:ZAMBIA_BILLING_CURRENCY,
+    usdToZmwRate:result.rate,
+    fxSource:result.source,
+    fxUpdatedAt:result.fetchedAt,
+    fxProviderDate:result.providerDate,
+    fxQuoteTtlMinutes:1440,
+    updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return result;
 }
 
 export function planUsdPrice(plan:DocumentData,settings?:PlatformBillingSettings){
@@ -99,10 +153,8 @@ export async function quoteSubscriptionPlan(
   plan:DocumentData,
 ):Promise<SubscriptionBillingQuote>{
   if(!organizationId)throw new Error('An organization is required to price a subscription package.');
-  const [organization,settings]=await Promise.all([
-    db.doc('organizations/'+organizationId).get(),
-    loadPlatformBillingSettings(db),
-  ]);
+  const organization=await db.doc('organizations/'+organizationId).get();
+  let settings=await loadPlatformBillingSettings(db);
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
   const profile=organizationBillingProfile(organization.data());
   const priceUsd=planUsdPrice(plan,settings);
@@ -115,13 +167,22 @@ export async function quoteSubscriptionPlan(
       exchangeRate:1,fxSource:'base-price',fxUpdatedAt:'',
     };
   }
-  if(!settings.usdToZmwRate){
-    throw new Error('Zambian subscription billing is temporarily unavailable because the USD to ZMW exchange rate has not been configured.');
-  }
   const updatedAt=Date.parse(settings.fxUpdatedAt);
   const maxAgeMs=settings.fxQuoteTtlMinutes*60_000;
-  if(!Number.isFinite(updatedAt)||Date.now()-updatedAt>maxAgeMs){
-    throw new Error('Zambian subscription billing is temporarily unavailable because the USD to ZMW exchange rate is stale. A Super Admin must refresh the billing rate.');
+  const stale=!settings.usdToZmwRate||!Number.isFinite(updatedAt)||Date.now()-updatedAt>maxAgeMs;
+  if(stale){
+    try{
+      await refreshPlatformBillingRate(db);
+      settings=await loadPlatformBillingSettings(db);
+    }catch(error){
+      // A previously fetched rate may remain usable briefly when the upstream
+      // daily feed is temporarily unavailable. Never accept an unbounded stale quote.
+      const fallbackUpdatedAt=Date.parse(settings.fxUpdatedAt);
+      const emergencyWindowMs=72*60*60*1000;
+      if(!settings.usdToZmwRate||!Number.isFinite(fallbackUpdatedAt)||Date.now()-fallbackUpdatedAt>emergencyWindowMs){
+        throw new Error('Zambian subscription billing is temporarily unavailable because the daily USD to ZMW rate could not be refreshed.');
+      }
+    }
   }
   const amountMinor=amountToMinor(priceUsd*settings.usdToZmwRate,'ZMW');
   return {
