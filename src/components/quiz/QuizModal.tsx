@@ -3,7 +3,7 @@ import type { Lesson, DiscoverGuide } from '../../types';
 import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
-import { AssessmentStartConditionError, beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
+import { AssessmentStartConditionError, AssessmentSubmissionConditionError, beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
 import { ModalLayer } from '../layout/ModalLayer';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 
@@ -56,6 +56,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     Number.isFinite(Number(previousScore))?Number(previousScore):null,
   );
   const [attemptBlocked,setAttemptBlocked]=useState(false);
+  const [attemptBlockCode,setAttemptBlockCode]=useState('');
+  const [attemptRetryAt,setAttemptRetryAt]=useState<string|null>(null);
   const [confirmingRetake,setConfirmingRetake]=useState(false);
   const attemptStartLock=useRef(false);
   const question = questions[index];
@@ -90,6 +92,21 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     return () => window.clearInterval(timer);
   }, [submission?.retakePolicy.retryAt]);
 
+  useEffect(()=>{
+    if(!attemptRetryAt)return;
+    const update=()=>{
+      if(new Date(attemptRetryAt).getTime()<=Date.now()){
+        setAttemptRetryAt(null);
+        setAttemptBlockCode('');
+        setAttemptBlocked(false);
+        setError('');
+      }
+    };
+    update();
+    const timer=window.setInterval(update,1000);
+    return()=>window.clearInterval(timer);
+  },[attemptRetryAt]);
+
   const choose = (answer: number | boolean) => {
     if (!validQuiz || Object.hasOwn(answers, index)) return;
     setAnswers(previous => ({ ...previous, [index]: answer }));
@@ -120,6 +137,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setStage('result');
       if (result.passed) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (reason) {
+      if(reason instanceof AssessmentSubmissionConditionError
+        &&['ASSESSMENT_SESSION_EXPIRED','ASSESSMENT_SESSION_INVALID','ASSESSMENT_SESSION_REQUIRED'].includes(reason.code)){
+        setAttempt(null);
+        setQuestions(previewQuestions);
+        setAnswers({});
+        setIndex(0);
+        setRemainingSeconds(null);
+        setStage('intro');
+        setAttemptBlocked(false);
+        setAttemptBlockCode('');
+        setAttemptRetryAt(null);
+      }
       setError(reason instanceof Error ? reason.message : t('quiz.save_failed','Your assessment could not be saved.'));
     } finally {
       setSubmitting(false);
@@ -128,7 +157,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
   const restart = () => {
     if (!retakeReady || submission?.retakePolicy.remainingAttempts === 0) return;
-    setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setStage('intro');
+    setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setAttemptBlocked(false);setAttemptBlockCode('');setAttemptRetryAt(null);setStage('intro');
   };
   const startAttempt=async(confirmRetake=false)=>{
     // React state updates are asynchronous; a fast double-click can otherwise
@@ -144,20 +173,36 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       }
       setQuestions(started.questions);
       setAttempt(started);
+      setAttemptBlocked(false);
+      setAttemptBlockCode('');
+      setAttemptRetryAt(null);
       setConfirmingRetake(false);
       if(started.previousScoreRevoked&&onAttemptStarted)await onAttemptStarted();
       setStage('quiz');
     }catch(reason){
-      if(reason instanceof AssessmentStartConditionError&&reason.code==='ASSESSMENT_RETAKE_CONFIRMATION'){
-        setHasAttempted(true);
-        if(reason.previousScore!==null)setServerPreviousScore(reason.previousScore);
-        setConfirmingRetake(true);
-        setError('');
+      if(reason instanceof AssessmentStartConditionError){
+        if(reason.code==='ASSESSMENT_RETAKE_CONFIRMATION'){
+          setHasAttempted(true);
+          if(reason.previousScore!==null)setServerPreviousScore(reason.previousScore);
+          setConfirmingRetake(true);
+          setError('');
+          return;
+        }
+        const permanentlyBlocked=['ASSESSMENT_ATTEMPT_LIMIT','ASSESSMENT_CONFIGURATION'].includes(reason.code);
+        const cooldownBlocked=reason.code==='ASSESSMENT_RETAKE_COOLDOWN'&&Boolean(reason.retryAt);
+        setAttemptBlockCode(reason.code);
+        setAttemptRetryAt(cooldownBlocked?reason.retryAt:null);
+        setAttemptBlocked(permanentlyBlocked||cooldownBlocked);
+        setError(reason.message);
         return;
       }
       const message=reason instanceof Error?reason.message:t('quiz.start_failed','The assessment could not be started.');
+      // Connectivity and transient server failures must remain retryable. They
+      // must never burn another attempt or permanently disable the control.
+      setAttemptBlocked(false);
+      setAttemptBlockCode('');
+      setAttemptRetryAt(null);
       setError(message);
-      if(/attempt limit reached|retake is available after/i.test(message))setAttemptBlocked(true);
     }finally{
       attemptStartLock.current=false;
       setSubmitting(false);
@@ -174,6 +219,13 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const assessmentLabel=lesson.assessmentKind==='final_exam'
     ?t('quiz.final_exam','Final examination'):lesson.assessmentKind==='chapter_quiz'?t('quiz.chapter_quiz','Chapter quiz'):t('quiz.practice_assessment','Practice assessment');
   const retakeLabel=lesson.assessmentKind==='final_exam'?t('quiz.retake_exam','Retake exam'):t('quiz.retake_quiz','Retake quiz');
+  const blockedLabel=attemptBlockCode==='ASSESSMENT_ATTEMPT_LIMIT'
+    ?t('quiz.attempt_limit_reached','Attempt limit reached')
+    :attemptBlockCode==='ASSESSMENT_RETAKE_COOLDOWN'&&attemptRetryAt
+      ?t('quiz.retake_available_at','Retake available {time}',{time:new Date(attemptRetryAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})})
+      :attemptBlockCode==='ASSESSMENT_CONFIGURATION'
+        ?t('quiz.assessment_unavailable','Assessment unavailable')
+        :t('quiz.attempt_unavailable','Attempt unavailable');
   const knownPreviousScore=serverPreviousScore;
   const previousPassed=knownPreviousScore!==null&&validThreshold&&knownPreviousScore>=threshold;
   const instructions=lesson.assessmentInstructions?.trim()
@@ -395,7 +447,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?t('quiz.starting','Starting…'):attemptBlocked?t('quiz.attempt_unavailable','Attempt unavailable'):hasAttempted?retakeLabel :t('quiz.begin_assessment','Begin assessment')}
+              {submitting?t('quiz.starting','Starting…'):attemptBlocked?blockedLabel:hasAttempted?retakeLabel:t('quiz.begin_assessment','Begin assessment')}
               <ChevronRight size={18} />
             </button>}
           </div>
