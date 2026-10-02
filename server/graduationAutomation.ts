@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {FieldValue} from 'firebase-admin/firestore';
 import {configuredPassThreshold} from '../shared/studyValidation.js';
-import {verifiedAssessmentAverage} from '../shared/graduationEvidence.js';
+import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 import {createNotification} from './notifications.js';
 
@@ -160,8 +160,11 @@ export async function ensureAutomaticGraduationReview(
   }
   const scores=progress.guideScores&&typeof progress.guideScores==='object'
     ?progress.guideScores as Record<string,unknown>:{};
-  const average=verifiedAssessmentAverage(tests,scores,organizationId,language,guideId,threshold);
-  if(average===null)return {eligible:false,created:false,reason:'assessments_incomplete_or_failed'};
+  const evidence=await verifiedAssessmentEvidence(
+    db,candidateId,tests,scores,organizationId,language,guideId,threshold,
+  );
+  if(!evidence)return {eligible:false,created:false,reason:'assessments_incomplete_or_failed'};
+  const average=evidence.averageScore;
 
   const ref=db.doc(`graduationRequests/${requestId(organizationId,candidateId,guideId)}`);
   const userRef=db.doc(`users/${candidateId}`);
@@ -184,8 +187,10 @@ export async function ensureAutomaticGraduationReview(
     }
     const freshScores=freshProgress.guideScores&&typeof freshProgress.guideScores==='object'
       ?freshProgress.guideScores as Record<string,unknown>:{};
-    const verifiedAverage=verifiedAssessmentAverage(tests,freshScores,organizationId,language,guideId,threshold);
-    if(verifiedAverage===null)throw new Error('The learner no longer has all required passing assessments.');
+    if(!(await revalidateAssessmentEvidence(
+      transaction,userRef,evidence,freshScores,organizationId,language,guideId,
+    )))throw new Error('The learner no longer has all required passing assessments.');
+    const verifiedAverage=evidence.averageScore;
     const now=FieldValue.serverTimestamp();
     const information=fresh.information&&typeof fresh.information==='object'
       ?fresh.information as Record<string,unknown>:{};
