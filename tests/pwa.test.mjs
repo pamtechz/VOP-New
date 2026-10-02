@@ -15,16 +15,32 @@ test('PWA manifest is installable and scoped to VOP', () => {
 
 test('service worker has versioned cache lifecycle and excludes API authority', () => {
   const source = read('public/sw.js');
-  assert.match(source, /const CACHE_NAME = 'vop-shell-v1'/);
+  assert.match(source, /const CACHE_PREFIX = 'vop-shell-'/);
+  assert.match(source, /const CACHE_NAME = CACHE_PREFIX \+ 'v2'/);
   assert.match(source, /skipWaiting\(\)/);
   assert.match(source, /clients\.claim\(\)/);
   assert.match(source, /url\.pathname\.startsWith\('\/api\/'\)/);
   assert.match(source, /caches\.keys\(\)/);
   assert.match(source, /caches\.match\(request\)/);
+  assert.match(source, /offline\.html/);
+  assert.match(source, /SKIP_WAITING/);
+  assert.match(source, /url\.pathname\.startsWith\('\/assets\/'\)/);
+  assert.match(source, /Never\s+cache account data/);
+});
+
+test('document advertises the manifest and an explicit offline fallback exists', () => {
+  const html = read('index.html');
+  const offline = read('public/offline.html');
+  assert.match(html, /rel="manifest" href="\/manifest\.webmanifest"/);
+  assert.match(offline, /You’re offline|You're offline/);
+  assert.match(offline, /Try again/);
 });
 
 test('production entry registers the service worker only for production', () => {
   const source = read('src/main.tsx');
   assert.match(source, /navigator\.serviceWorker\.register\('\/sw\.js'/);
   assert.match(source, /import\.meta\.env\.PROD/);
+  assert.match(source, /registration\.waiting/);
+  assert.match(source, /updatefound/);
+  assert.match(source, /SKIP_WAITING/);
 });
