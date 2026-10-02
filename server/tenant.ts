@@ -259,13 +259,15 @@ export async function ensureOrganizationDefaultSubscription(
 
   const selected=await defaultFreeSubscriptionPlan(db);
   if(!selected)return null;
-  const snapshot=freePlanSnapshot(selected.id,selected.data);
+  const selectedPlanRef=db.doc('system/plans/catalog/'+selected.id);
   const startedAt=new Date().toISOString();
   let assigned=false;
+  let assignedSnapshot:ReturnType<typeof freePlanSnapshot>|null=null;
   await db.runTransaction(async transaction=>{
-    const [currentOrganization,currentSubscription]=await Promise.all([
+    const [currentOrganization,currentSubscription,currentPlanSnapshot]=await Promise.all([
       transaction.get(organizationRef),
       transaction.get(subscriptionRef),
+      transaction.get(selectedPlanRef),
     ]);
     if(!currentOrganization.exists||currentOrganization.data()?.status!=='active')return;
     const currentData=currentOrganization.data()||{};
@@ -275,6 +277,9 @@ export async function ensureOrganizationDefaultSubscription(
     const currentStatus=String(currentSubscriptionData.status||'').trim().toLowerCase();
     const currentSubscriptionPlanId=String(currentSubscriptionData.planId||'').trim();
     if(currentSubscription.exists&&['active','trialing'].includes(currentStatus)&&currentSubscriptionPlanId)return;
+    if(!currentPlanSnapshot.exists||currentPlanSnapshot.data()?.active!==true||freePlanPrice(currentPlanSnapshot.data()||{})!==0)return;
+    const snapshot=freePlanSnapshot(selected.id,currentPlanSnapshot.data()||{});
+    assignedSnapshot=snapshot;
 
     transaction.set(organizationRef,{
       plan:selected.id,
@@ -331,7 +336,7 @@ export async function ensureOrganizationDefaultSubscription(
     },
     timestamp:FieldValue.serverTimestamp(),
   });
-  return {planId:selected.id,planSnapshot:snapshot};
+  return assignedSnapshot?{planId:selected.id,planSnapshot:assignedSnapshot}:null;
 }
 
 export async function organizationSubscriptionTermBlockReason(
