@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { authenticateTenant, canEditCanonicalContent, enforceQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
-import { requirePermission } from '../server/permissions.js';
+import { authenticateTenant, canEditCanonicalContent, enforceOrganizationQuota, writeTenantAudit, tenantOwnerKey, organizationInHierarchyScope, accessibleOrganizationIds } from '../server/tenant.js';
+import { requireOrganizationSubscriptionFeature, requirePermission } from '../server/permissions.js';
 import { normalizeQuizQuestions, publicQuizQuestions, quizLessonNumber, type QuizAttachmentType } from '../shared/quizAttachments.js';
 import { quizManagementItem } from '../shared/quizManagementVisibility.js';
 import { curriculumAnchorExists } from '../shared/curriculumStructure.js';
@@ -180,7 +180,6 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       const current = existing.exists ? existing.data() || {} : {};
       await requirePermission(ctx, 'quizzes', existing.exists ? 'update' : 'create');
-      if (!existing.exists) await enforceQuota(ctx, 'quizzes', 'maxQuizzes');
       if (existing.exists && (!canEditCanonicalContent(ctx, current) || (!ctx.isSuperAdmin && String(current.ownerUid || '') !== ctx.auth.uid))) {
         throw new Error('Only this quiz\'s contributor or VOP Super Admin can edit it.');
       }
@@ -194,6 +193,12 @@ export default async function handler(req: Request, res: Response) {
       const published = data.published === true;
       const target = await resolveAttachment(ctx, { ...data, language, published });
       if (existing.exists && String(current.organizationId || '') !== target.organizationId) throw new Error('Moving a quiz between organizations is not allowed. Copy the quiz into the destination tenant instead.');
+      if(!ctx.isSuperAdmin&&ctx.tenantType==='hierarchy'){
+        await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',target.organizationId);
+      }
+      if(!existing.exists&&!ctx.isSuperAdmin){
+        await enforceOrganizationQuota(ctx.db,target.organizationId,'quizzes','maxQuizzes');
+      }
       const questions = normalizeQuizQuestions(data.questions, id);
       const learnerQuestions = publicQuizQuestions(questions);
       const assessmentKind=assessmentKindFor(String(target.attachmentType));

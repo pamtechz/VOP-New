@@ -269,7 +269,7 @@ export default async function handler(req: Request, res: Response) {
       if (existing.exists && String(current.organizationId || '').trim() !== effectiveOrganizationId) {
         throw new Error('Moving a guide to another organization is not allowed. Copy it into the destination tenant instead.');
       }
-      if (!existing.exists) if (ctx.tenantType !== 'hierarchy') await enforceQuota(ctx, 'guides', 'maxGuides');
+      if (!existing.exists && !ctx.isSuperAdmin) await enforceOrganizationQuota(ctx.db, effectiveOrganizationId, 'guides', 'maxGuides');
       await requirePermission(ctx,'curriculum',existing.exists?'update':'create');
       if(data.published===true)await requirePermission(ctx,'curriculum','publish');
       if (existing.exists && !(await canManageOrganizationContent(ctx, current))) throw new Error('Only an authorized tenant administrator or VOP Super Admin can edit this guide.');
@@ -392,7 +392,7 @@ export default async function handler(req: Request, res: Response) {
       const source = await ctx.db.doc(`guides/${sourceId}`).get();
       const sourceData = source.data() || {};
       if (!source.exists || sourceData.published !== true || sourceData.sharingScope !== 'shared') throw new Error('Only approved shared guides can be copied.');
-      await enforceQuota(ctx, 'guides', 'maxGuides');
+      if (!ctx.isSuperAdmin) await enforceOrganizationQuota(ctx.db, effectiveOrganizationId, 'guides', 'maxGuides');
       const id = safeId(body.targetId || `${effectiveOrganizationId}__${String(sourceData.language || 'en')}__copy-${Date.now().toString(36)}`);
       const now = new Date().toISOString();
       const target = ctx.db.doc(`guides/${id}`);
@@ -408,14 +408,14 @@ export default async function handler(req: Request, res: Response) {
         const data = lesson.data();
         const ref = target.collection('lessons').doc(lesson.id);
         batch.set(ref, {
-          ...data, id:lesson.id, lessonId:lesson.id, organizationId:ctx.organizationId,
+          ...data, id:lesson.id, lessonId:lesson.id, organizationId:effectiveOrganizationId,
           ownerOrganizationId:effectiveOrganizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
           copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:effectiveOrganizationId ? 'organization' : 'shared', published:false,
           createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid, copyOrder:index
         }, { merge:true });
       });
       await batch.commit();
-      return res.status(200).json({ ok:true, item:{id, sourceContentId:sourceId, organizationId:ctx.organizationId, copiedLessons:lessons.size} });
+      return res.status(200).json({ ok:true, item:{id, sourceContentId:sourceId, organizationId:effectiveOrganizationId, copiedLessons:lessons.size} });
     }
 
     if (action === 'forkLesson') {

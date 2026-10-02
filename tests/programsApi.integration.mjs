@@ -18,6 +18,7 @@ const vite=await createServer({configFile:false,
 after(async()=>vite.close());
 const {default:content}=await vite.ssrLoadModule('/api_handlers/admin/content.ts');
 const {default:candidates}=await vite.ssrLoadModule('/api_handlers/admin/candidates.ts');
+const {default:quizzes}=await vite.ssrLoadModule('/api/quizzes.ts');
 
 async function identity(name,orgId,role='owner'){
   const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
@@ -67,6 +68,18 @@ async function call(user,body){
 async function candidateCall(user,body){
   let status=200,value;
   await candidates({
+    method:'POST',
+    headers:{authorization:'Bearer '+user.token},
+    body,
+  },{
+    status(code){status=code;return this;},
+    json(result){value=result;return this;},
+  });
+  return {status,value};
+}
+async function quizCall(user,body){
+  let status=200,value;
+  await quizzes({
     method:'POST',
     headers:{authorization:'Bearer '+user.token},
     body,
@@ -215,7 +228,7 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
     id:orgId,name:'Metered Organization',status:'active',unionId,
     plan:'metered-plan',
     featureEntitlements:{curriculum:false},
-    quotas:{maxPrograms:1},
+    quotas:{maxPrograms:1,maxGuides:1,maxQuizzes:1},
   });
   const unionAdmin=await hierarchyIdentity('program-test-union-admin','union_admin',unionId);
   await db.doc('guides/'+guideId).set({
@@ -235,9 +248,54 @@ await test('hierarchy administrators cannot bypass descendant subscription entit
   assert.notEqual(excluded.status,200,'excluded curriculum capability must block hierarchy writes');
   assert.match(String(excluded.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
 
+  const excludedQuiz=await quizCall(unionAdmin,{
+    action:'upsert',organizationId:orgId,data:{
+      attachmentType:'guide',guideId,language:'en',title:'Excluded hierarchy assessment',
+      published:true,sharingScope:'organization',
+      questions:[{question:'Ready?',options:['No','Yes'],correctOptionIndex:1}],
+    },
+  });
+  assert.notEqual(excludedQuiz.status,200,'excluded curriculum capability must block hierarchy quiz writes');
+  assert.match(String(excludedQuiz.value?.error||''),/subscription plan does not include|Curriculum Studio/i);
+
   await db.doc('organizations/'+orgId).update({
     featureEntitlements:{curriculum:true},
   });
+  const guideOverLimit=await call(unionAdmin,{
+    collection:'guides',action:'upsertGuide',organizationId:orgId,
+    data:{title:'Second Guide',language:'en',published:false,archived:false},
+  });
+  assert.notEqual(guideOverLimit.status,200,'hierarchy actor must consume descendant maxGuides');
+  assert.match(String(guideOverLimit.value?.error||''),/maxGuides|limit|usage/i);
+
+  await db.doc('organizations/'+orgId).update({
+    quotas:{maxPrograms:1,maxGuides:2,maxQuizzes:1},
+  });
+  const secondGuide=await call(unionAdmin,{
+    collection:'guides',action:'upsertGuide',organizationId:orgId,
+    data:{title:'Second Guide',language:'en',published:false,archived:false},
+  });
+  assert.equal(secondGuide.status,200,JSON.stringify(secondGuide.value));
+  assert.equal(secondGuide.value.item.organizationId,orgId);
+
+  const quizPayload={
+    attachmentType:'guide',guideId,language:'en',title:'Hierarchy assessment',
+    published:true,sharingScope:'organization',
+    questions:[{question:'Ready?',options:['No','Yes'],correctOptionIndex:1}],
+  };
+  const firstQuiz=await quizCall(unionAdmin,{
+    action:'upsert',organizationId:orgId,data:quizPayload,
+  });
+  assert.equal(firstQuiz.status,200,JSON.stringify(firstQuiz.value));
+  assert.equal(firstQuiz.value.item.organizationId,orgId);
+
+  const secondQuiz=await quizCall(unionAdmin,{
+    action:'upsert',organizationId:orgId,
+    data:{...quizPayload,title:'Second hierarchy assessment'},
+  });
+  assert.notEqual(secondQuiz.status,200,'hierarchy actor must consume descendant maxQuizzes');
+  assert.match(String(secondQuiz.value?.error||''),/maxQuizzes|limit|usage/i);
+
   const first=await call(unionAdmin,{
     collection:'programs',action:'upsert',organizationId:orgId,data:draft,
   });
