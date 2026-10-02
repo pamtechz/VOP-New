@@ -36,6 +36,16 @@ test('document advertises the manifest and an explicit offline fallback exists',
   assert.match(offline, /Try again/);
 });
 
+test('large route workspaces are lazy-loaded instead of shipped in the initial App chunk', () => {
+  const source = read('src/App.tsx');
+  assert.match(source, /React\.lazy\(\(\)=>import\('\.\/pages\/AdminPage'\)/);
+  assert.match(source, /React\.lazy\(\(\)=>import\('\.\/pages\/EngagementPage'\)/);
+  assert.match(source, /React\.lazy\(\(\)=>import\('\.\/pages\/PaymentsPage'\)/);
+  assert.match(source, /<React\.Suspense/);
+  assert.doesNotMatch(source, /import \{ AdminPage \} from '\.\/pages\/AdminPage'/);
+  assert.doesNotMatch(source, /import \{ EngagementPage \} from '\.\/pages\/EngagementPage'/);
+});
+
 test('production entry registers the service worker only for production', () => {
   const source = read('src/main.tsx');
   assert.match(source, /navigator\.serviceWorker\.register\('\/sw\.js'/);
