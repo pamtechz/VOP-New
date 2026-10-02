@@ -341,17 +341,19 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
 
   const saveBillingSettings=async()=>{
     if(!isSuperAdmin)return;
-    const rate=Number(billingSettings.usdToZmwRate);
-    if(!Number.isFinite(rate)||rate<=0){setError('Enter the current USD to ZMW exchange rate.');return;}
+    const rawRate=billingSettings.usdToZmwRate.trim();
+    const rate=rawRate?Number(rawRate):0;
+    if(rawRate&&(!Number.isFinite(rate)||rate<=0)){setError('Enter a valid USD to ZMW exchange rate or leave it blank and refresh later.');return;}
     setBusy(true);setError('');
     try{
       await adminApi('/api/admin/plans',{
-        action:'updateBillingSettings',usdToZmwRate:rate,
+        action:'updateBillingSettings',
+        ...(rawRate?{usdToZmwRate:rate}:{}),
         fxSource:billingSettings.fxSource.trim()||'platform-configured',
         fxQuoteTtlMinutes:Math.max(15,Math.trunc(Number(billingSettings.fxQuoteTtlMinutes)||1440)),
         subscriptionAudience:billingSettings.subscriptionAudience,
       });
-      setMessage('Platform exchange-rate policy updated. Zambia subscription quotes will use the new rate.');
+      setMessage('Platform billing and subscription audience policy updated.');
       await load();
     }catch(reason){setError(reason instanceof Error?reason.message:'Billing settings could not be saved.');}
     finally{setBusy(false);}
