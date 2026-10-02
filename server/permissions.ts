@@ -17,7 +17,7 @@ const SUBSCRIPTION_MUTATION_RESOURCES=new Set<PermissionResource>([
   'curriculum','lessons','quizzes','materials','radio','announcements','prayer',
   'mentoring','portfolio','scripture','duels','certificates','translations',
 ]);
-const READ_ACTIONS=new Set<PermissionAction>(['view','read']);
+const NON_EXPANSIVE_ACTIONS=new Set<PermissionAction>(['view','read','delete']);
 const SUBSCRIPTION_FEATURE_BY_RESOURCE:Partial<Record<PermissionResource,SubscriptionFeatureKey>>={
   curriculum:'curriculum',
   lessons:'curriculum',
@@ -76,7 +76,7 @@ async function subscriptionMutationBlockReason(
   ctx:TenantContext,resource:PermissionResource,action:PermissionAction,
 ){
   if(ctx.isSuperAdmin||ctx.tenantType!=='organization'||!ctx.organizationId)return null;
-  if(READ_ACTIONS.has(action)||!SUBSCRIPTION_MUTATION_RESOURCES.has(resource))return null;
+  if(NON_EXPANSIVE_ACTIONS.has(action)||!SUBSCRIPTION_MUTATION_RESOURCES.has(resource))return null;
   const feature=SUBSCRIPTION_FEATURE_BY_RESOURCE[resource];
   if(feature)return organizationSubscriptionFeatureBlockReason(ctx.db,feature,ctx.organizationId);
   const organization=await ctx.db.doc('organizations/'+ctx.organizationId).get();
