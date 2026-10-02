@@ -56,6 +56,14 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     try{
       const [catalog,payments]=await Promise.all([loadPaymentCatalog(),loadPaymentHistory()]);
       setItems(catalog.items);setHistory(payments.items);
+      try{
+        const focusedPlan=sessionStorage.getItem('vop-subscription-checkout-plan')||'';
+        if(focusedPlan){
+          sessionStorage.removeItem('vop-subscription-checkout-plan');
+          const focused=catalog.items.find(item=>item.itemType==='organization_subscription'&&item.itemId===focusedPlan);
+          if(focused)setSelected(focused);
+        }
+      }catch{/* storage may be unavailable */}
     }catch(reason){setError(reason instanceof Error?reason.message:'Payments could not be loaded.');}
     finally{setLoading(false);}
   };
