@@ -408,32 +408,40 @@ export const App: React.FC = () => {
     return()=>{window.clearTimeout(timer);events.forEach(name=>window.removeEventListener(name,reset));};
   }, [currentUser.uid,settings.security?.sessionTimeoutMinutes]);
 
-  const applyLearnerLocation = useCallback((location:LearnerLocation) => {
+  const applyLearnerLocation = useCallback((location:LearnerLocation):LearnerLocation|null => {
     const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin']
       .includes(String(currentUser.role||''))||['owner','admin'].includes(String(currentUser.organizationRole||''));
-    if(location.route==='admin'&&!privileged)return false;
+    if(location.route==='admin'&&!privileged)return null;
     const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
-    if(location.route==='mentor'&&!mentorAccess)return false;
+    if(location.route==='mentor'&&!mentorAccess)return null;
     const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
         && (!location.guideLanguage||item.language===location.guideLanguage))
       :null)||null;
-    if(location.guideId&&!guide)return false;
+    if(location.guideId&&!guide)return null;
     const lesson=(location.lessonId&&guide
       ?guide.lessons.find(item=>item.id===location.lessonId)
       :null)||null;
-    if(location.lessonId&&!lesson)return false;
-    setCurrentRoute(location.route);
-    setActiveProgramId(location.programId||'');
+    if(location.lessonId&&!lesson)return null;
+    const pageCount=lesson?.type==='Lesson'?Math.max(1,lesson.contentPages?.length||1):1;
+    const safePageIndex=lesson?.type==='Lesson'
+      ?Math.max(0,Math.min(pageCount-1,Math.trunc(location.pageIndex||0)))
+      :0;
+    const applied:LearnerLocation={
+      route:location.route,
+      ...(location.programId?{programId:location.programId}:{}),
+      ...(guide?{guideId:guide.id,guideLanguage:guide.language}:{}),
+      ...(lesson?{lessonId:lesson.id}:{}),
+      ...(lesson?.type==='Lesson'?{pageIndex:safePageIndex}:{}),
+    };
+    setCurrentRoute(applied.route);
+    setActiveProgramId(applied.programId||'');
     setActiveGuide(guide);
     setActiveLesson(lesson);
-    const pageCount=lesson?.type==='Lesson'?Math.max(1,lesson.contentPages?.length||1):1;
-    setDeepLinkPageIndex(lesson?.type==='Lesson'
-      ?Math.max(0,Math.min(pageCount-1,Math.trunc(location.pageIndex||0)))
-      :0);
+    setDeepLinkPageIndex(safePageIndex);
     setStudyError('');
     setIsMenuOpen(false);
-    return true;
+    return applied;
   },[currentUser.role,currentUser.organizationRole,guides]);
 
   useEffect(()=>{
@@ -444,8 +452,9 @@ export const App: React.FC = () => {
     }
     if(!contentHydrated||explicitNavigation.current||restoredNavigationUid.current===uid)return;
     const stored=readLearnerLocation(uid);
-    if(stored&&applyLearnerLocation(stored.location)){
-      replaceLearnerLocation(uid,stored.location,stored.depth);
+    const restored=stored?applyLearnerLocation(stored.location):null;
+    if(stored&&restored){
+      replaceLearnerLocation(uid,restored,stored.depth);
     }else{
       const home:LearnerLocation={route:'home'};
       applyLearnerLocation(home);
