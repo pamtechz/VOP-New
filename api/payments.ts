@@ -71,12 +71,14 @@ export default async function handler(req:Request,res:Response){
       const secret=text(process.env.CRON_SECRET);
       if(!secret||header(req,'authorization')!=='Bearer '+secret)return res.status(401).json({error:'Unauthorized.'});
       const db=getAdminDb();
-      const [payments,refunds,subscriptions,freeTierReminders]=await Promise.all([
+      const [payments,refunds,subscriptions]=await Promise.all([
         reconcilePendingPayments(db,100),
         reconcilePendingRefunds(db,100),
         reconcileExpiredOrganizationSubscriptions(db,200),
-        remindFreeTierOrganizations(db,200),
       ]);
+      // Subscription lifecycle must settle before deciding who belongs on the
+      // free tier and who should receive the daily upgrade reminder.
+      const freeTierReminders=await remindFreeTierOrganizations(db,200);
       let fx:Record<string,unknown>;
       try{
         const refreshed=await refreshPlatformBillingRate(db);
