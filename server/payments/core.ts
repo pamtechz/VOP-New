@@ -718,13 +718,17 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
 
   const config=object(item.fulfilmentConfig);
   const uid=text(payment.payerUid),organizationId=text(payment.organizationId);
+  const billingTarget=paymentBillingTarget(payment);
   const receiptRef=db.doc('paymentReceipts/'+paymentId);
   const receiptNumber='RCPT-'+text(payment.reference);
   const batch=db.batch();
   batch.set(receiptRef,{
     id:paymentId,receiptNumber,paymentId,reference:text(payment.reference),
     payerUid:uid,payerEmail:text(payment.payerEmail),payerName:text(payment.payerName),
-    organizationId,itemSnapshot:object(payment.itemSnapshot),amountMinor:Number(payment.amountMinor),
+    organizationId,
+    billingTenantType:billingTarget?.type||'',
+    billingTenantId:billingTarget?.id||'',
+    itemSnapshot:object(payment.itemSnapshot),amountMinor:Number(payment.amountMinor),
     amountDecimal:text(payment.amountDecimal),currency:text(payment.currency),
     provider:text(payment.provider),paymentMethod:text(payment.paymentMethod),
     paidAt:payment.paidAt||FieldValue.serverTimestamp(),issuedAt:FieldValue.serverTimestamp(),
@@ -752,7 +756,7 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
       registeredAt:FieldValue.serverTimestamp(),source:'verified-payment',
     },{merge:true});
   }else if(itemType==='organization_subscription'){
-    if(!organizationId)throw new Error('A subscription payment requires an organization.');
+    if(!billingTarget)throw new Error('A subscription payment requires an institutional billing tenant.');
     const plan=object(config.planSnapshot);
     const planId=text(plan.id)||text(payment.itemId);
     const interval=text(plan.interval)||'month';
@@ -763,7 +767,9 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
       quotas:normalizeSubscriptionQuotas(plan.quotas),features:normalizeSubscriptionFeatures(plan.features),
     };
     const now=new Date();
-    const currentSubscription=await db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const tenantRef=billingTenantRef(db,billingTarget.type,billingTarget.id);
+    const subscriptionRef=billingTenantSubscriptionRef(db,billingTarget.type,billingTarget.id);
+    const currentSubscription=await subscriptionRef.get();
     const currentData=currentSubscription.data()||{};
     const existingEnd=Date.parse(text(currentData.currentPeriodEnd));
     const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===planId
@@ -776,12 +782,15 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
     if(end&&interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
     else if(end&&interval==='month')end.setUTCMonth(end.getUTCMonth()+1);
     const pricing=object(object(payment.itemSnapshot).pricing);
-    batch.set(db.doc('organizations/'+organizationId),{
+    batch.set(tenantRef,{
       plan:planId,quotas:entitlementSnapshot.quotas,featureEntitlements:entitlementSnapshot.features,
       billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
-    batch.set(db.doc('organizations/'+organizationId+'/subscription/current'),{
-      organizationId,planId,planName:entitlementSnapshot.name,planInterval:interval,
+    batch.set(subscriptionRef,{
+      billingTenantType:billingTarget.type,
+      billingTenantId:billingTarget.id,
+      organizationId:billingTarget.type==='organization'?billingTarget.id:'',
+      planId,planName:entitlementSnapshot.name,planInterval:interval,
       planVersion:entitlementSnapshot.version,planSnapshot:entitlementSnapshot,status:'active',
       activationSource:'payment',billingProvider:text(payment.provider),lastPaymentId:paymentId,
       lastPaidAt:FieldValue.serverTimestamp(),currentPeriodStart:start.toISOString(),
