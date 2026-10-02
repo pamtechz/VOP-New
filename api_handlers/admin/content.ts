@@ -1352,7 +1352,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(400).json({ error:'Unsupported content action.' });
   } catch (error) {
     const message=error instanceof Error ? error.message : 'Content operation failed.';
-    const status=/Sign in first/.test(message)?401:/permission|Only|membership|Select|available|required/.test(message)?403:400;
+    const status=/Sign in first/.test(message)?401:/permission|Only|membership|Select|available|required|subscription|organization/.test(message)?403:400;
     return res.status(status).json({error:message});
   }
 }

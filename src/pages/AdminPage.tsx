@@ -36,6 +36,7 @@ import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../servi
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
 import { consumeNotificationAdminTarget } from '../services/notificationRouting';
+import { SUBSCRIPTION_FEATURES, type SubscriptionFeatureKey } from '../../shared/subscriptions';
 
 interface AdminPageProps {
   currentUser: User;
@@ -144,6 +145,24 @@ async function adminContent(action: string, collection: string, id?: string, dat
   return body;
 }
 
+async function loadOrganizationSubscriptionFeatures(organizationId:string){
+  if(!auth?.currentUser)throw new Error('Your session has expired. Sign in again.');
+  const token=await auth.currentUser.getIdToken();
+  const response=await fetch('/api/admin/plans',{
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({action:'getSubscription',organizationId}),
+  });
+  const body=await response.json().catch(()=>({})) as {error?:string;plan?:unknown;featureEntitlements?:unknown};
+  if(!response.ok)throw new Error(body.error||'Subscription entitlements could not be loaded.');
+  if(String(body.plan||'').trim()==='unsubscribed'){
+    return Object.fromEntries(SUBSCRIPTION_FEATURES.map(feature=>[feature.key,false])) as Partial<Record<SubscriptionFeatureKey,boolean>>;
+  }
+  return body.featureEntitlements&&typeof body.featureEntitlements==='object'&&!Array.isArray(body.featureEntitlements)
+    ?body.featureEntitlements as Partial<Record<SubscriptionFeatureKey,boolean>>
+    :{};
+}
+
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(() =>
     readInitialAdminTab(currentUser.uid,consumeNotificationAdminTarget()));
@@ -172,6 +191,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [permissionMatrix, setPermissionMatrix] = useState<PermissionMatrix>(DEFAULT_PERMISSION_MATRIX);
   const [permissionSaving, setPermissionSaving] = useState(false);
   const [permissionLoading, setPermissionLoading] = useState(false);
+  const [subscriptionFeatures,setSubscriptionFeatures]=useState<Partial<Record<SubscriptionFeatureKey,boolean>>|null>(null);
 
   const navigateAdminTab=(tab:AdminTab,mode:'push'|'replace'='push')=>{
     setActiveTab(tab);
@@ -255,6 +275,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   useEffect(() => {
     if (!availableSettingsTabs.some(tab => tab.id === settingsSubtab)) setSettingsSubtab('general');
   }, [currentUser.role, settingsSubtab]);
+
+  useEffect(()=>{
+    const organizationId=String(currentUser.organizationId||'').trim();
+    const organizationRole=String(currentUser.organizationRole||'');
+    const canManageSubscription=['owner','admin'].includes(organizationRole);
+    if(isSuperAdmin||isHierarchyAdmin||!organizationId||!canManageSubscription){
+      setSubscriptionFeatures(null);
+      return;
+    }
+    let active=true;
+    void loadOrganizationSubscriptionFeatures(organizationId)
+      .then(features=>{if(active)setSubscriptionFeatures(features);})
+      .catch(()=>{if(active)setSubscriptionFeatures(null);});
+    return()=>{active=false;};
+  },[currentUser.uid,currentUser.organizationId,currentUser.organizationRole,isSuperAdmin,isHierarchyAdmin]);
 
   const showMessage = (value: string) => {
     setMessage(value);
@@ -490,6 +525,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       candidates:'candidatesModule',curriculum:'curriculumStudio',translations:'translations',
       radio:'radio',announcements:'announcements',events:'announcements',certification:'certification',
     };
+    const subscriptionFeatureForTab:Partial<Record<AdminTab,SubscriptionFeatureKey>>={
+      candidates:'candidates',
+      curriculum:'curriculum',
+      announcements:'announcements',
+      events:'announcements',
+      materials:'materials',
+      radio:'radio',
+      certification:'certification',
+      mentorship:'mentorship',
+    };
     return NAV.filter(item => {
       const feature=featureForTab[item.id];
       const role = String(currentUser.role || '');
@@ -497,6 +542,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       const organizationAdmin = ['owner','admin'].includes(organizationRole) && Boolean(currentUser.organizationId);
       const curriculumContributor=['editor','teacher'].includes(organizationRole)&&Boolean(currentUser.organizationId);
       const coreTenantAdmin=isSuperAdmin||isHierarchyAdmin||organizationAdmin;
+      const subscriptionFeature=subscriptionFeatureForTab[item.id];
+      if(organizationAdmin&&subscriptionFeature&&subscriptionFeatures
+        &&Object.hasOwn(subscriptionFeatures,subscriptionFeature)
+        &&subscriptionFeatures[subscriptionFeature]!==true)return false;
       // Candidates and Curriculum Studio are core tenant workspaces. Platform
       // feature switches and stale/custom permission matrices must not make
       // them disappear for the tenant roles that are responsible for them.
@@ -517,7 +566,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
       return true;
     }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
-  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin]);
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin, subscriptionFeatures]);
+
+  useEffect(()=>{
+    if(subscriptionFeatures===null)return;
+    if(visibleNav.some(item=>item.id===activeTab))return;
+    navigateAdminTab('dashboard','replace');
+  },[subscriptionFeatures,visibleNav,activeTab]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'

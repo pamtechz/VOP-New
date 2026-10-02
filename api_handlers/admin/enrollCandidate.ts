@@ -2,7 +2,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getApps } from 'firebase-admin/app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { authenticateTenant, requireOrgRole, organizationInHierarchyScope, writeTenantAudit, enforceOrganizationMembershipQuotas } from '../../server/tenant.js';
-import { requirePermission } from '../../server/permissions.js';
+import { requirePermission, requireSubscriptionFeature } from '../../server/permissions.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -25,6 +25,7 @@ export default async function handler(request:Request,response:Response){
     const password=typeof body.password==='string'?body.password:'';
     const guideId=typeof body.guideId==='string'?body.guideId.trim():'';
     if(!organizationId) throw new Error('An organization is required for candidate enrollment.');
+    await requireSubscriptionFeature(ctx,'candidates',organizationId);
     if(!displayName||!email||!guideId) return response.status(400).json({error:'Full name, email and course are required.'});
     if(password&&password.length<6) return response.status(400).json({error:'Password must contain at least 6 characters.'});
 
@@ -71,7 +72,7 @@ export default async function handler(request:Request,response:Response){
   }catch(error){
     const message=error instanceof Error?error.message:'Candidate enrollment failed.';
     if(message.includes('session')||message.includes('Sign in')) return response.status(401).json({error:message});
-    if(message.includes('permission')||message.includes('authorized')||message.includes('outside')||message.includes('organization')) return response.status(403).json({error:message});
+    if(message.includes('permission')||message.includes('authorized')||message.includes('outside')||message.includes('organization')||message.includes('subscription plan')) return response.status(403).json({error:message});
     console.error('VOP candidate enrollment failed',error);
     return response.status(500).json({error:message});
   }

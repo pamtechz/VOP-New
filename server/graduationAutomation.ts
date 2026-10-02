@@ -4,6 +4,7 @@ import {configuredPassThreshold} from '../shared/studyValidation.js';
 import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 import {createNotification} from './notifications.js';
+import {organizationSubscriptionFeatureBlockReason} from './permissions.js';
 
 type ApprovalStage={id:string;label:string;approverRoles:string[]};
 type AutoReviewResult={
@@ -117,6 +118,9 @@ export async function ensureAutomaticGraduationReview(
   if(!organizationId||text(candidate.role)!=='student')return {eligible:false,created:false,reason:'not_organization_learner'};
   const organization=await db.doc(`organizations/${organizationId}`).get();
   if(!organization.exists||organization.data()?.status!=='active')return {eligible:false,created:false,reason:'inactive_organization'};
+  if(await organizationSubscriptionFeatureBlockReason(db,'certification',organizationId)){
+    return {eligible:false,created:false,reason:'certification_subscription_unavailable'};
+  }
   const guideOrganizationId=text(guide.organizationId||guide.ownerOrganizationId);
   const systemWide=guide.sharingScope==='shared'
     || String(guide.scope||'')==='platform'
