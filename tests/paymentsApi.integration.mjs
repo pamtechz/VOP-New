@@ -218,7 +218,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         json(data){output=data;return this;},
       });
       assert.ok(output&&typeof output==='object','Plan API must return JSON');
-      return {status,...output};
+      return {status,...output,httpStatus:status};
     }
 
     async function organizationCall(user,body={}){
@@ -459,14 +459,14 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const scheduled=await planCall(organizationOwner,{
         action:'cancelSubscription',mode:'period_end',reason:'Owner requested end-of-term cancellation',
       });
-      assert.equal(scheduled.status,200,JSON.stringify(scheduled));
+      assert.equal(scheduled.httpStatus,200,JSON.stringify(scheduled));
       assert.equal(scheduled.status,'active');
       assert.equal(scheduled.cancelAtPeriodEnd,true);
       assert.notEqual((await db.doc('organizations/'+orgA).get()).data()?.billingAccessSuspended,true);
       assert.equal((await db.doc('organizations/'+orgA+'/subscription/current').get()).data()?.cancelAtPeriodEnd,true);
 
       const resumed=await planCall(organizationAdmin,{action:'reactivateSubscription'});
-      assert.equal(resumed.status,200,JSON.stringify(resumed));
+      assert.equal(resumed.httpStatus,200,JSON.stringify(resumed));
       assert.equal(resumed.cancelAtPeriodEnd,false);
       assert.equal((await db.doc('organizations/'+orgA+'/subscription/current').get()).data()?.cancelAtPeriodEnd,false);
 
@@ -505,7 +505,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         action:'assignPlan',organizationId:orgB,planId,
         activationSource:'complimentary',overrideReason:'Integration test complimentary entitlement',
       });
-      assert.equal(assigned.status,200,JSON.stringify(assigned));
+      assert.equal(assigned.httpStatus,200,JSON.stringify(assigned));
       const assignedSubscription=(await db.doc('organizations/'+orgB+'/subscription/current').get()).data();
       assert.equal(assignedSubscription?.status,'active');
       assert.equal(assignedSubscription?.planInterval,'year');
@@ -526,14 +526,14 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const scheduled=await planCall(admin,{
         action:'cancelSubscription',organizationId:orgB,mode:'period_end',reason:'End after current term',
       });
-      assert.equal(scheduled.status,200,JSON.stringify(scheduled));
+      assert.equal(scheduled.httpStatus,200,JSON.stringify(scheduled));
       assert.equal(scheduled.cancelAtPeriodEnd,true);
       assert.notEqual((await db.doc('organizations/'+orgB).get()).data()?.billingAccessSuspended,true);
 
       const immediate=await planCall(admin,{
         action:'cancelSubscription',organizationId:orgB,mode:'immediate',reason:'Immediate administrative cancellation',
       });
-      assert.equal(immediate.status,200,JSON.stringify(immediate));
+      assert.equal(immediate.httpStatus,200,JSON.stringify(immediate));
       assert.equal(immediate.status,'cancelled');
       assert.equal((await db.doc('organizations/'+orgB).get()).data()?.billingAccessSuspended,true);
       assert.equal((await db.doc('organizations/'+orgB).get()).data()?.billingSuspendedReason,'subscription_cancelled');
@@ -541,7 +541,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const reactivated=await planCall(admin,{
         action:'reactivateSubscription',organizationId:orgB,overrideReason:'Restore complimentary entitlement',
       });
-      assert.equal(reactivated.status,200,JSON.stringify(reactivated));
+      assert.equal(reactivated.httpStatus,200,JSON.stringify(reactivated));
       assert.equal(reactivated.status,'active');
       const restoredOrg=(await db.doc('organizations/'+orgB).get()).data();
       assert.notEqual(restoredOrg?.billingAccessSuspended,true);
