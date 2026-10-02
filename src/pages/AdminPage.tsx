@@ -36,7 +36,7 @@ import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../servi
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { appConfirm } from '../components/layout/AppDialog';
 import { consumeNotificationAdminTarget } from '../services/notificationRouting';
-import { SUBSCRIPTION_FEATURES, type SubscriptionFeatureKey } from '../../shared/subscriptions';
+import { SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS, type SubscriptionFeatureKey } from '../../shared/subscriptions';
 
 interface AdminPageProps {
   currentUser: User;
@@ -145,7 +145,15 @@ async function adminContent(action: string, collection: string, id?: string, dat
   return body;
 }
 
-async function loadOrganizationSubscriptionFeatures(organizationId:string){
+type OrganizationSubscriptionState={
+  features:Partial<Record<SubscriptionFeatureKey,boolean>>;
+  freeTier:boolean;
+  paidPlanActive:boolean;
+  exhaustedQuotaKeys:string[];
+  planName:string;
+};
+
+async function loadOrganizationSubscriptionState(organizationId:string):Promise<OrganizationSubscriptionState>{
   if(!auth?.currentUser)throw new Error('Your session has expired. Sign in again.');
   const token=await auth.currentUser.getIdToken();
   const response=await fetch('/api/admin/plans',{
@@ -153,14 +161,26 @@ async function loadOrganizationSubscriptionFeatures(organizationId:string){
     headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
     body:JSON.stringify({action:'getSubscription',organizationId}),
   });
-  const body=await response.json().catch(()=>({})) as {error?:string;plan?:unknown;featureEntitlements?:unknown};
+  const body=await response.json().catch(()=>({})) as {
+    error?:string;plan?:unknown;featureEntitlements?:unknown;freeTier?:unknown;paidPlanActive?:unknown;
+    exhaustedQuotaKeys?:unknown;subscription?:unknown;catalogPlan?:unknown;
+  };
   if(!response.ok)throw new Error(body.error||'Subscription entitlements could not be loaded.');
-  if(String(body.plan||'').trim()==='unsubscribed'){
-    return Object.fromEntries(SUBSCRIPTION_FEATURES.map(feature=>[feature.key,false])) as Partial<Record<SubscriptionFeatureKey,boolean>>;
-  }
-  return body.featureEntitlements&&typeof body.featureEntitlements==='object'&&!Array.isArray(body.featureEntitlements)
-    ?body.featureEntitlements as Partial<Record<SubscriptionFeatureKey,boolean>>
-    :{};
+  const unsubscribed=String(body.plan||'').trim()==='unsubscribed';
+  const features=unsubscribed
+    ?Object.fromEntries(SUBSCRIPTION_FEATURES.map(feature=>[feature.key,false])) as Partial<Record<SubscriptionFeatureKey,boolean>>
+    :body.featureEntitlements&&typeof body.featureEntitlements==='object'&&!Array.isArray(body.featureEntitlements)
+      ?body.featureEntitlements as Partial<Record<SubscriptionFeatureKey,boolean>>
+      :{};
+  const subscription=body.subscription&&typeof body.subscription==='object'?body.subscription as Record<string,unknown>:{};
+  const catalogPlan=body.catalogPlan&&typeof body.catalogPlan==='object'?body.catalogPlan as Record<string,unknown>:{};
+  return {
+    features,
+    freeTier:body.freeTier===true,
+    paidPlanActive:body.paidPlanActive===true,
+    exhaustedQuotaKeys:Array.isArray(body.exhaustedQuotaKeys)?body.exhaustedQuotaKeys.map(String):[],
+    planName:String(subscription.planName||catalogPlan.name||body.plan||'Free plan'),
+  };
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
@@ -192,6 +212,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [permissionSaving, setPermissionSaving] = useState(false);
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [subscriptionFeatures,setSubscriptionFeatures]=useState<Partial<Record<SubscriptionFeatureKey,boolean>>|null>(null);
+  const [subscriptionState,setSubscriptionState]=useState<OrganizationSubscriptionState|null>(null);
 
   const navigateAdminTab=(tab:AdminTab,mode:'push'|'replace'='push')=>{
     setActiveTab(tab);
@@ -282,12 +303,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     const canManageSubscription=['owner','admin'].includes(organizationRole);
     if(isSuperAdmin||isHierarchyAdmin||!organizationId||!canManageSubscription){
       setSubscriptionFeatures(null);
+      setSubscriptionState(null);
       return;
     }
     let active=true;
-    void loadOrganizationSubscriptionFeatures(organizationId)
-      .then(features=>{if(active)setSubscriptionFeatures(features);})
-      .catch(()=>{if(active)setSubscriptionFeatures(null);});
+    void loadOrganizationSubscriptionState(organizationId)
+      .then(state=>{
+        if(!active)return;
+        setSubscriptionFeatures(state.features);
+        setSubscriptionState(state);
+      })
+      .catch(()=>{
+        if(!active)return;
+        setSubscriptionFeatures(null);
+        setSubscriptionState(null);
+      });
     return()=>{active=false;};
   },[currentUser.uid,currentUser.organizationId,currentUser.organizationRole,isSuperAdmin,isHierarchyAdmin]);
 
@@ -1264,6 +1294,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         })}</nav>
       </aside>
       <main className="vop-main">
+        {subscriptionState?.freeTier&&<section className={'vop-free-tier-banner '+(subscriptionState.exhaustedQuotaKeys.length?'limit-reached':'')}>
+          <AlertTriangle size={20}/>
+          <div>
+            <strong>{subscriptionState.exhaustedQuotaKeys.length?'Free plan limit reached':'Free version active'}</strong>
+            <span>{subscriptionState.exhaustedQuotaKeys.length
+              ?'Your organization has reached '+subscriptionState.exhaustedQuotaKeys.map(key=>SUBSCRIPTION_QUOTAS.find(item=>item.key===key)?.label||key).join(', ')+'. New usage in those categories is blocked until usage is reduced or the organization upgrades.'
+              :'Your organization is using '+subscriptionState.planName+'. Free-plan limits remain enforced until a paid plan is activated.'}</span>
+          </div>
+          <button className="vop-secondary" type="button" onClick={()=>navigateAdminTab('payments')}>View plans</button>
+        </section>}
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}
         {activeTab==='dashboard'&&renderDashboard()}
@@ -1284,7 +1324,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='prayer'&&<PrayerManagementPanel />}
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights />}
-        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>setActiveTab('payments')} />}
+        {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>navigateAdminTab('payments')} onOpenCandidates={()=>navigateAdminTab('candidates')} />}
         {activeTab==='payments'&&<PaymentManagement currentUser={currentUser} onOpenCheckout={planId=>{
           try{
             if(planId)sessionStorage.setItem('vop-subscription-checkout-plan',planId);
