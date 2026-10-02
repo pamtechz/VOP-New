@@ -226,7 +226,7 @@ export default async function handler(req: Request, res: Response) {
       }
       const audienceEnabled=await billingTenantAudienceEnabled(ctx.db,target.type);
       if(audienceEnabled)await ensureBillingTenantDefaultSubscription(ctx.db,target.type,target.id,ctx.auth.uid);
-      const [{snapshot:tenant,data:tenantData},subscription,usage,billingSettings]=await Promise.all([
+      const [{data:tenantData},subscription,usage,billingSettings]=await Promise.all([
         tenantSnapshotOrThrow(ctx,target),
         billingTenantSubscriptionRef(ctx.db,target.type,target.id).get(),
         billingTenantUsageSnapshot(ctx.db,target.type,target.id),
