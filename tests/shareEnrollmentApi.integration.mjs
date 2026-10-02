@@ -137,7 +137,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       const secondCandidate=await callOrganization(quotaOwner,{
         action:'setMember',organizationId:quotaOrg,uid:quotaCandidateTwo.uid,role:'learner',active:true,
       });
-      assert.equal(secondCandidate.status,403,JSON.stringify(secondCandidate));
+      assert.equal(secondCandidate.status,400,JSON.stringify(secondCandidate));
       assert.match(String(secondCandidate.error||''),/candidate limit/i);
 
       const mentor=await callOrganization(quotaOwner,{
@@ -153,7 +153,7 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
       const overSeat=await callOrganization(quotaOwner,{
         action:'setMember',organizationId:quotaOrg,uid:quotaExtra.uid,role:'editor',active:true,
       });
-      assert.equal(overSeat.status,403,JSON.stringify(overSeat));
+      assert.equal(overSeat.status,400,JSON.stringify(overSeat));
       assert.match(String(overSeat.error||''),/seat limit/i);
 
       const usage=await callOrganization(quotaOwner,{action:'getUsage',organizationId:quotaOrg});
