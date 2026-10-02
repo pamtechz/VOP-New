@@ -9,6 +9,8 @@ export interface ClientPayment {
   payerName:string;
   organizationId:string;
   tenantId:string;
+  billingTenantType:string;
+  billingTenantId:string;
   payableItemId:string;
   itemId:string;
   itemType:string;
