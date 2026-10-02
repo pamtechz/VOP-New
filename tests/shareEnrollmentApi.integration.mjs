@@ -89,6 +89,18 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     const invitee=await identity('share-invite-newcomer');
     const platformAdmin=await identity('share-platform-admin',{role:'super_admin'});
 
+    const quotaOrg='share-quota-org';
+    await db.doc('organizations/'+quotaOrg).set({
+      id:quotaOrg,name:'Quota Organization',status:'active',
+      quotas:{maxSeats:4,maxCandidates:1,maxMentors:1},
+    });
+    const quotaOwner=await identity('quota-owner',{organizationId:quotaOrg,organizationRole:'owner',membershipRole:'owner'});
+    const quotaCandidate=await identity('quota-candidate');
+    const quotaCandidateTwo=await identity('quota-candidate-two');
+    const quotaMentor=await identity('quota-mentor');
+    const quotaAdmin=await identity('quota-admin');
+    const quotaExtra=await identity('quota-extra');
+
     const guideId='share-enroll-guide',lessonId='share-enroll-lesson';
     await db.doc('guides/'+guideId).set({
       id:guideId,organizationId:orgA,ownerOrganizationId:orgA,ownerUid:author.uid,
@@ -115,6 +127,42 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
     });
     assert.equal(created.status,200,JSON.stringify(created));
     const code=created.item.code;
+
+    await t.test('subscription seats include candidates, mentors and administrators for the whole organization',async()=>{
+      const candidate=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaCandidate.uid,role:'learner',active:true,
+      });
+      assert.equal(candidate.status,200,JSON.stringify(candidate));
+
+      const secondCandidate=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaCandidateTwo.uid,role:'learner',active:true,
+      });
+      assert.equal(secondCandidate.status,403,JSON.stringify(secondCandidate));
+      assert.match(String(secondCandidate.error||''),/candidate limit/i);
+
+      const mentor=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaMentor.uid,role:'mentor',active:true,
+      });
+      assert.equal(mentor.status,200,JSON.stringify(mentor));
+
+      const adminMember=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaAdmin.uid,role:'admin',active:true,
+      });
+      assert.equal(adminMember.status,200,JSON.stringify(adminMember));
+
+      const overSeat=await callOrganization(quotaOwner,{
+        action:'setMember',organizationId:quotaOrg,uid:quotaExtra.uid,role:'editor',active:true,
+      });
+      assert.equal(overSeat.status,403,JSON.stringify(overSeat));
+      assert.match(String(overSeat.error||''),/seat limit/i);
+
+      const usage=await callOrganization(quotaOwner,{action:'getUsage',organizationId:quotaOrg});
+      assert.equal(usage.status,200,JSON.stringify(usage));
+      assert.equal(usage.usage.seats,4);
+      assert.equal(usage.usage.candidates,1);
+      assert.equal(usage.usage.mentors,1);
+      assert.equal(usage.usage.administrators,2);
+    });
 
     await t.test('active members create explicit lesson invitations and the recipient joins only after accepting',async()=>{
       const createdInvite=await callOrganization(ordinaryMember,{
