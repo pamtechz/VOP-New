@@ -44,7 +44,7 @@ const checks = [
   ['api/study/progress.ts', ['candidateId: decoded.uid','userId: decoded.uid']],
   ['api_handlers/admin/analytics.ts', ['accessibleOrganizationIds','requirePermission','ORG_SCOPED_COLLECTIONS']],
   ['api_handlers/admin/audit.ts', ['platformAudit','tenantAudit','requirePermission']],
-  ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users']],
+  ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users','ensureOrganizationDefaultSubscription','defaultSubscriptionPlanId']],
   ['api_handlers/admin/plans.ts', ['system/plans/catalog','listAvailablePlans','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId','subscription_','upsertPayableItem']],
   ['shared/payments.ts', ['PAYMENT_STATUSES','PAYABLE_ITEM_TYPES','amountToMinor','canTransitionPaymentStatus']],
   ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
