@@ -383,6 +383,16 @@ test('free subscription plans never enter the positive-amount payment pipeline',
   assert.match(workspace,/>Free<\/strong>/);
 });
 
+test('all organization creation paths attach the default free subscription',()=>{
+  const organizations=read('api_handlers/admin/organizations.ts');
+  const onboarding=read('api_handlers/admin/onboarding.ts');
+
+  assert.match(organizations,/ensureOrganizationDefaultSubscription\(bootstrapDb,organizationId,ctx\.auth\.uid\)/);
+  assert.match(onboarding,/ensureOrganizationDefaultSubscription\(ctx\.db,organizationId,ctx\.auth\.uid\)/);
+  assert.match(onboarding,/defaultSubscriptionPlanId/);
+  assert.match(onboarding,/effectivePlan/);
+});
+
 test('organizations without a plan automatically receive the default free subscription',()=>{
   const tenant=read('server/tenant.ts');
   const organizations=read('api_handlers/admin/organizations.ts');
