@@ -16,15 +16,28 @@ export function normalizeCountryCode(value:unknown,fallback=ZAMBIA_COUNTRY_CODE)
 
 export interface OrganizationBillingProfile{
   countryCode:string;
+  countryName:string;
   billingCurrency:string;
   pricingRegion:'zambia'|'international';
 }
 
+export function normalizedBillingCountryName(value:unknown,fallback='Zambia'){
+  const name=text(value,fallback).replace(/\s+/g,' ').slice(0,120);
+  if(!name)throw new Error('A billing country is required.');
+  return name;
+}
+
 export function organizationBillingProfile(data:DocumentData|undefined):OrganizationBillingProfile{
   const billing=object(data?.billingProfile);
-  const countryCode=normalizeCountryCode(billing.countryCode||data?.countryCode||ZAMBIA_COUNTRY_CODE);
+  const countryName=normalizedBillingCountryName(billing.countryName||data?.billingCountry||(
+    text(billing.countryCode||data?.countryCode).toUpperCase()==='ZM'?'Zambia':'International'
+  ));
+  const explicitCode=text(billing.countryCode||data?.countryCode).toUpperCase();
+  const countryCode=explicitCode&&/^[A-Z]{2}$/.test(explicitCode)
+    ?explicitCode
+    :countryName.toLowerCase()==='zambia'?ZAMBIA_COUNTRY_CODE:'ZZ';
   return {
-    countryCode,
+    countryCode,countryName,
     billingCurrency:countryCode===ZAMBIA_COUNTRY_CODE?ZAMBIA_BILLING_CURRENCY:SAAS_BASE_CURRENCY,
     pricingRegion:countryCode===ZAMBIA_COUNTRY_CODE?'zambia':'international',
   };
