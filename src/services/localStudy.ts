@@ -206,7 +206,7 @@ export async function submitQuizAnswers(
   });
 
   const body = await response.json().catch(() => null) as {
-    error?:unknown; code?:unknown; replayed?:unknown; score?:unknown; passed?:unknown; threshold?:unknown;
+    ok?:unknown; available?:unknown; error?:unknown; code?:unknown; replayed?:unknown; score?:unknown; passed?:unknown; threshold?:unknown;
     feedbackMode?:unknown; explanations?:unknown;
     retakePolicy?:Partial<AssessmentSubmissionResult['retakePolicy']>;
   } | null;
@@ -216,6 +216,12 @@ export async function submitQuizAnswers(
     const code=typeof body?.code==='string'?body.code:'';
     if(code.startsWith('ASSESSMENT_'))throw new AssessmentSubmissionConditionError(message,code);
     throw new Error(message);
+  }
+  if(body?.ok===false){
+    const message=typeof body.error==='string'&&body.error.trim()
+      ?body.error:'The assessment is not currently available.';
+    const code=typeof body.code==='string'?body.code:'ASSESSMENT_UNAVAILABLE';
+    throw new AssessmentSubmissionConditionError(message,code);
   }
   const feedbackMode=['score_only','after_submit','none'].includes(String(body?.feedbackMode||''))
     ?String(body?.feedbackMode) as AssessmentSubmissionResult['feedbackMode']:'score_only';
