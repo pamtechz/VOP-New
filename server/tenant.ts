@@ -1,7 +1,6 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type Firestore, type DocumentData } from 'firebase-admin/firestore';
-import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../shared/subscriptions.js';
 
 type Request = { headers?: Record<string, string | string[] | undefined> };
 
@@ -209,6 +208,12 @@ function freePlanPrice(data:DocumentData){
   return Number.isFinite(value)?value:NaN;
 }
 
+function subscriptionObject(value:unknown):Record<string,unknown>{
+  return value&&typeof value==='object'&&!Array.isArray(value)
+    ?{...(value as Record<string,unknown>)}
+    :{};
+}
+
 function freePlanSnapshot(planId:string,data:DocumentData){
   return {
     id:planId,
@@ -218,8 +223,8 @@ function freePlanSnapshot(planId:string,data:DocumentData){
     version:Math.max(1,Math.trunc(Number(data.version)||1)),
     priceUsd:0,
     baseCurrency:String(data.baseCurrency||'USD').trim()||'USD',
-    quotas:normalizeSubscriptionQuotas(data.quotas),
-    features:normalizeSubscriptionFeatures(data.features),
+    quotas:subscriptionObject(data.quotas),
+    features:subscriptionObject(data.features),
   };
 }
 
