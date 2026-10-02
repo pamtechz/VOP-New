@@ -140,18 +140,31 @@ export async function beginQuizAttempt(
     retryAt:typeof body.retryAt==='string'&&body.retryAt?body.retryAt:null,
     maxAttempts:Number.isInteger(Number(body.maxAttempts))&&Number(body.maxAttempts)>0?Number(body.maxAttempts):null,
   };
-  if(code==='ASSESSMENT_RETAKE_CONFIRMATION'&&body.confirmationRequired===true){
+  const conditionMessage=typeof body.error==='string'&&body.error.trim()
+    ?body.error
+    :code==='ASSESSMENT_RETAKE_CONFIRMATION'
+      ?'Confirm the retake before replacing the current result.'
+      :'The assessment cannot be started yet.';
+  // Assessment availability is a domain decision, not an HTTP failure.
+  // The server returns 200 + ok:false for expected blocked states so browsers
+  // do not report normal policy outcomes as failed network requests.
+  if(body.ok===false&&code.startsWith('ASSESSMENT_')){
     throw new AssessmentStartConditionError(
-      typeof body.error==='string'?body.error:'Confirm the retake before replacing the current result.',
+      conditionMessage,
       code,
       Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
       conditionDetails,
     );
   }
   if(!response.ok){
-    const message=typeof body.error==='string'?body.error:'The assessment could not be started.';
-    if(code.startsWith('ASSESSMENT_'))throw new AssessmentStartConditionError(message,code,null,conditionDetails);
-    throw new Error(message);
+    if(code.startsWith('ASSESSMENT_')){
+      throw new AssessmentStartConditionError(
+        conditionMessage,code,
+        Number.isFinite(Number(body.previousScore))?Number(body.previousScore):null,
+        conditionDetails,
+      );
+    }
+    throw new Error(conditionMessage);
   }
   if(!body.sessionId||!body.assessmentPolicy||!Array.isArray(body.questions)||!body.questions.length){
     throw new Error('The assessment could not load its published questions.');
