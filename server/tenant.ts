@@ -203,6 +203,27 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
 const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);
 const MENTOR_MEMBERSHIP_ROLES=new Set(['mentor']);
 
+export async function organizationSubscriptionTermBlockReason(
+  db:Firestore,
+  organizationId:string,
+){
+  if(!organizationId)return 'An organization is required for subscription access checks.';
+  const subscription=await db.doc(`organizations/${organizationId}/subscription/current`).get();
+  if(!subscription.exists)return null;
+  const data=subscription.data()||{};
+  const status=String(data.status||'').trim().toLowerCase();
+  if(status&&!['active','trialing'].includes(status)){
+    return 'This organization subscription is inactive. Renew or activate a subscription package to make changes.';
+  }
+  const interval=String(data.planInterval||data.interval||data.planSnapshot?.interval||'').trim().toLowerCase();
+  if(interval==='one_time')return null;
+  const end=Date.parse(String(data.currentPeriodEnd||'').trim());
+  if((status==='active'||status==='trialing')&&Number.isFinite(end)&&end<=Date.now()){
+    return 'This organization subscription term has ended. Renew the subscription package to make changes.';
+  }
+  return null;
+}
+
 function quotaLimit(quotas:unknown,key:string,legacyKey=''){
   const data=quotas&&typeof quotas==='object'?quotas as Record<string,unknown>:{};
   const raw=data[key]??(legacyKey?data[legacyKey]:undefined);
@@ -290,6 +311,10 @@ export async function enforceOrganizationMembershipQuotas(
   if(organization.data()?.billingAccessSuspended===true&&!ctx.isSuperAdmin){
     throw new Error('This organization subscription is inactive. Renew or activate a subscription package before adding members.');
   }
+  if(!ctx.isSuperAdmin){
+    const termBlock=await organizationSubscriptionTermBlockReason(ctx.db,organizationId);
+    if(termBlock)throw new Error(termBlock);
+  }
   const quotas=organization.data()?.quotas;
   const normalizedRole=String(nextRole||'learner').trim().toLowerCase();
   const existing=uid?await ctx.db.doc(`organizations/${organizationId}/members/${uid}`).get():null;
@@ -327,6 +352,8 @@ export async function enforceOrganizationQuota(
   if(String(organization.data()?.plan||'').trim()==='unsubscribed'){
     throw new Error('This organization does not have an active subscription package. Choose a plan before creating additional resources.');
   }
+  const termBlock=await organizationSubscriptionTermBlockReason(db,organizationId);
+  if(termBlock)throw new Error(termBlock);
   const quotas=organization.data()?.quotas;
   const limit=Number(quotas&&typeof quotas==='object'?(quotas as Record<string,unknown>)[quotaKey]:NaN);
   if(!Number.isFinite(limit)||limit<0)return;
