@@ -109,23 +109,24 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
         <em>{locked
           ?t('guide.exam_locked','Complete all lessons to unlock')
           :hasScore
-            ?`${isFinal?t('guide.retake_exam','Retake exam'):t('guide.retake_quiz','Retake quiz')} · ${passed?t('guide.passed','Passed'):t('guide.score','Score')} ${Math.round(score!)}%`
+            ?`${passed?t('guide.passed','Passed'):t('guide.score','Previous score')} · ${Math.round(score!)}%`
             :assessment.estimatedMinutes>0?`${assessment.estimatedMinutes} min`:t('guide.ready','Ready')}</em>
+        {!locked&&<span className="vop-guide-assessment-action">{hasScore?retakeText:t('guide.start_assessment','Start assessment')}</span>}
       </span>
-      <ChevronRight size={17}/>
+            <ChevronRight size={17}/>
     </button>;
   };
 
-  return <div className="min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
-    <div className="bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
+  return <div className="vop-guide-page min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
+    <div className="vop-guide-hero bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
       <div className="vop-guide-orb" aria-hidden="true"/>
       <div className="max-w-4xl mx-auto relative">
         <div className="flex items-center justify-between gap-4 mb-5">
           <button onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
+            className="vop-guide-back-button inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
             <ArrowLeft size={22}/><span className="font-bold text-base sm:text-lg">{t('common.back','Back')}</span>
           </button>
-          <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
+          <span className="vop-guide-module-badge text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 text-amber-300 border border-white/20">
             {t('guide.module_label','Module')} {guide.discoverNumber}
           </span>
         </div>
@@ -164,7 +165,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
       </div>
     </div>
 
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+    <div className="vop-guide-content max-w-4xl mx-auto px-4 sm:px-6 py-6">
       {studyLessons.length===0
         ?<div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
           <BookOpen size={36} className="text-slate-300 mx-auto mb-3"/>
