@@ -708,21 +708,34 @@ export async function fulfilPaidPayment(db:Firestore,paymentIdValue:unknown){
   }else if(itemType==='organization_subscription'){
     if(!organizationId)throw new Error('A subscription payment requires an organization.');
     const plan=object(config.planSnapshot);
+    const planId=text(plan.id)||text(payment.itemId);
     const interval=text(plan.interval)||'month';
-    const start=new Date(),end=new Date(start);
+    const now=new Date();
+    const currentSubscription=await db.doc('organizations/'+organizationId+'/subscription/current').get();
+    const currentData=currentSubscription.data()||{};
+    const existingEnd=Date.parse(text(currentData.currentPeriodEnd));
+    const sameActivePlan=currentData.status==='active'&&text(currentData.planId)===planId
+      &&Number.isFinite(existingEnd)&&existingEnd>now.getTime();
+    const start=sameActivePlan&&text(currentData.currentPeriodStart)
+      ?new Date(text(currentData.currentPeriodStart))
+      :now;
+    const extensionBase=sameActivePlan?new Date(existingEnd):now;
+    const end=new Date(extensionBase);
     if(interval==='year')end.setUTCFullYear(end.getUTCFullYear()+1);
     else if(interval==='month')end.setUTCMonth(end.getUTCMonth()+1);
     else end.setUTCFullYear(end.getUTCFullYear()+100);
     const pricing=object(object(payment.itemSnapshot).pricing);
     batch.set(db.doc('organizations/'+organizationId),{
-      plan:text(plan.id)||text(payment.itemId),quotas:object(plan.quotas),featureEntitlements:object(plan.features),
+      plan:planId,quotas:object(plan.quotas),featureEntitlements:object(plan.features),
       billingAccessSuspended:false,billingSuspendedReason:null,updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
     batch.set(db.doc('organizations/'+organizationId+'/subscription/current'),{
-      organizationId,planId:text(plan.id)||text(payment.itemId),status:'active',
+      organizationId,planId,status:'active',
       activationSource:'payment',billingProvider:text(payment.provider),lastPaymentId:paymentId,
       lastPaidAt:FieldValue.serverTimestamp(),currentPeriodStart:start.toISOString(),
       currentPeriodEnd:end.toISOString(),renewalMode:'manual',
+      renewalCount:Number(currentData.renewalCount||0)+(sameActivePlan?1:0),
+      ...(sameActivePlan?{renewedAt:FieldValue.serverTimestamp(),previousPeriodEnd:new Date(existingEnd).toISOString()}:{}),
       baseCurrency:text(pricing.baseCurrency)||'USD',baseAmountDecimal:text(pricing.baseAmountDecimal),
       billingCountryCode:text(pricing.billingCountryCode),billingCurrency:text(payment.currency),
       paidAmountDecimal:text(payment.amountDecimal),exchangeRate:Number(pricing.exchangeRate||1),
