@@ -39,6 +39,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const previewQuizValid = isPlayableQuizConfigured(previewQuestions);
   const validQuiz = isPlayableQuizConfigured(questions);
   const canStartFromServer = Boolean(lesson.sourceQuizId) || previewQuizValid;
+  const secureQuestionRefresh = Boolean(lesson.sourceQuizId) && !previewQuizValid;
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
@@ -270,8 +271,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               {instructions}
             </p>
             <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-              This {assessmentLabel.toLowerCase()} has{' '}
-              <strong style={{ color: 'var(--text-primary)' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.
+              {secureQuestionRefresh
+                ?<>Questions are refreshed securely when the attempt starts.</>
+                :<>This {assessmentLabel.toLowerCase()} has{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</strong>.</>}
               {' '}Pass mark:{' '}
               <strong style={{ color: '#0f172a' }}>
                 {validThreshold ? `${threshold}%` : 'Not configured'}
@@ -292,8 +295,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 background: '#f0f9ff', border: '1px solid #bae6fd',
                 textAlign: 'center',
               }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0284c7' }}>{questions.length}</div>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>Questions</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0284c7' }}>{secureQuestionRefresh?'—':questions.length}</div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>{secureQuestionRefresh?'Loaded at start':'Questions'}</div>
               </div>
               <div style={{
                 padding: '0.85rem', borderRadius: '1rem',
