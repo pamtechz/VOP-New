@@ -9,20 +9,6 @@ type Request = { method?: string; headers?: Record<string, string | string[] | u
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
 function id(value: unknown) { const v = String(value || '').trim(); if (!/^[a-zA-Z0-9_-]{2,80}$/.test(v)) throw new Error('A valid organization identifier is required.'); return v; }
-const QUOTA_KEYS = ['maxSeats','maxCandidates','maxMentors','maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials'] as const;
-function normalizeQuotas(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid usage limits.');
-  const input = value as Record<string, unknown>;
-  const result: Record<string, number> = {};
-  for (const key of QUOTA_KEYS) {
-    if (input[key] === undefined || input[key] === null || input[key] === '') continue;
-    const number = Number(input[key]);
-    if (!Number.isInteger(number) || number < 0) throw new Error('Usage limits must be whole numbers zero or greater.');
-    result[key] = number;
-  }
-  return result;
-}
-
 function slug(value: unknown) { const v = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); if (!v) throw new Error('Organization name is required.'); return v.slice(0, 80); }
 const INVITE_TARGET_KINDS=['organization','program','guide','lesson','section','assessment','material','radio','event','announcement','master-guide','scripture-memory','iron-duels','prayer'] as const;
 type InviteTargetKind=typeof INVITE_TARGET_KINDS[number];
@@ -489,35 +475,23 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'update') {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
-      if (!ctx.isSuperAdmin && data.plan !== undefined) throw new Error('Only the VOP Super Admin can change organization plans.');
+      if (data.plan !== undefined || data.quotas !== undefined || data.featureEntitlements !== undefined) {
+        throw new Error('Plan, feature entitlements and usage limits are managed through Billing & Subscriptions.');
+      }
       if (!ctx.isSuperAdmin && data.billingCountry !== undefined) throw new Error('Only the VOP Super Admin can change an organization billing country.');
       const nextBillingCountry=data.billingCountry!==undefined?normalizedBillingCountryName(data.billingCountry):undefined;
       const nextBillingProfile=nextBillingCountry?organizationBillingProfile({billingCountry:nextBillingCountry}):undefined;
       const allowed: Record<string, unknown> = {
         name: typeof data.name === 'string' ? data.name.trim() : undefined,
         slug: typeof data.slug === 'string' ? slug(data.slug) : undefined,
-        plan: typeof data.plan === 'string' ? data.plan.trim() : undefined,
         billingCountry:nextBillingCountry,
         countryCode:nextBillingProfile?.countryCode,
         billingProfile:nextBillingProfile,
-        quotas: ctx.isSuperAdmin && data.quotas !== undefined ? normalizeQuotas(data.quotas) : undefined,
         branding: data.branding && typeof data.branding === 'object' ? data.branding : undefined,
         updatedAt: FieldValue.serverTimestamp(),
       };
       Object.keys(allowed).forEach(key => allowed[key] === undefined && delete allowed[key]);
       const before = await ctx.db.doc(`organizations/${managedOrganizationId}`).get();
-      if (!ctx.isSuperAdmin && data.quotas !== undefined) throw new Error('Only the VOP Super Admin can change organization quotas.');
-      if (allowed.quotas !== undefined) {
-        const raw = allowed.quotas as Record<string, unknown>;
-        const normalized: Record<string, number> = {};
-        for (const key of ['maxSeats','maxCandidates','maxMentors','maxUsers','maxGuides','maxQuizzes','maxAnnouncements','maxRadioItems','maxRadioPlaylists','maxMaterials']) {
-          if (raw[key] === undefined || raw[key] === null || raw[key] === '') continue;
-          const value = Number(raw[key]);
-          if (!Number.isInteger(value) || value < -1) throw new Error('Organization limits must be whole numbers of -1 or greater.');
-          normalized[key] = value;
-        }
-        allowed.quotas = normalized;
-      }
       await ctx.db.doc(`organizations/${managedOrganizationId}`).set(allowed, { merge:true });
       await writeTenantAudit(ctx, 'organization.update', `organizations/${managedOrganizationId}`, before.data(), allowed);
       return res.status(200).json({ ok:true });
