@@ -123,6 +123,7 @@ export default function SubscriptionWorkspace({
     ||overview?.catalogPlan
     ||packages.find(plan=>plan.id===currentPlanId)
     ||null;
+  const currentPlanFree=Boolean(currentPlan)&&Number(currentPlan?.priceUsd??currentPlan?.price??0)===0;
   const status=String(subscription.status||'');
   const active=status==='active';
   const cancelAtPeriodEnd=subscription.cancelAtPeriodEnd===true;
@@ -146,6 +147,20 @@ export default function SubscriptionWorkspace({
       await refresh();
     }catch(reasonValue){setError(reasonValue instanceof Error?reasonValue.message:'The subscription could not be assigned.');}
     finally{setWorking(false);}
+  };
+
+  const activateFreePlan=async(plan:SubscriptionPackageView)=>{
+    if(isSuperAdmin||!organizationId)return;
+    setWorking(true);setError('');
+    try{
+      const result=await planApi({action:'activateFreePlan',organizationId,planId:plan.id});
+      setMessage(result.alreadyActive===true
+        ?plan.name+' is already active.'
+        :plan.name+' activated. No payment is required for this plan.');
+      await refresh();
+    }catch(reasonValue){
+      setError(reasonValue instanceof Error?reasonValue.message:'The free subscription plan could not be activated.');
+    }finally{setWorking(false);}
   };
 
   const cancel=async(mode:'period_end'|'immediate')=>{
@@ -229,7 +244,7 @@ export default function SubscriptionWorkspace({
           {cancelAtPeriodEnd&&<div className="vop-subscription-warning"><AlertTriangle size={17}/><div><strong>Cancellation scheduled</strong><span>Access remains available until {formatDate(subscription.currentPeriodEnd)}.</span></div></div>}
           <div className="vop-subscription-actions">
             {!isSuperAdmin&&<button className="btn btn-primary" type="button" onClick={()=>openCheckout(currentPlanId||undefined)}><CreditCard size={16}/>{active?'Renew / change plan':'Choose a plan'}</button>}
-            {active&&!cancelAtPeriodEnd&&<button className="btn btn-outline" type="button" disabled={working||busy} onClick={()=>void cancel('period_end')}>Cancel at period end</button>}
+            {active&&!currentPlanFree&&!cancelAtPeriodEnd&&<button className="btn btn-outline" type="button" disabled={working||busy} onClick={()=>void cancel('period_end')}>Cancel at period end</button>}
             {isSuperAdmin&&active&&<button className="btn btn-danger" type="button" disabled={working||busy} onClick={()=>void cancel('immediate')}>Cancel now</button>}
             {cancelAtPeriodEnd&&<button className="btn btn-outline" type="button" disabled={working||busy} onClick={()=>void reactivate()}><RotateCcw size={16}/>Keep subscription</button>}
             {isSuperAdmin&&!active&&currentPlanId&&<button className="btn btn-primary" type="button" disabled={working||busy} onClick={()=>void reactivate()}><RotateCcw size={16}/>Reactivate</button>}
@@ -266,11 +281,12 @@ export default function SubscriptionWorkspace({
         <div className="vop-subscription-plan-grid">{planOptions.map(plan=>{
           const isCurrent=plan.id===currentPlanId;
           const fits=planFitsUsage(plan,usage);
+          const freePlan=Number(plan.priceUsd??plan.price??0)===0;
           const enabledFeatures=SUBSCRIPTION_FEATURES.filter(feature=>plan.features?.[feature.key]===true);
           return <article key={plan.id} className={'vop-subscription-plan-card '+(isCurrent?'current':'')+(fits?'':' incompatible')}>
             <header><div><span>{subscriptionIntervalLabel(plan.interval)}</span><h4>{plan.name}</h4></div>{isCurrent&&<span className="vop-subscription-current-chip">Current</span>}</header>
             <p>{plan.description||'Organization subscription plan'}</p>
-            <div className="vop-subscription-price">{plan.billingCurrency||'USD'} <strong>{plan.billingPrice||Number(plan.priceUsd??plan.price??0).toFixed(2)}</strong><span> / {plan.interval==='year'?'year':plan.interval==='one_time'?'one-time':'month'}</span></div>
+            <div className="vop-subscription-price">{freePlan?<strong>Free</strong>:<>{plan.billingCurrency||'USD'} <strong>{plan.billingPrice||Number(plan.priceUsd??plan.price??0).toFixed(2)}</strong><span> / {plan.interval==='year'?'year':plan.interval==='one_time'?'one-time':'month'}</span></>}</div>
             <div className="vop-subscription-plan-limits">{SUBSCRIPTION_QUOTAS.slice(0,3).map(definition=>{
               const limit=subscriptionQuotaLimit(plan.quotas,definition.key);
               return <span key={definition.key}>{definition.label}: <strong>{limit===null?'Unlimited':limit}</strong></span>;
@@ -281,7 +297,9 @@ export default function SubscriptionWorkspace({
               {isSuperAdmin&&onEditPlan&&<button className="btn btn-outline" type="button" onClick={()=>onEditPlan(plan)}>Edit plan</button>}
               {isSuperAdmin&&onDeletePlan&&<button className="btn btn-outline" type="button" disabled={isCurrent||busy} onClick={()=>void onDeletePlan(plan)}>Delete</button>}
               {isSuperAdmin?<button className="btn btn-primary" type="button" disabled={isCurrent||!fits||working||busy} onClick={()=>void assign(plan)}>{isCurrent?'Current plan':'Assign manually'}</button>
-              :<button className="btn btn-primary" type="button" disabled={!fits} onClick={()=>openCheckout(plan.id)}>{isCurrent&&active?'Renew in checkout':'Choose plan'}</button>}
+              :freePlan
+                ?<button className="btn btn-primary" type="button" disabled={!fits||working||busy||(isCurrent&&active)} onClick={()=>void activateFreePlan(plan)}>{isCurrent&&active?'Current plan':'Activate free plan'}</button>
+                :<button className="btn btn-primary" type="button" disabled={!fits||working||busy} onClick={()=>openCheckout(plan.id)}>{isCurrent&&active?'Renew in checkout':'Choose plan'}</button>}
             </footer>
           </article>;
         })}</div>
