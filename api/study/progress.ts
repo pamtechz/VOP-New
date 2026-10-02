@@ -306,10 +306,10 @@ export default async function handler(
       const startedAtIso=new Date(startedAt).toISOString();
       const expiresAt=policy.timeLimitMinutes>0?startedAt+policy.timeLimitMinutes*60_000:0;
       const historicalLastAttemptMs=relevant.reduce((latest,doc)=>Math.max(latest,timestampMs(doc.data()?.createdAt)),0);
-      const latestAttempt=relevant.reduce<FirebaseFirestore.QueryDocumentSnapshot|null>((latest,doc)=>{
+      const latestAttempt=relevant.reduce((latest,doc)=>{
         if(!latest)return doc;
         return timestampMs(doc.data()?.createdAt)>timestampMs(latest.data()?.createdAt)?doc:latest;
-      },null);
+      },null as (typeof relevant)[number]|null);
       const reserved=await db.runTransaction(async transaction=>{
         const [currentPolicy,currentUser]=await Promise.all([
           transaction.get(policyRef),transaction.get(userRef),
