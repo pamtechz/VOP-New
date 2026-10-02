@@ -203,6 +203,21 @@ export function canEditCanonicalContent(ctx: TenantContext, data: DocumentData |
 const CANDIDATE_MEMBERSHIP_ROLES=new Set(['learner','student','candidate']);
 const MENTOR_MEMBERSHIP_ROLES=new Set(['mentor']);
 
+export async function subscriptionAudiencePolicy(db:Firestore){
+  const snapshot=await db.doc('system/billing').get();
+  const data=snapshot.data()||{};
+  const audience=data.subscriptionAudience&&typeof data.subscriptionAudience==='object'
+    ?data.subscriptionAudience as Record<string,unknown>:{};
+  return {
+    learnersCandidates:audience.learnersCandidates===true,
+    organizations:audience.organizations!==false,
+    churches:audience.churches!==false,
+    districts:audience.districts!==false,
+    conferences:audience.conferences!==false,
+    unions:audience.unions!==false,
+  };
+}
+
 function freePlanPrice(data:DocumentData){
   const value=Number(data.priceUsd??data.price??NaN);
   return Number.isFinite(value)?value:NaN;
@@ -410,9 +425,12 @@ export async function organizationUsageSnapshot(db:Firestore,organizationId:stri
     ownedCollectionCount(db,organizationId,'playlists'),
     ownedCollectionCount(db,organizationId,'books'),
   ]);
+  const candidates=roles.filter(role=>CANDIDATE_MEMBERSHIP_ROLES.has(role)).length;
+  const memberSeats=roles.filter(role=>!CANDIDATE_MEMBERSHIP_ROLES.has(role)).length;
   return {
-    seats:members.size,
-    candidates:roles.filter(role=>CANDIDATE_MEMBERSHIP_ROLES.has(role)).length,
+    seats:memberSeats,
+    memberSeats,
+    candidates,
     mentors:roles.filter(role=>MENTOR_MEMBERSHIP_ROLES.has(role)).length,
     administrators:roles.filter(role=>['owner','admin'].includes(role)).length,
     staff:roles.filter(role=>!CANDIDATE_MEMBERSHIP_ROLES.has(role)&&!MENTOR_MEMBERSHIP_ROLES.has(role)&&!['owner','admin'].includes(role)).length,
@@ -425,10 +443,15 @@ export async function validateOrganizationPlanCapacity(
   organizationId:string,
   quotas:Record<string,unknown>,
 ){
-  const usage=await organizationUsageSnapshot(db,organizationId);
+  const [usage,audience]=await Promise.all([
+    organizationUsageSnapshot(db,organizationId),
+    subscriptionAudiencePolicy(db),
+  ]);
   const checks:Array<[string,number,number]>=[
-    ['active seats',usage.seats,quotaLimit(quotas,'maxSeats','maxUsers')],
-    ['candidates / learners',usage.candidates,quotaLimit(quotas,'maxCandidates')],
+    ['member / staff seats',usage.seats,quotaLimit(quotas,'maxSeats','maxUsers')],
+    ...(audience.learnersCandidates
+      ?[['candidates / learners',usage.candidates,quotaLimit(quotas,'maxCandidates')] as [string,number,number]]
+      :[]),
     ['mentors',usage.mentors,quotaLimit(quotas,'maxMentors')],
     ['guides',usage.guides,quotaLimit(quotas,'maxGuides')],
     ['programs / courses',usage.programs,quotaLimit(quotas,'maxPrograms')],
@@ -456,6 +479,8 @@ export async function enforceOrganizationMembershipQuotas(
   nextRole:string,
   uid='',
 ){
+  const audience=await subscriptionAudiencePolicy(ctx.db);
+  if(!audience.organizations||ctx.isSuperAdmin)return;
   await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
   const organization=await ctx.db.doc(`organizations/${organizationId}`).get();
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
@@ -473,7 +498,9 @@ export async function enforceOrganizationMembershipQuotas(
   const existingRole=String(existing?.data()?.role||'').trim().toLowerCase();
   const usage=await organizationUsageSnapshot(ctx.db,organizationId);
 
-  const seatDelta=existingActive?0:1;
+  const nextConsumesMemberSeat=!CANDIDATE_MEMBERSHIP_ROLES.has(normalizedRole);
+  const existingConsumesMemberSeat=existingActive&&!CANDIDATE_MEMBERSHIP_ROLES.has(existingRole);
+  const seatDelta=nextConsumesMemberSeat&&!existingConsumesMemberSeat?1:0;
   const candidateDelta=CANDIDATE_MEMBERSHIP_ROLES.has(normalizedRole)
     &&!(existingActive&&CANDIDATE_MEMBERSHIP_ROLES.has(existingRole))?1:0;
   const mentorDelta=MENTOR_MEMBERSHIP_ROLES.has(normalizedRole)
@@ -482,8 +509,8 @@ export async function enforceOrganizationMembershipQuotas(
   const maxSeats=quotaLimit(quotas,'maxSeats','maxUsers');
   const maxCandidates=quotaLimit(quotas,'maxCandidates');
   const maxMentors=quotaLimit(quotas,'maxMentors');
-  if(usage.seats+seatDelta>maxSeats)throw new Error('This organization has reached its active seat limit. Upgrade the subscription package or deactivate a member before adding another user.');
-  if(usage.candidates+candidateDelta>maxCandidates)throw new Error('This organization has reached its candidate limit. Upgrade the subscription package or deactivate a candidate before adding another learner.');
+  if(usage.seats+seatDelta>maxSeats)throw new Error('This organization has reached its member/staff seat limit. Upgrade the subscription package or deactivate an institutional member before adding another member.');
+  if(audience.learnersCandidates&&usage.candidates+candidateDelta>maxCandidates)throw new Error('This organization has reached its candidate limit. Upgrade the subscription package or deactivate a candidate before adding another learner.');
   if(usage.mentors+mentorDelta>maxMentors)throw new Error('This organization has reached its mentor limit. Upgrade the subscription package or deactivate a mentor before adding another mentor.');
 }
 
@@ -495,6 +522,8 @@ export async function enforceOrganizationQuota(
   increment=1,
 ){
   if(!organizationId)throw new Error('An organization is required for quota enforcement.');
+  const audience=await subscriptionAudiencePolicy(db);
+  if(!audience.organizations)return;
   await ensureOrganizationDefaultSubscription(db,organizationId);
   const organization=await db.doc(`organizations/${organizationId}`).get();
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
