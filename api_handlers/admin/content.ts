@@ -421,7 +421,7 @@ export default async function handler(req: Request, res: Response) {
       const target = ctx.db.doc(`guides/${id}`);
       await target.set({
         ...sourceData, id, organizationId:effectiveOrganizationId, ownerOrganizationId:effectiveOrganizationId,
-        ownerUid:ctx.auth.uid, sourceContentId:sourceId, copiedAt:now, copiedBy:ctx.auth.uid,
+        ownerTenantId:tenantOwnerKey(ctx), ownerUid:ctx.auth.uid, sourceContentId:sourceId, copiedAt:now, copiedBy:ctx.auth.uid,
         canonical:true, sharingScope:effectiveOrganizationId ? 'organization' : 'shared', published:false, archived:false,
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
       }, { merge:true });
@@ -432,7 +432,8 @@ export default async function handler(req: Request, res: Response) {
         const ref = target.collection('lessons').doc(lesson.id);
         batch.set(ref, {
           ...data, id:lesson.id, lessonId:lesson.id, organizationId:effectiveOrganizationId,
-          ownerOrganizationId:effectiveOrganizationId, ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
+          ownerOrganizationId:effectiveOrganizationId, ownerTenantId:tenantOwnerKey(ctx),
+          ownerUid:ctx.auth.uid, sourceContentId:`${sourceId}/lessons/${lesson.id}`,
           copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:effectiveOrganizationId ? 'organization' : 'shared', published:false,
           createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid, copyOrder:index
         }, { merge:true });
@@ -458,11 +459,15 @@ export default async function handler(req: Request, res: Response) {
       const now = new Date().toISOString();
       await targetGuide.ref.collection('lessons').doc(id).set({
         ...sourceData, id, lessonId:id, organizationId:effectiveOrganizationId, ownerOrganizationId:effectiveOrganizationId,
+        ownerTenantId:targetGuide.data()?.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid:ctx.auth.uid, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`,
         copiedAt:now, copiedBy:ctx.auth.uid, canonical:true, sharingScope:'organization', published:false,
         createdAt:now, updatedAt:FieldValue.serverTimestamp(), updatedBy:ctx.auth.uid
       });
-      return res.status(200).json({ ok:true, item:{id, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`, organizationId:ctx.organizationId} });
+      return res.status(200).json({ ok:true, item:{
+        id, sourceContentId:`${sourceGuideId}/lessons/${sourceLessonId}`,
+        organizationId:effectiveOrganizationId,ownerTenantId:targetGuide.data()?.ownerTenantId || tenantOwnerKey(ctx),
+      } });
     }
 
     if (action === 'transferLessonStructure') {
@@ -627,6 +632,7 @@ export default async function handler(req: Request, res: Response) {
         lessonId,
         organizationId: effectiveOrganizationId,
         ownerOrganizationId: existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+        ownerTenantId: existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
         ownerUid: existing.data()?.ownerUid || ctx.auth.uid,
         canonical: true,
         sharingScope: guideSystemWide
@@ -643,6 +649,7 @@ export default async function handler(req: Request, res: Response) {
         batch.set(privateNotesRef,{
           text:savedNotes,guideId,lessonId,
           ownerOrganizationId:existing.data()?.ownerOrganizationId || effectiveOrganizationId,
+          ownerTenantId:existing.data()?.ownerTenantId || guideData.ownerTenantId || tenantOwnerKey(ctx),
           ownerUid:existing.data()?.ownerUid || ctx.auth.uid,
           updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid,
         },{merge:true});
