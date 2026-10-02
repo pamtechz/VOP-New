@@ -256,7 +256,7 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
-async function consumerPaymentMethods(db:Firestore,data:DocumentData){
+async function consumerPaymentMethods(db:Firestore,data:DocumentData,billingCurrency=''){
   const allowedMethods=stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never));
   const configuredProviders=stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const providerKeys=configuredProviders.length?configuredProviders:registeredPaymentProviderKeys();
@@ -265,6 +265,7 @@ async function consumerPaymentMethods(db:Firestore,data:DocumentData){
     const config=await providerConfig(db,key);
     if(!config.enabled||!config.configured)continue;
     for(const method of config.methods){
+      if(billingCurrency&&billingCurrency!=='ZMW'&&method!=='card')continue;
       if((!allowedMethods.length||allowedMethods.includes(method))&&PAYMENT_METHODS.includes(method as never)
         &&method!=='manual'&&method!=='bank')methods.add(method);
     }
@@ -294,7 +295,7 @@ async function consumerPayableItem(db:Firestore,id:string,data:DocumentData,orga
     organizationName:text(data.organizationName),
     currency,amountMinor,amountDecimal,pricing,
     repeatable:bool(data.repeatable,false),
-    allowedMethods:await consumerPaymentMethods(db,data),
+    allowedMethods:await consumerPaymentMethods(db,data,currency),
   };
 }
 
@@ -435,6 +436,7 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     if(!plan.exists||plan.data()?.active!==true)throw new Error('This subscription package is no longer available.');
     const quote=await quoteSubscriptionPlan(ctx.db,organizationId,plan.data()||{});
     amountMinor=quote.amountMinor;currency=quote.billingCurrency;
+    if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
     pricingSnapshot={
       baseCurrency:quote.baseCurrency,baseAmountMinor:quote.baseAmountMinor,baseAmountDecimal:quote.baseAmountDecimal,
       billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
