@@ -10,7 +10,7 @@ import {
 
 export type SubscriptionPackageView={
   id:string;name:string;description:string;active:boolean;price:number;priceUsd?:number;baseCurrency?:string;currency:string;
-  interval:string;sortOrder:number;quotas:Record<string,unknown>;features:Record<string,unknown>;
+  interval:string;sortOrder:number;defaultForUnsubscribed?:boolean;quotas:Record<string,unknown>;features:Record<string,unknown>;
   billingPrice?:string;billingCurrency?:string;exchangeRate?:number;billingCountryCode?:string;
 };
 
