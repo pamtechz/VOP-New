@@ -333,7 +333,14 @@ test('study progress: server grades and guide paths stay within authorized tenan
       await db.doc('organizations/'+orgA+'/members/'+learner.uid).update({active:true});
     });
 
-    await t.test('quiz-bank path mismatch fails without changing an existing mark',async()=>{
+    await t.test('quiz-bank path mismatch fails before revoking an existing mark',async()=>{
+      const profileBeforeMismatch=(await db.doc('users/'+learner.uid).get()).data()||{};
+      const progressBeforeMismatch=profileBeforeMismatch.progress&&typeof profileBeforeMismatch.progress==='object'
+        ?profileBeforeMismatch.progress:{};
+      const scoreKey=orgA+':en:'+guideId+':'+testId;
+      await db.doc('users/'+learner.uid).set({
+        progress:{...progressBeforeMismatch,guideScores:{...(progressBeforeMismatch.guideScores||{}),[scoreKey]:100}},
+      },{merge:true});
       await db.doc('quizzes/'+quizId).update({assessmentPath:'guides/another/lessons/quiz-'+quizId});
       const response=await startQuiz(learner,{confirmRetake:true});
       assert.equal(response.status,409,JSON.stringify(response));
