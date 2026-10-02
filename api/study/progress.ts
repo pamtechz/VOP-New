@@ -352,21 +352,63 @@ export default async function handler(
         return String(row.organizationId||'')===policyOrganizationId
           &&String(row.language||'')===language&&String(row.guideId||'')===effectiveGuideId;
       });
-      const sessionId=randomUUID();
-      const sessionRef=userRef.collection('assessmentSessions').doc(sessionId);
+      const newSessionId=randomUUID();
+      const newSessionRef=userRef.collection('assessmentSessions').doc(newSessionId);
       const startedAt=Date.now();
       const startedAtIso=new Date(startedAt).toISOString();
       const expiresAt=policy.timeLimitMinutes>0?startedAt+policy.timeLimitMinutes*60_000:0;
+      // Untimed assessments are still resumable for a bounded period. This prevents
+      // a lost response, refresh, device sleep or accidental double click from
+      // consuming another attempt while also avoiding immortal abandoned sessions.
+      const resumeUntil=expiresAt||startedAt+24*60*60*1000;
       const historicalLastAttemptMs=relevant.reduce((latest,doc)=>Math.max(latest,timestampMs(doc.data()?.createdAt)),0);
       const latestAttempt=relevant.reduce((latest,doc)=>{
         if(!latest)return doc;
         return timestampMs(doc.data()?.createdAt)>timestampMs(latest.data()?.createdAt)?doc:latest;
       },null as (typeof relevant)[number]|null);
+      const expectedSession={
+        organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+      };
       const reserved=await db.runTransaction(async transaction=>{
         const currentPolicy=await transaction.get(policyRef);
         const currentUser=await transaction.get(userRef);
         const graduationRequest=graduationRef?await transaction.get(graduationRef):null;
         const policyData=currentPolicy.data()||{};
+
+        const activeSessionId=String(policyData.activeSessionId||'').trim();
+        if(activeSessionId){
+          const activeRef=userRef.collection('assessmentSessions').doc(activeSessionId);
+          const active=await transaction.get(activeRef);
+          const activeData=active.data()||{};
+          if(active.exists&&activeAssessmentSession(activeData,expectedSession,startedAt)
+            &&Array.isArray(activeData.questionsSnapshot)&&activeData.questionsSnapshot.length){
+            const activePolicy=object(activeData.assessmentPolicySnapshot);
+            const activeAttemptNumber=Math.max(1,Math.trunc(Number(activeData.attemptNumber)||1));
+            return {
+              resumed:true,
+              sessionId:activeSessionId,
+              attemptNumber:activeAttemptNumber,
+              previousScore:Number.isFinite(Number(activeData.previousScore))?Number(activeData.previousScore):null,
+              previousScoreRevoked:activeData.previousScoreRevoked===true,
+              startedAt:String(activeData.startedAt||startedAtIso),
+              expiresAt:String(activeData.expiresAt||'')||null,
+              questions:activeData.questionsSnapshot as QuestionRecord[],
+              assessmentPolicy:{
+                threshold:Number(activePolicy.threshold)||policy.threshold,
+                maxAttempts:Number(activePolicy.maxAttempts)>0?Number(activePolicy.maxAttempts):null,
+                remainingAttempts:Number.isInteger(Number(activePolicy.remainingAttempts))&&Number(activePolicy.remainingAttempts)>=0
+                  ?Number(activePolicy.remainingAttempts):null,
+                cooldownMinutes:Math.max(0,Math.trunc(Number(activePolicy.cooldownMinutes)||0)),
+                timeLimitMinutes:Math.max(0,Math.trunc(Number(activePolicy.timeLimitMinutes)||0)),
+                feedbackMode:['score_only','after_submit','none'].includes(String(activePolicy.feedbackMode||''))
+                  ?String(activePolicy.feedbackMode):policy.feedbackMode,
+                instructions:String(activePolicy.instructions||''),
+                attemptsUsed:activeAttemptNumber,
+              },
+            };
+          }
+        }
+
         const priorAttempts=currentPolicy.exists
           ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
         const lastAttemptMs=currentPolicy.exists?timestampMs(policyData.lastAttemptAt):historicalLastAttemptMs;
@@ -401,7 +443,7 @@ export default async function handler(
           if(latestAttempt){
             transaction.set(latestAttempt.ref,{
               creditStatus:'revoked_for_retake',creditRevokedAt:FieldValue.serverTimestamp(),
-              supersededBySessionId:sessionId,updatedAt:FieldValue.serverTimestamp(),
+              supersededBySessionId:newSessionId,updatedAt:FieldValue.serverTimestamp(),
             },{merge:true});
           }
           if(graduationRequest?.exists){
@@ -418,7 +460,7 @@ export default async function handler(
               transaction.set(graduationRequest.ref,{
                 status:'rejected',rejectionReason:'assessment_retake',
                 eligibilityRevokedAt:FieldValue.serverTimestamp(),
-                supersededBySessionId:sessionId,approverNotes:'Eligibility revoked by assessment retake.',
+                supersededBySessionId:newSessionId,approverNotes:'Eligibility revoked by assessment retake.',
                 decisions,revision:Math.max(1,Number(review.revision||0)+1),
                 approvedAt:null,updatedAt:FieldValue.serverTimestamp(),
               },{merge:true});
@@ -426,33 +468,48 @@ export default async function handler(
           }
         }
         const attemptNumber=priorAttempts+1;
+        const remainingAttempts=policy.maxAttempts>0?Math.max(0,policy.maxAttempts-attemptNumber):null;
+        const policySnapshot={
+          threshold:policy.threshold,maxAttempts:policy.maxAttempts||null,remainingAttempts,
+          cooldownMinutes:policy.retakeCooldownMinutes,timeLimitMinutes:policy.timeLimitMinutes,
+          feedbackMode:policy.feedbackMode,instructions:policy.instructions,attemptsUsed:attemptNumber,
+        };
         transaction.set(policyRef,{
           organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
-          attemptCount:attemptNumber,lastAttemptAt:startedAtIso,updatedAt:FieldValue.serverTimestamp(),
+          attemptCount:attemptNumber,lastAttemptAt:startedAtIso,activeSessionId:newSessionId,
+          activeSessionStartedAt:startedAtIso,activeSessionResumeUntil:new Date(resumeUntil).toISOString(),
+          updatedAt:FieldValue.serverTimestamp(),
         },{merge:true});
-        transaction.set(sessionRef,{
-          sessionId,organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
-          attemptNumber,startedAt:startedAtIso,
+        transaction.set(newSessionRef,{
+          sessionId:newSessionId,organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+          attemptNumber,status:'active',startedAt:startedAtIso,
           expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+          resumeUntil:new Date(resumeUntil).toISOString(),
           previousScore:hasCurrentScore?currentScore:null,
           previousScoreRevoked:isRetake&&hasCurrentScore,
-          consumed:false,createdAt:FieldValue.serverTimestamp(),
+          consumed:false,
+          questionsSnapshot:attemptQuestions,
+          assessmentPolicySnapshot:policySnapshot,
+          createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
         });
-        return {attemptNumber,priorAttempts,previousScore:hasCurrentScore?currentScore:null,previousScoreRevoked:isRetake&&hasCurrentScore};
+        return {
+          resumed:false,sessionId:newSessionId,attemptNumber,
+          previousScore:hasCurrentScore?currentScore:null,
+          previousScoreRevoked:isRetake&&hasCurrentScore,
+          startedAt:startedAtIso,expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
+          questions:attemptQuestions,assessmentPolicy:policySnapshot,
+        };
       });
       return res.status(200).json({
-        ok:true,sessionId,startedAt:startedAtIso,
-        expiresAt:expiresAt?new Date(expiresAt).toISOString():null,
-        questions:attemptQuestions,
+        ok:true,
+        resumed:reserved.resumed,
+        sessionId:reserved.sessionId,
+        startedAt:reserved.startedAt,
+        expiresAt:reserved.expiresAt,
+        questions:reserved.questions,
         previousScore:reserved.previousScore,
         previousScoreRevoked:reserved.previousScoreRevoked,
-        assessmentPolicy:{
-          threshold:policy.threshold,maxAttempts:policy.maxAttempts||null,
-          remainingAttempts:policy.maxAttempts>0?Math.max(0,policy.maxAttempts-reserved.attemptNumber):null,
-          cooldownMinutes:policy.retakeCooldownMinutes,timeLimitMinutes:policy.timeLimitMinutes,
-          feedbackMode:policy.feedbackMode,instructions:policy.instructions,
-          attemptsUsed:reserved.attemptNumber,
-        },
+        assessmentPolicy:reserved.assessmentPolicy,
       });
     }
 
