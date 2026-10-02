@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { initializeApp, getApps, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createServer } from 'vite';
+import { createHash } from 'node:crypto';
 
 test('study progress: server grades and guide paths stay within authorized tenants', async t => {
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST, 'Firestore emulator required; never run against production.');
@@ -182,6 +183,12 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(passed.retakePolicy.retryAt,null);
       const scoreKey=orgA+':en:'+guideId+':'+testId;
       assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],100);
+      const graduationId='grad-'+createHash('sha256').update(orgA+':'+passedRetakeLearner.uid+':'+guideId).digest('hex').slice(0,48);
+      await db.doc('graduationRequests/'+graduationId).set({
+        candidateId:passedRetakeLearner.uid,organizationId:orgA,guideId,
+        status:'pending_organization',revision:1,decisions:[],
+      });
+      await db.doc('users/'+passedRetakeLearner.uid).set({information:{graduating:true,graduated:false}},{merge:true});
 
       // A normal click must not destroy a passed mark. The server requires
       // explicit destructive-retake confirmation and leaves the score intact.
@@ -190,6 +197,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(warning.code,'ASSESSMENT_RETAKE_CONFIRMATION');
       assert.match(String(warning.error||''),/current score of 100%|credit will be revoked/i);
       assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],100);
+      assert.equal((await db.doc('graduationRequests/'+graduationId).get()).data()?.status,'pending_organization');
 
       // The lesson's cached/public question payload may be stale or missing.
       // A confirmed retake must refresh from the authoritative private bank
@@ -205,7 +213,13 @@ test('study progress: server grades and guide paths stay within authorized tenan
       assert.equal(Object.hasOwn(retakeStart.questions[0],'correctOptionIndex'),false);
       assert.equal(Object.hasOwn(retakeStart.questions[0],'answer'),false);
       assert.equal(Object.hasOwn(retakeStart.questions[0],'explanation'),false);
-      assert.equal((await db.doc('users/'+passedRetakeLearner.uid).get()).data()?.progress?.guideScores?.[scoreKey],undefined);
+      const revokedProfile=(await db.doc('users/'+passedRetakeLearner.uid).get()).data();
+      assert.equal(revokedProfile?.progress?.guideScores?.[scoreKey],undefined);
+      assert.equal(revokedProfile?.information?.graduating,false);
+      const revokedReview=(await db.doc('graduationRequests/'+graduationId).get()).data();
+      assert.equal(revokedReview?.status,'rejected');
+      assert.equal(revokedReview?.rejectionReason,'assessment_retake');
+      assert.equal(revokedReview?.supersededBySessionId,retakeStart.sessionId);
 
       const priorAttempts=await db.collection('users/'+passedRetakeLearner.uid+'/assessmentAttempts').where('lessonId','==',testId).get();
       assert.ok(priorAttempts.docs.some(doc=>doc.data()?.creditStatus==='revoked_for_retake'));
