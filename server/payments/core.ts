@@ -8,11 +8,12 @@ import {
 } from '../../shared/payments.js';
 import { normalizeSubscriptionFeatures, normalizeSubscriptionQuotas } from '../../shared/subscriptions.js';
 import {
-  accessibleOrganizationIds, authenticateTenant, organizationInHierarchyScope,
-  tenantOwnerKey, validateOrganizationPlanCapacity, writeTenantAudit, type TenantContext,
+  accessibleOrganizationIds, authenticateTenant, billingTenantAudienceEnabled, billingTenantFromContext,
+  billingTenantRef, billingTenantSubscriptionRef, organizationInHierarchyScope, tenantOwnerKey,
+  validateBillingTenantPlanCapacity, writeTenantAudit, type BillingTenantType, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
-import { quoteSubscriptionPlan } from '../billing.js';
+import { quoteSubscriptionPlanForTenant } from '../billing.js';
 import {
   getPaymentProvider, paymentProviderCatalog, registeredPaymentProviderKeys,
   type ProviderVerification,
@@ -165,13 +166,23 @@ function requireSuperAdminFinanceControl(ctx:TenantContext,resource:string){
   if(!ctx.isSuperAdmin)throw new Error(`Only Super Admin can access ${resource}.`);
 }
 
-async function requireOrganizationSubscriptionConsumer(ctx:TenantContext){
-  if(ctx.isSuperAdmin)return;
+async function requireInstitutionalSubscriptionConsumer(ctx:TenantContext){
+  if(ctx.isSuperAdmin)return null;
   await requirePermission(ctx,'billing','view');
-  const role=text(ctx.membership?.role||ctx.profile.organizationRole);
-  if(ctx.tenantType!=='organization'||!ctx.organizationId||!['owner','admin'].includes(role)){
-    throw new Error('Only an organization owner or administrator can manage the organization subscription.');
+  const target=billingTenantFromContext(ctx);
+  if(!target)throw new Error('This account is not linked to an institutional billing tenant.');
+  if(target.type==='organization'){
+    const role=text(ctx.membership?.role||ctx.profile.organizationRole);
+    if(!['owner','admin'].includes(role)){
+      throw new Error('Only an organization owner or administrator can manage the organization subscription.');
+    }
+  }else if(ctx.tenantType!=='hierarchy'){
+    throw new Error('Only an institutional tenant administrator can manage this subscription.');
   }
+  if(!(await billingTenantAudienceEnabled(ctx.db,target.type))){
+    throw new Error('Subscription billing is not required for this institutional tenant type.');
+  }
+  return target;
 }
 
 export async function upsertPayableItem(ctx:TenantContext,input:Record<string,unknown>){
