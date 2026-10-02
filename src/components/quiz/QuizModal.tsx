@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Lesson, DiscoverGuide } from '../../types';
-import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight } from 'lucide-react';
+import { X, Trophy, ArrowRight, RotateCcw, Award, CheckCircle2, XCircle, BookOpen, ChevronRight, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { areQuizResponsesComplete, isPlayableQuizConfigured } from '../../services/quiz';
 import { beginQuizAttempt, type AssessmentPolicyResult, type AssessmentSubmissionResult } from '../../services/localStudy';
@@ -18,13 +18,16 @@ interface QuizModalProps {
   maxAttempts?: number;
   retakeCooldownMinutes?: number;
   previouslyAttempted?: boolean;
+  previousScore?: number;
+  onAttemptStarted?: () => void | Promise<void>;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
   lesson, guide, onClose, onSubmitScore, onOpenCertificate, onContinue, hasNextLesson = false, passThreshold,
-  maxAttempts = 0, retakeCooldownMinutes = 0, previouslyAttempted = false,
+  maxAttempts = 0, retakeCooldownMinutes = 0, previouslyAttempted = false, previousScore, onAttemptStarted,
 }) => {
-  const questions = lesson.questions ?? [];
+  const previewQuestions = lesson.questions ?? [];
+  const [questions,setQuestions]=useState(previewQuestions);
   const previewThreshold = Number(lesson.assessmentPassThreshold || 0) || passThreshold;
   const [attempt,setAttempt]=useState<AssessmentPolicyResult|null>(null);
   const threshold=attempt?.assessmentPolicy.threshold||previewThreshold;
@@ -33,7 +36,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const previewCooldown=Number(lesson.assessmentRetakeCooldownMinutes||0)||retakeCooldownMinutes;
   const previewTimeLimit=Math.max(0,Math.trunc(Number(lesson.assessmentTimeLimitMinutes||0)));
   const [remainingSeconds,setRemainingSeconds]=useState<number|null>(null);
+  const previewQuizValid = isPlayableQuizConfigured(previewQuestions);
   const validQuiz = isPlayableQuizConfigured(questions);
+  const canStartFromServer = Boolean(lesson.sourceQuizId) || previewQuizValid;
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number | boolean>>({});
@@ -44,12 +49,14 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [hasAttempted,setHasAttempted]=useState(previouslyAttempted);
   const [attemptBlocked,setAttemptBlocked]=useState(false);
+  const [confirmingRetake,setConfirmingRetake]=useState(false);
   const attemptStartLock=useRef(false);
   const question = questions[index];
   const remainingAttempts=submission?.retakePolicy.remainingAttempts;
   const retakeAllowed=remainingAttempts!==0;
 
   useEffect(()=>{if(previouslyAttempted)setHasAttempted(true)},[previouslyAttempted]);
+  useEffect(()=>{setQuestions(previewQuestions)},[lesson.id]);
 
   useEffect(()=>{
     const expiresAt=attempt?.expiresAt;
