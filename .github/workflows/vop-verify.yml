@@ -2,6 +2,7 @@ name: Verify VOP changes
 on:
   push:
     branches:
+      - main
       - fix/reference-design-and-certification-integrity
   workflow_dispatch:
 concurrency:
