@@ -489,6 +489,10 @@ export default async function handler(
           previousScoreRevoked:isRetake&&hasCurrentScore,
           consumed:false,
           questionsSnapshot:attemptQuestions,
+          // Private server-only snapshot pins the grading key to the exact
+          // assessment revision that was opened. Firestore rules deny all
+          // client access to assessmentSessions.
+          gradingQuestionsSnapshot:attemptQuestionSource,
           assessmentPolicySnapshot:policySnapshot,
           createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
         });
