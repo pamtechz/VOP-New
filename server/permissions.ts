@@ -1,4 +1,4 @@
-import type { DocumentData } from 'firebase-admin/firestore';
+import type { DocumentData, Firestore } from 'firebase-admin/firestore';
 import {
   DEFAULT_PERMISSION_MATRIX,
   normalizePermissionMatrix,
@@ -38,13 +38,13 @@ function entitlementRecord(value:unknown):Record<string,unknown>{
     :{};
 }
 
-async function subscriptionFeatureBlockReason(
-  ctx:TenantContext,
+export async function organizationSubscriptionFeatureBlockReason(
+  db:Firestore,
   feature:SubscriptionFeatureKey,
   organizationId:string,
 ){
-  if(ctx.isSuperAdmin||!organizationId)return null;
-  const organization=await ctx.db.doc('organizations/'+organizationId).get();
+  if(!organizationId)return 'An organization is required for subscription entitlement checks.';
+  const organization=await db.doc('organizations/'+organizationId).get();
   if(!organization.exists)return 'The organization is not available.';
   const data=organization.data()||{};
   if(data.billingAccessSuspended===true){
@@ -63,13 +63,22 @@ async function subscriptionFeatureBlockReason(
   return null;
 }
 
+export async function requireOrganizationSubscriptionFeature(
+  db:Firestore,
+  feature:SubscriptionFeatureKey,
+  organizationId:string,
+){
+  const reason=await organizationSubscriptionFeatureBlockReason(db,feature,organizationId);
+  if(reason)throw new Error(reason);
+}
+
 async function subscriptionMutationBlockReason(
   ctx:TenantContext,resource:PermissionResource,action:PermissionAction,
 ){
   if(ctx.isSuperAdmin||ctx.tenantType!=='organization'||!ctx.organizationId)return null;
   if(READ_ACTIONS.has(action)||!SUBSCRIPTION_MUTATION_RESOURCES.has(resource))return null;
   const feature=SUBSCRIPTION_FEATURE_BY_RESOURCE[resource];
-  if(feature)return subscriptionFeatureBlockReason(ctx,feature,ctx.organizationId);
+  if(feature)return organizationSubscriptionFeatureBlockReason(ctx.db,feature,ctx.organizationId);
   const organization=await ctx.db.doc('organizations/'+ctx.organizationId).get();
   return organization.exists&&organization.data()?.billingAccessSuspended===true
     ?'This organization subscription is inactive. Renew or activate a subscription package to make changes.'
@@ -81,8 +90,8 @@ export async function requireSubscriptionFeature(
   feature:SubscriptionFeatureKey,
   organizationId=ctx.organizationId,
 ){
-  const reason=await subscriptionFeatureBlockReason(ctx,feature,organizationId);
-  if(reason)throw new Error(reason);
+  if(ctx.isSuperAdmin)return;
+  await requireOrganizationSubscriptionFeature(ctx.db,feature,organizationId);
 }
 
 export async function loadPermissionMatrix(ctx: TenantContext): Promise<PermissionMatrix> {
