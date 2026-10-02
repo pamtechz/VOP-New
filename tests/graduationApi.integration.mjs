@@ -102,10 +102,39 @@ test('graduation: completion auto-queues review and final approval auto-awards t
       'Historical certificates without a documentType remain compatible.');
 
     const candidate=await identity('graduation-candidate',org);
+    const strictAttemptCandidate=await identity('graduation-strict-attempt',org);
     const admin=await identity('graduation-admin',org,'admin');
     const outsider=await identity('graduation-outsider','org-graduation-b','admin');
     await db.doc('users/'+candidate.uid).update({
       progress:{completedLessons:[lang+':'+guide+':lesson-one'],guideScores:scores},
+    });
+
+    await t.test('certificate eligibility honors a stricter verified attempt threshold than the global minimum',async()=>{
+      const strictScores={
+        [org+':'+lang+':'+guide+':test-one']:85,
+        [org+':'+lang+':'+guide+':test-two']:98,
+      };
+      await db.doc('users/'+strictAttemptCandidate.uid).update({
+        progress:{completedLessons:[lang+':'+guide+':lesson-one'],guideScores:strictScores},
+      });
+      const attemptRef=db.doc('users/'+strictAttemptCandidate.uid+'/assessmentAttempts/strict-test-one');
+      await attemptRef.set({
+        candidateId:strictAttemptCandidate.uid,userId:strictAttemptCandidate.uid,
+        organizationId:org,language:lang,guideId:guide,lessonId:'test-one',
+        score:85,threshold:90,passed:false,creditStatus:'active',attemptNumber:1,
+        createdAt:new Date().toISOString(),
+      });
+      const blocked=await ensureAutomaticGraduationReview(db,strictAttemptCandidate.uid,guide,'test:strict-attempt');
+      assert.equal(blocked.eligible,false,JSON.stringify(blocked));
+      assert.equal(blocked.reason,'assessments_incomplete_or_failed');
+
+      await attemptRef.update({score:92,passed:true});
+      await db.doc('users/'+strictAttemptCandidate.uid).update({
+        ['progress.guideScores.'+org+':'+lang+':'+guide+':test-one']:92,
+      });
+      const eligible=await ensureAutomaticGraduationReview(db,strictAttemptCandidate.uid,guide,'test:strict-attempt-passed');
+      assert.equal(eligible.eligible,true,JSON.stringify(eligible));
+      assert.equal(eligible.averageScore,95);
     });
 
     await t.test('verified completion creates the review automatically without learner submission',async()=>{
