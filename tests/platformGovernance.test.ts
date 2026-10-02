@@ -224,6 +224,10 @@ test('subscription capabilities are enforced server-side and reflected in organi
   const admin=read('src/pages/AdminPage.tsx');
   const enrollCandidate=read('api_handlers/admin/enrollCandidate.ts');
   const candidates=read('api_handlers/admin/candidates.ts');
+  const mentorship=read('api/mentorship.ts');
+  const graduations=read('api_handlers/admin/graduations.ts');
+  const graduationAutomation=read('server/graduationAutomation.ts');
+  const contentApi=read('api_handlers/admin/content.ts');
 
   assert.match(permissions,/SUBSCRIPTION_FEATURE_BY_RESOURCE/);
   assert.match(permissions,/curriculum:'curriculum'/);
@@ -235,10 +239,16 @@ test('subscription capabilities are enforced server-side and reflected in organi
   assert.match(permissions,/subscription plan does not include/);
   assert.match(permissions,/plan\|\|'\'\)\.trim\(\)==='unsubscribed'/);
   assert.match(permissions,/requireSubscriptionFeature/);
+  assert.match(permissions,/requireOrganizationSubscriptionFeature/);
 
   assert.match(enrollCandidate,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
   assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',candidateOrganizationId\)/);
+  assert.match(mentorship,/requireOrganizationSubscriptionFeature\(db,'mentorship',organizationId\)/);
+  assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',ctx\.organizationId\)/);
+  assert.match(graduations,/requireSubscriptionFeature\(ctx,'certification',requestOrganizationId\)/);
+  assert.match(graduationAutomation,/organizationSubscriptionFeatureBlockReason\(db,'certification',organizationId\)/);
+  assert.match(contentApi,/required\|subscription\|organization/);
 
   assert.match(admin,/loadOrganizationSubscriptionFeatures/);
   assert.match(admin,/SUBSCRIPTION_FEATURES\.map\(feature=>\[feature\.key,false\]\)/);
