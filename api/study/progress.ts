@@ -800,8 +800,9 @@ export default async function handler(
       ?new Date(attemptTimeMs+retakeCooldownMinutes*60_000).toISOString():null;
     const storedResult={
       score,passed,threshold,timeLimitMinutes,feedbackMode:policy.feedbackMode,
-      explanations:policy.feedbackMode==='after_submit'
-        ?questions.map(question=>String((question as Record<string,unknown>).explanation||'')):undefined,
+      ...(policy.feedbackMode==='after_submit'
+        ?{explanations:questions.map(question=>String((question as Record<string,unknown>).explanation||''))}
+        :{}),
       attemptsUsed:Math.max(1,Math.trunc(Number(sessionData.attemptNumber)||1)),
       maxAttempts:maxAttempts||null,remainingAttempts:remainingAttemptsForAttempt,
       cooldownMinutes:retakeCooldownMinutes,retryAt:retryAtForAttempt,
