@@ -119,14 +119,17 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'updateBillingSettings') {
       if (!ctx.isSuperAdmin) throw new Error('Only the VOP Super Admin can change platform billing settings.');
-      const usdToZmwRate=Number(body.usdToZmwRate);
-      if(!Number.isFinite(usdToZmwRate)||usdToZmwRate<=0)throw new Error('Enter a valid USD to ZMW exchange rate.');
-      const fxQuoteTtlMinutes=Math.max(15,Math.min(10080,Math.trunc(Number(body.fxQuoteTtlMinutes)||1440)));
-      const fxSource=text(body.fxSource,'platform-configured');
+      const currentSettings=await loadPlatformBillingSettings(ctx.db);
+      const suppliedRate=body.usdToZmwRate!==undefined&&body.usdToZmwRate!==null&&String(body.usdToZmwRate).trim()!=='';
+      const requestedRate=suppliedRate?Number(body.usdToZmwRate):currentSettings.usdToZmwRate;
+      if(suppliedRate&&(!Number.isFinite(requestedRate)||requestedRate<=0))throw new Error('Enter a valid USD to ZMW exchange rate.');
+      const usdToZmwRate=Number.isFinite(requestedRate)&&requestedRate>0?requestedRate:0;
+      const fxQuoteTtlMinutes=Math.max(15,Math.min(10080,Math.trunc(Number(body.fxQuoteTtlMinutes)||currentSettings.fxQuoteTtlMinutes||1440)));
+      const fxSource=text(body.fxSource,currentSettings.fxSource||'platform-configured');
       const audienceInput=object(body.subscriptionAudience);
       const data={
         baseCurrency:SAAS_BASE_CURRENCY,zambiaCurrency:ZAMBIA_BILLING_CURRENCY,
-        usdToZmwRate,fxSource,fxUpdatedAt:new Date().toISOString(),fxQuoteTtlMinutes,
+        usdToZmwRate,fxSource,fxUpdatedAt:suppliedRate?new Date().toISOString():currentSettings.fxUpdatedAt,fxQuoteTtlMinutes,
         subscriptionAudience:{
           learnersCandidates:audienceInput.learnersCandidates===true,
           organizations:audienceInput.organizations!==false,
