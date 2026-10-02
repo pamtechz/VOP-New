@@ -1079,7 +1079,9 @@ export async function adminRequestRefund(ctx:TenantContext,input:Record<string,u
   const ref=ctx.db.doc('paymentRefunds/'+refundId);
   const record:PaymentRefund={
     id:refundId,paymentId,paymentReference:payment.reference,refundReference,
-    organizationId:payment.organizationId,payerUid:payment.payerUid,currency:payment.currency,
+    organizationId:payment.organizationId,
+    billingTenantType:payment.billingTenantType,billingTenantId:payment.billingTenantId,
+    payerUid:payment.payerUid,currency:payment.currency,
     amountMinor,amountDecimal:minorToDecimal(amountMinor,payment.currency),reason:reason.slice(0,800),
     provider:payment.provider,status:'requested',providerStatus:'requested',
     providerRefundId:'',providerRefundReference:'',requestedBy:ctx.auth.uid,
