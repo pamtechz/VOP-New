@@ -190,6 +190,12 @@ test('share enrollment preserves tenant privilege and creates idempotent course 
           learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
         },
       },{merge:true});
+
+      const listed=await callOrganization(quotaOwner,{action:'list'});
+      assert.equal(listed.status,200,JSON.stringify(listed));
+      const quotaSummary=listed.items.find(item=>item.id===quotaOrg);
+      assert.equal(quotaSummary.memberCount,4);
+      assert.equal(quotaSummary.candidateCount,2);
     });
 
     await t.test('active members create explicit lesson invitations and the recipient joins only after accepting',async()=>{
