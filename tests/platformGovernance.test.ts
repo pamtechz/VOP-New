@@ -219,6 +219,34 @@ test('organization plan limits are consolidated into the subscription entitlemen
   assert.match(core,/cancelled=data\.cancelAtPeriodEnd===true/);
 });
 
+test('subscription capabilities are enforced server-side and reflected in organization admin navigation',()=>{
+  const permissions=read('server/permissions.ts');
+  const admin=read('src/pages/AdminPage.tsx');
+  const enrollCandidate=read('api_handlers/admin/enrollCandidate.ts');
+  const candidates=read('api_handlers/admin/candidates.ts');
+
+  assert.match(permissions,/SUBSCRIPTION_FEATURE_BY_RESOURCE/);
+  assert.match(permissions,/curriculum:'curriculum'/);
+  assert.match(permissions,/lessons:'curriculum'/);
+  assert.match(permissions,/quizzes:'curriculum'/);
+  assert.match(permissions,/certificates:'certification'/);
+  assert.match(permissions,/mentoring:'mentorship'/);
+  assert.match(permissions,/Object\.hasOwn\(entitlements,feature\)/);
+  assert.match(permissions,/subscription plan does not include/);
+  assert.match(permissions,/requireSubscriptionFeature/);
+
+  assert.match(enrollCandidate,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
+  assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',organizationId\)/);
+  assert.match(candidates,/requireSubscriptionFeature\(ctx,'candidates',candidateOrganizationId\)/);
+
+  assert.match(admin,/loadOrganizationSubscriptionFeatures/);
+  assert.match(admin,/subscriptionFeatureForTab/);
+  assert.match(admin,/candidates:'candidates'/);
+  assert.match(admin,/certification:'certification'/);
+  assert.match(admin,/mentorship:'mentorship'/);
+  assert.match(admin,/Object\.hasOwn\(subscriptionFeatures,subscriptionFeature\)/);
+});
+
 test('notification and invitation workflows are visible, actionable and routed to their destination',()=>{
   const app=read('src/App.tsx');
   const types=read('src/types/index.ts');
