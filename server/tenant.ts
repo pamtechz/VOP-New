@@ -273,6 +273,9 @@ export async function enforceOrganizationMembershipQuotas(
 ){
   const organization=await ctx.db.doc(`organizations/${organizationId}`).get();
   if(!organization.exists||organization.data()?.status!=='active')throw new Error('The organization is not available.');
+  if(organization.data()?.billingAccessSuspended===true&&!ctx.isSuperAdmin){
+    throw new Error('This organization subscription is inactive. Renew or activate a subscription package before adding members.');
+  }
   const quotas=organization.data()?.quotas;
   const normalizedRole=String(nextRole||'learner').trim().toLowerCase();
   const existing=uid?await ctx.db.doc(`organizations/${organizationId}/members/${uid}`).get():null;
@@ -297,6 +300,9 @@ export async function enforceOrganizationMembershipQuotas(
 export async function enforceQuota(ctx: TenantContext, collectionName: string, quotaKey: string, increment = 1) {
   if (ctx.isSuperAdmin || !ctx.organizationId) return;
   const organization = await ctx.db.doc(`organizations/${ctx.organizationId}`).get();
+  if(organization.data()?.billingAccessSuspended===true){
+    throw new Error('This organization subscription is inactive. Renew or activate a subscription package before creating additional resources.');
+  }
   const quotas = organization.data()?.quotas;
   const limit = Number(quotas && typeof quotas === 'object' ? (quotas as Record<string, unknown>)[quotaKey] : NaN);
   if (!Number.isFinite(limit) || limit < 0) return;
