@@ -61,6 +61,12 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     lessonIsComplete(guide,lesson,currentUser,threshold)).length;
   const progressPercent=studyLessons.length
     ?Math.round(completedCount*100/studyLessons.length):0;
+  const allGuideAssessmentsPassed=guideAssessments.length>0&&guideAssessments.every(item=>{
+    const score=lessonScoreForDisplay(guide,item,currentUser);
+    const configured=Number(item.assessmentPassThreshold);
+    const passMark=Number.isFinite(configured)&&configured>=1&&configured<=100?configured:threshold;
+    return typeof score==='number'&&Number.isFinite(score)&&Number.isFinite(passMark)&&passMark>=1&&passMark<=100&&score>=passMark;
+  });
 
   const attachedAssessments=(lesson:Lesson,type:'lesson'|'chapter'|'section'|'block',anchorId='')=>
     assessments.filter(item=>item.attachedLessonId===lesson.id
@@ -86,7 +92,10 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
     const locked=isFinal&&guide.requiresFinalExam===true&&!finalExamReady;
     const score=lessonScoreForDisplay(guide,assessment,currentUser);
     const hasScore=typeof score==='number'&&Number.isFinite(score);
-    const passed=hasScore&&Number.isFinite(threshold)&&threshold>=1&&threshold<=100&&score!>=threshold;
+    const configured=Number(assessment.assessmentPassThreshold);
+    const passMark=Number.isFinite(configured)&&configured>=1&&configured<=100?configured:threshold;
+    const passed=hasScore&&Number.isFinite(passMark)&&passMark>=1&&passMark<=100&&score!>=passMark;
+    const retakeText=isFinal?t('guide.retake_exam','Retake exam'):t('guide.retake_quiz','Retake quiz');
     return <button type="button" key={assessment.id}
       className={'vop-guide-assessment '+(locked?'locked':passed?'passed':hasScore?'attempted':'')}
       onClick={()=>onSelectLesson(assessment)} disabled={locked}
