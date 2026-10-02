@@ -143,17 +143,15 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listAvailablePlans') {
-      if (!ctx.isSuperAdmin) {
-        const role=text(ctx.membership?.role || ctx.profile.organizationRole);
-        if (ctx.tenantType !== 'organization' || !ctx.organizationId || !['owner','admin'].includes(role)) {
-          throw new Error('Only an organization owner or administrator can view subscription packages for the organization.');
-        }
+      const target=targetFromRequest(ctx,body);
+      if(!selfServiceManager(ctx,target)&&!ctx.isSuperAdmin){
+        throw new Error('Only an institutional tenant administrator can view subscription packages for this tenant.');
       }
+      const audienceEnabled=await billingTenantAudienceEnabled(ctx.db,target.type);
       const snapshot = await ctx.db.collection('system/plans/catalog').where('active', '==', true).get();
-      const targetOrganizationId=ctx.organizationId||requestedOrganizationId;
       const items = await Promise.all(snapshot.docs.map(async doc => {
         const data = doc.data() || {};
-        const quote=targetOrganizationId?await quoteSubscriptionPlan(ctx.db,targetOrganizationId,data):null;
+        const quote=audienceEnabled?await quoteSubscriptionPlanForTenant(ctx.db,target.type,target.id,data):null;
         return {
           id: doc.id,
           name: text(data.name),
@@ -172,7 +170,7 @@ export default async function handler(req: Request, res: Response) {
         };
       }));
       items.sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name));
-      return res.status(200).json({ ok: true, items });
+      return res.status(200).json({ ok: true, ...targetResponse(target), subscriptionRequired:audienceEnabled, items });
     }
 
     if (action === 'getBillingSettings') {
@@ -222,46 +220,50 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'getSubscription') {
-      const organizationId = requestedOrganizationId || ctx.organizationId;
-      if (!organizationId) throw new Error('An organization is required.');
-      await ensureOrganizationDefaultSubscription(ctx.db,organizationId,ctx.auth.uid);
-      if (!ctx.isSuperAdmin && !ctx.organizationId && !(await accessibleOrganizationIds(ctx)).includes(organizationId)) throw new Error('The organization is outside your scope.');
-      if (!ctx.isSuperAdmin && ctx.organizationId !== organizationId) throw new Error('You cannot access another organization subscription.');
-      const [organization, subscription, usage, billingSettings] = await Promise.all([
-        ctx.db.doc(`organizations/${organizationId}`).get(),
-        ctx.db.doc(`organizations/${organizationId}/subscription/current`).get(),
-        organizationUsageSnapshot(ctx.db,organizationId),
+      const target=targetFromRequest(ctx,body);
+      if(!selfServiceManager(ctx,target)&&!ctx.isSuperAdmin){
+        throw new Error('You cannot access another institutional tenant subscription.');
+      }
+      const audienceEnabled=await billingTenantAudienceEnabled(ctx.db,target.type);
+      if(audienceEnabled)await ensureBillingTenantDefaultSubscription(ctx.db,target.type,target.id,ctx.auth.uid);
+      const [{snapshot:tenant,data:tenantData},subscription,usage,billingSettings]=await Promise.all([
+        tenantSnapshotOrThrow(ctx,target),
+        billingTenantSubscriptionRef(ctx.db,target.type,target.id).get(),
+        billingTenantUsageSnapshot(ctx.db,target.type,target.id),
         loadPlatformBillingSettings(ctx.db),
       ]);
-      if (!organization.exists || organization.data()?.status !== 'active') throw new Error('The organization is not available.');
-      const organizationData=organization.data()||{};
-      const currentPlanId=text(organizationData.plan);
+      const currentPlanId=text(tenantData.plan);
       const catalogPlan=currentPlanId?await ctx.db.doc(`system/plans/catalog/${currentPlanId}`).get():null;
       const subscriptionData=subscription.exists?subscription.data()||{}:null;
-      const liveTermBlock=await organizationSubscriptionTermBlockReason(ctx.db,organizationId);
-      const storedSuspended=organizationData.billingAccessSuspended===true;
+      const liveTermBlock=audienceEnabled
+        ?await billingTenantSubscriptionTermBlockReason(ctx.db,target.type,target.id)
+        :null;
+      const storedSuspended=audienceEnabled&&tenantData.billingAccessSuspended===true;
       const storedSubscriptionStatus=text(subscriptionData?.status).toLowerCase();
       const liveExpired=Boolean(liveTermBlock&&['active','trialing'].includes(storedSubscriptionStatus));
       const effectiveSubscriptionStatus=liveExpired?'expired':storedSubscriptionStatus;
       const subscriptionSnapshot=subscriptionData?.planSnapshot&&typeof subscriptionData.planSnapshot==='object'
         ?subscriptionData.planSnapshot as Record<string,unknown>:{};
       const planPriceUsd=Number(subscriptionSnapshot.priceUsd??catalogPlan?.data()?.priceUsd??catalogPlan?.data()?.price??NaN);
-      const freeTier=['active','trialing'].includes(effectiveSubscriptionStatus)&&Number.isFinite(planPriceUsd)&&planPriceUsd===0;
-      const exhaustedQuotaKeys=SUBSCRIPTION_QUOTAS
+      const freeTier=audienceEnabled&&['active','trialing'].includes(effectiveSubscriptionStatus)
+        &&Number.isFinite(planPriceUsd)&&planPriceUsd===0;
+      const exhaustedQuotaKeys=audienceEnabled?SUBSCRIPTION_QUOTAS
         .filter(definition=>{
           if(definition.key==='maxCandidates'&&!billingSettings.subscriptionAudience.learnersCandidates)return false;
-          const limit=subscriptionQuotaLimit(organizationData.quotas||{},definition.key);
+          const limit=subscriptionQuotaLimit(tenantData.quotas||{},definition.key);
           const used=Math.max(0,Number((usage as Record<string,unknown>)[definition.usageKey]||0));
           return limit!==null&&used>=limit;
         })
-        .map(definition=>definition.key);
-      if(!ctx.isSuperAdmin&&freeTier&&['owner','admin'].includes(text(ctx.membership?.role||ctx.profile.organizationRole))){
-        await sendFreeTierUpgradeReminder(ctx.db,organizationId).catch(()=>undefined);
+        .map(definition=>definition.key):[];
+      if(target.type==='organization'&&!ctx.isSuperAdmin&&freeTier
+          &&['owner','admin'].includes(text(ctx.membership?.role||ctx.profile.organizationRole))){
+        await sendFreeTierUpgradeReminder(ctx.db,target.id).catch(()=>undefined);
       }
       return res.status(200).json({
         ok:true,
-        organizationId,
-        organizationName:text(organizationData.name,organizationId),
+        ...targetResponse(target),
+        tenantName:text(tenantData.name||tenantData.title,target.id),
+        organizationName:target.type==='organization'?text(tenantData.name,target.id):'',
         plan:currentPlanId||null,
         catalogPlan:catalogPlan?.exists?{id:catalogPlan.id,...catalogPlan.data()}:null,
         subscription:subscriptionData?{
@@ -274,17 +276,20 @@ export default async function handler(req: Request, res: Response) {
           cancellationRequestedAt:timestampIso(subscriptionData.cancellationRequestedAt)||text(subscriptionData.cancellationRequestedAt),
           updatedAt:timestampIso(subscriptionData.updatedAt)||text(subscriptionData.updatedAt),
         }:null,
-        quotas:organizationData.quotas||{},
-        featureEntitlements:organizationData.featureEntitlements||{},
+        quotas:tenantData.quotas||{},
+        featureEntitlements:audienceEnabled?(tenantData.featureEntitlements||{}):{},
         usage,
-        billingProfile:organizationData.billingProfile||{},
+        billingProfile:tenantData.billingProfile||{},
         subscriptionAudience:billingSettings.subscriptionAudience,
+        subscriptionRequired:audienceEnabled,
         freeTier,
-        paidPlanActive:['active','trialing'].includes(effectiveSubscriptionStatus)&&Number.isFinite(planPriceUsd)&&planPriceUsd>0,
+        paidPlanActive:audienceEnabled&&['active','trialing'].includes(effectiveSubscriptionStatus)
+          &&Number.isFinite(planPriceUsd)&&planPriceUsd>0,
         exhaustedQuotaKeys,
         billingAccessSuspended:storedSuspended||Boolean(liveTermBlock),
-        billingSuspendedReason:text(organizationData.billingSuspendedReason)
-          ||(liveExpired?'subscription_expired':liveTermBlock?'subscription_inactive':''),
+        billingSuspendedReason:audienceEnabled
+          ?text(tenantData.billingSuspendedReason)||(liveExpired?'subscription_expired':liveTermBlock?'subscription_inactive':'')
+          :'subscription_not_required',
         billingSuspendedMessage:liveTermBlock||'',
       });
     }
