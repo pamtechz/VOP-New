@@ -43,6 +43,15 @@ export function organizationBillingProfile(data:DocumentData|undefined):Organiza
   };
 }
 
+export interface SubscriptionAudiencePolicy{
+  learnersCandidates:boolean;
+  organizations:boolean;
+  churches:boolean;
+  districts:boolean;
+  conferences:boolean;
+  unions:boolean;
+}
+
 export interface PlatformBillingSettings{
   baseCurrency:'USD';
   zambiaCurrency:'ZMW';
@@ -51,6 +60,7 @@ export interface PlatformBillingSettings{
   fxUpdatedAt:string;
   fxQuoteTtlMinutes:number;
   fxProviderDate:string;
+  subscriptionAudience:SubscriptionAudiencePolicy;
 }
 
 export async function loadPlatformBillingSettings(db:Firestore):Promise<PlatformBillingSettings>{
@@ -58,6 +68,8 @@ export async function loadPlatformBillingSettings(db:Firestore):Promise<Platform
   const data=snapshot.data()||{};
   const rate=Number(data.usdToZmwRate||0);
   const ttl=Number(data.fxQuoteTtlMinutes||1440);
+  const audience=data.subscriptionAudience&&typeof data.subscriptionAudience==='object'
+    ?data.subscriptionAudience as Record<string,unknown>:{};
   return {
     baseCurrency:'USD',
     zambiaCurrency:'ZMW',
@@ -66,6 +78,14 @@ export async function loadPlatformBillingSettings(db:Firestore):Promise<Platform
     fxUpdatedAt:text(data.fxUpdatedAt),
     fxQuoteTtlMinutes:Number.isFinite(ttl)&&ttl>0?Math.trunc(ttl):1440,
     fxProviderDate:text(data.fxProviderDate),
+    subscriptionAudience:{
+      learnersCandidates:audience.learnersCandidates===true,
+      organizations:audience.organizations!==false,
+      churches:audience.churches!==false,
+      districts:audience.districts!==false,
+      conferences:audience.conferences!==false,
+      unions:audience.unions!==false,
+    },
   };
 }
 
