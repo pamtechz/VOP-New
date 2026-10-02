@@ -25,8 +25,8 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   const [items,setItems]=useState<Organization[]>([]),[selected,setSelected]=useState<Organization|null>(null),[detailsOpen,setDetailsOpen]=useState(false),[editing,setEditing]=useState(false);
   const [members,setMembers]=useState<Member[]>([]),[audit,setAudit]=useState<Array<Record<string,unknown>>>([]);
   const [name,setName]=useState(''),[organizationId,setOrganizationId]=useState(''),[billingCountry,setBillingCountry]=useState('Zambia'),[plan,setPlan]=useState('unsubscribed'),[status,setStatus]=useState('active');
-  const [inviteEmail,setInviteEmail]=useState(''),[inviteRole,setInviteRole]=useState('learner'),[inviteUrl,setInviteUrl]=useState('');
-  const [memberRole,setMemberRole]=useState('learner'),[memberSearch,setMemberSearch]=useState(''),[memberMatches,setMemberMatches]=useState<DirectoryUser[]>([]),[selectedUser,setSelectedUser]=useState<DirectoryUser|null>(null);
+  const [inviteEmail,setInviteEmail]=useState(''),[inviteRole,setInviteRole]=useState('viewer'),[inviteUrl,setInviteUrl]=useState('');
+  const [memberRole,setMemberRole]=useState('viewer'),[memberSearch,setMemberSearch]=useState(''),[memberMatches,setMemberMatches]=useState<DirectoryUser[]>([]),[selectedUser,setSelectedUser]=useState<DirectoryUser|null>(null);
   const [ownerSearch,setOwnerSearch]=useState(''),[ownerMatches,setOwnerMatches]=useState<DirectoryUser[]>([]),[selectedOwner,setSelectedOwner]=useState<DirectoryUser|null>(null);
   const [showCreateMember,setShowCreateMember]=useState(false),[newMemberName,setNewMemberName]=useState(''),[newMemberEmail,setNewMemberEmail]=useState(''),[newMemberPassword,setNewMemberPassword]=useState('');
   const [saving,setSaving]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[error,setError]=useState('');
