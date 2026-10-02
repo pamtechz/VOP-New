@@ -72,7 +72,7 @@ export async function verifiedAssessmentEvidence(
     ||configuredPassThreshold(fallbackPassMark)===null)return null;
 
   const snapshot=await db.collection(`users/${candidateId}/assessmentAttempts`)
-    .where('guideId','==',guideId).limit(500).get();
+    .where('guideId','==',guideId).get();
   const attempts=snapshot.docs.map(doc=>({id:doc.id,data:doc.data()||{}}));
   const rows:AssessmentEvidenceRow[]=[];
   const seen=new Set<string>();
