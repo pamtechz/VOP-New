@@ -706,7 +706,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(paidUnionSubscription?.organizationId,'');
       assert.equal(paidUnionSubscription?.lastPaymentId,unionCheckout.payment.id);
 
-      const unionTransactions=await call(unionAdmin,'transactions',{filters:{}});
+      const unionTransactions=await call(unionAdmin,'admin/transactions',{filters:{}});
       assert.equal(unionTransactions.status,200,JSON.stringify(unionTransactions));
       assert.equal(unionTransactions.items.some(item=>item.id===unionCheckout.payment.id),true);
       assert.equal(unionTransactions.items
