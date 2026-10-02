@@ -196,11 +196,18 @@ export default async function handler(req: Request, res: Response) {
       const published = data.published === true;
       const target = await resolveAttachment(ctx, { ...data, language, published });
       if (existing.exists && String(current.organizationId || '') !== target.organizationId) throw new Error('Moving a quiz between organizations is not allowed. Copy the quiz into the destination tenant instead.');
-      if(!ctx.isSuperAdmin&&ctx.tenantType==='hierarchy'){
-        await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',target.organizationId);
+      if(!ctx.isSuperAdmin){
+        if(ctx.tenantType==='hierarchy')await requireSubscriptionFeature(ctx,'curriculum','');
+        else await requireOrganizationSubscriptionFeature(ctx.db,'curriculum',target.organizationId);
       }
       if(!existing.exists&&!ctx.isSuperAdmin){
-        await enforceOrganizationQuota(ctx.db,target.organizationId,'quizzes','maxQuizzes');
+        if(ctx.tenantType==='hierarchy'){
+          const billingTarget=billingTenantFromContext(ctx);
+          if(!billingTarget)throw new Error('This hierarchy administrator is not linked to a billing tenant.');
+          await enforceBillingTenantQuota(ctx.db,billingTarget.type,billingTarget.id,'quizzes','maxQuizzes');
+        }else{
+          await enforceOrganizationQuota(ctx.db,target.organizationId,'quizzes','maxQuizzes');
+        }
       }
       const questions = normalizeQuizQuestions(data.questions, id);
       const learnerQuestions = publicQuizQuestions(questions);
