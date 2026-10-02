@@ -120,7 +120,7 @@ export const DiscoverGuideView: React.FC<DiscoverGuideViewProps> = ({
   return <div className="vop-guide-page min-h-screen bg-[#f4f6fa] pb-28 md:pb-12">
     <div className="vop-guide-hero bg-[#002d72] text-white pt-5 pb-8 px-4 sm:px-6 shadow-md relative overflow-hidden">
       <div className="vop-guide-orb" aria-hidden="true"/>
-      <div className="max-w-4xl mx-auto relative">
+      <div className="vop-guide-hero-inner max-w-4xl mx-auto relative">
         <div className="flex items-center justify-between gap-4 mb-5">
           <button onClick={onBack}
             className="vop-guide-back-button inline-flex items-center gap-1.5 text-white/90 hover:text-white transition-colors cursor-pointer py-1">
