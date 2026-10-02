@@ -257,6 +257,12 @@ export async function ensureOrganizationDefaultSubscription(
   const organizationData=organization.data()||{};
   const assignedPlan=String(organizationData.plan||'').trim();
   if(assignedPlan&&assignedPlan!=='unsubscribed')return null;
+  const legacyQuotas=subscriptionObject(organizationData.quotas);
+  const legacyFeatures=subscriptionObject(organizationData.featureEntitlements);
+  // Older tenants may have explicit limits/entitlements without a plan id.
+  // Preserve that deliberate configuration; only truly unconfigured tenants
+  // or tenants explicitly marked "unsubscribed" receive the automatic free tier.
+  if(!assignedPlan&&(Object.keys(legacyQuotas).length>0||Object.keys(legacyFeatures).length>0))return null;
   const subscriptionData=subscription.data()||{};
   const existingStatus=String(subscriptionData.status||'').trim().toLowerCase();
   const existingPlanId=String(subscriptionData.planId||'').trim();
@@ -278,6 +284,9 @@ export async function ensureOrganizationDefaultSubscription(
     const currentData=currentOrganization.data()||{};
     const currentPlan=String(currentData.plan||'').trim();
     if(currentPlan&&currentPlan!=='unsubscribed')return;
+    const currentLegacyQuotas=subscriptionObject(currentData.quotas);
+    const currentLegacyFeatures=subscriptionObject(currentData.featureEntitlements);
+    if(!currentPlan&&(Object.keys(currentLegacyQuotas).length>0||Object.keys(currentLegacyFeatures).length>0))return;
     const currentSubscriptionData=currentSubscription.data()||{};
     const currentStatus=String(currentSubscriptionData.status||'').trim().toLowerCase();
     const currentSubscriptionPlanId=String(currentSubscriptionData.planId||'').trim();
