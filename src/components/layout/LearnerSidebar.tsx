@@ -26,6 +26,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
+  const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
@@ -51,6 +52,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
       {route:'payments',label:t('navigation.payments','Payments & receipts'),icon:WalletCards},
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
       {route:'personal-settings',label:t('navigation.personal_settings','Personal settings'),icon:Settings},
+      ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),icon:ScrollText}]:[]),
       ...(settings.features?.certification===false?[]:[{route:'certificates' as const,label:t('certificates.my_certificate','Certificates'),icon:GraduationCap}]),
       {route:'about',label:t('navigation.about','About VOP'),icon:BookOpen},
       ...(isAdmin?[{route:'admin' as const,label:t('navigation.admin','Admin panel'),icon:ShieldCheck}]:[]),
