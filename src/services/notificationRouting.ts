@@ -20,8 +20,8 @@ export function notificationRoute(item:RoutableNotification):AppRoute{
   if(path.startsWith('/personal-settings'))return 'personal-settings';
   if(path.startsWith('/iron-duels')||source==='scripture-duel')return 'iron-duels';
   if(path.startsWith('/mentor'))return 'mentor';
-  if(path.startsWith('/support')||type==='learning-support'||type==='mentor-feedback')return 'support';
   if(path.startsWith('/admin')||type==='user')return 'admin';
+  if(path.startsWith('/support')||type==='learning-support'||type==='mentor-feedback')return 'support';
   return 'home';
 }
 
