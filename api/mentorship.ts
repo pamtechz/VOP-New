@@ -190,11 +190,111 @@ function safeReference(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
   const type = String(item.type || '');
-  if (!['guide','lesson','section','topic','block'].includes(type)) return null;
+  if (!['guide','lesson','section','topic','doctrine','question','quiz','scripture','block'].includes(type)) return null;
   const referenceId = String(item.id || '').trim();
   const label = String(item.label || '').trim();
-  if (!referenceId || !label) return null;
+  if (!referenceId || !label || referenceId.length > 220 || label.length > 300) return null;
   return { type, id: referenceId, label };
+}
+
+const SUPPORT_TEAM_ROLES=new Set(['owner','admin','staff']);
+const SUPPORT_CATEGORIES=new Set([
+  'lesson_clarification','doctrine','bible_question','assessment',
+  'prayer','evangelism','baptism','one_voice_27','other',
+]);
+const SUPPORT_INTERESTS=new Set([
+  'none','bible_study','prayer','baptism','church_visit','home_visit','one_voice_27','evangelism',
+]);
+
+function isCandidate(data:Record<string,unknown>){
+  const role=String(data.role||'').toLowerCase();
+  const organizationRole=String(data.organizationRole||'').toLowerCase();
+  return ['student','learner','candidate'].includes(role)||['student','learner','candidate'].includes(organizationRole);
+}
+function supportTarget(value:unknown){
+  const target=String(value||'mentor').trim().toLowerCase();
+  return target==='support_team'||target==='both'?target:'mentor';
+}
+function supportChannel(value:unknown){
+  const channel=String(value||'in_app').trim().toLowerCase();
+  return channel==='whatsapp'||channel==='both'?channel:'in_app';
+}
+function supportCategory(value:unknown){
+  const category=String(value||'lesson_clarification').trim().toLowerCase();
+  return SUPPORT_CATEGORIES.has(category)?category:'other';
+}
+function supportInterest(value:unknown){
+  const interest=String(value||'none').trim().toLowerCase();
+  return SUPPORT_INTERESTS.has(interest)?interest:'none';
+}
+function supportPriority(value:unknown){
+  return String(value||'normal').trim().toLowerCase()==='high'?'high':'normal';
+}
+function supportStatus(value:unknown){
+  const status=String(value||'open').trim().toLowerCase();
+  return ['open','in_progress','resolved','closed'].includes(status)?status:'open';
+}
+function supportCreatedMillis(value:unknown){
+  const candidate=value as {toDate?:()=>Date}|undefined;
+  if(candidate?.toDate)return candidate.toDate().getTime();
+  const parsed=new Date(String(value||'')).getTime();
+  return Number.isFinite(parsed)?parsed:0;
+}
+async function organizationWhatsApp(db:FirebaseFirestore.Firestore,organizationId:string){
+  if(!organizationId)return '';
+  const settings=await db.doc(`organizations/${organizationId}/settings/settings`).get();
+  const data=settings.data()||{};
+  const detail=data.detailPages&&typeof data.detailPages==='object'
+    ?data.detailPages as Record<string,unknown>:{};
+  const numbers=Array.isArray(detail.contactWhatsAppNumbers)
+    ?detail.contactWhatsAppNumbers.map(value=>String(value||'').trim()).filter(Boolean):[];
+  return String(data.whatsappNumber||numbers[0]||data.contactPhone||'').trim();
+}
+async function supportTeamRecipients(db:FirebaseFirestore.Firestore,organizationId:string){
+  if(!organizationId)return [] as string[];
+  const members=await db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
+  return members.docs
+    .filter(doc=>SUPPORT_TEAM_ROLES.has(String(doc.data()?.role||'').toLowerCase()))
+    .map(doc=>String(doc.data()?.uid||doc.id).trim())
+    .filter(Boolean);
+}
+async function activeMentorFor(db:FirebaseFirestore.Firestore,studentId:string,organizationId:string){
+  const assignment=await db.doc(`mentorAssignments/${studentId}`).get();
+  if(!assignment.exists||assignment.data()?.status==='inactive')return '';
+  if(String(assignment.data()?.organizationId||'')!==organizationId)return '';
+  const mentorId=String(assignment.data()?.mentorId||'').trim();
+  if(!mentorId)return '';
+  const mentor=await db.doc(`users/${mentorId}`).get();
+  if(!mentor.exists||String(mentor.data()?.organizationId||'')!==organizationId)return '';
+  return mentorId;
+}
+async function assertSupportRequestAccess(
+  db:FirebaseFirestore.Firestore,
+  uid:string,
+  actor:Record<string,unknown>,
+  request:Record<string,unknown>,
+){
+  const organizationId=String(request.organizationId||'').trim();
+  if(!organizationId)throw new Error('This support request is missing its organization scope.');
+  if(String(request.candidateId||'')===uid)return;
+  if(isAdmin(actor)){
+    await assertOrganizationScope(db,{...actor,uid},organizationId);
+    return;
+  }
+  if(isMentor(actor)&&String(request.assignedMentorId||'')===uid
+    &&String(actor.organizationId||'')===organizationId)return;
+  throw new Error('You are not allowed to access this support request.');
+}
+function supportRequestPayload(doc:FirebaseFirestore.QueryDocumentSnapshot|FirebaseFirestore.DocumentSnapshot){
+  const data=doc.data()||{};
+  return {
+    id:doc.id,...data,
+    createdAt:iso(data.createdAt),
+    updatedAt:iso(data.updatedAt),
+    lastMessageAt:iso(data.lastMessageAt),
+    firstResponseAt:iso(data.firstResponseAt),
+    resolvedAt:iso(data.resolvedAt),
+  };
 }
 
 async function performanceFor(db: FirebaseFirestore.Firestore, studentId: string) {
@@ -265,10 +365,10 @@ export default async function handler(req: Request, res: Response) {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
     const permissionAction =
-      ['listStudents','listMentors','listAssignments','getAutomationSettings'].includes(action) ? 'view' :
-      ['assign','saveAutomationSettings','createDraft','sendDraft'].includes(action) ? 'manage' :
-      action === 'sendMessage' ? 'create' :
-      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages'].includes(action) ? 'read' : '';
+      ['listStudents','listMentors','listAssignments','getAutomationSettings','listSupportRequests'].includes(action) ? 'view' :
+      ['assign','saveAutomationSettings','createDraft','sendDraft','updateSupportRequest'].includes(action) ? 'manage' :
+      ['sendMessage','createSupportRequest','replySupportRequest'].includes(action) ? 'create' :
+      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages'].includes(action) ? 'read' : '';
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
@@ -276,7 +376,7 @@ export default async function handler(req: Request, res: Response) {
       await requireOrganizationSubscriptionFeature(db,'mentorship',organizationId);
     }
 
-    if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
+    if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings','updateSupportRequest'].includes(action)) {
       await assertAdmin(db, decoded.uid);
     }
 
@@ -511,6 +611,201 @@ export default async function handler(req: Request, res: Response) {
         createdBy:decoded.uid,
       });
       return res.status(200).json({ ok: true, item: { id: messageRef.id, senderId: decoded.uid, body: message, references } });
+    }
+
+    if (action === 'createSupportRequest') {
+      if(!isCandidate(actor))throw new Error('Only a learner or candidate can open a learning support request.');
+      const candidateId=decoded.uid;
+      const candidateOrganizationId=String(actor.organizationId||'').trim();
+      if(!candidateOrganizationId)throw new Error('Your account is not linked to an organization.');
+      const message=String(body.message||'').trim();
+      if(message.length<3||message.length>10000)throw new Error('Describe the question or support need in 3 to 10,000 characters.');
+      const subject=String(body.subject||'').trim().slice(0,180)
+        ||(supportCategory(body.category)==='doctrine'?'Doctrine question':'Learning support request');
+      const target=supportTarget(body.target);
+      const channel=supportChannel(body.channel);
+      const category=supportCategory(body.category);
+      const spiritualInterest=supportInterest(body.spiritualInterest);
+      const priority=supportPriority(body.priority);
+      const references=Array.isArray(body.references)
+        ?body.references.slice(0,8).map(safeReference).filter(Boolean):[];
+      const assignedMentorId=(target==='mentor'||target==='both')
+        ?await activeMentorFor(db,candidateId,candidateOrganizationId):'';
+      if(target==='mentor'&&!assignedMentorId){
+        throw new Error('No active mentor is assigned yet. Choose Organization support team or ask your administrator to assign a mentor.');
+      }
+      const teamRecipients=(target==='support_team'||target==='both')
+        ?await supportTeamRecipients(db,candidateOrganizationId):[];
+      if(target==='support_team'&&!teamRecipients.length){
+        throw new Error('The organization support team is not configured yet.');
+      }
+      const recipients=[...new Set([
+        ...(assignedMentorId?[assignedMentorId]:[]),
+        ...teamRecipients,
+      ])].filter(uid=>uid!==candidateId);
+      if(!recipients.length)throw new Error('No support recipient is currently available for this request.');
+
+      const requestRef=db.collection('learningSupportRequests').doc();
+      const messageRef=requestRef.collection('messages').doc();
+      const createdAt=FieldValue.serverTimestamp();
+      const campaignTag=spiritualInterest==='one_voice_27'||category==='one_voice_27'?'one_voice_27':'';
+      await requestRef.set({
+        organizationId:candidateOrganizationId,candidateId,
+        candidateName:String(actor.displayName||actor.email||'Learner'),
+        candidateEmail:String(actor.email||decoded.email||''),
+        subject,message,category,priority,target,channel,spiritualInterest,campaignTag,
+        references,assignedMentorId,recipientIds:recipients,status:'open',
+        createdAt,updatedAt:createdAt,lastMessageAt:createdAt,
+        createdBy:candidateId,firstResponseAt:null,resolvedAt:null,
+      });
+      await messageRef.set({
+        senderId:candidateId,senderRole:'candidate',body:message,references,
+        createdAt:FieldValue.serverTimestamp(),
+      });
+      await Promise.all(recipients.map(recipientId=>createNotification(db,{
+        organizationId:candidateOrganizationId,recipientId,type:'learning-support',
+        title:priority==='high'?'High-priority learning support request':subject,
+        body:`${String(actor.displayName||actor.email||'A learner')} asked for help: ${message.slice(0,240)}`,
+        actionUrl:recipientId===assignedMentorId?'/mentor':'/admin?admin=mentorship',
+        metadata:{
+          source:'candidate-support-request',requestId:requestRef.id,candidateId,
+          category,target,channel,spiritualInterest,campaignTag,
+        },
+        createdBy:candidateId,
+      })));
+      const whatsappNumber=await organizationWhatsApp(db,candidateOrganizationId);
+      return res.status(201).json({
+        ok:true,
+        item:{
+          id:requestRef.id,organizationId:candidateOrganizationId,candidateId,subject,message,category,
+          priority,target,channel,spiritualInterest,campaignTag,references,assignedMentorId,status:'open',
+          whatsappNumber,
+          whatsappText:`VOP Support #${requestRef.id}\n${subject}\n${message}`,
+        },
+      });
+    }
+
+    if (action === 'listMySupportRequests') {
+      if(!isCandidate(actor))throw new Error('Only a learner or candidate can view personal support requests.');
+      const snapshot=await db.collection('learningSupportRequests').where('candidateId','==',decoded.uid).get();
+      const whatsappNumber=await organizationWhatsApp(db,String(actor.organizationId||''));
+      const items=snapshot.docs
+        .map(doc=>({...supportRequestPayload(doc),whatsappNumber}))
+        .sort((a,b)=>supportCreatedMillis((b as Record<string,unknown>).createdAt)-supportCreatedMillis((a as Record<string,unknown>).createdAt));
+      return res.status(200).json({ok:true,items});
+    }
+
+    if (action === 'listSupportRequests') {
+      let items:Record<string,unknown>[]=[];
+      if(isAdmin(actor)){
+        const snapshot=await db.collection('learningSupportRequests').get();
+        const allowed:Record<string,unknown>[]=[];
+        for(const doc of snapshot.docs){
+          const data=doc.data()||{};
+          const requestOrganizationId=String(data.organizationId||'').trim();
+          if(!requestOrganizationId)continue;
+          try{
+            await assertOrganizationScope(db,{...actor,uid:decoded.uid},requestOrganizationId);
+            if(organizationId&&requestOrganizationId!==organizationId)continue;
+            allowed.push(supportRequestPayload(doc));
+          }catch{/* outside administrator scope */}
+        }
+        items=allowed;
+      }else if(isMentor(actor)){
+        const mentorOrganizationId=String(actor.organizationId||'').trim();
+        if(!mentorOrganizationId)throw new Error('Your mentor account is not linked to an organization.');
+        const snapshot=await db.collection('learningSupportRequests').where('assignedMentorId','==',decoded.uid).get();
+        items=snapshot.docs
+          .filter(doc=>String(doc.data()?.organizationId||'')===mentorOrganizationId)
+          .map(doc=>supportRequestPayload(doc));
+      }else{
+        throw new Error('Administrator or mentor access is required to view the support queue.');
+      }
+      const whatsappNumber=await organizationWhatsApp(db,organizationId||String(actor.organizationId||''));
+      items=items.map(item=>({...item,whatsappNumber}))
+        .sort((a,b)=>supportCreatedMillis(b.lastMessageAt||b.createdAt)-supportCreatedMillis(a.lastMessageAt||a.createdAt));
+      return res.status(200).json({ok:true,items});
+    }
+
+    if (action === 'supportRequestMessages') {
+      const requestId=id(body.requestId);
+      const request=await db.doc(`learningSupportRequests/${requestId}`).get();
+      if(!request.exists)return res.status(200).json({ok:true,items:[]});
+      await assertSupportRequestAccess(db,decoded.uid,actor,request.data()||{});
+      const messages=await request.ref.collection('messages').orderBy('createdAt','asc').limit(300).get();
+      return res.status(200).json({ok:true,items:messages.docs.map(doc=>({
+        id:doc.id,...doc.data(),createdAt:iso(doc.data()?.createdAt),
+      }))});
+    }
+
+    if (action === 'replySupportRequest') {
+      const requestId=id(body.requestId);
+      const requestRef=db.doc(`learningSupportRequests/${requestId}`);
+      const request=await requestRef.get();
+      if(!request.exists)throw new Error('Support request was not found.');
+      const requestData=request.data()||{};
+      await assertSupportRequestAccess(db,decoded.uid,actor,requestData);
+      const message=String(body.message||'').trim();
+      if(!message||message.length>10000)throw new Error('A support reply is required.');
+      const references=Array.isArray(body.references)
+        ?body.references.slice(0,8).map(safeReference).filter(Boolean):[];
+      const candidateId=String(requestData.candidateId||'');
+      const senderIsCandidate=decoded.uid===candidateId;
+      const messageRef=requestRef.collection('messages').doc();
+      await messageRef.set({
+        senderId:decoded.uid,
+        senderRole:senderIsCandidate?'candidate':isMentor(actor)?'mentor':'support_team',
+        body:message,references,createdAt:FieldValue.serverTimestamp(),
+      });
+      const update:Record<string,unknown>={
+        updatedAt:FieldValue.serverTimestamp(),lastMessageAt:FieldValue.serverTimestamp(),
+        status:senderIsCandidate&&String(requestData.status||'')==='resolved'?'open':'in_progress',
+      };
+      if(!senderIsCandidate&&!requestData.firstResponseAt)update.firstResponseAt=FieldValue.serverTimestamp();
+      if(senderIsCandidate)update.resolvedAt=null;
+      await requestRef.set(update,{merge:true});
+      const recipients=senderIsCandidate
+        ?[...new Set((Array.isArray(requestData.recipientIds)?requestData.recipientIds:[])
+          .map(value=>String(value||'')).filter(Boolean))]
+        :[candidateId];
+      await Promise.all(recipients.filter(uid=>uid&&uid!==decoded.uid).map(recipientId=>createNotification(db,{
+        organizationId:String(requestData.organizationId||''),recipientId,type:'learning-support',
+        title:senderIsCandidate?'Learner replied to support request':'New support reply',
+        body:message.slice(0,300),actionUrl:recipientId===candidateId?'/support':recipientId===String(requestData.assignedMentorId||'')?'/mentor':'/admin?admin=mentorship',
+        metadata:{source:'candidate-support-reply',requestId,messageId:messageRef.id},
+        createdBy:decoded.uid,
+      })));
+      return res.status(200).json({ok:true,item:{
+        id:messageRef.id,senderId:decoded.uid,body:message,references,createdAt:new Date().toISOString(),
+      }});
+    }
+
+    if (action === 'updateSupportRequest') {
+      const requestId=id(body.requestId);
+      const requestRef=db.doc(`learningSupportRequests/${requestId}`);
+      const request=await requestRef.get();
+      if(!request.exists)throw new Error('Support request was not found.');
+      const requestData=request.data()||{};
+      await assertSupportRequestAccess(db,decoded.uid,actor,requestData);
+      const nextStatus=supportStatus(body.status);
+      const nextPriority=supportPriority(body.priority??requestData.priority);
+      const update:Record<string,unknown>={
+        status:nextStatus,priority:nextPriority,updatedAt:FieldValue.serverTimestamp(),updatedBy:decoded.uid,
+      };
+      if(['resolved','closed'].includes(nextStatus))update.resolvedAt=FieldValue.serverTimestamp();
+      else update.resolvedAt=null;
+      await requestRef.set(update,{merge:true});
+      const candidateId=String(requestData.candidateId||'');
+      if(candidateId)await createNotification(db,{
+        organizationId:String(requestData.organizationId||''),recipientId:candidateId,type:'learning-support',
+        title:nextStatus==='resolved'?'Your support request was resolved':'Support request updated',
+        body:nextStatus==='resolved'
+          ?'Your VOP support request has been marked resolved. You can reopen it by replying if you still need help.'
+          :`Your support request status is now ${nextStatus.replace('_',' ')}.`,
+        actionUrl:'/support',metadata:{source:'candidate-support-status',requestId,status:nextStatus},
+        createdBy:decoded.uid,
+      });
+      return res.status(200).json({ok:true,item:{id:requestId,status:nextStatus,priority:nextPriority}});
     }
 
     if (action === 'getAutomationSettings') {
