@@ -228,6 +228,7 @@ export interface User {
   displayName: string;
   email: string;
   phoneNumber?: string;
+  whatsappNumber?: string;
   photoURL?: string;
   bio?: string;
   address?: string;
