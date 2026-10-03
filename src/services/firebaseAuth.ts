@@ -3,11 +3,10 @@ import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  getRedirectResult,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import { auth, authPersistenceReady } from '../lib/firebase';
@@ -32,23 +31,19 @@ export const emailSignUp = async (email: string, password: string) => {
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(requireAuth(), email.trim());
 
-/** Complete a pending web redirect before the root auth observer decides which screen to render. */
-export async function completeGoogleRedirectSignIn() {
-  if (Capacitor.isNativePlatform()) return null;
-  const firebaseAuth = requireAuth();
-  await authPersistenceReady;
-  return getRedirectResult(firebaseAuth);
-}
-
-/** Android uses native account selection; web uses Firebase redirect to avoid COOP popup-window polling. */
+/** Android uses native account selection; web uses Firebase's popup flow.
+ *
+ * The web app deliberately keeps the auth observer mounted while the popup is
+ * open. The same-origin-allow-popups header is configured in both Vite and
+ * Vercel so the OAuth window can communicate back without a full-page redirect.
+ */
 export async function googleSignIn() {
   const firebaseAuth = requireAuth();
   await authPersistenceReady;
   if (!Capacitor.isNativePlatform()) {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    await signInWithRedirect(firebaseAuth, provider);
-    return null;
+    return signInWithPopup(firebaseAuth, provider);
   }
   const result = await FirebaseAuthentication.signInWithGoogle();
   const idToken = result.credential?.idToken;
