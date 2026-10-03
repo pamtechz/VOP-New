@@ -667,7 +667,7 @@ export default async function handler(req: Request, res: Response) {
         organizationId:candidateOrganizationId,recipientId,type:'learning-support',
         title:priority==='high'?'High-priority learning support request':subject,
         body:`${String(actor.displayName||actor.email||'A learner')} asked for help: ${message.slice(0,240)}`,
-        actionUrl:recipientId===assignedMentorId?'/mentor':'/admin?admin=mentorship',
+        actionUrl:recipientId===assignedMentorId?'/mentor':'/admin/mentorship',
         metadata:{
           source:'candidate-support-request',requestId:requestRef.id,candidateId,
           category,target,channel,spiritualInterest,campaignTag,
@@ -772,7 +772,7 @@ export default async function handler(req: Request, res: Response) {
       await Promise.all(recipients.filter(uid=>uid&&uid!==decoded.uid).map(recipientId=>createNotification(db,{
         organizationId:String(requestData.organizationId||''),recipientId,type:'learning-support',
         title:senderIsCandidate?'Learner replied to support request':'New support reply',
-        body:message.slice(0,300),actionUrl:recipientId===candidateId?'/support':recipientId===String(requestData.assignedMentorId||'')?'/mentor':'/admin?admin=mentorship',
+        body:message.slice(0,300),actionUrl:recipientId===candidateId?'/support':recipientId===String(requestData.assignedMentorId||'')?'/mentor':'/admin/mentorship',
         metadata:{source:'candidate-support-reply',requestId,messageId:messageRef.id},
         createdBy:decoded.uid,
       })));
