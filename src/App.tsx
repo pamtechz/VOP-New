@@ -629,7 +629,7 @@ export const App: React.FC = () => {
             onBack={goBack} selectedProgramId={activeProgramId} onSelectProgram={selectCatalogProgram}
             onOpenGuide={openGuide}
             onOpenLesson={openCatalogLesson} onRefresh={async () => {
-              const latest = await loadFirestoreGuides();
+              const latest = await loadFirestoreGuides(undefined,currentUser);
               setGuides(latest);
               saveGuides(latest);
             }}/>}
