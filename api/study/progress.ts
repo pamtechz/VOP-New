@@ -62,9 +62,17 @@ function positiveOverride(value:unknown,fallback:number,max:number){
 function assessmentPolicy(lesson:Record<string,unknown>,settings:Record<string,unknown>){
   const configured=configuredPassThreshold(lesson.assessmentPassThreshold)
     ?? configuredPassThreshold(settings.quizPassThreshold);
+  const organizationMaxAttempts=nonNegativeWhole(settings.quizMaxAttempts,100);
+  const explicitAttemptOverride=String(lesson.assessmentMaxAttemptsMode||'')==='custom';
   return {
     threshold:configured,
-    maxAttempts:positiveOverride(lesson.assessmentMaxAttempts,nonNegativeWhole(settings.quizMaxAttempts,100),100),
+    // Legacy assessmentMaxAttempts values are not authoritative by themselves.
+    // Only an explicitly marked custom policy may override the live organization
+    // setting. This prevents stale per-assessment values (for example 1) from
+    // defeating an organization-wide 0 = unlimited policy.
+    maxAttempts:explicitAttemptOverride
+      ?positiveOverride(lesson.assessmentMaxAttempts,organizationMaxAttempts,100)
+      :organizationMaxAttempts,
     retakeCooldownMinutes:positiveOverride(lesson.assessmentRetakeCooldownMinutes,nonNegativeWhole(settings.quizRetakeCooldownMinutes,10080),10080),
     timeLimitMinutes:nonNegativeWhole(lesson.assessmentTimeLimitMinutes,1440),
     feedbackMode:['score_only','after_submit','none'].includes(String(lesson.assessmentFeedbackMode||''))
