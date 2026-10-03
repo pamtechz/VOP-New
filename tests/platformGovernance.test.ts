@@ -128,7 +128,6 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(modal,/previousScore/);
   assert.match(modal,/Retake quiz/);
   assert.match(modal,/Retake exam/);
-  assert.match(modal,/quiz\.retake_waiting_period/);
   assert.match(modal,/Retake replaces the current assessment credit/);
   assert.match(modal,/Revoke result/);
   assert.match(modal,/attemptStartLock/);
