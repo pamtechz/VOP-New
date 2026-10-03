@@ -116,7 +116,7 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(api,/attachment==='guide'\?'final_exam':attachment==='chapter'\?'chapter_quiz':'practice'/);
   for(const field of [
     'assessmentInstructions','assessmentTimeLimitMinutes','assessmentPassThreshold',
-    'assessmentMaxAttempts','assessmentRetakeCooldownMinutes','assessmentFeedbackMode',
+    'assessmentMaxAttemptsMode','assessmentMaxAttempts','assessmentRetakeCooldownMinutes','assessmentFeedbackMode',
   ])assert.match(manager,new RegExp(field));
   assert.match(study,/action === 'startQuiz'/);
   assert.match(study,/assessmentSessions/);
@@ -144,6 +144,11 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(study,/questions:attemptQuestions/);
   assert.match(study,/platformSettingsSnap/);
   assert.match(study,/settingsData=\{\.\.\.platformSettings,\.\.\.scopedSettings\}/);
+  assert.match(study,/explicitAttemptOverride=String\(lesson\.assessmentMaxAttemptsMode\|\|''\)==='custom'/);
+  assert.match(study,/Legacy assessmentMaxAttempts values are not authoritative by themselves/);
+  assert.match(manager,/Inherit organization policy/);
+  assert.match(manager,/Custom for this assessment/);
+  assert.match(api,/assessmentMaxAttemptsMode=data\.assessmentMaxAttemptsMode==='custom'\?'custom':'inherit'/);
   assert.match(study,/maxAttempts>0&&priorAttempts>=policy\.maxAttempts/);
   assert.match(study,/const retryAtForAttempt=retakeCooldownMinutes>0/);
   assert.match(study,/activeSessionId/);
