@@ -104,8 +104,42 @@ test('mentor accounts have a dedicated assigned-learner workspace and messaging 
   assert.match(workspace,/listMyAssignments/);
   assert.match(workspace,/performance/);
   assert.match(workspace,/sendMessage/);
-  assert.match(api,/action === 'sendMessage' \? 'create'/);
+  assert.match(api,/\['sendMessage','createSupportRequest','replySupportRequest'\]\.includes\(action\) \? 'create'/);
   assert.match(api,/action === 'listMyAssignments'/);
+});
+
+test('candidate contextual support covers doctrine, lesson references, mentor/team routing and evangelism follow-up',()=>{
+  const support=read('src/pages/SupportPage.tsx');
+  const api=read('api/mentorship.ts');
+  const mentor=read('src/pages/MentorWorkspace.tsx');
+  const admin=read('src/pages/MentorshipInsights.tsx');
+  const sidebar=read('src/components/layout/LearnerSidebar.tsx');
+  const drawer=read('src/components/layout/MenuDrawer.tsx');
+  const routing=read('src/services/notificationRouting.ts');
+
+  assert.match(api,/action === 'createSupportRequest'/);
+  assert.match(api,/learningSupportRequests/);
+  assert.match(api,/\['guide','lesson','section','topic','doctrine','question','quiz','scripture','block'\]/);
+  assert.match(api,/supportTeamRecipients/);
+  assert.match(api,/activeMentorFor/);
+  assert.match(api,/one_voice_27/);
+  assert.match(api,/action === 'replySupportRequest'/);
+  assert.match(api,/action === 'updateSupportRequest'/);
+  assert.match(api,/\/admin\/mentorship/);
+
+  assert.match(support,/Organization support team/);
+  assert.match(support,/Mentor \+ support team/);
+  assert.match(support,/WhatsApp \+ VOP record/);
+  assert.match(support,/Doctrine/);
+  assert.match(support,/One Voice 27 follow-up/);
+  assert.match(support,/I want to discuss baptism/);
+  assert.match(mentor,/Candidate support queue/);
+  assert.match(admin,/Candidate Support/);
+  assert.match(admin,/Continue on WhatsApp/);
+  assert.match(sidebar,/Learning & spiritual support/);
+  assert.match(drawer,/Learning & spiritual support/);
+
+  assert.match(routing,/if\(path\.startsWith\('\/admin'\)\|\|type==='user'\)return 'admin';[\s\S]*type==='learning-support'/);
 });
 
 test('assessment architecture separates classification and policy and starts attempts on the server',()=>{
@@ -659,6 +693,8 @@ test('notification actions preserve exact admin destinations',()=>{
   assert.match(routing,/vop_notification_admin_target/);
   assert.match(routing,/localization:'translations'/);
   assert.match(routing,/graduations:'certification'/);
+  assert.match(routing,/\/admin\/\(\[A-Za-z-\]\+\)/);
+  assert.match(routing,/adminTargets/);
   assert.match(admin,/consumeNotificationAdminTarget/);
   assert.match(admin,/validAdminTab\(target\)/);
   assert.match(admin,/navigateAdminTab\(target\)/);
