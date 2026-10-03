@@ -67,7 +67,7 @@ test('quiz API: private bank stays with author or Super Admin across organizatio
       language:'en',title:'Confidential answers',published:true,sharingScope:'organization',
       assessmentInstructions:'Read the lesson before attempting this practice assessment.',
       assessmentTimeLimitMinutes:15,assessmentPassThreshold:70,
-      assessmentMaxAttempts:3,assessmentRetakeCooldownMinutes:20,
+      assessmentMaxAttemptsMode:'custom',assessmentMaxAttempts:3,assessmentRetakeCooldownMinutes:20,
       assessmentFeedbackMode:'after_submit',
       questions:[{question:'Question A',options:['Wrong','Right'],correctOptionIndex:1,explanation:'Teacher-only explanation'}],
     };
@@ -82,6 +82,7 @@ test('quiz API: private bank stays with author or Super Admin across organizatio
     assert.equal(learnerAssessment?.assessmentInstructions,'Read the lesson before attempting this practice assessment.');
     assert.equal(learnerAssessment?.assessmentTimeLimitMinutes,15);
     assert.equal(learnerAssessment?.assessmentPassThreshold,70);
+    assert.equal(learnerAssessment?.assessmentMaxAttemptsMode,'custom');
     assert.equal(learnerAssessment?.assessmentMaxAttempts,3);
     assert.equal(learnerAssessment?.assessmentRetakeCooldownMinutes,20);
     assert.equal(learnerAssessment?.assessmentFeedbackMode,'after_submit');

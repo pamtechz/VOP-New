@@ -38,6 +38,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     }
     const learner=await identity('study-own',orgA);
     const inheritanceLearner=await identity('study-settings-inheritance',orgA);
+    const legacyAssessmentOverrideLearner=await identity('study-legacy-assessment-override',orgA);
     const outsider=await identity('study-foreign',orgB);
     const retakeLearner=await identity('study-retake',orgA);
     const legacyCounterLearner=await identity('study-legacy-attempt-counter',orgA);
@@ -397,6 +398,36 @@ test('study progress: server grades and guide paths stay within authorized tenan
       },{merge:true});
     });
 
+    await t.test('legacy numeric assessment attempt values cannot override organization unlimited policy without explicit custom mode',async()=>{
+      await db.doc('organizations/'+orgA+'/settings/settings').set({
+        quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+      },{merge:true});
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentMaxAttempts:1,
+        assessmentMaxAttemptsMode:'',
+      });
+
+      const first=await startQuiz(legacyAssessmentOverrideLearner);
+      assert.equal(first.status,200,JSON.stringify(first));
+      assert.equal(first.assessmentPolicy.maxAttempts,null);
+      assert.equal(first.assessmentPolicy.remainingAttempts,null);
+      const submitted=await api(legacyAssessmentOverrideLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:first.sessionId,answers:{0:0},
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+
+      const second=await startQuiz(legacyAssessmentOverrideLearner,{confirmRetake:true});
+      assert.equal(second.status,200,JSON.stringify(second));
+      assert.equal(second.ok,true);
+      assert.ok(second.sessionId);
+      assert.equal(second.assessmentPolicy.maxAttempts,null);
+
+      await db.doc('guides/'+guideId+'/lessons/'+testId).update({
+        assessmentMaxAttemptsMode:'inherit',assessmentMaxAttempts:0,
+      });
+    });
+
     await t.test('failed assessments follow the configured attempt limit and waiting period',async()=>{
       await db.doc('organizations/'+orgA+'/settings/settings').set({
         quizPassThreshold:80,quizMaxAttempts:2,quizRetakeCooldownMinutes:0,
@@ -538,6 +569,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     await t.test('per-assessment policy overrides organization defaults and hidden feedback does not leak score',async()=>{
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({
         assessmentPassThreshold:75,
+        assessmentMaxAttemptsMode:'custom',
         assessmentMaxAttempts:4,
         assessmentRetakeCooldownMinutes:0,
         assessmentTimeLimitMinutes:10,
@@ -560,7 +592,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
       const profile=(await db.doc('users/'+learner.uid).get()).data();
       assert.equal(profile.progress.guideScores[orgA+':en:'+guideId+':'+testId],100);
       await db.doc('guides/'+guideId+'/lessons/'+testId).update({
-        assessmentPassThreshold:0,assessmentMaxAttempts:0,
+        assessmentPassThreshold:0,assessmentMaxAttemptsMode:'inherit',assessmentMaxAttempts:0,
         assessmentRetakeCooldownMinutes:0,assessmentTimeLimitMinutes:0,
         assessmentFeedbackMode:'score_only',
       });

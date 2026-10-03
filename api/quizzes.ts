@@ -215,7 +215,10 @@ export default async function handler(req: Request, res: Response) {
       const assessmentInstructions=String(data.assessmentInstructions||'').trim().slice(0,5000);
       const assessmentTimeLimitMinutes=whole(data.assessmentTimeLimitMinutes??0,0,1440,'Assessment time limit');
       const assessmentPassThreshold=passMark(data.assessmentPassThreshold);
-      const assessmentMaxAttempts=whole(data.assessmentMaxAttempts??0,0,100,'Assessment maximum attempts');
+      const assessmentMaxAttemptsMode=data.assessmentMaxAttemptsMode==='custom'?'custom':'inherit';
+      const assessmentMaxAttempts=assessmentMaxAttemptsMode==='custom'
+        ?whole(data.assessmentMaxAttempts??0,1,100,'Assessment maximum attempts')
+        :0;
       const assessmentRetakeCooldownMinutes=whole(data.assessmentRetakeCooldownMinutes??0,0,10080,'Assessment retake waiting period');
       const assessmentFeedbackMode=['score_only','after_submit','none'].includes(String(data.assessmentFeedbackMode||''))
         ?String(data.assessmentFeedbackMode):'score_only';
@@ -241,7 +244,7 @@ export default async function handler(req: Request, res: Response) {
         attachmentType:target.attachmentType, lessonId:target.lessonId,
         anchorId:target.anchorId, assessmentKind,
         assessmentInstructions,assessmentTimeLimitMinutes,assessmentPassThreshold,
-        assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
+        assessmentMaxAttemptsMode,assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
         organizationId:current.organizationId || target.organizationId,
         ownerOrganizationId:current.ownerOrganizationId || target.organizationId,
         ownerTenantId:current.ownerTenantId || tenantOwnerKey(ctx),
@@ -257,7 +260,7 @@ export default async function handler(req: Request, res: Response) {
         attachedLessonId:target.lessonId, anchorId:target.anchorId,
         assessmentKind,
         assessmentInstructions,assessmentTimeLimitMinutes,assessmentPassThreshold,
-        assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
+        assessmentMaxAttemptsMode,assessmentMaxAttempts,assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
         questions:learnerQuestions, quiz:learnerQuestions,
         answerVisibility:'public_redacted',
         organizationId:target.organizationId, ownerOrganizationId:target.organizationId,

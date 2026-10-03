@@ -96,6 +96,7 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
     assessmentInstructions: typeof item.assessmentInstructions === 'string' ? item.assessmentInstructions : undefined,
     assessmentTimeLimitMinutes: Number.isFinite(Number(item.assessmentTimeLimitMinutes)) ? Math.max(0,Math.trunc(Number(item.assessmentTimeLimitMinutes))) : 0,
     assessmentPassThreshold: Number.isFinite(Number(item.assessmentPassThreshold)) ? Number(item.assessmentPassThreshold) : 0,
+    assessmentMaxAttemptsMode: item.assessmentMaxAttemptsMode === 'custom' ? 'custom' : 'inherit',
     assessmentMaxAttempts: Number.isFinite(Number(item.assessmentMaxAttempts)) ? Math.max(0,Math.trunc(Number(item.assessmentMaxAttempts))) : 0,
     assessmentRetakeCooldownMinutes: Number.isFinite(Number(item.assessmentRetakeCooldownMinutes)) ? Math.max(0,Math.trunc(Number(item.assessmentRetakeCooldownMinutes))) : 0,
     assessmentFeedbackMode: ['score_only','after_submit','none'].includes(String(item.assessmentFeedbackMode||''))
