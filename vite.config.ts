@@ -150,11 +150,6 @@ export default defineConfig(({ mode }) => {
   setNodeEnvForLocalApi(mode);
 
   return {
-    server:{
-      headers:{
-        'Cross-Origin-Opener-Policy':'same-origin-allow-popups',
-      },
-    },
     plugins: [
       react(),
       {

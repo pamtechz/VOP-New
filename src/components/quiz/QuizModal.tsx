@@ -190,6 +190,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           setError('');
           return;
         }
+        // Confirmation is only valid while the server says the retake is
+        // currently eligible. A limit/cooldown/prerequisite rejection must
+        // leave the confirmation state so the learner can see the real policy
+        // outcome instead of a disabled, apparently frozen confirmation card.
+        setConfirmingRetake(false);
         const permanentlyBlocked=[
           'ASSESSMENT_ATTEMPT_LIMIT','ASSESSMENT_CONFIGURATION','ASSESSMENT_PREREQUISITE',
           'ASSESSMENT_CONTENT_CHANGED','ASSESSMENT_TYPE',
@@ -214,11 +219,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     }
   };
   const requestStart=()=>{
-    if(hasAttempted){
-      setConfirmingRetake(true);
-      setError('');
-      return;
-    }
+    // Never infer retake eligibility from cached client state. startQuiz first
+    // evaluates the authoritative server policy. Eligible retakes return the
+    // explicit confirmation condition; blocked retakes return their real
+    // limit/cooldown/prerequisite reason without revoking existing credit.
     void startAttempt(false);
   };
   const assessmentLabel=lesson.assessmentKind==='final_exam'
@@ -365,12 +369,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             {(previewMaxAttempts > 0 || previewCooldown > 0 || previewTimeLimit > 0) && <p style={{color:'var(--text-muted)',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
               {previewTimeLimit>0?t('quiz.time_limit_summary','Time limit: {minutes} min · ',{minutes:previewTimeLimit}):''}
               {t('quiz.retake_policy_label','Retake policy:')}{' '}
-              {previewMaxAttempts > 0
-                ?t('quiz.maximum_attempts','maximum {count} {attempts}',{
-                  count:previewMaxAttempts,
-                  attempts:previewMaxAttempts===1?t('quiz.attempt_singular','attempt'):t('quiz.attempt_plural','attempts'),
-                })
-                :t('quiz.unlimited_attempts','unlimited attempts')}
+              {previewMaxAttempts === 1
+                ?t('quiz.single_attempt_only','1 total attempt (retakes disabled)')
+                :previewMaxAttempts > 1
+                  ?t('quiz.maximum_attempts','maximum {count} attempts',{count:previewMaxAttempts})
+                  :t('quiz.unlimited_attempts','unlimited attempts')}
               {previewCooldown > 0
                 ?t('quiz.waiting_period_summary',' · {minutes} minute waiting period',{minutes:previewCooldown})
                 :t('quiz.no_waiting_period',' · no waiting period')}.
@@ -430,6 +433,16 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 {t('quiz.pass_mark_required','The pass mark must be configured (1–100%) by an administrator.')}
               </div>
             )}
+            {error && (
+              <div role="alert" className="vop-retake-policy-error" style={{
+                padding:'0.85rem 1rem',borderRadius:'0.75rem',
+                background:'var(--vop-danger-bg,#fef2f2)',
+                border:'1px solid color-mix(in srgb,var(--vop-danger,#dc2626) 30%,var(--theme-border))',
+                color:'var(--vop-danger,#b42318)',fontSize:'0.85rem',marginBottom:'1rem',textAlign:'left',
+              }}>
+                {error}
+              </div>
+            )}
 
             {confirmingRetake?<div className="vop-retake-confirm">
               <strong>{t('quiz.confirm_retake','Confirm retake')}</strong>
@@ -458,7 +471,13 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?t('quiz.starting','Starting…'):attemptBlocked?blockedLabel:hasAttempted?retakeLabel:t('quiz.begin_assessment','Begin assessment')}
+              {submitting
+                ?t('quiz.starting','Starting…')
+                :attemptBlocked
+                  ?blockedLabel
+                  :hasAttempted
+                    ?t('quiz.check_retake_availability','Check retake availability')
+                    :t('quiz.begin_assessment','Begin assessment')}
               <ChevronRight size={18} />
             </button>}
           </div>

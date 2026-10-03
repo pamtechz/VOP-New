@@ -134,6 +134,11 @@ test('assessment architecture separates classification and policy and starts att
   assert.doesNotMatch(modal,/const retakeAllowed=/);
   assert.match(modal,/let startQuiz enforce the current authoritative policy/);
   assert.match(modal,/quiz\.check_retake_availability/);
+  assert.match(modal,/Never infer retake eligibility from cached client state/);
+  assert.match(modal,/const requestStart=\(\)=>\{[\s\S]*void startAttempt\(false\)/);
+  assert.match(modal,/setConfirmingRetake\(false\);[\s\S]*const permanentlyBlocked=/);
+  assert.match(modal,/vop-retake-policy-error/);
+  assert.match(modal,/1 total attempt \(retakes disabled\)/);
   assert.match(study,/ASSESSMENT_RETAKE_CONFIRMATION/);
   assert.match(study,/creditStatus:'revoked_for_retake'/);
   assert.match(study,/questions:attemptQuestions/);
@@ -502,8 +507,8 @@ test('web Google authentication uses popup flow without delaying the root auth o
   assert.doesNotMatch(firebaseAuth,/completeGoogleRedirectSignIn/);
   assert.doesNotMatch(root,/completeGoogleRedirectSignIn/);
   assert.match(root,/const unsubscribe = onAuthStateChanged/);
-  assert.match(vercel,/same-origin-allow-popups/);
-  assert.match(vite,/same-origin-allow-popups/);
+  assert.doesNotMatch(vercel,/Cross-Origin-Opener-Policy/);
+  assert.doesNotMatch(vite,/Cross-Origin-Opener-Policy/);
 });
 
 test('organization records open as read-only browser-navigable pages and require explicit edit mode',()=>{
