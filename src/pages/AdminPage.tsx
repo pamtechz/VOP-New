@@ -586,16 +586,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       const curriculumContributor=['editor','teacher'].includes(organizationRole)&&Boolean(currentUser.organizationId);
       const coreTenantAdmin=isSuperAdmin||isHierarchyAdmin||organizationAdmin;
       const subscriptionFeature=subscriptionFeatureForTab[item.id];
-      if(organizationAdmin&&subscriptionFeature&&subscriptionFeatures
+      // Core tenant workspaces must remain discoverable. A subscription may
+      // restrict certification actions, but it must not silently remove the
+      // organization approval/certificate workspace from navigation.
+      if(item.id!=='certification'&&organizationAdmin&&subscriptionFeature&&subscriptionFeatures
         &&Object.hasOwn(subscriptionFeatures,subscriptionFeature)
         &&subscriptionFeatures[subscriptionFeature]!==true)return false;
-      // Candidates and Curriculum Studio are core tenant workspaces. Platform
-      // feature switches and stale/custom permission matrices must not make
-      // them disappear for the tenant roles that are responsible for them.
+      // Candidates, Curriculum Studio and Certification are core tenant
+      // workspaces. Tenant settings do not own the platform feature switches;
+      // missing scoped feature fields must never hide these responsibilities.
       if(item.id==='candidates'){
         if(!coreTenantAdmin)return false;
       }else if(item.id==='curriculum'){
         if(!(coreTenantAdmin||curriculumContributor||canSee(item.id)))return false;
+      }else if(item.id==='certification'){
+        if(!(coreTenantAdmin||canSee(item.id)))return false;
       }else{
         if(feature&&settings?.features?.[feature]===false)return false;
         if(!canSee(item.id))return false;
@@ -1332,6 +1337,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             adminContent={adminContent}
             showMessage={showMessage}
             isSuperAdmin={currentUser.role === 'super_admin'}
+            featureAvailable={isSuperAdmin||subscriptionFeatures===null
+              ||!Object.hasOwn(subscriptionFeatures,'certification')
+              ||subscriptionFeatures.certification===true}
+            onOpenBilling={()=>navigateAdminTab('payments')}
           />
         )}
         {activeTab==='prayer'&&<PrayerManagementPanel />}
