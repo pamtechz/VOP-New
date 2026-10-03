@@ -203,7 +203,10 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
         <strong>{communicationSummary.total} unread conversation{communicationSummary.total===1?'':'s'}</strong>
         <small>{communicationSummary.supportRequests>0&&`${communicationSummary.supportRequests} support request${communicationSummary.supportRequests===1?'':'s'}`}{communicationSummary.supportRequests>0&&communicationSummary.conversations>0?' · ':''}{communicationSummary.conversations>0&&`${communicationSummary.conversations} mentor chat${communicationSummary.conversations===1?'':'s'}`}</small>
       </span>
-      <button type="button" onClick={()=>onNavigate?.(communicationSummary.route)}>{t('common.open','Open')}</button>
+      <button type="button" onClick={()=>{
+        if(communicationSummary.route==='admin')prepareNotificationNavigation({actionUrl:'/admin/mentorship'});
+        onNavigate?.(communicationSummary.route);
+      }}>{t('common.open','Open')}</button>
     </div>}
 
     {toast&&<div className="vop-notification-toast" role="status">
