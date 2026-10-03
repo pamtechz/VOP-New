@@ -369,12 +369,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             {(previewMaxAttempts > 0 || previewCooldown > 0 || previewTimeLimit > 0) && <p style={{color:'var(--text-muted)',fontSize:'0.78rem',margin:'-0.7rem 0 1.2rem'}}>
               {previewTimeLimit>0?t('quiz.time_limit_summary','Time limit: {minutes} min · ',{minutes:previewTimeLimit}):''}
               {t('quiz.retake_policy_label','Retake policy:')}{' '}
-              {previewMaxAttempts > 0
-                ?t('quiz.maximum_attempts','maximum {count} {attempts}',{
-                  count:previewMaxAttempts,
-                  attempts:previewMaxAttempts===1?t('quiz.attempt_singular','attempt'):t('quiz.attempt_plural','attempts'),
-                })
-                :t('quiz.unlimited_attempts','unlimited attempts')}
+              {previewMaxAttempts === 1
+                ?t('quiz.single_attempt_only','1 total attempt (retakes disabled)')
+                :previewMaxAttempts > 1
+                  ?t('quiz.maximum_attempts','maximum {count} attempts',{count:previewMaxAttempts})
+                  :t('quiz.unlimited_attempts','unlimited attempts')}
               {previewCooldown > 0
                 ?t('quiz.waiting_period_summary',' · {minutes} minute waiting period',{minutes:previewCooldown})
                 :t('quiz.no_waiting_period',' · no waiting period')}.
