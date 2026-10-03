@@ -366,10 +366,15 @@ async function assertSupportRequestAccess(
     &&String(actor.organizationId||'')===organizationId)return;
   throw new Error('You are not allowed to access this support request.');
 }
-function supportRequestPayload(doc:FirebaseFirestore.QueryDocumentSnapshot|FirebaseFirestore.DocumentSnapshot){
+function supportRequestPayload(
+  doc:FirebaseFirestore.QueryDocumentSnapshot|FirebaseFirestore.DocumentSnapshot,
+  viewerUid='',
+){
   const data=doc.data()||{};
+  const {unreadFor:privateUnreadFor,...publicData}=data as Record<string,unknown>;
   return {
-    id:doc.id,...data,
+    id:doc.id,...publicData,
+    unread:Boolean(viewerUid&&unreadFor(privateUnreadFor).includes(viewerUid)),
     createdAt:iso(data.createdAt),
     updatedAt:iso(data.updatedAt),
     lastMessageAt:iso(data.lastMessageAt),
@@ -590,7 +595,14 @@ export default async function handler(req: Request, res: Response) {
         items = items.filter(item => allowedStudentIds.has(String(item.studentId || '')));
         if (requestedStudent) items = items.filter(item => String(item.studentId || '') === requestedStudent);
         if (requestedMentor) items = items.filter(item => String(item.mentorId || '') === requestedMentor);
-        return res.status(200).json({ ok: true, items });
+        return res.status(200).json({ ok: true, items:items.map(item=>{
+          const {unreadFor:privateUnreadFor,...publicItem}=item as Record<string,unknown>;
+          return {
+            ...publicItem,
+            lastMessageAt:iso(item.lastMessageAt),
+            unread:unreadFor(privateUnreadFor).includes(decoded.uid),
+          };
+        }) });
       }
       organizationId = String(actor.organizationId || '').trim();
       if (!organizationId) throw new Error('Your mentor account is not linked to a tenant organization.');
@@ -612,7 +624,8 @@ export default async function handler(req: Request, res: Response) {
         : scopedConversationDocs;
       return res.status(200).json({ ok: true, items: items.map(doc => {
         const data=doc.data()||{};
-        return {id:doc.id,...data,lastMessageAt:iso(data.lastMessageAt),unread:unreadFor(data.unreadFor).includes(decoded.uid)};
+        const {unreadFor:privateUnreadFor,...publicData}=data as Record<string,unknown>;
+        return {id:doc.id,...publicData,lastMessageAt:iso(data.lastMessageAt),unread:unreadFor(privateUnreadFor).includes(decoded.uid)};
       }) });
     }
 
@@ -634,10 +647,11 @@ export default async function handler(req: Request, res: Response) {
       const snapshot = await ref.get();
       const item = snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : { id: ref.id, studentId, mentorId, status: 'open' };
       const itemData=item as Record<string,unknown>;
+      const {unreadFor:privateUnreadFor,...publicItem}=itemData;
       return res.status(200).json({ ok: true, items: [{
-        ...item,
+        ...publicItem,
         lastMessageAt:iso(itemData.lastMessageAt),
-        unread:unreadFor(itemData.unreadFor).includes(decoded.uid),
+        unread:unreadFor(privateUnreadFor).includes(decoded.uid),
         mentorName: String(mentor.displayName || mentor.email || mentorId),
         mentorPhotoURL: String(mentor.photoURL || ''),
       }] });
@@ -832,7 +846,7 @@ export default async function handler(req: Request, res: Response) {
       if(!isCandidate(actor))throw new Error('Only a learner or candidate can view personal support requests.');
       const snapshot=await db.collection('learningSupportRequests').where('candidateId','==',decoded.uid).limit(100).get();
       const items=snapshot.docs
-        .map(doc=>supportRequestPayload(doc))
+        .map(doc=>supportRequestPayload(doc,decoded.uid))
         .sort((a,b)=>supportCreatedMillis((b as Record<string,unknown>).createdAt)-supportCreatedMillis((a as Record<string,unknown>).createdAt));
       return res.status(200).json({ok:true,items});
     }
@@ -849,7 +863,7 @@ export default async function handler(req: Request, res: Response) {
           try{
             await assertOrganizationScope(db,{...actor,uid:decoded.uid},requestOrganizationId);
             if(organizationId&&requestOrganizationId!==organizationId)continue;
-            allowed.push(supportRequestPayload(doc));
+            allowed.push(supportRequestPayload(doc,decoded.uid));
           }catch{/* outside administrator scope */}
         }
         items=allowed;
@@ -859,7 +873,7 @@ export default async function handler(req: Request, res: Response) {
         const snapshot=await db.collection('learningSupportRequests').where('assignedMentorId','==',decoded.uid).get();
         items=snapshot.docs
           .filter(doc=>String(doc.data()?.organizationId||'')===mentorOrganizationId)
-          .map(doc=>supportRequestPayload(doc));
+          .map(doc=>supportRequestPayload(doc,decoded.uid));
       }else{
         throw new Error('Administrator or mentor access is required to view the support queue.');
       }
@@ -895,8 +909,7 @@ export default async function handler(req: Request, res: Response) {
       await assertSupportRequestAccess(db,decoded.uid,actor,requestData);
       const message=String(body.message||'').trim();
       if(!message||message.length>10000)throw new Error('A support reply is required.');
-      const references=Array.isArray(body.references)
-        ?body.references.slice(0,8).map(safeReference).filter(Boolean):[];
+      const references=messageReferences(body.references);
       const candidateId=String(requestData.candidateId||'');
       const senderIsCandidate=decoded.uid===candidateId;
       const messageRef=requestRef.collection('messages').doc();
