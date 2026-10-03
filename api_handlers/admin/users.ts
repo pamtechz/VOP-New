@@ -178,6 +178,7 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
       displayName: authUser.displayName || String(profile.displayName || profile.name || 'Unnamed user'),
       email: authUser.email || String(profile.email || ''),
       phoneNumber: authUser.phoneNumber || String(profile.phoneNumber || ''),
+      whatsappNumber: String(profile.whatsappNumber || ''),
       photoURL: authUser.photoURL || String(profile.photoURL || ''),
       role: String(profile.role || 'student'),
       roleLabel: displayRole(type, profile),
@@ -302,9 +303,10 @@ export default async function handler(request: Request, response: Response) {
         ? body.profile as Record<string, unknown>
         : {};
       const phoneNumber = typeof incoming.phoneNumber === 'string' ? incoming.phoneNumber.trim() : '';
+      const whatsappNumber = typeof incoming.whatsappNumber === 'string' ? incoming.whatsappNumber.trim() : '';
       const address = typeof incoming.address === 'string' ? incoming.address.trim() : '';
       const displayName = typeof incoming.displayName === 'string' ? incoming.displayName.trim() : '';
-      if (displayName.length > 120 || phoneNumber.length > 40 || address.length > 500) {
+      if (displayName.length > 120 || phoneNumber.length > 40 || whatsappNumber.length > 40 || address.length > 500) {
         return response.status(400).json({ error:'Profile details exceed the allowed length.' });
       }
       const ref = db.doc('users/' + decoded.uid);
@@ -313,6 +315,7 @@ export default async function handler(request: Request, response: Response) {
       await ref.set({
         ...(displayName ? { displayName } : {}),
         phoneNumber,
+        whatsappNumber,
         address,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge:true });
@@ -407,6 +410,7 @@ export default async function handler(request: Request, response: Response) {
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
       const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
       const phoneNumber = typeof body.phoneNumber === 'string' ? body.phoneNumber.trim() : '';
+      const whatsappNumber = typeof body.whatsappNumber === 'string' ? body.whatsappNumber.trim() : '';
       const password = typeof body.password === 'string' ? body.password : '';
       const type = (body.userType === 'super_admin' || body.userType === 'admin' || body.userType === 'teacher' || body.userType === 'mentor' || body.userType === 'guest' || body.userType === 'learner') ? body.userType as ProfileType : 'learner';
 
@@ -454,6 +458,7 @@ export default async function handler(request: Request, response: Response) {
         email,
         displayName,
         ...(phoneNumber ? { phoneNumber } : {}),
+        ...(whatsappNumber ? { whatsappNumber } : {}),
         userType: type,
         ...profile,
         ...hierarchyMembershipFields,
@@ -593,6 +598,7 @@ export default async function handler(request: Request, response: Response) {
         email: updated.email || existingData.email || '',
         displayName: updated.displayName || existingData.displayName || '',
         phoneNumber: updated.phoneNumber || existingData.phoneNumber || '',
+        whatsappNumber: typeof body.whatsappNumber === 'string' ? body.whatsappNumber.trim() : String(existingData.whatsappNumber || ''),
         userType: type,
         ...profile,
         ...(hierarchyReassignment ? {
