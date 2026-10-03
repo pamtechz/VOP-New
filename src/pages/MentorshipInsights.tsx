@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, BookOpen, CheckCircle2, Copy, ExternalLink, HeartHandshake, Link2, MessageCircle, QrCode, Send, Tag, UserCheck, Users, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, ExternalLink, HeartHandshake, Link2, MessageCircle, QrCode, Send, Tag, UserCheck, Users, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import type { DiscoverGuide } from '../types';
+import ChatThread, { type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
 
 async function mentoringApi(action: string, data: Record<string, unknown> = {}) {
   if (!auth?.currentUser) throw new Error('Your session has expired. Sign in again.');
@@ -12,7 +14,7 @@ async function mentoringApi(action: string, data: Record<string, unknown> = {}) 
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || 'Mentorship request failed.');
-  return body as { items?: any[]; item?: any; delivery?: string };
+  return body as { items?: any[]; item?: any; delivery?: string; whatsappTargets?:Array<{kind:'mentor'|'organization';label:string;number:string}> };
 }
 
 async function shareApi(action: string, data: Record<string, unknown> = {}) {
@@ -43,7 +45,7 @@ async function organizationInviteApi(data: Record<string, unknown> = {}) {
 
 type Tab = 'assignments' | 'support' | 'conversations' | 'performance' | 'questions' | 'sharing' | 'messages' | 'automation';
 
-export const MentorshipInsights: React.FC = () => {
+export const MentorshipInsights: React.FC<{guides:DiscoverGuide[]}> = ({guides}) => {
   const [tab, setTab] = useState<Tab>('assignments');
   const [students, setStudents] = useState<any[]>([]);
   const [mentors, setMentors] = useState<any[]>([]);
@@ -52,14 +54,14 @@ export const MentorshipInsights: React.FC = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [supportRequests,setSupportRequests]=useState<any[]>([]);
   const [selectedSupportRequest,setSelectedSupportRequest]=useState<any|null>(null);
-  const [supportMessages,setSupportMessages]=useState<any[]>([]);
+  const [supportMessages,setSupportMessages]=useState<ChatMessage[]>([]);
   const [supportReply,setSupportReply]=useState('');
   const [followUpAt,setFollowUpAt]=useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedMentor, setSelectedMentor] = useState('');
   const [performance, setPerformance] = useState<any | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<any | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [adminMessage, setAdminMessage] = useState('');
   const [draft, setDraft] = useState<any | null>(null);
   const [draftChannel, setDraftChannel] = useState<'in_app'|'email'>('in_app');
@@ -133,24 +135,42 @@ export const MentorshipInsights: React.FC = () => {
   };
 
   const openConversation = async (item: any) => {
-    setSelectedConversation(item);
+    setSelectedConversation({...item,unread:false});
     try {
       const result = await mentoringApi('messages', { conversationId: item.id });
-      setMessages(result.items || []);
+      setMessages((result.items || []) as ChatMessage[]);
+      setConversations(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
+      setTab('messages');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not load conversation.'); }
   };
 
-  const sendAdminMessage = async () => {
-    if (!selectedConversation || !adminMessage.trim()) return;
+  const sendAdminMessage = async (body:string,references:ChatReference[]) => {
+    if (!selectedConversation || !body.trim()) return;
     try {
       const result = await mentoringApi('sendMessage', {
         studentId: selectedConversation.studentId,
         mentorId: selectedConversation.mentorId,
-        message: adminMessage.trim(),
+        message: body.trim(),
+        references,
       });
-      setMessages(current => [...current, result.item]);
-      setAdminMessage('');
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not send message.'); }
+      setMessages(current => [...current, result.item as ChatMessage]);
+      setSelectedConversation((current:any)=>current?{...current,unread:false,lastMessageAt:new Date().toISOString()}:current);
+      setConversations(current=>current.map(item=>item.id===selectedConversation.id?{...item,unread:false,lastMessageAt:new Date().toISOString()}:item));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not send message.'); throw reason; }
+  };
+  const editAdminMessage=async(message:ChatMessage,body:string,references:ChatReference[])=>{
+    if(!selectedConversation)return;
+    try{
+      const result=await mentoringApi('editMessage',{conversationId:selectedConversation.id,messageId:message.id,message:body,references});
+      setMessages(current=>current.map(item=>item.id===message.id?{...item,...result.item}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not edit message.');throw reason;}
+  };
+  const deleteAdminMessage=async(message:ChatMessage)=>{
+    if(!selectedConversation)return;
+    try{
+      const result=await mentoringApi('deleteMessage',{conversationId:selectedConversation.id,messageId:message.id});
+      setMessages(current=>current.map(item=>item.id===message.id?{...item,...result.item}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not delete message.');throw reason;}
   };
 
   const openSupportRequest = async (item:any) => {
@@ -160,23 +180,38 @@ export const MentorshipInsights: React.FC = () => {
     setSelectedStudent(String(item.candidateId||''));
     try{
       const result=await mentoringApi('supportRequestMessages',{requestId:item.id});
-      setSupportMessages(result.items||[]);
+      setSupportMessages((result.items||[]) as ChatMessage[]);
+      setSelectedSupportRequest({...item,unread:false,whatsappTargets:result.whatsappTargets||[]});
+      setSupportRequests(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
       setTab('support');
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not open support request.');}
   };
 
-  const replySupportRequest = async () => {
-    if(!selectedSupportRequest||!supportReply.trim())return;
+  const replySupportRequest = async (body:string,references:ChatReference[]) => {
+    if(!selectedSupportRequest||!body.trim())return;
     try{
       const result=await mentoringApi('replySupportRequest',{
-        requestId:selectedSupportRequest.id,message:supportReply.trim(),
+        requestId:selectedSupportRequest.id,message:body.trim(),references,
       });
-      setSupportMessages(current=>[...current,result.item]);
-      setSupportReply('');
-      setSelectedSupportRequest((current:any)=>current?{...current,status:'in_progress'}:current);
-      setSupportRequests(current=>current.map(item=>item.id===selectedSupportRequest.id?{...item,status:'in_progress'}:item));
+      setSupportMessages(current=>[...current,result.item as ChatMessage]);
+      setSelectedSupportRequest((current:any)=>current?{...current,status:'in_progress',unread:false}:current);
+      setSupportRequests(current=>current.map(item=>item.id===selectedSupportRequest.id?{...item,status:'in_progress',unread:false}:item));
       setNotice('Support reply sent.');
-    }catch(reason){setError(reason instanceof Error?reason.message:'Could not send support reply.');}
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not send support reply.');throw reason;}
+  };
+  const editAdminSupportMessage=async(message:ChatMessage,body:string,references:ChatReference[])=>{
+    if(!selectedSupportRequest)return;
+    try{
+      const result=await mentoringApi('editSupportMessage',{requestId:selectedSupportRequest.id,messageId:message.id,message:body,references});
+      setSupportMessages(current=>current.map(item=>item.id===message.id?{...item,...result.item}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not edit support message.');throw reason;}
+  };
+  const deleteAdminSupportMessage=async(message:ChatMessage)=>{
+    if(!selectedSupportRequest)return;
+    try{
+      const result=await mentoringApi('deleteSupportMessage',{requestId:selectedSupportRequest.id,messageId:message.id});
+      setSupportMessages(current=>current.map(item=>item.id===message.id?{...item,...result.item}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not delete support message.');throw reason;}
   };
 
   const updateSupportStatus = async (status:'in_progress'|'resolved'|'closed') => {
@@ -267,6 +302,10 @@ export const MentorshipInsights: React.FC = () => {
   useEffect(() => { void loadCore(); void loadShares(); }, []);
   useEffect(() => { if (tab === 'conversations' || tab === 'messages') void loadConversations(); }, [tab, selectedStudent]);
 
+  const unreadSupport=supportRequests.filter(item=>item.unread).length;
+  const unreadConversations=conversations.filter(item=>item.unread).length;
+  const unreadTotal=unreadSupport+unreadConversations;
+
   const assignmentRows = assignments.map(item => ({
     ...item,
     student: studentMap.get(item.studentId),
@@ -282,6 +321,7 @@ export const MentorshipInsights: React.FC = () => {
 
       {error && <div className="vop-mentoring-alert error">{error}<button type="button" onClick={()=>setError('')}><X size={16}/></button></div>}
       {notice && <div className="vop-mentoring-alert success"><CheckCircle2 size={16}/>{notice}<button type="button" onClick={()=>setNotice('')}><X size={16}/></button></div>}
+      {unreadTotal>0&&<div className="vop-mentoring-alert success" role="status"><MessageCircle size={16}/>There {unreadTotal===1?'is':'are'} {unreadTotal} unread mentoring conversation{unreadTotal===1?'':'s'}.</div>}
 
       <div className="vop-mentoring-stats">
         <div><Users size={21}/><span>Learners</span><strong>{students.length}</strong></div>
@@ -294,7 +334,10 @@ export const MentorshipInsights: React.FC = () => {
       <div className="vop-mentoring-tabs">{([
         ['assignments','Mentor Allocation'],['support','Candidate Support'],['conversations','Conversations'],['performance','Learner Performance'],
         ['questions','Commonly Missed Questions'],['sharing','Lesson Sharing'],['messages','Messages & Drafts'],['automation','Automation']
-      ] as const).map(([value,label])=><button key={value} type="button" className={tab===value?'active':''} onClick={()=>setTab(value)}>{label}</button>)}</div>
+      ] as const).map(([value,label])=>{
+        const badge=value==='support'?unreadSupport:value==='conversations'||value==='messages'?unreadConversations:0;
+        return <button key={value} type="button" className={tab===value?'active':''} onClick={()=>setTab(value)}>{label}{badge>0?` (${badge})`:''}</button>;
+      })}</div>
 
       {tab==='assignments' && <section className="vop-mentoring-card">
         <div className="vop-mentoring-card-head"><div><h2>Allocate mentors to learners</h2><p>Assignments are stored against the learner and remain available to the mentor for ongoing support.</p></div></div>
@@ -315,7 +358,7 @@ export const MentorshipInsights: React.FC = () => {
           <div><span>Visits requested</span><strong>{supportRequests.filter(item=>['church_visit','home_visit'].includes(String(item.spiritualInterest||''))).length}</strong></div>
         </div>
         <div className="vop-conversation-grid">{supportRequests.map(item=><button key={item.id} type="button" onClick={()=>void openSupportRequest(item)}>
-          <HeartHandshake size={21}/><div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId}</strong><span>{item.subject||item.category||'Support request'} · {String(item.status||'open').replace('_',' ')}</span><small>{item.lastMessageAt||item.createdAt?new Date(item.lastMessageAt||item.createdAt).toLocaleString():'New request'}</small></div><ExternalLink size={16}/>
+          <HeartHandshake size={21}/><div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId}{item.unread?' · New':''}</strong><span>{item.subject||item.category||'Support request'} · {String(item.status||'open').replace('_',' ')}</span><small>{item.lastMessageAt||item.createdAt?new Date(item.lastMessageAt||item.createdAt).toLocaleString():'New request'}</small></div><ExternalLink size={16}/>
         </button>)}{!supportRequests.length&&<div className="vop-empty">No candidate support requests found.</div>}</div>
         {selectedSupportRequest&&<div className="vop-admin-chat" style={{marginTop:16}}>
           <div className="vop-mentoring-card-head"><div><h3>{selectedSupportRequest.subject||'Support request'}</h3><p>{String(selectedSupportRequest.category||'support').replaceAll('_',' ')} · {String(selectedSupportRequest.priority||'normal')} priority · target: {String(selectedSupportRequest.target||'').replaceAll('_',' ')}</p></div><div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void updateSupportStatus('in_progress')}>In progress</button><button className="vop-primary" type="button" onClick={()=>void updateSupportStatus('resolved')}><CheckCircle2 size={15}/>Resolve</button></div></div>
@@ -331,15 +374,20 @@ export const MentorshipInsights: React.FC = () => {
               <button className="vop-primary" type="button" onClick={()=>void updateEvangelismFollowUp('completed')}><CheckCircle2 size={15}/>Mark follow-up complete</button>
             </div>
           </>}
-          <div className="vop-support-messages">{supportMessages.map(item=><article key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':'theirs'}><p>{item.body}</p>{(item.references||[]).map((ref:any)=><span key={ref.type+ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}</article>)}</div>
-          <div><textarea value={supportReply} maxLength={10000} onChange={e=>setSupportReply(e.target.value)} placeholder="Reply with Bible study help, clarification or follow-up…"/><button className="vop-primary" type="button" disabled={!supportReply.trim()} onClick={()=>void replySupportRequest()}><Send size={16}/>Send reply</button></div>
-          {selectedSupportRequest.whatsappNumber&&<a className="vop-secondary" href={'https://wa.me/'+String(selectedSupportRequest.whatsappNumber).replace(/\D/g,'')+'?text='+encodeURIComponent('VOP Support #'+selectedSupportRequest.id+' · '+(selectedSupportRequest.subject||''))} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/>Continue on WhatsApp</a>}
+          <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={supportMessages as ChatMessage[]} draft={supportReply} onDraftChange={setSupportReply}
+            guides={guides} placeholder="Reply with Bible study help, clarification or follow-up…" emptyText="No messages in this support request yet."
+            sendLabel="Send reply" onSend={replySupportRequest} onEdit={editAdminSupportMessage} onDelete={deleteAdminSupportMessage}/>
+          {Array.isArray(selectedSupportRequest.whatsappTargets)&&selectedSupportRequest.whatsappTargets.length>0&&<div className="vop-performance-actions">
+            {selectedSupportRequest.whatsappTargets.map((target:any)=><a key={target.kind+target.number} className="vop-secondary"
+              href={'https://wa.me/'+String(target.number).replace(/\D/g,'')+'?text='+encodeURIComponent('VOP Support #'+selectedSupportRequest.id+' · '+(selectedSupportRequest.subject||''))}
+              target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/>WhatsApp {target.label}</a>)}
+          </div>}
         </div>}
       </section>}
 
       {tab==='conversations' && <section className="vop-mentoring-card">
         <div className="vop-mentoring-card-head"><div><h2>Mentor conversations</h2><p>Review support requests and open a conversation to respond.</p></div><select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">All learners</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName || item.email}</option>)}</select></div>
-        <div className="vop-conversation-grid">{conversations.map(item=><button key={item.id} type="button" onClick={()=>void openConversation(item)}><MessageCircle size={21}/><div><strong>{studentMap.get(item.studentId)?.displayName || item.studentId}</strong><span>{mentorMap.get(item.mentorId)?.displayName || item.mentorId}</span><small>{item.lastMessageAt ? new Date(item.lastMessageAt).toLocaleString() : 'No messages yet'}</small></div><ExternalLink size={16}/></button>)}{!conversations.length&&<div className="vop-empty">No conversations found.</div>}</div>
+        <div className="vop-conversation-grid">{conversations.map(item=><button key={item.id} type="button" onClick={()=>void openConversation(item)}><MessageCircle size={21}/><div><strong>{studentMap.get(item.studentId)?.displayName || item.studentId}{item.unread?' · New':''}</strong><span>{mentorMap.get(item.mentorId)?.displayName || item.mentorId}</span><small>{item.lastMessageAt ? new Date(item.lastMessageAt).toLocaleString() : 'No messages yet'}</small></div><ExternalLink size={16}/></button>)}{!conversations.length&&<div className="vop-empty">No conversations found.</div>}</div>
       </section>}
 
       {tab==='performance' && <section className="vop-mentoring-card">
@@ -386,7 +434,9 @@ export const MentorshipInsights: React.FC = () => {
         <div className="vop-mentoring-card-head"><div><h2>Messages & performance-based drafts</h2><p>Send an administrator message or generate a support draft from actual learner performance.</p></div></div>
         <div className="vop-message-tools"><select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName || item.email}</option>)}</select><select value={draftChannel} onChange={e=>setDraftChannel(e.target.value as any)}><option value="in_app">In-app</option><option value="email">Email</option></select><button className="vop-secondary" type="button" onClick={()=>void createDraft()} disabled={!selectedStudent}>Draft from performance</button></div>
         {draft && <div className="vop-draft"><input value={draft.subject} onChange={e=>setDraft({...draft,subject:e.target.value})}/><textarea value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/><button className="vop-primary" type="button" onClick={()=>void sendDraft()}><Send size={16}/>Send {draft.channel==='email'?'Email':'Message'}</button></div>}
-        {selectedConversation && <div className="vop-admin-chat"><div className="vop-support-messages">{messages.map(item=><article key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':'theirs'}><p>{item.body}</p></article>)}</div><div><textarea value={adminMessage} onChange={e=>setAdminMessage(e.target.value)} placeholder="Write a message…"/><button className="vop-primary" type="button" onClick={()=>void sendAdminMessage()}><Send size={16}/>Send</button></div></div>}
+        {selectedConversation && <div className="vop-admin-chat"><ChatThread currentUserId={auth?.currentUser?.uid||''} messages={messages} draft={adminMessage} onDraftChange={setAdminMessage}
+          guides={guides} placeholder="Write a message…" emptyText="No messages in this conversation yet."
+          sendLabel="Send" onSend={sendAdminMessage} onEdit={editAdminMessage} onDelete={deleteAdminMessage}/></div>}
         {!selectedConversation && <div className="vop-empty">Open a conversation from the Conversations tab to reply here.</div>}
       </section>}
     </div>
