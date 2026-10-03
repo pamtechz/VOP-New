@@ -36,6 +36,7 @@ async function mentoring(action:string,data:Record<string,unknown>={}){
   if(!response.ok)throw new Error(payload.error||'Mentorship request failed.');
   return payload;
 }
+function signalCommunicationChanged(){window.dispatchEvent(new Event('vop_communication_changed'));}
 function categoryLabel(value:string){
   return ({
     lesson_clarification:'Lesson clarification',doctrine:'Doctrine',bible_question:'Bible question',
@@ -106,6 +107,7 @@ export default function MentorWorkspace({onBack,guides}:{onBack:()=>void;guides:
       const result=await mentoring('messages',{conversationId:thread.id});
       setMessages((result.items||[]) as Message[]);
       setConversations(current=>current.map(item=>item.id===thread!.id?{...item,unread:false}:item));
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Conversation could not be opened.');}
     finally{setBusy(false);}
   };
@@ -118,6 +120,7 @@ export default function MentorWorkspace({onBack,guides}:{onBack:()=>void;guides:
         studentId:conversation.studentId,mentorId:auth?.currentUser?.uid||'',message:body.trim(),references,
       });
       setMessages(current=>[...current,result.item as Message]);
+      signalCommunicationChanged();
       setNotice('Message sent.');
       setConversation(current=>current?{...current,unread:false,lastMessageAt:new Date().toISOString()}:current);
       setConversations(current=>current.map(item=>item.id===conversation.id?{...item,unread:false,lastMessageAt:new Date().toISOString()}:item));
@@ -152,6 +155,7 @@ export default function MentorWorkspace({onBack,guides}:{onBack:()=>void;guides:
       setSupportMessages((result.items||[]) as Message[]);
       setSupportRequest(current=>current?{...current,unread:false}:current);
       setSupportRequests(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Support request could not be opened.');}
     finally{setBusy(false);}
   };
@@ -162,6 +166,7 @@ export default function MentorWorkspace({onBack,guides}:{onBack:()=>void;guides:
     try{
       const result=await mentoring('replySupportRequest',{requestId:supportRequest.id,message:body.trim(),references});
       setSupportMessages(current=>[...current,result.item as Message]);
+      signalCommunicationChanged();
       setSupportRequest(current=>current?{...current,status:'in_progress',unread:false}:current);
       setSupportRequests(current=>current.map(item=>item.id===supportRequest.id?{...item,status:'in_progress',unread:false}:item));
       setNotice('Support reply sent.');
