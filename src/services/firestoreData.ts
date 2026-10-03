@@ -331,6 +331,7 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
     displayName: String(data.displayName ?? ''),
     email: String(data.email ?? ''),
     phoneNumber: data.phoneNumber,
+    whatsappNumber: data.whatsappNumber,
     photoURL: data.photoURL,
     bio: data.bio,
     address: data.address,
