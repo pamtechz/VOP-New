@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, ExternalLink, HeartHandshake, Link2, MessageCircle, QrCode, Send, Tag, UserCheck, Users, X } from 'lucide-react';
+import { BarChart3, BookOpen, CheckCircle2, Copy, ExternalLink, HeartHandshake, Link2, MessageCircle, QrCode, Send, Tag, UserCheck, Users, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
 
 async function mentoringApi(action: string, data: Record<string, unknown> = {}) {
