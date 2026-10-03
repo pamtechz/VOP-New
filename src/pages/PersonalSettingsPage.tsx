@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen } from 'lucide-react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
-import { loadPublicContent } from '../services/publicFirestore';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { hasTrustedOfflineDeviceConsent, setTrustedOfflineDeviceConsent } from '../services/offlineDeviceConsent';
@@ -10,6 +9,9 @@ import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
 import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
 import { persistThemePreference } from '../services/themePreference';
+import {
+  deletePasskey, listPasskeys, passkeysSupported, platformPasskeyAvailable, registerPasskey, type PasskeyRecord,
+} from '../services/passkeys';
 
 type PersonalSettings = {
   theme?: 'light' | 'dark' | 'system';
@@ -50,6 +52,10 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
   const [uiLocales, setUiLocales] = useState<CustomLanguage[]>(getAvailableUiLocales());
   const [trustedDevice, setTrustedDevice] = useState(hasTrustedOfflineDeviceConsent);
+  const [passkeys,setPasskeys]=useState<PasskeyRecord[]>([]);
+  const [passkeyCapable,setPasskeyCapable]=useState(passkeysSupported);
+  const [platformBiometric,setPlatformBiometric]=useState(false);
+  const [passkeyBusy,setPasskeyBusy]=useState(false);
   const changeTrustedDevice = async (enabled: boolean) => {
     if (enabled && !await appConfirm(
       'Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.',
@@ -72,15 +78,18 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadSettings = callPersonalSettings('get')
       .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
-    void loadUiLocaleRegistry().then(setUiLocales).catch(() => undefined);
-    const loadLanguages = loadPublicContent()
-      .then(content => { if (active) setLanguages(content.languages || []); })
-      .catch(error => {
-        // Language metadata is optional for the page. Keep personal settings usable
-        // when public content is temporarily unavailable.
-        if (active) setMessage(error instanceof Error ? error.message : 'Configured languages could not be loaded.');
-      });
-    void Promise.allSettled([loadSettings, loadLanguages]).finally(() => {
+    const loadLanguages=loadUiLocaleRegistry()
+      .then(items=>{if(active){setUiLocales(items);setLanguages(items)}})
+      .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Configured languages could not be loaded.');});
+    const supported=passkeysSupported();
+    setPasskeyCapable(supported);
+    const loadSecurity=supported
+      ?Promise.all([
+          platformPasskeyAvailable().then(value=>{if(active)setPlatformBiometric(value)}),
+          listPasskeys().then(items=>{if(active)setPasskeys(items)}),
+        ]).catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Passkey status could not be loaded.');})
+      :Promise.resolve();
+    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity]).finally(() => {
       if (active) setBusy(false);
     });
     return () => { active = false; };
@@ -88,6 +97,31 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
     setSettings(previous => ({ ...previous, [key]: value }));
+
+  const enablePasskey=async()=>{
+    if(!passkeyCapable)return;
+    setPasskeyBusy(true);setMessage('');
+    try{
+      await registerPasskey(navigator.platform||'This device');
+      setPasskeys(await listPasskeys());
+      setMessage(platformBiometric
+        ?'Passkey enabled. You can now sign in using this device’s fingerprint, face, PIN or screen lock.'
+        :'Passkey enabled. You can now use this device or its passkey provider to sign in.');
+    }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be enabled.');}
+    finally{setPasskeyBusy(false);}
+  };
+  const removePasskey=async(item:PasskeyRecord)=>{
+    if(!await appConfirm('Remove this passkey from your VOP account? Other sign-in methods will continue to work.',{
+      title:'Remove passkey',confirmLabel:'Remove',tone:'danger',
+    }))return;
+    setPasskeyBusy(true);setMessage('');
+    try{
+      await deletePasskey(item.id);
+      setPasskeys(current=>current.filter(entry=>entry.id!==item.id));
+      setMessage('Passkey removed.');
+    }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be removed.');}
+    finally{setPasskeyBusy(false);}
+  };
 
   const save = async () => {
     setSaving(true); setMessage('');
@@ -143,6 +177,24 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
         <small>Use only on a private device. Cached course material can remain accessible to someone using the same browser after sign-out. Lesson completion while offline is saved as pending, not as an official result, until the server verifies it.</small>
         <small>Reload while online after changing this option. For complete removal of previously cached content, clear the browser’s site data.</small>
+      </section>
+      <section className="vop-personal-card vop-card">
+        <h2><Fingerprint size={19}/> Passkeys & device verification</h2>
+        {!passkeyCapable?<p>This browser or connection does not support secure passkey sign-in.</p>:<>
+          <p>{platformBiometric
+            ?'Enable a passkey after signing in once. Your device can then verify you using fingerprint, face recognition, PIN or screen lock.'
+            :'Enable a passkey after signing in once. The available verification method is controlled by your device or passkey provider.'}</p>
+          <small>VOP stores a public-key credential only. Biometric data remains on your device and is not uploaded to VOP or Firebase.</small>
+          <button type="button" className="vop-primary" disabled={passkeyBusy} onClick={()=>void enablePasskey()}>
+            <Fingerprint size={17}/>{passkeyBusy?'Please wait…':'Enable passkey on this device'}
+          </button>
+          {passkeys.length>0&&<div style={{display:'grid',gap:8,marginTop:12}}>
+            {passkeys.map(item=><div key={item.id} className="vop-setting-row">
+              <div><div className="vop-setting-name">{item.label||'Passkey'}</div><div className="vop-setting-help">Added {item.createdAt?new Date(item.createdAt).toLocaleDateString():'to this account'}</div></div>
+              <button type="button" className="vop-secondary danger" disabled={passkeyBusy} onClick={()=>void removePasskey(item)}><Trash2 size={15}/>Remove</button>
+            </div>)}
+          </div>}
+        </>}
       </section>
       <section className="vop-personal-card vop-card">
         <h2><ShieldCheck size={19}/> Privacy</h2>
