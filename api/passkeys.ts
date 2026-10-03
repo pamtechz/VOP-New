@@ -2,7 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getAdminDb } from '../server/tenant.js';
 import {
-  credentialDocumentId, randomChallenge, requestOrigin, signPasskeyChallenge, userHandle,
+  credentialDocumentId, parseRegistrationAttestation, randomChallenge, requestOrigin, signPasskeyChallenge, userHandle,
   validateAuthenticatorData, validateClientData, verifyPasskeyAssertion, verifyPasskeyChallenge,
 } from '../server/passkeys.js';
 
@@ -23,6 +23,12 @@ async function authenticated(req:Request):Promise<DecodedIdToken>{
   const authorization=header(req,'authorization');
   if(!authorization.startsWith('Bearer '))throw new Error('Sign in first.');
   return getAuth().verifyIdToken(authorization.slice(7).trim());
+}
+function requireRecentAuthentication(actor:DecodedIdToken){
+  const authTime=Number(actor.auth_time||0);
+  if(!authTime||Date.now()/1000-authTime>10*60){
+    throw new Error('For security, sign in again before enabling a new passkey.');
+  }
 }
 function clean(value:unknown,max:number){return String(value||'').trim().slice(0,max);}
 function credentialId(value:unknown){
@@ -84,7 +90,7 @@ export default async function handler(req:Request,res:Response){
         throw new Error('Passkey counter validation failed. Remove and re-enroll this passkey.');
       if(authData.signCount>0&&authData.signCount!==previousCount){
         await credentialRef.set({
-          signCount:authData.signCount,
+          signCount:registration.signCount,
           lastUsedAt:FieldValue.serverTimestamp(),
         },{merge:true});
       }
@@ -112,6 +118,7 @@ export default async function handler(req:Request,res:Response){
     }
 
     if(action==='beginRegistration'){
+      requireRecentAuthentication(actor);
       const existing=await db.collection('passkeyCredentials').where('uid','==',actor.uid).limit(11).get();
       if(existing.size>=10)throw new Error('This account already has the maximum of 10 passkeys.');
       const challenge=randomChallenge();
@@ -127,17 +134,17 @@ export default async function handler(req:Request,res:Response){
     }
 
     if(action==='finishRegistration'){
+      requireRecentAuthentication(actor);
       const payload=verifyPasskeyChallenge(clean(input.challengeToken,12000),'registration');
       if(payload.uid!==actor.uid)throw new Error('Passkey challenge belongs to another account.');
       if(payload.origin!==site.origin||payload.rpId!==site.rpId)throw new Error('Passkey request site changed. Start again.');
       const id=credentialId(input.credentialId);
       const clientDataJSON=b64(input.clientDataJSON);
-      const authenticatorData=b64(input.authenticatorData);
-      const publicKeyDer=b64(input.publicKeyDer);
-      const algorithm=Number(input.algorithm);
-      if(![-7,-257].includes(algorithm))throw new Error('This passkey algorithm is not supported.');
+      const attestationObject=b64(input.attestationObject,90000);
       validateClientData(clientDataJSON,payload,'webauthn.create');
-      const authData=validateAuthenticatorData(authenticatorData,payload.rpId);
+      const registration=parseRegistrationAttestation(attestationObject,payload.rpId,id);
+      const publicKeyDer=registration.publicKeyDer;
+      const algorithm=registration.algorithm;
       const ref=db.doc('passkeyCredentials/'+credentialDocumentId(id));
       const existing=await ref.get();
       if(existing.exists&&String(existing.data()?.uid||'')!==actor.uid)
