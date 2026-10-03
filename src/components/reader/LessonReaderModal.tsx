@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Lesson, DiscoverGuide, User } from '../../types';
-import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen } from 'lucide-react';
+import { X, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle, Quote, Sparkles, BookOpen, MessageCircle } from 'lucide-react';
 import { isLessonConfigured } from '../../services/lesson.ts';
 import { saveLessonResume } from '../../services/localStudy';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -9,6 +9,7 @@ import { MediaPlayer } from '../media/MediaPlayer';
 import { StudyPlateContent } from './StudyPlateContent';
 import { ModalLayer } from '../layout/ModalLayer';
 import { lessonScoreForDisplay } from '../../services/lessonProgress';
+import type { SupportContextPrefill } from '../../services/supportContext';
 
 interface LessonReaderModalProps {
   lesson: Lesson;
@@ -19,6 +20,7 @@ interface LessonReaderModalProps {
   onPreviousLesson?: () => void;
   onNextLesson?: () => void;
   onOpenQuiz?: (quiz: Lesson) => void;
+  onAskSupport?: (context: SupportContextPrefill) => void;
   onPageChange?: (pageIndex: number) => void;
   initialPageIndex?: number;
   hasPreviousLesson?: boolean;
@@ -26,7 +28,7 @@ interface LessonReaderModalProps {
 }
 
 export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
-  lesson, guide, currentUser, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz, onPageChange,
+  lesson, guide, currentUser, onClose, onComplete, onPreviousLesson, onNextLesson, onOpenQuiz, onAskSupport, onPageChange,
   hasPreviousLesson = false, hasNextLesson = false, initialPageIndex = 0,
 }) => {
   const language = getActiveLanguage();
@@ -358,6 +360,31 @@ export const LessonReaderModal: React.FC<LessonReaderModalProps> = ({
                     — {currentPage.scriptureQuote.reference}
                   </cite>
                 </blockquote>
+              )}
+
+              {onAskSupport && (
+                <button type="button" className="vop-lesson-support-action"
+                  onClick={()=>onAskSupport({
+                    guideId:guide.id,
+                    lessonId:lesson.id,
+                    category:'lesson_clarification',
+                    subject:'Question about '+(currentSection?.title||currentPage.title||lesson.title),
+                    referenceType:currentSection?'section':'topic',
+                    referenceId:currentSection?.id||`${lesson.id}:page:${currentPageIndex+1}`,
+                    referenceLabel:currentSection?.title||currentPage.title||lesson.title,
+                  })}
+                  style={{
+                    width:'100%',display:'flex',alignItems:'center',gap:'.7rem',textAlign:'left',
+                    border:'1px solid var(--border-subtle)',borderRadius:'1rem',padding:'1rem 1.1rem',
+                    background:'var(--bg-elevated)',color:'var(--text-primary)',cursor:'pointer',
+                  }}>
+                  <MessageCircle size={20} color="#2563eb"/>
+                  <span style={{display:'grid',gap:'.15rem'}}>
+                    <strong>{t('support.ask_about_page','Ask about this page')}</strong>
+                    <small style={{color:'var(--text-muted)'}}>{t('support.ask_about_page_help','Send this lesson and section directly to your mentor or organization support team.')}</small>
+                  </span>
+                  <ChevronRight size={18} style={{marginLeft:'auto'}}/>
+                </button>
               )}
 
               {/* Key takeaway */}

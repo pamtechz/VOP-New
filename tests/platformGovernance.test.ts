@@ -142,6 +142,33 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
   assert.match(routing,/if\(path\.startsWith\('\/admin'\)\|\|type==='user'\)return 'admin';[\s\S]*type==='learning-support'/);
 });
 
+test('lesson reader hands exact study context into support and evangelism follow-up remains operational',()=>{
+  const app=read('src/App.tsx');
+  const reader=read('src/components/reader/LessonReaderModal.tsx');
+  const support=read('src/pages/SupportPage.tsx');
+  const context=read('src/services/supportContext.ts');
+  const api=read('api/mentorship.ts');
+  const admin=read('src/pages/MentorshipInsights.tsx');
+
+  assert.match(reader,/Ask about this page/);
+  assert.match(reader,/referenceType:currentSection\?'section':'topic'/);
+  assert.match(reader,/guideId:guide\.id/);
+  assert.match(reader,/lessonId:lesson\.id/);
+  assert.match(app,/saveSupportContextPrefill\(context\)/);
+  assert.match(app,/navigate\('support'\)/);
+  assert.match(support,/consumeSupportContextPrefill/);
+  assert.match(context,/vop_support_context_v1/);
+
+  assert.match(api,/SUPPORT_FOLLOW_UP_STATUSES/);
+  assert.match(api,/followUpStatus=spiritualInterest==='none'\?'not_required':'new'/);
+  assert.match(api,/followUpScheduledAt/);
+  assert.match(admin,/Bible-study interest/);
+  assert.match(admin,/Baptism interest/);
+  assert.match(admin,/One Voice 27/);
+  assert.match(admin,/Schedule follow-up/);
+  assert.match(admin,/Mark follow-up complete/);
+});
+
 test('assessment architecture separates classification and policy and starts attempts on the server',()=>{
   const manager=read('src/pages/QuizLibrary.tsx');
   const api=read('api/quizzes.ts');

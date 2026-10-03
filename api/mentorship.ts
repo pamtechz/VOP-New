@@ -205,6 +205,7 @@ const SUPPORT_CATEGORIES=new Set([
 const SUPPORT_INTERESTS=new Set([
   'none','bible_study','prayer','baptism','church_visit','home_visit','one_voice_27','evangelism',
 ]);
+const SUPPORT_FOLLOW_UP_STATUSES=new Set(['not_required','new','contacted','scheduled','completed']);
 
 function isCandidate(data:Record<string,unknown>){
   const role=String(data.role||'').toLowerCase();
@@ -233,6 +234,17 @@ function supportPriority(value:unknown){
 function supportStatus(value:unknown){
   const status=String(value||'open').trim().toLowerCase();
   return ['open','in_progress','resolved','closed'].includes(status)?status:'open';
+}
+function supportFollowUpStatus(value:unknown,fallback='not_required'){
+  const status=String(value||fallback).trim().toLowerCase();
+  return SUPPORT_FOLLOW_UP_STATUSES.has(status)?status:fallback;
+}
+function supportFollowUpDate(value:unknown){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  const date=new Date(raw);
+  if(Number.isNaN(date.getTime()))throw new Error('Choose a valid evangelism follow-up date and time.');
+  return date.toISOString();
 }
 function supportCreatedMillis(value:unknown){
   const candidate=value as {toDate?:()=>Date}|undefined;
@@ -650,11 +662,13 @@ export default async function handler(req: Request, res: Response) {
       const messageRef=requestRef.collection('messages').doc();
       const createdAt=FieldValue.serverTimestamp();
       const campaignTag=spiritualInterest==='one_voice_27'||category==='one_voice_27'?'one_voice_27':'';
+      const followUpStatus=spiritualInterest==='none'?'not_required':'new';
       await requestRef.set({
         organizationId:candidateOrganizationId,candidateId,
         candidateName:String(actor.displayName||actor.email||'Learner'),
         candidateEmail:String(actor.email||decoded.email||''),
         subject,message,category,priority,target,channel,spiritualInterest,campaignTag,
+        followUpStatus,followUpScheduledAt:null,followUpCompletedAt:null,followUpUpdatedAt:createdAt,
         references,assignedMentorId,recipientIds:recipients,status:'open',
         createdAt,updatedAt:createdAt,lastMessageAt:createdAt,
         createdBy:candidateId,firstResponseAt:null,resolvedAt:null,
@@ -679,7 +693,7 @@ export default async function handler(req: Request, res: Response) {
         ok:true,
         item:{
           id:requestRef.id,organizationId:candidateOrganizationId,candidateId,subject,message,category,
-          priority,target,channel,spiritualInterest,campaignTag,references,assignedMentorId,status:'open',
+          priority,target,channel,spiritualInterest,campaignTag,followUpStatus,references,assignedMentorId,status:'open',
           whatsappNumber,
           whatsappText:`VOP Support #${requestRef.id}\n${subject}\n${message}`,
         },
@@ -788,25 +802,48 @@ export default async function handler(req: Request, res: Response) {
       if(!request.exists)throw new Error('Support request was not found.');
       const requestData=request.data()||{};
       await assertSupportRequestAccess(db,decoded.uid,actor,requestData);
-      const nextStatus=supportStatus(body.status);
+      const nextStatus=supportStatus(body.status??requestData.status);
       const nextPriority=supportPriority(body.priority??requestData.priority);
+      const currentFollowUp=String(requestData.spiritualInterest||'none')==='none'?'not_required'
+        :supportFollowUpStatus(requestData.followUpStatus,'new');
+      const nextFollowUp=body.followUpStatus===undefined
+        ?currentFollowUp:supportFollowUpStatus(body.followUpStatus,currentFollowUp);
+      const scheduledAt=body.followUpScheduledAt===undefined
+        ?String(requestData.followUpScheduledAt||'')
+        :supportFollowUpDate(body.followUpScheduledAt);
+      if(nextFollowUp==='scheduled'&&!scheduledAt)throw new Error('Choose a date and time before scheduling evangelism follow-up.');
       const update:Record<string,unknown>={
-        status:nextStatus,priority:nextPriority,updatedAt:FieldValue.serverTimestamp(),updatedBy:decoded.uid,
+        status:nextStatus,priority:nextPriority,followUpStatus:nextFollowUp,
+        followUpScheduledAt:nextFollowUp==='scheduled'?scheduledAt:null,
+        followUpCompletedAt:nextFollowUp==='completed'?FieldValue.serverTimestamp():null,
+        followUpUpdatedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp(),updatedBy:decoded.uid,
       };
       if(['resolved','closed'].includes(nextStatus))update.resolvedAt=FieldValue.serverTimestamp();
       else update.resolvedAt=null;
       await requestRef.set(update,{merge:true});
       const candidateId=String(requestData.candidateId||'');
+      const followUpChanged=nextFollowUp!==currentFollowUp
+        ||(nextFollowUp==='scheduled'&&scheduledAt!==String(requestData.followUpScheduledAt||''));
       if(candidateId)await createNotification(db,{
         organizationId:String(requestData.organizationId||''),recipientId:candidateId,type:'learning-support',
-        title:nextStatus==='resolved'?'Your support request was resolved':'Support request updated',
-        body:nextStatus==='resolved'
-          ?'Your VOP support request has been marked resolved. You can reopen it by replying if you still need help.'
-          :`Your support request status is now ${nextStatus.replace('_',' ')}.`,
-        actionUrl:'/support',metadata:{source:'candidate-support-status',requestId,status:nextStatus},
+        title:followUpChanged
+          ?nextFollowUp==='scheduled'?'Evangelism follow-up scheduled':'Evangelism follow-up updated'
+          :nextStatus==='resolved'?'Your support request was resolved':'Support request updated',
+        body:followUpChanged
+          ?nextFollowUp==='scheduled'
+            ?`Your requested follow-up has been scheduled for ${new Date(scheduledAt).toLocaleString('en-US',{timeZone:'UTC'})} UTC.`
+            :`Your requested follow-up is now ${nextFollowUp.replace('_',' ')}.`
+          :nextStatus==='resolved'
+            ?'Your VOP support request has been marked resolved. You can reopen it by replying if you still need help.'
+            :`Your support request status is now ${nextStatus.replace('_',' ')}.`,
+        actionUrl:'/support',metadata:{source:'candidate-support-status',requestId,status:nextStatus,followUpStatus:nextFollowUp},
         createdBy:decoded.uid,
       });
-      return res.status(200).json({ok:true,item:{id:requestId,status:nextStatus,priority:nextPriority}});
+      return res.status(200).json({ok:true,item:{
+        id:requestId,status:nextStatus,priority:nextPriority,followUpStatus:nextFollowUp,
+        followUpScheduledAt:nextFollowUp==='scheduled'?scheduledAt:'',
+      }});
     }
 
     if (action === 'getAutomationSettings') {
