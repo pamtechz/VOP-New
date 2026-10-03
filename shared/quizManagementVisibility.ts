@@ -38,6 +38,7 @@ export function quizManagementItem(
     assessmentInstructions: String(data.assessmentInstructions || ''),
     assessmentTimeLimitMinutes: Number(data.assessmentTimeLimitMinutes || 0),
     assessmentPassThreshold: Number(data.assessmentPassThreshold || 0),
+    assessmentMaxAttemptsMode: data.assessmentMaxAttemptsMode === 'custom' ? 'custom' : 'inherit',
     assessmentMaxAttempts: Number(data.assessmentMaxAttempts || 0),
     assessmentRetakeCooldownMinutes: Number(data.assessmentRetakeCooldownMinutes || 0),
     assessmentFeedbackMode: ['score_only','after_submit','none'].includes(String(data.assessmentFeedbackMode || ''))
