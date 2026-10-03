@@ -197,7 +197,7 @@ function safeReference(value: unknown) {
   return { type, id: referenceId, label };
 }
 
-const SUPPORT_TEAM_ROLES=new Set(['owner','admin','staff']);
+const SUPPORT_TEAM_ROLES=new Set(['owner','admin']);
 const SUPPORT_CATEGORIES=new Set([
   'lesson_clarification','doctrine','bible_question','assessment',
   'prayer','evangelism','baptism','one_voice_27','other',
