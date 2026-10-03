@@ -92,4 +92,4 @@ The learner account, certificate, and administrator overview screens use the sup
 
 The production build runs `scripts/verify-server-esm-imports.mjs` before TypeScript/Vite compilation. This prevents extensionless relative imports into server modules from reaching Vercel's ESM runtime, where they can otherwise cause API `500` responses after deployment.
 
-Firebase Web Google authentication uses the redirect flow, avoiding cross-origin popup polling and `window.closed/window.close` COOP warnings. Local and Vercel responses also use `Cross-Origin-Opener-Policy: same-origin-allow-popups` for consistent browser isolation behavior.
+Firebase Web Google authentication uses Firebase's popup flow while the root auth observer remains mounted. The user-facing Vite and Vercel responses intentionally do not force a `Cross-Origin-Opener-Policy` header because Firebase's popup resolver manages and polls the OAuth window itself; VOP does not require cross-origin isolation.
