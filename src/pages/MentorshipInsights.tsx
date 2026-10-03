@@ -54,6 +54,7 @@ export const MentorshipInsights: React.FC = () => {
   const [selectedSupportRequest,setSelectedSupportRequest]=useState<any|null>(null);
   const [supportMessages,setSupportMessages]=useState<any[]>([]);
   const [supportReply,setSupportReply]=useState('');
+  const [followUpAt,setFollowUpAt]=useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedMentor, setSelectedMentor] = useState('');
   const [performance, setPerformance] = useState<any | null>(null);
@@ -154,6 +155,8 @@ export const MentorshipInsights: React.FC = () => {
 
   const openSupportRequest = async (item:any) => {
     setSelectedSupportRequest(item);
+    setFollowUpAt(item.followUpScheduledAt
+      ?new Date(item.followUpScheduledAt).toISOString().slice(0,16):'');
     setSelectedStudent(String(item.candidateId||''));
     try{
       const result=await mentoringApi('supportRequestMessages',{requestId:item.id});
@@ -184,6 +187,25 @@ export const MentorshipInsights: React.FC = () => {
       setSupportRequests(current=>current.map(item=>item.id===selectedSupportRequest.id?{...item,status}:item));
       setNotice(status==='resolved'?'Support request resolved.':'Support request updated.');
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not update support request.');}
+  };
+
+  const updateEvangelismFollowUp = async (followUpStatus:'new'|'contacted'|'scheduled'|'completed') => {
+    if(!selectedSupportRequest)return;
+    if(followUpStatus==='scheduled'&&!followUpAt){
+      setError('Choose a date and time for the follow-up.');
+      return;
+    }
+    try{
+      const result=await mentoringApi('updateSupportRequest',{
+        requestId:selectedSupportRequest.id,
+        followUpStatus,
+        ...(followUpStatus==='scheduled'?{followUpScheduledAt:new Date(followUpAt).toISOString()}:{}),
+      });
+      const patch=result.item||{followUpStatus};
+      setSelectedSupportRequest((current:any)=>current?{...current,...patch}:current);
+      setSupportRequests(current=>current.map(item=>item.id===selectedSupportRequest.id?{...item,...patch}:item));
+      setNotice(followUpStatus==='scheduled'?'Evangelism follow-up scheduled.':'Evangelism follow-up updated.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not update evangelism follow-up.');}
   };
 
   const createDraft = async () => {
@@ -286,13 +308,29 @@ export const MentorshipInsights: React.FC = () => {
 
       {tab==='support' && <section className="vop-mentoring-card">
         <div className="vop-mentoring-card-head"><div><h2>Candidate learning & spiritual support</h2><p>Questions are tied to their guide, lesson, topic, doctrine or Bible reference. Organization support can answer in-app and continue on WhatsApp when the organization number is configured.</p></div><button className="vop-secondary" type="button" onClick={()=>void loadCore()}>Refresh queue</button></div>
+        <div className="vop-performance-stats">
+          <div><span>Bible-study interest</span><strong>{supportRequests.filter(item=>item.spiritualInterest==='bible_study').length}</strong></div>
+          <div><span>Baptism interest</span><strong>{supportRequests.filter(item=>item.spiritualInterest==='baptism').length}</strong></div>
+          <div><span>One Voice 27</span><strong>{supportRequests.filter(item=>item.campaignTag==='one_voice_27'||item.spiritualInterest==='one_voice_27').length}</strong></div>
+          <div><span>Visits requested</span><strong>{supportRequests.filter(item=>['church_visit','home_visit'].includes(String(item.spiritualInterest||''))).length}</strong></div>
+        </div>
         <div className="vop-conversation-grid">{supportRequests.map(item=><button key={item.id} type="button" onClick={()=>void openSupportRequest(item)}>
           <HeartHandshake size={21}/><div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId}</strong><span>{item.subject||item.category||'Support request'} · {String(item.status||'open').replace('_',' ')}</span><small>{item.lastMessageAt||item.createdAt?new Date(item.lastMessageAt||item.createdAt).toLocaleString():'New request'}</small></div><ExternalLink size={16}/>
         </button>)}{!supportRequests.length&&<div className="vop-empty">No candidate support requests found.</div>}</div>
         {selectedSupportRequest&&<div className="vop-admin-chat" style={{marginTop:16}}>
           <div className="vop-mentoring-card-head"><div><h3>{selectedSupportRequest.subject||'Support request'}</h3><p>{String(selectedSupportRequest.category||'support').replaceAll('_',' ')} · {String(selectedSupportRequest.priority||'normal')} priority · target: {String(selectedSupportRequest.target||'').replaceAll('_',' ')}</p></div><div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void updateSupportStatus('in_progress')}>In progress</button><button className="vop-primary" type="button" onClick={()=>void updateSupportStatus('resolved')}><CheckCircle2 size={15}/>Resolve</button></div></div>
           {(selectedSupportRequest.references||[]).length>0&&<div className="vop-weak-list">{selectedSupportRequest.references.map((ref:any)=><div key={ref.type+ref.id}><strong><Tag size={13}/>{ref.label}</strong><span>{ref.type}</span></div>)}</div>}
-          {selectedSupportRequest.spiritualInterest&&selectedSupportRequest.spiritualInterest!=='none'&&<div className="vop-mentoring-alert success"><HeartHandshake size={16}/>Follow-up interest: {String(selectedSupportRequest.spiritualInterest).replaceAll('_',' ')}</div>}
+          {selectedSupportRequest.spiritualInterest&&selectedSupportRequest.spiritualInterest!=='none'&&<>
+            <div className="vop-mentoring-alert success"><HeartHandshake size={16}/>Follow-up interest: {String(selectedSupportRequest.spiritualInterest).replaceAll('_',' ')}{selectedSupportRequest.campaignTag==='one_voice_27'?' · One Voice 27':''}</div>
+            <div className="vop-automation-grid" style={{marginBottom:16}}>
+              <label className="vop-field"><span>Evangelism follow-up stage</span><select value={selectedSupportRequest.followUpStatus||'new'} onChange={e=>void updateEvangelismFollowUp(e.target.value as 'new'|'contacted'|'scheduled'|'completed')}>
+                <option value="new">New interest</option><option value="contacted">Contacted</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option>
+              </select></label>
+              <label className="vop-field"><span>Visit / follow-up date</span><input type="datetime-local" value={followUpAt} onChange={e=>setFollowUpAt(e.target.value)}/></label>
+              <button className="vop-secondary" type="button" disabled={!followUpAt} onClick={()=>void updateEvangelismFollowUp('scheduled')}>Schedule follow-up</button>
+              <button className="vop-primary" type="button" onClick={()=>void updateEvangelismFollowUp('completed')}><CheckCircle2 size={15}/>Mark follow-up complete</button>
+            </div>
+          </>}
           <div className="vop-support-messages">{supportMessages.map(item=><article key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':'theirs'}><p>{item.body}</p>{(item.references||[]).map((ref:any)=><span key={ref.type+ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}</article>)}</div>
           <div><textarea value={supportReply} maxLength={10000} onChange={e=>setSupportReply(e.target.value)} placeholder="Reply with Bible study help, clarification or follow-up…"/><button className="vop-primary" type="button" disabled={!supportReply.trim()} onClick={()=>void replySupportRequest()}><Send size={16}/>Send reply</button></div>
           {selectedSupportRequest.whatsappNumber&&<a className="vop-secondary" href={'https://wa.me/'+String(selectedSupportRequest.whatsappNumber).replace(/\D/g,'')+'?text='+encodeURIComponent('VOP Support #'+selectedSupportRequest.id+' · '+(selectedSupportRequest.subject||''))} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/>Continue on WhatsApp</a>}
