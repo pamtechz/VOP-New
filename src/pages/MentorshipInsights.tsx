@@ -341,7 +341,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not update evangelism follow-up.');}
   };
 
-  const createDraft=async(channel:draftChannel extends never?never:'in_app'|'email'=draftChannel)=>{
+  const createDraft=async(channel:'in_app'|'email'=draftChannel)=>{
     if(!selectedStudent)return;
     try{
       setDraftChannel(channel);
@@ -418,6 +418,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       ||normalized(item.candidateName||studentMap.get(item.candidateId)?.displayName).includes(query)
       ||normalized(item.subject).includes(query)
       ||normalized(item.category).includes(query)
+      ||normalized(item.spiritualInterest).includes(query)
+      ||normalized(item.campaignTag).includes(query)
       ||(Array.isArray(item.references)&&item.references.some((ref:any)=>normalized(ref.label).includes(query)));
     const matchesStatus=supportStatus==='all'||String(item.status||'open')===supportStatus;
     const matchesPriority=supportPriority==='all'||String(item.priority||'normal')===supportPriority;
