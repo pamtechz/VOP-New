@@ -11,7 +11,7 @@ type Quiz = {
   sharingScope?: 'private' | 'organization' | 'shared';
   guideId?: string; lessonId?: string; attachmentType?: AttachmentType; anchorId?: string; assessmentKind?: 'final_exam'|'chapter_quiz'|'practice';
   assessmentInstructions?: string; assessmentTimeLimitMinutes?: number; assessmentPassThreshold?: number;
-  assessmentMaxAttempts?: number; assessmentRetakeCooldownMinutes?: number;
+  assessmentMaxAttemptsMode?: 'inherit'|'custom'; assessmentMaxAttempts?: number; assessmentRetakeCooldownMinutes?: number;
   assessmentFeedbackMode?: 'score_only'|'after_submit'|'none';
   ownerOrganizationId?: string; ownerUid?: string; canEdit?: boolean;
 };
@@ -61,6 +61,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
   const [assessmentInstructions,setAssessmentInstructions]=useState('');
   const [assessmentTimeLimitMinutes,setAssessmentTimeLimitMinutes]=useState(0);
   const [assessmentPassThreshold,setAssessmentPassThreshold]=useState(0);
+  const [assessmentMaxAttemptsMode,setAssessmentMaxAttemptsMode]=useState<'inherit'|'custom'>('inherit');
   const [assessmentMaxAttempts,setAssessmentMaxAttempts]=useState(0);
   const [assessmentRetakeCooldownMinutes,setAssessmentRetakeCooldownMinutes]=useState(0);
   const [assessmentFeedbackMode,setAssessmentFeedbackMode]=useState<'score_only'|'after_submit'|'none'>('score_only');
@@ -97,7 +98,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setTitle(initialExam ? 'Final guide examination' : '');
     setDescription('');setQuestions([]);setPublished(false);
     setAssessmentInstructions('');setAssessmentTimeLimitMinutes(0);setAssessmentPassThreshold(0);
-    setAssessmentMaxAttempts(0);setAssessmentRetakeCooldownMinutes(0);setAssessmentFeedbackMode('score_only');
+    setAssessmentMaxAttemptsMode('inherit');setAssessmentMaxAttempts(0);setAssessmentRetakeCooldownMinutes(0);setAssessmentFeedbackMode('score_only');
   }, [initialGuideId,initialLessonId,initialAnchorType,initialAnchorId,initialExam,organizationId]);
   useEffect(() => {
     if (!guideId) {setLessonDetails([]);return;}
@@ -147,7 +148,9 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
     setAssessmentInstructions(copy?'':quiz?.assessmentInstructions||'');
     setAssessmentTimeLimitMinutes(copy?0:Number(quiz?.assessmentTimeLimitMinutes||0));
     setAssessmentPassThreshold(copy?0:Number(quiz?.assessmentPassThreshold||0));
-    setAssessmentMaxAttempts(copy?0:Number(quiz?.assessmentMaxAttempts||0));
+    const attemptMode=!copy&&quiz?.assessmentMaxAttemptsMode==='custom'?'custom':'inherit';
+    setAssessmentMaxAttemptsMode(attemptMode);
+    setAssessmentMaxAttempts(attemptMode==='custom'?Math.max(1,Number(quiz?.assessmentMaxAttempts||1)):0);
     setAssessmentRetakeCooldownMinutes(copy?0:Number(quiz?.assessmentRetakeCooldownMinutes||0));
     setAssessmentFeedbackMode(copy?'score_only':quiz?.assessmentFeedbackMode||'score_only');
     setQuestions(quiz ? normalize(quiz.questions || []) : []);
@@ -172,7 +175,8 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
           attachmentType, guideId, lessonId: attachmentType === 'guide' ? '' : lessonId,
           anchorId: ['chapter','section','block'].includes(attachmentType) ? anchorId : '',
           assessmentInstructions:assessmentInstructions.trim(),
-          assessmentTimeLimitMinutes,assessmentPassThreshold,assessmentMaxAttempts,
+          assessmentTimeLimitMinutes,assessmentPassThreshold,assessmentMaxAttemptsMode,
+          assessmentMaxAttempts:assessmentMaxAttemptsMode==='custom'?assessmentMaxAttempts:0,
           assessmentRetakeCooldownMinutes,assessmentFeedbackMode,
           ...(sourceId ? { sourceContentId: sourceId } : {}),
           questions: questions.map(question => ({
@@ -268,7 +272,8 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         <div className="vop-form-grid">
           <div className="vop-field"><label>Time limit (minutes)</label><input type="number" min="0" max="1440" step="1" value={assessmentTimeLimitMinutes} onChange={e=>setAssessmentTimeLimitMinutes(Math.max(0,Math.min(1440,Math.trunc(Number(e.target.value)||0))))}/><small>0 = untimed.</small></div>
           <div className="vop-field"><label>Pass mark override (%)</label><input type="number" min="0" max="100" step="1" value={assessmentPassThreshold} onChange={e=>setAssessmentPassThreshold(Math.max(0,Math.min(100,Number(e.target.value)||0)))}/><small>0 = use organization pass mark.</small></div>
-          <div className="vop-field"><label>Maximum attempts</label><input type="number" min="0" max="100" step="1" value={assessmentMaxAttempts} onChange={e=>setAssessmentMaxAttempts(Math.max(0,Math.min(100,Math.trunc(Number(e.target.value)||0))))}/><small>0 = use organization policy; if that policy is also 0, passed or failed learners may retake without an attempt limit.</small></div>
+          <div className="vop-field"><label>Maximum attempts policy</label><select value={assessmentMaxAttemptsMode} onChange={e=>setAssessmentMaxAttemptsMode(e.target.value as 'inherit'|'custom')}><option value="inherit">Inherit organization policy</option><option value="custom">Custom for this assessment</option></select><small>Inherited policy follows the current organization setting. Organization value 0 means unlimited attempts.</small></div>
+          {assessmentMaxAttemptsMode==='custom' && <div className="vop-field"><label>Custom maximum attempts</label><input type="number" min="1" max="100" step="1" value={assessmentMaxAttempts} onChange={e=>setAssessmentMaxAttempts(Math.max(1,Math.min(100,Math.trunc(Number(e.target.value)||1))))}/><small>1–100 attempts. This explicit override takes precedence over the organization policy.</small></div>}
           <div className="vop-field"><label>Retake wait (minutes)</label><input type="number" min="0" max="10080" step="1" value={assessmentRetakeCooldownMinutes} onChange={e=>setAssessmentRetakeCooldownMinutes(Math.max(0,Math.min(10080,Math.trunc(Number(e.target.value)||0))))}/><small>0 = use organization policy; if that policy is also 0, retakes are immediate after both passed and failed attempts.</small></div>
           <div className="vop-field"><label>Feedback after submission</label><select value={assessmentFeedbackMode} onChange={e=>setAssessmentFeedbackMode(e.target.value as typeof assessmentFeedbackMode)}>
             <option value="score_only">Score and pass/fail only</option>
@@ -306,7 +311,7 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         <tbody>{items.map(item => <tr key={item.id}>
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
           <td>{item.attachmentType === 'guide' ? 'Final guide exam: ' + guideName(item.guideId || '') : item.attachmentType === 'lesson' ? 'Lesson: ' + lessonName(item.guideId || '', item.lessonId || '') : item.anchorId ? item.attachmentType + ': ' + lessonName(item.guideId || '', item.lessonId || '') : 'Not attached (legacy)'}</td>
-          <td><strong>{item.assessmentKind==='final_exam'?'Final exam':item.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice'}</strong><div>{item.assessmentTimeLimitMinutes?item.assessmentTimeLimitMinutes+' min':'Untimed'} · {item.assessmentPassThreshold?item.assessmentPassThreshold+'% pass':'Default pass mark'}</div></td>
+          <td><strong>{item.assessmentKind==='final_exam'?'Final exam':item.assessmentKind==='chapter_quiz'?'Chapter quiz':'Practice'}</strong><div>{item.assessmentTimeLimitMinutes?item.assessmentTimeLimitMinutes+' min':'Untimed'} · {item.assessmentPassThreshold?item.assessmentPassThreshold+'% pass':'Default pass mark'} · {item.assessmentMaxAttemptsMode==='custom'?'Custom '+item.assessmentMaxAttempts+' attempts':'Organization attempt policy'}</div></td>
           <td>{item.language.toUpperCase()}</td><td>{item.questions?.length || 0}</td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.archived ? 'Archived' : item.published ? 'Published' : 'Draft'}</td>
           <td><div className="vop-reference-action-cell">
