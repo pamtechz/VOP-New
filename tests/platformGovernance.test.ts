@@ -117,6 +117,35 @@ test('mentor accounts have a dedicated assigned-learner workspace and messaging 
   assert.match(api,/action === 'listMyAssignments'/);
 });
 
+test('Mentoring & Insights is an operational inbox with responsive drill-down and scoped reads',()=>{
+  const page=read('src/pages/MentorshipInsights.tsx');
+  const api=read('api/mentorship.ts');
+  const css=read('src/pages/admin.css');
+
+  assert.match(page,/type Tab='overview'/);
+  assert.match(page,/Needs attention/);
+  assert.match(page,/Mentor coverage/);
+  assert.match(page,/Interest pipeline/);
+  assert.match(page,/Support inbox/);
+  assert.match(page,/Unread and high priority first/);
+  assert.match(page,/vop-mentoring-split/);
+  assert.match(page,/Search candidate, subject, topic or doctrine/);
+  assert.match(page,/Open a learner–mentor thread to review context, attach lessons and reply/);
+  assert.match(page,/Draft in-app support/);
+  assert.match(page,/Outreach links/);
+  assert.match(page,/Guardrailed automation/);
+
+  assert.match(api,/collection\('mentorAssignments'\)\.where\('organizationId','==',organizationId\)\.limit\(500\)/);
+  assert.match(api,/collection\('mentorConversations'\)\.where\('organizationId','==',organizationId\)\.limit\(300\)/);
+  assert.match(api,/collection\('learningSupportRequests'\)\.where\('organizationId','==',organizationId\)\.limit\(200\)/);
+  assert.match(api,/const studentIds=\[\.\.\.new Set/);
+
+  assert.match(css,/\.vop-mentoring-overview\{display:grid/);
+  assert.match(css,/\.vop-mentoring-split\{display:grid/);
+  assert.match(css,/@media\(max-width:900px\)[\s\S]*\.vop-mentoring-split\{grid-template-columns:1fr/);
+  assert.match(css,/--mentor-surface:var\(--theme-surface/);
+});
+
 test('candidate contextual support covers doctrine, lesson references, mentor/team routing and evangelism follow-up',()=>{
   const support=read('src/pages/SupportPage.tsx');
   const api=read('api/mentorship.ts');
@@ -143,7 +172,7 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
   assert.match(support,/One Voice 27 follow-up/);
   assert.match(support,/I want to discuss baptism/);
   assert.match(mentor,/Candidate support queue/);
-  assert.match(admin,/Candidate Support/);
+  assert.match(admin,/Candidate support inbox/);
   assert.match(admin,/WhatsApp \{target\.label\}/);
   assert.match(sidebar,/Learning & spiritual support/);
   assert.match(drawer,/Learning & spiritual support/);
@@ -171,11 +200,11 @@ test('lesson reader hands exact study context into support and evangelism follow
   assert.match(api,/SUPPORT_FOLLOW_UP_STATUSES/);
   assert.match(api,/followUpStatus=spiritualInterest==='none'\?'not_required':'new'/);
   assert.match(api,/followUpScheduledAt/);
-  assert.match(admin,/Bible-study interest/);
-  assert.match(admin,/Baptism interest/);
+  assert.match(admin,/Bible study/);
+  assert.match(admin,/Baptism/);
   assert.match(admin,/One Voice 27/);
-  assert.match(admin,/Schedule follow-up/);
-  assert.match(admin,/Mark follow-up complete/);
+  assert.match(admin,/onClick=\{\(\)=>void updateEvangelismFollowUp\('scheduled'\)\}/);
+  assert.match(admin,/onClick=\{\(\)=>void updateEvangelismFollowUp\('completed'\)\}/);
 });
 
 test('assessment architecture separates classification and policy and starts attempts on the server',()=>{
