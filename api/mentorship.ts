@@ -262,6 +262,30 @@ async function organizationWhatsApp(db:FirebaseFirestore.Firestore,organizationI
     ?detail.contactWhatsAppNumbers.map(value=>String(value||'').trim()).filter(Boolean):[];
   return String(data.whatsappNumber||numbers[0]||data.contactPhone||'').trim();
 }
+async function mentorWhatsApp(db:FirebaseFirestore.Firestore,mentorId:string){
+  if(!mentorId)return '';
+  const snapshot=await db.doc(`users/${mentorId}`).get();
+  if(!snapshot.exists)return '';
+  const data=snapshot.data()||{};
+  return String(data.whatsappNumber||data.phoneNumber||'').trim();
+}
+async function supportWhatsAppTargets(
+  db:FirebaseFirestore.Firestore,
+  organizationId:string,
+  mentorId:string,
+  target:unknown,
+){
+  const normalized=supportTarget(target);
+  const [mentorNumber,organizationNumber]=await Promise.all([
+    normalized==='mentor'||normalized==='both'?mentorWhatsApp(db,mentorId):Promise.resolve(''),
+    normalized==='support_team'||normalized==='both'?organizationWhatsApp(db,organizationId):Promise.resolve(''),
+  ]);
+  const items:Array<{kind:'mentor'|'organization';label:string;number:string}>=[];
+  if(mentorNumber)items.push({kind:'mentor',label:'Mentor',number:mentorNumber});
+  if(organizationNumber&&!items.some(item=>item.number.replace(/\D/g,'')===organizationNumber.replace(/\D/g,'')))
+    items.push({kind:'organization',label:'Organization support',number:organizationNumber});
+  return items;
+}
 async function supportTeamRecipients(db:FirebaseFirestore.Firestore,organizationId:string){
   if(!organizationId)return [] as string[];
   const members=await db.collection(`organizations/${organizationId}/members`).where('active','==',true).get();
@@ -688,13 +712,14 @@ export default async function handler(req: Request, res: Response) {
         },
         createdBy:candidateId,
       })));
-      const whatsappNumber=await organizationWhatsApp(db,candidateOrganizationId);
+      const whatsappTargets=(channel==='whatsapp'||channel==='both')
+        ?await supportWhatsAppTargets(db,candidateOrganizationId,assignedMentorId,target):[];
       return res.status(201).json({
         ok:true,
         item:{
           id:requestRef.id,organizationId:candidateOrganizationId,candidateId,subject,message,category,
           priority,target,channel,spiritualInterest,campaignTag,followUpStatus,references,assignedMentorId,status:'open',
-          whatsappNumber,
+          whatsappTargets,
           whatsappText:`VOP Support #${requestRef.id}\n${subject}\n${message}`,
         },
       });
@@ -702,10 +727,9 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'listMySupportRequests') {
       if(!isCandidate(actor))throw new Error('Only a learner or candidate can view personal support requests.');
-      const snapshot=await db.collection('learningSupportRequests').where('candidateId','==',decoded.uid).get();
-      const whatsappNumber=await organizationWhatsApp(db,String(actor.organizationId||''));
+      const snapshot=await db.collection('learningSupportRequests').where('candidateId','==',decoded.uid).limit(100).get();
       const items=snapshot.docs
-        .map(doc=>({...supportRequestPayload(doc),whatsappNumber}))
+        .map(doc=>supportRequestPayload(doc))
         .sort((a,b)=>supportCreatedMillis((b as Record<string,unknown>).createdAt)-supportCreatedMillis((a as Record<string,unknown>).createdAt));
       return res.status(200).json({ok:true,items});
     }
@@ -713,7 +737,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listSupportRequests') {
       let items:Record<string,unknown>[]=[];
       if(isAdmin(actor)){
-        const snapshot=await db.collection('learningSupportRequests').get();
+        const snapshot=await db.collection('learningSupportRequests').limit(300).get();
         const allowed:Record<string,unknown>[]=[];
         for(const doc of snapshot.docs){
           const data=doc.data()||{};
@@ -736,8 +760,7 @@ export default async function handler(req: Request, res: Response) {
       }else{
         throw new Error('Administrator or mentor access is required to view the support queue.');
       }
-      const whatsappNumber=await organizationWhatsApp(db,organizationId||String(actor.organizationId||''));
-      items=items.map(item=>({...item,whatsappNumber}))
+      items=items
         .sort((a,b)=>supportCreatedMillis(b.lastMessageAt||b.createdAt)-supportCreatedMillis(a.lastMessageAt||a.createdAt));
       return res.status(200).json({ok:true,items});
     }
@@ -747,8 +770,15 @@ export default async function handler(req: Request, res: Response) {
       const request=await db.doc(`learningSupportRequests/${requestId}`).get();
       if(!request.exists)return res.status(200).json({ok:true,items:[]});
       await assertSupportRequestAccess(db,decoded.uid,actor,request.data()||{});
-      const messages=await request.ref.collection('messages').orderBy('createdAt','asc').limit(300).get();
-      return res.status(200).json({ok:true,items:messages.docs.map(doc=>({
+      const messages=await request.ref.collection('messages').orderBy('createdAt','asc').limit(200).get();
+      const requestData=request.data()||{};
+      const whatsappTargets=await supportWhatsAppTargets(
+        db,
+        String(requestData.organizationId||''),
+        String(requestData.assignedMentorId||''),
+        requestData.target,
+      );
+      return res.status(200).json({ok:true,whatsappTargets,items:messages.docs.map(doc=>({
         id:doc.id,...doc.data(),createdAt:iso(doc.data()?.createdAt),
       }))});
     }
