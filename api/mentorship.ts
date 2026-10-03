@@ -514,18 +514,24 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'listAssignments') {
-      const snapshot = await db.collection('mentorAssignments').get();
-      const studentSnapshots = await Promise.all(snapshot.docs.map(doc => db.doc(`users/${String(doc.data()?.studentId || '')}`).get()));
-      const allowedStudents = new Map(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => [item.id, item.data() || {}]));
-      const items = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(item => {
-          const student = allowedStudents.get(String(item.studentId || ''));
+      const base=organizationId
+        ?db.collection('mentorAssignments').where('organizationId','==',organizationId).limit(500)
+        :db.collection('mentorAssignments').limit(500);
+      const snapshot=await base.get();
+      const studentIds=[...new Set(snapshot.docs.map(doc=>String(doc.data()?.studentId||'')).filter(Boolean))];
+      const studentSnapshots=await Promise.all(studentIds.map(studentId=>db.doc(`users/${studentId}`).get()));
+      const allowedStudents=new Map(studentSnapshots
+        .filter(item=>item.exists&&sameTenant(actor,item.data()||{},organizationId)&&sameScope(actor,item.data()||{}))
+        .map(item=>[item.id,item.data()||{}]));
+      const items=snapshot.docs
+        .map(doc=>({id:doc.id,...doc.data()}))
+        .filter(item=>{
+          const student=allowedStudents.get(String(item.studentId||''));
           return Boolean(student)
-            && String(item.organizationId || '') === String(student?.organizationId || '')
-            && String(item.organizationId || '') === organizationId;
+            &&String(item.organizationId||'')===String(student?.organizationId||'')
+            &&(!organizationId||String(item.organizationId||'')===organizationId);
         });
-      return res.status(200).json({ ok: true, items });
+      return res.status(200).json({ok:true,items});
     }
 
     if (action === 'assign') {
@@ -588,11 +594,17 @@ export default async function handler(req: Request, res: Response) {
       const requestedStudent = body.studentId ? id(body.studentId) : '';
       const requestedMentor = body.mentorId ? id(body.mentorId) : '';
       if (isAdmin(actor)) {
-        let snapshot = await db.collection('mentorConversations').get();
-        let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => !organizationId || String(item.organizationId || '') === organizationId);
-        const studentSnapshots = await Promise.all(items.map(item => db.doc(`users/${String(item.studentId || '')}`).get()));
-        const allowedStudentIds = new Set(studentSnapshots.filter(item => item.exists && sameTenant(actor, item.data() || {}, organizationId) && sameScope(actor, item.data() || {})).map(item => item.id));
-        items = items.filter(item => allowedStudentIds.has(String(item.studentId || '')));
+        const conversationQuery=organizationId
+          ?db.collection('mentorConversations').where('organizationId','==',organizationId).limit(300)
+          :db.collection('mentorConversations').limit(300);
+        const snapshot=await conversationQuery.get();
+        let items=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+        const studentIds=[...new Set(items.map(item=>String(item.studentId||'')).filter(Boolean))];
+        const studentSnapshots=await Promise.all(studentIds.map(studentId=>db.doc(`users/${studentId}`).get()));
+        const allowedStudentIds=new Set(studentSnapshots
+          .filter(item=>item.exists&&sameTenant(actor,item.data()||{},organizationId)&&sameScope(actor,item.data()||{}))
+          .map(item=>item.id));
+        items=items.filter(item=>allowedStudentIds.has(String(item.studentId||'')));
         if (requestedStudent) items = items.filter(item => String(item.studentId || '') === requestedStudent);
         if (requestedMentor) items = items.filter(item => String(item.mentorId || '') === requestedMentor);
         return res.status(200).json({ ok: true, items:items.map(item=>{
@@ -866,7 +878,10 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'listSupportRequests') {
       let items:Record<string,unknown>[]=[];
       if(isAdmin(actor)){
-        const snapshot=await db.collection('learningSupportRequests').limit(300).get();
+        const supportQuery=organizationId
+          ?db.collection('learningSupportRequests').where('organizationId','==',organizationId).limit(200)
+          :db.collection('learningSupportRequests').limit(300);
+        const snapshot=await supportQuery.get();
         const allowed:Record<string,unknown>[]=[];
         for(const doc of snapshot.docs){
           const data=doc.data()||{};
