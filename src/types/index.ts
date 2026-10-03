@@ -285,6 +285,7 @@ export interface Lesson {
   assessmentInstructions?: string;
   assessmentTimeLimitMinutes?: number;
   assessmentPassThreshold?: number;
+  assessmentMaxAttemptsMode?: 'inherit' | 'custom';
   assessmentMaxAttempts?: number;
   assessmentRetakeCooldownMinutes?: number;
   assessmentFeedbackMode?: 'score_only' | 'after_submit' | 'none';
