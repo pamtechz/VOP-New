@@ -18,6 +18,7 @@ export function notificationRoute(item:RoutableNotification):AppRoute{
   if(path.startsWith('/radio')||type==='radio')return 'radio';
   if(path.startsWith('/certificates')||type==='certificate')return 'certificates';
   if(path.startsWith('/personal-settings'))return 'personal-settings';
+  if(path.startsWith('/localization'))return 'localization';
   if(path.startsWith('/iron-duels')||source==='scripture-duel')return 'iron-duels';
   if(path.startsWith('/mentor'))return 'mentor';
   if(path.startsWith('/admin')||type==='user')return 'admin';
