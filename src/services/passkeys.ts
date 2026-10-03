@@ -25,7 +25,7 @@ async function api<T>(action:string,data:Record<string,unknown>={},authenticated
     if(!auth?.currentUser)throw new Error('Sign in before managing passkeys.');
     headers.Authorization='Bearer '+await auth.currentUser.getIdToken();
   }
-  const response=await fetch('/api/passkeys',{
+  const response=await fetch('/api/admin/passkeys',{
     method:'POST',headers,body:JSON.stringify({action,...data}),
   });
   const payload=await response.json().catch(()=>({})) as T&{error?:string};
