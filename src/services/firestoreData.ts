@@ -340,6 +340,16 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
     churchId: data.churchId,
     role: data.role,
     preferences: { uiLocale: String(data.preferences?.uiLocale ?? '').trim() || undefined, studyLanguage: String(data.preferences?.studyLanguage ?? '').trim() || undefined },
+    localizationAccess: data.localizationAccess && typeof data.localizationAccess === 'object'
+      ? {
+          status: ['invited','active','inactive','declined'].includes(String(data.localizationAccess.status||''))
+            ? data.localizationAccess.status : undefined,
+          roles: Array.isArray(data.localizationAccess.roles)
+            ? data.localizationAccess.roles.filter((role:unknown)=>role==='translator'||role==='reviewer') : [],
+          languages: Array.isArray(data.localizationAccess.languages)
+            ? data.localizationAccess.languages.map((value:unknown)=>String(value||'').trim().toLowerCase()).filter(Boolean) : [],
+        }
+      : undefined,
     organizationId: data.organizationId,
     organizationRole: data.organizationRole,
     adminNodeType: data.adminNodeType,
