@@ -144,7 +144,7 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
   assert.match(support,/I want to discuss baptism/);
   assert.match(mentor,/Candidate support queue/);
   assert.match(admin,/Candidate Support/);
-  assert.match(admin,/Continue on WhatsApp/);
+  assert.match(admin,/WhatsApp \{target\.label\}/);
   assert.match(sidebar,/Learning & spiritual support/);
   assert.match(drawer,/Learning & spiritual support/);
 
@@ -593,13 +593,14 @@ test('passkey sign-in is server-verified and keeps biometric data on the device'
   const signIn=read('src/pages/SignInPage.tsx');
   const settings=read('src/pages/PersonalSettingsPage.tsx');
   const client=read('src/services/passkeys.ts');
-  const api=read('api/passkeys.ts');
+  const api=read('api_handlers/admin/passkeys.ts');
   const server=read('server/passkeys.ts');
   const rules=read('firestore.rules');
 
-  assert.match(signIn,/Continue with passkey/);
+  assert.match(signIn,/<strong>Passkey<\/strong>/);
   assert.match(settings,/Enable passkey on this device/);
   assert.match(settings,/Biometric data remains on your device/);
+  assert.match(client,/fetch\('\/api\/admin\/passkeys'/);
   assert.match(client,/navigator\.credentials\.create/);
   assert.match(client,/navigator\.credentials\.get/);
   assert.match(client,/userVerification:'required'/);
