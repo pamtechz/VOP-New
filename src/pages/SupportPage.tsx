@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen, ChevronRight, ExternalLink, HeartHandshake, MessageCircle, Send, Tag, UserRound, X,
 } from 'lucide-react';
