@@ -7,6 +7,7 @@ import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getStoredSettings } from '../services/storage';
 import { consumeSupportContextPrefill } from '../services/supportContext';
+import ChatThread, { type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
 
 interface SupportPageProps {
   currentUser: User;
@@ -19,10 +20,10 @@ type WhatsAppTarget={kind:'mentor'|'organization';label:string;number:string};
 type SupportRequest={
   id:string;subject:string;message?:string;category:string;priority:string;target:string;channel:string;
   spiritualInterest?:string;campaignTag?:string;followUpStatus?:string;followUpScheduledAt?:string;
-  status:string;references?:SupportReference[];assignedMentorId?:string;
+  status:string;references?:SupportReference[];assignedMentorId?:string;unread?:boolean;
   createdAt?:string;lastMessageAt?:string;whatsappTargets?:WhatsAppTarget[];whatsappText?:string;
 };
-type SupportMessage={id:string;senderId:string;senderRole?:string;body:string;references?:SupportReference[];createdAt?:string};
+type SupportMessage=ChatMessage&{senderRole?:string};
 
 async function supportApi(action: string, data: Record<string, unknown> = {}) {
   if (!auth?.currentUser) throw new Error('Sign in to use learning support.');
@@ -79,8 +80,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [referenceLabel,setReferenceLabel]=useState('');
   const [whatsappHandoff,setWhatsappHandoff]=useState<Array<WhatsAppTarget&{text:string}>>([]);
 
-  const [conversation,setConversation]=useState<any|null>(null);
-  const [messages,setMessages]=useState<any[]>([]);
+  const [conversation,setConversation]=useState<{id:string;studentId:string;mentorId:string;mentorName?:string;unread?:boolean}|null>(null);
+  const [messages,setMessages]=useState<ChatMessage[]>([]);
   const [mentorMessage,setMentorMessage]=useState('');
 
   const [loading,setLoading]=useState(true);
@@ -124,7 +125,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       setConversation(next);
       if(next?.id){
         const thread=await supportApi('messages',{conversationId:next.id});
-        setMessages((thread.items||[]) as any[]);
+        setMessages((thread.items||[]) as ChatMessage[]);
+        setConversation({...next,unread:false} as {id:string;studentId:string;mentorId:string;mentorName?:string;unread?:boolean});
       }else setMessages([]);
       setError('');
     }catch(reason){
@@ -151,6 +153,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     try{
       const result=await supportApi('supportRequestMessages',{requestId:item.id});
       setRequestMessages((result.items||[]) as SupportMessage[]);
+      setSupportRequests(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
+      setActiveRequest(current=>current?{...current,unread:false}:current);
       const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
       const targets=result.whatsappTargets||item.whatsappTargets||[];
       setWhatsappHandoff(targets.map(target=>({...target,text})));
@@ -181,30 +185,68 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     finally{setSending(false);}
   };
 
-  const replyRequest=async()=>{
-    if(!activeRequest||!requestReply.trim())return;
+  const replyRequest=async(body:string,references:ChatReference[])=>{
+    if(!activeRequest||!body.trim())return;
     setSending(true);setError('');
     try{
-      const result=await supportApi('replySupportRequest',{requestId:activeRequest.id,message:requestReply.trim()});
+      const result=await supportApi('replySupportRequest',{requestId:activeRequest.id,message:body.trim(),references});
       setRequestMessages(current=>[...current,result.item as SupportMessage]);
-      setRequestReply('');
-      setActiveRequest(current=>current?{...current,status:'in_progress'}:current);
-      setRequests(current=>current.map(item=>item.id===activeRequest.id?{...item,status:'in_progress'}:item));
-    }catch(reason){setError(reason instanceof Error?reason.message:'Could not send your reply.');}
+      setActiveRequest(current=>current?{...current,status:'in_progress',unread:false}:current);
+      setRequests(current=>current.map(item=>item.id===activeRequest.id?{...item,status:'in_progress',unread:false}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not send your reply.');throw reason;}
+    finally{setSending(false);}
+  };
+  const editRequestMessage=async(message:ChatMessage,body:string,references:ChatReference[])=>{
+    if(!activeRequest)return;
+    setSending(true);setError('');
+    try{
+      const result=await supportApi('editSupportMessage',{requestId:activeRequest.id,messageId:message.id,message:body,references});
+      const next=result.item as SupportMessage;
+      setRequestMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not edit the message.');throw reason;}
+    finally{setSending(false);}
+  };
+  const deleteRequestMessage=async(message:ChatMessage)=>{
+    if(!activeRequest)return;
+    setSending(true);setError('');
+    try{
+      const result=await supportApi('deleteSupportMessage',{requestId:activeRequest.id,messageId:message.id});
+      const next=result.item as SupportMessage;
+      setRequestMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not delete the message.');throw reason;}
     finally{setSending(false);}
   };
 
-  const sendMentorMessage=async()=>{
-    const body=mentorMessage.trim();
-    if(!body||!conversation?.studentId||!conversation?.mentorId)return;
+  const sendMentorMessage=async(body:string,references:ChatReference[])=>{
+    if(!body.trim()||!conversation?.studentId||!conversation?.mentorId)return;
     setSending(true);setError('');
     try{
       const result=await supportApi('sendMessage',{
-        studentId:conversation.studentId,mentorId:conversation.mentorId,message:body,references:buildReferences(),
+        studentId:conversation.studentId,mentorId:conversation.mentorId,message:body.trim(),references,
       });
-      setMessages(current=>[...current,result.item]);
-      setMentorMessage('');
-    }catch(reason){setError(reason instanceof Error?reason.message:t('support.send_error','Could not send your message.'));}
+      setMessages(current=>[...current,result.item as ChatMessage]);
+      setConversation(current=>current?{...current,unread:false}:current);
+    }catch(reason){setError(reason instanceof Error?reason.message:t('support.send_error','Could not send your message.'));throw reason;}
+    finally{setSending(false);}
+  };
+  const editMentorMessage=async(message:ChatMessage,body:string,references:ChatReference[])=>{
+    if(!conversation)return;
+    setSending(true);setError('');
+    try{
+      const result=await supportApi('editMessage',{conversationId:conversation.id,messageId:message.id,message:body,references});
+      const next=result.item as ChatMessage;
+      setMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not edit the message.');throw reason;}
+    finally{setSending(false);}
+  };
+  const deleteMentorMessage=async(message:ChatMessage)=>{
+    if(!conversation)return;
+    setSending(true);setError('');
+    try{
+      const result=await supportApi('deleteMessage',{conversationId:conversation.id,messageId:message.id});
+      const next=result.item as ChatMessage;
+      setMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not delete the message.');throw reason;}
     finally{setSending(false);}
   };
 
@@ -215,6 +257,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
   const openCount=requests.filter(item=>!['resolved','closed'].includes(item.status)).length;
   const resolvedCount=requests.filter(item=>item.status==='resolved'||item.status==='closed').length;
+  const unreadRequestCount=requests.filter(item=>item.unread).length;
+  const unreadConversationCount=(conversation?.unread?1:0)+unreadRequestCount;
 
   return (
     <div className="vop-support-page">
@@ -229,6 +273,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
       {error&&<div className="vop-support-error">{error}<button type="button" onClick={()=>setError('')}><X size={16}/></button></div>}
       {notice&&<div className="vop-support-selected"><span>{notice}</span></div>}
+      {unreadConversationCount>0&&<div className="vop-support-selected" role="status">
+        <MessageCircle size={16}/><span>You have {unreadConversationCount} unread conversation{unreadConversationCount===1?'':'s'}.</span>
+      </div>}
       {whatsappHandoff.length>0&&<div className="vop-support-selected">
         <span>Your VOP request is saved. Continue on WhatsApp with the configured recipient if you prefer.</span>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -296,7 +343,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             {loading?<div className="vop-support-empty-inline">Loading your support requests…</div>:requests.length===0
               ?<div className="vop-support-empty-inline">No support requests yet. Ask whenever a lesson, doctrine or Bible topic is unclear.</div>
               :requests.map(item=><article key={item.id} className={activeRequest?.id===item.id?'mine':'theirs'} style={{cursor:'pointer'}} onClick={()=>void openRequest(item)}>
-                <strong>{item.subject||labelForCategory(item.category)}</strong>
+                <strong>{item.subject||labelForCategory(item.category)}{item.unread?' · New':''}</strong>
                 <p>{labelForCategory(item.category)} · {item.target.replace('_',' ')} · {item.channel.replace('_',' ')}</p>
                 {item.spiritualInterest&&item.spiritualInterest!=='none'&&<span className="vop-support-ref"><HeartHandshake size={13}/>{labelForInterest(item.spiritualInterest)} · {String(item.followUpStatus||'new').replaceAll('_',' ')}</span>}
                 {item.followUpScheduledAt&&<span className="vop-support-ref"><HeartHandshake size={13}/>Follow-up: {new Date(item.followUpScheduledAt).toLocaleString()}</span>}
@@ -307,17 +354,10 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
           {activeRequest&&<div className="vop-support-compose" style={{marginTop:14}}>
             <div className="vop-support-reference"><MessageCircle size={14}/><span>{activeRequest.subject} · {activeRequest.status.replace('_',' ')}{activeRequest.spiritualInterest&&activeRequest.spiritualInterest!=='none'?' · follow-up '+String(activeRequest.followUpStatus||'new').replaceAll('_',' '):''}</span><button type="button" onClick={()=>{setActiveRequest(null);setRequestMessages([])}}><X size={14}/></button></div>
-            <div className="vop-support-messages">
-              {requestMessages.map(item=><article key={item.id} className={item.senderId===currentUser.uid?'mine':'theirs'}>
-                <p>{item.body}</p>
-                {(item.references||[]).map(ref=><span key={ref.type+ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}
-                <time>{item.createdAt?new Date(item.createdAt).toLocaleString():''}</time>
-              </article>)}
-            </div>
-            <textarea value={requestReply} maxLength={10000} onChange={e=>setRequestReply(e.target.value)}
-              placeholder="Continue this support conversation…"
-              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void replyRequest()}}}/>
-            <button type="button" disabled={sending||!requestReply.trim()} onClick={()=>void replyRequest()}><Send size={17}/>Reply</button>
+            <ChatThread currentUserId={currentUser.uid} messages={requestMessages} draft={requestReply} onDraftChange={setRequestReply}
+              guides={guides} busy={sending} placeholder="Continue this support conversation…"
+              emptyText="No replies yet." sendLabel="Reply"
+              onSend={replyRequest} onEdit={editRequestMessage} onDelete={deleteRequestMessage}/>
           </div>}
         </section>
 
@@ -344,11 +384,9 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
           <div className="vop-support-panel-title"><UserRound size={19}/><strong>Direct mentor conversation</strong></div>
           {!conversation?<p>No mentor is currently assigned. You can still use Organization support team above.</p>:<>
             <p>{conversation.mentorName||'Your mentor'} · private assigned-mentor channel.</p>
-            <div className="vop-support-messages" style={{maxHeight:260,overflow:'auto'}}>
-              {messages.map(item=><article key={item.id} className={item.senderId===currentUser.uid?'mine':'theirs'}><p>{item.body}</p></article>)}
-            </div>
-            <textarea value={mentorMessage} onChange={e=>setMentorMessage(e.target.value)} placeholder="Quick message to your mentor…"/>
-            <button type="button" disabled={sending||!mentorMessage.trim()} onClick={()=>void sendMentorMessage()}><Send size={16}/>Message mentor</button>
+            <ChatThread currentUserId={currentUser.uid} messages={messages} draft={mentorMessage} onDraftChange={setMentorMessage}
+              guides={guides} busy={sending} placeholder="Quick message to your mentor…" emptyText="No direct messages yet."
+              sendLabel="Send" onSend={sendMentorMessage} onEdit={editMentorMessage} onDelete={deleteMentorMessage}/>
           </>}
         </aside>
       </div>
