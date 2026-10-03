@@ -16,6 +16,7 @@ type ManagedUser = {
   displayName: string;
   email: string;
   phoneNumber?: string;
+  whatsappNumber?: string;
   photoURL?: string;
   role: string;
   roleLabel: string;
@@ -47,6 +48,7 @@ type EditorState = {
   displayName: string;
   email: string;
   phoneNumber: string;
+  whatsappNumber: string;
   userType: ManagedUser['userType'];
   assignmentMode: 'platform'|'organization'|'hierarchy';
   organizationId: string;
@@ -86,7 +88,7 @@ function roleLabel(type: ManagedUser['userType']) {
 }
 
 function emptyEditor(): EditorState {
-  return { displayName:'',email:'',phoneNumber:'',userType:'learner',assignmentMode:'organization',
+  return { displayName:'',email:'',phoneNumber:'',whatsappNumber:'',userType:'learner',assignmentMode:'organization',
     organizationId:'',adminNodeType:'',adminNodeId:'',password:'' };
 }
 
@@ -236,6 +238,7 @@ export default function UserManagement({ onBack, scope }: Props) {
       displayName: user.displayName,
       email: user.email,
       phoneNumber: user.phoneNumber || '',
+      whatsappNumber: user.whatsappNumber || '',
       userType: user.userType,
       assignmentMode:user.role==='super_admin'?'platform':user.adminNodeType&&user.adminNodeId?'hierarchy':'organization',
       organizationId: user.organizationId || '',
@@ -271,6 +274,7 @@ export default function UserManagement({ onBack, scope }: Props) {
         displayName: editor.displayName.trim(),
         email: editor.email.trim(),
         phoneNumber: editor.phoneNumber.trim(),
+        whatsappNumber: editor.whatsappNumber.trim(),
         userType: editor.userType,
         assignmentMode:editor.userType==='super_admin'?'platform':editor.assignmentMode,
         ...(editor.assignmentMode==='organization' ? { organizationId: editor.organizationId } : {}),
@@ -496,6 +500,7 @@ export default function UserManagement({ onBack, scope }: Props) {
           <div className="vop-user-profile-summary"><Avatar user={selected} large/><div><h3>{selected.displayName}</h3><span>{selected.email}</span><div className="vop-user-modal-pills"><span className={'vop-user-role-pill ' + selected.roleColor}>{selected.roleLabel}</span><span className={'vop-user-status ' + (selected.disabled ? 'inactive' : 'active')}>{selected.disabled ? 'Inactive' : 'Active'}</span></div></div></div>
           <div className="vop-user-detail-grid">
             <div><small>User ID</small><strong>{selected.userCode}</strong></div><div><small>Last Login</small><strong>{formatLastLogin(selected.lastLogin)}</strong></div>
+            <div><small>WhatsApp</small><strong>{selected.whatsappNumber || selected.phoneNumber || 'Not configured'}</strong></div>
             <div><small>Organization</small><strong>{selected.organizationName || 'Not assigned'}</strong></div><div><small>Conference</small><strong>{selected.conferenceName || 'Not assigned'}</strong></div><div><small>District</small><strong>{selected.districtName || 'Not assigned'}</strong></div>
             <div><small>Union</small><strong>{selected.unionName || 'Not assigned'}</strong></div><div><small>Email Verified</small><strong>{selected.emailVerified ? 'Verified' : 'Not verified'}</strong></div>
           </div>
@@ -511,6 +516,7 @@ export default function UserManagement({ onBack, scope }: Props) {
             <label><span>{t('common.full_name','Full Name')} *</span><input value={editor.displayName} onChange={e => setEditor({...editor,displayName:e.target.value})}/></label>
             <label><span>{t('common.email','Email')} *</span><input type="email" value={editor.email} onChange={e => setEditor({...editor,email:e.target.value})}/></label>
             <label><span>{t('common.phone','Phone')}</span><input value={editor.phoneNumber} onChange={e => setEditor({...editor,phoneNumber:e.target.value})}/></label>
+            <label><span>WhatsApp number</span><input value={editor.whatsappNumber} onChange={e => setEditor({...editor,whatsappNumber:e.target.value})} placeholder="+260…"/><small>Used only when this user is a configured mentor/support contact.</small></label>
             <label><span>{t('common.role','Role')}</span><select value={editor.userType} onChange={e => {
               const userType=e.target.value as EditorState['userType'];
               setEditor({...editor,userType,assignmentMode:userType==='super_admin'?'platform':userType==='admin'?(editor.assignmentMode==='platform'?'organization':editor.assignmentMode):'organization',adminNodeType:userType==='admin'?editor.adminNodeType:'',adminNodeId:userType==='admin'?editor.adminNodeId:''});
