@@ -232,6 +232,21 @@ test('organization plan limits are consolidated into the subscription entitlemen
   assert.match(core,/cancelled=data\.cancelAtPeriodEnd===true/);
 });
 
+test('organization certification stays visible and degrades to a locked workspace instead of disappearing',()=>{
+  const admin=read('src/pages/AdminPage.tsx');
+  const certification=read('src/pages/CertificationManager.tsx');
+
+  assert.match(admin,/item\.id!=='certification'&&organizationAdmin&&subscriptionFeature&&subscriptionFeatures/);
+  assert.match(admin,/else if\(item\.id==='certification'\)\{[\s\S]*coreTenantAdmin\|\|canSee\(item\.id\)/);
+  assert.match(admin,/featureAvailable=\{isSuperAdmin\|\|subscriptionFeatures===null/);
+  assert.match(admin,/onOpenBilling=\{\(\)=>navigateAdminTab\('payments'\)\}/);
+
+  assert.match(certification,/Certification is not included in the current subscription/);
+  assert.match(certification,/You can still review existing certification records/);
+  assert.match(certification,/disabled=\{!featureAvailable\|\|decidingRequestId === request\.id\}/);
+  assert.match(certification,/item\.status==='Certified'&&featureAvailable/);
+});
+
 test('subscription capabilities are enforced server-side and reflected in institutional admin navigation',()=>{
   const permissions=read('server/permissions.ts');
   const admin=read('src/pages/AdminPage.tsx');

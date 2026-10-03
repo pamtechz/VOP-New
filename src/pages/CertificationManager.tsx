@@ -87,6 +87,8 @@ interface Props {
   ) => Promise<{ items?: unknown[]; item?: unknown }>;
   showMessage: (message: string) => void;
   isSuperAdmin?: boolean;
+  featureAvailable?: boolean;
+  onOpenBilling?: () => void;
 }
 
 function toDate(value: unknown): Date | null {
@@ -128,7 +130,7 @@ const EmptyAvatar = () => (
 );
 
 export const CertificationManager: React.FC<Props> = ({
-  settings, adminContent, showMessage, isSuperAdmin = false,
+  settings, adminContent, showMessage, isSuperAdmin = false, featureAvailable = true, onOpenBilling,
 }) => {
   const t = (key: string, fallback: string) => getTranslation(key, fallback);
   const [view, setView] = useState<'list' | 'preview' | 'config'>('list');
@@ -252,6 +254,10 @@ export const CertificationManager: React.FC<Props> = ({
   };
 
   const decideGraduation = async (request: GraduationCandidate, decision: 'approve' | 'reject') => {
+    if (!featureAvailable) {
+      showMessage('Certification is not included in the current subscription. Open Billing & Subscriptions to change the plan.');
+      return;
+    }
     if (!auth?.currentUser || decidingRequestId) return;
     const revision = Number((request as GraduationCandidate & { revision?: number }).revision);
     if (!Number.isInteger(revision) || revision < 1) {
@@ -278,6 +284,10 @@ export const CertificationManager: React.FC<Props> = ({
   };
 
   const changeCertificateLifecycle = async (certificate:CertificateRecord, action:'revoke'|'replace') => {
+    if(!featureAvailable){
+      showMessage('Certification is not included in the current subscription. Open Billing & Subscriptions to change the plan.');
+      return;
+    }
     if(!auth?.currentUser||certificate.status!=='Certified')return;
     const reason=await appPrompt(action==='revoke'
       ?'Why is this certificate being revoked? This will be recorded in the audit history.'
@@ -428,6 +438,13 @@ export const CertificationManager: React.FC<Props> = ({
           <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />{t('admin.export_pdf','Export List (PDF)')}</button>
         </div>
       </div>
+      {!featureAvailable && (
+        <div className="vop-alert warning vop-cert-subscription-notice" role="status">
+          <Info size={20}/>
+          <div><strong>Certification is not included in the current subscription.</strong><span>You can still review existing certification records. Approval, issuance, replacement and revocation remain locked until the institution uses a plan with Certification.</span></div>
+          {onOpenBilling && <button className="vop-cert-secondary-button" type="button" onClick={onOpenBilling}>View plans</button>}
+        </div>
+      )}
       <div className="vop-cert-title-row">
         <div className="vop-cert-title-icon purple"><Award size={32} /></div>
         <div><h2>{t('admin.certified_candidates','Certified Candidates')}</h2><p>View and manage candidates who have successfully completed VOP courses.</p></div>
@@ -445,8 +462,8 @@ export const CertificationManager: React.FC<Props> = ({
                   <div className="vop-cert-issuer-avatar"><Users size={18} /></div>
                   <div><strong>{request.candidateName || 'Unnamed candidate'}</strong><span>{request.guideTitle || 'Guide not recorded'} · Stage: {workflow.workflowStageId || request.status || 'pending'}</span></div>
                   <div style={{display:'flex',gap:8}}>
-                    <button className="vop-cert-primary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'approve')}>{decidingRequestId === request.id ? 'Saving…' : 'Approve'}</button>
-                    <button className="vop-cert-secondary-button" type="button" disabled={decidingRequestId === request.id} onClick={() => void decideGraduation(request,'reject')}>{t('common.reject','Reject')}</button>
+                    <button className="vop-cert-primary-button" type="button" disabled={!featureAvailable||decidingRequestId === request.id} onClick={() => void decideGraduation(request,'approve')}>{decidingRequestId === request.id ? 'Saving…' : 'Approve'}</button>
+                    <button className="vop-cert-secondary-button" type="button" disabled={!featureAvailable||decidingRequestId === request.id} onClick={() => void decideGraduation(request,'reject')}>{t('common.reject','Reject')}</button>
                   </div>
                 </div>
               );
@@ -480,7 +497,7 @@ export const CertificationManager: React.FC<Props> = ({
                   <td><strong>{item.courseName}</strong>{item.certificateTypeName && <span>{item.certificateTypeName} · {item.documentType || 'course'}</span>}</td><td>{item.certificateNumber}</td><td>{dateText(item.completionDate)}</td>
                   <td><strong>{item.churchName || '—'}</strong><span>{item.districtName || ''}</span></td>
                   <td><span className="vop-cert-status">{item.status}</span></td>
-                  <td><div className="vop-cert-row-actions"><button type="button" onClick={() => openPreview(item)} aria-label="View"><Eye size={17} /></button><button type="button" onClick={() => openPreview(item)} aria-label="Download"><Download size={17} /></button><button type="button" onClick={() => setMenuId(menuId === item.id ? null : item.id)} aria-label="More"><MoreVertical size={17} /></button>{menuId === item.id && <div className="vop-cert-row-menu"><button type="button" onClick={() => openPreview(item)}>Open certificate</button>{item.status==='Certified'&&<><button type="button" onClick={() => void changeCertificateLifecycle(item,'replace')}>Replace certificate</button><button type="button" onClick={() => void changeCertificateLifecycle(item,'revoke')}>Revoke certificate</button></>}</div>}</div></td>
+                  <td><div className="vop-cert-row-actions"><button type="button" onClick={() => openPreview(item)} aria-label="View"><Eye size={17} /></button><button type="button" onClick={() => openPreview(item)} aria-label="Download"><Download size={17} /></button><button type="button" onClick={() => setMenuId(menuId === item.id ? null : item.id)} aria-label="More"><MoreVertical size={17} /></button>{menuId === item.id && <div className="vop-cert-row-menu"><button type="button" onClick={() => openPreview(item)}>Open certificate</button>{item.status==='Certified'&&featureAvailable&&<><button type="button" onClick={() => void changeCertificateLifecycle(item,'replace')}>Replace certificate</button><button type="button" onClick={() => void changeCertificateLifecycle(item,'revoke')}>Revoke certificate</button></>}</div>}</div></td>
                 </tr>
               ))}</tbody>
             </table>
