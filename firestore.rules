@@ -829,6 +829,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Passkey public credentials are authentication material. They are managed
+    // only by the authenticated server endpoint; browser clients never read,
+    // enumerate, create, update or delete them directly.
+    match /passkeyCredentials/{credentialId} {
+      allow read, write: if false;
+    }
+
     // Financial records are server-authoritative. Browser clients must use
     // authenticated payment APIs; no client may forge price, status, receipts,
     // provider events, reconciliation or entitlements.
