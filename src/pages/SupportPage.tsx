@@ -122,9 +122,12 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         const refreshed=supportRows.find(item=>item.id===activeRequest.id)||null;
         setActiveRequest(refreshed);
       }
-      const next=((mentorResult.items||[])[0]||null) as {id?:string;studentId?:string;mentorId?:string;mentorName?:string}|null;
+      const rawConversation=((mentorResult.items||[])[0]||null) as {id?:string;studentId?:string;mentorId?:string;mentorName?:string;unread?:boolean}|null;
+      const next=rawConversation?.id&&rawConversation.studentId&&rawConversation.mentorId
+        ?{id:rawConversation.id,studentId:rawConversation.studentId,mentorId:rawConversation.mentorId,mentorName:rawConversation.mentorName,unread:rawConversation.unread}
+        :null;
       setConversation(next);
-      if(next?.id){
+      if(next){
         const thread=await supportApi('messages',{conversationId:next.id});
         setMessages((thread.items||[]) as ChatMessage[]);
         setConversation({...next,unread:false} as {id:string;studentId:string;mentorId:string;mentorName?:string;unread?:boolean});
@@ -155,7 +158,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     try{
       const result=await supportApi('supportRequestMessages',{requestId:item.id});
       setRequestMessages((result.items||[]) as SupportMessage[]);
-      setSupportRequests(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
+      setRequests(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
       setActiveRequest(current=>current?{...current,unread:false}:current);
       const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
       const targets=result.whatsappTargets||item.whatsappTargets||[];
