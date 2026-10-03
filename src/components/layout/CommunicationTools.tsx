@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Bell,Check,ExternalLink,Search,Trash2,X} from 'lucide-react';
+import {Bell,Check,ExternalLink,MessageCircle,Search,Trash2,X} from 'lucide-react';
 import {auth} from '../../lib/firebase';
 import type {AppRoute} from '../../types';
 import {notificationRoute,prepareNotificationNavigation} from '../../services/notificationRouting';
@@ -15,10 +15,13 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
   const [notificationsOpen,setNotificationsOpen]=useState(false);
   const [notifications,setNotifications]=useState<NotificationItem[]>([]);
   const [notificationBusy,setNotificationBusy]=useState(false);
+  const [notificationUnread,setNotificationUnread]=useState(0);
+  const [communicationSummary,setCommunicationSummary]=useState<{total:number;conversations:number;supportRequests:number;route:AppRoute}>({total:0,conversations:0,supportRequests:0,route:'notifications'});
   const [toast,setToast]=useState<NotificationItem|null>(null);
   const searchRef=useRef<HTMLDivElement|null>(null);
   const notificationRef=useRef<HTMLDivElement|null>(null);
   const seenNotifications=useRef<Set<string>|null>(null);
+  const notificationUnreadRef=useRef(0);
 
   const token=async()=>auth?.currentUser?.getIdToken();
   const loadNotifications=async(silent=false)=>{
@@ -26,7 +29,7 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
     if(!silent)setNotificationBusy(true);
     try{
       const response=await fetch('/api/admin/notifications?action=list',{headers:{Authorization:'Bearer '+idToken}});
-      const body=await response.json().catch(()=>({})) as {items?:NotificationItem[]};
+      const body=await response.json().catch(()=>({})) as {items?:NotificationItem[];unread?:number};
       const next=response.ok&&Array.isArray(body.items)?body.items:[];
       const previous=seenNotifications.current;
       if(previous){
@@ -34,8 +37,42 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
         if(incoming)setToast(incoming);
       }
       seenNotifications.current=new Set(next.map(item=>item.id));
+      const unread=Number.isFinite(Number(body.unread))?Math.max(0,Number(body.unread)):next.filter(item=>item.read!==true).length;
+      notificationUnreadRef.current=unread;
+      setNotificationUnread(unread);
       setNotifications(next);
     }finally{if(!silent)setNotificationBusy(false);}
+  };
+  const loadNotificationSummary=async()=>{
+    const idToken=await token();if(!idToken)return;
+    try{
+      const response=await fetch('/api/admin/notifications?action=summary',{headers:{Authorization:'Bearer '+idToken}});
+      const body=await response.json().catch(()=>({})) as {unread?:number};
+      if(!response.ok)return;
+      const next=Math.max(0,Number(body.unread||0));
+      const previous=notificationUnreadRef.current;
+      notificationUnreadRef.current=next;
+      setNotificationUnread(next);
+      if(next>previous)void loadNotifications(true);
+    }catch{/* Summary refresh is non-blocking. */}
+  };
+  const loadCommunicationSummary=async()=>{
+    const idToken=await token();if(!idToken)return;
+    try{
+      const response=await fetch('/api/mentorship',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},
+        body:JSON.stringify({action:'unreadSummary'}),
+      });
+      const body=await response.json().catch(()=>({})) as {item?:{total?:number;conversations?:number;supportRequests?:number;route?:AppRoute}};
+      if(!response.ok||!body.item)return;
+      setCommunicationSummary({
+        total:Math.max(0,Number(body.item.total||0)),
+        conversations:Math.max(0,Number(body.item.conversations||0)),
+        supportRequests:Math.max(0,Number(body.item.supportRequests||0)),
+        route:body.item.route||'notifications',
+      });
+    }catch{/* Communication banner will retry on the next foreground refresh. */}
   };
 
   useEffect(()=>{
@@ -55,13 +92,21 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
   },[query,searchOpen]);
 
   useEffect(()=>{
-    void loadNotifications();
-    const timer=window.setInterval(()=>void loadNotifications(true),15000);
-    const refresh=()=>void loadNotifications(true);
+    const refresh=()=>{void loadNotificationSummary();void loadCommunicationSummary();};
+    refresh();
+    const timer=window.setInterval(refresh,60000);
     const visible=()=>{if(document.visibilityState==='visible')refresh();};
     window.addEventListener('focus',refresh);
+    window.addEventListener('vop_communication_changed',refresh);
+    window.addEventListener('vop_notifications_changed',refresh);
     document.addEventListener('visibilitychange',visible);
-    return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',visible);};
+    return()=>{
+      window.clearInterval(timer);
+      window.removeEventListener('focus',refresh);
+      window.removeEventListener('vop_communication_changed',refresh);
+      window.removeEventListener('vop_notifications_changed',refresh);
+      document.removeEventListener('visibilitychange',visible);
+    };
   },[]);
   useEffect(()=>{if(notificationsOpen)void loadNotifications();},[notificationsOpen]);
   useEffect(()=>{
@@ -79,26 +124,39 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
     const idToken=await token();if(!idToken)return;
     if(!item.read){
       const response=await fetch('/api/admin/notifications',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action:'markRead',notificationId:item.id})});
-      if(response.ok)setNotifications(items=>items.map(entry=>entry.id===item.id?{...entry,read:true}:entry));
+      if(response.ok){
+        setNotifications(items=>items.map(entry=>entry.id===item.id?{...entry,read:true}:entry));
+        notificationUnreadRef.current=Math.max(0,notificationUnreadRef.current-1);
+        setNotificationUnread(notificationUnreadRef.current);
+      }
     }
     if(navigate&&onNavigate){setNotificationsOpen(false);setToast(null);prepareNotificationNavigation(item);onNavigate(notificationRoute(item));}
   };
   const deleteOne=async(item:NotificationItem)=>{
     const idToken=await token();if(!idToken)return;
     const response=await fetch('/api/admin/notifications',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action:'delete',notificationId:item.id})});
-    if(response.ok)setNotifications(items=>items.filter(entry=>entry.id!==item.id));
+    if(response.ok){
+      setNotifications(items=>items.filter(entry=>entry.id!==item.id));
+      if(item.read!==true){
+        notificationUnreadRef.current=Math.max(0,notificationUnreadRef.current-1);
+        setNotificationUnread(notificationUnreadRef.current);
+      }
+    }
   };
   const markAll=async()=>{
     const idToken=await token();if(!idToken)return;
     const response=await fetch('/api/admin/notifications',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action:'markAllRead'})});
-    if(response.ok)setNotifications(items=>items.map(item=>({...item,read:true})));
+    if(response.ok){
+      setNotifications(items=>items.map(item=>({...item,read:true})));
+      notificationUnreadRef.current=0;setNotificationUnread(0);
+    }
   };
   const clearAll=async()=>{
     const idToken=await token();if(!idToken)return;
     const response=await fetch('/api/admin/notifications',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+idToken},body:JSON.stringify({action:'clearAll'})});
-    if(response.ok){setNotifications([]);seenNotifications.current=new Set();}
+    if(response.ok){setNotifications([]);seenNotifications.current=new Set();notificationUnreadRef.current=0;setNotificationUnread(0);}
   };
-  const unread=notifications.filter(item=>item.read!==true).length;
+  const unread=notificationUnread;
 
   return <>
     <div ref={searchRef} style={{position:'relative'}}>
@@ -138,6 +196,15 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
         </div>
       </div>}
     </div>
+
+    {communicationSummary.total>0&&<div className="vop-communication-banner" role="status">
+      <span className="vop-header-notification-icon"><MessageCircle size={16}/></span>
+      <span>
+        <strong>{communicationSummary.total} unread conversation{communicationSummary.total===1?'':'s'}</strong>
+        <small>{communicationSummary.supportRequests>0&&`${communicationSummary.supportRequests} support request${communicationSummary.supportRequests===1?'':'s'}`}{communicationSummary.supportRequests>0&&communicationSummary.conversations>0?' · ':''}{communicationSummary.conversations>0&&`${communicationSummary.conversations} mentor chat${communicationSummary.conversations===1?'':'s'}`}</small>
+      </span>
+      <button type="button" onClick={()=>onNavigate?.(communicationSummary.route)}>{t('common.open','Open')}</button>
+    </div>}
 
     {toast&&<div className="vop-notification-toast" role="status">
       <span className="vop-header-notification-icon"><Bell size={15}/></span>
