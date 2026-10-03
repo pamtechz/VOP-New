@@ -379,7 +379,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       subscribeChurches(setChurches, err => setError(err.message)),
       subscribeAnnouncements(setAnnouncements, err => setError(err.message)),
     ];
-    void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
+    void loadFirestoreGuides(undefined,currentUser).then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
     void loadDrafts();
     if (currentUser.role === 'super_admin') void loadCertification();
     if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) void loadPermissionMatrix();
