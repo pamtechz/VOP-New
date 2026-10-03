@@ -693,7 +693,7 @@ test('notification actions preserve exact admin destinations',()=>{
   assert.match(routing,/vop_notification_admin_target/);
   assert.match(routing,/localization:'translations'/);
   assert.match(routing,/graduations:'certification'/);
-  assert.match(routing,/\/admin\/\(\[A-Za-z-\]\+\)/);
+  assert.match(routing,/mentorship/);
   assert.match(routing,/adminTargets/);
   assert.match(admin,/consumeNotificationAdminTarget/);
   assert.match(admin,/validAdminTab\(target\)/);
