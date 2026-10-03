@@ -1345,7 +1345,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         )}
         {activeTab==='prayer'&&<PrayerManagementPanel />}
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
-        {activeTab==='mentorship'&&<MentorshipInsights />}
+        {activeTab==='mentorship'&&<MentorshipInsights guides={guides} />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>navigateAdminTab('payments')} onOpenCandidates={()=>navigateAdminTab('candidates')} />}
         {activeTab==='payments'&&<PaymentManagement currentUser={currentUser} onOpenCheckout={planId=>{
           try{
