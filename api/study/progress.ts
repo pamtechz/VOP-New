@@ -6,6 +6,8 @@ import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../..
 import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
 
+const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
+
 function admin() {
   if (getApps().length) return getApps()[0];
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
@@ -464,9 +466,17 @@ export default async function handler(
           }
         }
 
-        const priorAttempts=currentPolicy.exists
+        // Version 2 makes the policy document authoritative only after it has
+        // been written by the session-based attempt lifecycle. Older policy
+        // documents may contain counters left by pre-session implementations or
+        // interrupted starts. Reconcile those once from immutable submitted
+        // attempt records instead of permanently locking a learner out.
+        const storedPolicyVersion=Math.max(0,Math.trunc(Number(policyData.policyVersion)||0));
+        const legacyPolicy=currentPolicy.exists&&storedPolicyVersion<ASSESSMENT_ATTEMPT_POLICY_VERSION;
+        const priorAttempts=currentPolicy.exists&&!legacyPolicy
           ?Math.max(0,Number(policyData.attemptCount||0)):relevant.length;
-        const lastAttemptMs=currentPolicy.exists?timestampMs(policyData.lastAttemptAt):historicalLastAttemptMs;
+        const lastAttemptMs=currentPolicy.exists&&!legacyPolicy
+          ?timestampMs(policyData.lastAttemptAt):historicalLastAttemptMs;
         if(policy.maxAttempts>0&&priorAttempts>=policy.maxAttempts){
           throw new Error(`Assessment attempt limit reached (${policy.maxAttempts} attempt${policy.maxAttempts===1?'':'s'}).`);
         }
@@ -537,8 +547,10 @@ export default async function handler(
         };
         transaction.set(policyRef,{
           organizationId:policyOrganizationId,language,guideId:effectiveGuideId,lessonId,
+          policyVersion:ASSESSMENT_ATTEMPT_POLICY_VERSION,
           attemptCount:attemptNumber,lastAttemptAt:startedAtIso,activeSessionId:newSessionId,
           activeSessionStartedAt:startedAtIso,activeSessionResumeUntil:new Date(resumeUntil).toISOString(),
+          ...(legacyPolicy?{legacyCounterReconciledAt:FieldValue.serverTimestamp()} : {}),
           updatedAt:FieldValue.serverTimestamp(),
         },{merge:true});
         transaction.set(newSessionRef,{
@@ -953,6 +965,7 @@ export default async function handler(
         updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
       transaction.set(policyRef,{
+        policyVersion:ASSESSMENT_ATTEMPT_POLICY_VERSION,
         activeSessionId:null,activeSessionStartedAt:null,activeSessionResumeUntil:null,
         lastSubmittedAt:attemptTimeIso,lastCompletedAttemptNumber:attemptsUsed,
         updatedAt:FieldValue.serverTimestamp(),
