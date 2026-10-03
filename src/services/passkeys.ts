@@ -49,10 +49,7 @@ export async function listPasskeys(){
   return result.items||[];
 }
 
-type AttestationResponseWithKey=AuthenticatorAttestationResponse&{
-  getPublicKey?:()=>ArrayBuffer|null;
-  getPublicKeyAlgorithm?:()=>number;
-  getAuthenticatorData?:()=>ArrayBuffer;
+type AttestationResponseWithTransports=AuthenticatorAttestationResponse&{
   getTransports?:()=>string[];
 };
 
@@ -71,20 +68,12 @@ export async function registerPasskey(label='This device'){
     },
   }) as PublicKeyCredential|null;
   if(!credential)throw new Error('Passkey creation was cancelled.');
-  const response=credential.response as AttestationResponseWithKey;
-  const publicKey=response.getPublicKey?.();
-  const authenticatorData=response.getAuthenticatorData?.();
-  const algorithm=response.getPublicKeyAlgorithm?.();
-  if(!publicKey||!authenticatorData||!Number.isFinite(Number(algorithm))){
-    throw new Error('This browser cannot export the passkey public key required by VOP. Update the browser or use another supported device.');
-  }
+  const response=credential.response as AttestationResponseWithTransports;
   await api('finishRegistration',{
     challengeToken:begin.challengeToken,
     credentialId:credential.id,
     clientDataJSON:encode(response.clientDataJSON),
-    authenticatorData:encode(authenticatorData),
-    publicKeyDer:encode(publicKey),
-    algorithm:Number(algorithm),
+    attestationObject:encode(response.attestationObject),
     transports:response.getTransports?.()||[],
     label,
   },true);
