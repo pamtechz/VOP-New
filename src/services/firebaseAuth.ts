@@ -33,9 +33,11 @@ export const resetPassword = (email: string) =>
 
 /** Android uses native account selection; web uses Firebase's popup flow.
  *
- * The web app deliberately keeps the auth observer mounted while the popup is
- * open. The same-origin-allow-popups header is configured in both Vite and
- * Vercel so the OAuth window can communicate back without a full-page redirect.
+ * Do not force Cross-Origin-Opener-Policy on the user-facing app. Firebase's
+ * popup resolver polls and closes its OAuth window; explicit COOP headers can
+ * trigger Chromium window.closed/window.close warnings or break that lifecycle.
+ * The normal browser default is sufficient because VOP does not require
+ * cross-origin isolation.
  */
 export async function googleSignIn() {
   const firebaseAuth = requireAuth();
