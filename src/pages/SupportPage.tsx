@@ -17,7 +17,8 @@ interface SupportPageProps {
 type SupportReference={type:string;id:string;label:string};
 type SupportRequest={
   id:string;subject:string;message?:string;category:string;priority:string;target:string;channel:string;
-  spiritualInterest?:string;status:string;references?:SupportReference[];assignedMentorId?:string;
+  spiritualInterest?:string;campaignTag?:string;followUpStatus?:string;followUpScheduledAt?:string;
+  status:string;references?:SupportReference[];assignedMentorId?:string;
   createdAt?:string;lastMessageAt?:string;whatsappNumber?:string;whatsappText?:string;
 };
 type SupportMessage={id:string;senderId:string;senderRole?:string;body:string;references?:SupportReference[];createdAt?:string};
@@ -288,14 +289,15 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
               :requests.map(item=><article key={item.id} className={activeRequest?.id===item.id?'mine':'theirs'} style={{cursor:'pointer'}} onClick={()=>void openRequest(item)}>
                 <strong>{item.subject||labelForCategory(item.category)}</strong>
                 <p>{labelForCategory(item.category)} · {item.target.replace('_',' ')} · {item.channel.replace('_',' ')}</p>
-                {item.spiritualInterest&&item.spiritualInterest!=='none'&&<span className="vop-support-ref"><HeartHandshake size={13}/>{labelForInterest(item.spiritualInterest)}</span>}
+                {item.spiritualInterest&&item.spiritualInterest!=='none'&&<span className="vop-support-ref"><HeartHandshake size={13}/>{labelForInterest(item.spiritualInterest)} · {String(item.followUpStatus||'new').replaceAll('_',' ')}</span>}
+                {item.followUpScheduledAt&&<span className="vop-support-ref"><HeartHandshake size={13}/>Follow-up: {new Date(item.followUpScheduledAt).toLocaleString()}</span>}
                 {(item.references||[]).slice(0,3).map(ref=><span key={ref.type+ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}
                 <time>{item.status.replace('_',' ')}{item.createdAt?' · '+new Date(item.createdAt).toLocaleString():''}</time>
               </article>)}
           </div>
 
           {activeRequest&&<div className="vop-support-compose" style={{marginTop:14}}>
-            <div className="vop-support-reference"><MessageCircle size={14}/><span>{activeRequest.subject} · {activeRequest.status.replace('_',' ')}</span><button type="button" onClick={()=>{setActiveRequest(null);setRequestMessages([])}}><X size={14}/></button></div>
+            <div className="vop-support-reference"><MessageCircle size={14}/><span>{activeRequest.subject} · {activeRequest.status.replace('_',' ')}{activeRequest.spiritualInterest&&activeRequest.spiritualInterest!=='none'?' · follow-up '+String(activeRequest.followUpStatus||'new').replaceAll('_',' '):''}</span><button type="button" onClick={()=>{setActiveRequest(null);setRequestMessages([])}}><X size={14}/></button></div>
             <div className="vop-support-messages">
               {requestMessages.map(item=><article key={item.id} className={item.senderId===currentUser.uid?'mine':'theirs'}>
                 <p>{item.body}</p>
