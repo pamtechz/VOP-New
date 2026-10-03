@@ -758,6 +758,12 @@ export default async function handler(request: Request, response: Response) {
           }
         }      }
 
+      const passkeys=await db.collection('passkeyCredentials').where('uid','==',uid).limit(20).get();
+      if(!passkeys.empty){
+        const cleanup=db.batch();
+        passkeys.docs.forEach(document=>cleanup.delete(document.ref));
+        await cleanup.commit();
+      }
       await authService.deleteUser(uid);
       await targetProfile.ref.delete();
       if (targetOrganizationId) {
