@@ -24,6 +24,8 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
   const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
     || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole||''));
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+  const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
+    ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
@@ -40,7 +42,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
         {route:'announcements' as const,label:t('navigation.announcements','Announcements'),icon:Megaphone},
         {route:'events' as const,label:t('navigation.events','Events'),icon:CalendarDays},
       ]),
-      ...(currentUser.role==='student'?[{route:'support' as const,label:t('navigation.support','Mentor support'),icon:MessageCircle}]:[]),
+      ...(canSeekSupport?[{route:'support' as const,label:t('navigation.support','Learning & spiritual support'),icon:MessageCircle}]:[]),
       ...(isMentor?[{route:'mentor' as const,label:t('navigation.mentor_workspace','Mentor workspace'),icon:UserRound}]:[]),
     ]},
     {name:t('navigation.account','Account'),items:[
