@@ -38,6 +38,7 @@ async function supportApi(action: string, data: Record<string, unknown> = {}) {
   return body;
 }
 
+function signalCommunicationChanged(){window.dispatchEvent(new Event('vop_communication_changed'));}
 function whatsappUrl(number:string,text:string){
   let digits=String(number||'').replace(/\D/g,'');
   if(digits.startsWith('00'))digits=digits.slice(2);
@@ -127,6 +128,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         const thread=await supportApi('messages',{conversationId:next.id});
         setMessages((thread.items||[]) as ChatMessage[]);
         setConversation({...next,unread:false} as {id:string;studentId:string;mentorId:string;mentorName?:string;unread?:boolean});
+        signalCommunicationChanged();
       }else setMessages([]);
       setError('');
     }catch(reason){
@@ -158,7 +160,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
       const targets=result.whatsappTargets||item.whatsappTargets||[];
       setWhatsappHandoff(targets.map(target=>({...target,text})));
-      setActiveRequest({...item,whatsappTargets:targets});
+      setActiveRequest({...item,whatsappTargets:targets,unread:false});
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not open the support request.');}
   };
 
@@ -191,6 +194,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     try{
       const result=await supportApi('replySupportRequest',{requestId:activeRequest.id,message:body.trim(),references});
       setRequestMessages(current=>[...current,result.item as SupportMessage]);
+      signalCommunicationChanged();
       setActiveRequest(current=>current?{...current,status:'in_progress',unread:false}:current);
       setRequests(current=>current.map(item=>item.id===activeRequest.id?{...item,status:'in_progress',unread:false}:item));
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not send your reply.');throw reason;}
@@ -203,6 +207,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       const result=await supportApi('editSupportMessage',{requestId:activeRequest.id,messageId:message.id,message:body,references});
       const next=result.item as SupportMessage;
       setRequestMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not edit the message.');throw reason;}
     finally{setSending(false);}
   };
@@ -225,6 +230,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         studentId:conversation.studentId,mentorId:conversation.mentorId,message:body.trim(),references,
       });
       setMessages(current=>[...current,result.item as ChatMessage]);
+      signalCommunicationChanged();
       setConversation(current=>current?{...current,unread:false}:current);
     }catch(reason){setError(reason instanceof Error?reason.message:t('support.send_error','Could not send your message.'));throw reason;}
     finally{setSending(false);}
@@ -236,6 +242,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       const result=await supportApi('editMessage',{conversationId:conversation.id,messageId:message.id,message:body,references});
       const next=result.item as ChatMessage;
       setMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not edit the message.');throw reason;}
     finally{setSending(false);}
   };
