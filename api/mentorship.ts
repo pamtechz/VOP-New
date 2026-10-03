@@ -366,7 +366,8 @@ export default async function handler(req: Request, res: Response) {
     const action = String(body.action || '').trim();
     const permissionAction =
       ['listStudents','listMentors','listAssignments','getAutomationSettings','listSupportRequests'].includes(action) ? 'view' :
-      ['assign','saveAutomationSettings','createDraft','sendDraft','updateSupportRequest'].includes(action) ? 'manage' :
+      ['assign','saveAutomationSettings','createDraft','sendDraft'].includes(action) ? 'manage' :
+      action === 'updateSupportRequest' ? 'update' :
       ['sendMessage','createSupportRequest','replySupportRequest'].includes(action) ? 'create' :
       ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages'].includes(action) ? 'read' : '';
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
@@ -376,7 +377,7 @@ export default async function handler(req: Request, res: Response) {
       await requireOrganizationSubscriptionFeature(db,'mentorship',organizationId);
     }
 
-    if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings','updateSupportRequest'].includes(action)) {
+    if (['listStudents','listMentors','listAssignments','questionFailures','createDraft','sendDraft','getAutomationSettings','saveAutomationSettings'].includes(action)) {
       await assertAdmin(db, decoded.uid);
     }
 
