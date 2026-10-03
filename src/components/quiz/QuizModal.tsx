@@ -471,7 +471,13 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 transition: 'all 0.2s',
               }}
             >
-              {submitting?t('quiz.starting','Starting…'):attemptBlocked?blockedLabel:hasAttempted?retakeLabel:t('quiz.begin_assessment','Begin assessment')}
+              {submitting
+                ?t('quiz.starting','Starting…')
+                :attemptBlocked
+                  ?blockedLabel
+                  :hasAttempted
+                    ?t('quiz.check_retake_availability','Check retake availability')
+                    :t('quiz.begin_assessment','Begin assessment')}
               <ChevronRight size={18} />
             </button>}
           </div>
