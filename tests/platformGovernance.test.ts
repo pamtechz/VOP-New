@@ -331,6 +331,15 @@ test('subscription quota editor preserves unlimited values and usage counts only
   assert.match(shared,/Active, non-archived organization-owned assessment records/);
 });
 
+test('legacy assessment attempt counters are versioned and reconciled before limit enforcement',()=>{
+  const progress=read('api/study/progress.ts');
+  assert.match(progress,/ASSESSMENT_ATTEMPT_POLICY_VERSION = 2/);
+  assert.match(progress,/storedPolicyVersion<ASSESSMENT_ATTEMPT_POLICY_VERSION/);
+  assert.match(progress,/currentPolicy\.exists&&!legacyPolicy[\s\S]{0,120}relevant\.length/);
+  assert.match(progress,/policyVersion:ASSESSMENT_ATTEMPT_POLICY_VERSION/);
+  assert.match(progress,/legacyCounterReconciledAt:FieldValue\.serverTimestamp\(\)/);
+});
+
 test('study progress reserves HTTP 409 for assessment session state conflicts',()=>{
   const progress=read('api/study/progress.ts');
   const conflictCount=(progress.match(/status\(409\)/g)||[]).length;
@@ -479,16 +488,20 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(graduation,/Graduation approval required/);
 });
 
-test('web Google authentication uses redirect flow and restores redirect state before the root auth observer',()=>{
+test('web Google authentication uses popup flow without delaying the root auth observer',()=>{
   const firebaseAuth=read('src/services/firebaseAuth.ts');
   const root=read('src/Root.tsx');
+  const vercel=read('vercel.json');
+  const vite=read('vite.config.ts');
 
-  assert.match(firebaseAuth,/signInWithRedirect/);
-  assert.match(firebaseAuth,/getRedirectResult/);
-  assert.match(firebaseAuth,/completeGoogleRedirectSignIn/);
-  assert.doesNotMatch(firebaseAuth,/signInWithPopup/);
-  assert.match(root,/await completeGoogleRedirectSignIn\(\)/);
-  assert.match(root,/unsubscribe = onAuthStateChanged/);
+  assert.match(firebaseAuth,/signInWithPopup/);
+  assert.doesNotMatch(firebaseAuth,/signInWithRedirect/);
+  assert.doesNotMatch(firebaseAuth,/getRedirectResult/);
+  assert.doesNotMatch(firebaseAuth,/completeGoogleRedirectSignIn/);
+  assert.doesNotMatch(root,/completeGoogleRedirectSignIn/);
+  assert.match(root,/const unsubscribe = onAuthStateChanged/);
+  assert.match(vercel,/same-origin-allow-popups/);
+  assert.match(vite,/same-origin-allow-popups/);
 });
 
 test('organization records open as read-only browser-navigable pages and require explicit edit mode',()=>{
