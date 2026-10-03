@@ -51,6 +51,7 @@ import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
+import { saveSupportContextPrefill } from './services/supportContext';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -567,6 +568,9 @@ export const App: React.FC = () => {
   const previousLesson = activeLessonIndex > 0 ? orderedActiveLessons[activeLessonIndex - 1] : undefined;
   const nextLesson = activeLessonIndex >= 0 && activeLessonIndex < orderedActiveLessons.length - 1 ? orderedActiveLessons[activeLessonIndex + 1] : undefined;
 
+  const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
+    ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
+
   const navigate = (route: AppRoute) => {
     setActiveProgramId('');
     setActiveGuide(null);
@@ -689,6 +693,10 @@ export const App: React.FC = () => {
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} currentUser={currentUser} initialPageIndex={deepLinkPageIndex}
         onPageChange={rememberStudyPage}
         onOpenQuiz={quiz=>openStudyItem(activeGuide,quiz,0,currentRoute)}
+        onAskSupport={canSeekSupport?context=>{
+          saveSupportContextPrefill(context);
+          navigate('support');
+        }:undefined}
         onClose={goBack} hasPreviousLesson={Boolean(previousLesson)} hasNextLesson={Boolean(nextLesson)}
         onPreviousLesson={() => { if (previousLesson) openStudyItem(activeGuide,previousLesson,undefined,currentRoute); }}
         onNextLesson={() => { if (nextLesson) openStudyItem(activeGuide,nextLesson,undefined,currentRoute); }}
