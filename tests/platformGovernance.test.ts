@@ -172,7 +172,7 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
   assert.match(support,/One Voice 27 follow-up/);
   assert.match(support,/I want to discuss baptism/);
   assert.match(mentor,/Candidate support queue/);
-  assert.match(admin,/Candidate Support/);
+  assert.match(admin,/Candidate support inbox/);
   assert.match(admin,/WhatsApp \{target\.label\}/);
   assert.match(sidebar,/Learning & spiritual support/);
   assert.match(drawer,/Learning & spiritual support/);
@@ -200,11 +200,11 @@ test('lesson reader hands exact study context into support and evangelism follow
   assert.match(api,/SUPPORT_FOLLOW_UP_STATUSES/);
   assert.match(api,/followUpStatus=spiritualInterest==='none'\?'not_required':'new'/);
   assert.match(api,/followUpScheduledAt/);
-  assert.match(admin,/Bible-study interest/);
-  assert.match(admin,/Baptism interest/);
+  assert.match(admin,/Bible study/);
+  assert.match(admin,/Baptism/);
   assert.match(admin,/One Voice 27/);
-  assert.match(admin,/Schedule follow-up/);
-  assert.match(admin,/Mark follow-up complete/);
+  assert.match(admin,/onClick=\{\(\)=>void updateEvangelismFollowUp\('scheduled'\)\}/);
+  assert.match(admin,/onClick=\{\(\)=>void updateEvangelismFollowUp\('completed'\)\}/);
 });
 
 test('assessment architecture separates classification and policy and starts attempts on the server',()=>{
