@@ -50,7 +50,9 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
     const mentor=await identity('mentor-assigned',org,'mentor','mentor');
     const unassignedMentor=await identity('mentor-unassigned',org,'mentor','mentor');
     const learner=await identity('mentor-learner',org,'student','learner');
+    const supportAdmin=await identity('support-admin',org,'staff','admin');
     const foreignMentor=await identity('mentor-foreign',foreignOrg,'mentor','mentor');
+    const foreignAdmin=await identity('support-foreign-admin',foreignOrg,'staff','admin');
 
     await db.doc('mentorAssignments/'+learner.uid).set({
       studentId:learner.uid,mentorId:mentor.uid,organizationId:org,status:'active',
@@ -110,6 +112,76 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       const mentorMessages=await call(mentor,{action:'messages',conversationId:thread.id});
       assert.equal(mentorMessages.status,200,JSON.stringify(mentorMessages.payload));
       assert.equal(mentorMessages.payload.items.length,2);
+    });
+
+    await t.test('candidate can open contextual doctrine support with mentor, organization team and One Voice 27 follow-up',async()=>{
+      const created=await call(learner,{
+        action:'createSupportRequest',
+        subject:'I need help understanding the Sabbath',
+        message:'Please help me understand how this doctrine connects with the lesson and the Bible texts.',
+        category:'doctrine',
+        target:'both',
+        channel:'both',
+        priority:'high',
+        spiritualInterest:'one_voice_27',
+        references:[
+          {type:'guide',id:'guide-a',label:'Discover Bible Course'},
+          {type:'lesson',id:'lesson-a',label:'Lesson A'},
+          {type:'doctrine',id:'lesson-a:doctrine:sabbath',label:'The Sabbath'},
+        ],
+      });
+      assert.equal(created.status,201,JSON.stringify(created.payload));
+      assert.equal(created.payload.item.assignedMentorId,mentor.uid);
+      assert.equal(created.payload.item.category,'doctrine');
+      assert.equal(created.payload.item.spiritualInterest,'one_voice_27');
+      assert.equal(created.payload.item.campaignTag,'one_voice_27');
+      assert.equal(created.payload.item.references.length,3);
+      const requestId=created.payload.item.id;
+
+      const mine=await call(learner,{action:'listMySupportRequests'});
+      assert.equal(mine.status,200,JSON.stringify(mine.payload));
+      assert.ok(mine.payload.items.some(item=>item.id===requestId));
+
+      const mentorQueue=await call(mentor,{action:'listSupportRequests'});
+      assert.equal(mentorQueue.status,200,JSON.stringify(mentorQueue.payload));
+      assert.ok(mentorQueue.payload.items.some(item=>item.id===requestId));
+
+      const teamQueue=await call(supportAdmin,{action:'listSupportRequests'});
+      assert.equal(teamQueue.status,200,JSON.stringify(teamQueue.payload));
+      assert.ok(teamQueue.payload.items.some(item=>item.id===requestId));
+
+      const initial=await call(mentor,{action:'supportRequestMessages',requestId});
+      assert.equal(initial.status,200,JSON.stringify(initial.payload));
+      assert.equal(initial.payload.items.length,1);
+      assert.match(initial.payload.items[0].body,/help me understand/i);
+
+      const reply=await call(mentor,{
+        action:'replySupportRequest',requestId,
+        message:'Let us compare the lesson with the Bible passages together.',
+        references:[{type:'scripture',id:'exodus-20-8-11',label:'Exodus 20:8–11'}],
+      });
+      assert.equal(reply.status,200,JSON.stringify(reply.payload));
+
+      const candidateThread=await call(learner,{action:'supportRequestMessages',requestId});
+      assert.equal(candidateThread.status,200,JSON.stringify(candidateThread.payload));
+      assert.equal(candidateThread.payload.items.length,2);
+      assert.equal(candidateThread.payload.items[1].senderId,mentor.uid);
+
+      const resolved=await call(supportAdmin,{action:'updateSupportRequest',requestId,status:'resolved'});
+      assert.equal(resolved.status,200,JSON.stringify(resolved.payload));
+      assert.equal(resolved.payload.item.status,'resolved');
+
+      const reopen=await call(learner,{
+        action:'replySupportRequest',requestId,
+        message:'I still have one more question about the same doctrine.',
+      });
+      assert.equal(reopen.status,200,JSON.stringify(reopen.payload));
+
+      const reopenedMine=await call(learner,{action:'listMySupportRequests'});
+      assert.equal(reopenedMine.payload.items.find(item=>item.id===requestId)?.status,'open');
+
+      const foreignDenied=await call(foreignAdmin,{action:'supportRequestMessages',requestId});
+      assert.equal(foreignDenied.status,403,JSON.stringify(foreignDenied.payload));
     });
 
     await t.test('inactive assignment immediately removes mentor workspace access',async()=>{

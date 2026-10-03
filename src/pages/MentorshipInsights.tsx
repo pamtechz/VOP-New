@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, ExternalLink, Link2, MessageCircle, QrCode, Send, UserCheck, Users, X } from 'lucide-react';
+import { BarChart3, BookOpen, CheckCircle2, Copy, ExternalLink, HeartHandshake, Link2, MessageCircle, QrCode, Send, Tag, UserCheck, Users, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
 
 async function mentoringApi(action: string, data: Record<string, unknown> = {}) {
@@ -41,7 +41,7 @@ async function organizationInviteApi(data: Record<string, unknown> = {}) {
   return body;
 }
 
-type Tab = 'assignments' | 'conversations' | 'performance' | 'questions' | 'sharing' | 'messages' | 'automation';
+type Tab = 'assignments' | 'support' | 'conversations' | 'performance' | 'questions' | 'sharing' | 'messages' | 'automation';
 
 export const MentorshipInsights: React.FC = () => {
   const [tab, setTab] = useState<Tab>('assignments');
@@ -50,6 +50,10 @@ export const MentorshipInsights: React.FC = () => {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [failures, setFailures] = useState<any[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
+  const [supportRequests,setSupportRequests]=useState<any[]>([]);
+  const [selectedSupportRequest,setSelectedSupportRequest]=useState<any|null>(null);
+  const [supportMessages,setSupportMessages]=useState<any[]>([]);
+  const [supportReply,setSupportReply]=useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedMentor, setSelectedMentor] = useState('');
   const [performance, setPerformance] = useState<any | null>(null);
@@ -75,16 +79,18 @@ export const MentorshipInsights: React.FC = () => {
   const loadCore = async () => {
     setLoading(true);
     try {
-      const [studentResult, mentorResult, assignmentResult, failureResult] = await Promise.all([
+      const [studentResult, mentorResult, assignmentResult, failureResult, supportResult] = await Promise.all([
         mentoringApi('listStudents'),
         mentoringApi('listMentors'),
         mentoringApi('listAssignments'),
         mentoringApi('questionFailures'),
+        mentoringApi('listSupportRequests'),
       ]);
       setStudents(studentResult.items || []);
       setMentors(mentorResult.items || []);
       setAssignments(assignmentResult.items || []);
       setFailures(failureResult.items || []);
+      setSupportRequests(supportResult.items || []);
       const automationResult = await mentoringApi('getAutomationSettings');
       if (automationResult.item) setAutomation({ enabled: automationResult.item.enabled === true, channel: automationResult.item.channel === 'email' ? 'email' : 'in_app', minAverageScore: Number(automationResult.item.minAverageScore || 0), maxProgressPercent: Number(automationResult.item.maxProgressPercent || 0), cooldownDays: Number(automationResult.item.cooldownDays || 7) });
       setError('');
@@ -144,6 +150,40 @@ export const MentorshipInsights: React.FC = () => {
       setMessages(current => [...current, result.item]);
       setAdminMessage('');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not send message.'); }
+  };
+
+  const openSupportRequest = async (item:any) => {
+    setSelectedSupportRequest(item);
+    setSelectedStudent(String(item.candidateId||''));
+    try{
+      const result=await mentoringApi('supportRequestMessages',{requestId:item.id});
+      setSupportMessages(result.items||[]);
+      setTab('support');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not open support request.');}
+  };
+
+  const replySupportRequest = async () => {
+    if(!selectedSupportRequest||!supportReply.trim())return;
+    try{
+      const result=await mentoringApi('replySupportRequest',{
+        requestId:selectedSupportRequest.id,message:supportReply.trim(),
+      });
+      setSupportMessages(current=>[...current,result.item]);
+      setSupportReply('');
+      setSelectedSupportRequest((current:any)=>current?{...current,status:'in_progress'}:current);
+      setSupportRequests(current=>current.map(item=>item.id===selectedSupportRequest.id?{...item,status:'in_progress'}:item));
+      setNotice('Support reply sent.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not send support reply.');}
+  };
+
+  const updateSupportStatus = async (status:'in_progress'|'resolved'|'closed') => {
+    if(!selectedSupportRequest)return;
+    try{
+      await mentoringApi('updateSupportRequest',{requestId:selectedSupportRequest.id,status});
+      setSelectedSupportRequest((current:any)=>current?{...current,status}:current);
+      setSupportRequests(current=>current.map(item=>item.id===selectedSupportRequest.id?{...item,status}:item));
+      setNotice(status==='resolved'?'Support request resolved.':'Support request updated.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not update support request.');}
   };
 
   const createDraft = async () => {
@@ -225,11 +265,12 @@ export const MentorshipInsights: React.FC = () => {
         <div><Users size={21}/><span>Learners</span><strong>{students.length}</strong></div>
         <div><UserCheck size={21}/><span>Mentors</span><strong>{mentors.length}</strong></div>
         <div><MessageCircle size={21}/><span>Active assignments</span><strong>{assignments.filter(item=>item.status==='active').length}</strong></div>
+        <div><HeartHandshake size={21}/><span>Open support requests</span><strong>{supportRequests.filter(item=>!['resolved','closed'].includes(String(item.status||''))).length}</strong></div>
         <div><BarChart3 size={21}/><span>Tracked weak questions</span><strong>{failures.length}</strong></div>
       </div>
 
       <div className="vop-mentoring-tabs">{([
-        ['assignments','Mentor Allocation'],['conversations','Conversations'],['performance','Learner Performance'],
+        ['assignments','Mentor Allocation'],['support','Candidate Support'],['conversations','Conversations'],['performance','Learner Performance'],
         ['questions','Commonly Missed Questions'],['sharing','Lesson Sharing'],['messages','Messages & Drafts'],['automation','Automation']
       ] as const).map(([value,label])=><button key={value} type="button" className={tab===value?'active':''} onClick={()=>setTab(value)}>{label}</button>)}</div>
 
@@ -241,6 +282,21 @@ export const MentorshipInsights: React.FC = () => {
           <button className="vop-primary" type="button" onClick={()=>void assign()} disabled={!selectedStudent||!selectedMentor}>Assign Mentor</button>
         </div>
         <div className="vop-mentoring-table-wrap"><table className="vop-table"><thead><tr><th>Learner</th><th>Mentor</th><th>Status</th><th>Assigned</th><th>Action</th></tr></thead><tbody>{assignmentRows.map(item=><tr key={item.id}><td><strong>{item.student?.displayName || item.studentId}</strong><div className="vop-row-desc">{item.student?.email || ''}</div></td><td>{item.mentor?.displayName || item.mentorId}</td><td><span className="vop-status enabled">{item.status}</span></td><td>{item.assignedAt ? new Date(item.assignedAt).toLocaleDateString() : '—'}</td><td><button className="vop-actions" type="button" onClick={()=>{setSelectedStudent(item.studentId);setTab('performance');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button></td></tr>)}</tbody></table>{!assignmentRows.length&&!loading&&<div className="vop-empty">No mentor assignments have been configured.</div>}</div>
+      </section>}
+
+      {tab==='support' && <section className="vop-mentoring-card">
+        <div className="vop-mentoring-card-head"><div><h2>Candidate learning & spiritual support</h2><p>Questions are tied to their guide, lesson, topic, doctrine or Bible reference. Organization support can answer in-app and continue on WhatsApp when the organization number is configured.</p></div><button className="vop-secondary" type="button" onClick={()=>void loadCore()}>Refresh queue</button></div>
+        <div className="vop-conversation-grid">{supportRequests.map(item=><button key={item.id} type="button" onClick={()=>void openSupportRequest(item)}>
+          <HeartHandshake size={21}/><div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId}</strong><span>{item.subject||item.category||'Support request'} · {String(item.status||'open').replace('_',' ')}</span><small>{item.lastMessageAt||item.createdAt?new Date(item.lastMessageAt||item.createdAt).toLocaleString():'New request'}</small></div><ExternalLink size={16}/>
+        </button>)}{!supportRequests.length&&<div className="vop-empty">No candidate support requests found.</div>}</div>
+        {selectedSupportRequest&&<div className="vop-admin-chat" style={{marginTop:16}}>
+          <div className="vop-mentoring-card-head"><div><h3>{selectedSupportRequest.subject||'Support request'}</h3><p>{String(selectedSupportRequest.category||'support').replaceAll('_',' ')} · {String(selectedSupportRequest.priority||'normal')} priority · target: {String(selectedSupportRequest.target||'').replaceAll('_',' ')}</p></div><div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void updateSupportStatus('in_progress')}>In progress</button><button className="vop-primary" type="button" onClick={()=>void updateSupportStatus('resolved')}><CheckCircle2 size={15}/>Resolve</button></div></div>
+          {(selectedSupportRequest.references||[]).length>0&&<div className="vop-weak-list">{selectedSupportRequest.references.map((ref:any)=><div key={ref.type+ref.id}><strong><Tag size={13}/>{ref.label}</strong><span>{ref.type}</span></div>)}</div>}
+          {selectedSupportRequest.spiritualInterest&&selectedSupportRequest.spiritualInterest!=='none'&&<div className="vop-mentoring-alert success"><HeartHandshake size={16}/>Follow-up interest: {String(selectedSupportRequest.spiritualInterest).replaceAll('_',' ')}</div>}
+          <div className="vop-support-messages">{supportMessages.map(item=><article key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':'theirs'}><p>{item.body}</p>{(item.references||[]).map((ref:any)=><span key={ref.type+ref.id} className="vop-support-ref"><BookOpen size={13}/>{ref.label}</span>)}</article>)}</div>
+          <div><textarea value={supportReply} maxLength={10000} onChange={e=>setSupportReply(e.target.value)} placeholder="Reply with Bible study help, clarification or follow-up…"/><button className="vop-primary" type="button" disabled={!supportReply.trim()} onClick={()=>void replySupportRequest()}><Send size={16}/>Send reply</button></div>
+          {selectedSupportRequest.whatsappNumber&&<a className="vop-secondary" href={'https://wa.me/'+String(selectedSupportRequest.whatsappNumber).replace(/\D/g,'')+'?text='+encodeURIComponent('VOP Support #'+selectedSupportRequest.id+' · '+(selectedSupportRequest.subject||''))} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/>Continue on WhatsApp</a>}
+        </div>}
       </section>}
 
       {tab==='conversations' && <section className="vop-mentoring-card">

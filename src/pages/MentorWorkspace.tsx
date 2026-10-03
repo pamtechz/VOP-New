@@ -1,5 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import { ArrowLeft, BarChart3, BookOpen, CheckCircle2, MessageCircle, RefreshCw, Send, UserCheck, Users } from 'lucide-react';
+import {
+  ArrowLeft, BarChart3, BookOpen, CheckCircle2, HeartHandshake, MessageCircle, RefreshCw, Send, Tag, UserCheck, Users,
+} from 'lucide-react';
 import { auth } from '../lib/firebase';
 import './mentor-workspace.css';
 
@@ -13,7 +15,12 @@ type Performance={
   weakQuestions?:Array<{key:string;question:string;failedCount:number;answeredCount:number;lessonId?:string;guideId?:string}>;
 };
 type Conversation={id:string;studentId:string;mentorId:string;lastMessageAt?:string};
-type Message={id:string;senderId:string;body:string;createdAt?:string};
+type Message={id:string;senderId:string;body:string;createdAt?:string;references?:Array<{type:string;id:string;label:string}>};
+type SupportRequest={
+  id:string;candidateId:string;candidateName?:string;subject:string;message?:string;category:string;
+  priority:string;status:string;target:string;channel:string;spiritualInterest?:string;createdAt?:string;lastMessageAt?:string;
+  references?:Array<{type:string;id:string;label:string}>;
+};
 
 async function mentoring(action:string,data:Record<string,unknown>={}){
   const user=auth?.currentUser;
@@ -27,6 +34,13 @@ async function mentoring(action:string,data:Record<string,unknown>={}){
   if(!response.ok)throw new Error(payload.error||'Mentorship request failed.');
   return payload;
 }
+function categoryLabel(value:string){
+  return ({
+    lesson_clarification:'Lesson clarification',doctrine:'Doctrine',bible_question:'Bible question',
+    assessment:'Assessment',prayer:'Prayer & spiritual care',evangelism:'Evangelism',
+    baptism:'Baptism interest',one_voice_27:'One Voice 27',other:'Other',
+  } as Record<string,string>)[value]||value;
+}
 
 export default function MentorWorkspace({onBack}:{onBack:()=>void}){
   const [assignments,setAssignments]=useState<Assignment[]>([]);
@@ -36,6 +50,12 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
   const [conversation,setConversation]=useState<Conversation|null>(null);
   const [messages,setMessages]=useState<Message[]>([]);
   const [draft,setDraft]=useState('');
+
+  const [supportRequests,setSupportRequests]=useState<SupportRequest[]>([]);
+  const [supportRequest,setSupportRequest]=useState<SupportRequest|null>(null);
+  const [supportMessages,setSupportMessages]=useState<Message[]>([]);
+  const [supportReply,setSupportReply]=useState('');
+
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
@@ -45,13 +65,15 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
   const load=async()=>{
     setBusy(true);setError('');
     try{
-      const [assigned,threads]=await Promise.all([
+      const [assigned,threads,requests]=await Promise.all([
         mentoring('listMyAssignments'),
         mentoring('listConversations',{mentorId:auth?.currentUser?.uid||''}),
+        mentoring('listSupportRequests'),
       ]);
       const rows=(assigned.items||[]) as Assignment[];
       setAssignments(rows);
       setConversations((threads.items||[]) as Conversation[]);
+      setSupportRequests((requests.items||[]) as SupportRequest[]);
       if(!selectedStudent&&rows[0]?.studentId)setSelectedStudent(rows[0].studentId);
     }catch(reason){setError(reason instanceof Error?reason.message:'Mentor workspace could not be loaded.');}
     finally{setBusy(false);}
@@ -104,14 +126,50 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
     finally{setBusy(false);}
   };
 
+  const openSupportRequest=async(item:SupportRequest)=>{
+    setSupportRequest(item);setSelectedStudent(item.candidateId);setBusy(true);setError('');
+    try{
+      const result=await mentoring('supportRequestMessages',{requestId:item.id});
+      setSupportMessages((result.items||[]) as Message[]);
+    }catch(reason){setError(reason instanceof Error?reason.message:'Support request could not be opened.');}
+    finally{setBusy(false);}
+  };
+
+  const replySupport=async()=>{
+    if(!supportRequest||!supportReply.trim())return;
+    setBusy(true);setError('');
+    try{
+      const result=await mentoring('replySupportRequest',{requestId:supportRequest.id,message:supportReply.trim()});
+      setSupportMessages(current=>[...current,result.item as Message]);
+      setSupportReply('');
+      setSupportRequest(current=>current?{...current,status:'in_progress'}:current);
+      setSupportRequests(current=>current.map(item=>item.id===supportRequest.id?{...item,status:'in_progress'}:item));
+      setNotice('Support reply sent.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Support reply could not be sent.');}
+    finally{setBusy(false);}
+  };
+
+  const resolveSupport=async()=>{
+    if(!supportRequest)return;
+    setBusy(true);setError('');
+    try{
+      await mentoring('updateSupportRequest',{requestId:supportRequest.id,status:'resolved'});
+      setSupportRequest(current=>current?{...current,status:'resolved'}:current);
+      setSupportRequests(current=>current.map(item=>item.id===supportRequest.id?{...item,status:'resolved'}:item));
+      setNotice('Support request marked resolved.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Support request could not be resolved.');}
+    finally{setBusy(false);}
+  };
+
   const selected=assignments.find(item=>item.studentId===selectedStudent);
+  const openSupport=supportRequests.filter(item=>!['resolved','closed'].includes(item.status));
 
   return <main className="vop-mentor-page">
     <header className="vop-mentor-head">
       <div><button className="vop-secondary" type="button" onClick={onBack}><ArrowLeft size={16}/>Back</button>
         <span className="vop-kicker"><UserCheck size={16}/>Mentor workspace</span>
         <h1>Support assigned learners</h1>
-        <p>Review progress, identify learning difficulties and continue private conversations with learners assigned to you.</p></div>
+        <p>Review progress, answer contextual lesson and doctrine questions, and continue private conversations with learners assigned to you.</p></div>
       <button className="vop-secondary" type="button" disabled={busy} onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button>
     </header>
 
@@ -129,7 +187,30 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
       </aside>
 
       <section className="vop-mentor-main">
-        {!selected?<div className="vop-card vop-empty">Select an assigned learner.</div>:<>
+        <article className="vop-card vop-mentor-weak">
+          <header><div><h3><HeartHandshake size={18}/> Candidate support queue</h3><p>Questions addressed to you from lessons, topics, doctrine, Bible study and spiritual follow-up.</p></div><strong>{openSupport.length} open</strong></header>
+          {!supportRequests.length?<div className="vop-empty">No candidate support requests are assigned to you.</div>:supportRequests.map(item=><button type="button" key={item.id}
+            className="vop-secondary" style={{width:'100%',display:'grid',textAlign:'left',marginBottom:8}} onClick={()=>void openSupportRequest(item)}>
+            <strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId} · {item.subject}</strong>
+            <span>{categoryLabel(item.category)} · {item.priority} priority · {item.status.replace('_',' ')}</span>
+            {(item.references||[]).slice(0,3).map(ref=><small key={ref.type+ref.id}><Tag size={12}/>{ref.label}</small>)}
+          </button>)}
+        </article>
+
+        {supportRequest&&<article className="vop-card vop-mentor-conversation">
+          <header><div><h3>{supportRequest.subject}</h3><p>{categoryLabel(supportRequest.category)} · {supportRequest.status.replace('_',' ')}{supportRequest.spiritualInterest&&supportRequest.spiritualInterest!=='none'?' · follow-up: '+supportRequest.spiritualInterest.replaceAll('_',' '):''}</p></div>
+            {!['resolved','closed'].includes(supportRequest.status)&&<button className="vop-secondary" type="button" onClick={()=>void resolveSupport()} disabled={busy}><CheckCircle2 size={15}/>Resolve</button>}
+          </header>
+          <div className="vop-mentor-messages">{supportMessages.map(item=><div key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':''}>
+            <p>{item.body}</p>
+            {(item.references||[]).map(ref=><small key={ref.type+ref.id}><BookOpen size={12}/>{ref.label}</small>)}
+            {item.createdAt&&<small>{new Date(item.createdAt).toLocaleString()}</small>}
+          </div>)}</div>
+          <div className="vop-mentor-compose"><textarea value={supportReply} maxLength={10000} onChange={event=>setSupportReply(event.target.value)} placeholder="Reply to this support request…"/>
+            <button className="vop-primary" type="button" disabled={busy||!supportReply.trim()} onClick={()=>void replySupport()}><Send size={16}/>Reply</button></div>
+        </article>}
+
+        {!selected?<div className="vop-card vop-empty">Select an assigned learner to view performance.</div>:<>
           <article className="vop-card vop-mentor-student-head">
             <div><span className="vop-kicker">Assigned learner</span><h2>{selected.student?.displayName||selected.studentId}</h2><p>{selected.student?.email}</p></div>
             <button className="vop-primary" type="button" onClick={()=>void openConversation(selected.studentId)}><MessageCircle size={16}/>Open conversation</button>
@@ -150,7 +231,7 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
           </article>
 
           {conversation&&conversation.studentId===selected.studentId&&<article className="vop-card vop-mentor-conversation">
-            <header><div><h3>Private support conversation</h3><p>Messages are available only to the assigned mentor, learner and authorized administrators.</p></div></header>
+            <header><div><h3>Private mentor conversation</h3><p>Messages are available only to the assigned mentor, learner and authorized administrators.</p></div></header>
             <div className="vop-mentor-messages">{!messages.length?<div className="vop-empty">No messages yet. Send the first support message.</div>:messages.map(item=><div key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':''}>
               <p>{item.body}</p>{item.createdAt&&<small>{new Date(item.createdAt).toLocaleString()}</small>}
             </div>)}</div>

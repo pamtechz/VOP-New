@@ -24,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
   useLocalization(settings);
   const availableLanguages = getAvailableLanguages(settings);
   const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
+  const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
+    ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
   const nav = (route: AppRoute) => { if (onNavigate) onNavigate(route); };
   const [accountOpen,setAccountOpen]=useState(false);
   const accountRef=useRef<HTMLDivElement>(null);
@@ -66,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
           {settings.features?.radio!==false&&<button onClick={()=>nav('radio')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='radio'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Radio size={14}/><span>{t('navigation.radio','Radio')}</span></button>}
           {settings.features?.announcements!==false&&<><button onClick={()=>nav('announcements')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='announcements'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Megaphone size={14}/><span>{t('navigation.announcements','Announcements')}</span></button>
           <button onClick={()=>nav('events')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='events'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><CalendarDays size={14}/><span>{t('navigation.events','Events')}</span></button></>}
-          {currentUser.role==='student'&&<button onClick={()=>nav('support')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='support'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><MessageCircle size={14}/><span>{t('navigation.support','Support')}</span></button>}
+          {canSeekSupport&&<button onClick={()=>nav('support')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='support'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><MessageCircle size={14}/><span>{t('navigation.support','Support')}</span></button>}
           <button onClick={()=>nav('about')} className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${currentRoute==='about'?'bg-amber-400/20 text-amber-300 font-bold':'text-slate-300 hover:text-white hover:bg-white/5'}`}><Info size={14}/><span>{t('navigation.about','About')}</span></button>
         </nav>
         <div className="vop-app-header-actions">

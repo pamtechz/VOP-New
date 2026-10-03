@@ -74,6 +74,8 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const isAdmin = ['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']
     .includes(String(currentUser.role || '')) || ['owner', 'admin', 'editor', 'teacher', 'mentor', 'staff'].includes(String(currentUser.organizationRole || ''));
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+  const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
+    ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
   const progress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
   const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
   const initial = name.charAt(0).toUpperCase();
@@ -93,8 +95,8 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
       { route: 'announcements' as const, label: t('navigation.announcements', 'Announcements'), detail: t('navigation.announcements_detail', 'News from your organization'), icon: Megaphone },
       { route: 'events' as const, label: t('navigation.events', 'Events & Programmes'), detail: t('navigation.events_detail', 'Upcoming activities'), icon: CalendarDays },
     ]),
-    ...(currentUser.role === 'student'
-      ? [{ route: 'support' as const, label: t('navigation.mentor', 'Talk to my mentor'), detail: t('navigation.mentor_detail', 'Get guidance and support'), icon: MessageCircle }]
+    ...(canSeekSupport
+      ? [{ route: 'support' as const, label: t('navigation.support', 'Learning & spiritual support'), detail: t('navigation.mentor_detail', 'Ask about lessons, doctrine, Bible topics or spiritual decisions'), icon: MessageCircle }]
       : []),
     ...(isMentor
       ? [{ route:'mentor' as const,label:t('navigation.mentor_workspace','Mentor workspace'),detail:t('navigation.mentor_workspace_detail','Support assigned learners'),icon:UserCheck }]
