@@ -455,7 +455,7 @@ export default async function handler(req: Request, res: Response) {
       ['assign','saveAutomationSettings','createDraft','sendDraft'].includes(action) ? 'manage' :
       action === 'updateSupportRequest' ? 'update' :
       ['sendMessage','createSupportRequest','replySupportRequest','editMessage','deleteMessage','editSupportMessage','deleteSupportMessage'].includes(action) ? 'create' :
-      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages','markConversationRead','markSupportRequestRead'].includes(action) ? 'read' : '';
+      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages','markConversationRead','markSupportRequestRead','unreadSummary'].includes(action) ? 'read' : '';
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
@@ -627,6 +627,18 @@ export default async function handler(req: Request, res: Response) {
         const {unreadFor:privateUnreadFor,...publicData}=data as Record<string,unknown>;
         return {id:doc.id,...publicData,lastMessageAt:iso(data.lastMessageAt),unread:unreadFor(privateUnreadFor).includes(decoded.uid)};
       }) });
+    }
+
+    if(action==='unreadSummary'){
+      const [conversationCount,requestCount]=await Promise.all([
+        db.collection('mentorConversations').where('unreadFor','array-contains',decoded.uid).count().get(),
+        db.collection('learningSupportRequests').where('unreadFor','array-contains',decoded.uid).count().get(),
+      ]);
+      const conversations=Math.max(0,Number(conversationCount.data().count||0));
+      const supportRequests=Math.max(0,Number(requestCount.data().count||0));
+      const total=conversations+supportRequests;
+      const route=isMentor(actor)?'mentor':isCandidate(actor)?'support':isAdmin(actor)?'admin':'notifications';
+      return res.status(200).json({ok:true,item:{total,conversations,supportRequests,route}});
     }
 
     if (action === 'listMyConversations') {
