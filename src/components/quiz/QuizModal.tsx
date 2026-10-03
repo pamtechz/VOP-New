@@ -35,7 +35,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [attempt,setAttempt]=useState<AssessmentPolicyResult|null>(null);
   const threshold=attempt?.assessmentPolicy.threshold||previewThreshold;
   const validThreshold = Number.isFinite(threshold) && threshold >= 1 && threshold <= 100;
-  const previewMaxAttempts=Number(lesson.assessmentMaxAttempts||0)||maxAttempts;
+  const previewMaxAttempts=lesson.assessmentMaxAttemptsMode==='custom'
+    ?Math.max(1,Number(lesson.assessmentMaxAttempts||1))
+    :maxAttempts;
   const previewCooldown=Number(lesson.assessmentRetakeCooldownMinutes||0)||retakeCooldownMinutes;
   const previewTimeLimit=Math.max(0,Math.trunc(Number(lesson.assessmentTimeLimitMinutes||0)));
   const [remainingSeconds,setRemainingSeconds]=useState<number|null>(null);
