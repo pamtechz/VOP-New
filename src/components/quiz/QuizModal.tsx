@@ -62,7 +62,6 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const attemptStartLock=useRef(false);
   const question = questions[index];
   const remainingAttempts=submission?.retakePolicy.remainingAttempts;
-  const retakeAllowed=remainingAttempts!==0;
 
   useEffect(()=>{if(previouslyAttempted)setHasAttempted(true)},[previouslyAttempted]);
   useEffect(()=>{
@@ -156,7 +155,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   };
 
   const restart = () => {
-    if (!retakeReady || submission?.retakePolicy.remainingAttempts === 0) return;
+    // Submission policy is a snapshot of the attempt that just finished. It is
+    // informative only: administrators may change the future retake policy and
+    // legacy attempt state may be reconciled server-side. Always return to the
+    // intro and let startQuiz enforce the current authoritative policy.
     setAnswers({});setScore(null);setSubmission(null);setAttempt(null);setRemainingSeconds(null);setIndex(0);setError('');setAttemptBlocked(false);setAttemptBlockCode('');setAttemptRetryAt(null);setStage('intro');
   };
   const startAttempt=async(confirmRetake=false)=>{
@@ -635,18 +637,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               <button
                 type="button"
                 onClick={restart}
-                disabled={!retakeReady || !retakeAllowed}
                 className="vop-assessment-retake"
                 style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                   padding: '0.8rem', border: '1.5px solid #002d72',
                   borderRadius: '9999px', background: 'transparent',
                   color: '#002d72', fontWeight: 700, fontSize: '0.88rem',
-                  cursor: !retakeReady || !retakeAllowed ? 'not-allowed' : 'pointer',
-                  opacity: !retakeReady || !retakeAllowed ? 0.55 : 1,
+                  cursor: 'pointer',
                 }}
               >
-                <RotateCcw size={16} /> {!retakeAllowed ? t('quiz.attempt_limit_reached','Attempt limit reached') : retakeReady ? retakeLabel : t('quiz.retake_waiting_period','Retake waiting period')}
+                <RotateCcw size={16} /> {remainingAttempts===0 || !retakeReady
+                  ?t('quiz.check_retake_availability','Check retake availability')
+                  :retakeLabel}
               </button>
 
               {submission.feedbackMode!=='none' && score!==null && Number(score)>=threshold && hasNextLesson && onContinue && (
