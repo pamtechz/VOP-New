@@ -16,6 +16,7 @@ import h13 from '../api_handlers/admin/users.js';
 import h14 from '../api_handlers/admin/search.js';
 import h15 from '../api_handlers/admin/notifications.js';
 import h16 from '../api_handlers/admin/localization.js';
+import h17 from '../api_handlers/admin/passkeys.js';
 
 type Req={url?:string;query?:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void};
@@ -37,6 +38,7 @@ const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'search': h14,
   'notifications': h15,
   'localization': h16,
+  'passkeys': h17,
 });
 export default async function handler(req:Req,res:Res){
   const value=req.query?.__vopRoute;

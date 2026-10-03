@@ -85,6 +85,7 @@ export function LocalizationParticipation(){
       setMessage(action==='acceptInvitation'
         ?'Localization invitation accepted. Your assigned language workspace is now active.'
         :'Localization invitation declined.');
+      window.dispatchEvent(new Event('vop_profile_updated'));
       await refresh();
     }catch(reason){setError(reason instanceof Error?reason.message:'Localization invitation could not be updated.');}
     finally{setBusy(false);}

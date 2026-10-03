@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { AppRoute, AppSettings, DiscoverGuide, LanguageCode, User } from '../../types';
-import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, HeartHandshake, Info, LibraryBig, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, UserPlus, WalletCards, X, type LucideIcon } from 'lucide-react';
+import { Award, Bell, BookOpen, Brain, CalendarDays, FileText, Globe2, HeartHandshake, Info, LibraryBig, Megaphone, MessageCircle, Radio, ShieldCheck, Swords, UserCheck, UserPlus, WalletCards, X, type LucideIcon } from 'lucide-react';
 import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
@@ -76,6 +76,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
+  const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
   const progress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
   const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
   const initial = name.charAt(0).toUpperCase();
@@ -108,6 +109,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
     { route: 'payments', label: t('navigation.payments', 'Payments & receipts'), detail: t('navigation.payments_detail', 'Secure checkout and payment history'), icon: WalletCards },
     { route: 'profile', label: t('navigation.profile', 'Profile'), detail: t('navigation.profile_detail', 'Your learner account'), icon: UserCheck },
     { route: 'personal-settings', label: t('navigation.personal_settings', 'Personal Settings'), detail: t('navigation.settings_detail', 'Language and preferences'), icon: UserCheck },
+    ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),detail:t('navigation.localization_console_detail','Assigned translation and review work'),icon:Globe2}]:[]),
     ...(settings.features?.certification===false?[]:[{ route: 'certificates' as const, label: t('certificates.my_certificate', 'My Certificates'), detail: t('navigation.certificates_detail', 'Graduation and awards'), icon: Award }]),
     { route: 'about', label: t('navigation.about', 'About'), detail: t('navigation.about_detail', 'About the Voice of Prophecy'), icon: Info },
     ...(isAdmin ? [{ route: 'admin' as const, label: t('navigation.admin', 'Admin Panel'), detail: t('navigation.admin_detail', 'Manage authorized ministry content'), icon: ShieldCheck }] : []),

@@ -53,6 +53,8 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
     const supportAdmin=await identity('support-admin',org,'staff','admin');
     const foreignMentor=await identity('mentor-foreign',foreignOrg,'mentor','mentor');
     const foreignAdmin=await identity('support-foreign-admin',foreignOrg,'staff','admin');
+    await db.doc('users/'+mentor.uid).set({whatsappNumber:'+260970000001'},{merge:true});
+    await db.doc('organizations/'+org+'/settings/settings').set({whatsappNumber:'+260970000002'},{merge:true});
 
     await db.doc('mentorAssignments/'+learner.uid).set({
       studentId:learner.uid,mentorId:mentor.uid,organizationId:org,status:'active',
@@ -114,6 +116,49 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       assert.equal(mentorMessages.payload.items.length,2);
     });
 
+    await t.test('unread mentor chat is counted until read and sender-only edit/delete keeps a tombstone',async()=>{
+      const sent=await call(mentor,{
+        action:'sendMessage',studentId:learner.uid,mentorId:mentor.uid,message:'Editable mentor note',
+        references:[{type:'lesson',id:'lesson-a',label:'Lesson A'}],
+      });
+      assert.equal(sent.status,200,JSON.stringify(sent.payload));
+      const conversationIdValue=learner.uid+'__'+mentor.uid;
+      const unread=await call(learner,{action:'unreadSummary'});
+      assert.equal(unread.status,200,JSON.stringify(unread.payload));
+      assert.equal(unread.payload.item.conversations,1);
+
+      const edited=await call(mentor,{
+        action:'editMessage',conversationId:conversationIdValue,messageId:sent.payload.item.id,
+        message:'Edited mentor note',references:[{type:'lesson',id:'lesson-a',label:'Lesson A'}],
+      });
+      assert.equal(edited.status,200,JSON.stringify(edited.payload));
+      assert.equal(edited.payload.item.body,'Edited mentor note');
+      assert.ok(edited.payload.item.editedAt);
+
+      const denied=await call(learner,{
+        action:'editMessage',conversationId:conversationIdValue,messageId:sent.payload.item.id,message:'Learner rewrite',
+      });
+      assert.equal(denied.status,403,JSON.stringify(denied.payload));
+
+      const read=await call(learner,{action:'messages',conversationId:conversationIdValue});
+      assert.equal(read.status,200,JSON.stringify(read.payload));
+      assert.equal(read.payload.items.at(-1).body,'Edited mentor note');
+      assert.equal(read.payload.items.at(-1).references[0].id,'lesson-a');
+      const cleared=await call(learner,{action:'unreadSummary'});
+      assert.equal(cleared.payload.item.conversations,0);
+
+      const deleted=await call(mentor,{
+        action:'deleteMessage',conversationId:conversationIdValue,messageId:sent.payload.item.id,
+      });
+      assert.equal(deleted.status,200,JSON.stringify(deleted.payload));
+      assert.equal(deleted.payload.item.deleted,true);
+      const tombstone=await call(learner,{action:'messages',conversationId:conversationIdValue});
+      const deletedRow=tombstone.payload.items.find(item=>item.id===sent.payload.item.id);
+      assert.equal(deletedRow.deleted,true);
+      assert.equal(deletedRow.body,'');
+      assert.deepEqual(deletedRow.references,[]);
+    });
+
     await t.test('candidate can open contextual doctrine support with mentor, organization team and One Voice 27 follow-up',async()=>{
       const created=await call(learner,{
         action:'createSupportRequest',
@@ -137,6 +182,10 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       assert.equal(created.payload.item.campaignTag,'one_voice_27');
       assert.equal(created.payload.item.followUpStatus,'new');
       assert.equal(created.payload.item.references.length,3);
+      assert.deepEqual(
+        created.payload.item.whatsappTargets.map(item=>[item.kind,item.number]),
+        [['mentor','+260970000001'],['organization','+260970000002']],
+      );
       const requestId=created.payload.item.id;
 
       const mine=await call(learner,{action:'listMySupportRequests'});
@@ -155,6 +204,19 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       assert.equal(initial.status,200,JSON.stringify(initial.payload));
       assert.equal(initial.payload.items.length,1);
       assert.match(initial.payload.items[0].body,/help me understand/i);
+      assert.equal(initial.payload.whatsappTargets.length,2);
+
+      const candidateEdit=await call(learner,{
+        action:'editSupportMessage',requestId,messageId:initial.payload.items[0].id,
+        message:'Please help me understand this Sabbath doctrine clearly.',
+        references:[{type:'lesson',id:'lesson-a',label:'Lesson A'}],
+      });
+      assert.equal(candidateEdit.status,200,JSON.stringify(candidateEdit.payload));
+      assert.equal(candidateEdit.payload.item.body,'Please help me understand this Sabbath doctrine clearly.');
+      const mentorCannotEdit=await call(mentor,{
+        action:'editSupportMessage',requestId,messageId:initial.payload.items[0].id,message:'Mentor overwrite',
+      });
+      assert.equal(mentorCannotEdit.status,403,JSON.stringify(mentorCannotEdit.payload));
 
       const reply=await call(mentor,{
         action:'replySupportRequest',requestId,
@@ -167,6 +229,18 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       assert.equal(candidateThread.status,200,JSON.stringify(candidateThread.payload));
       assert.equal(candidateThread.payload.items.length,2);
       assert.equal(candidateThread.payload.items[1].senderId,mentor.uid);
+      const supportReplyId=candidateThread.payload.items[1].id;
+      const mentorEdit=await call(mentor,{
+        action:'editSupportMessage',requestId,messageId:supportReplyId,
+        message:'Let us compare this lesson with Exodus 20:8–11 together.',
+        references:[{type:'scripture',id:'exodus-20-8-11',label:'Exodus 20:8–11'}],
+      });
+      assert.equal(mentorEdit.status,200,JSON.stringify(mentorEdit.payload));
+      const mentorDelete=await call(mentor,{action:'deleteSupportMessage',requestId,messageId:supportReplyId});
+      assert.equal(mentorDelete.status,200,JSON.stringify(mentorDelete.payload));
+      assert.equal(mentorDelete.payload.item.deleted,true);
+      const afterDelete=await call(learner,{action:'supportRequestMessages',requestId});
+      assert.equal(afterDelete.payload.items.find(item=>item.id===supportReplyId)?.deleted,true);
 
       const followUpDate='2026-10-10T14:00:00.000Z';
       const scheduled=await call(supportAdmin,{

@@ -418,260 +418,125 @@
 }
 
 
-/* Firebase account entry, using the same VOP navy/gold visual language as the APK shell. */
-.vop-login-page {
-  min-height: 100dvh;
-  display: grid;
-  grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr);
-  background: #f4f6fa;
-}
-
-.vop-login-brand {
-  min-height: 100dvh;
-  padding: clamp(2rem, 6vw, 5rem);
-  background: linear-gradient(145deg, #07172e 0%, #0a2d63 62%, #123d79 100%);
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.vop-login-logo {
-  width: 84px;
-  height: 84px;
-  display: grid;
-  place-items: center;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, .1);
-  border: 1px solid rgba(255, 255, 255, .2);
-  margin-bottom: 1.25rem;
-}
-
-.vop-login-logo img {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-}
-
-.vop-login-brand h1 {
-  margin: 0;
-  color: #fff;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 1.05;
-}
-
-.vop-login-brand p {
-  color: rgba(255, 255, 255, .76);
-  margin: .45rem 0 0;
-  font-size: 1rem;
-}
-
-.vop-login-kicker {
-  color: #ffb52e !important;
-  font-size: .72rem !important;
-  font-weight: 800;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-}
-
-.vop-login-brand-footer {
-  margin-top: auto;
-  padding-top: 3rem;
-  display: grid;
-  gap: .35rem;
-  color: rgba(255, 255, 255, .78);
-}
-
-.vop-login-brand-footer strong {
-  color: #fff;
-}
-
-.vop-login-card {
-  display: grid;
-  place-items: center;
-  padding: 2rem;
-}
-
-.vop-login-card-inner {
-  width: min(100%, 460px);
-  background:var(--bg-card,#fff);
-  border: 1px solid #dce3ec;
-  border-radius: 24px;
-  box-shadow: 0 18px 55px rgba(10, 25, 47, .13);
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-.vop-login-card-inner h2 {
-  margin: .25rem 0 .35rem;
-  color: #10243f;
-  font-size: clamp(1.65rem, 4vw, 2.2rem);
-}
-
-.vop-login-subtitle {
-  color: #667085;
-  margin: 0 0 1.5rem;
-}
-
-.vop-login-form {
-  display: grid;
-  gap: .55rem;
-}
-
-.vop-login-form label {
-  color: #344054;
-  font-size: .86rem;
-  font-weight: 700;
-  margin-top: .35rem;
-}
-
-.vop-login-form input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #cfd7e3;
-  border-radius: 12px;
-  padding: .82rem .9rem;
-  min-height: 48px;
-  font: inherit;
-  background:var(--bg-card,#fff);
+/* Firebase account entry — responsive, accessible and consistent with the VOP visual system. */
+.vop-login-page{
+  min-height:100dvh;
+  display:grid;
+  grid-template-columns:minmax(320px,.9fr) minmax(420px,1.1fr);
+  background:var(--bg-primary,#f4f6fa);
   color:var(--text-primary,#17202d);
+  position:relative;
 }
-
-.vop-login-form input:focus {
-  outline: 3px solid rgba(255, 153, 0, .22);
-  border-color: var(--theme-accent);
+.vop-login-home-link{
+  position:fixed;top:14px;left:14px;z-index:20;
+  min-height:40px;padding:0 13px;
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid rgba(255,255,255,.28);border-radius:11px;
+  background:rgba(7,23,46,.72);backdrop-filter:blur(10px);
+  color:#fff;font:800 .76rem var(--font-sans);cursor:pointer;
 }
-
-.vop-login-primary,
-.vop-login-google {
-  min-height: 48px;
-  border-radius: 12px;
-  font: 700 .92rem var(--font-sans);
-  cursor: pointer;
+.vop-login-home-link:hover{background:rgba(7,23,46,.9)}
+.vop-login-home-link:focus-visible{outline:3px solid #f3bf53;outline-offset:3px}
+.vop-login-brand{
+  min-height:100dvh;
+  padding:clamp(3.2rem,7vw,6rem);
+  background:
+    radial-gradient(circle at 12% 12%,rgba(255,181,46,.17),transparent 28%),
+    radial-gradient(circle at 88% 78%,rgba(67,140,225,.2),transparent 32%),
+    linear-gradient(145deg,#061328 0%,#0a2d63 58%,#123d79 100%);
+  color:#fff;display:flex;flex-direction:column;justify-content:center;overflow:hidden;position:relative;
 }
-
-.vop-login-primary {
-  border: 0;
-  margin-top: .8rem;
-  background: #0c2d63;
-  color: #fff;
+.vop-login-brand::after{
+  content:'';position:absolute;right:-90px;bottom:-100px;width:320px;height:320px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 0 0 44px rgba(255,255,255,.025),0 0 0 90px rgba(255,255,255,.018);pointer-events:none;
 }
-
-.vop-login-primary:hover {
-  background: #08224d;
+.vop-login-brand-copy{position:relative;z-index:1;max-width:620px}
+.vop-login-logo{
+  width:78px;height:78px;display:grid;place-items:center;border-radius:20px;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.19);
+  box-shadow:0 12px 32px rgba(0,0,0,.14);margin-bottom:1.4rem;
 }
-
-.vop-login-google {
-  width: 100%;
-  border: 1px solid #cfd7e3;
-  background:var(--bg-card,#fff);
-  color:var(--text-primary,#17202d);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .7rem;
+.vop-login-logo img{width:60px;height:60px;object-fit:contain}
+.vop-login-kicker{color:#ffbd4a!important;font-size:.7rem!important;font-weight:900;letter-spacing:.17em;text-transform:uppercase;margin:0}
+.vop-login-brand h1{margin:.65rem 0 1rem;color:#fff;font-size:clamp(2.4rem,5vw,4.4rem);line-height:.98;letter-spacing:-.035em;max-width:13ch}
+.vop-login-brand-intro{color:rgba(255,255,255,.79)!important;margin:0!important;max-width:34rem;font-size:clamp(.95rem,1.7vw,1.08rem)!important;line-height:1.65}
+.vop-login-benefits{display:grid;gap:.8rem;margin-top:1.8rem}
+.vop-login-benefits span{display:flex;align-items:center;gap:.65rem;color:rgba(255,255,255,.88);font-size:.84rem;font-weight:700}
+.vop-login-benefits svg{color:#ffbd4a;flex:0 0 auto}
+.vop-login-brand-footer{position:relative;z-index:1;margin-top:auto;padding-top:3rem;display:grid;gap:.2rem;color:rgba(255,255,255,.68)}
+.vop-login-brand-footer strong{color:#fff;font-size:.88rem}.vop-login-brand-footer span{font-size:.76rem}
+.vop-login-card{display:grid;place-items:center;padding:clamp(1.2rem,4vw,3rem)}
+.vop-login-card-inner{
+  width:min(100%,500px);background:var(--bg-card,#fff);border:1px solid var(--border-color,#dce3ec);
+  border-radius:24px;box-shadow:0 18px 60px rgba(10,25,47,.12);padding:clamp(1.4rem,4vw,2.4rem);
 }
-
-.vop-login-google:hover {
-  background: #f7f9fc;
+.vop-login-card-head h2{margin:.35rem 0 .45rem;color:var(--text-primary,#10243f);font-size:clamp(1.65rem,3.5vw,2.2rem);letter-spacing:-.025em}
+.vop-login-subtitle{color:var(--text-muted,#667085);margin:0;line-height:1.55;font-size:.9rem}
+.vop-login-mode-switch{
+  margin:1.4rem 0 1.2rem;padding:4px;border:1px solid var(--border-color,#dce4ee);border-radius:12px;
+  display:grid;grid-template-columns:1fr 1fr;background:var(--bg-secondary,#f5f7fa);
 }
-
-.vop-google-mark {
-  font-weight: 900;
-  font-size: 1.1rem;
-  color: #4285f4;
+.vop-login-mode-switch button{
+  min-height:38px;border:0;border-radius:9px;background:transparent;color:var(--text-muted,#64748b);
+  font:800 .78rem var(--font-sans);cursor:pointer;
 }
-
-.vop-login-divider {
-  display: flex;
-  align-items: center;
-  gap: .8rem;
-  margin: 1.1rem 0;
-  color: #98a2b3;
-  font-size: .78rem;
+.vop-login-mode-switch button.active{background:var(--bg-card,#fff);color:var(--text-primary,#172033);box-shadow:0 2px 8px rgba(15,23,42,.08)}
+.vop-login-form{display:grid;gap:.55rem}
+.vop-login-form>label,.vop-login-password-row label{color:var(--text-secondary,#344054);font-size:.8rem;font-weight:800}
+.vop-login-password-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:.2rem}
+.vop-login-password-row button{border:0;background:transparent;color:var(--vop-blue,#0c2d63);font:800 .72rem var(--font-sans);padding:2px;cursor:pointer}
+.vop-login-input{
+  min-height:49px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+  border:1px solid var(--border-color,#cfd7e3);border-radius:12px;padding:0 11px;background:var(--bg-card,#fff);
+  color:var(--text-muted,#738096);transition:border-color .15s ease,box-shadow .15s ease;
 }
-
-.vop-login-divider::before,
-.vop-login-divider::after {
-  content: '';
-  height: 1px;
-  background: #e4e7ec;
-  flex: 1;
+.vop-login-input:focus-within{border-color:var(--vop-blue,#1768d7);box-shadow:0 0 0 3px color-mix(in srgb,var(--vop-blue,#1768d7) 14%,transparent)}
+.vop-login-input input{width:100%;min-width:0;min-height:47px;border:0;outline:0;background:transparent;color:var(--text-primary,#17202d);font:inherit;padding:0}
+.vop-login-input input::placeholder{color:var(--text-muted,#98a2b3)}
+.vop-login-password-toggle{width:32px;height:32px;display:grid;place-items:center;border:0;background:transparent;color:var(--text-muted,#6e7e91);border-radius:8px;cursor:pointer}
+.vop-login-password-toggle:hover{background:var(--bg-secondary,#f1f5f9);color:var(--text-primary,#172033)}
+.vop-login-field-help{color:var(--text-muted,#7b8798);font-size:.69rem;margin-top:-.1rem}
+.vop-login-primary{
+  min-height:49px;border:0;border-radius:12px;margin-top:.7rem;background:#0c2d63;color:#fff;
+  font:800 .9rem var(--font-sans);cursor:pointer;box-shadow:0 8px 18px rgba(12,45,99,.15);transition:transform .12s ease,background .12s ease;
 }
-
-.vop-login-links {
-  display: flex;
-  justify-content: space-between;
-  gap: .75rem;
-  margin-top: 1rem;
+.vop-login-primary:hover:not(:disabled){background:#082653;transform:translateY(-1px)}.vop-login-primary:disabled{opacity:.6;cursor:not-allowed}
+.vop-login-divider{display:flex;align-items:center;gap:.8rem;margin:1rem 0;color:var(--text-muted,#98a2b3);font-size:.68rem;font-weight:700}
+.vop-login-divider::before,.vop-login-divider::after{content:'';height:1px;background:var(--border-color,#e4e7ec);flex:1}
+.vop-login-alt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vop-login-alt{
+  min-height:58px;border:1px solid var(--border-color,#cfd7e3);border-radius:12px;background:var(--bg-card,#fff);
+  color:var(--text-primary,#17202d);display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:9px;
+  padding:8px 10px;text-align:left;cursor:pointer;
 }
-
-.vop-login-links button {
-  border: 0;
-  background: none;
-  color: #0c2d63;
-  font: 600 .8rem var(--font-sans);
-  padding: .25rem 0;
-  cursor: pointer;
+.vop-login-alt:hover:not(:disabled){background:var(--bg-secondary,#f7f9fc);border-color:color-mix(in srgb,var(--vop-blue,#1768d7) 32%,var(--border-color,#cfd7e3))}
+.vop-login-alt>span:last-child{display:grid;gap:1px}.vop-login-alt strong{font-size:.78rem}.vop-login-alt small{font-size:.62rem;color:var(--text-muted,#7d8998);line-height:1.25}
+.vop-google-mark{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;font-weight:900;font-size:1rem;color:#4285f4;background:#fff}
+.vop-login-error,.vop-login-success{margin:.9rem 0 0;padding:.78rem .86rem;border-radius:10px;font-size:.78rem;line-height:1.45}
+.vop-login-error{background:var(--vop-error-bg,#fff1f2);border:1px solid #fecdd3;color:#9f1239}.vop-login-success{background:#effdf4;border:1px solid #bbf7d0;color:#166534}
+.vop-login-note{margin:.85rem 0 0;color:var(--text-muted,#7d8998);text-align:center;font-size:.67rem;line-height:1.45}
+.vop-login-security-note{margin-top:1.15rem;padding-top:1rem;border-top:1px solid var(--border-color,#e7ebf0);display:flex;align-items:flex-start;gap:8px;color:var(--text-muted,#6f7d8f);font-size:.68rem;line-height:1.45}
+.vop-login-security-note svg{flex:0 0 auto;color:#2f7d4e;margin-top:1px}
+.vop-auth-loading{min-height:100dvh;display:grid;place-items:center;color:var(--text-muted,#475467);background:var(--bg-primary,#f4f6fa)}
+@media(max-width:900px){
+  .vop-login-page{grid-template-columns:minmax(250px,.7fr) minmax(380px,1fr)}
+  .vop-login-brand{padding:3rem 2rem}.vop-login-brand h1{font-size:clamp(2.1rem,5vw,3.1rem)}
 }
-
-.vop-login-error {
-  margin: 1rem 0 0;
-  padding: .8rem .9rem;
-  border-radius: 10px;
-  background:var(--vop-error-bg);
-  border: 1px solid #fecdd3;
-  color: #9f1239;
-  font-size: .82rem;
-  line-height: 1.45;
+@media(max-width:760px){
+  .vop-login-page{grid-template-columns:1fr;background:var(--bg-primary,#f4f6fa)}
+  .vop-login-home-link{position:absolute;top:10px;left:10px;background:rgba(7,23,46,.7)}
+  .vop-login-brand{min-height:auto;padding:4.4rem 1.25rem 1.5rem;justify-content:flex-start}
+  .vop-login-brand-copy{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;align-items:center}
+  .vop-login-logo{grid-row:1/4;width:56px;height:56px;border-radius:15px;margin:0}.vop-login-logo img{width:43px;height:43px}
+  .vop-login-brand h1{font-size:1.55rem;margin:.25rem 0 .2rem;line-height:1.05;max-width:none}.vop-login-brand h1 br{display:none}
+  .vop-login-brand-intro{grid-column:1/-1;margin-top:.8rem!important;font-size:.78rem!important;line-height:1.5}
+  .vop-login-benefits,.vop-login-brand-footer{display:none}
+  .vop-login-card{padding:.8rem 1rem 1.4rem;align-items:start}
+  .vop-login-card-inner{border-radius:18px;padding:1.25rem;box-shadow:0 10px 30px rgba(10,25,47,.09)}
 }
-
-.vop-login-success {
-  margin: 1rem 0 0;
-  padding: .8rem .9rem;
-  border-radius: 10px;
-  background: #effdf4;
-  border: 1px solid #bbf7d0;
-  color: #166534;
-  font-size: .82rem;
-}
-
-.vop-login-note {
-  margin: 1.5rem 0 0;
-  color: #98a2b3;
-  text-align: center;
-  font-size: .72rem;
-  line-height: 1.4;
-}
-
-.vop-auth-loading {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  color: #475467;
-}
-
-@media (max-width: 760px) {
-  .vop-login-page {
-    grid-template-columns: 1fr;
-  }
-
-  .vop-login-brand {
-    min-height: auto;
-    padding: 2rem 1.25rem;
-  }
-
-  .vop-login-brand-footer {
-    margin-top: 2rem;
-    padding-top: 0;
-  }
-
-  .vop-login-card {
-    padding: 1rem;
-  }
-
-  .vop-login-card-inner {
-    border-radius: 18px;
-  }
+@media(max-width:480px){
+  .vop-login-alt-actions{grid-template-columns:1fr}
+  .vop-login-card{padding:.65rem}.vop-login-card-inner{padding:1.1rem}
 }
 
 

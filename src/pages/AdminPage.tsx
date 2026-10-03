@@ -379,7 +379,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       subscribeChurches(setChurches, err => setError(err.message)),
       subscribeAnnouncements(setAnnouncements, err => setError(err.message)),
     ];
-    void loadFirestoreGuides().then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
+    void loadFirestoreGuides(undefined,currentUser).then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
     void loadDrafts();
     if (currentUser.role === 'super_admin') void loadCertification();
     if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) void loadPermissionMatrix();
@@ -1345,7 +1345,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         )}
         {activeTab==='prayer'&&<PrayerManagementPanel />}
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
-        {activeTab==='mentorship'&&<MentorshipInsights />}
+        {activeTab==='mentorship'&&<MentorshipInsights guides={guides} />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>navigateAdminTab('payments')} onOpenCandidates={()=>navigateAdminTab('candidates')} />}
         {activeTab==='payments'&&<PaymentManagement currentUser={currentUser} onOpenCheckout={planId=>{
           try{

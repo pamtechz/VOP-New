@@ -610,7 +610,7 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
     setError('');
     try {
       const [loadedGuides, draftResponse, guideResponse, moduleResponse] = await Promise.all([
-        loadFirestoreGuides().catch(() => [] as DiscoverGuide[]),
+        loadFirestoreGuides(undefined,currentUser).catch(() => [] as DiscoverGuide[]),
         adminContent('list', 'curriculum'),
         adminContent('listGuides', 'guides'),
         selectedGuideId ? adminContent('listGuideLessons','curriculum',selectedGuideId) : Promise.resolve({items:[]}),

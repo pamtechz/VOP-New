@@ -1,8 +1,10 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {
-  ArrowLeft, BarChart3, BookOpen, CheckCircle2, HeartHandshake, MessageCircle, RefreshCw, Send, Tag, UserCheck, Users,
+  ArrowLeft, BarChart3, BookOpen, CheckCircle2, HeartHandshake, MessageCircle, RefreshCw, Tag, UserCheck, Users,
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import type { DiscoverGuide } from '../types';
+import ChatThread, { type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
 import './mentor-workspace.css';
 
 type Assignment={
@@ -14,11 +16,11 @@ type Performance={
   completedLessons:number;progressPercent:number;
   weakQuestions?:Array<{key:string;question:string;failedCount:number;answeredCount:number;lessonId?:string;guideId?:string}>;
 };
-type Conversation={id:string;studentId:string;mentorId:string;lastMessageAt?:string};
-type Message={id:string;senderId:string;body:string;createdAt?:string;references?:Array<{type:string;id:string;label:string}>};
+type Conversation={id:string;studentId:string;mentorId:string;lastMessageAt?:string;unread?:boolean};
+type Message=ChatMessage;
 type SupportRequest={
   id:string;candidateId:string;candidateName?:string;subject:string;message?:string;category:string;
-  priority:string;status:string;target:string;channel:string;spiritualInterest?:string;createdAt?:string;lastMessageAt?:string;
+  priority:string;status:string;target:string;channel:string;spiritualInterest?:string;createdAt?:string;lastMessageAt?:string;unread?:boolean;
   references?:Array<{type:string;id:string;label:string}>;
 };
 
@@ -34,6 +36,7 @@ async function mentoring(action:string,data:Record<string,unknown>={}){
   if(!response.ok)throw new Error(payload.error||'Mentorship request failed.');
   return payload;
 }
+function signalCommunicationChanged(){window.dispatchEvent(new Event('vop_communication_changed'));}
 function categoryLabel(value:string){
   return ({
     lesson_clarification:'Lesson clarification',doctrine:'Doctrine',bible_question:'Bible question',
@@ -42,7 +45,7 @@ function categoryLabel(value:string){
   } as Record<string,string>)[value]||value;
 }
 
-export default function MentorWorkspace({onBack}:{onBack:()=>void}){
+export default function MentorWorkspace({onBack,guides}:{onBack:()=>void;guides:DiscoverGuide[]}){
   const [assignments,setAssignments]=useState<Assignment[]>([]);
   const [selectedStudent,setSelectedStudent]=useState('');
   const [performance,setPerformance]=useState<Performance|null>(null);
@@ -100,29 +103,48 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
         setMessages([]);
         return;
       }
-      setConversation(thread);
+      setConversation({...thread,unread:false});
       const result=await mentoring('messages',{conversationId:thread.id});
       setMessages((result.items||[]) as Message[]);
+      setConversations(current=>current.map(item=>item.id===thread!.id?{...item,unread:false}:item));
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Conversation could not be opened.');}
     finally{setBusy(false);}
   };
 
-  const send=async()=>{
-    const body=draft.trim();
-    if(!body||!conversation)return;
+  const send=async(body:string,references:ChatReference[])=>{
+    if(!body.trim()||!conversation)return;
     setBusy(true);setError('');setNotice('');
     try{
-      await mentoring('sendMessage',{
-        studentId:conversation.studentId,mentorId:auth?.currentUser?.uid||'',message:body,
+      const result=await mentoring('sendMessage',{
+        studentId:conversation.studentId,mentorId:auth?.currentUser?.uid||'',message:body.trim(),references,
       });
-      setDraft('');setNotice('Message sent.');
-      const threadResult=await mentoring('listConversations',{studentId:conversation.studentId,mentorId:auth?.currentUser?.uid||''});
-      const thread=((threadResult.items||[])[0]||conversation) as Conversation;
-      setConversation(thread);
-      const result=await mentoring('messages',{conversationId:thread.id});
-      setMessages((result.items||[]) as Message[]);
-      await load();
-    }catch(reason){setError(reason instanceof Error?reason.message:'Message could not be sent.');}
+      setMessages(current=>[...current,result.item as Message]);
+      signalCommunicationChanged();
+      setNotice('Message sent.');
+      setConversation(current=>current?{...current,unread:false,lastMessageAt:new Date().toISOString()}:current);
+      setConversations(current=>current.map(item=>item.id===conversation.id?{...item,unread:false,lastMessageAt:new Date().toISOString()}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Message could not be sent.');throw reason;}
+    finally{setBusy(false);}
+  };
+  const editMessage=async(message:ChatMessage,body:string,references:ChatReference[])=>{
+    if(!conversation)return;
+    setBusy(true);setError('');
+    try{
+      const result=await mentoring('editMessage',{conversationId:conversation.id,messageId:message.id,message:body,references});
+      const next=result.item as Message;
+      setMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Message could not be edited.');throw reason;}
+    finally{setBusy(false);}
+  };
+  const deleteMessage=async(message:ChatMessage)=>{
+    if(!conversation)return;
+    setBusy(true);setError('');
+    try{
+      const result=await mentoring('deleteMessage',{conversationId:conversation.id,messageId:message.id});
+      const next=result.item as Message;
+      setMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Message could not be deleted.');throw reason;}
     finally{setBusy(false);}
   };
 
@@ -131,21 +153,44 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
     try{
       const result=await mentoring('supportRequestMessages',{requestId:item.id});
       setSupportMessages((result.items||[]) as Message[]);
+      setSupportRequest(current=>current?{...current,unread:false}:current);
+      setSupportRequests(current=>current.map(row=>row.id===item.id?{...row,unread:false}:row));
+      signalCommunicationChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:'Support request could not be opened.');}
     finally{setBusy(false);}
   };
 
-  const replySupport=async()=>{
-    if(!supportRequest||!supportReply.trim())return;
+  const replySupport=async(body:string,references:ChatReference[])=>{
+    if(!supportRequest||!body.trim())return;
     setBusy(true);setError('');
     try{
-      const result=await mentoring('replySupportRequest',{requestId:supportRequest.id,message:supportReply.trim()});
+      const result=await mentoring('replySupportRequest',{requestId:supportRequest.id,message:body.trim(),references});
       setSupportMessages(current=>[...current,result.item as Message]);
-      setSupportReply('');
-      setSupportRequest(current=>current?{...current,status:'in_progress'}:current);
-      setSupportRequests(current=>current.map(item=>item.id===supportRequest.id?{...item,status:'in_progress'}:item));
+      signalCommunicationChanged();
+      setSupportRequest(current=>current?{...current,status:'in_progress',unread:false}:current);
+      setSupportRequests(current=>current.map(item=>item.id===supportRequest.id?{...item,status:'in_progress',unread:false}:item));
       setNotice('Support reply sent.');
-    }catch(reason){setError(reason instanceof Error?reason.message:'Support reply could not be sent.');}
+    }catch(reason){setError(reason instanceof Error?reason.message:'Support reply could not be sent.');throw reason;}
+    finally{setBusy(false);}
+  };
+  const editSupportMessage=async(message:ChatMessage,body:string,references:ChatReference[])=>{
+    if(!supportRequest)return;
+    setBusy(true);setError('');
+    try{
+      const result=await mentoring('editSupportMessage',{requestId:supportRequest.id,messageId:message.id,message:body,references});
+      const next=result.item as Message;
+      setSupportMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Support message could not be edited.');throw reason;}
+    finally{setBusy(false);}
+  };
+  const deleteSupportMessage=async(message:ChatMessage)=>{
+    if(!supportRequest)return;
+    setBusy(true);setError('');
+    try{
+      const result=await mentoring('deleteSupportMessage',{requestId:supportRequest.id,messageId:message.id});
+      const next=result.item as Message;
+      setSupportMessages(current=>current.map(item=>item.id===message.id?{...item,...next}:item));
+    }catch(reason){setError(reason instanceof Error?reason.message:'Support message could not be deleted.');throw reason;}
     finally{setBusy(false);}
   };
 
@@ -163,6 +208,7 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
 
   const selected=assignments.find(item=>item.studentId===selectedStudent);
   const openSupport=supportRequests.filter(item=>!['resolved','closed'].includes(item.status));
+  const unreadCount=supportRequests.filter(item=>item.unread).length+conversations.filter(item=>item.unread).length;
 
   return <main className="vop-mentor-page">
     <header className="vop-mentor-head">
@@ -175,6 +221,7 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
 
     {error&&<div className="vop-mentor-alert error">{error}</div>}
     {notice&&<div className="vop-mentor-alert success"><CheckCircle2 size={15}/>{notice}</div>}
+    {unreadCount>0&&<div className="vop-mentor-alert success" role="status"><MessageCircle size={15}/>You have {unreadCount} unread conversation{unreadCount===1?'':'s'}.</div>}
 
     <div className="vop-mentor-layout">
       <aside className="vop-card vop-mentor-roster">
@@ -191,7 +238,7 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
           <header><div><h3><HeartHandshake size={18}/> Candidate support queue</h3><p>Questions addressed to you from lessons, topics, doctrine, Bible study and spiritual follow-up.</p></div><strong>{openSupport.length} open</strong></header>
           {!supportRequests.length?<div className="vop-empty">No candidate support requests are assigned to you.</div>:supportRequests.map(item=><button type="button" key={item.id}
             className="vop-secondary" style={{width:'100%',display:'grid',textAlign:'left',marginBottom:8}} onClick={()=>void openSupportRequest(item)}>
-            <strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId} · {item.subject}</strong>
+            <strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||item.candidateId} · {item.subject}{item.unread?' · New':''}</strong>
             <span>{categoryLabel(item.category)} · {item.priority} priority · {item.status.replace('_',' ')}</span>
             {(item.references||[]).slice(0,3).map(ref=><small key={ref.type+ref.id}><Tag size={12}/>{ref.label}</small>)}
           </button>)}
@@ -201,13 +248,9 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
           <header><div><h3>{supportRequest.subject}</h3><p>{categoryLabel(supportRequest.category)} · {supportRequest.status.replace('_',' ')}{supportRequest.spiritualInterest&&supportRequest.spiritualInterest!=='none'?' · follow-up: '+supportRequest.spiritualInterest.replaceAll('_',' '):''}</p></div>
             {!['resolved','closed'].includes(supportRequest.status)&&<button className="vop-secondary" type="button" onClick={()=>void resolveSupport()} disabled={busy}><CheckCircle2 size={15}/>Resolve</button>}
           </header>
-          <div className="vop-mentor-messages">{supportMessages.map(item=><div key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':''}>
-            <p>{item.body}</p>
-            {(item.references||[]).map(ref=><small key={ref.type+ref.id}><BookOpen size={12}/>{ref.label}</small>)}
-            {item.createdAt&&<small>{new Date(item.createdAt).toLocaleString()}</small>}
-          </div>)}</div>
-          <div className="vop-mentor-compose"><textarea value={supportReply} maxLength={10000} onChange={event=>setSupportReply(event.target.value)} placeholder="Reply to this support request…"/>
-            <button className="vop-primary" type="button" disabled={busy||!supportReply.trim()} onClick={()=>void replySupport()}><Send size={16}/>Reply</button></div>
+          <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={supportMessages} draft={supportReply} onDraftChange={setSupportReply}
+            guides={guides} busy={busy} placeholder="Reply to this support request…" emptyText="No messages yet."
+            sendLabel="Reply" onSend={replySupport} onEdit={editSupportMessage} onDelete={deleteSupportMessage}/>
         </article>}
 
         {!selected?<div className="vop-card vop-empty">Select an assigned learner to view performance.</div>:<>
@@ -232,11 +275,9 @@ export default function MentorWorkspace({onBack}:{onBack:()=>void}){
 
           {conversation&&conversation.studentId===selected.studentId&&<article className="vop-card vop-mentor-conversation">
             <header><div><h3>Private mentor conversation</h3><p>Messages are available only to the assigned mentor, learner and authorized administrators.</p></div></header>
-            <div className="vop-mentor-messages">{!messages.length?<div className="vop-empty">No messages yet. Send the first support message.</div>:messages.map(item=><div key={item.id} className={item.senderId===auth?.currentUser?.uid?'mine':''}>
-              <p>{item.body}</p>{item.createdAt&&<small>{new Date(item.createdAt).toLocaleString()}</small>}
-            </div>)}</div>
-            <div className="vop-mentor-compose"><textarea value={draft} maxLength={10000} onChange={event=>setDraft(event.target.value)} placeholder="Write a learner support message…"/>
-              <button className="vop-primary" type="button" disabled={busy||!draft.trim()} onClick={()=>void send()}><Send size={16}/>Send</button></div>
+            <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={messages} draft={draft} onDraftChange={setDraft}
+              guides={guides} busy={busy} placeholder="Write a learner support message…" emptyText="No messages yet. Send the first support message."
+              sendLabel="Send" onSend={send} onEdit={editMessage} onDelete={deleteMessage}/>
           </article>}
         </>}
       </section>

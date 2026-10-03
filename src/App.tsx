@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
   Union, Conference, District, ChurchOrganization, PrayerRequest, RadioBroadcast, RadioPlaylist, Announcement, BookResource, MinistryEvent,
@@ -18,7 +17,7 @@ import {
   clearLearnerLocation, learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
   readLearnerLocation, replaceLearnerLocation, type LearnerLocation,
 } from './services/learnerNavigation';
-import { auth, db } from './lib/firebase';
+import { auth } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
 import { Header } from './components/layout/Header';
 import { MenuDrawer } from './components/layout/MenuDrawer';
@@ -45,6 +44,7 @@ import { EventsPage } from './pages/EventsPage';
 import PaymentsPage from './pages/PaymentsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
+import LocalizationConsolePage from './pages/LocalizationConsolePage';
 import NotificationsPage from './pages/NotificationsPage';
 import InvitationsPage from './pages/InvitationsPage';
 import MentorWorkspace from './pages/MentorWorkspace';
@@ -76,19 +76,30 @@ export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
   const [contentRefresh, setContentRefresh] = useState(0);
   const [contentHydrated,setContentHydrated] = useState(false);
+  const lastPublicContentLoadAt=useRef(0);
+  const previousRouteRef=useRef<AppRoute>('home');
   const appliedDeepLink = useRef(false);
   const explicitNavigation = useRef(false);
   const restoredNavigationUid = useRef('');
   useEffect(() => {
-    const refresh = () => setContentRefresh(value => value + 1);
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
-    window.addEventListener('focus', refresh);
-    window.addEventListener('online', refresh);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('online', refresh);
-      document.removeEventListener('visibilitychange', onVisible);
+    // Public content is a large multi-collection snapshot. Refresh it only when
+    // it can actually be stale instead of on every focus, visibility or route
+    // change. This materially reduces Firestore reads on normal navigation.
+    const refreshIfStale=()=>{
+      if(Date.now()-lastPublicContentLoadAt.current<10*60*1000)return;
+      setContentRefresh(value=>value+1);
+    };
+    const explicitRefresh=()=>setContentRefresh(value=>value+1);
+    const visible=()=>{if(document.visibilityState==='visible')refreshIfStale();};
+    const timer=window.setInterval(visible,10*60*1000);
+    window.addEventListener('online',refreshIfStale);
+    window.addEventListener('vop_public_content_changed',explicitRefresh);
+    document.addEventListener('visibilitychange',visible);
+    return()=>{
+      window.clearInterval(timer);
+      window.removeEventListener('online',refreshIfStale);
+      window.removeEventListener('vop_public_content_changed',explicitRefresh);
+      document.removeEventListener('visibilitychange',visible);
     };
   }, []);
   const [activeProgramId,setActiveProgramId] = useState('');
@@ -230,7 +241,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    void loadPublicContent().then(snapshot => {
+    void loadPublicContent(currentUser.uid ? currentUser : undefined).then(snapshot => {
       if (cancelled) return;
       const customTranslations: Record<string, Record<string, string>> = {};
       Object.entries(snapshot.translations).forEach(([key, values]) => {
@@ -251,6 +262,7 @@ export const App: React.FC = () => {
       setChurches(snapshot.churches);
       setRadioBroadcasts(snapshot.radioBroadcasts);
       setRadioPlaylists(snapshot.radioPlaylists);
+      lastPublicContentLoadAt.current=Date.now();
       setContentHydrated(true);
       const deepLinkParams = new URLSearchParams(window.location.search);
       const guideParam = deepLinkParams.get('guide');
@@ -313,45 +325,15 @@ export const App: React.FC = () => {
       }
     });
     return () => { cancelled = true; };
-  }, [currentUser.uid, currentUser.organizationId, currentRoute, contentRefresh]);
+  }, [currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId,contentRefresh]);
 
-  // Radio is live Firestore content. Keep the public/admin application state
-  // synchronized after an administrator publishes, edits, or deletes a record;
-  // do not wait for a full page reload or a stale localStorage snapshot.
-  useEffect(() => {
-    if (!db) return;
-    let cancelled = false;
-    const ref = collection(db, 'radioBroadcasts');
-    const queries = [
-      query(ref, where('sharingScope', '==', 'shared'), where('published', '==', true)),
-      query(ref, where('organizationId', '==', ''), where('published', '==', true)),
-    ];
-    const organizationId = String(currentUser.organizationId || '').trim();
-    if (organizationId) queries.push(query(ref, where('organizationId', '==', organizationId), where('published', '==', true)));
-    const buckets = new Map<string, { id: string; data: () => Record<string, unknown>; ref: { path: string } }[]>();
-    const emit = () => {
-      if (cancelled) return;
-      const merged = new Map<string, { id: string; data: () => Record<string, unknown>; ref: { path: string } }>();
-      buckets.forEach(items => items.forEach(item => merged.set(item.ref.path, item)));
-      const next = [...merged.values()].map(item => {
-        const data = item.data();
-        return {
-          id: item.id,
-          ...data,
-          published: data.published === true,
-        } as RadioBroadcast;
-      }).filter(item => item.published === true && (item.title?.trim() || item.audioUrl || item.videoUrl || item.streamUrl));
-      setRadioBroadcasts(next);
-      saveRadioBroadcasts(next);
-    };
-    const stops = queries.map((source, index) => onSnapshot(source, snapshot => {
-      buckets.set(String(index), snapshot.docs.map(item => ({ id:item.id, data:() => item.data() as Record<string, unknown>, ref:{path:item.ref.path} })));
-      emit();
-    }, error => {
-      if (!cancelled) console.warn('Public radio realtime subscription failed:', error);
-    }));
-    return () => { cancelled = true; stops.forEach(stop => stop()); };
-  }, [currentUser.organizationId]);
+  useEffect(()=>{
+    const previous=previousRouteRef.current;
+    previousRouteRef.current=currentRoute;
+    if(previous==='admin'&&currentRoute!=='admin'){
+      setContentRefresh(value=>value+1);
+    }
+  },[currentRoute]);
 
   useEffect(() => {
     const refreshOwnProfile = () => {
@@ -582,6 +564,8 @@ export const App: React.FC = () => {
     if (route === 'admin' && !privileged) return;
     const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
     if (route === 'mentor' && !mentorAccess) return;
+    const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
+    if(route==='localization'&&!localizationAccess)return;
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -638,13 +622,14 @@ export const App: React.FC = () => {
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
+          {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <LocalizationConsolePage currentUser={currentUser} onBack={goBack}/>} 
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
             onBack={goBack} selectedProgramId={activeProgramId} onSelectProgram={selectCatalogProgram}
             onOpenGuide={openGuide}
             onOpenLesson={openCatalogLesson} onRefresh={async () => {
-              const latest = await loadFirestoreGuides();
+              const latest = await loadFirestoreGuides(undefined,currentUser);
               setGuides(latest);
               saveGuides(latest);
             }}/>}
@@ -673,7 +658,7 @@ export const App: React.FC = () => {
               if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
             }}/>}
                     {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
-          {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack}/>}
+          {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack} guides={guides}/>}
 
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}

@@ -228,6 +228,7 @@ export interface User {
   displayName: string;
   email: string;
   phoneNumber?: string;
+  whatsappNumber?: string;
   photoURL?: string;
   bio?: string;
   address?: string;
@@ -244,6 +245,11 @@ export interface User {
   privileges: UserPrivileges;
   progress: AccountProgress;
   preferences?: { uiLocale?: string; studyLanguage?: string; };
+  localizationAccess?: {
+    status?: 'invited'|'active'|'inactive'|'declined';
+    roles?: Array<'translator'|'reviewer'>;
+    languages?: string[];
+  };
 }
 
 export interface Question {
@@ -485,7 +491,8 @@ export type AppRoute =
   | 'lesson' 
   | 'about' 
   | 'profile' 
-  | 'personal-settings' 
+  | 'personal-settings'
+  | 'localization'
   | 'resources' 
   | 'lessons'
   | 'master-guide'

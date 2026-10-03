@@ -46,6 +46,9 @@ test('localization workflow requires invite acceptance, scopes assigned language
   const server=read('api_handlers/admin/localization.ts');
   const participation=read('src/components/localization/LocalizationParticipation.tsx');
   const governance=read('src/pages/LocalizationGovernancePanel.tsx');
+  const consolePage=read('src/pages/LocalizationConsolePage.tsx');
+  const sidebar=read('src/components/layout/LearnerSidebar.tsx');
+  const userLoader=read('src/services/firestoreData.ts');
   assert.match(server,/action==='apply'/);
   assert.match(server,/action==='inviteCollaborator'/);
   assert.match(server,/status:'invited'/);
@@ -65,6 +68,12 @@ test('localization workflow requires invite acceptance, scopes assigned language
   assert.match(governance,/Awaiting recipient acceptance/);
   assert.match(governance,/Language access requests/);
   assert.match(governance,/90% reviewer recommendation/);
+  assert.match(server,/localizationAccess:\{status:'invited',roles:assignedRoles,languages:assignedLanguages\}/);
+  assert.match(server,/actionUrl:'\/localization'/);
+  assert.match(consolePage,/Assigned languages/);
+  assert.match(consolePage,/LocalizationParticipation/);
+  assert.match(sidebar,/localization_console/);
+  assert.match(userLoader,/localizationAccess/);
 });
 
 test('system-wide curriculum, automatic certificate review and baptism tracking stay server-governed',()=>{
@@ -104,7 +113,7 @@ test('mentor accounts have a dedicated assigned-learner workspace and messaging 
   assert.match(workspace,/listMyAssignments/);
   assert.match(workspace,/performance/);
   assert.match(workspace,/sendMessage/);
-  assert.match(api,/\['sendMessage','createSupportRequest','replySupportRequest'\]\.includes\(action\) \? 'create'/);
+  assert.match(api,/sendMessage[\s\S]*createSupportRequest[\s\S]*replySupportRequest[\s\S]*editMessage[\s\S]*deleteMessage/);
   assert.match(api,/action === 'listMyAssignments'/);
 });
 
@@ -135,7 +144,7 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
   assert.match(support,/I want to discuss baptism/);
   assert.match(mentor,/Candidate support queue/);
   assert.match(admin,/Candidate Support/);
-  assert.match(admin,/Continue on WhatsApp/);
+  assert.match(admin,/WhatsApp \{target\.label\}/);
   assert.match(sidebar,/Learning & spiritual support/);
   assert.match(drawer,/Learning & spiritual support/);
 
@@ -541,7 +550,10 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(sidebar,/route:'invites'/);
   assert.match(drawer,/route: 'notifications'/);
   assert.match(drawer,/route: 'invites'/);
-  assert.match(tools,/setInterval\(\(\)=>void loadNotifications\(true\),15000\)/);
+  assert.match(tools,/setInterval\(refresh,60000\)/);
+  assert.match(tools,/loadNotificationSummary/);
+  assert.match(tools,/loadCommunicationSummary/);
+  assert.match(tools,/vop-communication-banner/);
   assert.match(tools,/vop-notification-toast/);
   assert.match(tools,/action:'clearAll'/);
   assert.match(inbox,/acceptInvite/);
@@ -560,7 +572,8 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(inbox,/clearInviteHistory/);
   assert.match(notifications,/action==='clearAll'/);
   assert.match(notifications,/authenticateNotificationAccount/);
-  assert.match(notifications,/const ownAction=\['list','markRead','markUnread','delete','markAllRead','clearAll'\]/);
+  assert.match(notifications,/const ownAction=\['summary','list','markRead','markUnread','delete','markAllRead','clearAll'\]/);
+  assert.match(notifications,/\.where\('read','==',false\)[\s\S]*\.count\(\)\.get\(\)/);
   assert.match(notifications,/const account=await authenticateNotificationAccount\(req\)/);
   assert.match(notifications,/const ctx=await authenticateTenant\(req,requestedOrganization\|\|undefined,true\)/);
   assert.match(notifications,/\?401/);
@@ -574,6 +587,78 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(localization,/Localization application approved/);
   assert.match(prayer,/title:'New prayer request'/);
   assert.match(graduation,/Graduation approval required/);
+});
+
+test('passkey sign-in is server-verified and keeps biometric data on the device',()=>{
+  const signIn=read('src/pages/SignInPage.tsx');
+  const settings=read('src/pages/PersonalSettingsPage.tsx');
+  const client=read('src/services/passkeys.ts');
+  const api=read('api_handlers/admin/passkeys.ts');
+  const server=read('server/passkeys.ts');
+  const rules=read('firestore.rules');
+
+  assert.match(signIn,/<strong>Passkey<\/strong>/);
+  assert.match(settings,/Enable passkey on this device/);
+  assert.match(settings,/Biometric data remains on your device/);
+  assert.match(client,/fetch\('\/api\/admin\/passkeys'/);
+  assert.match(client,/navigator\.credentials\.create/);
+  assert.match(client,/navigator\.credentials\.get/);
+  assert.match(client,/userVerification:'required'/);
+  assert.match(client,/attestationObject:encode\(response\.attestationObject\)/);
+  assert.match(api,/requireRecentAuthentication/);
+  assert.match(api,/parseRegistrationAttestation/);
+  assert.match(api,/createCustomToken/);
+  assert.match(server,/format!=='none'/);
+  assert.match(server,/Passkey did not complete fingerprint, face, PIN, or device verification/);
+  assert.match(server,/credentialId!==expectedCredentialId/);
+  assert.match(server,/verifySignature\('sha256'/);
+  assert.match(rules,/match \/passkeyCredentials\/\{credentialId\}[\s\S]*allow read, write: if false/);
+});
+
+test('messaging supports unread banners, edit/delete and inline lesson attachments without leaving chat',()=>{
+  const api=read('api/mentorship.ts');
+  const chat=read('src/components/messaging/ChatThread.tsx');
+  const support=read('src/pages/SupportPage.tsx');
+  const mentor=read('src/pages/MentorWorkspace.tsx');
+  const tools=read('src/components/layout/CommunicationTools.tsx');
+
+  assert.match(api,/action==='unreadSummary'/);
+  assert.match(api,/where\('unreadFor','array-contains',decoded\.uid\)\.count\(\)\.get\(\)/);
+  assert.match(api,/action==='editMessage'\|\|action==='deleteMessage'/);
+  assert.match(api,/action==='editSupportMessage'\|\|action==='deleteSupportMessage'/);
+  assert.match(api,/You can only change messages you sent/);
+  assert.match(chat,/Attach a lesson/);
+  assert.match(chat,/Search the curriculum without leaving this conversation/);
+  assert.match(chat,/onEdit/);
+  assert.match(chat,/onDelete/);
+  assert.match(chat,/Message deleted/);
+  assert.match(support,/ChatThread/);
+  assert.match(support,/onEdit=\{editRequestMessage\}/);
+  assert.match(support,/onDelete=\{deleteMentorMessage\}/);
+  assert.match(mentor,/onEdit=\{editMessage\}/);
+  assert.match(mentor,/onDelete=\{deleteSupportMessage\}/);
+  assert.match(tools,/unread conversation/);
+});
+
+test('Firestore client reads avoid route-change reloads and aggressive notification polling',()=>{
+  const app=read('src/App.tsx');
+  const publicData=read('src/services/publicFirestore.ts');
+  const firestoreData=read('src/services/firestoreData.ts');
+  const tools=read('src/components/layout/CommunicationTools.tsx');
+  const notifications=read('api_handlers/admin/notifications.ts');
+
+  assert.doesNotMatch(app,/\[currentUser\.uid, currentUser\.organizationId, currentRoute, contentRefresh\]/);
+  assert.doesNotMatch(app,/onSnapshot/);
+  assert.match(app,/10\*60\*1000/);
+  assert.match(app,/vop_public_content_changed/);
+  assert.match(app,/loadPublicContent\(currentUser\.uid \? currentUser : undefined\)/);
+  assert.match(publicData,/loadPublicContent\(scopeUser\?: User\)/);
+  assert.match(publicData,/loadFirestoreGuides\(undefined, scopeUser\)/);
+  assert.match(firestoreData,/scopeUser\?\.uid === currentUser\.uid/);
+  assert.match(tools,/setInterval\(refresh,60000\)/);
+  assert.doesNotMatch(tools,/15000/);
+  assert.match(notifications,/action==='summary'/);
+  assert.match(notifications,/\.count\(\)\.get\(\)/);
 });
 
 test('web Google authentication uses popup flow without delaying the root auth observer',()=>{

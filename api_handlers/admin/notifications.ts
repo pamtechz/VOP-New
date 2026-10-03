@@ -48,9 +48,9 @@ async function recipientInOrganization(ctx:Awaited<ReturnType<typeof authenticat
 }
 async function ownNotifications(db:Firestore,uid:string){
   const [recipient,user,legacy]=await Promise.all([
-    db.collection('notifications').where('recipientId','==',uid).limit(500).get(),
-    db.collection('notifications').where('userId','==',uid).limit(500).get(),
-    db.collection('notifications').where('uid','==',uid).limit(500).get(),
+    db.collection('notifications').where('recipientId','==',uid).limit(160).get(),
+    db.collection('notifications').where('userId','==',uid).limit(80).get(),
+    db.collection('notifications').where('uid','==',uid).limit(80).get(),
   ]);
   const map=new Map<string,FirebaseFirestore.QueryDocumentSnapshot>();
   [...recipient.docs,...user.docs,...legacy.docs].forEach(doc=>map.set(doc.id,doc));
@@ -62,10 +62,17 @@ export default async function handler(req:Request,res:Response){
   try{
     const requestedOrganization=value(req,'organizationId');
     const action=value(req,'action')||'list';
-    const ownAction=['list','markRead','markUnread','delete','markAllRead','clearAll'].includes(action);
+    const ownAction=['summary','list','markRead','markUnread','delete','markAllRead','clearAll'].includes(action);
 
     if(ownAction){
       const account=await authenticateNotificationAccount(req);
+      if(action==='summary'){
+        const unreadAggregate=await account.db.collection('notifications')
+          .where('recipientId','==',account.auth.uid)
+          .where('read','==',false)
+          .count().get();
+        return res.status(200).json({ok:true,unread:Math.max(0,Number(unreadAggregate.data().count||0))});
+      }
       if(action==='list'){
         const docs=await ownNotifications(account.db,account.auth.uid);
       const items=docs.map(doc=>({id:doc.id,...doc.data()}))

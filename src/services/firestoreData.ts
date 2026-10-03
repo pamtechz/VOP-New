@@ -109,7 +109,9 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
   };
 }
 
-export async function loadFirestoreGuides(_language?: LanguageCode): Promise<DiscoverGuide[]> {
+type GuideScopeUser=Pick<User,'uid'|'organizationId'|'role'|'adminNodeId'|'unionId'|'conferenceId'|'districtId'|'churchId'>;
+
+export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: GuideScopeUser): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
   const guideSnapshots = [];
   const currentUser = auth?.currentUser;
@@ -118,7 +120,11 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
   let adminNodeId = '';
   let scopedOrganizationIds: string[] = [];
 
-  if (currentUser) {
+  if (currentUser && scopeUser?.uid === currentUser.uid) {
+    organizationId = String(scopeUser.organizationId || '').trim();
+    profileRole = String(scopeUser.role || '').trim();
+    adminNodeId = String(scopeUser.adminNodeId || '').trim();
+  } else if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
     const profileData = profile.data() || {};
     organizationId = String(profileData.organizationId || '').trim();
@@ -331,6 +337,7 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
     displayName: String(data.displayName ?? ''),
     email: String(data.email ?? ''),
     phoneNumber: data.phoneNumber,
+    whatsappNumber: data.whatsappNumber,
     photoURL: data.photoURL,
     bio: data.bio,
     address: data.address,
@@ -340,6 +347,16 @@ function normalizeUserProfile(uid: string, data: Record<string, any>): User {
     churchId: data.churchId,
     role: data.role,
     preferences: { uiLocale: String(data.preferences?.uiLocale ?? '').trim() || undefined, studyLanguage: String(data.preferences?.studyLanguage ?? '').trim() || undefined },
+    localizationAccess: data.localizationAccess && typeof data.localizationAccess === 'object'
+      ? {
+          status: ['invited','active','inactive','declined'].includes(String(data.localizationAccess.status||''))
+            ? data.localizationAccess.status : undefined,
+          roles: Array.isArray(data.localizationAccess.roles)
+            ? data.localizationAccess.roles.filter((role:unknown)=>role==='translator'||role==='reviewer') : [],
+          languages: Array.isArray(data.localizationAccess.languages)
+            ? data.localizationAccess.languages.map((value:unknown)=>String(value||'').trim().toLowerCase()).filter(Boolean) : [],
+        }
+      : undefined,
     organizationId: data.organizationId,
     organizationRole: data.organizationRole,
     adminNodeType: data.adminNodeType,
