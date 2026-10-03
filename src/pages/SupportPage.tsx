@@ -15,11 +15,12 @@ interface SupportPageProps {
 }
 
 type SupportReference={type:string;id:string;label:string};
+type WhatsAppTarget={kind:'mentor'|'organization';label:string;number:string};
 type SupportRequest={
   id:string;subject:string;message?:string;category:string;priority:string;target:string;channel:string;
   spiritualInterest?:string;campaignTag?:string;followUpStatus?:string;followUpScheduledAt?:string;
   status:string;references?:SupportReference[];assignedMentorId?:string;
-  createdAt?:string;lastMessageAt?:string;whatsappNumber?:string;whatsappText?:string;
+  createdAt?:string;lastMessageAt?:string;whatsappTargets?:WhatsAppTarget[];whatsappText?:string;
 };
 type SupportMessage={id:string;senderId:string;senderRole?:string;body:string;references?:SupportReference[];createdAt?:string};
 
@@ -31,7 +32,7 @@ async function supportApi(action: string, data: Record<string, unknown> = {}) {
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ action, ...data }),
   });
-  const body = await response.json().catch(() => ({})) as {error?:string;items?:unknown[];item?:unknown};
+  const body = await response.json().catch(() => ({})) as {error?:string;items?:unknown[];item?:unknown;whatsappTargets?:WhatsAppTarget[]};
   if (!response.ok) throw new Error(body.error || 'Support request failed.');
   return body;
 }
@@ -76,7 +77,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [selectedLesson,setSelectedLesson]=useState('');
   const [referenceType,setReferenceType]=useState<'section'|'topic'|'doctrine'|'question'|'scripture'>('topic');
   const [referenceLabel,setReferenceLabel]=useState('');
-  const [whatsappHandoff,setWhatsappHandoff]=useState<{number:string;text:string}|null>(null);
+  const [whatsappHandoff,setWhatsappHandoff]=useState<Array<WhatsAppTarget&{text:string}>>([]);
 
   const [conversation,setConversation]=useState<any|null>(null);
   const [messages,setMessages]=useState<any[]>([]);
@@ -146,29 +147,34 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   },[]);
 
   const openRequest=async(item:SupportRequest)=>{
-    setActiveRequest(item);setWhatsappHandoff(null);setError('');
+    setActiveRequest(item);setError('');
     try{
       const result=await supportApi('supportRequestMessages',{requestId:item.id});
       setRequestMessages((result.items||[]) as SupportMessage[]);
+      const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
+      const targets=result.whatsappTargets||item.whatsappTargets||[];
+      setWhatsappHandoff(targets.map(target=>({...target,text})));
+      setActiveRequest({...item,whatsappTargets:targets});
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not open the support request.');}
   };
 
   const createRequest=async()=>{
     if(question.trim().length<3)return;
-    setSending(true);setError('');setNotice('');setWhatsappHandoff(null);
+    setSending(true);setError('');setNotice('');setWhatsappHandoff([]);
     try{
       const result=await supportApi('createSupportRequest',{
         subject:subject.trim(),message:question.trim(),category,target,channel,priority,spiritualInterest,
         references:buildReferences(),
       });
-      const item=result.item as SupportRequest&{whatsappNumber?:string;whatsappText?:string};
+      const item=result.item as SupportRequest;
       setRequests(current=>[item,...current.filter(existing=>existing.id!==item.id)]);
       setQuestion('');setSubject('');setReferenceLabel('');setPriority('normal');
       setNotice('Your support request has been sent. You can continue the conversation here in the app.');
-      if((channel==='whatsapp'||channel==='both')&&item.whatsappNumber){
-        setWhatsappHandoff({number:item.whatsappNumber,text:item.whatsappText||`VOP Support #${item.id}\n${item.subject}`});
+      if((channel==='whatsapp'||channel==='both')&&(item.whatsappTargets||[]).length){
+        const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
+        setWhatsappHandoff((item.whatsappTargets||[]).map(target=>({...target,text})));
       }else if(channel==='whatsapp'||channel==='both'){
-        setNotice('Your request was saved in VOP, but this organization has not configured a WhatsApp number yet.');
+        setNotice('Your request was saved in VOP, but the selected mentor or organization has not configured a WhatsApp number yet.');
       }
       await openRequest(item);
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not create the support request.');}
@@ -202,9 +208,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     finally{setSending(false);}
   };
 
-  const openWhatsApp=()=>{
-    if(!whatsappHandoff)return;
-    const url=whatsappUrl(whatsappHandoff.number,whatsappHandoff.text);
+  const openWhatsApp=(target:WhatsAppTarget&{text:string})=>{
+    const url=whatsappUrl(target.number,target.text);
     if(url)window.open(url,'_blank','noopener,noreferrer');
   };
 
@@ -224,9 +229,13 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
 
       {error&&<div className="vop-support-error">{error}<button type="button" onClick={()=>setError('')}><X size={16}/></button></div>}
       {notice&&<div className="vop-support-selected"><span>{notice}</span></div>}
-      {whatsappHandoff&&<div className="vop-support-selected">
-        <span>Your VOP request is saved. Continue the same request on WhatsApp if you prefer.</span>
-        <button type="button" className="vop-secondary" onClick={openWhatsApp}><ExternalLink size={15}/>Open WhatsApp</button>
+      {whatsappHandoff.length>0&&<div className="vop-support-selected">
+        <span>Your VOP request is saved. Continue on WhatsApp with the configured recipient if you prefer.</span>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          {whatsappHandoff.map(target=><button type="button" key={target.kind+target.number} className="vop-secondary" onClick={()=>openWhatsApp(target)}>
+            <ExternalLink size={15}/>Message {target.label} on WhatsApp
+          </button>)}
+        </div>
       </div>}
 
       <div className="vop-support-layout">
