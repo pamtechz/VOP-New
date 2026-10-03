@@ -6,6 +6,7 @@ import type { DiscoverGuide, User } from '../types';
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getStoredSettings } from '../services/storage';
+import { consumeSupportContextPrefill } from '../services/supportContext';
 
 interface SupportPageProps {
   currentUser: User;
@@ -129,7 +130,19 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
     }finally{setLoading(false);}
   };
 
-  useEffect(()=>{void load();},[]);
+  useEffect(()=>{
+    const prefill=consumeSupportContextPrefill();
+    if(prefill){
+      setSelectedGuide(prefill.guideId);
+      setSelectedLesson(prefill.lessonId);
+      setCategory(prefill.category||'lesson_clarification');
+      setSubject(prefill.subject||'');
+      setReferenceType(prefill.referenceType||'topic');
+      setReferenceLabel(prefill.referenceLabel||'');
+      setNotice('The lesson context has been attached. Write your question and choose who should help you.');
+    }
+    void load();
+  },[]);
 
   const openRequest=async(item:SupportRequest)=>{
     setActiveRequest(item);setWhatsappHandoff(null);setError('');
