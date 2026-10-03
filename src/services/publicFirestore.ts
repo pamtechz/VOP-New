@@ -9,6 +9,7 @@ import type {
   District,
   RadioBroadcast, RadioPlaylist, MinistryEvent,
   Union,
+  User,
 } from '../types';
 import { db, auth } from '../lib/firebase';
 import { loadFirestoreGuides } from './firestoreData';
@@ -112,12 +113,15 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
   } as T;
 }
 
-export async function loadPublicContent(): Promise<PublicContentSnapshot> {
+export async function loadPublicContent(scopeUser?: User): Promise<PublicContentSnapshot> {
   const firestore = requireDb();
   const currentUser = auth?.currentUser;
   let organizationId = '';
   let profileData: Record<string, unknown> = {};
-  if (currentUser) {
+  if (currentUser && scopeUser?.uid === currentUser.uid) {
+    profileData = scopeUser as unknown as Record<string, unknown>;
+    organizationId = String(scopeUser.organizationId || '').trim();
+  } else if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
     profileData = (profile.data() || {}) as Record<string, unknown>;
     organizationId = String(profileData.organizationId || '').trim();
@@ -331,7 +335,7 @@ export async function loadPublicContent(): Promise<PublicContentSnapshot> {
     .map(item => { const data = item.data() as Record<string, unknown>; return ({ id:item.id, ...data, itemIds:Array.isArray(data.itemIds) ? data.itemIds.map(String) : [] } as RadioPlaylist); })
     .filter(item => item.published === true && item.name.trim());
 
-  const guides = await loadFirestoreGuides();
+  const guides = await loadFirestoreGuides(undefined, scopeUser);
 
   return {
     settings: effectiveSettings,
