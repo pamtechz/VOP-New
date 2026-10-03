@@ -109,7 +109,9 @@ function normalizeLesson(item: FirestoreLesson, documentId: string): Lesson | nu
   };
 }
 
-export async function loadFirestoreGuides(_language?: LanguageCode): Promise<DiscoverGuide[]> {
+type GuideScopeUser=Pick<User,'uid'|'organizationId'|'role'|'adminNodeId'|'unionId'|'conferenceId'|'districtId'|'churchId'>;
+
+export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: GuideScopeUser): Promise<DiscoverGuide[]> {
   const firestore = requireDb();
   const guideSnapshots = [];
   const currentUser = auth?.currentUser;
@@ -118,7 +120,11 @@ export async function loadFirestoreGuides(_language?: LanguageCode): Promise<Dis
   let adminNodeId = '';
   let scopedOrganizationIds: string[] = [];
 
-  if (currentUser) {
+  if (currentUser && scopeUser?.uid === currentUser.uid) {
+    organizationId = String(scopeUser.organizationId || '').trim();
+    profileRole = String(scopeUser.role || '').trim();
+    adminNodeId = String(scopeUser.adminNodeId || '').trim();
+  } else if (currentUser) {
     const profile = await getDoc(doc(firestore, 'users', currentUser.uid));
     const profileData = profile.data() || {};
     organizationId = String(profileData.organizationId || '').trim();
