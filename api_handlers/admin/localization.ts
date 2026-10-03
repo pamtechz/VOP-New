@@ -184,11 +184,17 @@ export default async function handler(req:Request,res:Response){
       const data=snap.data()||{};
       await ref.set({status:decision,reviewedBy:uid,reviewedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
       if(decision==='approved'){
+        const approvedRoles=roles(data.roles).length?roles(data.roles):['translator'];
+        const approvedLanguages=languages(data.languages);
         await db.doc('localizationCollaborators/'+applicantUid).set({
           uid:applicantUid,email:clean(data.email,320),displayName:clean(data.displayName,200),
-          roles:roles(data.roles).length?roles(data.roles):['translator'],
-          languages:languages(data.languages),status:'active',source:'application',
+          roles:approvedRoles,
+          languages:approvedLanguages,status:'active',source:'application',
           invitedBy:uid,approvedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        await db.doc('users/'+applicantUid).set({
+          localizationAccess:{status:'active',roles:approvedRoles,languages:approvedLanguages},
+          updatedAt:FieldValue.serverTimestamp(),
         },{merge:true});
       }
       await createNotification(db,{
@@ -197,7 +203,7 @@ export default async function handler(req:Request,res:Response){
         body:decision==='approved'
           ?'Your localization application was approved. Open Personal Settings to access your assigned translation/review work.'
           :'Your localization application was reviewed and was not approved at this time.',
-        actionUrl:'/personal-settings',
+        actionUrl:decision==='approved'?'/localization':'/personal-settings',
         metadata:{source:'localization-application-decision',status:decision},
         createdBy:uid,
       });
@@ -224,17 +230,23 @@ export default async function handler(req:Request,res:Response){
       const assignedLanguages=languages(body.languages);
       if(!assignedRoles.length)throw new Error('Choose translator, reviewer, or both.');
       if(!assignedLanguages.length)throw new Error('Assign at least one language or all languages.');
-      await db.doc('localizationCollaborators/'+collaboratorUid).set({
-        uid:collaboratorUid,email:user.email,displayName:user.displayName,
-        roles:assignedRoles,languages:assignedLanguages,status:'invited',source:'invite',
-        invitedBy:uid,invitedAt:FieldValue.serverTimestamp(),acceptedAt:null,declinedAt:null,
-        updatedAt:FieldValue.serverTimestamp(),
-      },{merge:true});
+      await Promise.all([
+        db.doc('localizationCollaborators/'+collaboratorUid).set({
+          uid:collaboratorUid,email:user.email,displayName:user.displayName,
+          roles:assignedRoles,languages:assignedLanguages,status:'invited',source:'invite',
+          invitedBy:uid,invitedAt:FieldValue.serverTimestamp(),acceptedAt:null,declinedAt:null,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+        db.doc('users/'+collaboratorUid).set({
+          localizationAccess:{status:'invited',roles:assignedRoles,languages:assignedLanguages},
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+      ]);
       await createNotification(db,{
         recipientId:collaboratorUid,type:'invitation',
         title:'Localization invitation',
         body:`You were invited as ${assignedRoles.join(' and ')} for ${assignedLanguages.includes('*')?'all enabled languages':assignedLanguages.join(', ').toUpperCase()}. Accept the invitation before translation access is activated.`,
-        actionUrl:'/personal-settings',
+        actionUrl:'/localization',
         metadata:{source:'localization-invite',roles:assignedRoles,languages:assignedLanguages,status:'invited'},
         createdBy:uid,
       });
@@ -247,12 +259,23 @@ export default async function handler(req:Request,res:Response){
       if(!snap.exists||snap.data()?.status!=='invited')throw new Error('No pending localization invitation was found.');
       const data=snap.data()||{};
       const accepted=action==='acceptInvitation';
-      await ref.set({
-        status:accepted?'active':'declined',
-        acceptedAt:accepted?FieldValue.serverTimestamp():null,
-        declinedAt:accepted?null:FieldValue.serverTimestamp(),
-        updatedAt:FieldValue.serverTimestamp(),
-      },{merge:true});
+      const nextLocalizationStatus=accepted?'active':'declined';
+      await Promise.all([
+        ref.set({
+          status:nextLocalizationStatus,
+          acceptedAt:accepted?FieldValue.serverTimestamp():null,
+          declinedAt:accepted?null:FieldValue.serverTimestamp(),
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+        db.doc('users/'+uid).set({
+          localizationAccess:{
+            status:nextLocalizationStatus,
+            roles:roles(data.roles),
+            languages:languages(data.languages),
+          },
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+      ]);
       const inviterUid=clean(data.invitedBy,160);
       if(inviterUid){
         await createNotification(db,{
@@ -282,11 +305,17 @@ export default async function handler(req:Request,res:Response){
       const assignedRoles=roles(body.roles).length?roles(body.roles):roles(existing.roles);
       const assignedLanguages=languages(body.languages).length?languages(body.languages):languages(existing.languages);
       const status=body.status==='inactive'?'inactive':body.status==='active'?'active':String(existing.status||'inactive');
-      await db.doc('localizationCollaborators/'+collaboratorUid).set({
-        uid:collaboratorUid,email:user.email,displayName:user.displayName,
-        roles:assignedRoles,languages:assignedLanguages,status,
-        updatedAt:FieldValue.serverTimestamp(),
-      },{merge:true});
+      await Promise.all([
+        db.doc('localizationCollaborators/'+collaboratorUid).set({
+          uid:collaboratorUid,email:user.email,displayName:user.displayName,
+          roles:assignedRoles,languages:assignedLanguages,status,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+        db.doc('users/'+collaboratorUid).set({
+          localizationAccess:{status,roles:assignedRoles,languages:assignedLanguages},
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true}),
+      ]);
       return res.status(200).json({ok:true,item:{uid:collaboratorUid,email:user.email,displayName:user.displayName,roles:assignedRoles,languages:assignedLanguages,status}});
     }
 
@@ -354,6 +383,17 @@ export default async function handler(req:Request,res:Response){
           throw new Error('The requested platform language is no longer enabled.');
         }
         await assignLanguage(db,requesterUid,code);
+        const refreshed=await collaborator(db,requesterUid);
+        if(refreshed){
+          await db.doc('users/'+requesterUid).set({
+            localizationAccess:{
+              status:String(refreshed.status||'active'),
+              roles:roles(refreshed.roles),
+              languages:languages(refreshed.languages),
+            },
+            updatedAt:FieldValue.serverTimestamp(),
+          },{merge:true});
+        }
       }
       await ref.set({
         status:decision,reviewedBy:uid,reviewedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
@@ -364,7 +404,7 @@ export default async function handler(req:Request,res:Response){
         body:decision==='approved'
           ?`${clean(data.name,120)||code.toUpperCase()} is now available in your localization workspace.`
           :`Your request for ${clean(data.name,120)||code.toUpperCase()} was not approved at this time.`,
-        actionUrl:'/personal-settings',
+        actionUrl:decision==='approved'?'/localization':'/personal-settings',
         metadata:{source:'localization-access-decision',requestId,languageCode:code,status:decision},
         createdBy:uid,
       });
