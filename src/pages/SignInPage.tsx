@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Fingerprint } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Fingerprint, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import { emailSignIn, emailSignUp, googleSignIn, resetPassword } from '../services/firebaseAuth';
 import { passkeysSupported, signInWithPasskey } from '../services/passkeys';
@@ -50,6 +50,7 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -118,29 +119,45 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
 
   return (
     <main className="vop-login-page">
-      {onBack && <button type="button" className="vop-login-home-link" onClick={onBack} aria-label="Return to Voice of Prophecy home">← Back to VOP home</button>}
+      {onBack && <button type="button" className="vop-login-home-link" onClick={onBack} aria-label="Return to Voice of Prophecy home"><ArrowLeft size={16}/>Back to VOP home</button>}
       <section className="vop-login-brand">
-        <div className="vop-login-logo">
-          <img src="/assets/vop_logo_2.png" alt="Voice of Prophecy" />
-        </div>
-        <div>
+        <div className="vop-login-brand-copy">
+          <div className="vop-login-logo">
+            <img src="/assets/vop_logo_2.png" alt="Voice of Prophecy" />
+          </div>
           <p className="vop-login-kicker">VOICE OF PROPHECY</p>
-          <h1>Voice of Prophecy</h1>
-          <p>Bible Correspondence School</p>
+          <h1>Study Scripture.<br/>Grow in Christ.</h1>
+          <p className="vop-login-brand-intro">Your Bible study, mentoring, progress and certificates stay connected to one VOP account.</p>
+          <div className="vop-login-benefits" aria-label="Voice of Prophecy account benefits">
+            <span><ShieldCheck size={16}/>Secure progress tied to your account</span>
+            <span><ShieldCheck size={16}/>Mentor and organization support</span>
+            <span><ShieldCheck size={16}/>Continue across web and supported devices</span>
+          </div>
         </div>
         <div className="vop-login-brand-footer">
-          <strong>Study the Word. Grow in Christ.</strong>
-          <span>Offline Bible studies with synchronized progress.</span>
+          <strong>Voice of Prophecy</strong>
+          <span>Bible Correspondence School</span>
         </div>
       </section>
 
       <section className="vop-login-card" aria-labelledby="vop-auth-heading">
-        <div className="vop-login-card-inner">
-          <p className="vop-login-kicker">ACCOUNT ACCESS</p>
-          <h2 id="vop-auth-heading">{mode === 'register' ? 'Create your account' : 'Welcome back'}</h2>
-          <p className="vop-login-subtitle">
-            {mode === 'register' ? 'Create an account to save your study progress.' : 'Sign in to continue your Bible studies.'}
-          </p>
+        <div className="vop-login-card-inner" aria-busy={pending}>
+          <div className="vop-login-card-head">
+            <p className="vop-login-kicker">ACCOUNT ACCESS</p>
+            <h2 id="vop-auth-heading">{mode === 'register' ? 'Create your VOP account' : 'Welcome back'}</h2>
+            <p className="vop-login-subtitle">
+              {mode === 'register'
+                ? 'Create one account for studies, mentoring, progress and certification.'
+                : 'Sign in to continue from where you stopped.'}
+            </p>
+          </div>
+
+          <div className="vop-login-mode-switch" role="tablist" aria-label="Account access mode">
+            <button type="button" role="tab" aria-selected={mode==='sign-in'} className={mode==='sign-in'?'active':''}
+              disabled={pending} onClick={()=>{setMode('sign-in');setError('');setMessage('')}}>Sign in</button>
+            <button type="button" role="tab" aria-selected={mode==='register'} className={mode==='register'?'active':''}
+              disabled={pending} onClick={()=>{setMode('register');setError('');setMessage('')}}>Create account</button>
+          </div>
 
           {configurationMissing ? (
             <div className="vop-login-error" role="alert">
@@ -148,54 +165,62 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
             </div>
           ) : (
             <>
+              {error && <p className="vop-login-error" role="alert">{error}</p>}
+              {message && <p className="vop-login-success" role="status">{message}</p>}
+
               <form onSubmit={onSubmit} className="vop-login-form">
                 <label htmlFor="vop-auth-email">Email address</label>
-                <input id="vop-auth-email" type="email" autoComplete="email" value={email}
-                  onChange={event => setEmail(event.target.value)} required disabled={pending} />
+                <div className="vop-login-input">
+                  <Mail size={18} aria-hidden="true"/>
+                  <input id="vop-auth-email" type="email" inputMode="email" autoComplete="email" value={email}
+                    onChange={event => setEmail(event.target.value)} placeholder="name@example.com" required disabled={pending} />
+                </div>
 
-                <label htmlFor="vop-auth-password">Password</label>
-                <input id="vop-auth-password" type="password" minLength={6}
-                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                  value={password} onChange={event => setPassword(event.target.value)} required disabled={pending} />
+                <div className="vop-login-password-row">
+                  <label htmlFor="vop-auth-password">Password</label>
+                  {mode==='sign-in'&&<button type="button" disabled={pending} onClick={() => void onReset()}>Forgot password?</button>}
+                </div>
+                <div className="vop-login-input">
+                  <LockKeyhole size={18} aria-hidden="true"/>
+                  <input id="vop-auth-password" type={showPassword?'text':'password'} minLength={6}
+                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                    value={password} onChange={event => setPassword(event.target.value)}
+                    placeholder={mode==='register'?'At least 6 characters':'Enter your password'} required disabled={pending} />
+                  <button className="vop-login-password-toggle" type="button" onClick={()=>setShowPassword(value=>!value)}
+                    disabled={pending} aria-label={showPassword?'Hide password':'Show password'}>
+                    {showPassword?<EyeOff size={17}/>:<Eye size={17}/>}
+                  </button>
+                </div>
+                {mode==='register'&&<small className="vop-login-field-help">Use a password you do not reuse on another service.</small>}
 
                 <button className="vop-login-primary" type="submit" disabled={pending}>
                   {pending ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign in'}
                 </button>
               </form>
 
-              <div className="vop-login-divider"><span>or</span></div>
+              <div className="vop-login-divider"><span>or continue with</span></div>
 
-              {mode==='sign-in'&&passkeysSupported()&&<>
-                <button className="vop-login-google" type="button" disabled={pending} onClick={() => void onPasskey()}>
-                  <Fingerprint size={20} aria-hidden="true" />
-                  Continue with passkey
+              <div className="vop-login-alt-actions">
+                {mode==='sign-in'&&passkeysSupported()&&
+                  <button className="vop-login-alt" type="button" disabled={pending} onClick={() => void onPasskey()}>
+                    <Fingerprint size={20} aria-hidden="true" />
+                    <span><strong>Passkey</strong><small>Fingerprint, face, PIN or device lock</small></span>
+                  </button>}
+                <button className="vop-login-alt" type="button" disabled={pending} onClick={() => void onGoogle()}>
+                  <span className="vop-google-mark" aria-hidden="true">G</span>
+                  <span><strong>Google</strong><small>Use your Google account</small></span>
                 </button>
-                <p className="vop-login-note">Use a passkey you previously enabled for VOP. Your device may verify you with fingerprint, face recognition, screen lock or PIN.</p>
-              </>}
-
-              <button className="vop-login-google" type="button" disabled={pending} onClick={() => void onGoogle()}>
-                <span className="vop-google-mark" aria-hidden="true">G</span>
-                Continue with Google
-              </button>
-
-              <div className="vop-login-links">
-                <button type="button" disabled={pending} onClick={() => {
-                  setMode(value => value === 'register' ? 'sign-in' : 'register');
-                  setError('');
-                  setMessage('');
-                }}>
-                  {mode === 'register' ? 'Already have an account? Sign in' : 'Create an account'}
-                </button>
-                {mode === 'sign-in' && (
-                  <button type="button" disabled={pending} onClick={() => void onReset()}>Forgot password?</button>
-                )}
               </div>
+
+              <p className="vop-login-note">
+                {mode==='sign-in'
+                  ?'Passkeys appear after you enable one from Personal Settings. VOP never receives your fingerprint or face data.'
+                  :'Already registered? Switch to Sign in above.'}
+              </p>
             </>
           )}
 
-          {error && <p className="vop-login-error" role="alert">{error}</p>}
-          {message && <p className="vop-login-success" role="status">{message}</p>}
-          <p className="vop-login-note">Your lesson library remains available offline after sign-in.</p>
+          <div className="vop-login-security-note"><ShieldCheck size={16}/><span>Your learning records stay linked to your authenticated VOP account. Never share your password or sign-in codes.</span></div>
         </div>
       </section>
     </main>
