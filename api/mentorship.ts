@@ -197,6 +197,51 @@ function safeReference(value: unknown) {
   return { type, id: referenceId, label };
 }
 
+function messageReferences(value:unknown){
+  return Array.isArray(value)?value.slice(0,8).map(safeReference).filter(Boolean):[];
+}
+
+function messagePayload(doc:FirebaseFirestore.QueryDocumentSnapshot){
+  const data=doc.data()||{};
+  return {
+    id:doc.id,
+    ...data,
+    body:data.deleted===true?'':String(data.body||''),
+    references:data.deleted===true?[]:Array.isArray(data.references)?data.references:[],
+    createdAt:iso(data.createdAt),
+    editedAt:iso(data.editedAt),
+    deletedAt:iso(data.deletedAt),
+  };
+}
+
+function unreadFor(value:unknown){
+  return Array.isArray(value)?value.map(item=>String(item||'').trim()).filter(Boolean):[];
+}
+
+async function markContainerRead(
+  ref:FirebaseFirestore.DocumentReference,
+  data:Record<string,unknown>,
+  uid:string,
+){
+  const current=unreadFor(data.unreadFor);
+  if(!current.includes(uid))return false;
+  await ref.set({
+    unreadFor:current.filter(item=>item!==uid),
+    updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return true;
+}
+
+async function supportInitialMessageId(
+  requestRef:FirebaseFirestore.DocumentReference,
+  requestData:Record<string,unknown>,
+){
+  const configured=String(requestData.initialMessageId||'').trim();
+  if(configured)return configured;
+  const first=await requestRef.collection('messages').orderBy('createdAt','asc').limit(1).get();
+  return first.docs[0]?.id||'';
+}
+
 const SUPPORT_TEAM_ROLES=new Set(['owner','admin']);
 const SUPPORT_CATEGORIES=new Set([
   'lesson_clarification','doctrine','bible_question','assessment',
@@ -404,8 +449,8 @@ export default async function handler(req: Request, res: Response) {
       ['listStudents','listMentors','listAssignments','getAutomationSettings','listSupportRequests'].includes(action) ? 'view' :
       ['assign','saveAutomationSettings','createDraft','sendDraft'].includes(action) ? 'manage' :
       action === 'updateSupportRequest' ? 'update' :
-      ['sendMessage','createSupportRequest','replySupportRequest'].includes(action) ? 'create' :
-      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages'].includes(action) ? 'read' : '';
+      ['sendMessage','createSupportRequest','replySupportRequest','editMessage','deleteMessage','editSupportMessage','deleteSupportMessage'].includes(action) ? 'create' :
+      ['performance','questionFailures','listConversations','listMyConversations','listMyAssignments','messages','listMySupportRequests','supportRequestMessages','markConversationRead','markSupportRequestRead'].includes(action) ? 'read' : '';
     if (permissionAction) await requirePermissionForProfile(db, actor as Record<string, unknown>, 'mentoring', permissionAction);
     let organizationId = String(body.organizationId || actor.organizationId || '').trim();
     if (isAdmin(actor)) organizationId = await assertOrganizationScope(db, { ...actor, uid: decoded.uid }, organizationId);
@@ -565,7 +610,10 @@ export default async function handler(req: Request, res: Response) {
       const items = requestedStudent
         ? scopedConversationDocs.filter(doc => String(doc.data()?.studentId || '') === requestedStudent)
         : scopedConversationDocs;
-      return res.status(200).json({ ok: true, items: items.map(doc => ({ id: doc.id, ...doc.data() })) });
+      return res.status(200).json({ ok: true, items: items.map(doc => {
+        const data=doc.data()||{};
+        return {id:doc.id,...data,lastMessageAt:iso(data.lastMessageAt),unread:unreadFor(data.unreadFor).includes(decoded.uid)};
+      }) });
     }
 
     if (action === 'listMyConversations') {
@@ -585,16 +633,34 @@ export default async function handler(req: Request, res: Response) {
       const ref = db.doc(`mentorConversations/${conversationId(studentId, mentorId)}`);
       const snapshot = await ref.get();
       const item = snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : { id: ref.id, studentId, mentorId, status: 'open' };
-      return res.status(200).json({ ok: true, items: [{ ...item, mentorName: String(mentor.displayName || mentor.email || mentorId), mentorPhotoURL: String(mentor.photoURL || '') }] });
+      const itemData=item as Record<string,unknown>;
+      return res.status(200).json({ ok: true, items: [{
+        ...item,
+        lastMessageAt:iso(itemData.lastMessageAt),
+        unread:unreadFor(itemData.unreadFor).includes(decoded.uid),
+        mentorName: String(mentor.displayName || mentor.email || mentorId),
+        mentorPhotoURL: String(mentor.photoURL || ''),
+      }] });
     }
 
     if (action === 'messages') {
       const conversation = await db.doc(`mentorConversations/${id(body.conversationId)}`).get();
-      if (!conversation.exists) return res.status(200).json({ ok: true, items: [] });
+      if (!conversation.exists) return res.status(200).json({ ok: true, items: [], unread:false });
       const data = conversation.data() || {};
       await assertParticipant(db, decoded.uid, data);
       const messages = await conversation.ref.collection('messages').orderBy('createdAt','asc').limit(200).get();
-      return res.status(200).json({ ok: true, items: messages.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: iso(doc.data()?.createdAt) })) });
+      const wasUnread=unreadFor(data.unreadFor).includes(decoded.uid);
+      if(wasUnread)await markContainerRead(conversation.ref,data,decoded.uid);
+      return res.status(200).json({ ok: true, unread:false, items: messages.docs.map(messagePayload) });
+    }
+
+    if(action==='markConversationRead'){
+      const conversation=await db.doc(`mentorConversations/${id(body.conversationId)}`).get();
+      if(!conversation.exists)return res.status(200).json({ok:true,updated:false});
+      const data=conversation.data()||{};
+      await assertParticipant(db,decoded.uid,data);
+      const updated=await markContainerRead(conversation.ref,data,decoded.uid);
+      return res.status(200).json({ok:true,updated});
     }
 
     if (action === 'sendMessage') {
@@ -620,7 +686,12 @@ export default async function handler(req: Request, res: Response) {
       if (String(decoded.uid) === studentId && mentorId !== String(assignment.data()?.mentorId || '')) {
         throw new Error('You can only message your assigned mentor.');
       }
-      const references = Array.isArray(body.references) ? body.references.map(safeReference).filter(Boolean) : [];
+      const references = messageReferences(body.references);
+      const recipientId=String(decoded.uid)===studentId?mentorId:studentId;
+      const nextUnread=[...new Set([
+        ...unreadFor(current.unreadFor).filter(uid=>uid!==decoded.uid),
+        recipientId,
+      ])];
       await ref.set({
         ...current,
         organizationId: String(student.organizationId || organizationId),
@@ -628,10 +699,11 @@ export default async function handler(req: Request, res: Response) {
         mentorId,
         status: 'open',
         lastMessageAt: FieldValue.serverTimestamp(),
+        lastMessageSenderId:decoded.uid,
+        unreadFor:nextUnread,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       const messageRef = ref.collection('messages').doc();
-      const recipientId=String(decoded.uid)===studentId?mentorId:studentId;
       await messageRef.set({
         senderId: decoded.uid,
         recipientId,
@@ -647,7 +719,38 @@ export default async function handler(req: Request, res: Response) {
         metadata:{source:'mentor-message',conversationId:ref.id,studentId,mentorId,messageId:messageRef.id},
         createdBy:decoded.uid,
       });
-      return res.status(200).json({ ok: true, item: { id: messageRef.id, senderId: decoded.uid, body: message, references } });
+      return res.status(200).json({ ok: true, item: { id: messageRef.id, senderId: decoded.uid, recipientId, body: message, references, createdAt:new Date().toISOString(), editedAt:'', deleted:false } });
+    }
+
+    if(action==='editMessage'||action==='deleteMessage'){
+      const conversationIdValue=id(body.conversationId);
+      const messageId=id(body.messageId);
+      const conversation=await db.doc(`mentorConversations/${conversationIdValue}`).get();
+      if(!conversation.exists)throw new Error('Conversation was not found.');
+      const conversationData=conversation.data()||{};
+      await assertParticipant(db,decoded.uid,conversationData);
+      const messageRef=conversation.ref.collection('messages').doc(messageId);
+      const message=await messageRef.get();
+      if(!message.exists)throw new Error('Message was not found.');
+      const data=message.data()||{};
+      if(String(data.senderId||'')!==decoded.uid)throw new Error('You can only change messages you sent.');
+      if(data.deleted===true)throw new Error('This message has already been deleted.');
+      if(action==='deleteMessage'){
+        await messageRef.set({
+          body:'',references:[],deleted:true,deletedAt:FieldValue.serverTimestamp(),deletedBy:decoded.uid,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        return res.status(200).json({ok:true,item:{id:messageId,senderId:decoded.uid,body:'',references:[],deleted:true,deletedAt:new Date().toISOString()}});
+      }
+      const nextBody=String(body.message||'').trim();
+      if(!nextBody||nextBody.length>10000)throw new Error('A message is required.');
+      const references=messageReferences(body.references);
+      await messageRef.set({
+        body:nextBody,references,editedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      return res.status(200).json({ok:true,item:{
+        id:messageId,senderId:decoded.uid,body:nextBody,references,editedAt:new Date().toISOString(),deleted:false,
+      }});
     }
 
     if (action === 'createSupportRequest') {
@@ -664,8 +767,7 @@ export default async function handler(req: Request, res: Response) {
       const category=supportCategory(body.category);
       const spiritualInterest=supportInterest(body.spiritualInterest);
       const priority=supportPriority(body.priority);
-      const references=Array.isArray(body.references)
-        ?body.references.slice(0,8).map(safeReference).filter(Boolean):[];
+      const references=messageReferences(body.references);
       const assignedMentorId=(target==='mentor'||target==='both')
         ?await activeMentorFor(db,candidateId,candidateOrganizationId):'';
       if(target==='mentor'&&!assignedMentorId){
@@ -694,7 +796,8 @@ export default async function handler(req: Request, res: Response) {
         subject,message,category,priority,target,channel,spiritualInterest,campaignTag,
         followUpStatus,followUpScheduledAt:null,followUpCompletedAt:null,followUpUpdatedAt:createdAt,
         references,assignedMentorId,recipientIds:recipients,status:'open',
-        createdAt,updatedAt:createdAt,lastMessageAt:createdAt,
+        initialMessageId:messageRef.id,unreadFor:recipients,
+        createdAt,updatedAt:createdAt,lastMessageAt:createdAt,lastMessageSenderId:candidateId,
         createdBy:candidateId,firstResponseAt:null,resolvedAt:null,
       });
       await messageRef.set({
@@ -772,15 +875,15 @@ export default async function handler(req: Request, res: Response) {
       await assertSupportRequestAccess(db,decoded.uid,actor,request.data()||{});
       const messages=await request.ref.collection('messages').orderBy('createdAt','asc').limit(200).get();
       const requestData=request.data()||{};
+      const wasUnread=unreadFor(requestData.unreadFor).includes(decoded.uid);
+      if(wasUnread)await markContainerRead(request.ref,requestData,decoded.uid);
       const whatsappTargets=await supportWhatsAppTargets(
         db,
         String(requestData.organizationId||''),
         String(requestData.assignedMentorId||''),
         requestData.target,
       );
-      return res.status(200).json({ok:true,whatsappTargets,items:messages.docs.map(doc=>({
-        id:doc.id,...doc.data(),createdAt:iso(doc.data()?.createdAt),
-      }))});
+      return res.status(200).json({ok:true,unread:false,whatsappTargets,items:messages.docs.map(messagePayload)});
     }
 
     if (action === 'replySupportRequest') {
@@ -802,17 +905,22 @@ export default async function handler(req: Request, res: Response) {
         senderRole:senderIsCandidate?'candidate':isMentor(actor)?'mentor':'support_team',
         body:message,references,createdAt:FieldValue.serverTimestamp(),
       });
+      const recipients=senderIsCandidate
+        ?[...new Set((Array.isArray(requestData.recipientIds)?requestData.recipientIds:[])
+          .map(value=>String(value||'')).filter(Boolean))]
+        :[candidateId];
       const update:Record<string,unknown>={
         updatedAt:FieldValue.serverTimestamp(),lastMessageAt:FieldValue.serverTimestamp(),
+        lastMessageSenderId:decoded.uid,
+        unreadFor:[...new Set([
+          ...unreadFor(requestData.unreadFor).filter(uid=>uid!==decoded.uid),
+          ...recipients.filter(uid=>uid&&uid!==decoded.uid),
+        ])],
         status:senderIsCandidate&&String(requestData.status||'')==='resolved'?'open':'in_progress',
       };
       if(!senderIsCandidate&&!requestData.firstResponseAt)update.firstResponseAt=FieldValue.serverTimestamp();
       if(senderIsCandidate)update.resolvedAt=null;
       await requestRef.set(update,{merge:true});
-      const recipients=senderIsCandidate
-        ?[...new Set((Array.isArray(requestData.recipientIds)?requestData.recipientIds:[])
-          .map(value=>String(value||'')).filter(Boolean))]
-        :[candidateId];
       await Promise.all(recipients.filter(uid=>uid&&uid!==decoded.uid).map(recipientId=>createNotification(db,{
         organizationId:String(requestData.organizationId||''),recipientId,type:'learning-support',
         title:senderIsCandidate?'Learner replied to support request':'New support reply',
@@ -821,7 +929,56 @@ export default async function handler(req: Request, res: Response) {
         createdBy:decoded.uid,
       })));
       return res.status(200).json({ok:true,item:{
-        id:messageRef.id,senderId:decoded.uid,body:message,references,createdAt:new Date().toISOString(),
+        id:messageRef.id,senderId:decoded.uid,body:message,references,createdAt:new Date().toISOString(),editedAt:'',deleted:false,
+      }});
+    }
+
+    if(action==='markSupportRequestRead'){
+      const requestId=id(body.requestId);
+      const request=await db.doc(`learningSupportRequests/${requestId}`).get();
+      if(!request.exists)return res.status(200).json({ok:true,updated:false});
+      const data=request.data()||{};
+      await assertSupportRequestAccess(db,decoded.uid,actor,data);
+      const updated=await markContainerRead(request.ref,data,decoded.uid);
+      return res.status(200).json({ok:true,updated});
+    }
+
+    if(action==='editSupportMessage'||action==='deleteSupportMessage'){
+      const requestId=id(body.requestId);
+      const messageId=id(body.messageId);
+      const requestRef=db.doc(`learningSupportRequests/${requestId}`);
+      const request=await requestRef.get();
+      if(!request.exists)throw new Error('Support request was not found.');
+      const requestData=request.data()||{};
+      await assertSupportRequestAccess(db,decoded.uid,actor,requestData);
+      const messageRef=requestRef.collection('messages').doc(messageId);
+      const message=await messageRef.get();
+      if(!message.exists)throw new Error('Message was not found.');
+      const data=message.data()||{};
+      if(String(data.senderId||'')!==decoded.uid)throw new Error('You can only change messages you sent.');
+      if(data.deleted===true)throw new Error('This message has already been deleted.');
+      const initialId=await supportInitialMessageId(requestRef,requestData);
+      if(action==='deleteSupportMessage'){
+        const batch=db.batch();
+        batch.set(messageRef,{
+          body:'',references:[],deleted:true,deletedAt:FieldValue.serverTimestamp(),deletedBy:decoded.uid,
+          updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+        if(messageId===initialId)batch.set(requestRef,{message:'',updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        await batch.commit();
+        return res.status(200).json({ok:true,item:{id:messageId,senderId:decoded.uid,body:'',references:[],deleted:true,deletedAt:new Date().toISOString()}});
+      }
+      const nextBody=String(body.message||'').trim();
+      if(!nextBody||nextBody.length>10000)throw new Error('A support reply is required.');
+      const references=messageReferences(body.references);
+      const batch=db.batch();
+      batch.set(messageRef,{
+        body:nextBody,references,editedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      if(messageId===initialId)batch.set(requestRef,{message:nextBody,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      await batch.commit();
+      return res.status(200).json({ok:true,item:{
+        id:messageId,senderId:decoded.uid,body:nextBody,references,editedAt:new Date().toISOString(),deleted:false,
       }});
     }
 
