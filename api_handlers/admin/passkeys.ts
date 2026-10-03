@@ -96,6 +96,12 @@ export default async function handler(req:Request,res:Response){
       }
       const uid=clean(stored.uid,180);
       if(!uid)throw new Error('Passkey account mapping is invalid.');
+      const [authUser,profile]=await Promise.all([
+        getAuth().getUser(uid),
+        db.doc('users/'+uid).get(),
+      ]);
+      if(authUser.disabled)throw new Error('This VOP account is disabled.');
+      if(!profile.exists)throw new Error('This VOP account no longer exists.');
       const customToken=await getAuth().createCustomToken(uid,{authMethod:'passkey'});
       return res.status(200).json({ok:true,customToken});
     }
