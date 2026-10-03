@@ -244,6 +244,11 @@ export interface User {
   privileges: UserPrivileges;
   progress: AccountProgress;
   preferences?: { uiLocale?: string; studyLanguage?: string; };
+  localizationAccess?: {
+    status?: 'invited'|'active'|'inactive'|'declined';
+    roles?: Array<'translator'|'reviewer'>;
+    languages?: string[];
+  };
 }
 
 export interface Question {
@@ -485,7 +490,8 @@ export type AppRoute =
   | 'lesson' 
   | 'about' 
   | 'profile' 
-  | 'personal-settings' 
+  | 'personal-settings'
+  | 'localization'
   | 'resources' 
   | 'lessons'
   | 'master-guide'
