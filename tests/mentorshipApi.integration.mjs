@@ -135,6 +135,7 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       assert.equal(created.payload.item.category,'doctrine');
       assert.equal(created.payload.item.spiritualInterest,'one_voice_27');
       assert.equal(created.payload.item.campaignTag,'one_voice_27');
+      assert.equal(created.payload.item.followUpStatus,'new');
       assert.equal(created.payload.item.references.length,3);
       const requestId=created.payload.item.id;
 
@@ -167,9 +168,22 @@ test('mentor workspace is assignment-scoped end to end',async t=>{
       assert.equal(candidateThread.payload.items.length,2);
       assert.equal(candidateThread.payload.items[1].senderId,mentor.uid);
 
+      const followUpDate='2026-10-10T14:00:00.000Z';
+      const scheduled=await call(supportAdmin,{
+        action:'updateSupportRequest',requestId,followUpStatus:'scheduled',followUpScheduledAt:followUpDate,
+      });
+      assert.equal(scheduled.status,200,JSON.stringify(scheduled.payload));
+      assert.equal(scheduled.payload.item.followUpStatus,'scheduled');
+      assert.equal(scheduled.payload.item.followUpScheduledAt,followUpDate);
+
+      const afterScheduling=await call(learner,{action:'listMySupportRequests'});
+      const scheduledRequest=afterScheduling.payload.items.find(item=>item.id===requestId);
+      assert.equal(scheduledRequest.followUpStatus,'scheduled');
+
       const resolved=await call(supportAdmin,{action:'updateSupportRequest',requestId,status:'resolved'});
       assert.equal(resolved.status,200,JSON.stringify(resolved.payload));
       assert.equal(resolved.payload.item.status,'resolved');
+      assert.equal(resolved.payload.item.followUpStatus,'scheduled');
 
       const reopen=await call(learner,{
         action:'replySupportRequest',requestId,
