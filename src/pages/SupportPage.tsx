@@ -117,7 +117,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         const refreshed=supportRows.find(item=>item.id===activeRequest.id)||null;
         setActiveRequest(refreshed);
       }
-      const next=(mentorResult.items||[])[0]||null;
+      const next=((mentorResult.items||[])[0]||null) as {id?:string;studentId?:string;mentorId?:string;mentorName?:string}|null;
       setConversation(next);
       if(next?.id){
         const thread=await supportApi('messages',{conversationId:next.id});
