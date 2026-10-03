@@ -45,6 +45,7 @@ import { EventsPage } from './pages/EventsPage';
 import PaymentsPage from './pages/PaymentsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
+import LocalizationConsolePage from './pages/LocalizationConsolePage';
 import NotificationsPage from './pages/NotificationsPage';
 import InvitationsPage from './pages/InvitationsPage';
 import MentorWorkspace from './pages/MentorWorkspace';
@@ -582,6 +583,8 @@ export const App: React.FC = () => {
     if (route === 'admin' && !privileged) return;
     const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
     if (route === 'mentor' && !mentorAccess) return;
+    const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
+    if(route==='localization'&&!localizationAccess)return;
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -638,6 +641,7 @@ export const App: React.FC = () => {
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
+          {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <LocalizationConsolePage currentUser={currentUser} onBack={goBack}/>} 
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
