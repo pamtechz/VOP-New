@@ -132,6 +132,9 @@ test('assessment architecture separates classification and policy and starts att
   assert.match(modal,/Retake replaces the current assessment credit/);
   assert.match(modal,/Revoke result/);
   assert.match(modal,/attemptStartLock/);
+  assert.doesNotMatch(modal,/const retakeAllowed=/);
+  assert.match(modal,/let startQuiz enforce the current authoritative policy/);
+  assert.match(modal,/quiz\.check_retake_availability/);
   assert.match(study,/ASSESSMENT_RETAKE_CONFIRMATION/);
   assert.match(study,/creditStatus:'revoked_for_retake'/);
   assert.match(study,/questions:attemptQuestions/);
