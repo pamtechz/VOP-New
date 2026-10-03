@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
+import { Fingerprint } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import { emailSignIn, emailSignUp, googleSignIn, resetPassword } from '../services/firebaseAuth';
+import { passkeysSupported, signInWithPasskey } from '../services/passkeys';
 
 type Mode = 'sign-in' | 'register';
 
@@ -62,6 +64,20 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
       else await emailSignIn(email, password);
     } catch (reason) {
       setError(firebaseMessage(reason, mode));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onPasskey() {
+    if (pending || configurationMissing) return;
+    setPending(true);
+    setError('');
+    setMessage('');
+    try {
+      await signInWithPasskey();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Passkey sign-in failed.');
     } finally {
       setPending(false);
     }
@@ -148,6 +164,14 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
               </form>
 
               <div className="vop-login-divider"><span>or</span></div>
+
+              {mode==='sign-in'&&passkeysSupported()&&<>
+                <button className="vop-login-google" type="button" disabled={pending} onClick={() => void onPasskey()}>
+                  <Fingerprint size={20} aria-hidden="true" />
+                  Continue with passkey
+                </button>
+                <p className="vop-login-note">Use a passkey you previously enabled for VOP. Your device may verify you with fingerprint, face recognition, screen lock or PIN.</p>
+              </>}
 
               <button className="vop-login-google" type="button" disabled={pending} onClick={() => void onGoogle()}>
                 <span className="vop-google-mark" aria-hidden="true">G</span>
