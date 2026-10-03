@@ -8,7 +8,6 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorPage } from './pages/ErrorPage';
 import { InvitationLandingPage } from './pages/InvitationLandingPage';
 import { createFirestoreStudentProfile, loadFirestoreUser } from './services/firestoreData';
-import { completeGoogleRedirectSignIn } from './services/firebaseAuth';
 import { App } from './App';
 import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
@@ -37,19 +36,7 @@ export function Root() {
       return;
     }
 
-    let unsubscribe: (()=>void) | undefined;
-    let cancelled=false;
-
-    void (async()=>{
-      try{
-        await completeGoogleRedirectSignIn();
-      }catch(error){
-        console.error('Google redirect sign-in could not be completed:',error);
-        setDataError(error instanceof Error?error.message:'Google sign-in could not be completed.');
-      }
-      if(cancelled)return;
-
-      unsubscribe = onAuthStateChanged(
+    const unsubscribe = onAuthStateChanged(
       auth,
       firebaseUser => {
         setAccount(firebaseUser);
@@ -136,12 +123,8 @@ export function Root() {
         setDataError('Firebase authentication could not be restored.');
       },
       );
-    })();
 
-    return () => {
-      cancelled=true;
-      unsubscribe?.();
-    };
+    return () => unsubscribe();
   }, []);
 
   if (!authReady) {

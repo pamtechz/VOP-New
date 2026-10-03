@@ -40,6 +40,7 @@ test('study progress: server grades and guide paths stay within authorized tenan
     const inheritanceLearner=await identity('study-settings-inheritance',orgA);
     const outsider=await identity('study-foreign',orgB);
     const retakeLearner=await identity('study-retake',orgA);
+    const legacyCounterLearner=await identity('study-legacy-attempt-counter',orgA);
     const cooldownLearner=await identity('study-cooldown',orgA);
     const passedRetakeLearner=await identity('study-passed-retake',orgA);
     const idempotentLearner=await identity('study-idempotent',orgA);
@@ -355,6 +356,45 @@ test('study progress: server grades and guide paths stay within authorized tenan
       const response=await submitStarted(outsider,{0:1});
       assert.equal(response.status,403,JSON.stringify(response));
       assert.equal((await db.doc('users/'+outsider.uid).get()).data()?.progress?.guideScores,undefined);
+    });
+
+    await t.test('legacy stale attempt counters self-heal without weakening new attempt limits',async()=>{
+      await db.doc('organizations/'+orgA+'/settings/settings').set({
+        quizPassThreshold:80,quizMaxAttempts:1,quizRetakeCooldownMinutes:0,
+      },{merge:true});
+      const policyId=createHash('sha256').update([orgA,'en',guideId,testId].join(':')).digest('hex');
+      const policyRef=db.doc('users/'+legacyCounterLearner.uid+'/assessmentAttemptPolicy/'+policyId);
+      await policyRef.set({
+        organizationId:orgA,language:'en',guideId,lessonId:testId,
+        attemptCount:1,lastAttemptAt:new Date().toISOString(),
+        activeSessionId:'missing-legacy-session',
+      });
+      assert.equal((await db.collection('users/'+legacyCounterLearner.uid+'/assessmentAttempts').get()).size,0);
+
+      const repairedStart=await startQuiz(legacyCounterLearner);
+      assert.equal(repairedStart.status,200,JSON.stringify(repairedStart));
+      assert.ok(repairedStart.sessionId);
+      const repairedPolicy=(await policyRef.get()).data();
+      assert.equal(repairedPolicy?.policyVersion,2);
+      assert.equal(repairedPolicy?.attemptCount,1);
+      assert.ok(repairedPolicy?.legacyCounterReconciledAt);
+
+      const submitted=await api(legacyCounterLearner,{
+        action:'submitQuiz',language:'en',guideId,lessonId:testId,
+        sessionId:repairedStart.sessionId,answers:{0:0},
+      });
+      assert.equal(submitted.status,200,JSON.stringify(submitted));
+      assert.equal(submitted.retakePolicy.attemptsUsed,1);
+
+      const blocked=await startQuiz(legacyCounterLearner);
+      assert.equal(blocked.status,200,JSON.stringify(blocked));
+      assert.equal(blocked.ok,false);
+      assert.equal(blocked.code,'ASSESSMENT_ATTEMPT_LIMIT');
+      assert.equal((await db.collection('users/'+legacyCounterLearner.uid+'/assessmentAttempts').get()).size,1);
+
+      await db.doc('organizations/'+orgA+'/settings/settings').set({
+        quizPassThreshold:80,quizMaxAttempts:0,quizRetakeCooldownMinutes:0,
+      },{merge:true});
     });
 
     await t.test('failed assessments follow the configured attempt limit and waiting period',async()=>{
