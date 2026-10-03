@@ -29,12 +29,14 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [phone, setPhone] = useState(currentUser.phoneNumber ?? '');
+  const [whatsapp, setWhatsapp] = useState(currentUser.whatsappNumber ?? '');
   const [address, setAddress] = useState(currentUser.address ?? '');
 
   useEffect(() => {
     setPhone(currentUser.phoneNumber ?? '');
+    setWhatsapp(currentUser.whatsappNumber ?? '');
     setAddress(currentUser.address ?? '');
-  }, [currentUser.uid, currentUser.phoneNumber, currentUser.address]);
+  }, [currentUser.uid, currentUser.phoneNumber, currentUser.whatsappNumber, currentUser.address]);
 
   const course = useMemo(() => calculateCurriculumProgress(
     guides, currentUser, settings.quizPassThreshold, activeLanguage,
@@ -82,7 +84,7 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
           action: 'updateOwnProfile',
-          profile: { phoneNumber: phone.trim(), address: address.trim() },
+          profile: { phoneNumber: phone.trim(), whatsappNumber: whatsapp.trim(), address: address.trim() },
         }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string };
@@ -159,6 +161,11 @@ export const ReferenceProfilePage: React.FC<ProfileProps> = ({
             <label className="vop-reference-field">
               {t('phone', 'Phone')}
               <input type="tel" value={phone} onChange={event => setPhone(event.target.value)} />
+            </label>
+            <label className="vop-reference-field">
+              WhatsApp number
+              <input type="tel" value={whatsapp} onChange={event => setWhatsapp(event.target.value)} placeholder="+260…" />
+              <small>Mentors can use this number for candidate support WhatsApp handoff.</small>
             </label>
             <label className="vop-reference-field">
               {t('address', 'Address')}
