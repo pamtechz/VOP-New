@@ -7,7 +7,7 @@ import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getStoredSettings } from '../services/storage';
 import { consumeSupportContextPrefill } from '../services/supportContext';
-import ChatThread, { type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
+import ChatThread, { APP_CHAT_REFERENCES, type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
 
 interface SupportPageProps {
   currentUser: User;
@@ -15,7 +15,7 @@ interface SupportPageProps {
   onBack: () => void;
 }
 
-type SupportReference={type:string;id:string;label:string};
+type SupportReference=ChatReference;
 type WhatsAppTarget={kind:'mentor'|'organization';label:string;number:string};
 type SupportRequest={
   id:string;subject:string;message?:string;category:string;priority:string;target:string;channel:string;
@@ -79,6 +79,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
   const [selectedLesson,setSelectedLesson]=useState('');
   const [referenceType,setReferenceType]=useState<'section'|'topic'|'doctrine'|'question'|'scripture'>('topic');
   const [referenceLabel,setReferenceLabel]=useState('');
+  const [selectedAppReference,setSelectedAppReference]=useState('');
   const [whatsappHandoff,setWhatsappHandoff]=useState<Array<WhatsAppTarget&{text:string}>>([]);
 
   const [conversation,setConversation]=useState<{id:string;studentId:string;mentorId:string;mentorName?:string;unread?:boolean}|null>(null);
@@ -106,6 +107,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
         label,
       });
     }
+    const appReference=APP_CHAT_REFERENCES.find(item=>item.type+':'+item.id===selectedAppReference);
+    if(appReference)refs.push(appReference);
     return refs.slice(0,8);
   };
 
@@ -178,7 +181,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
       });
       const item=result.item as SupportRequest;
       setRequests(current=>[item,...current.filter(existing=>existing.id!==item.id)]);
-      setQuestion('');setSubject('');setReferenceLabel('');setPriority('normal');
+      setQuestion('');setSubject('');setReferenceLabel('');setSelectedAppReference('');setPriority('normal');
       setNotice('Your support request has been sent. You can continue the conversation here in the app.');
       if((channel==='whatsapp'||channel==='both')&&(item.whatsappTargets||[]).length){
         const text=item.whatsappText||`VOP Support #${item.id}\n${item.subject}`;
@@ -388,6 +391,11 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
           </select>
           <input value={referenceLabel} onChange={e=>setReferenceLabel(e.target.value)}
             placeholder="e.g. Sabbath, Daniel 8:14, Question 4"/>
+          <select value={selectedAppReference} onChange={e=>setSelectedAppReference(e.target.value)}>
+            <option value="">Attach VOP activity / game (optional)</option>
+            {APP_CHAT_REFERENCES.map(item=><option key={item.type+':'+item.id} value={item.type+':'+item.id}>{item.label} · {item.type}</option>)}
+          </select>
+          <small>Attach a Duel, Solo Challenge, Scripture Arena, Scripture Memory, Master Guide, resource, event, prayer item, radio or another VOP destination.</small>
           {buildReferences().length>0&&<div className="vop-support-selected"><span>Will attach</span><strong>{buildReferences().map(item=>item.label).join(' · ')}</strong></div>}
 
           <hr/>
