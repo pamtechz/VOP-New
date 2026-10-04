@@ -218,6 +218,20 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.equal((await db.collection('users/' + outsider.uid + '/scriptureMemoryState').get()).size, 0);
       const second = await api(learner, { action: 'memoryDue', deckId: 'deck-A' });
       assert.equal(second.due.length, 0);
+      assert.equal(second.reviewed.length, 1, 'Reviewed Scripture must remain available instead of disappearing.');
+      assert.equal(second.all.length, 1);
+      assert.equal(second.summary.reviewed, 1);
+      assert.equal(second.summary.scheduled, 1);
+      assert.equal(second.reviewed[0].id, 'gen-1');
+      assert.equal(second.reviewed[0].status, 'reviewed');
+      const scheduledDueAt=review.state.dueAt;
+      const practice=await api(learner,{
+        action:'memoryReview',deckId:'deck-A',verseId:'gen-1',rating:5,practice:true,
+      });
+      assert.equal(practice.status,200);
+      assert.equal(practice.practice,true);
+      assert.equal(practice.pointsAwarded,0,'Revisiting a reviewed verse must not farm engagement points.');
+      assert.equal(practice.state.dueAt,scheduledDueAt,'Practice revisit must not disturb the spaced-repetition schedule.');
     });
 
     await t.test('duel discovery requires opt-in and cross-organization access is blocked', async () => {

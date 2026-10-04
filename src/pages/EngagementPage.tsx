@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { auth } from '../lib/firebase';
-import { ArrowLeft, Sparkles, Brain, Swords, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Sparkles, Brain, Swords, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown, ChevronRight, BookmarkCheck, Layers3, History, RotateCcw } from 'lucide-react';
 
 export type EngagementMode = 'master-guide' | 'memory' | 'duels';
 interface Props { mode: EngagementMode; onBack: () => void; }
@@ -14,6 +14,9 @@ type ArenaSummary={
   soloCompleted:number;perfectSolo:number;totalChallenges:number;recent:ArenaRecent[];
 };
 type SoloChallengeSummary={id:string;score:number;answeredCount:number;questionCount:number;expiresAt?:unknown};
+type MemoryView='due'|'reviewed'|'all';
+type MemorySummary={total:number;due:number;reviewed:number;scheduled:number;unseen:number};
+const EMPTY_MEMORY_SUMMARY:MemorySummary={total:0,due:0,reviewed:0,scheduled:0,unseen:0};
 const EMPTY_ARENA:ArenaSummary={
   points:0,rating:1200,level:1,levelProgress:0,nextLevelAt:100,
   duelsCompleted:0,duelWins:0,draws:0,losses:0,soloCompleted:0,perfectSolo:0,totalChallenges:0,recent:[],
@@ -25,6 +28,12 @@ function timeRemaining(value:unknown,now:number){
   const minutes=Math.floor(remaining/60000);
   const seconds=Math.floor((remaining%60000)/1000);
   return remaining<=0?'Expired':`${minutes}:${String(seconds).padStart(2,'0')} left`;
+}
+function memoryDate(value:unknown){
+  if(!value)return 'Not scheduled';
+  const date=new Date(String(value));
+  if(Number.isNaN(date.getTime()))return 'Not scheduled';
+  return date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
 const revisionOf=(item:Record<string,unknown>)=>{
@@ -67,6 +76,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [deckId, setDeckId] = useState('');
   const [decks, setDecks] = useState<Array<Record<string, unknown>>>([]);
   const [due, setDue] = useState<Array<Record<string, unknown>>>([]);
+  const [reviewed,setReviewed]=useState<Array<Record<string,unknown>>>([]);
+  const [memoryAll,setMemoryAll]=useState<Array<Record<string,unknown>>>([]);
+  const [memorySummary,setMemorySummary]=useState<MemorySummary>(EMPTY_MEMORY_SUMMARY);
+  const [memoryView,setMemoryView]=useState<MemoryView>('due');
+  const [practiceVerseId,setPracticeVerseId]=useState('');
   const [opponentId, setOpponentId] = useState('');
   const [opponents, setOpponents] = useState<Array<{ uid: string; displayName: string }>>([]);
   const [duelOptIn, setDuelOptIn] = useState(false);
@@ -87,6 +101,12 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
   const run = async (work: () => Promise<void>) => { setBusy(true); setError(''); setMessage(''); try { await work(); } catch (e) { setError(e instanceof Error ? e.message : 'Request failed.'); } finally { setBusy(false); } };
+  const applyMemoryResult=(result:Record<string,unknown>)=>{
+    setDue((result.due as Array<Record<string,unknown>>)||[]);
+    setReviewed((result.reviewed as Array<Record<string,unknown>>)||[]);
+    setMemoryAll((result.all as Array<Record<string,unknown>>)||[]);
+    setMemorySummary({...EMPTY_MEMORY_SUMMARY,...(result.summary as MemorySummary||{})});
+  };
   const applyDuelOverview=(result:Record<string,unknown>)=>{
     setOpponents((result.opponents as Array<{uid:string;displayName:string}>)||[]);
     setActiveMatches((result.matches as Array<{id:string;opponentName:string;expiresAt?:unknown}>)||[]);
@@ -115,7 +135,14 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  useEffect(() => { if (!deckId || tab !== 'memory') return; void run(async () => { const result = await engagement({ action: 'memoryDue', deckId }); setDue((result.due as Array<Record<string, unknown>>) || []); }); }, [deckId, tab]);
+  useEffect(() => {
+    if (!deckId || tab !== 'memory') return;
+    setPracticeVerseId('');
+    void run(async () => {
+      const result=await engagement({action:'memoryDue',deckId});
+      applyMemoryResult(result);
+    });
+  }, [deckId, tab]);
   useEffect(()=>{
     if(!matchId||!challengeExpiresAt)return;
     setArenaNow(Date.now());
@@ -154,6 +181,25 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
     {label:'3 duel victories',progress:Math.min(3,arena.duelWins),goal:3},
     {label:'10 total challenges',progress:Math.min(10,arena.totalChallenges),goal:10},
   ];
+
+  const memoryItems=memoryView==='due'?due:memoryView==='reviewed'?reviewed:memoryAll;
+  const refreshMemoryDeck=async()=>{
+    if(!deckId)return;
+    const result=await engagement({action:'memoryDue',deckId});
+    applyMemoryResult(result);
+  };
+  const saveMemoryReview=async(verse:Record<string,unknown>,rating:number,practice=false)=>{
+    const saved=await engagement({
+      action:'memoryReview',deckId,verseId:String(verse.id),rating,...(practice?{practice:true}:{}),
+    });
+    if(practice){
+      setPracticeVerseId('');
+      setMessage('Practice revisit saved. Your spaced-repetition schedule was left unchanged and no extra points were awarded.');
+      return;
+    }
+    await refreshMemoryDeck();
+    setMessage(`Review saved · +${Number(saved.pointsAwarded||0)} points · moved to Reviewed and scheduled for later.`);
+  };
 
   return (
     <main className="vop-materials-page vop-engagement-page">
@@ -207,10 +253,81 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           </div></article>
         </section>}
 
-        {tab === 'memory' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><h2>Scripture Memory</h2><p>Review verses using persisted spaced repetition. Your schedule and mastery are stored against your account.</p><select value={deckId} onChange={event => setDeckId(event.target.value)} disabled={busy} aria-label="Scripture memory deck"><option value="">Select a deck</option>{decks.map(deck => <option key={String(deck.id)} value={String(deck.id)}>{String(deck.title || deck.name || deck.id)}</option>)}</select></div></article>
-          {due.map(verse => <article className="vop-material-card" key={String(verse.id)}><div className="vop-material-body"><span className="vop-material-kicker"><Brain size={14}/> Due for review</span><h2>{String(verse.reference || verse.title || 'Scripture')}</h2><p>{String(verse.text || verse.content || '')}</p><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating) => <button key={rating} type="button" aria-label={label} title={label} disabled={busy} onClick={() => void run(async () => { const saved=await engagement({ action:'memoryReview', deckId, verseId:String(verse.id), rating }); const result=await engagement({action:'memoryDue',deckId}); setDue((result.due as Array<Record<string,unknown>>) || []); setMessage(`Review saved · +${Number(saved.pointsAwarded||0)} points · next review scheduled.`); })}>{label}</button>)}</div></div></article>)}
-          {!due.length && deckId && <div className="vop-materials-empty"><Brain size={40}/><h2>Nothing due</h2><p>Your Scripture memory queue is clear for this deck.</p></div>}
+        {tab === 'memory' && <section className="vop-memory-workspace">
+          <article className="vop-material-card vop-memory-overview"><div className="vop-material-body">
+            <div className="vop-memory-head">
+              <div><span className="vop-material-kicker"><Brain size={14}/> Scripture engagement</span><h2>Scripture Memory</h2><p>Reviewed verses never disappear. They move to Reviewed, keep their mastery and next-review schedule, and remain available for revisit at any time.</p></div>
+              <select value={deckId} onChange={event=>{setDeckId(event.target.value);setMemoryView('due')}} disabled={busy} aria-label="Scripture memory deck">
+                <option value="">Select a deck</option>{decks.map(deck=><option key={String(deck.id)} value={String(deck.id)}>{String(deck.title||deck.name||deck.id)}</option>)}
+              </select>
+            </div>
+            {deckId&&<div className="vop-memory-summary">
+              <div><Clock3 size={18}/><span>Due now</span><strong>{memorySummary.due}</strong></div>
+              <div><BookmarkCheck size={18}/><span>Reviewed</span><strong>{memorySummary.reviewed}</strong></div>
+              <div><History size={18}/><span>Scheduled</span><strong>{memorySummary.scheduled}</strong></div>
+              <div><Layers3 size={18}/><span>Deck total</span><strong>{memorySummary.total}</strong></div>
+            </div>}
+          </div></article>
+
+          {deckId&&<div className="vop-memory-tabs" role="tablist" aria-label="Scripture memory card status">
+            <button type="button" role="tab" aria-selected={memoryView==='due'} className={memoryView==='due'?'active':''} onClick={()=>setMemoryView('due')}>
+              <Clock3 size={15}/>Due <b>{memorySummary.due}</b>
+            </button>
+            <button type="button" role="tab" aria-selected={memoryView==='reviewed'} className={memoryView==='reviewed'?'active':''} onClick={()=>setMemoryView('reviewed')}>
+              <BookmarkCheck size={15}/>Reviewed <b>{memorySummary.reviewed}</b>
+            </button>
+            <button type="button" role="tab" aria-selected={memoryView==='all'} className={memoryView==='all'?'active':''} onClick={()=>setMemoryView('all')}>
+              <Layers3 size={15}/>All cards <b>{memorySummary.total}</b>
+            </button>
+          </div>}
+
+          {memoryItems.map(verse=>{
+            const state=verse.state&&typeof verse.state==='object'?verse.state as Record<string,unknown>:null;
+            const dueNow=String(verse.status||'due')==='due';
+            const mastery=Math.max(0,Math.min(100,Number(state?.mastery||0)));
+            const isPractice=practiceVerseId===String(verse.id);
+            return <article className={'vop-material-card vop-memory-card '+(dueNow?'due':'reviewed')} key={String(verse.id)}>
+              <div className="vop-material-body">
+                <div className="vop-memory-card-head">
+                  <span className={'vop-memory-status '+(dueNow?'due':'reviewed')}>{dueNow?<><Clock3 size={13}/>Due for review</>:<><BookmarkCheck size={13}/>Reviewed</>}</span>
+                  {state&&<span className="vop-memory-mastery">{Math.round(mastery)}% mastery</span>}
+                </div>
+                <h2>{String(verse.reference||verse.title||'Scripture')}</h2>
+                <p>{String(verse.text||verse.content||'')}</p>
+                {state&&<div className="vop-memory-state">
+                  <div><span>Last review</span><strong>{memoryDate(state.lastReviewedAt)}</strong></div>
+                  <div><span>Last result</span><strong>{['Not recalled','Very hard','Partial','Recalled','Strong','Easy'][Math.max(0,Math.min(5,Number(state.lastRating||0)))]}</strong></div>
+                  <div><span>Next scheduled review</span><strong>{memoryDate(state.dueAt)}</strong></div>
+                  <div><span>Interval</span><strong>{Math.max(1,Number(state.intervalDays||1))} day{Number(state.intervalDays||1)===1?'':'s'}</strong></div>
+                  <div className="vop-memory-mastery-row"><span>Mastery</span><div className="vop-arena-progress-track small"><span style={{width:mastery+'%'}}/></div></div>
+                </div>}
+                {dueNow?<div className="vop-memory-rating">
+                  <span>{state?'Review again':'First review'} · choose how well you recalled it</span>
+                  <div>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating)=><button key={rating} type="button" aria-label={label} title={label} disabled={busy}
+                    onClick={()=>void run(()=>saveMemoryReview(verse,rating,false))}>{label}</button>)}</div>
+                </div>:<>
+                  <div className="vop-memory-revisit">
+                    <div><strong>This verse stays in your deck.</strong><span>You can read it whenever you want. Its scheduled review remains intact.</span></div>
+                    <button type="button" className="vop-secondary" disabled={busy} onClick={()=>setPracticeVerseId(current=>current===String(verse.id)?'':String(verse.id))}><RotateCcw size={15}/>{isPractice?'Close practice':'Practice again'}</button>
+                  </div>
+                  {isPractice&&<div className="vop-memory-rating practice">
+                    <span>Practice revisit · this does not change the schedule or award extra points</span>
+                    <div>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating)=><button key={rating} type="button" aria-label={'Practice '+label} title={label} disabled={busy}
+                      onClick={()=>void run(()=>saveMemoryReview(verse,rating,true))}>{label}</button>)}</div>
+                  </div>}
+                </>}
+              </div>
+            </article>;
+          })}
+
+          {!memoryItems.length&&deckId&&<div className="vop-materials-empty">
+            {memoryView==='due'?<Clock3 size={40}/>:<BookmarkCheck size={40}/>}
+            <h2>{memoryView==='due'?'Nothing due right now':memoryView==='reviewed'?'No reviewed verses yet':'This deck is empty'}</h2>
+            <p>{memoryView==='due'
+              ?(memorySummary.reviewed?'Your due queue is clear. Reviewed verses are still available under Reviewed.':'Start reviewing this deck when cards become available.')
+              :memoryView==='reviewed'?'Verses move here after you complete a review, and they remain available for revisit.':'There are no Scripture cards in this deck.'}</p>
+            {memoryView==='due'&&memorySummary.reviewed>0&&<button type="button" className="vop-secondary" onClick={()=>setMemoryView('reviewed')}><BookmarkCheck size={15}/>Open Reviewed</button>}
+          </div>}
         </section>}
 
         {tab === 'duels' && <section className="vop-arena">
