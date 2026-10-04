@@ -1,7 +1,7 @@
 import type { AppRoute, User } from '../types';
 
 const ADMIN_ROLES = new Set(['super_admin','union_admin','conference_admin','district_admin','church_admin']);
-const ADMIN_ORGANIZATION_ROLES = new Set(['owner','admin','editor','teacher']);
+const ADMIN_ORGANIZATION_ROLES = new Set(['owner','admin','editor','teacher','staff']);
 const MENTOR_ROLES = new Set(['mentor']);
 
 function normalized(value: unknown) {
