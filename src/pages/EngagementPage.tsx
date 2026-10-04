@@ -321,7 +321,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
                 return <section className={'vop-arena-question '+(answered?'answered':'')} key={String(question.id)}>
                   <div className="vop-arena-question-head"><span>Question {index+1} of {duelQuestions.length}</span>{answered&&<b><CheckCircle2 size={13}/> Answered</b>}</div>
                   <h3>{String(question.question||'')}</h3>
-                  {question.scriptureRef&&<small className="vop-arena-scripture-ref">{String(question.scriptureRef)}</small>}
+                  {Boolean(question.scriptureRef)&&<small className="vop-arena-scripture-ref">{String(question.scriptureRef)}</small>}
                   <div className="vop-arena-options">{(Array.isArray(question.options)?question.options:[]).map(option=><button key={String(option)} type="button" disabled={busy||answered} onClick={()=>void run(async()=>{
                     const answerResult=await engagement({action:challengeMode==='solo'?'duelSoloAnswer':'duelAnswer',...(challengeMode==='solo'?{challengeId:matchId}:{matchId}),questionId:String(question.id),answer:String(option)});
                     setAnsweredQuestionIds(current=>[...new Set([...current,String(question.id)])]);
