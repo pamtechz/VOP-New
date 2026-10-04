@@ -3,6 +3,7 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {configuredPassThreshold} from '../shared/studyValidation.js';
 import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
+import {effectiveCertificationConfig} from './certificationConfig.js';
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
 export function certificateDateValue(value:unknown):string|null{
@@ -106,16 +107,15 @@ export async function awardApprovedCertificate(
   issuedBy:string,
   requestedGuideId='',
 ){
-  const [candidateSnapshot,configSnapshot,requestsSnapshot]=await Promise.all([
+  const [candidateSnapshot,requestsSnapshot]=await Promise.all([
     db.doc('users/'+candidateId).get(),
-    db.doc('system/certification').get(),
     db.collection('graduationRequests').where('candidateId','==',candidateId).limit(100).get(),
   ]);
   if(!candidateSnapshot.exists)throw new Error('Candidate account was not found.');
   const candidate=candidateSnapshot.data()||{};
-  const config=configSnapshot.data()||{};
   const organizationId=text(candidate.organizationId);
   if(!organizationId)throw new Error('The candidate is not linked to a tenant organization.');
+  const config=await effectiveCertificationConfig(db,organizationId);
   if(config.enabled!==true)throw new Error('Official certification is disabled in certification settings.');
   const approved=requestsSnapshot.docs
     .map(snapshot=>({id:snapshot.id,...snapshot.data()}))
@@ -236,6 +236,7 @@ export async function awardApprovedCertificate(
     unionName:union?.exists?text(union.data()?.name):'',
     guideId,guideTitle:text(guide.title),assessmentAverageScore:average,
     eligibilitySnapshot,
+    certificateConfigSnapshot:{...config},
     issuer:{name:text(config.issuerName),subtitle:text(config.issuerSubtitle),actorUid:issuedBy,organizationId},
     status:'Certified',downloadCount:0,issuedBy,
     verificationEnabled:config.verificationEnabled===true,
