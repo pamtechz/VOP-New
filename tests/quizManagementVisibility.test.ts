@@ -1,6 +1,17 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
-import { quizManagementItem } from '../shared/quizManagementVisibility.ts';
+import {createServer} from 'vite';
+
+const vite=await createServer({
+  configFile:false,
+  server:{middlewareMode:true,hmr:false},
+  appType:'custom',
+  logLevel:'error',
+});
+after(async()=>vite.close());
+
+const {quizManagementItem}=await vite.ssrLoadModule('/shared/quizManagementVisibility.ts')
+  as typeof import('../shared/quizManagementVisibility.ts');
 
 const record = {
   title:'Lesson quiz', description:'Description', language:'en',
