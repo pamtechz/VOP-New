@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { awardApprovedCertificate } from '../server/certificateAward.js';
 import { ensureAutomaticGraduationReview } from '../server/graduationAutomation.js';
+import { effectiveCertificationConfig } from '../server/certificationConfig.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -84,7 +85,7 @@ async function mine(req:Request,res:Response){
      }
    }
  }
- const configSnapshot=await db.doc('system/certification').get();
+ const config=await effectiveCertificationConfig(db,organizationId);
  const certificateMap=new Map<string,ReturnType<typeof safe>>();
  certificateDocs.map(d=>safe({id:d.id,...d.data()})).filter(x=>x.status==='Certified')
    .forEach(record=>certificateMap.set(record.id,record));
@@ -93,7 +94,6 @@ async function mine(req:Request,res:Response){
    if(record.status==='Certified')certificateMap.set(record.id,record);
  }
  const certificates=[...certificateMap.values()];
- const config=configSnapshot.exists?configSnapshot.data()??{}:{};
  const review=latestReview?{
    id:String(latestReview.id||''),
    status:String(latestReview.status||''),
@@ -108,14 +108,20 @@ async function mine(req:Request,res:Response){
 
 async function verify(req:Request,res:Response){
  const number=queryValue(req,'certificateNumber').trim();if(!number||number.length>160)return res.status(400).json({verified:false,state:'unknown',error:'Enter a certificate number.'});
- const db=getFirestore(admin());const [snapshot,configSnapshot]=await Promise.all([db.collection('certificates').where('certificateNumber','==',number).limit(1).get(),db.doc('system/certification').get()]);
+ const db=getFirestore(admin());
+ const snapshot=await db.collection('certificates').where('certificateNumber','==',number).limit(1).get();
  if(snapshot.empty)return res.status(404).json({verified:false,state:'unknown',error:'No certificate was found with that number.'});
- const document=snapshot.docs[0],data=document.data(),enabled=configSnapshot.exists&&configSnapshot.data()?.verificationEnabled===true;
+ const document=snapshot.docs[0],data=document.data();
+ const organizationId=String(data.organizationId||'').trim();
+ const effectiveConfig=await effectiveCertificationConfig(db,organizationId);
+ const enabled=effectiveConfig.verificationEnabled===true;
  if(!enabled)return res.status(200).json({verified:false,state:'disabled',certificate:publicStatus(document.id,data),error:'Public certificate verification is currently disabled.'});
  if(data.status==='Revoked')return res.status(200).json({verified:false,state:'revoked',certificate:publicStatus(document.id,data),error:'This certificate has been revoked and is no longer valid.'});
  if(data.status==='Replaced')return res.status(200).json({verified:false,state:'replaced',certificate:publicStatus(document.id,data),replacement:{certificateNumber:String(data.replacedByCertificateNumber||'')},error:'This certificate has been replaced by a newer official credential.'});
  if(data.status!=='Certified')return res.status(200).json({verified:false,state:'unavailable',certificate:publicStatus(document.id,data),error:'This certificate is not currently valid for public verification.'});
- return res.status(200).json({verified:true,state:'valid',certificate:publicCertificate(document.id,data),config:publicConfig(configSnapshot.data()||{})});
+ const savedConfig=data.certificateConfigSnapshot&&typeof data.certificateConfigSnapshot==='object'
+   ?data.certificateConfigSnapshot as Record<string,unknown>:effectiveConfig;
+ return res.status(200).json({verified:true,state:'valid',certificate:publicCertificate(document.id,data),config:publicConfig(savedConfig)});
 }
 
 async function issue(req:Request,res:Response){
