@@ -4,6 +4,7 @@ import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import type { User } from '../types';
 import { appConfirm } from '../components/layout/AppDialog';
+import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 
 type Kind = 'requirements' | 'memoryDecks' | 'duelQuestions';
 type Status = 'draft' | 'published' | 'archived';
@@ -69,6 +70,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
   const [items,setItems] = useState<Item[]>([]);
   const [search,setSearch] = useState('');
   const [status,setStatus] = useState<'all'|Status>('all');
+  const [viewMode,setViewMode]=useState<AdminViewMode>('table');
   const [editor,setEditor] = useState<Editor|null>(null);
   const [busy,setBusy] = useState(false);
   const [loading,setLoading] = useState(true);
@@ -301,10 +303,11 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     </form>}
     <div className="vop-toolbar" style={{marginBottom:15}}><div className="vop-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search titles and descriptions…" aria-label="Search content"/></div>
       <select className="vop-filter" value={status} onChange={e=>setStatus(e.target.value as typeof status)} aria-label="Filter publication state"><option value="all">All states</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select>
+      <ViewModeToggle value={viewMode} onChange={setViewMode} label="Engagement catalogue view"/>
     </div>
     {loading?<div className="vop-empty" role="status">Loading ministry content…</div>:
       filtered.length===0?<div className="vop-empty" role="status">No {labels[kind]}s match your filters. Create one or select another publishing scope.</div>:
-      <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>Content</th><th>Visibility</th><th>Publication</th><th>Actions</th></tr></thead><tbody>
+      viewMode==='table'?<div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>Content</th><th>Visibility</th><th>Publication</th><th>Actions</th></tr></thead><tbody>
         {filtered.map(item=><tr key={item.id}><td><strong>{item.title}</strong><div>{item.description || (kind==='duelQuestions'?item.question:'No description')}</div></td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.status || 'Draft'}</td><td>
             <div className="vop-reference-action-cell">
@@ -312,6 +315,21 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
               <button type="button" className="vop-actions" disabled={item.canEdit===false||item.status==='archived'||busy} onClick={()=>void archive(item)} title="Archive content" aria-label={'Archive '+item.title}><Trash2 size={16}/></button>
             </div>
           </td></tr>)}
-      </tbody></table></div>}
+      </tbody></table></div>:<div className="vop-admin-record-cards">
+        {filtered.map(item=><article key={item.id} className="vop-admin-record-card">
+          <div className="vop-admin-record-card-head"><div><h3>{item.title}</h3><p>{item.description||(kind==='duelQuestions'?item.question:'No description')}</p></div><span className={'vop-status '+(item.status==='published'?'enabled':'disabled')}>{item.status||'draft'}</span></div>
+          <div className="vop-admin-record-card-meta">
+            <div><small>Visibility</small><strong>{item.sharingScope||'organization'}</strong></div>
+            <div><small>Content type</small><strong>{labels[kind]}</strong></div>
+            {kind==='memoryDecks'&&<div><small>Memory cards</small><strong>{item.verses?.length||0}</strong></div>}
+            {kind==='requirements'&&<div><small>Required signatures</small><strong>{Math.max(1,Number(item.requiredSignatures||1))}</strong></div>}
+            {kind==='duelQuestions'&&<div><small>Scripture</small><strong>{item.scriptureRef||'Not set'}</strong></div>}
+          </div>
+          <div className="vop-admin-record-card-actions">
+            <button type="button" className="vop-secondary" disabled={item.canEdit===false||busy} onClick={()=>open(item)}>{item.canEdit===false?'Read-only':'Edit'}</button>
+            <button type="button" className="vop-secondary" disabled={item.canEdit===false||item.status==='archived'||busy} onClick={()=>void archive(item)}><Trash2 size={15}/>Archive</button>
+          </div>
+        </article>)}
+      </div>}
   </div>;
 }
