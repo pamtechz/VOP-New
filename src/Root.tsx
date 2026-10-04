@@ -11,6 +11,7 @@ import { createFirestoreStudentProfile, loadFirestoreUser } from './services/fir
 import { App } from './App';
 import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
+import { RouteShimmer } from './components/layout/Shimmer';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
@@ -113,11 +114,7 @@ export function Root() {
   }, []);
 
   if (!authReady) {
-    return (
-      <main className="vop-auth-loading" aria-busy="true">
-        <p>Opening Voice of Prophecy…</p>
-      </main>
-    );
+    return <RouteShimmer label="Opening Voice of Prophecy" />;
   }
 
   if (!isKnownRoute) return <NotFoundPage />;
@@ -129,11 +126,7 @@ export function Root() {
   if (isBootstrapRoute) return <BootstrapPage account={account} />;
 
   if (!dataReady) {
-    return (
-      <main className="vop-auth-loading" aria-busy="true">
-        <p>Opening Voice of Prophecy…</p>
-      </main>
-    );
+    return <RouteShimmer label="Opening Voice of Prophecy" />;
   }
 
   if (!account) {
