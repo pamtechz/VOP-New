@@ -1,12 +1,32 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {
-  BookOpen,Check,Edit3,Paperclip,Search,Send,Trash2,X,
+  BookOpen,Brain,CalendarDays,Check,Edit3,ExternalLink,HeartHandshake,Paperclip,Radio,
+  Search,Send,Sparkles,Swords,Trash2,Trophy,X,
 } from 'lucide-react';
 import type {DiscoverGuide,Lesson} from '../../types';
 import {appConfirm} from '../layout/AppDialog';
 import './chat-thread.css';
 
-export type ChatReference={type:string;id:string;label:string};
+export type ChatReference={
+  type:string;
+  id:string;
+  label:string;
+  route?:string;
+  description?:string;
+};
+
+export const APP_CHAT_REFERENCES:ChatReference[]=[
+  {type:'activity',id:'master-guide',label:'Master Guide',route:'master-guide',description:'Youth leadership requirements, portfolio activities and evaluator sign-offs.'},
+  {type:'memory',id:'scripture-memory',label:'Scripture Memory',route:'scripture-memory',description:'Spaced-repetition Scripture memory decks and review practice.'},
+  {type:'game',id:'scripture-arena',label:'Scripture Arena',route:'iron-duels',description:'The gamified Bible knowledge Arena containing Solo Challenges and Ranked Duels.'},
+  {type:'challenge',id:'solo-scripture-challenge',label:'Solo Scripture Challenge',route:'iron-duels',description:'A personal Bible knowledge challenge completed without an opponent.'},
+  {type:'duel',id:'ranked-scripture-duel',label:'Ranked Scripture Duel',route:'iron-duels',description:'A head-to-head Scripture challenge against another opted-in learner.'},
+  {type:'resource',id:'resources',label:'Resources library',route:'resources',description:'Books and study resources available inside VOP.'},
+  {type:'event',id:'events',label:'Events',route:'events',description:'Published ministry and organization events.'},
+  {type:'prayer',id:'prayer',label:'Prayer',route:'prayer',description:'Prayer requests and prayer ministry inside VOP.'},
+  {type:'media',id:'radio',label:'VOP Radio',route:'radio',description:'Published radio broadcasts, audio and playlists.'},
+  {type:'announcement',id:'announcements',label:'Announcements',route:'announcements',description:'Published VOP and organization announcements.'},
+];
 export type ChatMessage={
   id:string;
   senderId:string;
@@ -29,6 +49,7 @@ type Props={
   onEdit?:(message:ChatMessage,body:string,references:ChatReference[])=>Promise<void>|void;
   onDelete?:(message:ChatMessage)=>Promise<void>|void;
   guides?:DiscoverGuide[];
+  attachmentOptions?:ChatReference[];
   busy?:boolean;
   placeholder?:string;
   emptyText?:string;
@@ -65,13 +86,32 @@ function firstLessonText(lesson:Lesson){
   const text=(lesson.contentPages||[]).map(page=>String(page.content||'').trim()).find(Boolean)||lesson.description||'';
   return text.replace(/\s+/g,' ').trim().slice(0,260);
 }
+function referenceTypeLabel(type:string){
+  return ({
+    lesson:'Lesson',guide:'Guide / course',activity:'Activity',memory:'Memory game',game:'Game',
+    challenge:'Challenge',duel:'Duel',resource:'Resource',event:'Event',prayer:'Prayer',
+    media:'Media',announcement:'Announcement',topic:'Topic',section:'Section',doctrine:'Doctrine',
+    question:'Question',quiz:'Quiz / assessment',scripture:'Scripture',block:'Content block',
+  } as Record<string,string>)[type]||type.replaceAll('_',' ');
+}
+function ReferenceIcon({type,size=13}:{type:string;size?:number}){
+  if(type==='duel')return <Swords size={size}/>;
+  if(type==='challenge'||type==='memory')return <Brain size={size}/>;
+  if(type==='game'||type==='activity')return <Trophy size={size}/>;
+  if(type==='event')return <CalendarDays size={size}/>;
+  if(type==='prayer')return <HeartHandshake size={size}/>;
+  if(type==='media')return <Radio size={size}/>;
+  if(type==='announcement')return <Sparkles size={size}/>;
+  return <BookOpen size={size}/>;
+}
 
 export function ChatThread({
-  currentUserId,messages,draft,onDraftChange,onSend,onEdit,onDelete,guides=[],
+  currentUserId,messages,draft,onDraftChange,onSend,onEdit,onDelete,guides=[],attachmentOptions=[],
   busy=false,placeholder='Write a message…',emptyText='No messages yet.',sendLabel='Send',className='',
 }:Props){
   const [pickerOpen,setPickerOpen]=useState(false);
   const [lessonSearch,setLessonSearch]=useState('');
+  const [pickerView,setPickerView]=useState<'study'|'app'>('study');
   const [pendingReferences,setPendingReferences]=useState<ChatReference[]>([]);
   const [previewReference,setPreviewReference]=useState('');
   const [editingId,setEditingId]=useState('');
