@@ -381,7 +381,7 @@ export const subscribeSettings = (
     if (!scope.superAdmin && !scope.organizationId && !['union_admin','conference_admin','district_admin','church_admin'].includes(scope.role)) {
       callback({
         appName:'', organizationName:'', schoolName:'', directorName:'', directorTitle:'',
-        contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'',
+        contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, engagementPoints:{soloChallenge:10,duelChallenge:15,memoryReview:1,practiceQuiz:5,chapterQuiz:10,finalExam:25}, defaultLanguage:'',
         appTagline:'', timezone:'', website:'', welcomeMessage:'',
         systemOptions:{allowRegistrations:false,requireApproval:false,enableEmailNotifications:false,showChurchInfo:false,enablePwa:false,maintenanceMode:false},
         features:{candidatesModule:true,curriculumStudio:true,translations:true,radio:true,announcements:true,certification:true},
@@ -410,6 +410,14 @@ export const subscribeSettings = (
           quizPassThreshold: Number(data.quizPassThreshold ?? 0),
           quizMaxAttempts: Math.max(0, Math.trunc(Number(data.quizMaxAttempts ?? 0) || 0)),
           quizRetakeCooldownMinutes: Math.max(0, Math.trunc(Number(data.quizRetakeCooldownMinutes ?? 0) || 0)),
+          engagementPoints:{
+            soloChallenge:Math.max(0,Math.trunc(Number(data.engagementPoints?.soloChallenge ?? 10)||0)),
+            duelChallenge:Math.max(0,Math.trunc(Number(data.engagementPoints?.duelChallenge ?? 15)||0)),
+            memoryReview:Math.max(0,Math.trunc(Number(data.engagementPoints?.memoryReview ?? 1)||0)),
+            practiceQuiz:Math.max(0,Math.trunc(Number(data.engagementPoints?.practiceQuiz ?? 5)||0)),
+            chapterQuiz:Math.max(0,Math.trunc(Number(data.engagementPoints?.chapterQuiz ?? 10)||0)),
+            finalExam:Math.max(0,Math.trunc(Number(data.engagementPoints?.finalExam ?? 25)||0)),
+          },
           defaultLanguage: data.defaultLanguage || '',
           appTagline: data.appTagline || '',
           timezone: data.timezone || '',
