@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowLeft, Award, Bell, Book, BookOpen, CalendarDays, Check,
   ChevronDown, ChevronLeft, ChevronRight, Church, Edit3, ExternalLink, UserCheck,
   Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone,
-  Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload, LogOut,
+  Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload, LogOut, UserPlus,
   Users, X, BarChart3, Layers, Grid2X2, Building2, HeartHandshake, WalletCards
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
@@ -31,12 +31,20 @@ import PrayerManagementPanel from './PrayerManagementPanel';
 import EngagementStudio from './EngagementStudio';
 import LocalizationGovernancePanel from './LocalizationGovernancePanel';
 import PaymentManagement from './PaymentManagement';
+import PaymentsPage from './PaymentsPage';
+import NotificationsPage from './NotificationsPage';
+import InvitationsPage from './InvitationsPage';
+import { PersonalSettingsPage } from './PersonalSettingsPage';
+import { CertificatesPage } from './CertificatesPage';
+import { AboutPage } from './AboutPage';
+import OrganizationAccountProfilePage from './OrganizationAccountProfilePage';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import { appConfirm } from '../components/layout/AppDialog';
 import { consumeNotificationAdminTarget } from '../services/notificationRouting';
 import { SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS, type SubscriptionFeatureKey } from '../../shared/subscriptions';
+import { isOrganizationPortalAccount } from '../services/portalAccess';
 
 interface AdminPageProps {
   currentUser: User;
@@ -48,12 +56,15 @@ interface AdminPageProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onNavigateToCertificates?: () => void;
+  onAccountChanged?: () => Promise<void>;
 }
 
 type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'events' | 'materials' | 'radio' | 'prayer' | 'engagement'
-  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations' | 'payments';
+  | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations' | 'payments'
+  | 'accountNotifications' | 'accountInvitations' | 'accountPayments' | 'accountProfile'
+  | 'accountPersonalSettings' | 'accountCertificates' | 'accountAbout';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
 type StudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
@@ -80,15 +91,23 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
   { id: 'payments', label: 'Billing & Subscriptions', icon: WalletCards },
+  { id: 'accountNotifications', label: 'Notifications', icon: Bell },
+  { id: 'accountInvitations', label: 'Invitations', icon: UserPlus },
+  { id: 'accountPayments', label: 'Payments & receipts', icon: WalletCards },
+  { id: 'accountProfile', label: 'Profile', icon: UserCheck },
+  { id: 'accountPersonalSettings', label: 'Personal settings', icon: Settings },
+  { id: 'accountCertificates', label: 'Certificates', icon: Award },
+  { id: 'accountAbout', label: 'About VOP', icon: BookOpen },
 ];
 
-type AdminNavGroupId='workspace'|'learning'|'community'|'finance'|'organization';
+type AdminNavGroupId='workspace'|'learning'|'community'|'finance'|'organization'|'account';
 const ADMIN_NAV_GROUPS:Array<{id:AdminNavGroupId;label:string;ids:AdminTab[]}>= [
   {id:'workspace',label:'Workspace',ids:['dashboard','userManagement','settings','candidates']},
   {id:'learning',label:'Learning & content',ids:['curriculum','engagement','languages','translations','materials','certification']},
   {id:'community',label:'Community',ids:['announcements','events','radio','prayer','mentorship']},
   {id:'finance',label:'Finance',ids:['payments']},
   {id:'organization',label:'Organization',ids:['organizations','unions','conferences','districts','churches']},
+  {id:'account',label:'Account',ids:['accountNotifications','accountInvitations','accountPayments','accountProfile','accountPersonalSettings','accountCertificates','accountAbout']},
 ];
 function adminNavGroupFor(tab:AdminTab):AdminNavGroupId {
   return ADMIN_NAV_GROUPS.find(group=>group.ids.includes(tab))?.id||'workspace';
@@ -198,7 +217,7 @@ async function loadInstitutionalSubscriptionState(
   };
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguage, onBack, onLogout, onNavigate, uiLocale, sidebarCollapsed, onToggleSidebar, onAccountChanged }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(() =>
     readInitialAdminTab(currentUser.uid,consumeNotificationAdminTarget()));
   const adminT = (key: string, fallback: string) => getTranslation(`admin.${key}`, getUiLocale(), settings?.customTranslations, fallback, 'AdminPage');
@@ -291,6 +310,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const detectedTimeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || '', []);
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isHierarchyAdmin = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
+  const isOrganizationPortal=isOrganizationPortalAccount(currentUser);
+  const organizationAccountTabs=new Set<AdminTab>([
+    'accountNotifications','accountInvitations','accountPayments','accountProfile',
+    'accountPersonalSettings','accountCertificates','accountAbout',
+  ]);
   const accountRoleLabel = isSuperAdmin ? 'Super Admin' : isHierarchyAdmin
     ? String(currentUser.role).replaceAll('_',' ').replace(/\b\w/g,character=>character.toUpperCase())
     : currentUser.organizationRole === 'owner' ? 'Organization Owner'
@@ -542,16 +566,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       organizationRole: currentUser.organizationRole,
       privileges: currentUser.privileges as unknown as Record<string, unknown> | undefined,
     });
-    const resourceForNav: Record<AdminTab, PermissionResource> = {
+    const resourceForNav: Partial<Record<AdminTab, PermissionResource>> = {
       dashboard:'dashboard', userManagement:'users', settings:'settings', candidates:'users',
       curriculum:'curriculum', engagement:'portfolio', languages:'languages', translations:'translations',
       announcements:'announcements', events:'announcements', materials:'materials', radio:'radio', prayer:'prayer',
       unions:'hierarchy', conferences:'hierarchy', districts:'hierarchy', churches:'hierarchy',
       certification:'certificates', mentorship:'mentoring', organizations:'organizations', payments:'payments',
     };
-    const canSee = (id: AdminTab) => id === 'engagement'
-      ? ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'))
-      : permissionAllowed(permissionMatrix, permissionRole, resourceForNav[id], 'view');
+    const canSee = (id: AdminTab) => {
+      if(organizationAccountTabs.has(id))return isOrganizationPortal;
+      if(id==='engagement')return ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'));
+      const resource=resourceForNav[id];
+      return Boolean(resource&&permissionAllowed(permissionMatrix, permissionRole, resource, 'view'));
+    };
     const featureForTab:Partial<Record<AdminTab,keyof NonNullable<ExtendedAppSettings['features']>>> = {
       candidates:'candidatesModule',curriculum:'curriculumStudio',translations:'translations',
       radio:'radio',announcements:'announcements',events:'announcements',certification:'certification',
@@ -567,6 +594,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       mentorship:'mentorship',
     };
     return NAV.filter(item => {
+      if(organizationAccountTabs.has(item.id))return isOrganizationPortal;
       const feature=featureForTab[item.id];
       const role = String(currentUser.role || '');
       const organizationRole=String(currentUser.organizationRole||'');
@@ -601,8 +629,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       if (item.id === 'churches' && !['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(role)) return false;
       if (item.id === 'unions' && !['super_admin','union_admin'].includes(role)) return false;
       return true;
-    }).map(item => ({ ...item, label: adminT(item.id, item.label) }));
-  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin, subscriptionFeatures]);
+    }).map(item => ({ ...item, label: item.id==='settings'&&isOrganizationPortal?'Organization Settings':adminT(item.id, item.label) }));
+  }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin, isOrganizationPortal, subscriptionFeatures]);
 
   useEffect(()=>{
     if(subscriptionFeatures===null)return;
@@ -614,6 +642,23 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const currentPageLabel = activeTab === 'curriculum'
     ? curriculumSettingsOpen ? 'Curriculum Settings' : studioTab === 'quizzes' ? 'Quiz Management' : studioTab === 'guides' ? 'Guides Management' : 'Curriculum Studio'
     : activeTab === 'userManagement' ? 'User Management' : currentPage?.label || 'Dashboard';
+  const accountBack=()=>navigateAdminTab('dashboard');
+  const navigateOrganizationRoute=(route:AppRoute)=>{
+    const accountRouteMap:Partial<Record<AppRoute,AdminTab>>={
+      notifications:'accountNotifications',invites:'accountInvitations',payments:'accountPayments',
+      profile:'accountProfile','personal-settings':'accountPersonalSettings',
+      certificates:'accountCertificates',about:'accountAbout',
+      announcements:'announcements',events:'events',prayer:'prayer',
+    };
+    if(route==='admin'){
+      const target=consumeNotificationAdminTarget();
+      navigateAdminTab(validAdminTab(target)?target:'dashboard');
+      return;
+    }
+    const target=accountRouteMap[route];
+    if(target){navigateAdminTab(target);return;}
+    setError('This organization account stays inside the organization portal. Use a learner account for learner-only study pages.');
+  };
   const toggleNavigation = () => {
     setProfileOpen(false);
     if (window.matchMedia('(max-width: 900px)').matches) {
@@ -1141,9 +1186,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <span className="vop-brand-copy"><span className="vop-brand-name">{settings?.appName || 'Voice of Prophecy'}</span>
           <span className="vop-brand-sub">{settings?.appTagline || 'Bible Correspondence School'}</span></span>
       </button>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : activeTab === 'payments' ? 'Financial Operations' : 'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{organizationAccountTabs.has(activeTab)?'Organization Account':activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : activeTab === 'payments' ? 'Financial Operations' : isOrganizationPortal?'Organization Portal':'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <CommunicationTools onNavigate={route=>{
+          if(isOrganizationPortal){navigateOrganizationRoute(route);return;}
           if(route==='admin'){
             const target=consumeNotificationAdminTarget();
             if(validAdminTab(target)){navigateAdminTab(target);return;}
@@ -1158,8 +1204,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           </button>
           {profileOpen&&<div className="vop-profile-menu" role="menu">
             <div className="vop-profile-menu-head">{currentUser.photoURL ? <img className="vop-profile-menu-avatar" src={currentUser.photoURL} alt="" /> : <div className="vop-profile-menu-avatar vop-avatar-initials">{(currentUser.displayName || currentUser.email || '').trim().slice(0,1).toUpperCase()}</div>}<div><strong>{currentUser.displayName || currentUser.email || 'Account'}</strong><span>{currentUser.email || ''}</span><small>{accountRoleLabel}</small></div></div>
-            <button type="button" role="menuitem" onClick={()=>{navigateAdminTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
-            <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
+            {isOrganizationPortal?<>
+              <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);navigateAdminTab('accountProfile')}}><UserCheck size={16}/>Profile</button>
+              <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);navigateAdminTab('accountPersonalSettings')}}><Settings size={16}/>Personal settings</button>
+              <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);navigateAdminTab('accountNotifications')}}><Bell size={16}/>Notifications</button>
+            </>:<>
+              <button type="button" role="menuitem" onClick={()=>{navigateAdminTab('settings');setSettingsSubtab('general')}}><Settings size={16}/>Account & Settings</button>
+              <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onBack()}}><ArrowLeft size={16}/>Back to App</button>
+            </>}
             <button type="button" role="menuitem" onClick={()=>{setProfileOpen(false);onLogout()}}><LogOut size={16}/>Sign out</button>
           </div>}
         </div>
@@ -1172,7 +1224,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <button type="button" className="vop-admin-sidebar-brand" onClick={()=>navigateAdminTab('dashboard')}
             title="Admin dashboard" aria-label="Voice of Prophecy – Admin dashboard">
             <img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/>
-            <span className="vop-admin-sidebar-brand-copy"><strong>{settings?.appName || 'Voice of Prophecy'}</strong><small>Administration workspace</small></span>
+            <span className="vop-admin-sidebar-brand-copy"><strong>{settings?.organizationName || settings?.appName || 'Voice of Prophecy'}</strong><small>{isOrganizationPortal?'Organization portal':'Administration workspace'}</small></span>
           </button>
           <button className="vop-admin-sidebar-collapse" type="button" onClick={toggleNavigation}
             aria-label={sidebarCollapsed ? 'Expand administration sidebar' : 'Collapse administration sidebar'}
@@ -1186,7 +1238,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {!sidebarCollapsed&&<label className="vop-admin-nav-search">
           <Search size={16} aria-hidden="true"/>
           <input value={navQuery} onChange={event=>setNavQuery(event.target.value)}
-            placeholder="Find an admin tool" aria-label="Find an admin tool"/>
+            placeholder={isOrganizationPortal?"Find a portal tool":"Find an admin tool"} aria-label={isOrganizationPortal?"Find a portal tool":"Find an admin tool"}/>
           {navQuery&&<button type="button" onClick={()=>setNavQuery('')} aria-label="Clear navigation search"><X size={15}/></button>}
         </label>}
         <nav className="vop-nav" aria-label="Administration sections">{ADMIN_NAV_GROUPS.map(group=>{
@@ -1205,7 +1257,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
               title={sidebarCollapsed?item.label:undefined} aria-label={item.label}
               aria-current={activeTab===item.id?'page':undefined}
               className={'vop-nav-item '+(activeTab===item.id?'active':'')}
-              onClick={()=>navigateAdminTab(item.id)}><Icon size={20}/><span>{item.label}</span></button>})}</div>}
+              onClick={()=>navigateAdminTab(item.id)}><Icon size={20}/><span>{item.label}</span></button>})}
+              {group.id==='account'&&isOrganizationPortal&&<button type="button" title={sidebarCollapsed?'Admin panel':undefined}
+                aria-label="Admin panel" className={'vop-nav-item '+(activeTab==='dashboard'?'active':'')}
+                onClick={()=>navigateAdminTab('dashboard')}><Shield size={20}/><span>Admin panel</span></button>}
+            </div>}
           </div>;
         })}</nav>
       </aside>
@@ -1250,8 +1306,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             if(planId)sessionStorage.setItem('vop-subscription-checkout-plan',planId);
             else sessionStorage.removeItem('vop-subscription-checkout-plan');
           }catch{/* storage may be unavailable */}
-          onNavigate('payments');
+          if(isOrganizationPortal)navigateAdminTab('accountPayments'); else onNavigate('payments');
         }}/>}
+        {isOrganizationPortal&&activeTab==='accountNotifications'&&<NotificationsPage onBack={accountBack} onNavigate={navigateOrganizationRoute}/>}
+        {isOrganizationPortal&&activeTab==='accountInvitations'&&<InvitationsPage
+          currentUser={currentUser} guides={guides} onBack={accountBack} onNavigate={navigateOrganizationRoute}
+          onInvitationAccepted={()=>navigateAdminTab('accountInvitations')} onAccountChanged={onAccountChanged}/>}
+        {isOrganizationPortal&&activeTab==='accountPayments'&&<PaymentsPage currentUser={currentUser} onBack={accountBack}/>}
+        {isOrganizationPortal&&activeTab==='accountProfile'&&<OrganizationAccountProfilePage
+          currentUser={currentUser} organizationName={settings?.organizationName}
+          onBack={accountBack} onUpdated={onAccountChanged} onOpenOrganization={()=>navigateAdminTab('settings')}/>}
+        {isOrganizationPortal&&activeTab==='accountPersonalSettings'&&<PersonalSettingsPage
+          currentUser={currentUser} context="organization" onBack={accountBack} onStudyLanguageChange={()=>{}}/>}
+        {isOrganizationPortal&&activeTab==='accountCertificates'&&settings&&<CertificatesPage
+          currentUser={currentUser} settings={settings} activeLanguage={activeLanguage as LanguageCode} onBack={accountBack}/>}
+        {isOrganizationPortal&&activeTab==='accountAbout'&&settings&&<AboutPage
+          settings={settings} activeLanguage={activeLanguage as LanguageCode} onBack={accountBack}/>}
         {managedTabs.includes(activeTab as ManagedAdminCollection) && activeTab!=='translations' && (
           <AdminRecordsPanel
             kind={activeTab as ManagedAdminCollection}
