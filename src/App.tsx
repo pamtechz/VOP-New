@@ -11,7 +11,7 @@ import {
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, syncPendingLessonResumes } from './services/offlineStudyQueue';
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
-import { loadPublicContent } from './services/publicFirestore';
+import { loadPublicContent, type PublicContentLoadMode } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import {
   clearLearnerLocation, learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
@@ -58,12 +58,15 @@ const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolNam
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
 const PORTAL_SESSION_STORAGE_KEY='vop-portal-session-user-v1';
 
-export const App: React.FC = () => {
+interface AppProps{initialUser?:User|null}
+
+export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
   const { locale: uiLocale } = useLocalization(settings);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
-  const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User>(()=>initialUser||EMPTY_USER);
+  const [allUsers, setAllUsers] = useState<User[]>(()=>initialUser?[initialUser]:[]);
+  const initialProfileRef=useRef<User|null>(initialUser);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [events, setEvents] = useState<MinistryEvent[]>([]);
@@ -75,7 +78,8 @@ export const App: React.FC = () => {
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
   const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>([]);
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
-  const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(()=>
+    initialUser?.uid?defaultPortalRoute(initialUser):'home');
   const [contentRefresh, setContentRefresh] = useState(0);
   const [contentHydrated,setContentHydrated] = useState(false);
   const lastPublicContentLoadAt=useRef(0);
@@ -165,7 +169,10 @@ export const App: React.FC = () => {
       // Organization invitations require an explicit Accept action after sign-in.
       // Keep the query token intact so the Invitations screen can preview it.
       if(inviteToken)setCurrentRoute('invites');
-      void loadFirestoreUser(firebaseUser.uid).then(async (profile: User | null) => {
+      const handedOff=initialProfileRef.current?.uid===firebaseUser.uid
+        ?initialProfileRef.current:null;
+      initialProfileRef.current=null;
+      void Promise.resolve(handedOff||loadFirestoreUser(firebaseUser.uid)).then(async (profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
@@ -270,8 +277,14 @@ export const App: React.FC = () => {
   }, [currentUser.uid]);
 
   useEffect(() => {
+    // Root hands the authoritative profile into App. Avoid starting a broad
+    // anonymous content fetch in the small window before that profile exists.
+    if(auth?.currentUser&&!currentUser.uid)return;
     let cancelled = false;
-    void loadPublicContent(currentUser.uid ? currentUser : undefined).then(snapshot => {
+    const landing=currentUser.uid?defaultPortalRoute(currentUser):'home';
+    const loadMode:PublicContentLoadMode=landing==='admin'||landing==='localization'
+      ?'portal':landing==='mentor'?'mentor':'full';
+    void loadPublicContent(currentUser.uid ? currentUser : undefined,loadMode).then(snapshot => {
       if (cancelled) return;
       const customTranslations: Record<string, Record<string, string>> = {};
       Object.entries(snapshot.translations).forEach(([key, values]) => {
@@ -339,14 +352,20 @@ export const App: React.FC = () => {
       const shareRef = deepLinkParams.get('ref');
       if (shareRef) sessionStorage.setItem('vop_share_ref', shareRef);
       saveSettings(nextSettings);
-      saveGuides(snapshot.guides);
-      saveAnnouncements(snapshot.announcements);
-      saveBooks(snapshot.books);
-      saveUnions(snapshot.unions);
-      saveConferences(snapshot.conferences);
-      saveDistricts(snapshot.districts);
-      saveChurches(snapshot.churches);
-      saveRadioBroadcasts(snapshot.radioBroadcasts);
+      // Dedicated portals intentionally load a small shell snapshot. Never
+      // overwrite the learner cache with the empty arrays from that fast path.
+      if(loadMode!=='portal'){
+        saveGuides(snapshot.guides);
+      }
+      if(loadMode==='full'){
+        saveAnnouncements(snapshot.announcements);
+        saveBooks(snapshot.books);
+        saveUnions(snapshot.unions);
+        saveConferences(snapshot.conferences);
+        saveDistricts(snapshot.districts);
+        saveChurches(snapshot.churches);
+        saveRadioBroadcasts(snapshot.radioBroadcasts);
+      }
     }).catch(error => {
       if (!cancelled) {
         setContentHydrated(true);
