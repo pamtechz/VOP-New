@@ -462,7 +462,7 @@ test('subscription capabilities are enforced server-side and reflected in instit
   assert.match(permissions,/quizzes:'curriculum'/);
   assert.match(permissions,/certificates:'certification'/);
   assert.match(permissions,/mentoring:'mentorship'/);
-  assert.match(permissions,/Object\.hasOwn\(entitlements,feature\)/);
+  assert.match(permissions,/Object\.prototype\.hasOwnProperty\.call\(entitlements,feature\)/);
   assert.match(permissions,/subscription plan does not include/);
   assert.match(permissions,/plan\|\|'\'\)\.trim\(\)==='unsubscribed'/);
   assert.match(permissions,/requireSubscriptionFeature/);
