@@ -775,6 +775,20 @@ export default async function handler(req: Request, res: Response) {
         }
         incoming.quizRetakeCooldownMinutes = minutes;
       }
+      if(collection==='settings'&&Object.hasOwn(incoming,'engagementPoints')){
+        const raw=incoming.engagementPoints&&typeof incoming.engagementPoints==='object'
+          ?incoming.engagementPoints as Record<string,unknown>:{};
+        const defaults={soloChallenge:10,duelChallenge:15,memoryReview:1,practiceQuiz:5,chapterQuiz:10,finalExam:25};
+        const normalized:Record<string,number>={};
+        for(const [key,fallback] of Object.entries(defaults)){
+          const value=raw[key]===undefined?fallback:Number(raw[key]);
+          if(!Number.isInteger(value)||value<0||value>10000){
+            throw new Error('Activity point values must be whole numbers from 0 to 10,000.');
+          }
+          normalized[key]=value;
+        }
+        incoming.engagementPoints=normalized;
+      }
 
       if (collection === 'certificationConfig') {
         const enabled = incoming.enabled;
