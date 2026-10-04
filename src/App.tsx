@@ -706,9 +706,16 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const programId=String(target.searchParams.get('program')||'');
     const guideId=String(target.searchParams.get('guide')||'');
     const lessonId=String(target.searchParams.get('lesson')||'');
-    const pageIndex=Math.max(0,Math.trunc(Number(target.searchParams.get('page')||0)||0));
+    const rawPage=Math.max(0,Math.trunc(Number(target.searchParams.get('page')||0)||0));
+    const sectionId=String(target.searchParams.get('section')||'');
     const guide=guideId?guides.find(item=>item.id===guideId)||null:null;
     const lesson=lessonId&&guide?guide.lessons.find(item=>item.id===lessonId)||null:null;
+    const sectionIndex=lesson?.type==='Lesson'&&sectionId
+      ?(lesson.contentPages||[]).findIndex(page=>page.sectionId===sectionId)
+      :-1;
+    const pageCount=lesson?.type==='Lesson'?Math.max(1,lesson.contentPages?.length||1):1;
+    const requestedPage=sectionIndex>=0?sectionIndex:rawPage>0?rawPage-1:0;
+    const pageIndex=lesson?.type==='Lesson'?Math.max(0,Math.min(pageCount-1,requestedPage)):0;
     const location:LearnerLocation={
       route,
       ...(programId?{programId}:{}),
