@@ -5,6 +5,7 @@ import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
+import { ShimmerCards } from '../components/layout/Shimmer';
 
 interface CertificatesPageProps { currentUser: User; settings: AppSettings; activeLanguage: LanguageCode; onBack: () => void; }
 interface OfficialCertificate {
