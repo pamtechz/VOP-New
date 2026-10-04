@@ -1791,3 +1791,8 @@
 
 .vop-live-data-note{display:inline-flex;align-items:center;gap:6px;color:var(--vop-muted,#667d9b);font-size:11px;font-weight:800}
 .vop-live-data-note>span{width:8px;height:8px;border-radius:999px;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+
+.vop-page-btn:disabled{opacity:.42;cursor:not-allowed}
+.vop-page-indicator{display:inline-flex;align-items:center;justify-content:center;min-width:86px;color:var(--vop-muted,#667d9b);font-size:11px;font-weight:800}
+.vop-language-card-grid{margin-top:2px}
+.vop-language-default-control{display:inline-flex;align-items:center;gap:6px;margin-right:auto;color:var(--vop-muted,#667d9b);font-size:10px;font-weight:800}
