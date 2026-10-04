@@ -35,6 +35,7 @@ import { applyThemePreference, persistThemePreference, readThemePreference } fro
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
 import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
+import { RouteShimmer } from './components/layout/Shimmer';
 
 const AboutPage=React.lazy(()=>import('./pages/AboutPage').then(module=>({default:module.AboutPage})));
 const ReferenceProfilePage=React.lazy(()=>import('./pages/ReferenceProfilePage').then(module=>({default:module.ReferenceProfilePage})));
@@ -55,7 +56,7 @@ const InvitationsPage=React.lazy(()=>import('./pages/InvitationsPage'));
 const AdminPage=React.lazy(()=>import('./pages/AdminPage').then(module=>({default:module.AdminPage})));
 const LocalizationConsolePage=React.lazy(()=>import('./pages/LocalizationConsolePage'));
 const MentorWorkspace=React.lazy(()=>import('./pages/MentorWorkspace'));
-const RouteLoading=()=> <div className="vop-empty" role="status" aria-live="polite">Opening workspace…</div>;
+const RouteLoading=()=> <RouteShimmer label="Opening workspace"/>;
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -676,6 +677,57 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
 
+  const openInvitationTarget=useCallback(async(targetPath:string)=>{
+    const safe=String(targetPath||'/');
+    if(!safe.startsWith('/')||safe.startsWith('//'))return;
+    let account=currentUser;
+    if(auth?.currentUser){
+      try{
+        const refreshed=await loadFirestoreUser(auth.currentUser.uid);
+        if(refreshed){
+          account=refreshed;
+          setCurrentUser(refreshed);
+          setAllUsers([refreshed]);
+          setLocalizationOrganizationScope(refreshed.organizationId||'');
+        }
+      }catch{/* Keep the current in-memory account if profile revalidation is temporarily unavailable. */}
+    }
+    const target=new URL(safe,window.location.origin);
+    const knownRoutes=new Set<AppRoute>([
+      'home','guide','lesson','about','profile','personal-settings','localization','resources','lessons',
+      'master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications',
+      'invites','support','mentor','admin','certificates','payments','certificate-verification',
+    ]);
+    let route=String(target.searchParams.get('route')||defaultPortalRoute(account)) as AppRoute;
+    if(!knownRoutes.has(route))route=defaultPortalRoute(account);
+    if(isOrganizationPortalAccount(account)&&route!=='certificate-verification')route='admin';
+    if(isPortalRoute(route)&&!canAccessPortalRoute(account,route))route=defaultPortalRoute(account);
+
+    const programId=String(target.searchParams.get('program')||'');
+    const guideId=String(target.searchParams.get('guide')||'');
+    const lessonId=String(target.searchParams.get('lesson')||'');
+    const pageIndex=Math.max(0,Math.trunc(Number(target.searchParams.get('page')||0)||0));
+    const guide=guideId?guides.find(item=>item.id===guideId)||null:null;
+    const lesson=lessonId&&guide?guide.lessons.find(item=>item.id===lessonId)||null:null;
+    const location:LearnerLocation={
+      route,
+      ...(programId?{programId}:{}),
+      ...(guide?{guideId:guide.id,guideLanguage:guide.language}:{}),
+      ...(lesson?{lessonId:lesson.id}:{}),
+      ...(lesson?.type==='Lesson'?{pageIndex}:{}),
+    };
+    setCurrentRoute(route);
+    setActiveProgramId(programId);
+    setActiveGuide(guide);
+    setActiveLesson(lesson);
+    setDeepLinkPageIndex(pageIndex);
+    setStudyError('');
+    setStudyNotice('');
+    setIsMenuOpen(false);
+    if(account.uid)replaceLearnerLocation(account.uid,location,0);
+    window.history.replaceState(window.history.state,'',window.location.pathname);
+  },[currentUser,guides]);
+
   const navigate = (route: AppRoute) => {
     setActiveProgramId('');
     setActiveGuide(null);
@@ -776,11 +828,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
             inviteToken={new URLSearchParams(window.location.search).get('invite')||undefined}
             currentUser={currentUser} guides={guides}
             onBack={goBack} onNavigate={navigate}
-            onInvitationAccepted={targetPath=>{
-              const safe=String(targetPath||'/');
-              if(!safe.startsWith('/')||safe.startsWith('//'))return;
-              window.location.assign(safe);
-            }}
+            onInvitationAccepted={targetPath=>{void openInvitationTarget(targetPath)}}
             onAccountChanged={async()=>{
               if(!auth?.currentUser)return;
               const refreshed=await loadFirestoreUser(auth.currentUser.uid);
