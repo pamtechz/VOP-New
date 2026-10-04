@@ -210,12 +210,30 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
   const ref = db.doc(`users/${decoded.uid}`);
   const snap = await ref.get();
   const existing = snap.exists ? snap.data() || {} : {};
+
+  // Organization membership is the authorization source of truth. A stale
+  // organizationRole on a user profile must never resurrect access after the
+  // membership was suspended or removed.
+  let organizationId=String(existing.organizationId || '').trim();
+  let organizationRole=String(existing.organizationRole || '').trim();
+  if(organizationId){
+    const membership=await db.doc(`organizations/${organizationId}/members/${decoded.uid}`).get();
+    if(membership.exists && membership.data()?.active===true){
+      organizationRole=String(membership.data()?.role || organizationRole || 'learner').trim().toLowerCase();
+    }else{
+      organizationId='';
+      organizationRole='';
+    }
+  }
+
   const profile = {
     uid: decoded.uid,
     email: decoded.email ?? existing.email ?? '',
     displayName: decoded.name ?? existing.displayName ?? decoded.email?.split('@')[0] ?? 'VOP Student',
     photoURL: decoded.picture ?? existing.photoURL ?? null,
     role: existing.role ?? 'student',
+    organizationId,
+    organizationRole,
     adminNodeType: existing.adminNodeType ?? null,
     adminNodeId: existing.adminNodeId ?? null,
     privileges: existing.privileges ?? { admin:false, guardian:false, editor:false, manager:false, developer:false, coordinator:false },
