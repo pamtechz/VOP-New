@@ -217,7 +217,7 @@ export function ChatThread({
                 <textarea value={editBody} maxLength={10000} onChange={event=>setEditBody(event.target.value)} autoFocus/>
                 {editReferences.length>0&&<div className="vop-chat-reference-list">
                   {editReferences.map(reference=><span className="vop-chat-reference-chip" key={reference.type+reference.id}>
-                    <BookOpen size={13}/>{reference.label}
+                    <ReferenceIcon type={reference.type}/>{reference.label}
                     <button type="button" onClick={()=>setEditReferences(current=>current.filter(item=>item!==reference))} aria-label={'Remove '+reference.label}><X size={12}/></button>
                   </span>)}
                 </div>}
@@ -229,18 +229,25 @@ export function ChatThread({
                 <p>{message.deleted?<em>Message deleted</em>:message.body}</p>
                 {!message.deleted&&(message.references||[]).length>0&&<div className="vop-chat-reference-list">
                   {(message.references||[]).map(reference=><button type="button" className="vop-chat-reference-chip is-button"
-                    key={reference.type+reference.id} onClick={()=>setPreviewReference(current=>current===reference.id?'':reference.id)}>
-                    <BookOpen size={13}/>{reference.label}
+                    key={reference.type+reference.id} onClick={()=>setPreviewReference(current=>current===referenceKey(reference)?'':referenceKey(reference))}>
+                    <ReferenceIcon type={reference.type}/>{reference.label}
                   </button>)}
                 </div>}
-                {!message.deleted&&previewReference&&(message.references||[]).some(reference=>reference.id===previewReference)&&(()=>{
-                  const row=lessonMap.get(previewReference);
-                  if(!row)return null;
-                  return <div className="vop-chat-lesson-preview">
+                {!message.deleted&&previewReference&&(()=>{
+                  const reference=(message.references||[]).find(item=>referenceKey(item)===previewReference);
+                  if(!reference)return null;
+                  const row=lessonMap.get(reference.id);
+                  if(row)return <div className="vop-chat-lesson-preview">
                     <span>{row.guide.title} · {row.guide.language.toUpperCase()}</span>
                     <strong>Lesson {row.lesson.lessonNumber}: {row.lesson.title}</strong>
                     <p>{firstLessonText(row.lesson)||'Lesson content is available in the study library.'}</p>
                     <small>{row.lesson.estimatedMinutes||15} min study</small>
+                  </div>;
+                  return <div className="vop-chat-reference-preview">
+                    <span><ReferenceIcon type={reference.type}/>{referenceTypeLabel(reference.type)}</span>
+                    <strong>{reference.label}</strong>
+                    {reference.description&&<p>{reference.description}</p>}
+                    {reference.route&&<a href={'/?route='+encodeURIComponent(reference.route)}><ExternalLink size={13}/>Open in VOP</a>}
                   </div>;
                 })()}
                 <footer>
@@ -262,27 +269,43 @@ export function ChatThread({
     <div className="vop-chat-composer">
       {pendingReferences.length>0&&<div className="vop-chat-pending-references">
         {pendingReferences.map(reference=><span className="vop-chat-reference-chip" key={reference.type+reference.id}>
-          <BookOpen size={13}/>{reference.label}
+          <ReferenceIcon type={reference.type}/>{reference.label}
           <button type="button" onClick={()=>setPendingReferences(current=>current.filter(item=>item!==reference))} aria-label={'Remove '+reference.label}><X size={12}/></button>
         </span>)}
       </div>}
       {pickerOpen&&<div className="vop-chat-lesson-picker">
         <div className="vop-chat-picker-head">
-          <div><BookOpen size={17}/><span><strong>Attach a lesson</strong><small>Search the curriculum without leaving this conversation.</small></span></div>
-          <button type="button" onClick={()=>setPickerOpen(false)} aria-label="Close lesson picker"><X size={16}/></button>
+          <div><Paperclip size={17}/><span><strong>Attach VOP content</strong><small>Attach lessons, Duels, Challenges, games and other in-app destinations.</small></span></div>
+          <button type="button" onClick={()=>setPickerOpen(false)} aria-label="Close attachment picker"><X size={16}/></button>
         </div>
-        <label className="vop-chat-picker-search"><Search size={15}/><input value={attachmentSearch} onChange={event=>setAttachmentSearch(event.target.value)} placeholder="Search lesson title, number or guide…"/></label>
+        <div className="vop-chat-picker-tabs" role="tablist" aria-label="Attachment type">
+          <button type="button" role="tab" aria-selected={pickerView==='study'} className={pickerView==='study'?'active':''} onClick={()=>setPickerView('study')}><BookOpen size={14}/>Study content</button>
+          <button type="button" role="tab" aria-selected={pickerView==='app'} className={pickerView==='app'?'active':''} onClick={()=>setPickerView('app')}><Trophy size={14}/>App activities & games</button>
+        </div>
+        <label className="vop-chat-picker-search"><Search size={15}/><input value={attachmentSearch} onChange={event=>setAttachmentSearch(event.target.value)}
+          placeholder={pickerView==='study'?'Search lesson title, number or guide…':'Search Duels, Challenges, games or app features…'}/></label>
         <div className="vop-chat-picker-results">
-          {!filteredLessons.length?<div className="vop-chat-picker-empty">No lesson matches that search.</div>:filteredLessons.map(row=><button type="button" key={row.reference.id} onClick={()=>attach(row.reference)}>
-            <span className="vop-chat-lesson-number">{row.lesson.lessonNumber}</span>
-            <span><strong>{row.lesson.title}</strong><small>{row.guide.title} · {row.guide.language.toUpperCase()}</small></span>
-            <Paperclip size={14}/>
-          </button>)}
+          {pickerView==='study'?(!filteredLessons.length?<div className="vop-chat-picker-empty">No lesson matches that search.</div>:filteredLessons.map(row=>{
+            const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(row.reference));
+            return <button type="button" key={row.reference.id} className={attached?'attached':''} onClick={()=>attach(row.reference)}>
+              <span className="vop-chat-lesson-number">{row.lesson.lessonNumber}</span>
+              <span><strong>{row.lesson.title}</strong><small>{row.guide.title} · {row.guide.language.toUpperCase()}</small></span>
+              {attached?<Check size={14}/>:<Paperclip size={14}/>}
+            </button>;
+          })):(!filteredAppReferences.length?<div className="vop-chat-picker-empty">No app activity matches that search.</div>:filteredAppReferences.map(reference=>{
+            const attached=pendingReferences.some(item=>referenceKey(item)===referenceKey(reference));
+            return <button type="button" key={referenceKey(reference)} className={attached?'attached':''} onClick={()=>attach(reference)}>
+              <span className="vop-chat-attachment-icon"><ReferenceIcon type={reference.type} size={16}/></span>
+              <span><strong>{reference.label}</strong><small>{referenceTypeLabel(reference.type)}{reference.description?' · '+reference.description:''}</small></span>
+              {attached?<Check size={14}/>:<Paperclip size={14}/>}
+            </button>;
+          }))}
         </div>
+        <div className="vop-chat-picker-footer"><span>{pendingReferences.length}/8 attached</span><button type="button" onClick={()=>setPickerOpen(false)}>Done</button></div>
       </div>}
       <div className="vop-chat-input-row">
         <button type="button" className={'vop-chat-attach '+(pickerOpen?'active':'')} onClick={()=>setPickerOpen(value=>!value)}
-          disabled={busy||localBusy||!rows.length} title={rows.length?'Attach lesson':'No lessons available'} aria-label="Attach a lesson">
+          disabled={busy||localBusy} title="Attach VOP content" aria-label="Attach VOP content">
           <Paperclip size={18}/>
         </button>
         <textarea value={draft} maxLength={10000} onChange={event=>onDraftChange(event.target.value)} placeholder={placeholder}
@@ -291,7 +314,7 @@ export function ChatThread({
           <Send size={17}/><span>{localBusy?'Sending…':sendLabel}</span>
         </button>
       </div>
-      <small className="vop-chat-hint">Enter to send · Shift+Enter for a new line{rows.length?' · paperclip attaches a lesson':''}</small>
+      <small className="vop-chat-hint">Enter to send · Shift+Enter for a new line · paperclip attaches lessons, Duels, Challenges, games and other VOP content</small>
     </div>
   </div>;
 }
