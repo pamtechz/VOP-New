@@ -833,6 +833,15 @@ test('startup path reuses the authoritative profile, scopes refresh cache and de
   assert.match(i18n,/localizationInitInflight/);
 });
 
+test('tenant authentication reuses one organization scope read per request',()=>{
+  const tenant=read('server/tenant.ts');
+  assert.match(tenant,/const readOrganizationScope=async\(id:string\)=>/);
+  assert.match(tenant,/Promise\.all\(\[/);
+  assert.match(tenant,/organizationSnap,membershipSnap/);
+  assert.match(tenant,/resolvedScope\?\.id===organizationId/);
+  assert.doesNotMatch(tenant,/const profileMembership=await/);
+});
+
 test('web Google authentication uses popup flow without delaying the root auth observer',()=>{
   const firebaseAuth=read('src/services/firebaseAuth.ts');
   const root=read('src/Root.tsx');
