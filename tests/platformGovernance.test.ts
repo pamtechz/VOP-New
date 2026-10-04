@@ -90,7 +90,8 @@ test('platform stewardship keeps both runtime JS and TypeScript compatibility en
   const compatibility=read('shared/platformStewardship.ts');
   const programManager=read('server/programManager.ts');
   assert.match(runtime,/platformStewardedResource/);
-  assert.match(compatibility,/from '\.\/platformStewardship\.js'/);
+  assert.match(compatibility,/export function platformStewardedResource/);
+  assert.match(compatibility,/export function assertMutableTenantResource/);
   assert.match(programManager,/from '\.\.\/shared\/platformStewardship\.js'/);
 });
 
