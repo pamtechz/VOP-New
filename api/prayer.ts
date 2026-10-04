@@ -46,7 +46,7 @@ export default async function handler(req: Request, res: Response) {
       }
 
       const items = docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
         .filter(item => {
           if (item.candidateId === ctx.auth.uid) return true;
