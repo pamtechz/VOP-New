@@ -163,6 +163,8 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   const candidates=read('src/pages/CandidateEnrollment.tsx');
   const engagementStudio=read('src/pages/EngagementStudio.tsx');
   const viewModeToggle=read('src/components/admin/ViewModeToggle.tsx');
+  const organizationAccount=read('src/pages/OrganizationAccountProfilePage.tsx');
+  const personalSettings=read('src/pages/PersonalSettingsPage.tsx');
 
   assert.match(mentoring,/type Tab='overview'\|'operations'\|'support'\|'insights'\|'outreach'/);
   assert.doesNotMatch(mentoring,/type OperationsPanel=/);
@@ -185,6 +187,23 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(admin,/ViewModeToggle value=\{languageView\}/);
   assert.match(admin,/Previous language page/);
   assert.match(admin,/Next language page/);
+  assert.match(admin,/label:'Account'/);
+  assert.match(admin,/accountNotifications/);
+  assert.match(admin,/accountInvitations/);
+  assert.match(admin,/accountPayments/);
+  assert.match(admin,/accountProfile/);
+  assert.match(admin,/accountPersonalSettings/);
+  assert.match(admin,/accountCertificates/);
+  assert.match(admin,/accountAbout/);
+  assert.match(admin,/Organization portal/);
+  assert.match(admin,/Admin panel/);
+  assert.match(app,/isOrganizationPortalAccount\(currentUser\)/);
+  assert.match(app,/Organization staff accounts use the organization portal/);
+  assert.match(organizationAccount,/Organization account profile/);
+  assert.match(organizationAccount,/updateOwnProfile/);
+  assert.match(personalSettings,/context\?: 'learner'\|'organization'/);
+  assert.match(personalSettings,/organizationAccount/);
+  assert.match(personalSettings,/Light \(default\)/);
 
   assert.match(organizations,/Delete selected/);
   assert.match(organizations,/Clear all/);
