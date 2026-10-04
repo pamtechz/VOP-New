@@ -17,6 +17,7 @@ import { transferCurriculumNode } from '../../shared/curriculumTransfer.js';
 import { handleCurriculumPrograms } from '../../server/programManager.js';
 import { adoptOrganizationLanguage } from '../../server/tenantLanguageAdoption.js';
 import { translationKey } from '../../server/localization.js';
+import { effectiveCertificationConfig, organizationCertificationConfigPath, writableCertificationConfig } from '../../server/certificationConfig.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -31,7 +32,7 @@ const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBro
 
 const ORG_COLLECTIONS = new Set([
   'announcements','events','programs','learningPaths','bibleTopics','seasons',
-  'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
+  'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings','certificationConfig'
 ]);
 
 const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatureKey>>={
@@ -46,6 +47,7 @@ const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatu
   candidates:'candidates',
   certificates:'certification',
   graduationRequests:'certification',
+  certificationConfig:'certification',
 };
 const NON_EXPANSIVE_CONTENT_ACTIONS=new Set(['list','learnerList','listGuides','listGuideLessons','delete','archiveGuide']);
 function quotaKeyForCollection(collection:string){
@@ -156,9 +158,15 @@ export default async function handler(req: Request, res: Response) {
     if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
-        throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
-      }
-      if (collection === 'settings' && ctx.tenantType === 'hierarchy') {
+        if (!effectiveOrganizationId) throw new Error('Select an organization before managing its certificate configuration.');
+        if (ctx.tenantType === 'hierarchy') {
+          if (!(await organizationInHierarchyScope(ctx,effectiveOrganizationId))) {
+            throw new Error('The organization is outside your hierarchy scope.');
+          }
+        } else {
+          requireOrgRole(ctx,['owner','admin']);
+        }
+      } else if (collection === 'settings' && ctx.tenantType === 'hierarchy') {
         // Union, conference, district and church administrators own their
         // hierarchy-level ministry profile even when no organization is selected.
       } else if (collection === 'settings' && (ctx.organizationId || effectiveOrganizationId)) {
@@ -714,6 +722,46 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, item: { id: lessonId, published: true } });
     }
 
+    if (collection === 'certificationConfig' && action === 'upsert') {
+      await requirePermission(ctx,'certificates','update');
+      const targetOrganizationId=effectiveOrganizationId;
+      if(!ctx.isSuperAdmin&&!targetOrganizationId){
+        throw new Error('An organization is required for certificate configuration.');
+      }
+      if(targetOrganizationId){
+        await requireOwnedFeature('certification');
+        if(!ctx.isSuperAdmin&&ctx.tenantType==='hierarchy'&&!(await organizationInHierarchyScope(ctx,targetOrganizationId))){
+          throw new Error('The organization is outside your hierarchy scope.');
+        }
+        if(!ctx.isSuperAdmin&&ctx.tenantType!=='hierarchy')requireOrgRole(ctx,['owner','admin']);
+      }
+      const ref=targetOrganizationId
+        ?ctx.db.doc(organizationCertificationConfigPath(targetOrganizationId))
+        :ctx.db.doc('system/certification');
+      const before=await ref.get();
+      const incoming=writableCertificationConfig(body.data);
+      if(Object.hasOwn(incoming,'minimumScore')){
+        const raw=incoming.minimumScore;
+        if(raw===''||raw===null||raw===undefined)delete incoming.minimumScore;
+        else{
+          const score=Number(raw);
+          if(!Number.isFinite(score)||score<0||score>100)throw new Error('Minimum certification score must be between 0 and 100.');
+          incoming.minimumScore=score;
+        }
+      }
+      await ref.set({
+        ...incoming,
+        ...(targetOrganizationId?{organizationId:targetOrganizationId}:{}),
+        updatedBy:ctx.auth.uid,updatedAt:FieldValue.serverTimestamp(),
+        createdAt:before.data()?.createdAt||new Date().toISOString(),
+        createdBy:before.data()?.createdBy||ctx.auth.uid,
+      },{merge:true});
+      const saved=await ref.get();
+      await writeTenantAudit(ctx,'certificationConfig.update',ref.path,before.exists?before.data():undefined,saved.data());
+      const effective=await effectiveCertificationConfig(ctx.db,targetOrganizationId);
+      return res.status(200).json({ok:true,item:{id:'certification',...effective}});
+    }
+
     if ((collection === 'settings' || collection === 'curriculumSettings') && action === 'upsert') {
       await requirePermission(ctx, 'settings', 'update');
       const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
@@ -832,9 +880,10 @@ export default async function handler(req: Request, res: Response) {
       }
       if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
         if (collection === 'certificationConfig') {
-          if (!ctx.isSuperAdmin) return res.status(200).json({ ok: true, items: [] });
-          const s = await ctx.db.doc('system/certification').get();
-          return res.status(200).json({ ok: true, items: s.exists ? [{ id:'certification', ...s.data() }] : [] });
+          const targetOrganizationId=effectiveOrganizationId;
+          if(!ctx.isSuperAdmin&&!targetOrganizationId)return res.status(200).json({ok:true,items:[]});
+          const effective=await effectiveCertificationConfig(ctx.db,targetOrganizationId);
+          return res.status(200).json({ok:true,items:[{id:'certification',...effective}]});
         }
         const id = collection === 'settings' ? 'settings' : 'curriculum';
         if (ctx.organizationId) {
