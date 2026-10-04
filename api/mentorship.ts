@@ -387,7 +387,7 @@ async function performanceFor(db: FirebaseFirestore.Firestore, studentId: string
   const student = await profile(db, studentId);
   const progress = student.progress && typeof student.progress === 'object' ? student.progress as Record<string, unknown> : {};
   const attemptsSnapshot = await db.doc(`users/${studentId}`).collection('assessmentAttempts').orderBy('createdAt', 'desc').limit(100).get();
-  const attempts = attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const attempts = attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}));
   const scores = attempts.map(item => Number(item.score)).filter(Number.isFinite);
   const passed = attempts.filter(item => item.passed === true).length;
   const completedLessons = Array.isArray(progress.completedLessons) ? progress.completedLessons.length : 0;
@@ -469,13 +469,13 @@ export default async function handler(req: Request, res: Response) {
 
     if (action === 'listStudents') {
       const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
-      const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => String(item.role || 'student') === 'student' && sameTenant(actor, item, organizationId) && sameScope(actor, item));
+      const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Record<string,unknown>&{uid:string})).filter(item => String(item.role || 'student') === 'student' && sameTenant(actor, item, organizationId) && sameScope(actor, item));
       return res.status(200).json({ ok: true, items: students });
     }
 
     if (action === 'listMentors') {
       const snapshot = organizationId ? await db.collection('users').where('organizationId','==',organizationId).get() : await db.collection('users').get();
-      const mentors = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(item => isMentor(item) && sameTenant(actor, item, organizationId));
+      const mentors = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Record<string,unknown>&{uid:string})).filter(item => isMentor(item) && sameTenant(actor, item, organizationId));
       return res.status(200).json({ ok: true, items: mentors });
     }
 
@@ -524,7 +524,7 @@ export default async function handler(req: Request, res: Response) {
         .filter(item=>item.exists&&sameTenant(actor,item.data()||{},organizationId)&&sameScope(actor,item.data()||{}))
         .map(item=>[item.id,item.data()||{}]));
       const items=snapshot.docs
-        .map(doc=>({id:doc.id,...doc.data()}))
+        .map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}))
         .filter(item=>{
           const student=allowedStudents.get(String(item.studentId||''));
           return Boolean(student)
@@ -587,7 +587,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'questionFailures') {
       const base = organizationId ? db.collection('questionPerformance').where('organizationId','==',organizationId).orderBy('failedCount','desc').limit(50) : db.collection('questionPerformance').orderBy('failedCount','desc').limit(50);
       const snapshot = await base.get();
-      return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) });
+      return res.status(200).json({ ok: true, items: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string})) });
     }
 
     if (action === 'listConversations') {
@@ -598,7 +598,7 @@ export default async function handler(req: Request, res: Response) {
           ?db.collection('mentorConversations').where('organizationId','==',organizationId).limit(300)
           :db.collection('mentorConversations').limit(300);
         const snapshot=await conversationQuery.get();
-        let items=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+        let items=snapshot.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}));
         const studentIds=[...new Set(items.map(item=>String(item.studentId||'')).filter(Boolean))];
         const studentSnapshots=await Promise.all(studentIds.map(studentId=>db.doc(`users/${studentId}`).get()));
         const allowedStudentIds=new Set(studentSnapshots
