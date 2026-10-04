@@ -37,24 +37,19 @@ service cloud.firestore {
     }
 
     function isOrgMember(orgId) {
+      // Tenant access requires a live membership document. The profile's
+      // organizationId is routing metadata only and cannot authorize access.
       return signedIn()
         && orgId != ''
-        && (
-          (hasUserProfile() && userDoc().data.get('organizationId', '') == orgId)
-          || (
-            exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
-            && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('active', false) == true
-          )
-        );
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('active', false) == true;
     }
 
     function orgRole(orgId) {
+      // The membership record is authoritative for the tenant role. Never fall
+      // back to a stale organizationRole stored on the user profile.
       return isOrgMember(orgId)
-        ? (
-            exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
-              ? get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', hasUserProfile() ? userDoc().data.get('organizationRole', 'viewer') : 'viewer')
-              : (hasUserProfile() ? userDoc().data.get('organizationRole', 'admin') : 'viewer')
-          )
+        ? get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', 'viewer')
         : '';
     }
 
