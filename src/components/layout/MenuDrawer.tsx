@@ -6,6 +6,7 @@ import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
 import { ModalLayer } from './ModalLayer';
 import { hasAdminPortalAccess, hasMentorPortalAccess } from '../../services/portalAccess';
+import { hasAdminPortalAccess, hasMentorPortalAccess, hasLocalizationPortalAccess } from '../../services/portalAccess';
 
 interface MenuDrawerProps {
   isOpen: boolean;
@@ -76,7 +77,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const isMentor=hasMentorPortalAccess(currentUser);
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
-  const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
+  const localizationAccess=hasLocalizationPortalAccess(currentUser);
   const progress = calculateCurriculumProgress(guides, currentUser, settings.quizPassThreshold, activeLanguage);
   const name = currentUser.displayName?.trim() || currentUser.email || t('common.learner', 'Learner');
   const initial = name.charAt(0).toUpperCase();
