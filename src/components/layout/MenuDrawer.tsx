@@ -5,7 +5,6 @@ import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
 import { ModalLayer } from './ModalLayer';
-import { hasAdminPortalAccess, hasMentorPortalAccess } from '../../services/portalAccess';
 import { hasAdminPortalAccess, hasMentorPortalAccess, hasLocalizationPortalAccess } from '../../services/portalAccess';
 
 interface MenuDrawerProps {
