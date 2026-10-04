@@ -109,6 +109,10 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(()=>
     initialUser?.uid?defaultPortalRoute(initialUser):'home');
+  const dataModeForRoute=(route:AppRoute):PublicContentLoadMode=>
+    route==='admin'||route==='localization'?'portal':route==='mentor'?'mentor':'full';
+  const [contentLoadMode,setContentLoadMode]=useState<PublicContentLoadMode>(()=>
+    dataModeForRoute(initialUser?.uid?defaultPortalRoute(initialUser):'home'));
   const [contentRefresh, setContentRefresh] = useState(0);
   const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
@@ -313,9 +317,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     // anonymous content fetch in the small window before that profile exists.
     if(auth?.currentUser&&!currentUser.uid)return;
     let cancelled = false;
-    const landing=currentUser.uid?defaultPortalRoute(currentUser):'home';
-    const loadMode:PublicContentLoadMode=landing==='admin'||landing==='localization'
-      ?'portal':landing==='mentor'?'mentor':'full';
+    const loadMode=contentLoadMode;
     void loadPublicContent(currentUser.uid ? currentUser : undefined,loadMode).then(snapshot => {
       if (cancelled) return;
       const customTranslations: Record<string, Record<string, string>> = {};
@@ -412,14 +414,12 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       }
     });
     return () => { cancelled = true; };
-  }, [currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId,contentRefresh]);
+  }, [currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId,contentLoadMode,contentRefresh]);
 
   useEffect(()=>{
-    const previous=previousRouteRef.current;
     previousRouteRef.current=currentRoute;
-    if(previous==='admin'&&currentRoute!=='admin'){
-      setContentRefresh(value=>value+1);
-    }
+    const required=dataModeForRoute(currentRoute);
+    setContentLoadMode(current=>current===required?current:required);
   },[currentRoute]);
 
   useEffect(() => {
