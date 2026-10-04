@@ -804,6 +804,13 @@ test('Firestore client reads avoid route-change reloads and aggressive notificat
   assert.match(app,/contentLoadMode,contentRefresh/);
   assert.doesNotMatch(app,/currentRoute,contentRefresh/);
   assert.match(publicData,/loadPublicContent\(scopeUser\?: User,mode:PublicContentLoadMode='full'\)/);
+  assert.match(publicData,/loadPublicRouteData/);
+  assert.match(publicData,/PublicRouteDataKind='events'\|'resources'\|'radio'\|'profile'/);
+  assert.match(app,/loadPublicRouteData\(kind,currentUser\)/);
+  assert.match(app,/lazyRouteLoadsRef/);
+  assert.match(app,/currentRoute==='resources'/);
+  assert.match(app,/currentRoute==='radio'/);
+  assert.match(app,/currentRoute==='profile'/);
   assert.match(publicData,/mode==='portal'/);
   assert.match(publicData,/loadFirestoreGuides\(undefined,scopeUser\)/);
   assert.match(firestoreData,/scopeUser\?\.uid === currentUser\.uid/);
