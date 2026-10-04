@@ -47,6 +47,37 @@
 .vop-engagement-page .vop-material-body a{color:#0c4b9a;overflow-wrap:anywhere}
 .vop-engagement-page .vop-material-body strong{overflow-wrap:anywhere}
 
+/* Scripture Memory — reviewed cards remain visible and revisitable. */
+.vop-memory-workspace{display:grid;gap:12px;min-width:0}
+.vop-memory-overview .vop-material-body{display:grid;gap:14px}
+.vop-memory-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
+.vop-memory-head>div{min-width:0}.vop-memory-head h2{margin:3px 0 5px!important}.vop-memory-head p{margin:0!important;max-width:760px;color:var(--theme-muted)!important;font-size:12px!important;line-height:1.5!important}
+.vop-memory-head select{width:min(320px,100%);min-width:220px;margin:0!important}
+.vop-memory-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.vop-memory-summary>div{display:grid;grid-template-columns:30px minmax(0,1fr);grid-template-areas:"icon label" "icon value";gap:1px 8px;align-items:center;padding:11px 12px;border:1px solid var(--theme-border);border-radius:11px;background:var(--theme-surface-soft)}
+.vop-memory-summary svg{grid-area:icon;color:var(--theme-accent)}.vop-memory-summary span{grid-area:label;font-size:9px;color:var(--theme-muted);font-weight:800}.vop-memory-summary strong{grid-area:value;font-size:17px;color:var(--theme-title)}
+.vop-memory-tabs{display:flex;gap:7px;padding:5px;border:1px solid var(--theme-border);border-radius:12px;background:var(--theme-surface-soft);overflow:auto}
+.vop-memory-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1;min-width:130px;min-height:38px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--theme-text);font-size:10px;font-weight:850;cursor:pointer}
+.vop-memory-tabs button b{min-width:20px;height:20px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:var(--theme-surface);border:1px solid var(--theme-border);font-size:8px}
+.vop-memory-tabs button.active{background:var(--theme-surface);border-color:color-mix(in srgb,var(--theme-accent) 30%,var(--theme-border));color:var(--theme-accent);box-shadow:0 4px 12px color-mix(in srgb,var(--theme-accent) 7%,transparent)}
+.vop-memory-card{border-inline-start:3px solid var(--theme-border)!important}.vop-memory-card.due{border-inline-start-color:var(--theme-accent)!important}.vop-memory-card.reviewed{border-inline-start-color:color-mix(in srgb,var(--theme-accent) 45%,var(--theme-border))!important}
+.vop-memory-card .vop-material-body{display:grid;gap:11px}.vop-memory-card h2{margin:0!important}.vop-memory-card p{margin:0!important;white-space:pre-wrap;line-height:1.65!important}
+.vop-memory-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.vop-memory-status,.vop-memory-mastery{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;border:1px solid var(--theme-border);font-size:9px;font-weight:850}
+.vop-memory-status.due{color:var(--theme-accent);background:color-mix(in srgb,var(--theme-accent) 8%,var(--theme-surface))}
+.vop-memory-status.reviewed{color:var(--theme-text);background:var(--theme-surface-soft)}.vop-memory-mastery{color:var(--theme-muted);background:var(--theme-surface-soft)}
+.vop-memory-state{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:11px;border-radius:11px;border:1px solid var(--theme-border);background:var(--theme-surface-soft)}
+.vop-memory-state>div{display:grid;gap:2px;min-width:0}.vop-memory-state span{font-size:8px;color:var(--theme-muted);font-weight:750}.vop-memory-state strong{font-size:10px;color:var(--theme-title);overflow-wrap:anywhere}
+.vop-memory-state .vop-memory-mastery-row{grid-column:1/-1;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px}.vop-memory-state .vop-arena-progress-track{margin:0}
+.vop-memory-rating{display:grid;gap:7px;padding-top:2px}.vop-memory-rating>span{font-size:9px;color:var(--theme-muted);font-weight:750}.vop-memory-rating>div{display:flex;gap:6px;flex-wrap:wrap}
+.vop-engagement-page .vop-memory-rating button{margin:0!important;min-height:34px!important;padding:0 10px!important;background:var(--theme-surface-soft)!important;color:var(--theme-text)!important;border-color:var(--theme-border)!important;font-size:9px!important}
+.vop-engagement-page .vop-memory-rating button:hover:not(:disabled){border-color:var(--theme-accent)!important;color:var(--theme-accent)!important}
+.vop-memory-rating.practice{padding:10px;border:1px dashed color-mix(in srgb,var(--theme-accent) 35%,var(--theme-border));border-radius:10px;background:color-mix(in srgb,var(--theme-accent) 4%,var(--theme-surface))}
+.vop-memory-revisit{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 11px;border:1px solid var(--theme-border);border-radius:10px;background:var(--theme-surface-soft)}
+.vop-memory-revisit>div{display:grid;gap:2px}.vop-memory-revisit strong{font-size:10px;color:var(--theme-title)}.vop-memory-revisit span{font-size:9px;color:var(--theme-muted)}.vop-memory-revisit button{margin:0!important;flex:0 0 auto}
+@media(max-width:800px){.vop-memory-head{align-items:stretch;flex-direction:column}.vop-memory-head select{width:100%;min-width:0}.vop-memory-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.vop-memory-state{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.vop-memory-summary,.vop-memory-state{grid-template-columns:1fr}.vop-memory-state .vop-memory-mastery-row{grid-column:auto}.vop-memory-tabs button{min-width:115px}.vop-memory-revisit{align-items:stretch;flex-direction:column}.vop-memory-revisit button{width:100%}.vop-memory-rating>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.vop-engagement-page .vop-memory-rating button{width:100%}}
+
 /* Scripture Arena — gamification sits around the existing Solo Challenge and Ranked Duel flows. */
 .vop-arena{display:grid;gap:14px;min-width:0}
 .vop-arena-dashboard{
