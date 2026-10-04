@@ -8,6 +8,7 @@ import { getTranslation, getUiLocale } from '../services/i18n';
 import { getStoredSettings } from '../services/storage';
 import { consumeSupportContextPrefill } from '../services/supportContext';
 import ChatThread, { APP_CHAT_REFERENCES, type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 interface SupportPageProps {
   currentUser: User;
