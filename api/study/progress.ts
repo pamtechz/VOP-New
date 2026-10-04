@@ -6,6 +6,7 @@ import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../..
 import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
 import { awardEngagementPoints, pointKeyForAssessment } from '../../server/engagementPoints.js';
+import { ensureAutomaticProgramCertificates } from '../../server/programCertificateAward.js';
 
 const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
 
@@ -1014,11 +1015,19 @@ export default async function handler(
       :{awarded:false,points:0,total:null};
 
     let certificateReview:Awaited<ReturnType<typeof ensureAutomaticGraduationReview>>|null=null;
+    let programCertificates:Awaited<ReturnType<typeof ensureAutomaticProgramCertificates>>=[];
     if(useTenantGuide&&guideId!=='discover'){
       try{
         certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:assessment-completion');
       }catch(reviewError){
-        console.warn('Automatic certificate review could not be created after assessment completion',reviewError);
+        console.warn('Automatic guide certificate processing could not complete after assessment submission',reviewError);
+      }
+      if(passed){
+        try{
+          programCertificates=await ensureAutomaticProgramCertificates(db,decoded.uid,guideId,'system:program-completion');
+        }catch(programError){
+          console.warn('Automatic program certificate reconciliation could not complete',programError);
+        }
       }
     }
 
@@ -1027,7 +1036,7 @@ export default async function handler(
     const committed=storedSubmissionPayload({...storedResult,attemptsUsed:policyResult.attemptsUsed});
     if(!committed)throw new Error('The saved assessment result could not be reconstructed.');
     return res.status(200).json({
-      ok:true,replayed:false,scoreKey,...committed,certificateReview,pointAward,
+      ok:true,replayed:false,scoreKey,...committed,certificateReview,programCertificates,pointAward,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
