@@ -233,7 +233,6 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
   const openConversation=async(item:any)=>{
     setSelectedConversation({...item,unread:false});
     setTab('support');
-    setSupportPanel('requests');
     setSupportPanel('conversations');
     try{
       const result=await mentoringApi('messages',{conversationId:item.id});
