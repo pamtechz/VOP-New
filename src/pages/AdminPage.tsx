@@ -229,7 +229,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [navQuery,setNavQuery]=useState('');
-  const [expandedNavGroups,setExpandedNavGroups]=useState<AdminNavGroupId[]>(()=>[adminNavGroupFor(activeTab)]);
+  const [expandedNavGroups,setExpandedNavGroups]=useState<AdminNavGroupId[]>(()=>{
+    const primary=adminNavGroupFor(activeTab);
+    return isOrganizationPortalAccount(currentUser)&&primary!=='account'?[primary,'account']:[primary];
+  });
   const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
   const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
@@ -1182,8 +1185,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       <button type="button" className="vop-brand" onClick={()=>navigateAdminTab('dashboard')}
         aria-label="Voice of Prophecy – Administration dashboard">
         <span className="vop-brand-mark"><img src="/assets/vop_logo_2.png" alt="" aria-hidden="true"/></span>
-        <span className="vop-brand-copy"><span className="vop-brand-name">{settings?.appName || 'Voice of Prophecy'}</span>
-          <span className="vop-brand-sub">{settings?.appTagline || 'Bible Correspondence School'}</span></span>
+        <span className="vop-brand-copy"><span className="vop-brand-name">{isOrganizationPortal?(settings?.organizationName||settings?.appName||'Voice of Prophecy'):(settings?.appName || 'Voice of Prophecy')}</span>
+          <span className="vop-brand-sub">{isOrganizationPortal?'Organization portal':(settings?.appTagline || 'Bible Correspondence School')}</span></span>
       </button>
       <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{ORGANIZATION_ACCOUNT_TABS.has(activeTab)?'Organization Account':activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : activeTab === 'payments' ? 'Financial Operations' : isOrganizationPortal?'Organization Portal':'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
@@ -1218,7 +1221,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     </header>
     <div className="vop-shell">
       {sidebarOpen && <button className="vop-sidebar-backdrop open" type="button" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)} />}
-      <aside id="vop-admin-navigation" aria-label="Administration navigation" className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}>
+      <aside id="vop-admin-navigation" aria-label={isOrganizationPortal?'Organization portal navigation':'Administration navigation'} className={'vop-sidebar '+(sidebarOpen?'open ':'')+(sidebarCollapsed?'collapsed':'')}>
         <div className="vop-admin-sidebar-head">
           <button type="button" className="vop-admin-sidebar-brand" onClick={()=>navigateAdminTab('dashboard')}
             title="Admin dashboard" aria-label="Voice of Prophecy – Admin dashboard">
@@ -1249,7 +1252,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           return <div key={group.id} className={'vop-admin-sidebar-group '+(expanded?'expanded':'collapsed')}>
             {!sidebarCollapsed&&<button type="button" className="vop-admin-sidebar-group-toggle"
               aria-expanded={expanded} onClick={()=>toggleAdminNavGroup(group.id)}>
-              <span>{group.label}</span><small>{entries.length}</small>{expanded?<ChevronDown size={16}/>:<ChevronRight size={16}/>}
+              <span>{group.label}</span><small>{entries.length+(group.id==='account'&&isOrganizationPortal?1:0)}</small>{expanded?<ChevronDown size={16}/>:<ChevronRight size={16}/>}
             </button>}
             {sidebarCollapsed&&<span className="vop-admin-sidebar-label" aria-hidden="true">•</span>}
             {expanded&&<div className="vop-admin-sidebar-items">{entries.map(item=>{const Icon=item.icon;return <button key={item.id} type="button"
