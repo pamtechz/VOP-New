@@ -114,6 +114,10 @@ function adminNavGroupFor(tab:AdminTab):AdminNavGroupId {
 }
 
 const ADMIN_TAB_IDS=new Set<AdminTab>(NAV.map(item=>item.id));
+const ORGANIZATION_ACCOUNT_TABS=new Set<AdminTab>([
+  'accountNotifications','accountInvitations','accountPayments','accountProfile',
+  'accountPersonalSettings','accountCertificates','accountAbout',
+]);
 const ADMIN_TAB_STORAGE_PREFIX='vop-admin-tab-v1:';
 function validAdminTab(value:unknown):value is AdminTab {
   return typeof value==='string'&&ADMIN_TAB_IDS.has(value as AdminTab);
@@ -311,10 +315,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isHierarchyAdmin = ['union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''));
   const isOrganizationPortal=isOrganizationPortalAccount(currentUser);
-  const organizationAccountTabs=new Set<AdminTab>([
-    'accountNotifications','accountInvitations','accountPayments','accountProfile',
-    'accountPersonalSettings','accountCertificates','accountAbout',
-  ]);
   const accountRoleLabel = isSuperAdmin ? 'Super Admin' : isHierarchyAdmin
     ? String(currentUser.role).replaceAll('_',' ').replace(/\b\w/g,character=>character.toUpperCase())
     : currentUser.organizationRole === 'owner' ? 'Organization Owner'
@@ -574,7 +574,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       certification:'certificates', mentorship:'mentoring', organizations:'organizations', payments:'payments',
     };
     const canSee = (id: AdminTab) => {
-      if(organizationAccountTabs.has(id))return isOrganizationPortal;
+      if(ORGANIZATION_ACCOUNT_TABS.has(id))return isOrganizationPortal;
       if(id==='engagement')return ['portfolio','scripture','duels'].some(resource => permissionAllowed(permissionMatrix,permissionRole,resource as PermissionResource,'create'));
       const resource=resourceForNav[id];
       return Boolean(resource&&permissionAllowed(permissionMatrix, permissionRole, resource, 'view'));
@@ -594,7 +594,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       mentorship:'mentorship',
     };
     return NAV.filter(item => {
-      if(organizationAccountTabs.has(item.id))return isOrganizationPortal;
+      if(ORGANIZATION_ACCOUNT_TABS.has(item.id))return isOrganizationPortal;
       const feature=featureForTab[item.id];
       const role = String(currentUser.role || '');
       const organizationRole=String(currentUser.organizationRole||'');
@@ -1186,7 +1186,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <span className="vop-brand-copy"><span className="vop-brand-name">{settings?.appName || 'Voice of Prophecy'}</span>
           <span className="vop-brand-sub">{settings?.appTagline || 'Bible Correspondence School'}</span></span>
       </button>
-      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{organizationAccountTabs.has(activeTab)?'Organization Account':activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : activeTab === 'payments' ? 'Financial Operations' : isOrganizationPortal?'Organization Portal':'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
+      <div className="vop-top-title"><button className="vop-menu-btn" type="button" onClick={toggleNavigation} aria-label={sidebarOpen ? "Close administration navigation" : "Open administration navigation"} aria-expanded={sidebarOpen} aria-controls="vop-admin-navigation" title="Toggle navigation">{sidebarOpen ? <X size={28}/> : <Menu size={30}/>}</button><div><div className="vop-top-kicker">{ORGANIZATION_ACCOUNT_TABS.has(activeTab)?'Organization Account':activeTab === 'certification' ? 'Certification' : activeTab === 'userManagement' ? 'Settings' : activeTab === 'curriculum' ? 'Curriculum Studio' : activeTab === 'payments' ? 'Financial Operations' : isOrganizationPortal?'Organization Portal':'Administration'}</div><div className="vop-top-page">{currentPageLabel}</div></div></div>
       <div className="vop-top-actions">
         <CommunicationTools onNavigate={route=>{
           if(isOrganizationPortal){navigateOrganizationRoute(route);return;}
