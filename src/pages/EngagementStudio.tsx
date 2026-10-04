@@ -5,6 +5,7 @@ import { getTranslation, getUiLocale } from '../services/i18n';
 import type { User } from '../types';
 import { appConfirm } from '../components/layout/AppDialog';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 type Kind = 'requirements' | 'memoryDecks' | 'duelQuestions';
 type Status = 'draft' | 'published' | 'archived';
@@ -305,9 +306,9 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
       <select className="vop-filter" value={status} onChange={e=>setStatus(e.target.value as typeof status)} aria-label="Filter publication state"><option value="all">All states</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select>
       <ViewModeToggle value={viewMode} onChange={setViewMode} label="Engagement catalogue view"/>
     </div>
-    {loading?<div className="vop-empty" role="status">Loading ministry content…</div>:
+    {loading&&items.length===0?<ShimmerList rows={6} compact label="Loading ministry content"/>:
       filtered.length===0?<div className="vop-empty" role="status">No {labels[kind]}s match your filters. Create one or select another publishing scope.</div>:
-      viewMode==='table'?<div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>Content</th><th>Visibility</th><th>Publication</th><th>Actions</th></tr></thead><tbody>
+      viewMode==='table'?<div className={'vop-reference-table-wrap'+(loading?' vop-refreshing vop-shimmer-overlay':'')}><table className="vop-reference-table"><thead><tr><th>Content</th><th>Visibility</th><th>Publication</th><th>Actions</th></tr></thead><tbody>
         {filtered.map(item=><tr key={item.id}><td><strong>{item.title}</strong><div>{item.description || (kind==='duelQuestions'?item.question:'No description')}</div></td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.status || 'Draft'}</td><td>
             <div className="vop-reference-action-cell">
@@ -315,7 +316,7 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
               <button type="button" className="vop-actions" disabled={item.canEdit===false||item.status==='archived'||busy} onClick={()=>void archive(item)} title="Archive content" aria-label={'Archive '+item.title}><Trash2 size={16}/></button>
             </div>
           </td></tr>)}
-      </tbody></table></div>:<div className="vop-admin-record-cards">
+      </tbody></table></div>:<div className={'vop-admin-record-cards'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
         {filtered.map(item=><article key={item.id} className="vop-admin-record-card">
           <div className="vop-admin-record-card-head"><div><h3>{item.title}</h3><p>{item.description||(kind==='duelQuestions'?item.question:'No description')}</p></div><span className={'vop-status '+(item.status==='published'?'enabled':'disabled')}>{item.status||'draft'}</span></div>
           <div className="vop-admin-record-card-meta">
