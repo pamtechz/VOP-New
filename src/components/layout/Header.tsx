@@ -4,7 +4,6 @@ import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } f
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, WalletCards, Settings as SettingsIcon } from 'lucide-react';
 import { CommunicationTools } from './CommunicationTools';
 import { hasAdminPortalAccess } from '../../services/portalAccess';
-import { hasAdminPortalAccess } from '../../services/portalAccess';
 
 interface HeaderProps {
   currentUser: User;
