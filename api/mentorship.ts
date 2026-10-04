@@ -186,15 +186,29 @@ function conversationId(studentId: string, mentorId: string) {
   return `${studentId}__${mentorId}`;
 }
 
+const CHAT_REFERENCE_TYPES=new Set([
+  'guide','lesson','section','topic','doctrine','question','quiz','scripture','block',
+  'activity','memory','game','challenge','duel','resource','event','prayer','media','announcement',
+]);
+const CHAT_REFERENCE_ROUTES=new Set([
+  'home','guide','lesson','resources','lessons','master-guide','scripture-memory','iron-duels',
+  'prayer','radio','announcements','events','support','certificates',
+]);
 function safeReference(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
   const type = String(item.type || '');
-  if (!['guide','lesson','section','topic','doctrine','question','quiz','scripture','block'].includes(type)) return null;
+  if (!CHAT_REFERENCE_TYPES.has(type)) return null;
   const referenceId = String(item.id || '').trim();
   const label = String(item.label || '').trim();
   if (!referenceId || !label || referenceId.length > 220 || label.length > 300) return null;
-  return { type, id: referenceId, label };
+  const route=String(item.route||'').trim();
+  const description=String(item.description||'').trim();
+  return {
+    type,id:referenceId,label,
+    ...(route&&CHAT_REFERENCE_ROUTES.has(route)?{route}:{}),
+    ...(description?{description:description.slice(0,500)}:{}),
+  };
 }
 
 function messageReferences(value:unknown){
