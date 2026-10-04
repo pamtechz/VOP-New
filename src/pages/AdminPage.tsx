@@ -1316,7 +1316,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           onInvitationAccepted={()=>navigateAdminTab('accountInvitations')} onAccountChanged={onAccountChanged}/>}
         {isOrganizationPortal&&activeTab==='accountPayments'&&<PaymentsPage currentUser={currentUser} onBack={accountBack}/>}
         {isOrganizationPortal&&activeTab==='accountProfile'&&<OrganizationAccountProfilePage
-          currentUser={currentUser} organizationName={settings?.organizationName}
+          currentUser={currentUser} organizationName={settings?.aboutContext?.organizationName||settings?.organizationName}
           onBack={accountBack} onUpdated={onAccountChanged} onOpenOrganization={()=>navigateAdminTab('settings')}/>}
         {isOrganizationPortal&&activeTab==='accountPersonalSettings'&&<PersonalSettingsPage
           currentUser={currentUser} context="organization" onBack={accountBack} onStudyLanguageChange={()=>{}}/>}
