@@ -75,7 +75,7 @@ export default async function handler(req:Request,res:Response){
       }
       if(action==='list'){
         const docs=await ownNotifications(account.db,account.auth.uid);
-      const items=docs.map(doc=>({id:doc.id,...doc.data()}))
+      const items=docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}))
         .sort((a,b)=>timestampValue(b.createdAt)-timestampValue(a.createdAt))
         .slice(0,100);
         return res.status(200).json({ok:true,items,unread:items.filter(item=>item.read!==true).length});
