@@ -799,14 +799,38 @@ test('Firestore client reads avoid route-change reloads and aggressive notificat
   assert.doesNotMatch(app,/onSnapshot/);
   assert.match(app,/10\*60\*1000/);
   assert.match(app,/vop_public_content_changed/);
-  assert.match(app,/loadPublicContent\(currentUser\.uid \? currentUser : undefined\)/);
-  assert.match(publicData,/loadPublicContent\(scopeUser\?: User\)/);
-  assert.match(publicData,/loadFirestoreGuides\(undefined, scopeUser\)/);
+  assert.match(app,/loadPublicContent\(currentUser\.uid \? currentUser : undefined,loadMode\)/);
+  assert.match(publicData,/loadPublicContent\(scopeUser\?: User,mode:PublicContentLoadMode='full'\)/);
+  assert.match(publicData,/mode==='portal'/);
+  assert.match(publicData,/loadFirestoreGuides\(undefined,scopeUser\)/);
   assert.match(firestoreData,/scopeUser\?\.uid === currentUser\.uid/);
+  assert.match(firestoreData,/offset\+=8/);
   assert.match(tools,/setInterval\(refresh,60000\)/);
   assert.doesNotMatch(tools,/15000/);
   assert.match(notifications,/action==='summary'/);
   assert.match(notifications,/\.count\(\)\.get\(\)/);
+});
+
+test('startup path reuses the authoritative profile, scopes refresh cache and deduplicates admin scope reads',()=>{
+  const root=read('src/Root.tsx');
+  const app=read('src/App.tsx');
+  const adminFirestore=read('src/services/adminFirestore.ts');
+  const usersApi=read('api_handlers/admin/users.ts');
+  const i18n=read('src/services/i18n.ts');
+
+  assert.match(root,/setResolvedProfile\(profile\)/);
+  assert.match(root,/<App initialUser=\{resolvedProfile\}/);
+  assert.doesNotMatch(root,/fetch\('\/api\/admin\/users'/);
+  assert.match(app,/STARTUP_CACHE_META_KEY/);
+  assert.match(app,/scope:startupScope\(currentUser\)/);
+  assert.match(app,/sessionStorage\.removeItem\(STARTUP_CACHE_META_KEY\)/);
+  assert.match(app,/React\.lazy\(\(\)=>import\('\.\/pages\/AdminPage'/);
+  assert.match(adminFirestore,/tenantScopeInflight/);
+  assert.match(adminFirestore,/expiresAt:Date\.now\(\)\+60_000/);
+  assert.match(usersApi,/const needsWrite=/);
+  assert.match(usersApi,/if\(needsWrite\)/);
+  assert.doesNotMatch(usersApi,/const latest=await ref\.get\(\)/);
+  assert.match(i18n,/localizationInitInflight/);
 });
 
 test('web Google authentication uses popup flow without delaying the root auth observer',()=>{
