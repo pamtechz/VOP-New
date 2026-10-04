@@ -107,7 +107,7 @@ export const CertificatesPage: React.FC<CertificatesPageProps> = ({ currentUser,
         </div>
       </header>
       <main className="vop-certificate-reference-body">
-        {loading && <div className="vop-reference-card"><strong>{t('loading','Loading…')}</strong></div>}
+        {loading && <ShimmerCards cards={1} label={t('loading','Loading certificate')}/>}
         {!loading && certificate && (
           <>
             <div className="vop-official-certificate-wrap" ref={certificateRef}>
