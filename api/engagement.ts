@@ -5,6 +5,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { requirePermissionForProfile } from '../server/permissions.js';
 import { createNotification } from '../server/notifications.js';
 import { engagementCatalog } from '../server/engagementCatalog.js';
+import {awardPointsInTransaction,organizationPointRules} from '../server/engagementPoints.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -116,52 +117,6 @@ function role(actor: Profile) {
 
 function canManagePortfolio(actor: Profile) {
   return ['super_admin','union_admin','conference_admin','district_admin','church_admin','owner','admin','mentor','teacher'].includes(role(actor));
-}
-
-type EngagementPointKind='soloChallenge'|'duelChallenge'|'memoryReview'|'practiceQuiz'|'chapterQuiz'|'finalExam';
-const DEFAULT_ENGAGEMENT_POINTS:Record<EngagementPointKind,number>={
-  soloChallenge:10,duelChallenge:15,memoryReview:1,practiceQuiz:5,chapterQuiz:10,finalExam:25,
-};
-function pointValue(raw:unknown,fallback:number){
-  const value=Number(raw);
-  return Number.isInteger(value)&&value>=0&&value<=10000?value:fallback;
-}
-async function organizationPointRules(db:FirebaseFirestore.Firestore,organizationId:string){
-  if(!organizationId)return DEFAULT_ENGAGEMENT_POINTS;
-  const settings=await db.doc(`organizations/${organizationId}/settings/settings`).get();
-  const configured=settings.data()?.engagementPoints;
-  const rows=configured&&typeof configured==='object'?configured as Record<string,unknown>:{};
-  return {
-    soloChallenge:pointValue(rows.soloChallenge,DEFAULT_ENGAGEMENT_POINTS.soloChallenge),
-    duelChallenge:pointValue(rows.duelChallenge,DEFAULT_ENGAGEMENT_POINTS.duelChallenge),
-    memoryReview:pointValue(rows.memoryReview,DEFAULT_ENGAGEMENT_POINTS.memoryReview),
-    practiceQuiz:pointValue(rows.practiceQuiz,DEFAULT_ENGAGEMENT_POINTS.practiceQuiz),
-    chapterQuiz:pointValue(rows.chapterQuiz,DEFAULT_ENGAGEMENT_POINTS.chapterQuiz),
-    finalExam:pointValue(rows.finalExam,DEFAULT_ENGAGEMENT_POINTS.finalExam),
-  };
-}
-function pointsLedgerRef(db:FirebaseFirestore.Firestore,uid:string,kind:EngagementPointKind,eventId:string){
-  return db.doc(`users/${cleanId(uid,'user')}/pointsLedger/${kind}-${cleanId(eventId,'point event')}`);
-}
-async function awardPointsInTransaction(
-  transaction:FirebaseFirestore.Transaction,
-  db:FirebaseFirestore.Firestore,
-  uid:string,
-  organizationId:string,
-  kind:EngagementPointKind,
-  eventId:string,
-  points:number,
-){
-  const ledger=pointsLedgerRef(db,uid,kind,eventId);
-  const existing=await transaction.get(ledger);
-  if(existing.exists)return 0;
-  transaction.create(ledger,{
-    kind,eventId,points,organizationId,awardedAt:FieldValue.serverTimestamp(),
-  });
-  if(points>0)transaction.set(db.doc(`users/${cleanId(uid,'user')}`),{
-    engagementPoints:FieldValue.increment(points),updatedAt:FieldValue.serverTimestamp(),
-  },{merge:true});
-  return points;
 }
 
 function nowIso() { return new Date().toISOString(); }
@@ -595,7 +550,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       if(!latest.exists||String(current.playerId||'')!==String(actor.uid)||String(current.organizationId||'')!==orgOf(actor))
         throw new Error('This solo challenge is unavailable to you.');
       if(current.status==='completed'){
-        return {completed:true,score:Number(current.finalScore??current.score||0),pointsAwarded:0,replayed:true};
+        return {completed:true,score:Number(current.finalScore??current.score??0),pointsAwarded:0,replayed:true};
       }
       if(current.status!=='active')throw new Error('This solo challenge is no longer active.');
       const ids=Array.isArray(current.questionIds)?current.questionIds.map(String):[];
