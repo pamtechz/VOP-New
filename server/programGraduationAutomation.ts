@@ -226,9 +226,11 @@ export async function ensureAutomaticProgramGraduationReviews(
     if(!checked.evidence){results.push({eligible:false,created:false,reason:checked.reason});continue;}
     const evidence=checked.evidence;
     const config=await certificationConfigFor(db,organizationId);
-    const stages=stagesFromConfig(config);
-    if(!stages.length){results.push({eligible:false,created:false,reason:'approval_workflow_not_configured'});continue;}
-    const firstStage=stages[0];
+    if(config.enabled!==true){results.push({eligible:false,created:false,reason:'certification_disabled'});continue;}
+    const releaseMode=text(config.releaseMode)==='automatic'?'automatic':'review';
+    const stages=releaseMode==='review'?stagesFromConfig(config):[];
+    if(releaseMode==='review'&&!stages.length){results.push({eligible:false,created:false,reason:'approval_workflow_not_configured'});continue;}
+    const firstStage=stages[0]||{id:'automatic',label:'Automatic release',approverRoles:[]};
     const ref=db.doc(`graduationRequests/${requestId(organizationId,candidateId,evidence.programId)}`);
     const userRef=db.doc(`users/${candidateId}`);
     const result=await db.runTransaction(async transaction=>{
@@ -250,17 +252,35 @@ export async function ensureAutomaticProgramGraduationReviews(
         guideId:'',guideTitle:evidence.programTitle,
         churchId:text(freshData.churchId),districtId:text(freshData.districtId),
         conferenceId:text(freshData.conferenceId),unionId:text(freshData.unionId),
-        averageScore:evidence.averageScore,status:pendingStatus(firstStage),
-        workflowStageId:firstStage.id,workflowStageIndex:0,
+        averageScore:evidence.averageScore,status:releaseMode==='automatic'?'approved':pendingStatus(firstStage),
+        workflowStageId:firstStage.id,workflowStageIndex:releaseMode==='automatic'?-1:0,
         revision:existing.exists?Math.max(1,Number(current.revision||0)+1):1,
-        submittedAt:now,approvedAt:null,approverNotes:'',decisions:[],
+        submittedAt:now,approvedAt:releaseMode==='automatic'?now:null,
+        approverNotes:releaseMode==='automatic'?'Automatically verified from server-side program completion evidence.':'',
+        decisions:releaseMode==='automatic'?[{
+          stageId:'automatic',stageLabel:'Automatic release',decision:'approve',
+          notes:'Server-side program completion and assessment evidence verified.',
+          approverUid:'system',approverRole:'system',decidedAt:new Date().toISOString(),
+        }]:[],
         automatic:true,source:'program_completion',updatedAt:now,
       };
       transaction.set(ref,data,{merge:false});
-      transaction.set(userRef,{updatedAt:now},{merge:true});
+      const information=freshData.information&&typeof freshData.information==='object'
+        ?freshData.information as Record<string,unknown>:{};
+      transaction.set(userRef,{
+        information:{
+          ...information,
+          graduating:releaseMode!=='automatic',
+          graduated:releaseMode==='automatic'?true:information.graduated===true,
+          decisionDate:releaseMode==='automatic'?new Date().toISOString():information.decisionDate,
+          graduationDate:releaseMode==='automatic'?new Date().toISOString():information.graduationDate,
+          completionDate:text(information.completionDate)||new Date().toISOString(),
+        },
+        updatedAt:now,
+      },{merge:true});
       return {created:true,status:String(data.status),data:{id:ref.id,...data}};
     });
-    if(result.created){
+    if(result.created&&releaseMode==='review'){
       await notifyApprovers(db,result.data as Record<string,unknown>,firstStage,createdBy);
       await createNotification(db,{
         organizationId,recipientId:candidateId,type:'certificate',
