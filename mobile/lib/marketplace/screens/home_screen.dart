@@ -64,7 +64,7 @@ class HomeScreen extends ConsumerWidget {
           children: [
             Icon(Icons.storefront_rounded, color: scheme.primary),
             const SizedBox(width: 8),
-            const Text('Marketplace', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Ubuy - Store', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [

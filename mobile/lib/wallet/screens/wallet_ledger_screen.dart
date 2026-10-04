@@ -194,10 +194,10 @@ class WalletLedgerScreen extends ConsumerWidget {
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: isCredit ? Colors.emerald.withOpacity(0.15) : Colors.rose.withOpacity(0.15),
+                            backgroundColor: isCredit ? const Color(0xFF10B981).withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
                             child: Icon(
                               isCredit ? Icons.arrow_downward : Icons.arrow_upward,
-                              color: isCredit ? Colors.emerald : Colors.rose,
+                              color: isCredit ? const Color(0xFF10B981) : Colors.redAccent,
                               size: 20,
                             ),
                           ),
@@ -215,7 +215,7 @@ class WalletLedgerScreen extends ConsumerWidget {
                           trailing: Text(
                             '${isCredit ? '+' : ''}K${amount.abs().toStringAsFixed(2)}',
                             style: TextStyle(
-                              color: isCredit ? Colors.emerald : Colors.rose,
+                              color: isCredit ? const Color(0xFF10B981) : Colors.redAccent,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),

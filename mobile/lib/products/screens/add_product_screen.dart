@@ -129,7 +129,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Product published successfully!'),
-            backgroundColor: Colors.emerald,
+            backgroundColor: Color(0xFF10B981),
           ),
         );
         Navigator.of(context).pop();
@@ -137,7 +137,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save product: $e'), backgroundColor: Colors.rose),
+          SnackBar(content: Text('Failed to save product: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {

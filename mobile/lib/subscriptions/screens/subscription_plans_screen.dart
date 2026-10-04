@@ -86,7 +86,7 @@ class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScree
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                const Icon(Icons.check_circle_outline, size: 16, color: Colors.emerald),
+                                const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF10B981)),
                                 const SizedBox(width: 8),
                                 Text('Up to $maxProducts products listed', style: const TextStyle(fontSize: 13)),
                               ],
@@ -94,7 +94,7 @@ class _SubscriptionPlansScreenState extends ConsumerState<SubscriptionPlansScree
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(Icons.check_circle_outline, size: 16, color: Colors.emerald),
+                                const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF10B981)),
                                 const SizedBox(width: 8),
                                 Text('$maxImages images per product (WebP compressed)', style: const TextStyle(fontSize: 13)),
                               ],

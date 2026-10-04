@@ -10,7 +10,7 @@
 // Or create a `.env` and use a package like `flutter_dotenv` to load them.
 
 class AppConfig {
-  static const String appName = 'Local Marketplace';
+  static const String appName = 'Ubuy - Store';
 
   // ── Supabase ──────────────────────────────────────────────────────────────
   // Injected at build time via --dart-define. No default values here.

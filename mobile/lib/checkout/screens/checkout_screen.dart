@@ -79,7 +79,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order placed successfully!'),
-            backgroundColor: Colors.emerald,
+            backgroundColor: Color(0xFF10B981),
           ),
         );
         context.go('/orders');
@@ -89,7 +89,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to place order: $e'),
-            backgroundColor: Colors.rose,
+            backgroundColor: Colors.redAccent,
           ),
         );
       }

@@ -59,7 +59,7 @@ class ManageProductsScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.rose),
+                const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
                 const SizedBox(height: 12),
                 Text('Error loading products: $e', textAlign: TextAlign.center),
                 const SizedBox(height: 16),
@@ -135,7 +135,7 @@ class ManageProductsScreen extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: status == 'active' ? Colors.emerald.withOpacity(0.15) : Colors.amber.withOpacity(0.15),
+                            color: status == 'active' ? const Color(0xFF10B981).withOpacity(0.15) : Colors.amber.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -143,7 +143,7 @@ class ManageProductsScreen extends ConsumerWidget {
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
-                              color: status == 'active' ? Colors.emerald : Colors.amber,
+                              color: status == 'active' ? const Color(0xFF10B981) : Colors.amber,
                             ),
                           ),
                         ),
