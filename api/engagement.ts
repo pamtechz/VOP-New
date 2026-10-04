@@ -396,11 +396,28 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     const deck = await db.doc(`scriptureMemoryDecks/${deckId}`).get();
     if (!deck.exists || deck.data()?.status !== 'published' || !contentVisibleToLearner(actor, deck.data() || {},organization)) throw new Error('This Scripture memory deck is not available.');
     const verses = Array.isArray(deck.data()?.verses) ? deck.data()?.verses as Array<Record<string, unknown>> : [];
-    const due = verses.filter(verse => {
-      const state = stateByVerse.get(String(verse.id || ''));
-      return !state || new Date(String(state.dueAt || 0)).getTime() <= Date.now();
-    }).slice(0, 20).map(verse => ({ ...verse, state: stateByVerse.get(String(verse.id || '')) || null }));
-    return { deck: { id: deck.id, ...deck.data() }, due };
+    const now=Date.now();
+    const all=verses.map(verse=>{
+      const state=stateByVerse.get(String(verse.id||''))||null;
+      const dueAt=state?new Date(String(state.dueAt||0)).getTime():0;
+      const dueNow=!state||!Number.isFinite(dueAt)||dueAt<=now;
+      return {...verse,state,status:dueNow?'due':'reviewed'};
+    });
+    const due=all.filter(item=>item.status==='due').slice(0,20);
+    const reviewed=all.filter(item=>item.state).sort((a,b)=>
+      new Date(String((b.state as Record<string,unknown>)?.lastReviewedAt||0)).getTime()
+      -new Date(String((a.state as Record<string,unknown>)?.lastReviewedAt||0)).getTime());
+    const scheduled=reviewed.filter(item=>item.status==='reviewed');
+    return {
+      deck:{id:deck.id,...deck.data()},due,reviewed,scheduled,all,
+      summary:{
+        total:all.length,
+        due:all.filter(item=>item.status==='due').length,
+        reviewed:reviewed.length,
+        scheduled:scheduled.length,
+        unseen:all.filter(item=>!item.state).length,
+      },
+    };
   }
   if (action === 'memoryReview') {
     const verseId = cleanId(b.verseId, 'verse');
@@ -415,6 +432,17 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     const legacyRef = db.doc(`users/${actor.uid}/scriptureMemoryState/${verseId}`);
     const reviewRef = db.collection(`users/${actor.uid}/scriptureMemoryReviews`).doc();
     const pointRules=await organizationPointRules(db,orgOf(actor));
+    const practice=b.practice===true;
+    if(practice){
+      const current=await ref.get();
+      const legacy=current.exists?null:await legacyRef.get();
+      const state=current.data()||(legacy?.data()?.deckId===deckId?legacy.data():null)||null;
+      await reviewRef.set({
+        deckId,verseId,rating:Math.round(rating),practice:true,
+        reviewedAt:FieldValue.serverTimestamp(),
+      });
+      return {state,pointsAwarded:0,practice:true};
+    }
     let pointsAwarded=0;
     const ledgerRef=db.doc(`users/${actor.uid}/pointsLedger/memoryReview-${reviewRef.id}`);
     const next = await db.runTransaction(async transaction => {
