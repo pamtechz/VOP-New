@@ -1337,6 +1337,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             adminContent={adminContent}
             showMessage={showMessage}
             isSuperAdmin={currentUser.role === 'super_admin'}
+            canManage={permissionAllowed(permissionMatrix,currentPermissionRole,'certificates','manage')}
             featureAvailable={isSuperAdmin||subscriptionFeatures===null
               ||!Object.hasOwn(subscriptionFeatures,'certification')
               ||subscriptionFeatures.certification===true}
