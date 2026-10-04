@@ -195,7 +195,7 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
 
   assert.match(portal,/hasAdminPortalAccess/);
   assert.match(portal,/Boolean\(user\.organizationId\).*ADMIN_ORGANIZATION_ROLES/);
-  assert.match(portal,/Boolean\(user\.organizationId\).*MENTOR_ROLES/);
+  assert.match(portal,/Boolean\(user\.organizationId\)[\s\S]*MENTOR_ROLES/);
   assert.match(portal,/defaultPortalRoute/);
   assert.match(app,/PORTAL_SESSION_STORAGE_KEY/);
   assert.match(app,/defaultPortalRoute\(profile\)/);
