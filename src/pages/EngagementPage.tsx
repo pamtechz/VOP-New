@@ -1,9 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { auth } from '../lib/firebase';
-import { ArrowLeft, Sparkles, Brain, Swords, ShieldCheck, Share2, CheckCircle2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Sparkles, Brain, Swords, ShieldCheck, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown } from 'lucide-react';
 
 export type EngagementMode = 'master-guide' | 'memory' | 'duels';
 interface Props { mode: EngagementMode; onBack: () => void; }
+
+type ArenaRecent={
+  id:string;kind:'duel'|'solo';outcome:string;opponentName?:string;score?:number;questionCount?:number;completedAt?:unknown;
+};
+type ArenaSummary={
+  points:number;rating:number;level:number;levelProgress:number;nextLevelAt:number;
+  duelsCompleted:number;duelWins:number;draws:number;losses:number;
+  soloCompleted:number;perfectSolo:number;totalChallenges:number;recent:ArenaRecent[];
+};
+type SoloChallengeSummary={id:string;score:number;answeredCount:number;questionCount:number;expiresAt?:unknown};
+const EMPTY_ARENA:ArenaSummary={
+  points:0,rating:1200,level:1,levelProgress:0,nextLevelAt:100,
+  duelsCompleted:0,duelWins:0,draws:0,losses:0,soloCompleted:0,perfectSolo:0,totalChallenges:0,recent:[],
+};
+function timeRemaining(value:unknown,now:number){
+  const end=new Date(String(value||'')).getTime();
+  if(!Number.isFinite(end))return '';
+  const remaining=Math.max(0,end-now);
+  const minutes=Math.floor(remaining/60000);
+  const seconds=Math.floor((remaining%60000)/1000);
+  return remaining<=0?'Expired':`${minutes}:${String(seconds).padStart(2,'0')} left`;
+}
 
 const revisionOf=(item:Record<string,unknown>)=>{
   const value=Number(item.revision); return Number.isInteger(value)&&value>=1?value:1;
@@ -48,11 +70,16 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [opponentId, setOpponentId] = useState('');
   const [opponents, setOpponents] = useState<Array<{ uid: string; displayName: string }>>([]);
   const [duelOptIn, setDuelOptIn] = useState(false);
-  const [activeMatches, setActiveMatches] = useState<Array<{ id: string; opponentName: string }>>([]);
+  const [activeMatches, setActiveMatches] = useState<Array<{ id: string; opponentName: string; expiresAt?:unknown }>>([]);
+  const [soloChallenges,setSoloChallenges]=useState<SoloChallengeSummary[]>([]);
+  const [arena,setArena]=useState<ArenaSummary>(EMPTY_ARENA);
+  const [rewards,setRewards]=useState({soloChallenge:0,duelChallenge:0});
   const [leaderboard, setLeaderboard] = useState<Array<{rank:number;displayName:string;rating:number;points?:number}>>([]);
   const [answeredQuestionIds, setAnsweredQuestionIds] = useState<string[]>([]);
   const [challengeMode,setChallengeMode]=useState<'duel'|'solo'>('duel');
   const [matchId, setMatchId] = useState('');
+  const [challengeExpiresAt,setChallengeExpiresAt]=useState<unknown>('');
+  const [arenaNow,setArenaNow]=useState(()=>Date.now());
   const [duelQuestions, setDuelQuestions] = useState<Array<Record<string, unknown>>>([]);
   const [shareUrl, setShareUrl] = useState('');
   const [evidenceRequirement, setEvidenceRequirement] = useState('');
@@ -60,6 +87,20 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
   const run = async (work: () => Promise<void>) => { setBusy(true); setError(''); setMessage(''); try { await work(); } catch (e) { setError(e instanceof Error ? e.message : 'Request failed.'); } finally { setBusy(false); } };
+  const applyDuelOverview=(result:Record<string,unknown>)=>{
+    setOpponents((result.opponents as Array<{uid:string;displayName:string}>)||[]);
+    setActiveMatches((result.matches as Array<{id:string;opponentName:string;expiresAt?:unknown}>)||[]);
+    setSoloChallenges((result.soloChallenges as SoloChallengeSummary[])||[]);
+    setDuelOptIn(result.optIn===true);
+    if(result.arena)setArena({...EMPTY_ARENA,...result.arena as ArenaSummary});
+    if(result.rewards){
+      const item=result.rewards as Record<string,unknown>;
+      setRewards({
+        soloChallenge:Math.max(0,Number(item.soloChallenge||0)),
+        duelChallenge:Math.max(0,Number(item.duelChallenge||0)),
+      });
+    }
+  };
 
   useEffect(() => {
     if (tab === 'master-guide') void run(async () => { const result = await engagement({ action: 'portfolioGet' }); setPortfolio(result.portfolio as Record<string, unknown>); setRequirements((result.requirements as Array<Record<string, unknown>>) || []); });
@@ -68,15 +109,19 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
       const [result, standings] = await Promise.all([
         engagement({action:'duelOverview'}),engagement({action:'duelLeaderboard'}),
       ]);
-      setOpponents((result.opponents as Array<{uid:string;displayName:string}>) || []);
-      setActiveMatches((result.matches as Array<{id:string;opponentName:string}>) || []);
-      setDuelOptIn(result.optIn === true);
+      applyDuelOverview(result);
       setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number;points?:number}>) || []);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   useEffect(() => { if (!deckId || tab !== 'memory') return; void run(async () => { const result = await engagement({ action: 'memoryDue', deckId }); setDue((result.due as Array<Record<string, unknown>>) || []); }); }, [deckId, tab]);
+  useEffect(()=>{
+    if(!matchId||!challengeExpiresAt)return;
+    setArenaNow(Date.now());
+    const timer=window.setInterval(()=>setArenaNow(Date.now()),1000);
+    return()=>window.clearInterval(timer);
+  },[matchId,challengeExpiresAt]);
 
   const activities = Array.isArray(portfolio?.activities) ? portfolio?.activities as Array<Record<string, unknown>> : [];
   const signoffs = Array.isArray(portfolio?.signoffs) ? portfolio?.signoffs as Array<Record<string, unknown>> : [];
@@ -92,6 +137,23 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
       setMessage('Evidence submitted for evaluator review.');
     });
   };
+
+  const levelProgress=Math.max(0,Math.min(100,arena.levelProgress));
+  const challengeProgress=duelQuestions.length
+    ?Math.round((answeredQuestionIds.length/duelQuestions.length)*100):0;
+  const arenaBadges=[
+    {id:'first',label:'First Challenge',description:'Complete your first Scripture challenge.',Icon:Zap,unlocked:arena.totalChallenges>=1},
+    {id:'scholar',label:'Scripture Scholar',description:'Complete 5 solo challenges.',Icon:Brain,unlocked:arena.soloCompleted>=5},
+    {id:'duelist',label:'Duelist',description:'Complete 5 ranked duels.',Icon:Swords,unlocked:arena.duelsCompleted>=5},
+    {id:'victor',label:'Victor',description:'Win 3 ranked duels.',Icon:Trophy,unlocked:arena.duelWins>=3},
+    {id:'flawless',label:'Flawless',description:'Complete a perfect solo challenge.',Icon:Star,unlocked:arena.perfectSolo>=1},
+  ];
+  const arenaMissions=[
+    {label:'First challenge',progress:Math.min(1,arena.totalChallenges),goal:1},
+    {label:'5 solo challenges',progress:Math.min(5,arena.soloCompleted),goal:5},
+    {label:'3 duel victories',progress:Math.min(3,arena.duelWins),goal:3},
+    {label:'10 total challenges',progress:Math.min(10,arena.totalChallenges),goal:10},
+  ];
 
   return (
     <main className="vop-materials-page vop-engagement-page">
