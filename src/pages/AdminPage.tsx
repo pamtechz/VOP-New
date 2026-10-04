@@ -8,7 +8,7 @@ import {
   Send, FileText, Grid2X2, Building2, HeartHandshake, WalletCards
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, Lesson, AppRoute, LanguageCode } from '../types';
+import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, AppRoute, LanguageCode } from '../types';
 import {
   subscribeLanguages, saveLanguageToFirestore, updateLanguageStatusInFirestore,
   deleteLanguageFromFirestore, subscribeSettings, saveSettingsToFirestore,
@@ -215,8 +215,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [churches, setChurches] = useState<ChurchOrganization[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-  const [curriculumDrafts, setCurriculumDrafts] = useState<Record<string, unknown>[]>([]);
-  const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [langSearch, setLangSearch] = useState('');
@@ -278,22 +276,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     window.addEventListener('popstate',onPopState);
     return()=>window.removeEventListener('popstate',onPopState);
   },[currentUser.uid]);
-  const [lessonSearch, setLessonSearch] = useState('');
-  const [lessonLanguage, setLessonLanguage] = useState('all');
-  const [lessonStatus, setLessonStatus] = useState('all');
-  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [selectedGuide, setSelectedGuide] = useState<DiscoverGuide | null>(null);
-  const [editorMode, setEditorMode] = useState(false);
-  const [editorTitle, setEditorTitle] = useState('');
-  const [editorDescription, setEditorDescription] = useState('');
-  const [editorNumber, setEditorNumber] = useState('');
-  const [editorLanguage, setEditorLanguage] = useState('');
-  const [editorSeason, setEditorSeason] = useState('');
-  const [editorContent, setEditorContent] = useState('');
-  const [editorImage, setEditorImage] = useState('');
-  const [editorTags, setEditorTags] = useState('');
-  const [editorStatus, setEditorStatus] = useState<'draft' | 'published'>('draft');
-  const [editorSaving, setEditorSaving] = useState(false);
   const [dashboardRange, setDashboardRange] = useState('year');
   const [candidateSearch, setCandidateSearch] = useState('');
   const [candidateStatus, setCandidateStatus] = useState<'all' | 'active' | 'graduated' | 'graduating'>('all');
@@ -365,18 +347,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     window.setTimeout(() => setMessage(''), 3000);
   };
 
-  const loadDrafts = async () => {
-    setLoadingDrafts(true);
-    try {
-      const response = await adminContent('list', 'curriculum');
-      setCurriculumDrafts((response.items || []) as Record<string, unknown>[]);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load curriculum drafts.');
-    } finally {
-      setLoadingDrafts(false);
-    }
-  };
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -405,7 +375,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
       subscribeAnnouncements(setAnnouncements, err => setError(err.message)),
     ];
     void loadFirestoreGuides(undefined,currentUser).then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
-    void loadDrafts();
     if (currentUser.role === 'super_admin') void loadCertification();
     if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) void loadPermissionMatrix();
     return () => unsubs.forEach(unsub => unsub());
@@ -422,25 +391,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     guide.lessons.filter(lesson => lesson.type === 'Test').map(lesson => ({guide,lesson}))), [guides]);
   const totalQuestions = useMemo(() => assessmentRows.reduce((sum,row) =>
     sum + (row.lesson.questions?.length || 0), 0), [assessmentRows]);
-  const quizCount = assessmentRows.length;
-
   const filteredLanguages = useMemo(() => languages.filter(language => {
     const q = langSearch.trim().toLowerCase();
     const matchText = !q || [language.name, language.code, language.nativeName].join(' ').toLowerCase().includes(q);
     const matchStatus = langFilter === 'all' || (langFilter === 'enabled' ? language.enabled !== false : language.enabled === false);
     return matchText && matchStatus;
   }), [languages, langSearch, langFilter]);
-
-  const lessonRows = useMemo(() => guides.flatMap(guide =>
-    guide.lessons.filter(lesson => lesson.type === 'Lesson').map(lesson => ({ guide, lesson }))), [guides]);
-
-  const filteredLessons = useMemo(() => lessonRows.filter(row => {
-    const q = lessonSearch.trim().toLowerCase();
-    const matchText = !q || [row.lesson.title, row.lesson.description, row.lesson.lessonNumber, row.guide.language, row.guide.title].join(' ').toLowerCase().includes(q);
-    const matchLanguage = lessonLanguage === 'all' || row.guide.language === lessonLanguage;
-    const matchStatus = lessonStatus === 'all' || (lessonStatus === 'published' && (row.lesson as Lesson & { published?: boolean }).published === true) || (lessonStatus === 'draft' && (row.lesson as Lesson & { published?: boolean }).published !== true);
-    return matchText && matchLanguage && matchStatus;
-  }), [lessonRows, lessonSearch, lessonLanguage, lessonStatus]);
 
   const filteredCandidates = useMemo(() => {
     const q = candidateSearch.trim().toLowerCase();
@@ -839,71 +795,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save feature setting.'); }
   };
 
-  const openNewLesson = () => {
-    setSelectedLesson(null);
-    setSelectedGuide(null);
-    setEditorTitle('');
-    setEditorDescription('');
-    setEditorNumber('');
-    setEditorLanguage(activeLanguages[0]?.code || languageOptions[0] || '');
-    setEditorSeason('');
-    setEditorContent('');
-    setEditorImage('');
-    setEditorTags('');
-    setEditorStatus('draft');
-    setEditorMode(true);
-  };
-
-  const openLessonEditor = (guide: DiscoverGuide, lesson: Lesson) => {
-    setSelectedGuide(guide);
-    setSelectedLesson(lesson);
-    setEditorTitle(lesson.title);
-    setEditorDescription(lesson.description);
-    setEditorNumber(lesson.lessonNumber);
-    setEditorLanguage(guide.language);
-    setEditorSeason('');
-    setEditorContent((lesson.contentPages || []).map(page => page.content).filter(Boolean).join('\\n\\n'));
-    setEditorImage((lesson.contentPages || []).find(page => page.imageUrl)?.imageUrl || guide.image || '');
-    setEditorTags('');
-    setEditorStatus('published');
-    setEditorMode(true);
-  };
-
-  const saveLessonDraft = async (publish: boolean) => {
-    if (!editorTitle.trim()) {
-      setError('Lesson title is required.');
-      return;
-    }
-    if (!selectedGuide) {
-      setError('Select a guide before saving a lesson.');
-      return;
-    }
-    setEditorSaving(true);
-    try {
-      const id = selectedLesson?.id || ('lesson-' + Date.now());
-      await adminContent('upsertLesson', 'curriculum', id, {
-        guideId: selectedGuide.id,
-        title: editorTitle.trim(),
-        description: editorDescription.trim(),
-        lessonNumber: editorNumber.trim(),
-        language: editorLanguage.trim(),
-        season: editorSeason.trim(),
-        content: editorContent,
-        imageUrl: editorImage.trim(),
-        tags: editorTags.split(',').map(tag => tag.trim()).filter(Boolean),
-        published: publish,
-        type: 'Lesson',
-      });
-      await loadDrafts();
-      showMessage(publish ? 'Lesson draft published to the admin content store.' : 'Lesson draft saved.');
-      setEditorStatus(publish ? 'published' : 'draft');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save lesson.');
-    } finally {
-      setEditorSaving(false);
-    }
-  };
-
   const renderHeader = (icon: React.ComponentType<{size?: number}>, title: string, subtitle: string, action?: React.ReactNode) => {
     const Icon = icon;
     return <div className="vop-page-head">
@@ -980,7 +871,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           </svg>}
         </div>
         <div className="vop-card vop-section-card">
-          <div className="vop-section-title"><div><h2>Recent Activities</h2><p>Latest updates available.</p></div><button className="vop-secondary" type="button" onClick={()=>void loadDrafts()}><RefreshCw size={15}/><span>Refresh</span></button></div>
+          <div className="vop-section-title"><div><h2>Recent Activities</h2><p>Live updates from candidate, announcement, language and church records.</p></div><span className="vop-live-data-note"><span aria-hidden="true"/>Live</span></div>
           <div className="vop-activity">
             {activities.length === 0 ? <div className="vop-empty">No recent activity is available.</div> : activities.map((activity,index)=>{
               const Icon = activity.icon;
@@ -1200,60 +1091,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         <div className="vop-setting-row"><div><div className="vop-setting-name">Status</div><div className="vop-setting-help">Disable to hide this language from learners.</div></div><Toggle on={languageDraft.enabled} onClick={()=>setLanguageDraft({...languageDraft,enabled:!languageDraft.enabled})}/></div>
         <div style={{display:'flex',gap:10,marginTop:18}}><button type="button" className="vop-secondary" style={{flex:1}} onClick={()=>openLanguageEditor()}>Clear</button><button className="vop-primary" style={{flex:1,justifyContent:'center'}} type="submit"><Save size={16}/>{editingLanguage?'Save Changes':'Save Language'}</button></div>
       </form>
-    </div>
-  </div>;
-
-  const renderLegacyStudio = () => {
-    if (editorMode) return renderLessonEditor();
-    const tabCounts: Record<StudioTab, number> = {programs:0,lessons:totalLessons,guides:guides.length,quizzes:quizCount,paths:0,topics:0,seasons:0};
-    const tabs: Array<{id:StudioTab;label:string;icon:React.ComponentType<{size?:number}>}> = [
-      {id:'programs',label:'Programs',icon:Layers},{id:'lessons',label:'Lessons',icon:FileText},{id:'guides',label:'Guides',icon:BookOpen},{id:'quizzes',label:'Quizzes',icon:CircleHelp},
-      {id:'paths',label:'Learning Paths',icon:Layers},{id:'topics',label:'Bible Topics',icon:Book},{id:'seasons',label:'Seasons',icon:CalendarDays},
-    ];
-    return <div>
-      {renderHeader(FileText,'Curriculum Studio','Create and manage VOP content, lessons, guides and learning paths.',<div style={{display:'flex',gap:10}}><button className="vop-secondary" type="button"><Settings size={16}/>Curriculum Settings</button><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={18}/>New Content</button></div>)}
-      <div className="vop-studio-tabs">{tabs.map(tab=>{const Icon=tab.icon;return <button key={tab.id} className={'vop-tab '+(studioTab===tab.id?'active':'')} type="button" onClick={()=>setStudioTab(tab.id)}><Icon size={17}/>{tab.label} ({tabCounts[tab.id]})</button>;})}</div>
-      {studioTab==='lessons' && <div>
-        <div className="vop-toolbar"><div className="vop-search"><Search size={18}/><input value={lessonSearch} onChange={e=>setLessonSearch(e.target.value)} placeholder="Search lessons, topics or descriptions…"/></div><select className="vop-filter" value={lessonLanguage} onChange={e=>setLessonLanguage(e.target.value)}><option value="all">All Languages</option>{languageOptions.map(language=><option key={language} value={language}>{language.toUpperCase()}</option>)}</select><select className="vop-filter" value={lessonStatus} onChange={e=>setLessonStatus(e.target.value)}><option value="all">All Status</option><option value="published">Published</option></select><button className="vop-secondary" type="button" onClick={()=>void loadDrafts()}><RefreshCw size={17}/><span>Refresh</span></button></div>
-        <div className="vop-studio-list">
-          {filteredLessons.map(row=><button key={row.guide.id+'-'+row.lesson.id} className="vop-lesson-row" type="button" onClick={()=>openLessonEditor(row.guide,row.lesson)}>
-            <img className="vop-thumb" src={(row.lesson.contentPages||[]).find(page=>page.imageUrl)?.imageUrl || row.guide.image || ''} alt="" />
-            <div style={{minWidth:0,textAlign:'left'}}><div className="vop-row-title">{row.lesson.lessonNumber}. {row.lesson.title}</div><div className="vop-row-desc">{row.lesson.description || 'No description configured.'}</div><div className="vop-row-meta"><span><BookOpen size={13}/> {row.guide.title}</span><span><CircleHelp size={13}/> {row.lesson.questions?.length || 0}</span><span><Clock size={13}/> {row.lesson.estimatedMinutes} mins</span></div></div>
-            <span className="vop-status published">Published</span><span className="vop-chip"><Globe size={12}/>{row.guide.language.toUpperCase()}</span><span className="vop-actions"><MoreVertical size={16}/></span>
-          </button>)}
-          {filteredLessons.length===0 && <div className="vop-empty">No approved lessons match the current filters.</div>}
-        </div>
-        <div className="vop-pager"><span>Showing {filteredLessons.length} of {totalLessons} lessons</span><div className="vop-pager-controls"><button className="vop-page-btn"><ChevronLeft size={17}/></button><button className="vop-page-btn active">1</button><button className="vop-page-btn"><ChevronRight size={17}/></button></div></div>
-      </div>}
-      {studioTab==='guides' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Guide</th><th>Languages</th><th>Lessons</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{guides.map((guide,index)=><tr key={guide.id}><td>{index+1}</td><td><div style={{display:'flex',alignItems:'center',gap:12}}>{guide.image ? <img className="vop-thumb" style={{width:72,height:48}} src={guide.image} alt="" />:<div className="vop-avatar-code"><BookOpen size={18}/></div>}<div><strong>{guide.title}</strong><div style={{fontSize:12,color:'var(--text-muted)'}}>{guide.description || guide.subtitle || 'No description configured.'}</div></div></div></td><td><span className="vop-chip">{guide.language.toUpperCase()}</span></td><td>{guide.lessons.filter(lesson=>lesson.type==='Lesson').length}</td><td><span className="vop-status published">Published</span></td><td>Not recorded</td><td><button className="vop-actions" type="button" onClick={()=>{setStudioTab('lessons');setLessonLanguage(guide.language)}}><MoreVertical size={16}/></button></td></tr>)}</tbody></table>{guides.length===0&&<div className="vop-empty">No guides are currently configured.</div>}</div>}
-      {studioTab==='quizzes' && <div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>#</th><th>Quiz / Lesson</th><th>Guide</th><th>Questions</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>{assessmentRows.map((row,index)=><tr key={row.guide.id+'-'+row.lesson.id}><td>{index+1}</td><td><strong>{row.lesson.title}</strong><div style={{fontSize:12,color:'var(--text-muted)'}}>{row.lesson.lessonNumber}</div></td><td>{row.guide.title}</td><td>{row.lesson.questions?.length || 0}</td><td><span className="vop-chip">Configured</span></td><td><span className="vop-status published">Published</span></td><td><button className="vop-actions" type="button" onClick={()=>openLessonEditor(row.guide,row.lesson)}><Edit3 size={16}/></button></td></tr>)}</tbody></table>{quizCount===0&&<div className="vop-empty">No quiz-bearing lessons are configured.</div>}</div>}
-      {studioTab!=='lessons' && studioTab!=='guides' && studioTab!=='quizzes' && <div className="vop-empty"><Layers size={32}/><h2 style={{color:'#09275f'}}>No {tabs.find(tab=>tab.id===studioTab)?.label.toLowerCase()} configured</h2><p>These records are intentionally data-driven and will appear here when configured by an administrator.</p><button className="vop-primary" type="button" onClick={openNewLesson}><Plus size={17}/>Create Content</button></div>}
-    </div>;
-  };
-
-  const renderStudio = () => <CurriculumManager languages={languages} />;
-
-  const renderLessonEditor = () => <div>
-    <div className="vop-breadcrumb"><button type="button" style={{border:0,background:'transparent',color:'#58719a'}} onClick={()=>setEditorMode(false)}>Curriculum Studio</button><ChevronRight size={15}/><span>Lessons</span><ChevronRight size={15}/><span>{selectedLesson ? 'Edit Lesson' : 'Create Lesson'}</span></div>
-    {renderHeader(FileText,'Lesson Editor','Create and edit lesson content, text, images, audio, video and quiz questions.',<div style={{display:'flex',gap:9}}><button className="vop-secondary" type="button" onClick={()=>setEditorMode(false)}><Eye size={17}/>Preview</button><button className="vop-secondary" type="button" onClick={()=>void saveLessonDraft(false)} disabled={editorSaving}><Save size={17}/>Save Draft</button><button className="vop-primary" type="button" onClick={()=>void saveLessonDraft(true)} disabled={editorSaving}><Send size={17}/>Publish</button></div>)}
-    <div className="vop-form-grid" style={{gridTemplateColumns:'1.15fr 1fr .8fr 1fr 1fr',marginBottom:14}}>
-      <div className="vop-field"><label>Title *</label><input value={editorTitle} onChange={e=>setEditorTitle(e.target.value)}/></div>
-      <div className="vop-field"><label>Guide</label><select value={selectedGuide?.id || ''} onChange={e=>{const guide=guides.find(item=>item.id===e.target.value);setSelectedGuide(guide||null);setEditorLanguage(guide?.language||editorLanguage)}}><option value="">Not selected</option>{guides.map(guide=><option key={guide.id} value={guide.id}>{guide.title} · {guide.language}</option>)}</select></div>
-      <div className="vop-field"><label>Lesson Number *</label><input value={editorNumber} onChange={e=>setEditorNumber(e.target.value)}/></div>
-      <div className="vop-field"><label>Season / Quarter</label><input value={editorSeason} onChange={e=>setEditorSeason(e.target.value)}/></div>
-      <div className="vop-field"><label>Language</label><select value={editorLanguage} onChange={e=>setEditorLanguage(e.target.value)}><option value="">Not configured</option>{languageOptions.map(language=><option key={language} value={language}>{language.toUpperCase()}</option>)}</select></div>
-    </div>
-    <div className="vop-grid-2">
-      <div className="vop-card vop-editor">
-        <div className="vop-settings-tabs" style={{marginBottom:10}}>{['Content','Media','Bible References','Quiz','Teacher Notes','Settings'].map((label,index)=><button key={label} type="button" className={'vop-tab '+(index===0?'active':'')}><span>{label}</span></button>)}</div>
-        <div className="vop-field" style={{marginBottom:12}}><label>Lesson Content *</label><div className="vop-editor-preview"><div className="vop-editor-toolbar"><button type="button"><strong>B</strong></button><button type="button"><em>I</em></button><button type="button"><u>U</u></button><button type="button"><Tag size={15}/></button><button type="button"><Link2 size={15}/></button><button type="button"><ImageIcon size={15}/></button><button type="button"><Grid2X2 size={15}/></button></div><textarea className="vop-editor-body" value={editorContent} onChange={e=>setEditorContent(e.target.value)} placeholder="Write the lesson content here. Use the curriculum editor to structure paragraphs, headings, lists, scripture references and media."></textarea></div></div>
-        <div className="vop-field"><label>Description</label><textarea value={editorDescription} onChange={e=>setEditorDescription(e.target.value)} /></div>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:16}}>
-        <div className="vop-card vop-form-card"><div className="vop-section-title"><div><h3>Featured Image</h3><p>Use a configured media URL.</p></div></div><div className="vop-featured">{editorImage ? <img src={editorImage} alt="" />:<div className="vop-thumb" style={{width:145,height:92}}/>}<div style={{flex:1}}><div className="vop-field"><label>Image URL</label><input value={editorImage} onChange={e=>setEditorImage(e.target.value)}/></div></div></div></div>
-        <div className="vop-card vop-form-card"><div className="vop-field"><label>Lesson Status</label><select value={editorStatus} onChange={e=>setEditorStatus(e.target.value as 'draft'|'published')}><option value="draft">Draft</option><option value="published">Published</option></select></div><div style={{height:13}}/><div className="vop-field"><label>Tags</label><input value={editorTags} onChange={e=>setEditorTags(e.target.value)} placeholder="Add tags separated by commas"/></div><div style={{height:13}}/><div className="vop-field"><label>Draft records</label><div style={{fontSize:13,color:'var(--text-muted)'}}>{loadingDrafts?'Loading…':curriculumDrafts.length+' admin content records'}</div></div></div>
-        <div className="vop-card vop-form-card"><div style={{display:'flex',gap:10,alignItems:'flex-start'}}><div className="vop-mini-stat-icon" style={{background:'#eaf3ff',color:'#1768d7'}}><Shield size={20}/></div><div><strong>Publishing</strong><p style={{margin:'5px 0 0',fontSize:12,color:'var(--text-muted)'}}>Published learner curriculum remains controlled by the approved curriculum hierarchy.</p></div></div></div>
-      </div>
     </div>
   </div>;
 
