@@ -4,6 +4,7 @@ import {configuredPassThreshold} from '../shared/studyValidation.js';
 import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 import {createNotification} from './notifications.js';
+import {certificationPortfolioEvidence} from './certificateAward.js';
 import {organizationSubscriptionFeatureBlockReason} from './permissions.js';
 
 type ApprovalStage={id:string;label:string;approverRoles:string[]};
@@ -181,6 +182,12 @@ export async function ensureAutomaticGraduationReview(
   );
   if(!evidence)return {eligible:false,created:false,reason:'assessments_incomplete_or_failed'};
   const average=evidence.averageScore;
+  if(releaseMode==='automatic'){
+    const requirementIds=Array.isArray(guide.certificationRequirementIds)
+      ?guide.certificationRequirementIds.map(String).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)):[];
+    const portfolio=await certificationPortfolioEvidence(db,candidateId,organizationId,requirementIds);
+    if(portfolio.reasons.length)return {eligible:false,created:false,reason:'certification_requirements_incomplete'};
+  }
 
   const ref=db.doc(`graduationRequests/${requestId(organizationId,candidateId,guideId)}`);
   const userRef=db.doc(`users/${candidateId}`);
