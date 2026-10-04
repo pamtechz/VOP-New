@@ -12,7 +12,7 @@ import {
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, syncPendingLessonResumes } from './services/offlineStudyQueue';
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
-import { loadPublicContent, type PublicContentLoadMode } from './services/publicFirestore';
+import { loadPublicContent, loadPublicRouteData, type PublicContentLoadMode, type PublicRouteDataKind } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import {
   clearLearnerLocation, learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
@@ -117,6 +117,8 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [contentRefresh, setContentRefresh] = useState(0);
   const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
+  const lazyRouteLoadsRef=useRef(new Map<string,number>());
+  const routeDataScopeRef=useRef(startupScope(initialUser));
   const appliedDeepLink = useRef(false);
   const explicitNavigation = useRef(false);
   const restoredNavigationUid = useRef('');
@@ -331,14 +333,6 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       setSettings(nextSettings);
       setGuides(snapshot.guides);
       setAnnouncements(snapshot.announcements);
-      setEvents(snapshot.events);
-      setBooks(snapshot.books);
-      setUnions(snapshot.unions);
-      setConferences(snapshot.conferences);
-      setDistricts(snapshot.districts);
-      setChurches(snapshot.churches);
-      setRadioBroadcasts(snapshot.radioBroadcasts);
-      setRadioPlaylists(snapshot.radioPlaylists);
       lastPublicContentLoadAt.current=Date.now();
       setContentHydrated(true);
       const deepLinkParams = new URLSearchParams(window.location.search);
@@ -393,12 +387,6 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
       }
       if(loadMode==='full'){
         saveAnnouncements(snapshot.announcements);
-        saveBooks(snapshot.books);
-        saveUnions(snapshot.unions);
-        saveConferences(snapshot.conferences);
-        saveDistricts(snapshot.districts);
-        saveChurches(snapshot.churches);
-        saveRadioBroadcasts(snapshot.radioBroadcasts);
       }
       if(currentUser.uid){
         try{
@@ -420,6 +408,58 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const required=dataModeForRoute(currentRoute);
     setContentLoadMode(current=>current===required?current:required);
   },[currentRoute]);
+
+  // Secondary learner collections are route data, not startup data. Keep them
+  // isolated to the current account/tenant scope and revalidate on first use.
+  useEffect(()=>{
+    const nextScope=startupScope(currentUser);
+    if(routeDataScopeRef.current===nextScope)return;
+    routeDataScopeRef.current=nextScope;
+    lazyRouteLoadsRef.current.clear();
+    setEvents([]);
+    setBooks([]);
+    setRadioBroadcasts([]);
+    setRadioPlaylists([]);
+    setUnions([]);
+    setConferences([]);
+    setDistricts([]);
+    setChurches([]);
+  },[currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.organizationRole,currentUser.adminNodeId]);
+
+  useEffect(()=>{
+    if(!currentUser.uid)return;
+    let kind:PublicRouteDataKind|null=null;
+    if(currentRoute==='events'&&settings.features?.announcements!==false)kind='events';
+    else if(currentRoute==='resources')kind='resources';
+    else if(currentRoute==='radio'&&settings.features?.radio!==false)kind='radio';
+    else if(currentRoute==='profile')kind='profile';
+    if(!kind)return;
+
+    const cacheKey=startupScope(currentUser)+'|'+kind;
+    const previous=lazyRouteLoadsRef.current.get(cacheKey)||0;
+    if(Date.now()-previous<10*60*1000)return;
+    lazyRouteLoadsRef.current.set(cacheKey,Date.now());
+    let cancelled=false;
+    void loadPublicRouteData(kind,currentUser).then(snapshot=>{
+      if(cancelled)return;
+      if(snapshot.events)setEvents(snapshot.events);
+      if(snapshot.books){setBooks(snapshot.books);saveBooks(snapshot.books);}
+      if(snapshot.radioBroadcasts){setRadioBroadcasts(snapshot.radioBroadcasts);saveRadioBroadcasts(snapshot.radioBroadcasts);}
+      if(snapshot.radioPlaylists)setRadioPlaylists(snapshot.radioPlaylists);
+      if(snapshot.unions){setUnions(snapshot.unions);saveUnions(snapshot.unions);}
+      if(snapshot.conferences){setConferences(snapshot.conferences);saveConferences(snapshot.conferences);}
+      if(snapshot.districts){setDistricts(snapshot.districts);saveDistricts(snapshot.districts);}
+      if(snapshot.churches){setChurches(snapshot.churches);saveChurches(snapshot.churches);}
+    }).catch(error=>{
+      lazyRouteLoadsRef.current.delete(cacheKey);
+      if(!cancelled)setStudyError(error instanceof Error?error.message:'This page data could not be loaded.');
+    });
+    return()=>{cancelled=true};
+  },[
+    currentRoute,currentUser.uid,currentUser.organizationId,currentUser.role,
+    currentUser.organizationRole,currentUser.adminNodeId,
+    settings.features?.announcements,settings.features?.radio,
+  ]);
 
   useEffect(() => {
     const refreshOwnProfile = () => {
