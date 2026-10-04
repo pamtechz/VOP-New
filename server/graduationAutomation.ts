@@ -5,6 +5,8 @@ import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assess
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 import {createNotification} from './notifications.js';
 import {organizationSubscriptionFeatureBlockReason} from './permissions.js';
+import {effectiveCertificationConfig} from './certificationConfig.js';
+import {awardApprovedCertificate, certificationPortfolioEvidence} from './certificateAward.js';
 
 type ApprovalStage={id:string;label:string;approverRoles:string[]};
 type AutoReviewResult={
@@ -14,6 +16,8 @@ type AutoReviewResult={
   status?:string;
   averageScore?:number;
   reason?:string;
+  certificateId?:string;
+  certificateNumber?:string;
 };
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
@@ -106,10 +110,9 @@ export async function ensureAutomaticGraduationReview(
   createdBy='system:completion',
 ):Promise<AutoReviewResult>{
   if(!candidateId||!guideId)return {eligible:false,created:false,reason:'missing_candidate_or_guide'};
-  const [candidateSnapshot,guideSnapshot,configSnapshot]=await Promise.all([
+  const [candidateSnapshot,guideSnapshot]=await Promise.all([
     db.doc(`users/${candidateId}`).get(),
     db.doc(`guides/${guideId}`).get(),
-    db.doc('system/certification').get(),
   ]);
   if(!candidateSnapshot.exists||!guideSnapshot.exists)return {eligible:false,created:false,reason:'missing_record'};
   const candidate=candidateSnapshot.data()||{};
@@ -129,10 +132,11 @@ export async function ensureAutomaticGraduationReview(
   if(guide.published!==true||guide.archived===true||guide.certificateEligible!==true){
     return {eligible:false,created:false,reason:'guide_not_certificate_eligible'};
   }
-  const config=configSnapshot.data()||{};
+  const config=await effectiveCertificationConfig(db,organizationId);
   if(config.enabled!==true)return {eligible:false,created:false,reason:'certification_disabled'};
-  const stages=stagesFromConfig(config);
-  if(!stages.length)return {eligible:false,created:false,reason:'approval_workflow_not_configured'};
+  const automatic=config.issuanceMode==='automatic';
+  const stages=automatic?[]:stagesFromConfig(config);
+  if(!automatic&&!stages.length)return {eligible:false,created:false,reason:'approval_workflow_not_configured'};
 
   const [lessonsSnapshot,settingsSnapshot]=await Promise.all([
     guideSnapshot.ref.collection('lessons').get(),
@@ -169,6 +173,12 @@ export async function ensureAutomaticGraduationReview(
   );
   if(!evidence)return {eligible:false,created:false,reason:'assessments_incomplete_or_failed'};
   const average=evidence.averageScore;
+  const requirementIds=Array.isArray(guide.certificationRequirementIds)
+    ?guide.certificationRequirementIds.map(String).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)):[];
+  const portfolio=await certificationPortfolioEvidence(db,candidateId,organizationId,requirementIds);
+  if(portfolio.reasons.length){
+    return {eligible:false,created:false,reason:'portfolio_requirements_incomplete'};
+  }
 
   const ref=db.doc(`graduationRequests/${requestId(organizationId,candidateId,guideId)}`);
   const userRef=db.doc(`users/${candidateId}`);
@@ -181,7 +191,12 @@ export async function ensureAutomaticGraduationReview(
     const current=existing.data()||{};
     const currentStatus=text(current.status);
     if(existing.exists&&currentStatus!=='rejected'){
-      return {created:false,status:currentStatus||pendingStatus(firstStage),data:{id:ref.id,...current}};
+      if(!automatic||currentStatus==='approved'){
+        return {created:false,status:currentStatus||(firstStage?pendingStatus(firstStage):'approved'),data:{id:ref.id,...current}};
+      }
+      // If an organization changes from reviewed to automatic issuance, a
+      // still-pending eligible record is promoted only after the same immutable
+      // completion evidence is revalidated below.
     }
     const freshProgress=fresh.progress&&typeof fresh.progress==='object'
       ?fresh.progress as Record<string,unknown>:{};
@@ -210,14 +225,19 @@ export async function ensureAutomaticGraduationReview(
       conferenceId:text(fresh.conferenceId),
       unionId:text(fresh.unionId),
       averageScore:verifiedAverage,
-      status:pendingStatus(firstStage),
-      workflowStageId:firstStage.id,
-      workflowStageIndex:0,
+      status:automatic?'approved':pendingStatus(firstStage!),
+      workflowStageId:automatic?'automatic':firstStage!.id,
+      workflowStageIndex:automatic?-1:0,
       revision:existing.exists?Math.max(1,Number(current.revision||0)+1):1,
       submittedAt:now,
-      approvedAt:null,
-      approverNotes:'',
-      decisions:[],
+      approvedAt:automatic?now:null,
+      approvedBy:automatic?'system:automatic-certification':'',
+      approverNotes:automatic?'Automatically approved after verified curriculum completion.':'',
+      decisions:automatic?[{
+        stageId:'automatic',stageLabel:'Automatic completion verification',
+        decision:'approved',decidedBy:'system:automatic-certification',decidedAt:new Date().toISOString(),
+        notes:'All required lessons and assessments were completed and passed.',
+      }]:[],
       automatic:true,
       source:'completion',
       updatedAt:now,
@@ -226,22 +246,53 @@ export async function ensureAutomaticGraduationReview(
     transaction.set(userRef,{
       information:{
         ...information,
-        graduating:true,
+        graduating:!automatic,
+        graduated:automatic?true:information.graduated===true,
         completionDate:text(information.completionDate)||new Date().toISOString(),
+        ...(automatic?{graduationDate:text(information.graduationDate)||new Date().toISOString()}:{})
       },
       updatedAt:now,
     },{merge:true});
     return {created:true,status:String(data.status),data:{id:ref.id,...data}};
   });
 
-  if(result.created){
+  if(automatic){
+    let awarded:Awaited<ReturnType<typeof awardApprovedCertificate>>|null=null;
+    try{
+      awarded=await awardApprovedCertificate(db,candidateId,createdBy,guideId);
+    }catch(error){
+      await ref.set({
+        certificateStatus:'issuance_pending_retry',
+        certificateIssueError:error instanceof Error?error.message:'Certificate issuance will be retried.',
+        updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      console.warn('Automatic certificate issuance will be retried',error);
+    }
+    const certificate=awarded?.certificate as Record<string,unknown>|undefined;
+    if(awarded?.created){
+      await createNotification(db,{
+        organizationId,recipientId:candidateId,type:'certificate',
+        title:'Certificate awarded',
+        body:`You completed ${text(guide.title)||'your VOP course'} and your official certificate is ready.`,
+        actionUrl:'/certificates',
+        metadata:{source:'automatic-certificate-award',requestId:ref.id,guideId,
+          certificateId:text(certificate?.id),certificateNumber:text(certificate?.certificateNumber)},
+        createdBy,
+      });
+    }
+    return {
+      eligible:true,created:result.created,requestId:ref.id,status:'approved',averageScore:average,
+      certificateId:text(certificate?.id)||undefined,certificateNumber:text(certificate?.certificateNumber)||undefined,
+    };
+  }
+  if(result.created&&firstStage){
     await notifyApprovers(db,result.data as Record<string,unknown>,firstStage,createdBy);
     await createNotification(db,{
       organizationId,
       recipientId:candidateId,
       type:'certificate',
       title:'Certificate earned — review pending',
-      body:`You completed ${text(guide.title)||'your VOP course'}. Your certificate has been earned and is being withheld until the required organization review is approved.`,
+      body:`You completed ${text(guide.title)||'your VOP course'}. Your certificate is awaiting the organization review configured for this course.`,
       actionUrl:'/certificates',
       metadata:{source:'automatic-certificate-review',requestId:ref.id,status:result.status,guideId},
       createdBy,
