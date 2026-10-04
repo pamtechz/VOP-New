@@ -5,6 +5,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
 import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
+import { awardEngagementPoints, pointKeyForAssessment } from '../../server/engagementPoints.js';
 
 const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
 
@@ -727,8 +728,16 @@ export default async function handler(
     if(sessionData.consumed===true){
       const replay=storedSubmissionPayload(sessionData.submissionResult);
       if(replay){
+        const pointAward=policyOrganizationId
+          ?await awardEngagementPoints(
+            db,decoded.uid,policyOrganizationId,
+            pointKeyForAssessment(lessonData.assessmentKind),
+            'assessment-attempt',sessionId,
+            {guideId:effectiveGuideId,lessonId,assessmentKind:String(lessonData.assessmentKind||'practice')},
+          )
+          :{awarded:false,points:0,total:null};
         return res.status(200).json({
-          ok:true,replayed:true,scoreKey,...replay,certificateReview:null,
+          ok:true,replayed:true,scoreKey,...replay,certificateReview:null,pointAward,
         });
       }
       return res.status(409).json({error:'This assessment attempt was already submitted.',code:'ASSESSMENT_SESSION_CONSUMED'});
@@ -982,10 +991,27 @@ export default async function handler(
     });
 
     if(policyResult.replayed&&policyResult.replay){
+      const pointAward=policyOrganizationId
+        ?await awardEngagementPoints(
+          db,decoded.uid,policyOrganizationId,
+          pointKeyForAssessment(lessonData.assessmentKind),
+          'assessment-attempt',sessionId,
+          {guideId:effectiveGuideId,lessonId,assessmentKind:String(lessonData.assessmentKind||'practice')},
+        )
+        :{awarded:false,points:0,total:null};
       return res.status(200).json({
-        ok:true,replayed:true,scoreKey,...policyResult.replay,certificateReview:null,
+        ok:true,replayed:true,scoreKey,...policyResult.replay,certificateReview:null,pointAward,
       });
     }
+
+    const pointAward=policyOrganizationId
+      ?await awardEngagementPoints(
+        db,decoded.uid,policyOrganizationId,
+        pointKeyForAssessment(lessonData.assessmentKind),
+        'assessment-attempt',attemptId,
+        {guideId:effectiveGuideId,lessonId,assessmentKind:String(lessonData.assessmentKind||'practice'),passed},
+      )
+      :{awarded:false,points:0,total:null};
 
     let certificateReview:Awaited<ReturnType<typeof ensureAutomaticGraduationReview>>|null=null;
     if(useTenantGuide&&guideId!=='discover'){
@@ -1001,7 +1027,7 @@ export default async function handler(
     const committed=storedSubmissionPayload({...storedResult,attemptsUsed:policyResult.attemptsUsed});
     if(!committed)throw new Error('The saved assessment result could not be reconstructed.');
     return res.status(200).json({
-      ok:true,replayed:false,scoreKey,...committed,certificateReview,
+      ok:true,replayed:false,scoreKey,...committed,certificateReview,pointAward,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';
