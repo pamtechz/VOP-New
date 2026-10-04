@@ -1788,3 +1788,6 @@
 .vop-admin-record-card-meta strong{margin-top:3px;color:var(--vop-text,#254a78);font-size:10.5px;overflow-wrap:anywhere}
 .vop-admin-record-card-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:10px}
 @media(max-width:640px){.vop-view-mode-toggle span{display:none}.vop-view-mode-toggle button{width:34px;padding:0}.vop-admin-record-cards{grid-template-columns:1fr}}
+
+.vop-live-data-note{display:inline-flex;align-items:center;gap:6px;color:var(--vop-muted,#667d9b);font-size:11px;font-weight:800}
+.vop-live-data-note>span{width:8px;height:8px;border-radius:999px;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
