@@ -23,7 +23,7 @@ export default async function AdminPayoutsPage() {
     .order('created_at', { ascending: false })
     .limit(50);
 
-  const payouts: PayoutRow[] = (payoutsData ?? []) as PayoutRow[];
+  const payouts: PayoutRow[] = (payoutsData ?? []) as unknown as PayoutRow[];
 
   const pendingTotal = payouts
     .filter(p => p.status === 'pending')

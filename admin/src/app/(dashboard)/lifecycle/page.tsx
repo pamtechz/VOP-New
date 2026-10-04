@@ -22,7 +22,7 @@ export default async function AdminLifecyclePage() {
     .select('user_id, last_active_at, deletion_due_at, warning_stage, deletion_hold, deletion_hold_reason, profiles(full_name, role)')
     .order('deletion_due_at', { ascending: true });
 
-  const lifecycle: LifecycleRow[] = (lifecycleData ?? []) as LifecycleRow[];
+  const lifecycle: LifecycleRow[] = (lifecycleData ?? []) as unknown as LifecycleRow[];
 
   return (
     <div className="space-y-6 p-6">

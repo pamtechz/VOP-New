@@ -39,7 +39,7 @@ export default async function AdminStoresPage() {
     .order('created_at', { ascending: false })
     .limit(50);
 
-  const stores: StoreRow[] = (storesData ?? []) as StoreRow[];
+  const stores: StoreRow[] = (storesData ?? []) as unknown as StoreRow[];
 
   return (
     <div className="space-y-6 p-6">

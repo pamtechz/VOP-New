@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
 
 /// Result returned after any image attachment operation.
 class ImageAttachResult {
-  final String displayUrl; // shortened URL or storage URL — ready to show
-  final String? shortCode; // Base62 code if shortened
+  final String displayUrl;
+  final String? shortCode;
   final bool isShortened;
 
   const ImageAttachResult({
@@ -15,11 +17,33 @@ class ImageAttachResult {
   });
 }
 
-/// Unified product image picker widget.
-/// Offers two modes:
-///   1. Upload from device  → compresses to WebP → Supabase Storage
-///   2. Paste external URL  → validates → shortens via RPC → stores short URL
-class ProductImagePicker extends StatefulWidget {
+/// Helper to convert external links (Cloudinary, Google Drive, direct URLs) into embeddable image URLs.
+class ExternalImageResolver {
+  static String resolve(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    // Google Drive share link converter
+    // Matches: https://drive.google.com/file/d/FILE_ID/view...
+    final driveFileMatch = RegExp(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    if (driveFileMatch != null) {
+      final fileId = driveFileMatch.group(1);
+      return 'https://lh3.googleusercontent.com/d/$fileId';
+    }
+
+    // Matches: https://drive.google.com/open?id=FILE_ID or https://drive.google.com/uc?id=FILE_ID
+    final driveIdMatch = RegExp(r'drive\.google\.com/(?:open|uc)\?.*id=([a-zA-Z0-9_-]+)').firstMatch(trimmed);
+    if (driveIdMatch != null) {
+      final fileId = driveIdMatch.group(1);
+      return 'https://lh3.googleusercontent.com/d/$fileId';
+    }
+
+    return trimmed;
+  }
+}
+
+/// External image picker widget tailored for Cloudinary & Google Drive integration.
+class ProductImagePicker extends ConsumerStatefulWidget {
   final String productId;
   final String storeId;
   final int currentImageCount;
@@ -36,190 +60,263 @@ class ProductImagePicker extends StatefulWidget {
   });
 
   @override
-  State<ProductImagePicker> createState() => _ProductImagePickerState();
+  ConsumerState<ProductImagePicker> createState() => _ProductImagePickerState();
 }
 
-class _ProductImagePickerState extends State<ProductImagePicker> {
+class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  bool get _atLimit => widget.currentImageCount >= widget.maxImages;
+  bool _isAdmin(WidgetRef ref) {
+    final profile = ref.watch(profileProvider).valueOrNull;
+    final role = profile?['role'] as String? ?? 'user';
+    return role == 'admin' || role == 'super_admin';
+  }
 
-  // ── Option 1: Paste an external URL ────────────────────────────────────────
-  Future<void> _pasteUrlFlow() async {
-    if (_atLimit) {
-      _showLimitError();
-      return;
-    }
-    final url = await _showUrlInputDialog();
-    if (url == null || url.isEmpty) return;
+  bool _isAtLimit(bool isAdmin) {
+    if (isAdmin) return false; // Admin is never restricted by subscription quotas
+    return widget.currentImageCount >= widget.maxImages;
+  }
 
-    setState(() { _isLoading = true; _errorMessage = null; });
+  Future<void> _attachExternalUrl(String inputUrl) async {
+    final resolvedUrl = ExternalImageResolver.resolve(inputUrl);
+    if (resolvedUrl.isEmpty) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     try {
-      final result = await SupabaseService.client.rpc(
-        'attach_shortened_url_to_product_image',
-        params: {
-          'p_product_id':   widget.productId,
-          'p_external_url': url,
-          'p_created_by':   SupabaseService.client.auth.currentUser?.id,
-        },
-      );
+      final user = Supabase.instance.client.auth.currentUser;
+      String finalUrl = resolvedUrl;
+      String? shortCode;
+
+      // Try shortening / registering via RPC if available
+      try {
+        final result = await SupabaseService.client.rpc(
+          'attach_shortened_url_to_product_image',
+          params: {
+            'p_product_id': widget.productId,
+            'p_external_url': resolvedUrl,
+            'p_created_by': user?.id,
+          },
+        );
+        if (result != null && result['short_url'] != null) {
+          finalUrl = result['short_url'] as String;
+          shortCode = result['code'] as String?;
+        }
+      } catch (_) {
+        // Fallback: use the resolved direct URL directly
+        finalUrl = resolvedUrl;
+      }
 
       widget.onImageAttached(ImageAttachResult(
-        displayUrl:  result['short_url'] as String,
-        shortCode:   result['code'] as String?,
-        isShortened: true,
+        displayUrl: finalUrl,
+        shortCode: shortCode,
+        isShortened: shortCode != null,
       ));
-    } on PostgrestException catch (e) {
-      setState(() => _errorMessage = _friendlyError(e.message));
     } catch (e) {
-      setState(() => _errorMessage = 'Unexpected error. Please try again.');
+      setState(() => _errorMessage = 'Failed to link image. Please check URL.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ── Option 2: Upload from device (compressed to WebP) ──────────────────────
-  Future<void> _uploadFromDeviceFlow() async {
-    if (_atLimit) {
-      _showLimitError();
-      return;
-    }
-    // In a real build, use image_picker to pick a file.
-    // Here we demonstrate the compress-then-upload pipeline.
-    setState(() { _isLoading = true; _errorMessage = null; });
-    try {
-      // Simulate picking a file — replace with ImagePicker in production.
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Example: compress raw bytes before upload.
-      // final Uint8List rawBytes = await _pickImageBytes();
-      // final Uint8List webpBytes = ImageOptimizerService.optimizeImageForUpload(rawBytes);
-      //
-      // final String storagePath =
-      //     'products/${widget.storeId}/${widget.productId}/${const Uuid().v4()}.webp';
-      // await SupabaseService.client.storage
-      //     .from('product-media')
-      //     .uploadBinary(storagePath, webpBytes,
-      //         fileOptions: const FileOptions(contentType: 'image/webp', upsert: false));
-      //
-      // final String publicUrl = SupabaseService.client.storage
-      //     .from('product-media').getPublicUrl(storagePath);
-      //
-      // widget.onImageAttached(ImageAttachResult(
-      //     displayUrl: publicUrl, isShortened: false));
-
-      if (mounted) {
-        setState(() => _errorMessage = 'Device upload: integrate image_picker package then un-comment the upload block above.');
-      }
-    } catch (e) {
-      setState(() => _errorMessage = e.toString());
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ── URL input dialog ────────────────────────────────────────────────────────
-  Future<String?> _showUrlInputDialog() async {
+  Future<void> _showAddImageDialog(BuildContext context) async {
     final controller = TextEditingController();
-    return showDialog<String>(
+    String? previewUrl;
+
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Paste Image or File URL'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Paste a direct link to your image or file.\n'
-              'The URL will be automatically shortened to save storage.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.cloud_upload_outlined, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Add External Image', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Image or File URL',
-                hintText: 'https://example.com/my-product-photo.jpg',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.link),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Paste an image link from Cloudinary or Google Drive:',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'Cloudinary / Google Drive URL',
+                      hintText: 'https://res.cloudinary.com/... or Google Drive link',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.link),
+                    ),
+                    onChanged: (val) {
+                      final resolved = ExternalImageResolver.resolve(val);
+                      setDialogState(() {
+                        previewUrl = resolved.isNotEmpty ? resolved : null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Quick presets / provider helpers
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ActionChip(
+                        avatar: const Icon(Icons.cloud_done, size: 14, color: Colors.blue),
+                        label: const Text('Cloudinary', style: TextStyle(fontSize: 11)),
+                        onPressed: () {
+                          _showGuideDialog(
+                            context,
+                            'Cloudinary Guide',
+                            '1. Visit console.cloudinary.com/app\n'
+                            '2. Upload your product photo into your Media Library\n'
+                            '3. Click "Copy URL" on the image\n'
+                            '4. Paste the URL here.',
+                          );
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.drive_folder_upload, size: 14, color: Color(0xFF10B981)),
+                        label: const Text('Google Drive', style: TextStyle(fontSize: 11)),
+                        onPressed: () {
+                          _showGuideDialog(
+                            context,
+                            'Google Drive Guide',
+                            '1. Upload your photo to Google Drive\n'
+                            '2. Right click file -> Share -> Change to "Anyone with the link"\n'
+                            '3. Copy the link and paste it here.\n'
+                            '4. Our system converts it automatically into a direct product image!',
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Live Preview Box
+                  if (previewUrl != null && previewUrl!.isNotEmpty) ...[
+                    const Text('Live Preview:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        height: 120,
+                        width: double.infinity,
+                        color: Colors.black12,
+                        child: Image.network(
+                          previewUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Text('Invalid image link or permissions', style: TextStyle(fontSize: 11, color: Colors.red)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final text = controller.text.trim();
+                  if (text.isNotEmpty) {
+                    Navigator.pop(ctx);
+                    _attachExternalUrl(text);
+                  }
+                },
+                child: const Text('Attach Image'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showGuideDialog(BuildContext context, String title, String body) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final url = controller.text.trim();
-              Navigator.pop(ctx, url.isNotEmpty ? url : null);
-            },
-            child: const Text('Shorten & Attach'),
-          ),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got It')),
         ],
       ),
     );
   }
 
-  void _showLimitError() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Image limit reached (${widget.maxImages} images). '
-          'Upgrade your plan to add more.',
-        ),
-        backgroundColor: Colors.red.shade700,
-      ),
-    );
-  }
-
-  String _friendlyError(String raw) {
-    if (raw.contains('URL_SCHEME_BLOCKED')) return 'Only http:// and https:// URLs are allowed.';
-    if (raw.contains('URL_TOO_LONG')) return 'URL is too long (max 2048 characters).';
-    if (raw.contains('IMAGE_LIMIT_REACHED')) return 'Image limit reached for your plan.';
-    return 'Could not shorten URL. Please check the link and try again.';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isAdmin = _isAdmin(ref);
+    final atLimit = _isAtLimit(isAdmin);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Limit indicator
         Row(
           children: [
             Text(
-              'Product Images',
+              'Product Images (Cloudinary & Google Drive)',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
-            Text(
-              '${widget.currentImageCount} / ${widget.maxImages}',
-              style: TextStyle(
-                fontSize: 12,
-                color: _atLimit ? Colors.red : Colors.grey,
-                fontWeight: FontWeight.bold,
+            if (isAdmin)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'ADMIN: UNLIMITED',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                ),
+              )
+            else
+              Text(
+                '${widget.currentImageCount} / ${widget.maxImages}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: atLimit ? Colors.red : Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
+        const Text(
+          'Attach image links hosted on Cloudinary or Google Drive. Images are optimized and rendered dynamically.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 10),
 
-        // Error message
         if (_errorMessage != null)
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
               color: Colors.red.shade50,
-              border: Border.all(color: Colors.red.shade300),
+              border: Border.all(color: Colors.red.shade200),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -231,32 +328,25 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
             ),
           ),
 
-        // Action buttons
         if (_isLoading)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(16),
-            child: CircularProgressIndicator(),
-          ))
-        else if (!_atLimit)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (!atLimit)
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.upload_file, size: 18),
-                  label: const Text('Upload File', style: TextStyle(fontSize: 13)),
-                  onPressed: _uploadFromDeviceFlow,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
                   icon: const Icon(Icons.link, size: 18),
-                  label: const Text('Paste URL', style: TextStyle(fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
+                  label: const Text('Add Cloud Image Link', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: scheme.primary),
                   ),
-                  onPressed: _pasteUrlFlow,
+                  onPressed: () => _showAddImageDialog(context),
                 ),
               ),
             ],
@@ -275,7 +365,7 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Image limit reached. Upgrade your seller plan to add more images.',
+                    'Image limit reached (${widget.maxImages}). Upgrade your seller plan to add more images.',
                     style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
                   ),
                 ),
@@ -286,3 +376,4 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
     );
   }
 }
+

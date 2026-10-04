@@ -224,8 +224,58 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               },
             ),
             if (_imageUrls.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('${_imageUrls.length} image(s) ready to upload', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 90,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _imageUrls.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (ctx, idx) {
+                    final url = _imageUrls[idx];
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: 90,
+                            height: 90,
+                            color: Colors.black12,
+                            child: Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(Icons.broken_image, size: 28, color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _imageUrls.removeAt(idx);
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Colors.black87,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text('${_imageUrls.length} cloud image(s) attached', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF10B981))),
             ],
             const SizedBox(height: 28),
 

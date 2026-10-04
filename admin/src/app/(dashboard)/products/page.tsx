@@ -24,7 +24,7 @@ export default async function AdminProductsPage() {
     .order('created_at', { ascending: false })
     .limit(100);
 
-  const products: ProductRow[] = (productsData ?? []) as ProductRow[];
+  const products: ProductRow[] = (productsData ?? []) as unknown as ProductRow[];
 
   const statusBadge = (status: string) => {
     switch (status) {

@@ -37,7 +37,7 @@ export default async function AdminAdvertisingPage() {
     .select('id, title, placement, budget, status, start_date, end_date, advertisers(company_name), stores(name)')
     .order('created_at', { ascending: false });
 
-  const campaigns: CampaignRow[] = (campaignsData ?? []) as CampaignRow[];
+  const campaigns: CampaignRow[] = (campaignsData ?? []) as unknown as CampaignRow[];
 
   return (
     <div className="space-y-6 p-6">
