@@ -90,7 +90,7 @@ export default async function handler(req:Request,res:Response){
         throw new Error('Passkey counter validation failed. Remove and re-enroll this passkey.');
       if(authData.signCount>0&&authData.signCount!==previousCount){
         await credentialRef.set({
-          signCount:registration.signCount,
+          signCount:authData.signCount,
           lastUsedAt:FieldValue.serverTimestamp(),
         },{merge:true});
       }
@@ -159,7 +159,7 @@ export default async function handler(req:Request,res:Response){
         ?input.transports.map(value=>clean(value,40)).filter(Boolean).slice(0,10):[];
       await ref.set({
         uid:actor.uid,credentialId:id,publicKeyDer,algorithm,
-        signCount:authData.signCount,
+        signCount:registration.signCount,
         transports,label:clean(input.label,120)||'This device',
         rpId:payload.rpId,
         createdAt:existing.exists?existing.data()?.createdAt||FieldValue.serverTimestamp():FieldValue.serverTimestamp(),
