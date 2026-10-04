@@ -331,6 +331,9 @@ export interface CurriculumProgram {
   guideIds:string[];
   organizationId:string;
   sharingScope:'private'|'organization'|'shared';
+  certificateEligible?:boolean;
+  certificateDocumentType?:string;
+  certificateTypeName?:string;
   published:boolean;
   archived:boolean;
 }
