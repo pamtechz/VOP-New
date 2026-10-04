@@ -57,10 +57,13 @@ test('portal routing sends each account to its authorized primary workspace',()=
 test('stale tenant role metadata cannot create portal access without a tenant identity',()=>{
   const staleAdmin=user({role:'student',organizationRole:'admin',organizationId:''});
   const staleMentor=user({role:'student',organizationRole:'mentor',organizationId:''});
+  const staleTopLevelMentor=user({role:'mentor',organizationRole:'',organizationId:''});
   assert.equal(hasAdminPortalAccess(staleAdmin),false);
   assert.equal(hasMentorPortalAccess(staleMentor),false);
+  assert.equal(hasMentorPortalAccess(staleTopLevelMentor),false);
   assert.equal(canAccessPortalRoute(staleAdmin,'admin'),false);
   assert.equal(canAccessPortalRoute(staleMentor,'mentor'),false);
+  assert.equal(canAccessPortalRoute(staleTopLevelMentor,'mentor'),false);
 });
 
 test('admin, mentor and localization workspaces remain distinct',()=>{
