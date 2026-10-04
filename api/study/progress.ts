@@ -5,6 +5,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
 import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
+import {ensureAutomaticProgramGraduationReviews} from '../../server/programGraduationAutomation.js';
 import {organizationPointRules,pointKindForAssessment} from '../../server/engagementPoints.js';
 
 const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
@@ -687,6 +688,7 @@ export default async function handler(
       if(useTenantGuide&&guideId!=='discover'){
         try{
           certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:lesson-completion');
+          await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-lesson-completion');
         }catch(reviewError){
           // Study completion is authoritative even if a downstream review
           // notification/configuration is temporarily unavailable. A later
@@ -1007,6 +1009,7 @@ export default async function handler(
     if(useTenantGuide&&guideId!=='discover'){
       try{
         certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:assessment-completion');
+        await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-assessment-completion');
       }catch(reviewError){
         console.warn('Automatic certificate review could not be created after assessment completion',reviewError);
       }
