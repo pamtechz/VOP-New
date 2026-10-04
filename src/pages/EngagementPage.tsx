@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { auth } from '../lib/firebase';
-import { ArrowLeft, Sparkles, Brain, Swords, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Sparkles, Brain, Swords, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown, ChevronRight, BookmarkCheck, Layers3, History, RotateCcw } from 'lucide-react';
 
 export type EngagementMode = 'master-guide' | 'memory' | 'duels';
 interface Props { mode: EngagementMode; onBack: () => void; }
@@ -14,6 +14,9 @@ type ArenaSummary={
   soloCompleted:number;perfectSolo:number;totalChallenges:number;recent:ArenaRecent[];
 };
 type SoloChallengeSummary={id:string;score:number;answeredCount:number;questionCount:number;expiresAt?:unknown};
+type MemoryView='due'|'reviewed'|'all';
+type MemorySummary={total:number;due:number;reviewed:number;scheduled:number;unseen:number};
+const EMPTY_MEMORY_SUMMARY:MemorySummary={total:0,due:0,reviewed:0,scheduled:0,unseen:0};
 const EMPTY_ARENA:ArenaSummary={
   points:0,rating:1200,level:1,levelProgress:0,nextLevelAt:100,
   duelsCompleted:0,duelWins:0,draws:0,losses:0,soloCompleted:0,perfectSolo:0,totalChallenges:0,recent:[],
@@ -25,6 +28,12 @@ function timeRemaining(value:unknown,now:number){
   const minutes=Math.floor(remaining/60000);
   const seconds=Math.floor((remaining%60000)/1000);
   return remaining<=0?'Expired':`${minutes}:${String(seconds).padStart(2,'0')} left`;
+}
+function memoryDate(value:unknown){
+  if(!value)return 'Not scheduled';
+  const date=new Date(String(value));
+  if(Number.isNaN(date.getTime()))return 'Not scheduled';
+  return date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
 const revisionOf=(item:Record<string,unknown>)=>{
@@ -67,6 +76,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [deckId, setDeckId] = useState('');
   const [decks, setDecks] = useState<Array<Record<string, unknown>>>([]);
   const [due, setDue] = useState<Array<Record<string, unknown>>>([]);
+  const [reviewed,setReviewed]=useState<Array<Record<string,unknown>>>([]);
+  const [memoryAll,setMemoryAll]=useState<Array<Record<string,unknown>>>([]);
+  const [memorySummary,setMemorySummary]=useState<MemorySummary>(EMPTY_MEMORY_SUMMARY);
+  const [memoryView,setMemoryView]=useState<MemoryView>('due');
+  const [practiceVerseId,setPracticeVerseId]=useState('');
   const [opponentId, setOpponentId] = useState('');
   const [opponents, setOpponents] = useState<Array<{ uid: string; displayName: string }>>([]);
   const [duelOptIn, setDuelOptIn] = useState(false);
@@ -87,6 +101,12 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
   const run = async (work: () => Promise<void>) => { setBusy(true); setError(''); setMessage(''); try { await work(); } catch (e) { setError(e instanceof Error ? e.message : 'Request failed.'); } finally { setBusy(false); } };
+  const applyMemoryResult=(result:Record<string,unknown>)=>{
+    setDue((result.due as Array<Record<string,unknown>>)||[]);
+    setReviewed((result.reviewed as Array<Record<string,unknown>>)||[]);
+    setMemoryAll((result.all as Array<Record<string,unknown>>)||[]);
+    setMemorySummary({...EMPTY_MEMORY_SUMMARY,...(result.summary as MemorySummary||{})});
+  };
   const applyDuelOverview=(result:Record<string,unknown>)=>{
     setOpponents((result.opponents as Array<{uid:string;displayName:string}>)||[]);
     setActiveMatches((result.matches as Array<{id:string;opponentName:string;expiresAt?:unknown}>)||[]);
@@ -115,7 +135,14 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  useEffect(() => { if (!deckId || tab !== 'memory') return; void run(async () => { const result = await engagement({ action: 'memoryDue', deckId }); setDue((result.due as Array<Record<string, unknown>>) || []); }); }, [deckId, tab]);
+  useEffect(() => {
+    if (!deckId || tab !== 'memory') return;
+    setPracticeVerseId('');
+    void run(async () => {
+      const result=await engagement({action:'memoryDue',deckId});
+      applyMemoryResult(result);
+    });
+  }, [deckId, tab]);
   useEffect(()=>{
     if(!matchId||!challengeExpiresAt)return;
     setArenaNow(Date.now());
