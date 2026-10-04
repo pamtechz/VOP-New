@@ -151,7 +151,7 @@ export async function ensureAutomaticGraduationReview(
     guideSnapshot.ref.collection('lessons').get(),
     db.doc(`organizations/${organizationId}/settings/settings`).get(),
   ]);
-  const records=lessonsSnapshot.docs.map(document=>({...document.data(),id:document.id}));
+  const records=lessonsSnapshot.docs.map(document=>({...document.data(),id:document.id} as Record<string,unknown>&{id:string}));
   if(!records.length||records.some(record=>record.published!==true||record.archived===true)){
     return {eligible:false,created:false,reason:'curriculum_not_fully_published'};
   }

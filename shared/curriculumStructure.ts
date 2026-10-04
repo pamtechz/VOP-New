@@ -141,9 +141,9 @@ export function containsPublicQuizAnswer(value:unknown,depth=0):boolean {
   if(depth>24||value===null||typeof value!=='object')return false;
   if(Array.isArray(value))return value.some(item=>containsPublicQuizAnswer(item,depth+1));
   const row=value as Record<string,unknown>;
-  const questionLike=Object.hasOwn(row,'question')||Object.hasOwn(row,'prompt')
-    ||Object.hasOwn(row,'options');
-  if(questionLike&&(Object.hasOwn(row,'correctOptionIndex')||Object.hasOwn(row,'answer')
-    ||Object.hasOwn(row,'explanation')))return true;
+  const questionLike=Object.prototype.hasOwnProperty.call(row,'question')||Object.prototype.hasOwnProperty.call(row,'prompt')
+    ||Object.prototype.hasOwnProperty.call(row,'options');
+  if(questionLike&&(Object.prototype.hasOwnProperty.call(row,'correctOptionIndex')||Object.prototype.hasOwnProperty.call(row,'answer')
+    ||Object.prototype.hasOwnProperty.call(row,'explanation')))return true;
   return Object.values(row).some(item=>containsPublicQuizAnswer(item,depth+1));
 }

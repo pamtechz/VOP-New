@@ -130,7 +130,7 @@ export async function awardApprovedCertificate(
   if(!organizationId)throw new Error('The candidate is not linked to a tenant organization.');
   if(config.enabled!==true)throw new Error('Official certification is disabled in certification settings.');
   const approved=requestsSnapshot.docs
-    .map(snapshot=>({id:snapshot.id,...snapshot.data()}))
+    .map(snapshot=>({id:snapshot.id,...snapshot.data()} as Record<string, unknown> & {id:string}))
     .filter(record=>{
       const approvedAt=certificateDateValue(record.approvedAt);
       return text(record.organizationId)===organizationId
@@ -169,7 +169,7 @@ export async function awardApprovedCertificate(
   if(threshold===null)throw new Error('The certification pass mark is not configured.');
 
   const lessonDocuments=await matching.ref.collection('lessons').get();
-  const lessons=lessonDocuments.docs.map(document=>({...document.data(),id:document.id}));
+  const lessons=lessonDocuments.docs.map(document=>({...document.data(),id:document.id} as Record<string,unknown>&{id:string}));
   if(!lessons.length)throw new Error('The approved guide has no published curriculum items.');
   if(lessons.some(item=>item.published!==true||item.archived===true)){
     throw new Error('The approved guide contains unpublished or archived items and cannot be certified.');
@@ -330,7 +330,7 @@ export async function awardApprovedProgramCertificate(
   const config=await certificationConfigFor(db,organizationId);
   if(config.enabled!==true)throw new Error('Official certification is disabled in certification settings.');
   const approved=requestsSnapshot.docs
-    .map(snapshot=>({id:snapshot.id,...snapshot.data()}))
+    .map(snapshot=>({id:snapshot.id,...snapshot.data()} as Record<string,unknown>&{id:string}))
     .filter(record=>{
       const approvedAt=certificateDateValue(record.approvedAt);
       return text(record.organizationId)===organizationId

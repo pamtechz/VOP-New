@@ -7,6 +7,7 @@
     "dev": "node scripts/repair-admin-records-panel.mjs && vite --host",
     "prebuild": "node scripts/repair-admin-records-panel.mjs",
     "build": "node scripts/verify-server-esm-imports.mjs && tsc -b && vite build",
+    "typecheck:serverless": "tsc -p tsconfig.serverless.json",
     "verify:content": "node scripts/generate-snapshots.js && node --test tests/ingestion.test.mjs tests/snapshots.test.mjs",
     "test:unit": "node --test tests/*.test.ts tests/mtnMomoProvider.test.mjs tests/airtelMoneyProvider.test.mjs tests/androidRelease.test.mjs tests/productionAssets.test.mjs tests/pwa.test.mjs tests/serverlessRouting.test.mjs tests/apiRuntime.test.mjs tests/localizationFlow.test.mjs",
     "build:android": "node scripts/generate-snapshots.js && node scripts/validate-android-release.mjs && npm run build && cap sync android",

@@ -3,7 +3,7 @@
  * The platform administrator retains stewardship; contributors must fork
  * before making incompatible changes to a shared version.
  */
-export function platformStewardedResource(data: Record<string, unknown>): boolean {
+export function platformStewardedResource(data) {
   // A tenant can draft a contribution in a platform collection. The scope
   // alone does not transfer ownership; adoption or public sharing does.
   return (data.scope === 'platform' && !String(data.ownerOrganizationId || '').trim())
@@ -12,11 +12,7 @@ export function platformStewardedResource(data: Record<string, unknown>): boolea
     || (data.sharingScope === 'shared' && data.published === true);
 }
 
-export function assertMutableTenantResource(
-  isSuperAdmin: boolean,
-  existing: Record<string, unknown> | undefined,
-  operation: 'edit' | 'archive' | 'delete',
-): void {
+export function assertMutableTenantResource(isSuperAdmin, existing, operation) {
   if (isSuperAdmin || !existing || !platformStewardedResource(existing)) return;
   throw new Error(
     'This published shared resource is under VOP platform stewardship. ' +

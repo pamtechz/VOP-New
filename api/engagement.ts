@@ -240,7 +240,7 @@ async function portfolioAction(db: FirebaseFirestore.Firestore, actor: Profile, 
       portfolio: portfolioSnap.exists ? { id: portfolioSnap.id, ...portfolioSnap.data() } : { id: learnerId, learnerId, organizationId: orgOf(learner), status: 'active', activities: [], evidence: [], signoffs: [] },
       requirements: requirementsSnap.docs
         .filter(doc => doc.data().status === 'published' && contentVisibleToLearner(learner, doc.data(), organization))
-        .map(doc => ({ id:doc.id, ...doc.data() })),
+        .map(doc => ({ id:doc.id, ...doc.data() } as Record<string,unknown>&{id:string})),
     };
   }
 
@@ -376,7 +376,7 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
   const organization=await actorOrganization(db,actor);
   if (action === 'memoryDecks') {
     const snapshot = await db.collection('scriptureMemoryDecks').where('status', '==', 'published').limit(100).get();
-    return { decks: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() })) };
+    return { decks: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string})) };
   }
   const deckId = cleanId(b.deckId, 'deck');
   if (action === 'memoryDue') {
@@ -466,7 +466,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     const names = new Map(people.docs.map(doc => [doc.id, String(doc.data().displayName || 'Learner')]));
     const opponents = people.docs.filter(doc => doc.id !== String(actor.uid) && doc.data().disabled !== true && doc.data().scriptureDuelOptIn === true && ['student', 'learner'].includes(String(doc.data().role || 'student')))
       .map(doc => ({ uid: doc.id, displayName: String(doc.data().displayName || 'Learner') }));
-    const matches = active.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    const matches = active.docs.map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}))
       .filter(item => item.status === 'active' && (item.playerA === String(actor.uid) || item.playerB === String(actor.uid)))
       .map(item => ({ id: item.id, opponentName: names.get(item.playerA === String(actor.uid) ? String(item.playerB) : String(item.playerA)) || 'Learner', expiresAt: item.expiresAt }));
     return { opponents, matches, optIn: actor.scriptureDuelOptIn === true };
@@ -493,7 +493,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   if(action==='duelSoloCreate'){
     const questionSnapshot=await db.collection('scriptureDuelQuestions').where('status','==','published').limit(30).get();
     const questions=questionSnapshot.docs.filter(doc=>contentVisibleToLearner(actor,doc.data()||{},organization))
-      .map(doc=>({id:doc.id,...doc.data()}));
+      .map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}));
     if(questions.length<3)throw new Error('At least three published Scripture challenge questions are required.');
     const selected=questions.sort(()=>Math.random()-.5).slice(0,Math.min(10,questions.length));
     const challengeId=randomUUID();
@@ -602,7 +602,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if (!sameOrg(actor, opponent)) throw new Error('You can only challenge a learner in your organization.');
     if (opponent.scriptureDuelOptIn !== true || opponent.disabled === true || !['student', 'learner'].includes(String(opponent.role || 'student'))) throw new Error('This learner is not accepting challenges.');
     const questionSnapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(20).get();
-    const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() }));
+    const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}));
     if (questions.length < 3) throw new Error('At least three published Scripture Duel questions are required.');
     const selected = questions.sort(() => Math.random() - 0.5).slice(0, Math.min(10, questions.length));
     const matchId = randomUUID();
@@ -614,7 +614,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   }
   if (action === 'duelHistory') {
     const snapshot = await db.collection('scriptureDuelResults').where('organizationId', '==', orgOf(actor)).limit(100).get();
-    return { results: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(item => item.playerA === String(actor.uid) || item.playerB === String(actor.uid)) };
+    return { results: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string})).filter(item => item.playerA === String(actor.uid) || item.playerB === String(actor.uid)) };
   }
   const matchId = cleanId(b.matchId, 'match');
   const matchRef = db.doc(`scriptureDuels/${matchId}`);

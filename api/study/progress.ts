@@ -11,6 +11,7 @@ import {awardApprovedCertificate,awardApprovedProgramCertificate} from '../../se
 import {createNotification} from '../../server/notifications.js';
 
 const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
+type Response={status:(n:number)=>Response;json:(v:unknown)=>void};
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -247,7 +248,7 @@ function storedSubmissionPayload(value:unknown){
 
 export default async function handler(
   req: { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown },
-  res: { status: (n: number) => unknown; json: (v: unknown) => void },
+  res: Response,
 ) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
 

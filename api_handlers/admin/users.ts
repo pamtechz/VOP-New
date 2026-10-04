@@ -470,7 +470,7 @@ export default async function handler(request: Request, response: Response) {
       const profile = profileForType(type, {
         ...body,
         ...(type === 'admin' && !managedOrganizationId ? {adminNodeType:requestedNodeType,adminNodeId:requestedNodeId} : {}),
-      }, managedOrganizationId);
+      }, managedOrganizationId) as Record<string,unknown>;
       const hierarchyMembershipFields = hierarchyTenant
         ? {
             unionId: hierarchyTenant === 'union_admin' ? hierarchyNodeId : String(profile.unionId || body.unionId || '').trim(),

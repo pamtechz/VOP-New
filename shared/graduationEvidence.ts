@@ -23,7 +23,7 @@ export function verifiedAssessmentAverage(
     const key = `${organizationId}:${language}:${guideId}:${id}`;
     // Number(undefined), Number(null), Number('') and Number('100') are not
     // acceptable substitutes for the verified numeric score saved by the API.
-    if (!Object.hasOwn(guideScores, key)) return null;
+    if (!Object.prototype.hasOwnProperty.call(guideScores, key)) return null;
     const score = guideScores[key];
     if (typeof score !== 'number' || !Number.isFinite(score) ||
         score < 0 || score > 100 || score < requiredPassMark) return null;

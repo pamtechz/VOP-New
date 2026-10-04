@@ -1,4 +1,4 @@
-import { platformStewardedResource } from './platformStewardship.ts';
+import { platformStewardedResource } from './platformStewardship.js';
 /**
  * A contributor can discover shared or same-tenant quizzes, but only the author
  * (and the Super Admin) may receive an unredacted quiz bank. A whitelist, rather

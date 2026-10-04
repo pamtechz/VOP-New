@@ -70,7 +70,7 @@ async function mine(req:Request,res:Response){
    certificateDocs=(await certificateQuery.limit(20).get()).docs;
  }
  const reviewSnapshot=await db.collection('graduationRequests').where('candidateId','==',decoded.uid).limit(100).get();
- const reviews=reviewSnapshot.docs.map(document=>({id:document.id,...document.data()}))
+ const reviews=reviewSnapshot.docs.map(document=>({id:document.id,...document.data()} as Record<string,unknown>&{id:string}))
    .filter(record=>!organizationId||String(record.organizationId||'')===organizationId)
    .sort((a,b)=>Date.parse(String(dateValue(b.submittedAt)||''))-Date.parse(String(dateValue(a.submittedAt)||'')));
  const latestReview=reviews[0]||null;

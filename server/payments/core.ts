@@ -23,7 +23,7 @@ type RequestLike={headers?:Record<string,string|string[]|undefined>};
 function text(value:unknown,fallback=''){return String(value??fallback).trim();}
 function object(value:unknown){return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};}
 function bool(value:unknown,fallback=false){return typeof value==='boolean'?value:fallback;}
-function stringArray(value:unknown){return Array.isArray(value)?value.map(text).filter(Boolean):[];}
+function stringArray(value:unknown){return Array.isArray(value)?value.map(item=>text(item)).filter(Boolean):[];}
 function nowIso(){return new Date().toISOString();}
 const BILLING_TENANT_TYPES=new Set<BillingTenantType>(['organization','church','district','conference','union']);
 function paymentBillingTarget(data:DocumentData){
