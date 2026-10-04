@@ -166,3 +166,16 @@
     width:auto;min-width:0;flex:1 1 145px;justify-content:center;
   }
 }
+
+@media screen{
+  .vop-cert-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+  .vop-cert-record-card{border:1px solid var(--theme-border,#dce4ef);border-radius:11px;padding:11px;background:var(--theme-surface,#fff);display:grid;gap:10px;min-width:0}
+  .vop-cert-record-card>header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .vop-cert-record-card-body{display:grid;gap:2px;padding:9px;border-radius:8px;background:var(--theme-surface-soft,#f6f8fc)}
+  .vop-cert-record-card-body>span,.vop-cert-record-card dt{font-size:8px;color:var(--theme-muted,#74839a);text-transform:uppercase;letter-spacing:.05em}
+  .vop-cert-record-card-body strong{font-size:12px}.vop-cert-record-card-body small{font-size:9px;color:var(--theme-muted,#74839a)}
+  .vop-cert-record-card dl{margin:0;display:grid;gap:6px}.vop-cert-record-card dl>div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--theme-border,#e2e8f0);padding-bottom:5px}.vop-cert-record-card dl>div:last-child{border-bottom:0}
+  .vop-cert-record-card dd{margin:0;font-size:9px;text-align:right;overflow-wrap:anywhere}.vop-cert-record-card footer{display:flex;justify-content:flex-end}
+}
+@media screen and (max-width:1100px){.vop-cert-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media screen and (max-width:650px){.vop-cert-card-grid{grid-template-columns:1fr}}
