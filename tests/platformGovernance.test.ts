@@ -159,6 +159,10 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   const progress=read('api/study/progress.ts');
   const graduation=read('server/graduationAutomation.ts');
   const programGraduation=read('server/programGraduationAutomation.ts');
+  const users=read('src/pages/UserManagement.tsx');
+  const candidates=read('src/pages/CandidateEnrollment.tsx');
+  const engagementStudio=read('src/pages/EngagementStudio.tsx');
+  const viewModeToggle=read('src/components/admin/ViewModeToggle.tsx');
 
   assert.match(mentoring,/type Tab='overview'\|'operations'\|'support'\|'insights'\|'outreach'/);
   assert.doesNotMatch(mentoring,/type OperationsPanel=/);
@@ -184,6 +188,13 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(organizations,/auditView==='cards'/);
   assert.match(organizations,/organizationView==='table'/);
   assert.match(organizations,/organizationView==='cards'/);
+  assert.match(viewModeToggle,/AdminViewMode='table'\|'cards'/);
+  assert.match(users,/ViewModeToggle value=\{viewMode\}/);
+  assert.match(candidates,/ViewModeToggle value=\{viewMode\}/);
+  assert.match(engagementStudio,/ViewModeToggle value=\{viewMode\}/);
+  assert.match(users,/viewMode==='table'/);
+  assert.match(candidates,/viewMode==='table'/);
+  assert.match(engagementStudio,/viewMode==='table'/);
 
   for(const key of ['soloChallenge','duelChallenge','memoryReview','practiceQuiz','chapterQuiz','finalExam']){
     assert.match(points,new RegExp(key));
