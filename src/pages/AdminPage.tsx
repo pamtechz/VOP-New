@@ -82,6 +82,18 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'payments', label: 'Billing & Subscriptions', icon: WalletCards },
 ];
 
+type AdminNavGroupId='workspace'|'learning'|'community'|'finance'|'organization';
+const ADMIN_NAV_GROUPS:Array<{id:AdminNavGroupId;label:string;ids:AdminTab[]}>= [
+  {id:'workspace',label:'Workspace',ids:['dashboard','userManagement','settings','candidates']},
+  {id:'learning',label:'Learning & content',ids:['curriculum','engagement','languages','translations','materials','certification']},
+  {id:'community',label:'Community',ids:['announcements','events','radio','prayer','mentorship']},
+  {id:'finance',label:'Finance',ids:['payments']},
+  {id:'organization',label:'Organization',ids:['organizations','unions','conferences','districts','churches']},
+];
+function adminNavGroupFor(tab:AdminTab):AdminNavGroupId {
+  return ADMIN_NAV_GROUPS.find(group=>group.ids.includes(tab))?.id||'workspace';
+}
+
 const ADMIN_TAB_IDS=new Set<AdminTab>(NAV.map(item=>item.id));
 const ADMIN_TAB_STORAGE_PREFIX='vop-admin-tab-v1:';
 function validAdminTab(value:unknown):value is AdminTab {
@@ -193,6 +205,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [curriculumSettingsOpen, setCurriculumSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [navQuery,setNavQuery]=useState('');
+  const [expandedNavGroups,setExpandedNavGroups]=useState<AdminNavGroupId[]>(()=>[adminNavGroupFor(activeTab)]);
   const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>('general');
   const [studioTab, setStudioTab] = useState<StudioTab>('lessons');
   const [languages, setLanguages] = useState<CustomLanguage[]>([]);
@@ -216,6 +230,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [subscriptionFeatures,setSubscriptionFeatures]=useState<Partial<Record<SubscriptionFeatureKey,boolean>>|null>(null);
   const [subscriptionState,setSubscriptionState]=useState<InstitutionalSubscriptionState|null>(null);
+
+  useEffect(()=>{
+    const group=adminNavGroupFor(activeTab);
+    setExpandedNavGroups(current=>current.includes(group)?current:[...current,group]);
+  },[activeTab]);
+
+  const toggleAdminNavGroup=(group:AdminNavGroupId)=>{
+    setExpandedNavGroups(current=>current.includes(group)
+      ? current.filter(item=>item!==group)
+      : [...current,group]);
+  };
 
   const navigateAdminTab=(tab:AdminTab,mode:'push'|'replace'='push')=>{
     setActiveTab(tab);
@@ -1309,22 +1334,30 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
           <button type="button" className="vop-admin-sidebar-dismiss" onClick={()=>setSidebarOpen(false)}
             aria-label="Close administration navigation"><X size={20}/></button>
         </div>
-        <nav className="vop-nav" aria-label="Administration sections">{([
-          {label:'WORKSPACE',ids:['dashboard','userManagement','settings','candidates']},
-          {label:'LEARNING & CONTENT',ids:['curriculum','engagement','languages','translations','materials','certification']},
-          {label:'COMMUNITY',ids:['announcements','events','radio','prayer','mentorship']},
-          {label:'FINANCE',ids:['payments']},
-          {label:'ORGANIZATION',ids:['organizations','unions','conferences','districts','churches']},
-        ] as Array<{label:string;ids:AdminTab[]}>).map(group=>{
-          const entries=visibleNav.filter(item=>group.ids.includes(item.id));
-          return entries.length?<div key={group.label} className="vop-admin-sidebar-group">
-            <span className="vop-admin-sidebar-label" aria-hidden="true">{sidebarCollapsed?'•':group.label}</span>
-            {entries.map(item=>{const Icon=item.icon;return <button key={item.id} type="button"
+        {!sidebarCollapsed&&<label className="vop-admin-nav-search">
+          <Search size={16} aria-hidden="true"/>
+          <input value={navQuery} onChange={event=>setNavQuery(event.target.value)}
+            placeholder="Find an admin tool" aria-label="Find an admin tool"/>
+          {navQuery&&<button type="button" onClick={()=>setNavQuery('')} aria-label="Clear navigation search"><X size={15}/></button>}
+        </label>}
+        <nav className="vop-nav" aria-label="Administration sections">{ADMIN_NAV_GROUPS.map(group=>{
+          const query=navQuery.trim().toLowerCase();
+          const entries=visibleNav.filter(item=>group.ids.includes(item.id)
+            &&(!query||item.label.toLowerCase().includes(query)));
+          if(!entries.length)return null;
+          const expanded=sidebarCollapsed||Boolean(query)||expandedNavGroups.includes(group.id);
+          return <div key={group.id} className={'vop-admin-sidebar-group '+(expanded?'expanded':'collapsed')}>
+            {!sidebarCollapsed&&<button type="button" className="vop-admin-sidebar-group-toggle"
+              aria-expanded={expanded} onClick={()=>toggleAdminNavGroup(group.id)}>
+              <span>{group.label}</span><small>{entries.length}</small>{expanded?<ChevronDown size={16}/>:<ChevronRight size={16}/>}
+            </button>}
+            {sidebarCollapsed&&<span className="vop-admin-sidebar-label" aria-hidden="true">•</span>}
+            {expanded&&<div className="vop-admin-sidebar-items">{entries.map(item=>{const Icon=item.icon;return <button key={item.id} type="button"
               title={sidebarCollapsed?item.label:undefined} aria-label={item.label}
               aria-current={activeTab===item.id?'page':undefined}
               className={'vop-nav-item '+(activeTab===item.id?'active':'')}
-              onClick={()=>navigateAdminTab(item.id)}><Icon size={20}/><span>{item.label}</span></button>})}
-          </div>:null;
+              onClick={()=>navigateAdminTab(item.id)}><Icon size={20}/><span>{item.label}</span></button>})}</div>}
+          </div>;
         })}</nav>
       </aside>
       <main className="vop-main">
