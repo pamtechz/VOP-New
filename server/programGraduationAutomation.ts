@@ -155,7 +155,7 @@ export async function programCompletionEvidence(
     const language=text(guide.language);
     if(!language)return {evidence:null,reason:'guide_language_missing'};
     const lessonSnapshot=await guideSnapshot.ref.collection('lessons').get();
-    const records=lessonSnapshot.docs.map(document=>({...document.data(),id:document.id}));
+    const records=lessonSnapshot.docs.map(document=>({...document.data(),id:document.id} as Record<string,unknown>&{id:string}));
     if(!records.length||records.some(record=>record.published!==true||record.archived===true)){
       return {evidence:null,reason:'curriculum_not_fully_published'};
     }
