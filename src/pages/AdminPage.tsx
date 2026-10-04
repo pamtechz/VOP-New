@@ -323,6 +323,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     : currentUser.organizationRole === 'owner' ? 'Organization Owner'
     : currentUser.organizationRole === 'admin' ? 'Organization Admin'
     : currentUser.organizationRole === 'editor' ? 'Organization Editor'
+    : currentUser.organizationRole === 'teacher' ? 'Organization Teacher'
+    : currentUser.organizationRole === 'staff' ? 'Organization Staff'
     : String(currentUser.role || 'Learner').replaceAll('_',' ');
   const availableSettingsTabs: Array<{id: SettingsSubtab; label: string; icon: React.ComponentType<{size?:number}>}> = isSuperAdmin
     ? [
