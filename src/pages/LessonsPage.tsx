@@ -6,6 +6,7 @@ import { loadFirestorePrograms } from '../services/firestoreData';
 import './program-catalog.css';
 import { lessonIsComplete, lessonScoreForDisplay } from '../services/lessonProgress';
 import { getTranslation, getUiLocale } from '../services/i18n';
+import { ShimmerCards } from '../components/layout/Shimmer';
 
 interface Props {
   guides: DiscoverGuide[];
@@ -30,15 +31,17 @@ export const LessonsPage: React.FC<Props> = ({
 }) => {
   const [refreshing,setRefreshing]=useState(false);
   const [programs,setPrograms]=useState<CurriculumProgram[]>([]);
+  const [programsLoading,setProgramsLoading]=useState(true);
   const [programError,setProgramError]=useState('');
   useEffect(()=>{
     let active=true;
+    setProgramsLoading(true);
     setProgramError('');
     void loadFirestorePrograms(currentUser).then(items=>{
       if(active)setPrograms(items);
     }).catch(reason=>{
       if(active)setProgramError(reason instanceof Error?reason.message:'Programs are temporarily unavailable.');
-    });
+    }).finally(()=>{if(active)setProgramsLoading(false);});
     return ()=>{active=false;};
   },[currentUser.uid,currentUser.organizationId,currentUser.role]);
   const [refreshError,setRefreshError]=useState('');
@@ -104,7 +107,8 @@ export const LessonsPage: React.FC<Props> = ({
       {programError&&<div className="vop-lessons-refresh-error" role="alert">
         Programs could not be loaded. Individual lessons remain available. {programError}
       </div>}
-      {availablePrograms.length>0&&<section className="vop-program-catalog" aria-label="Bible study courses and programs">
+      {programsLoading&&programs.length===0&&<section className="vop-program-catalog" aria-label="Loading Bible study courses and programs"><ShimmerCards cards={3} label="Loading study programs"/></section>}
+      {availablePrograms.length>0&&<section className={'vop-program-catalog'+(refreshing?' vop-refreshing vop-shimmer-overlay':'')} aria-label="Bible study courses and programs">
         {activeProgram?<div className="vop-program-catalog-open">
           <header>
             <button type="button" className="vop-program-back"
@@ -174,7 +178,7 @@ export const LessonsPage: React.FC<Props> = ({
         })()}><RefreshCw size={16}/>{refreshing?'Refreshing…':'Refresh lessons'}</button>
       </div>
       {refreshError&&<div className="vop-lessons-refresh-error" role="alert">{refreshError}</div>}
-      {standaloneEntries.length ? <div className="vop-lessons-grid">{standaloneEntries.map(({guide,lesson})=>{
+      {standaloneEntries.length ? <div className={'vop-lessons-grid'+(refreshing?' vop-refreshing vop-shimmer-overlay':'')}>{standaloneEntries.map(({guide,lesson})=>{
         const state=status(guide,lesson);
         const attempted=lesson.type==='Test'&&lessonScoreForDisplay(guide,lesson,currentUser)!==undefined;
         return <article className="vop-material-card vop-lesson-card" key={guide.id+':'+guide.language+':'+lesson.id}>
