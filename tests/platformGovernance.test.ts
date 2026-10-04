@@ -126,7 +126,7 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(page,/Needs attention/);
   assert.match(page,/Mentor coverage/);
   assert.match(page,/Interest pipeline/);
-  assert.match(page,/Support inbox/);
+  assert.match(page,/Candidate support inbox/);
   assert.match(page,/Unread and high priority first/);
   assert.match(page,/vop-mentoring-split/);
   assert.match(page,/Search candidate, subject, topic or doctrine/);
