@@ -18,18 +18,28 @@ final sellerSummaryProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
 
   final storeId = store['id'] as String;
 
-  final [wallet, productsCountRes, ordersCountRes] = await Future.wait([
-    SupabaseService.client.from('wallet_accounts').select('balance_available, balance_pending').eq('store_id', storeId).maybeSingle(),
-    SupabaseService.client.from('products').select('id', const FetchOptions(count: CountOption.exact, head: true)).eq('store_id', storeId),
-    SupabaseService.client.from('seller_orders').select('id', const FetchOptions(count: CountOption.exact, head: true)).eq('store_id', storeId),
-  ]);
+  final wallet = await SupabaseService.client
+      .from('wallet_accounts')
+      .select('balance_available, balance_pending')
+      .eq('store_id', storeId)
+      .maybeSingle();
+
+  final products = await SupabaseService.client
+      .from('products')
+      .select('id')
+      .eq('store_id', storeId);
+
+  final orders = await SupabaseService.client
+      .from('seller_orders')
+      .select('id')
+      .eq('store_id', storeId);
 
   return {
     'store': store,
     'available_balance': wallet?['balance_available'] ?? 0.0,
     'pending_balance': wallet?['balance_pending'] ?? 0.0,
-    'total_products': (productsCountRes as dynamic).count ?? 0,
-    'total_orders': (ordersCountRes as dynamic).count ?? 0,
+    'total_products': (products as List).length,
+    'total_orders': (orders as List).length,
   };
 });
 
@@ -142,15 +152,15 @@ class SellerCentreScreen extends ConsumerWidget {
                           title: const Text('Manage Products'),
                           subtitle: Text('$totalProducts product(s) in store catalogue'),
                           trailing: const Icon(Icons.chevron_right),
-                          onPressed: () => context.push('/seller/products'),
+                          onTap: () => context.push('/seller/products'),
                         ),
                         const Divider(height: 1),
                         ListTile(
-                          leading: const Icon(Icons.add_box_outlined, color: Colors.emerald),
+                          leading: const Icon(Icons.add_box_outlined, color: Color(0xFF10B981)),
                           title: const Text('Add New Product'),
                           subtitle: const Text('Upload images and publish item'),
                           trailing: const Icon(Icons.chevron_right),
-                          onPressed: () => context.push('/seller/products/add'),
+                          onTap: () => context.push('/seller/products/add'),
                         ),
                         const Divider(height: 1),
                         ListTile(
@@ -158,7 +168,7 @@ class SellerCentreScreen extends ConsumerWidget {
                           title: const Text('Wallet & Payouts'),
                           subtitle: const Text('View financial ledger & request settlement'),
                           trailing: const Icon(Icons.chevron_right),
-                          onPressed: () => context.push('/wallet'),
+                          onTap: () => context.push('/wallet'),
                         ),
                       ],
                     ),
