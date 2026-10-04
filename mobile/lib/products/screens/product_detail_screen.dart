@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -92,7 +91,6 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           final store = product['stores'] as Map<String, dynamic>?;
           final storeName = store?['name'] as String? ?? 'Unknown Store';
           final storeSlug = store?['slug'] as String? ?? '';
-          final storeId = store?['id'] as String? ?? '';
 
           final price = (product['price'] as num?)?.toDouble() ?? 0.0;
           final compareAt = (product['compare_at_price'] as num?)?.toDouble();

@@ -282,7 +282,6 @@ class _ProductCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final price = product['price'] as num? ?? 0;
     final storeName = (product['stores'] as Map?)?['name'] as String? ?? '';
-    final storeSlug = (product['stores'] as Map?)?['slug'] as String?;
 
     return GestureDetector(
       onTap: () => context.push('/product/${product['id']}'),

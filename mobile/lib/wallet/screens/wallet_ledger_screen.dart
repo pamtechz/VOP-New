@@ -73,8 +73,8 @@ class WalletLedgerScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.refresh(walletAccountProvider);
-          ref.refresh(walletLedgerProvider);
+          ref.invalidate(walletAccountProvider);
+          ref.invalidate(walletLedgerProvider);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

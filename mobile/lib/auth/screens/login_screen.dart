@@ -15,7 +15,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscurePassword = true;
-  bool _showReset = false;
 
   @override
   void dispose() {

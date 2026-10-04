@@ -54,7 +54,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final userId = user?.id;
 
       // Create an order in Supabase
-      final orderRes = await SupabaseService.client
+      await SupabaseService.client
           .from('orders')
           .insert({
             'buyer_id': userId,
@@ -71,9 +71,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'total_amount': 1250.00,
             'shipping_amount': 50.00,
             'discount_amount': 0.00,
-          })
-          .select()
-          .single();
+          });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -102,7 +100,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final profile = ref.watch(profileProvider);
 
     return Scaffold(
       appBar: AppBar(

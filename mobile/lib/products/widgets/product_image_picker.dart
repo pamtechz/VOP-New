@@ -1,8 +1,6 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/services/image_optimizer_service.dart';
 
 /// Result returned after any image attachment operation.
 class ImageAttachResult {

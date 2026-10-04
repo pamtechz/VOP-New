@@ -123,7 +123,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         }
       }
 
-      ref.refresh(sellerProductsProvider);
+      ref.invalidate(sellerProductsProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
