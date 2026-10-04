@@ -7,6 +7,7 @@ import type { AppRoute, AppSettings, User } from '../../types';
 import { hasAdminPortalAccess, hasMentorPortalAccess } from '../../services/portalAccess';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './sidebar-system.css';
+import { hasAdminPortalAccess, hasMentorPortalAccess, hasLocalizationPortalAccess } from '../../services/portalAccess';
 
 type NavItem = { route:AppRoute; label:string; icon:LucideIcon };
 type Props = {
@@ -26,7 +27,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
   const isMentor=hasMentorPortalAccess(currentUser);
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
-  const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
+  const localizationAccess=hasLocalizationPortalAccess(currentUser);
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},
