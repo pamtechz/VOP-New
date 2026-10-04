@@ -102,8 +102,29 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.shield_outlined, size: 18, color: Color(0xFF10B981)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'User-Owned Media: Use your own free Cloudinary or Google Drive account. Zero platform hosting fees!',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF047857), fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const Text(
-                    'Paste an image link from Cloudinary or Google Drive:',
+                    'Paste an image link from your Cloudinary or Google Drive:',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 12),

@@ -181,6 +181,44 @@ class SellerCentreScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // Zero-cost user-owned cloud media guide banner
+                  Card(
+                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.cloud_done_rounded, color: Color(0xFF10B981), size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Zero-Cost Media Hosting',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'To keep store listing completely free, product images are hosted on your own free personal Cloudinary, Google Drive, or Dropbox accounts. Simply paste your shared links when adding products!',
+                            style: TextStyle(fontSize: 12, color: scheme.outline, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -195,7 +233,7 @@ class SellerCentreScreen extends ConsumerWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
