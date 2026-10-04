@@ -155,3 +155,7 @@
   .vop-study-modal section[role="dialog"]>footer button{min-height:44px;flex:1 1 auto}
   .vop-quiz-modal section[role="dialog"]{overflow-y:auto}
 }
+
+.vop-engagement-points-badge{display:grid;grid-template-columns:20px auto;grid-template-areas:"icon value" "icon label";align-items:center;column-gap:7px;padding:8px 10px;border:1px solid var(--theme-border);border-radius:10px;background:var(--theme-surface-soft);min-width:125px}.vop-engagement-points-badge svg{grid-area:icon;color:var(--theme-accent)}.vop-engagement-points-badge strong{grid-area:value;font-size:17px;line-height:1}.vop-engagement-points-badge span{grid-area:label;font-size:9px;color:var(--theme-muted)}
+.vop-challenge-mode-switch{display:inline-flex;gap:3px;padding:3px;border:1px solid var(--theme-border);border-radius:10px;background:var(--theme-surface-soft);margin:0 0 12px}.vop-engagement-page .vop-challenge-mode-switch button{min-height:34px!important;padding:6px 11px!important;border:0!important;background:transparent!important;color:var(--theme-muted)!important;box-shadow:none!important}.vop-engagement-page .vop-challenge-mode-switch button.active{background:var(--theme-surface)!important;color:var(--theme-accent)!important;box-shadow:0 1px 6px rgba(16,45,86,.08)!important}
+@media(max-width:520px){.vop-challenge-mode-switch{display:grid;grid-template-columns:1fr 1fr;width:100%}.vop-engagement-page .vop-challenge-mode-switch button{width:100%}}
