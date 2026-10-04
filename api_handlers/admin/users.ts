@@ -214,15 +214,23 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
   // Organization membership is the authorization source of truth. A stale
   // organizationRole on a user profile must never resurrect access after the
   // membership was suspended or removed.
-  let organizationId=String(existing.organizationId || '').trim();
+  const previousOrganizationId=String(existing.organizationId || '').trim();
+  let organizationId=previousOrganizationId;
   let organizationRole=String(existing.organizationRole || '').trim();
+  let role=String(existing.role || 'student').trim() || 'student';
   if(organizationId){
     const membership=await db.doc(`organizations/${organizationId}/members/${decoded.uid}`).get();
     if(membership.exists && membership.data()?.active===true){
       organizationRole=String(membership.data()?.role || organizationRole || 'learner').trim().toLowerCase();
+      // Tenant mentor access follows the live membership role. This prevents a
+      // user whose mentor assignment was changed to learner/admin from retaining
+      // a stale top-level mentor role and therefore a mentor portal session.
+      if(organizationRole==='mentor') role='mentor';
+      else if(role==='mentor') role='student';
     }else{
       organizationId='';
       organizationRole='';
+      if(role==='mentor') role='student';
     }
   }
 
@@ -231,7 +239,7 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
     email: decoded.email ?? existing.email ?? '',
     displayName: decoded.name ?? existing.displayName ?? decoded.email?.split('@')[0] ?? 'VOP Student',
     photoURL: decoded.picture ?? existing.photoURL ?? null,
-    role: existing.role ?? 'student',
+    role,
     organizationId,
     organizationRole,
     adminNodeType: existing.adminNodeType ?? null,
