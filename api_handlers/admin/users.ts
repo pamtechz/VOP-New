@@ -248,10 +248,26 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
     information: existing.information ?? { enrollmentDate:new Date().toISOString(), graduating:false, graduated:false, baptismCandidate:false, baptized:false },
     progress: existing.progress ?? { discoverProgress:0, completedGuidesCount:0, totalGuidesCount:0, guideScores:{}, completedLessons:[] },
   };
-  await ref.set({...profile,updatedAt:FieldValue.serverTimestamp(),createdAt:existing.createdAt ?? FieldValue.serverTimestamp()},{merge:true});
-  const latest=await ref.get();
-  if(!latest.exists || latest.data()?.uid !== decoded.uid) throw new Error('Firestore profile verification failed.');
-  return latest.data();
+  // A normal page refresh previously rewrote the profile and then read it back
+  // even when nothing changed. Keep membership reconciliation authoritative,
+  // but only persist when identity/authorization data actually changed.
+  const needsWrite=!snap.exists
+    ||String(existing.uid||'')!==profile.uid
+    ||String(existing.email||'')!==String(profile.email||'')
+    ||String(existing.displayName||'')!==String(profile.displayName||'')
+    ||String(existing.photoURL||'')!==String(profile.photoURL||'')
+    ||String(existing.role||'student')!==String(profile.role||'student')
+    ||String(existing.organizationId||'')!==String(profile.organizationId||'')
+    ||String(existing.organizationRole||'')!==String(profile.organizationRole||'')
+    ||existing.privileges==null||existing.information==null||existing.progress==null;
+  if(needsWrite){
+    await ref.set({
+      ...profile,
+      updatedAt:FieldValue.serverTimestamp(),
+      createdAt:existing.createdAt ?? FieldValue.serverTimestamp(),
+    },{merge:true});
+  }
+  return {...existing,...profile};
 }
 
 async function listAllUsers(authService: ReturnType<typeof getAuth>) {
