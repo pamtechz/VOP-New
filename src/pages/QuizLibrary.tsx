@@ -3,6 +3,7 @@ import { Check, Copy, Edit3, Plus, RefreshCw, Save, Share2, Trash2 } from 'lucid
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { appConfirm } from '../components/layout/AppDialog';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 type AttachmentType = 'lesson' | 'guide' | 'chapter' | 'section' | 'block';
 type Quiz = {
@@ -305,8 +306,8 @@ export default function QuizLibrary({ organizationId = '',initialGuideId,initial
         <button className="vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={17}/>{saving ? 'Saving…' : 'Save Quiz'}</button>
       </div>
     </div>}
-    <div className="vop-reference-table-wrap">
-      {loading ? <div className="vop-empty">Loading quizzes…</div> : <table className="vop-reference-table">
+    <div className={'vop-reference-table-wrap'+(loading&&items.length?' vop-refreshing vop-shimmer-overlay':'')}>
+      {loading&&items.length===0 ? <ShimmerList rows={7} compact label="Loading quizzes"/> : <table className="vop-reference-table">
         <thead><tr><th>Assessment</th><th>Attached to</th><th>Policy</th><th>Language</th><th>Questions</th><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{items.map(item => <tr key={item.id}>
           <td><strong>{item.title}</strong><div>{item.description || 'No description'}</div></td>
