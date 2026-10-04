@@ -12,6 +12,7 @@ after(async()=>vite.close());
 
 const {
   hasAdminPortalAccess,
+  isOrganizationPortalAccount,
   hasMentorPortalAccess,
   hasLocalizationPortalAccess,
   canAccessPortalRoute,
@@ -36,6 +37,7 @@ test('portal routing sends each account to its authorized primary workspace',()=
   for(const organizationRole of ['owner','admin','editor','teacher']){
     const organizationAdmin=user({role:'student',organizationId:'org-1',organizationRole});
     assert.equal(hasAdminPortalAccess(organizationAdmin),true,organizationRole);
+    assert.equal(isOrganizationPortalAccount(organizationAdmin),true,organizationRole);
     assert.equal(defaultPortalRoute(organizationAdmin),'admin',organizationRole);
   }
 
@@ -59,6 +61,7 @@ test('stale tenant role metadata cannot create portal access without a tenant id
   const staleMentor=user({role:'student',organizationRole:'mentor',organizationId:''});
   const staleTopLevelMentor=user({role:'mentor',organizationRole:'',organizationId:''});
   assert.equal(hasAdminPortalAccess(staleAdmin),false);
+  assert.equal(isOrganizationPortalAccount(staleAdmin),false);
   assert.equal(hasMentorPortalAccess(staleMentor),false);
   assert.equal(hasMentorPortalAccess(staleTopLevelMentor),false);
   assert.equal(canAccessPortalRoute(staleAdmin,'admin'),false);
