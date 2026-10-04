@@ -52,6 +52,16 @@
 .vop-learner-simulated .vop-learner-main .vop-app-header-menu{display:inline-grid!important;place-items:center}
 .vop-login-home-link{position:fixed;top:12px;left:12px;z-index:10;padding:10px 13px;border:1px solid var(--theme-border-strong);border-radius:10px;background:var(--theme-surface);color:var(--theme-title);font-size:12px;font-weight:800;cursor:pointer}
 .vop-login-home-link:focus-visible{outline:3px solid #f3bf53;outline-offset:3px}
+.vop-admin-nav-search{display:flex;align-items:center;gap:8px;margin:10px 11px 2px;padding:0 10px;min-height:40px;border:1px solid var(--theme-border-strong);border-radius:11px;background:var(--theme-surface-soft);color:var(--theme-muted)}
+.vop-admin-nav-search input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--theme-title);font:inherit;font-size:12px}
+.vop-admin-nav-search input::placeholder{color:var(--theme-muted)}
+.vop-admin-nav-search>button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--theme-muted);cursor:pointer}
+.vop-admin-nav-search>button:hover{background:var(--theme-surface-elevated);color:var(--theme-title)}
+.vop-admin-sidebar-group-toggle{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;width:100%;min-height:36px;padding:6px 9px;border:0;border-radius:9px;background:transparent;color:var(--theme-muted);text-align:left;cursor:pointer;text-transform:uppercase;letter-spacing:.08em;font-size:10px;font-weight:900}
+.vop-admin-sidebar-group-toggle:hover{background:var(--theme-surface-soft);color:var(--theme-title)}
+.vop-admin-sidebar-group-toggle small{display:grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:var(--theme-surface-elevated);color:var(--theme-muted);font-size:9px;letter-spacing:0}
+.vop-admin-sidebar-items{display:grid;gap:4px}
+
 /* Administrative rail follows the same open/collapsed dimensions and
  * accessible icon treatment, while keeping the existing mobile overlay. */
 @media(min-width:901px){
