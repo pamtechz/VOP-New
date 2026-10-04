@@ -8,6 +8,7 @@ import {
   loadPaymentReceipt, startPaymentCheckout, verifyPayment,
   type ClientPayment,
 } from '../services/payments';
+import { ShimmerCards, ShimmerList } from '../components/layout/Shimmer';
 import './payments.css';
 
 interface Props{currentUser:User;onBack:()=>void}
@@ -169,7 +170,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
 
     {subscriptionItems.length>0&&<section className="vop-payment-section">
       <div className="vop-payment-section-title"><div><span>Organization billing</span><h2>Subscription packages</h2></div><WalletCards size={24}/></div>
-      <div className="vop-payable-grid">{subscriptionItems.map(item=><article key={item.id} className="vop-payable-card">
+      <div className={'vop-payable-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>{subscriptionItems.map(item=><article key={item.id} className="vop-payable-card">
         <div><span className="vop-payment-type">Organization subscription</span><h3>{item.name}</h3><p>{item.description||'VOP organization subscription package'}</p>{item.pricing?.baseAmountDecimal&&item.currency!=='USD'&&<small>Base price: USD {item.pricing.baseAmountDecimal} · billed in {item.currency} for this organization</small>}{item.currency==='USD'&&<small>International billing · canonical USD price</small>}</div>
         <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
           <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Choose package</button></div>
@@ -178,8 +179,8 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
 
     <section className="vop-payment-section">
       <div className="vop-payment-section-title"><div><span>Available payments</span><h2>Charges & registrations</h2></div><WalletCards size={24}/></div>
-      {loading?<div className="vop-payment-empty"><LoaderCircle className="spin" size={28}/>Loading secure payment options…</div>:
-      otherItems.length?<div className="vop-payable-grid">{otherItems.map(item=><article key={item.id} className="vop-payable-card">
+      {loading&&items.length===0?<ShimmerCards cards={3} label="Loading secure payment options"/>:
+      otherItems.length?<div className={'vop-payable-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>{otherItems.map(item=><article key={item.id} className="vop-payable-card">
         <div><span className="vop-payment-type">{item.itemType.replaceAll('_',' ')}</span><h3>{item.name}</h3><p>{item.description||'Available VOP payment'}</p></div>
         <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
           <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Pay now</button></div>
@@ -188,7 +189,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
 
     <section className="vop-payment-section">
       <div className="vop-payment-section-title"><div><span>Your records</span><h2>Payment history</h2></div><Clock3 size={24}/></div>
-      {history.length?<div className="vop-payment-history">{history.map(payment=><article key={payment.id}>
+      {loading&&history.length===0?<ShimmerList rows={4} compact label="Loading payment history"/>:history.length?<div className={'vop-payment-history'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>{history.map(payment=><article key={payment.id}>
         <div className="vop-payment-history-icon">{methodIcon(payment.paymentMethod)}</div>
         <div className="vop-payment-history-copy"><strong>{payment.description}</strong><span>{payment.reference}</span><small>{payment.createdAt?new Date(payment.createdAt).toLocaleString():'Date pending'}</small></div>
         <div className="vop-payment-history-amount"><strong>{payment.currency} {payment.amountDecimal}</strong><span className={'vop-payment-status '+statusTone(payment.status)}>{friendlyStatus(payment)}</span></div>
