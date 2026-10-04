@@ -25,7 +25,7 @@ export type ProgramCompletionEvidence={
   guides:ProgramGuideEvidence[];
 };
 type ProgramReviewResult={
-  eligible:boolean;created:boolean;requestId?:string;status?:string;averageScore?:number;reason?:string;
+  eligible:boolean;created:boolean;requestId?:string;programId?:string;status?:string;averageScore?:number;reason?:string;
 };
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
@@ -291,7 +291,7 @@ export async function ensureAutomaticProgramGraduationReviews(
         createdBy,
       });
     }
-    results.push({eligible:true,created:result.created,requestId:ref.id,status:result.status,averageScore:evidence.averageScore});
+    results.push({eligible:true,created:result.created,requestId:ref.id,programId:evidence.programId,status:result.status,averageScore:evidence.averageScore});
   }
   return results;
 }
