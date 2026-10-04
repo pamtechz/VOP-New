@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowLeft, Award, Bell, Book, BookOpen, CalendarDays, Check,
-  ChevronDown, ChevronLeft, ChevronRight, Church, Clock, Edit3, ExternalLink, UserCheck,
-  Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone, MoreVertical,
+  ChevronDown, ChevronLeft, ChevronRight, Church, Edit3, ExternalLink, UserCheck,
+  Filter, Globe, LayoutDashboard, Link2, Lock, Menu, Megaphone,
   Plus, Radio, RefreshCw, Save, Search, Settings, Shield, Trash2, Upload, LogOut,
-  Users, X, BarChart3, CircleHelp, Layers, Tag, Image as ImageIcon, Eye,
-  Send, FileText, Grid2X2, Building2, HeartHandshake, WalletCards
+  Users, X, BarChart3, Layers, Grid2X2, Building2, HeartHandshake, WalletCards
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import type { User, CustomLanguage, ChurchOrganization, Announcement, DiscoverGuide, AppRoute, LanguageCode } from '../types';
