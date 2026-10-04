@@ -197,32 +197,37 @@ class _CategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 90,
+    height: 105,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       itemCount: categories.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 12),
+      separatorBuilder: (_, __) => const SizedBox(width: 16),
       itemBuilder: (ctx, i) {
         final cat = categories[i];
         return GestureDetector(
           onTap: () => ctx.push('/search?category=${cat['slug']}'),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               CircleAvatar(
-                radius: 28,
+                radius: 26,
                 backgroundColor: Theme.of(ctx).colorScheme.primaryContainer,
                 backgroundImage: (cat['icon_url'] as String?)?.isNotEmpty == true
                     ? NetworkImage(cat['icon_url'] as String) : null,
                 child: (cat['icon_url'] as String?)?.isNotEmpty != true
                     ? const Icon(Icons.category_outlined, size: 20) : null,
               ),
-              const SizedBox(height: 4),
-              Text(
-                cat['name'] as String? ?? '',
-                style: const TextStyle(fontSize: 11),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 6),
+              SizedBox(
+                width: 68,
+                child: Text(
+                  cat['name'] as String? ?? '',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -238,13 +243,13 @@ class _HorizontalProductList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 220,
+    height: 255,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: products.length,
       separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (ctx, i) => _ProductCard(product: products[i], width: 160),
+      itemBuilder: (ctx, i) => _ProductCard(product: products[i], width: 155),
     ),
   );
 }
@@ -254,16 +259,19 @@ class _ProductGrid extends StatelessWidget {
   const _ProductGrid({required this.products});
 
   @override
-  Widget build(BuildContext context) => SliverGrid(
-    delegate: SliverChildBuilderDelegate(
-      (ctx, i) => _ProductCard(product: products[i]),
-      childCount: products.length,
-    ),
-    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 0.72,
+  Widget build(BuildContext context) => SliverPadding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: SliverGrid(
+      delegate: SliverChildBuilderDelegate(
+        (ctx, i) => _ProductCard(product: products[i]),
+        childCount: products.length,
+      ),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.65,
+      ),
     ),
   );
 }
