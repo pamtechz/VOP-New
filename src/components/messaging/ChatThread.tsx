@@ -110,7 +110,7 @@ export function ChatThread({
   busy=false,placeholder='Write a message…',emptyText='No messages yet.',sendLabel='Send',className='',
 }:Props){
   const [pickerOpen,setPickerOpen]=useState(false);
-  const [lessonSearch,setLessonSearch]=useState('');
+  const [attachmentSearch,setAttachmentSearch]=useState('');
   const [pickerView,setPickerView]=useState<'study'|'app'>('study');
   const [pendingReferences,setPendingReferences]=useState<ChatReference[]>([]);
   const [previewReference,setPreviewReference]=useState('');
@@ -121,6 +121,14 @@ export function ChatThread({
   const bottomRef=useRef<HTMLDivElement|null>(null);
 
   const rows=useMemo(()=>lessonRows(guides),[guides]);
+  const appReferences=useMemo(()=>{
+    const map=new Map<string,ChatReference>();
+    [...APP_CHAT_REFERENCES,...attachmentOptions].forEach(reference=>{
+      if(!reference?.type||!reference?.id||!reference?.label)return;
+      map.set(reference.type+':'+reference.id,reference);
+    });
+    return [...map.values()];
+  },[attachmentOptions]);
   const lessonMap=useMemo(()=>{
     const map=new Map<string,LessonRow>();
     rows.forEach(row=>{
@@ -131,12 +139,20 @@ export function ChatThread({
     return map;
   },[rows]);
   const filteredLessons=useMemo(()=>{
-    const query=lessonSearch.trim().toLowerCase();
+    const query=attachmentSearch.trim().toLowerCase();
     if(!query)return rows.slice(0,18);
     return rows.filter(row=>[
       row.guide.title,row.lesson.title,row.lesson.lessonNumber,row.lesson.description,row.guide.language,
     ].join(' ').toLowerCase().includes(query)).slice(0,24);
-  },[rows,lessonSearch]);
+  },[rows,attachmentSearch]);
+  const filteredAppReferences=useMemo(()=>{
+    const query=attachmentSearch.trim().toLowerCase();
+    if(!query)return appReferences;
+    return appReferences.filter(reference=>[
+      reference.label,reference.type,reference.description,reference.route,
+    ].join(' ').toLowerCase().includes(query));
+  },[appReferences,attachmentSearch]);
+  const referenceKey=(reference:ChatReference)=>reference.type+':'+reference.id;
 
   useEffect(()=>{
     bottomRef.current?.scrollIntoView({block:'nearest'});
@@ -145,8 +161,6 @@ export function ChatThread({
   const attach=(reference:ChatReference)=>{
     setPendingReferences(current=>current.some(item=>item.type===reference.type&&item.id===reference.id)
       ?current:[...current,reference].slice(0,8));
-    setPickerOpen(false);
-    setLessonSearch('');
   };
   const send=async()=>{
     const body=draft.trim();
@@ -257,7 +271,7 @@ export function ChatThread({
           <div><BookOpen size={17}/><span><strong>Attach a lesson</strong><small>Search the curriculum without leaving this conversation.</small></span></div>
           <button type="button" onClick={()=>setPickerOpen(false)} aria-label="Close lesson picker"><X size={16}/></button>
         </div>
-        <label className="vop-chat-picker-search"><Search size={15}/><input value={lessonSearch} onChange={event=>setLessonSearch(event.target.value)} placeholder="Search lesson title, number or guide…"/></label>
+        <label className="vop-chat-picker-search"><Search size={15}/><input value={attachmentSearch} onChange={event=>setAttachmentSearch(event.target.value)} placeholder="Search lesson title, number or guide…"/></label>
         <div className="vop-chat-picker-results">
           {!filteredLessons.length?<div className="vop-chat-picker-empty">No lesson matches that search.</div>:filteredLessons.map(row=><button type="button" key={row.reference.id} onClick={()=>attach(row.reference)}>
             <span className="vop-chat-lesson-number">{row.lesson.lessonNumber}</span>
