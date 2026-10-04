@@ -17,6 +17,18 @@ type AutoReviewResult={
 };
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
+async function certificationConfigFor(db:FirebaseFirestore.Firestore,organizationId:string){
+  const [platform,scoped]=await Promise.all([
+    db.doc('system/certification').get(),
+    organizationId?db.doc(`organizations/${organizationId}/settings/certification`).get():Promise.resolve(null),
+  ]);
+  return {
+    ...(platform.data()||{}),
+    ...(scoped?.data()||{}),
+    scope:scoped?.exists?'organization':'platform',
+    inherited:!scoped?.exists,
+  } as Record<string,unknown>;
+}
 function requestId(organizationId:string,candidateId:string,guideId:string){
   return 'grad-'+createHash('sha256').update(organizationId+':'+candidateId+':'+guideId).digest('hex').slice(0,48);
 }
@@ -106,10 +118,9 @@ export async function ensureAutomaticGraduationReview(
   createdBy='system:completion',
 ):Promise<AutoReviewResult>{
   if(!candidateId||!guideId)return {eligible:false,created:false,reason:'missing_candidate_or_guide'};
-  const [candidateSnapshot,guideSnapshot,configSnapshot]=await Promise.all([
+  const [candidateSnapshot,guideSnapshot]=await Promise.all([
     db.doc(`users/${candidateId}`).get(),
     db.doc(`guides/${guideId}`).get(),
-    db.doc('system/certification').get(),
   ]);
   if(!candidateSnapshot.exists||!guideSnapshot.exists)return {eligible:false,created:false,reason:'missing_record'};
   const candidate=candidateSnapshot.data()||{};
@@ -129,7 +140,7 @@ export async function ensureAutomaticGraduationReview(
   if(guide.published!==true||guide.archived===true||guide.certificateEligible!==true){
     return {eligible:false,created:false,reason:'guide_not_certificate_eligible'};
   }
-  const config=configSnapshot.data()||{};
+  const config=await certificationConfigFor(db,organizationId);
   if(config.enabled!==true)return {eligible:false,created:false,reason:'certification_disabled'};
   const stages=stagesFromConfig(config);
   if(!stages.length)return {eligible:false,created:false,reason:'approval_workflow_not_configured'};
