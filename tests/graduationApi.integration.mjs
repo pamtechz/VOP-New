@@ -63,7 +63,7 @@ test('graduation: completion auto-queues review and final approval auto-awards t
     await db.doc('organizations/'+org).set({id:org,status:'active'});
     await db.doc('organizations/org-graduation-b').set({id:'org-graduation-b',status:'active'});
     await db.doc('system/certification').set({
-      enabled:true,verificationEnabled:true,minimumScore:80,
+      enabled:true,verificationEnabled:true,minimumScore:80,releaseMode:'review',
       certificateTitle:'Platform default certificate',issuerName:'Voice of Prophecy',
       approvalStages:[{id:'church',label:'Church',approverRoles:['admin'],enabled:true}],
     });
