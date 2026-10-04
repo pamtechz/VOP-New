@@ -132,13 +132,22 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
     adminNodeId = String(profileData.adminNodeId || '').trim();
   }
 
-  const sharedGuides = await getDocs(query(collection(firestore, 'guides'), where('sharingScope', '==', 'shared'), where('published', '==', true)));
-  guideSnapshots.push(...sharedGuides.docs);
+  // Start the two universal catalogue reads immediately. They are independent
+  // from tenant/hierarchy discovery, so do not serialize them behind profile scope.
+  const sharedGuidesPromise=getDocs(query(collection(firestore,'guides'),
+    where('sharingScope','==','shared'),where('published','==',true)));
+  const legacyGuidesPromise=getDocs(query(collection(firestore,'curricula/discover/languages'),
+    where('published','==',true)));
 
   if (profileRole === 'super_admin') {
-    const platformGuides = await getDocs(query(collection(firestore, 'guides'), where('published', '==', true)));
-    guideSnapshots.push(...platformGuides.docs);
+    const [sharedGuides,platformGuides]=await Promise.all([
+      sharedGuidesPromise,
+      getDocs(query(collection(firestore,'guides'),where('published','==',true))),
+    ]);
+    guideSnapshots.push(...sharedGuides.docs,...platformGuides.docs);
   } else if (['union_admin','conference_admin','district_admin','church_admin'].includes(profileRole) && adminNodeId) {
+    const sharedGuides=await sharedGuidesPromise;
+    guideSnapshots.push(...sharedGuides.docs);
     const hierarchyField =
       profileRole === 'union_admin' ? 'unionId'
       : profileRole === 'conference_admin' ? 'conferenceId'
@@ -160,11 +169,17 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
       scopedGuides.forEach(snapshot => guideSnapshots.push(...snapshot.docs));
     }
   } else if (organizationId) {
-    const owned = await getDocs(query(collection(firestore, 'guides'), where('organizationId', '==', organizationId)));
-    guideSnapshots.push(...owned.docs.filter(item => item.data().sharingScope !== 'shared'));
+    const [sharedGuides,owned]=await Promise.all([
+      sharedGuidesPromise,
+      getDocs(query(collection(firestore,'guides'),where('organizationId','==',organizationId))),
+    ]);
+    guideSnapshots.push(...sharedGuides.docs,...owned.docs.filter(item=>item.data().sharingScope!=='shared'));
+  } else {
+    const sharedGuides=await sharedGuidesPromise;
+    guideSnapshots.push(...sharedGuides.docs);
   }
 
-  const legacyGuides = await getDocs(query(collection(firestore, 'curricula/discover/languages'), where('published', '==', true)));
+  const legacyGuides=await legacyGuidesPromise;
 
   const guides = new Map<string, { guide: DiscoverGuide; lessonsRef: ReturnType<typeof collection> }>();
 
@@ -212,31 +227,34 @@ export async function loadFirestoreGuides(_language?: LanguageCode, scopeUser?: 
     guides.set(key, { guide, lessonsRef: collection(firestore, `${item.ref.path}/lessons`) });
   }
 
-  for (const entry of guides.values()) {
-    const ownerOrganizationId = entry.guide.ownerOrganizationId || '';
-    const canReadTenantLessons = profileRole === 'super_admin'
-      || Boolean(ownerOrganizationId && ownerOrganizationId === organizationId)
-      || scopedOrganizationIds.includes(ownerOrganizationId);
-    const platformGuide = entry.guide.sharingScope === 'shared' && !ownerOrganizationId;
-    // Platform-owned guides are system-wide as a whole. Legacy platform lessons
-    // created before visibility inheritance may not yet carry sharingScope=shared,
-    // so read every published child. Organization-owned shared guides keep the
-    // stricter child-sharing rule.
-    const lessonSnapshot = entry.guide.sharingScope === 'shared' && !canReadTenantLessons && !platformGuide
-      ? await getDocs(query(entry.lessonsRef, where('published', '==', true), where('sharingScope', '==', 'shared')))
-      : await getDocs(query(entry.lessonsRef, where('published', '==', true)));
-    for (const item of lessonSnapshot.docs) {
-      const data = item.data() as FirestoreLesson & Record<string, unknown>;
-      if (data.published === false || data.archived === true) continue;
-      const lesson = normalizeLesson(data, item.id);
-      if (!lesson) continue;
-      lesson.ownerOrganizationId = String(data.ownerOrganizationId ?? entry.guide.ownerOrganizationId ?? '').trim() || undefined;
-      lesson.ownerUid = String(data.ownerUid ?? entry.guide.ownerUid ?? '').trim() || undefined;
-      lesson.sharingScope = data.sharingScope === 'shared' ? 'shared' : entry.guide.sharingScope;
-      lesson.canonical = data.canonical !== false;
-      lesson.quizId = typeof data.quizId === 'string' ? data.quizId : undefined;
+  // Loading lessons one guide at a time made cold starts scale linearly with
+  // the number of courses. Use bounded parallel batches so network latency is
+  // overlapped without creating an unbounded Firestore request burst.
+  const guideEntries=[...guides.values()];
+  const loadLessons=async(entry:(typeof guideEntries)[number])=>{
+    const ownerOrganizationId=entry.guide.ownerOrganizationId||'';
+    const canReadTenantLessons=profileRole==='super_admin'
+      ||Boolean(ownerOrganizationId&&ownerOrganizationId===organizationId)
+      ||scopedOrganizationIds.includes(ownerOrganizationId);
+    const platformGuide=entry.guide.sharingScope==='shared'&&!ownerOrganizationId;
+    const lessonSnapshot=entry.guide.sharingScope==='shared'&&!canReadTenantLessons&&!platformGuide
+      ?await getDocs(query(entry.lessonsRef,where('published','==',true),where('sharingScope','==','shared')))
+      :await getDocs(query(entry.lessonsRef,where('published','==',true)));
+    for(const item of lessonSnapshot.docs){
+      const data=item.data() as FirestoreLesson&Record<string,unknown>;
+      if(data.published===false||data.archived===true)continue;
+      const lesson=normalizeLesson(data,item.id);
+      if(!lesson)continue;
+      lesson.ownerOrganizationId=String(data.ownerOrganizationId??entry.guide.ownerOrganizationId??'').trim()||undefined;
+      lesson.ownerUid=String(data.ownerUid??entry.guide.ownerUid??'').trim()||undefined;
+      lesson.sharingScope=data.sharingScope==='shared'?'shared':entry.guide.sharingScope;
+      lesson.canonical=data.canonical!==false;
+      lesson.quizId=typeof data.quizId==='string'?data.quizId:undefined;
       entry.guide.lessons.push(lesson);
     }
+  };
+  for(let offset=0;offset<guideEntries.length;offset+=8){
+    await Promise.all(guideEntries.slice(offset,offset+8).map(loadLessons));
   }
 
   return [...guides.values()]
