@@ -31,7 +31,7 @@ const GLOBAL_COLLECTIONS = new Set(['languages','translations','books','radioBro
 
 const ORG_COLLECTIONS = new Set([
   'announcements','events','programs','learningPaths','bibleTopics','seasons',
-  'certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
+  'certificationConfig','certificates','graduationRequests','candidates','curriculum','guides','settings','curriculumSettings'
 ]);
 
 const SUBSCRIPTION_FEATURE_BY_COLLECTION:Partial<Record<string,SubscriptionFeatureKey>>={
@@ -156,9 +156,14 @@ export default async function handler(req: Request, res: Response) {
     if (action !== 'list' && action !== 'learnerList' && action !== 'listGuides' && action !== 'listGuideLessons' && !HIERARCHY_COLLECTIONS.has(collection) && !(ctx.tenantType === 'hierarchy' && ORG_COLLECTIONS.has(collection))) requireOrgRole(ctx, editorRoles);
     if ((collection === 'settings' || collection === 'certificationConfig') && !ctx.isSuperAdmin) {
       if (collection === 'certificationConfig') {
-        throw new Error('Only the VOP Super Admin can manage platform certification configuration.');
-      }
-      if (collection === 'settings' && ctx.tenantType === 'hierarchy') {
+        if (ctx.tenantType === 'hierarchy') {
+          if (!effectiveOrganizationId) throw new Error('Select an organization within your hierarchy before managing its certificate configuration.');
+        } else if (ctx.organizationId || effectiveOrganizationId) {
+          requireOrgRole(ctx, ['owner','admin']);
+        } else {
+          throw new Error('Organization membership is required to manage certificate configuration.');
+        }
+      } else if (collection === 'settings' && ctx.tenantType === 'hierarchy') {
         // Union, conference, district and church administrators own their
         // hierarchy-level ministry profile even when no organization is selected.
       } else if (collection === 'settings' && (ctx.organizationId || effectiveOrganizationId)) {
@@ -714,11 +719,12 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, item: { id: lessonId, published: true } });
     }
 
-    if ((collection === 'settings' || collection === 'curriculumSettings') && action === 'upsert') {
-      await requirePermission(ctx, 'settings', 'update');
+    if ((collection === 'settings' || collection === 'curriculumSettings' || collection === 'certificationConfig') && action === 'upsert') {
+      await requirePermission(ctx, collection === 'certificationConfig' ? 'certificates' : 'settings', 'update');
       const targetOrganizationId = ctx.organizationId || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId) ? requestedOrganizationId : '');
       if (!targetOrganizationId) {
-        if (collection !== 'settings') throw new Error('Curriculum settings require an organization tenant.');
+        if (collection === 'curriculumSettings') throw new Error('Curriculum settings require an organization tenant.');
+        if (collection === 'certificationConfig' && !ctx.isSuperAdmin) throw new Error('Certificate configuration requires an organization tenant.');
         if (!ctx.isSuperAdmin && ctx.tenantType !== 'hierarchy') {
           throw new Error('An organization within your authorized scope is required for organization settings.');
         }
@@ -730,12 +736,16 @@ export default async function handler(req: Request, res: Response) {
         throw new Error('The organization is outside your hierarchy scope.');
       }
 
-      const settingsId = collection === 'settings' ? 'settings' : 'curriculum';
-      const ref = ctx.isSuperAdmin && !targetOrganizationId
-        ? ctx.db.doc('system/settings')
-        : ctx.tenantType === 'hierarchy' && !targetOrganizationId
-          ? ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings/settings`)
-          : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
+      const settingsId = collection === 'settings' ? 'settings' : collection === 'curriculumSettings' ? 'curriculum' : 'certification';
+      const ref = collection === 'certificationConfig'
+        ? (targetOrganizationId
+          ? ctx.db.doc(`organizations/${targetOrganizationId}/settings/certification`)
+          : ctx.db.doc('system/certification'))
+        : ctx.isSuperAdmin && !targetOrganizationId
+          ? ctx.db.doc('system/settings')
+          : ctx.tenantType === 'hierarchy' && !targetOrganizationId
+            ? ctx.db.doc(`tenantSettings/${ctx.tenantId}/settings/settings`)
+            : ctx.db.doc(`organizations/${targetOrganizationId}/settings/${settingsId}`);
       const existing = await ref.get();
       const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
 
@@ -764,6 +774,36 @@ export default async function handler(req: Request, res: Response) {
           throw new Error('Assessment retake waiting period must be a whole number from 0 to 10,080 minutes.');
         }
         incoming.quizRetakeCooldownMinutes = minutes;
+      }
+
+      if (collection === 'certificationConfig') {
+        const enabled = incoming.enabled;
+        if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error('Certification enabled must be true or false.');
+        if (Object.hasOwn(incoming,'minimumScore')) {
+          const raw = incoming.minimumScore;
+          if (raw === '' || raw === null || raw === 0 || raw === '0') incoming.minimumScore = 0;
+          else {
+            const mark=configuredPassThreshold(raw);
+            if(mark===null)throw new Error('Certification minimum score must be between 1 and 100 percent.');
+            incoming.minimumScore=mark;
+          }
+        }
+        if (Object.hasOwn(incoming,'approvalStages')) {
+          const stages=Array.isArray(incoming.approvalStages)?incoming.approvalStages:[];
+          if(stages.length>20)throw new Error('Configure at most 20 certificate approval stages.');
+          incoming.approvalStages=stages.map(value=>{
+            const row=value&&typeof value==='object'?value as Record<string,unknown>:{};
+            const stageId=String(row.id||'').trim();
+            const label=String(row.label||'').trim();
+            const roles=Array.isArray(row.approverRoles)
+              ?row.approverRoles.map(role=>String(role||'').trim()).filter(Boolean):[];
+            if(!stageId||stageId.length>80||!roles.length)throw new Error('Every certificate approval stage needs a name and at least one approver role.');
+            return {id:stageId,label:label||stageId,approverRoles:[...new Set(roles)].slice(0,20),enabled:row.enabled!==false};
+          });
+        }
+        incoming.organizationId=targetOrganizationId||'';
+        incoming.scope=targetOrganizationId?'organization':'platform';
+        incoming.inherited=false;
       }
 
       if (collection === 'curriculumSettings' && !targetOrganizationId) {
@@ -832,9 +872,24 @@ export default async function handler(req: Request, res: Response) {
       }
       if (collection === 'settings' || collection === 'certificationConfig' || collection === 'curriculumSettings') {
         if (collection === 'certificationConfig') {
-          if (!ctx.isSuperAdmin) return res.status(200).json({ ok: true, items: [] });
-          const s = await ctx.db.doc('system/certification').get();
-          return res.status(200).json({ ok: true, items: s.exists ? [{ id:'certification', ...s.data() }] : [] });
+          const targetOrganizationId = ctx.organizationId
+            || (ctx.tenantType === 'hierarchy' && requestedOrganizationId && await organizationInHierarchyScope(ctx, requestedOrganizationId)
+              ? requestedOrganizationId : '');
+          const platform = await ctx.db.doc('system/certification').get();
+          if (targetOrganizationId) {
+            const scoped = await ctx.db.doc(`organizations/${targetOrganizationId}/settings/certification`).get();
+            const merged = {
+              ...(platform.data() || {}),
+              ...(scoped.data() || {}),
+              id:'certification',
+              organizationId:targetOrganizationId,
+              scope:'organization',
+              inherited:!scoped.exists,
+            };
+            return res.status(200).json({ok:true,items:[merged]});
+          }
+          if (!ctx.isSuperAdmin) return res.status(200).json({ok:true,items:[]});
+          return res.status(200).json({ok:true,items:platform.exists?[{id:'certification',...platform.data(),scope:'platform',inherited:false}]:[]});
         }
         const id = collection === 'settings' ? 'settings' : 'curriculum';
         if (ctx.organizationId) {
