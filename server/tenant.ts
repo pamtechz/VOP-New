@@ -54,64 +54,75 @@ export async function authenticateTenant(request: Request, requestedOrganization
     return { db, auth, profile, organizationId: '', membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId }, isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId };
   }
 
-  if (!isSuperAdmin && requestedId && requestedId !== profileOrganizationId) {
-    const requestedMembership = await db.doc(`organizations/${requestedId}/members/${auth.uid}`).get();
-    if (!requestedMembership.exists || requestedMembership.data()?.active !== true) {
-      if (!hierarchyAdmin) throw new Error('You cannot access another organization.');
+  const readOrganizationScope=async(id:string)=>{
+    const [organizationSnap,membershipSnap]=await Promise.all([
+      db.doc(`organizations/${id}`).get(),
+      db.doc(`organizations/${id}/members/${auth.uid}`).get(),
+    ]);
+    return {id,organizationSnap,membershipSnap};
+  };
+
+  let organizationId=isSuperAdmin?requestedId:profileOrganizationId;
+  let resolvedScope:Awaited<ReturnType<typeof readOrganizationScope>>|null=null;
+
+  if(!isSuperAdmin&&requestedId&&requestedId!==profileOrganizationId){
+    resolvedScope=await readOrganizationScope(requestedId);
+    if(!resolvedScope.organizationSnap.exists||resolvedScope.organizationSnap.data()?.status!=='active')
+      throw new Error('The organization is not available.');
+    if(!resolvedScope.membershipSnap.exists||resolvedScope.membershipSnap.data()?.active!==true)
+      throw new Error('You cannot access another organization.');
+    organizationId=requestedId;
+  }else if(!isSuperAdmin&&requestedId){
+    organizationId=requestedId;
+  }
+
+  // Validate the profile organization exactly once. If that membership became
+  // inactive, fall back to discovering another live membership as before.
+  if(!isSuperAdmin&&organizationId&&!resolvedScope){
+    resolvedScope=await readOrganizationScope(organizationId);
+    if(!resolvedScope.membershipSnap.exists||resolvedScope.membershipSnap.data()?.active!==true)
+      organizationId='';
+  }
+
+  if(!organizationId&&!isSuperAdmin){
+    const memberships=await db.collectionGroup('members').where('uid','==',auth.uid).where('active','==',true).limit(20).get();
+    const organizationMembership=memberships.docs.find(doc=>doc.ref.path.startsWith('organizations/'));
+    if(organizationMembership){
+      const parts=organizationMembership.ref.path.split('/');
+      if(parts.length>=4){
+        organizationId=parts[1];
+        resolvedScope=null;
+      }
     }
   }
 
-  let organizationId = isSuperAdmin ? requestedId : profileOrganizationId;
-  if (!isSuperAdmin && requestedId) {
-    const requestedOrganization = await db.doc(`organizations/${requestedId}`).get();
-    if (!requestedOrganization.exists || requestedOrganization.data()?.status !== 'active') throw new Error('The organization is not available.');
-    const requestedMembership = await db.doc(`organizations/${requestedId}/members/${auth.uid}`).get();
-    if (requestedMembership.exists && requestedMembership.data()?.active === true) organizationId = requestedId;
-  }
-  if (!isSuperAdmin && organizationId) {
-    const profileMembership = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
-    if (!profileMembership.exists || profileMembership.data()?.active !== true) organizationId = '';
-  }
-
-  if (!organizationId && !isSuperAdmin) {
-    const memberships = await db.collectionGroup('members').where('uid', '==', auth.uid).where('active', '==', true).limit(20).get();
-    const organizationMembership = memberships.docs.find(doc => doc.ref.path.startsWith('organizations/'));
-    if (organizationMembership) {
-      const parts = organizationMembership.ref.path.split('/');
-      if (parts.length >= 4) organizationId = parts[1];
-    }
-  }
-
-  if (!organizationId) {
-    if (hierarchyAdmin) {
-      const nodeId = String(profile.adminNodeId || '').trim();
-      if (!nodeId) throw new Error('This administrator account is not linked to a hierarchy tenant.');
-      const role = String(profile.role || '');
-      const collection = role === 'union_admin' ? 'unions' : role === 'conference_admin' ? 'conferences' : role === 'district_admin' ? 'districts' : 'churches';
-      const node = await db.doc(collection + '/' + nodeId).get();
-      if (!node.exists) throw new Error('The assigned hierarchy tenant does not exist.');
-      return { db, auth, profile, organizationId: '', membership: { role, active: true, tenantType: 'hierarchy', tenantId: role + ':' + nodeId }, isSuperAdmin, tenantType: 'hierarchy', tenantId: role + ':' + nodeId };
-    }
-    if (allowUnassigned) return { db, auth, profile, organizationId: '', membership: { role: 'unassigned', active: false }, isSuperAdmin, tenantType: 'platform', tenantId: '' };
-    if (isSuperAdmin) return { db, auth, profile, organizationId: '', membership: { role: 'platform', active: true }, isSuperAdmin, tenantType: 'platform', tenantId: '' };
+  if(!organizationId){
+    if(allowUnassigned)return {db,auth,profile,organizationId:'',membership:{role:'unassigned',active:false},isSuperAdmin,tenantType:'platform',tenantId:''};
+    if(isSuperAdmin)return {db,auth,profile,organizationId:'',membership:{role:'platform',active:true},isSuperAdmin,tenantType:'platform',tenantId:''};
     throw new Error('An organization membership is required.');
   }
-  const organizationSnap = await db.doc(`organizations/${organizationId}`).get();
-  if (!organizationSnap.exists || organizationSnap.data()?.status !== 'active') throw new Error('The organization is not available.');
-  const membershipSnap = await db.doc(`organizations/${organizationId}/members/${auth.uid}`).get();
-  if (!isSuperAdmin && (!membershipSnap.exists || membershipSnap.data()?.active !== true)) throw new Error('You are not a member of this organization.');
 
-  let membership = membershipSnap.data() || { role: 'platform' };
-  if (!isSuperAdmin && membershipSnap.exists) {
-    const profileRole = String(profile.organizationRole || '').trim();
-    const membershipRole = String(membership.role || '').trim();
-    if (['owner', 'admin'].includes(profileRole) && membershipRole !== profileRole) {
-      membership = { ...membership, role: profileRole };
-      await db.doc(`organizations/${organizationId}/members/${auth.uid}`).set({ uid: auth.uid, organizationId, role: profileRole, active: true, updatedAt: new Date().toISOString() }, { merge: true });
+  const scope=resolvedScope?.id===organizationId
+    ?resolvedScope
+    :await readOrganizationScope(organizationId);
+  if(!scope.organizationSnap.exists||scope.organizationSnap.data()?.status!=='active')
+    throw new Error('The organization is not available.');
+  if(!isSuperAdmin&&(!scope.membershipSnap.exists||scope.membershipSnap.data()?.active!==true))
+    throw new Error('You are not a member of this organization.');
+
+  let membership=scope.membershipSnap.data()||{role:'platform'};
+  if(!isSuperAdmin&&scope.membershipSnap.exists){
+    const profileRole=String(profile.organizationRole||'').trim();
+    const membershipRole=String(membership.role||'').trim();
+    if(['owner','admin'].includes(profileRole)&&membershipRole!==profileRole){
+      membership={...membership,role:profileRole};
+      await db.doc(`organizations/${organizationId}/members/${auth.uid}`).set({
+        uid:auth.uid,organizationId,role:profileRole,active:true,updatedAt:new Date().toISOString(),
+      },{merge:true});
     }
   }
 
-  return { db, auth, profile, organizationId, membership, isSuperAdmin, tenantType: 'organization', tenantId: organizationId };
+  return {db,auth,profile,organizationId,membership,isSuperAdmin,tenantType:'organization',tenantId:organizationId};
 }
 
 export function requireOrgRole(ctx: TenantContext, roles: string[]) {

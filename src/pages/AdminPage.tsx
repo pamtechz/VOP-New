@@ -19,25 +19,7 @@ import './admin.css';
 import './admin-mobile.css';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { DEFAULT_PERMISSION_MATRIX, PERMISSION_ROLES, PERMISSION_RESOURCES, PERMISSION_ACTIONS, normalizePermissionMatrix, permissionAllowed, roleForPermission, type PermissionMatrix, type PermissionRole, type PermissionResource, type PermissionAction } from '../../shared/permissions';
-import AdminRecordsPanel, { type ManagedAdminCollection } from './AdminRecordsPanel';
-import CurriculumManager from './CurriculumManager';
-import CurriculumSettings from './CurriculumSettings';
-import CertificationManager from './CertificationManager';
-import UserManagement from './UserManagement';
-import MentorshipInsights from './MentorshipInsights';
-import OrganizationManagement from './OrganizationManagement';
-import CandidateEnrollment from './CandidateEnrollment';
-import PrayerManagementPanel from './PrayerManagementPanel';
-import EngagementStudio from './EngagementStudio';
-import LocalizationGovernancePanel from './LocalizationGovernancePanel';
-import PaymentManagement from './PaymentManagement';
-import PaymentsPage from './PaymentsPage';
-import NotificationsPage from './NotificationsPage';
-import InvitationsPage from './InvitationsPage';
-import { PersonalSettingsPage } from './PersonalSettingsPage';
-import { CertificatesPage } from './CertificatesPage';
-import { AboutPage } from './AboutPage';
-import OrganizationAccountProfilePage from './OrganizationAccountProfilePage';
+import type { ManagedAdminCollection } from './AdminRecordsPanel';
 import { loadPermissionMatrixClient, clearPermissionMatrixCache } from '../services/permissions';
 import { CommunicationTools } from '../components/layout/CommunicationTools';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
@@ -45,6 +27,27 @@ import { appConfirm } from '../components/layout/AppDialog';
 import { consumeNotificationAdminTarget } from '../services/notificationRouting';
 import { SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS, type SubscriptionFeatureKey } from '../../shared/subscriptions';
 import { isOrganizationPortalAccount } from '../services/portalAccess';
+
+const AdminRecordsPanel=React.lazy(()=>import('./AdminRecordsPanel'));
+const CurriculumManager=React.lazy(()=>import('./CurriculumManager'));
+const CurriculumSettings=React.lazy(()=>import('./CurriculumSettings'));
+const CertificationManager=React.lazy(()=>import('./CertificationManager'));
+const UserManagement=React.lazy(()=>import('./UserManagement'));
+const MentorshipInsights=React.lazy(()=>import('./MentorshipInsights'));
+const OrganizationManagement=React.lazy(()=>import('./OrganizationManagement'));
+const CandidateEnrollment=React.lazy(()=>import('./CandidateEnrollment'));
+const PrayerManagementPanel=React.lazy(()=>import('./PrayerManagementPanel'));
+const EngagementStudio=React.lazy(()=>import('./EngagementStudio'));
+const LocalizationGovernancePanel=React.lazy(()=>import('./LocalizationGovernancePanel'));
+const PaymentManagement=React.lazy(()=>import('./PaymentManagement'));
+const PaymentsPage=React.lazy(()=>import('./PaymentsPage'));
+const NotificationsPage=React.lazy(()=>import('./NotificationsPage'));
+const InvitationsPage=React.lazy(()=>import('./InvitationsPage'));
+const PersonalSettingsPage=React.lazy(()=>import('./PersonalSettingsPage').then(module=>({default:module.PersonalSettingsPage})));
+const CertificatesPage=React.lazy(()=>import('./CertificatesPage'));
+const AboutPage=React.lazy(()=>import('./AboutPage').then(module=>({default:module.AboutPage})));
+const OrganizationAccountProfilePage=React.lazy(()=>import('./OrganizationAccountProfilePage'));
+const AdminPanelLoading=()=> <div className="vop-empty" role="status" aria-live="polite">Loading this workspace…</div>;
 
 interface AdminPageProps {
   currentUser: User;
@@ -398,19 +401,48 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     };
   }, []);
 
+  // The admin shell used to subscribe to every large collection at mount.
+  // Keep the small settings stream live, then attach each heavy dataset only
+  // when the active workspace needs it. Existing state is retained between
+  // tabs so returning to a workspace paints immediately while it revalidates.
+  useEffect(() => subscribeSettings(setSettings, err => setError(err.message)), []);
+
   useEffect(() => {
-    const unsubs = [
-      subscribeLanguages(setLanguages, err => setError(err.message)),
-      subscribeSettings(setSettings, err => setError(err.message)),
-      subscribeCandidates(setCandidates, err => setError(err.message)),
-      subscribeChurches(setChurches, err => setError(err.message)),
-      subscribeAnnouncements(setAnnouncements, err => setError(err.message)),
-    ];
-    void loadFirestoreGuides(undefined,currentUser).then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
-    if (currentUser.role === 'super_admin') void loadCertification();
-    if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) void loadPermissionMatrix();
-    return () => unsubs.forEach(unsub => unsub());
+    if (!['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) return;
+    void loadPermissionMatrix();
   }, []);
+
+  useEffect(() => {
+    const needsLanguages = [
+      'dashboard','settings','languages','curriculum','announcements','events','materials','radio',
+    ].includes(activeTab);
+    if(!needsLanguages)return;
+    return subscribeLanguages(setLanguages,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(activeTab!=='dashboard')return;
+    return subscribeCandidates(setCandidates,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(activeTab!=='dashboard')return;
+    return subscribeChurches(setChurches,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(activeTab!=='dashboard')return;
+    return subscribeAnnouncements(setAnnouncements,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(!['dashboard','mentorship','accountInvitations'].includes(activeTab))return;
+    let active=true;
+    void loadFirestoreGuides(undefined,currentUser)
+      .then(items=>{if(active)setGuides(items)})
+      .catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'Could not load curriculum.')});
+    return()=>{active=false};
+  },[activeTab,currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId]);
 
   const scopedLanguages = useMemo(
     ()=>languages.filter(item=>item.enabled!==false),
@@ -1282,6 +1314,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         </section>}
         {message&&<div className="vop-toast"><Check size={17} style={{verticalAlign:'middle',marginRight:7}}/>{message}</div>}
         {error&&<div role="alert" style={{background:'#fff1f1',border:'1px solid #ffcaca',color:'#b42318',padding:'12px 15px',borderRadius:11,marginBottom:16,display:'flex',alignItems:'center',gap:8}}><AlertTriangle size={17}/>{error}<button type="button" onClick={()=>setError('')} style={{marginLeft:'auto',border:0,background:'transparent'}}><X size={16}/></button></div>}
+        <React.Suspense fallback={<AdminPanelLoading/>}>
         {activeTab==='dashboard'&&renderDashboard()}
         {activeTab==='userManagement'&&<UserManagement onBack={onBack} scope={{ isSuperAdmin: currentUser.role === 'super_admin', organizationId: currentUser.organizationId, role: currentUser.role }} />}
         {activeTab==='settings'&&renderSettings()}
@@ -1337,6 +1370,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
             canDelete={canAdminResource(activeTab as ManagedAdminCollection, 'delete')}
           />
         )}
+        </React.Suspense>
       </main>
     </div>
   </div>;

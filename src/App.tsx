@@ -6,12 +6,13 @@ import type {
 } from './types';
 import {
   getActiveLanguage, setActiveLanguage,
+  getStoredSettings,getStoredGuides,getStoredAnnouncements,getStoredBooks,getStoredUnions,getStoredConferences,getStoredDistricts,getStoredChurches,getStoredRadioBroadcasts,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
 import { pendingForUser, pendingResumesForUser, syncPendingLessonCompletions, syncPendingLessonResumes } from './services/offlineStudyQueue';
 import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, useLocalization } from './services/i18n';
-import { loadPublicContent } from './services/publicFirestore';
+import { loadPublicContent, type PublicContentLoadMode } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import {
   clearLearnerLocation, learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
@@ -28,58 +29,94 @@ import { HomeDashboard } from './components/home/HomeDashboard';
 import { DiscoverGuideView } from './components/guide/DiscoverGuideView';
 import { LessonReaderModal } from './components/reader/LessonReaderModal';
 import { QuizModal } from './components/quiz/QuizModal';
-import { AboutPage } from './pages/AboutPage';
-import { ReferenceProfilePage } from './pages/ReferenceProfilePage';
-import { ResourcesPage } from './pages/ResourcesPage';
-import { LessonsPage } from './pages/LessonsPage';
-import { EngagementPage } from './pages/EngagementPage';
 import './pages/learning.css';
-import { PrayerPage } from './pages/PrayerPage';
-import { RadioPage } from './pages/RadioPage';
-import { CertificatesPage } from './pages/CertificatesPage';
-import { AdminPage } from './pages/AdminPage';
-import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
-import { AnnouncementsPage } from './pages/AnnouncementsPage';
-import { EventsPage } from './pages/EventsPage';
-import PaymentsPage from './pages/PaymentsPage';
-import { SupportPage } from './pages/SupportPage';
-import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
-import LocalizationConsolePage from './pages/LocalizationConsolePage';
-import NotificationsPage from './pages/NotificationsPage';
-import InvitationsPage from './pages/InvitationsPage';
-import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
 import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
 
+const AboutPage=React.lazy(()=>import('./pages/AboutPage').then(module=>({default:module.AboutPage})));
+const ReferenceProfilePage=React.lazy(()=>import('./pages/ReferenceProfilePage').then(module=>({default:module.ReferenceProfilePage})));
+const ResourcesPage=React.lazy(()=>import('./pages/ResourcesPage').then(module=>({default:module.ResourcesPage})));
+const LessonsPage=React.lazy(()=>import('./pages/LessonsPage').then(module=>({default:module.LessonsPage})));
+const EngagementPage=React.lazy(()=>import('./pages/EngagementPage').then(module=>({default:module.EngagementPage})));
+const PrayerPage=React.lazy(()=>import('./pages/PrayerPage').then(module=>({default:module.PrayerPage})));
+const RadioPage=React.lazy(()=>import('./pages/RadioPage'));
+const CertificatesPage=React.lazy(()=>import('./pages/CertificatesPage'));
+const CertificateVerificationPage=React.lazy(()=>import('./pages/CertificateVerificationPage'));
+const AnnouncementsPage=React.lazy(()=>import('./pages/AnnouncementsPage'));
+const EventsPage=React.lazy(()=>import('./pages/EventsPage').then(module=>({default:module.EventsPage})));
+const PaymentsPage=React.lazy(()=>import('./pages/PaymentsPage'));
+const SupportPage=React.lazy(()=>import('./pages/SupportPage'));
+const PersonalSettingsPage=React.lazy(()=>import('./pages/PersonalSettingsPage').then(module=>({default:module.PersonalSettingsPage})));
+const NotificationsPage=React.lazy(()=>import('./pages/NotificationsPage'));
+const InvitationsPage=React.lazy(()=>import('./pages/InvitationsPage'));
+const AdminPage=React.lazy(()=>import('./pages/AdminPage').then(module=>({default:module.AdminPage})));
+const LocalizationConsolePage=React.lazy(()=>import('./pages/LocalizationConsolePage'));
+const MentorWorkspace=React.lazy(()=>import('./pages/MentorWorkspace'));
+const RouteLoading=()=> <div className="vop-empty" role="status" aria-live="polite">Opening workspace…</div>;
+
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
 const PORTAL_SESSION_STORAGE_KEY='vop-portal-session-user-v1';
 
-export const App: React.FC = () => {
-  const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
+interface AppProps{initialUser?:User|null}
+const STARTUP_CACHE_META_KEY='vop-startup-cache-v2';
+type StartupCacheMeta={scope:string;mode:PublicContentLoadMode;savedAt:number};
+function startupScope(user:User|null|undefined){
+  if(!user?.uid)return 'anonymous';
+  return [user.uid,user.organizationId||'',user.role||'',user.organizationRole||'',user.adminNodeId||''].join('|');
+}
+function dataModeForRoute(route:AppRoute):PublicContentLoadMode{
+  return route==='admin'||route==='localization'?'portal':route==='mentor'?'mentor':'full';
+}
+function readStartupSeed(user:User|null|undefined){
+  if(typeof window==='undefined'||!user?.uid)return null;
+  try{
+    const meta=JSON.parse(sessionStorage.getItem(STARTUP_CACHE_META_KEY)||'null') as StartupCacheMeta|null;
+    if(!meta||meta.scope!==startupScope(user)||Date.now()-Number(meta.savedAt||0)>30*60*1000)return null;
+    return {
+      meta,
+      settings:getStoredSettings(),
+      guides:meta.mode==='portal'?[]:getStoredGuides(),
+      announcements:meta.mode==='full'?getStoredAnnouncements():[],
+      books:meta.mode==='full'?getStoredBooks():[],
+      unions:meta.mode==='full'?getStoredUnions():[],
+      conferences:meta.mode==='full'?getStoredConferences():[],
+      districts:meta.mode==='full'?getStoredDistricts():[],
+      churches:meta.mode==='full'?getStoredChurches():[],
+      radioBroadcasts:meta.mode==='full'?getStoredRadioBroadcasts():[],
+    };
+  }catch{return null;}
+}
+
+export const App: React.FC<AppProps> = ({initialUser=null}) => {
+  const [startupSeed]=useState(()=>readStartupSeed(initialUser));
+  const [settings, setSettings] = useState<AppSettings>(()=>startupSeed?.settings||EMPTY_SETTINGS);
   const { locale: uiLocale } = useLocalization(settings);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
-  const [currentUser, setCurrentUser] = useState<User>(EMPTY_USER);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [currentUser, setCurrentUser] = useState<User>(()=>initialUser||EMPTY_USER);
+  const [allUsers, setAllUsers] = useState<User[]>(()=>initialUser?[initialUser]:[]);
+  const initialProfileRef=useRef<User|null>(initialUser);
+  const [guides, setGuides] = useState<DiscoverGuide[]>(()=>startupSeed?.guides||[]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(()=>startupSeed?.announcements||[]);
   const [events, setEvents] = useState<MinistryEvent[]>([]);
-  const [books, setBooks] = useState<BookResource[]>([]);
-  const [unions, setUnions] = useState<Union[]>([]);
-  const [conferences, setConferences] = useState<Conference[]>([]);
-  const [districts, setDistricts] = useState<District[]>([]);
-  const [churches, setChurches] = useState<ChurchOrganization[]>([]);
+  const [books, setBooks] = useState<BookResource[]>(()=>startupSeed?.books||[]);
+  const [unions, setUnions] = useState<Union[]>(()=>startupSeed?.unions||[]);
+  const [conferences, setConferences] = useState<Conference[]>(()=>startupSeed?.conferences||[]);
+  const [districts, setDistricts] = useState<District[]>(()=>startupSeed?.districts||[]);
+  const [churches, setChurches] = useState<ChurchOrganization[]>(()=>startupSeed?.churches||[]);
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
-  const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>([]);
+  const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>(()=>startupSeed?.radioBroadcasts||[]);
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
-  const [currentRoute, setCurrentRoute] = useState<AppRoute>('home');
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(()=>
+    initialUser?.uid?defaultPortalRoute(initialUser):'home');
+  const [contentLoadMode,setContentLoadMode]=useState<PublicContentLoadMode>(()=>
+    dataModeForRoute(initialUser?.uid?defaultPortalRoute(initialUser):'home'));
   const [contentRefresh, setContentRefresh] = useState(0);
-  const [contentHydrated,setContentHydrated] = useState(false);
+  const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
-  const previousRouteRef=useRef<AppRoute>('home');
   const appliedDeepLink = useRef(false);
   const explicitNavigation = useRef(false);
   const restoredNavigationUid = useRef('');
@@ -154,7 +191,10 @@ export const App: React.FC = () => {
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
         restoredNavigationUid.current='';
-        try{sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);}catch{/* storage may be unavailable */}
+        try{
+          sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
+          sessionStorage.removeItem(STARTUP_CACHE_META_KEY);
+        }catch{/* storage may be unavailable */}
         // Clear cached tenant-only labels before showing the anonymous registry.
         void initializeLocalization(settings);
         return;
@@ -165,7 +205,10 @@ export const App: React.FC = () => {
       // Organization invitations require an explicit Accept action after sign-in.
       // Keep the query token intact so the Invitations screen can preview it.
       if(inviteToken)setCurrentRoute('invites');
-      void loadFirestoreUser(firebaseUser.uid).then(async (profile: User | null) => {
+      const handedOff=initialProfileRef.current?.uid===firebaseUser.uid
+        ?initialProfileRef.current:null;
+      initialProfileRef.current=null;
+      void Promise.resolve(handedOff||loadFirestoreUser(firebaseUser.uid)).then(async (profile: User | null) => {
         if (!profile) {
           setCurrentUser(EMPTY_USER);
           setAllUsers([]);
@@ -270,8 +313,12 @@ export const App: React.FC = () => {
   }, [currentUser.uid]);
 
   useEffect(() => {
+    // Root hands the authoritative profile into App. Avoid starting a broad
+    // anonymous content fetch in the small window before that profile exists.
+    if(auth?.currentUser&&!currentUser.uid)return;
     let cancelled = false;
-    void loadPublicContent(currentUser.uid ? currentUser : undefined).then(snapshot => {
+    const loadMode=contentLoadMode;
+    void loadPublicContent(currentUser.uid ? currentUser : undefined,loadMode).then(snapshot => {
       if (cancelled) return;
       const customTranslations: Record<string, Record<string, string>> = {};
       Object.entries(snapshot.translations).forEach(([key, values]) => {
@@ -339,14 +386,26 @@ export const App: React.FC = () => {
       const shareRef = deepLinkParams.get('ref');
       if (shareRef) sessionStorage.setItem('vop_share_ref', shareRef);
       saveSettings(nextSettings);
-      saveGuides(snapshot.guides);
-      saveAnnouncements(snapshot.announcements);
-      saveBooks(snapshot.books);
-      saveUnions(snapshot.unions);
-      saveConferences(snapshot.conferences);
-      saveDistricts(snapshot.districts);
-      saveChurches(snapshot.churches);
-      saveRadioBroadcasts(snapshot.radioBroadcasts);
+      // Dedicated portals intentionally load a small shell snapshot. Never
+      // overwrite the learner cache with the empty arrays from that fast path.
+      if(loadMode!=='portal'){
+        saveGuides(snapshot.guides);
+      }
+      if(loadMode==='full'){
+        saveAnnouncements(snapshot.announcements);
+        saveBooks(snapshot.books);
+        saveUnions(snapshot.unions);
+        saveConferences(snapshot.conferences);
+        saveDistricts(snapshot.districts);
+        saveChurches(snapshot.churches);
+        saveRadioBroadcasts(snapshot.radioBroadcasts);
+      }
+      if(currentUser.uid){
+        try{
+          const meta:StartupCacheMeta={scope:startupScope(currentUser),mode:loadMode,savedAt:Date.now()};
+          sessionStorage.setItem(STARTUP_CACHE_META_KEY,JSON.stringify(meta));
+        }catch{/* Startup cache is an optimization only. */}
+      }
     }).catch(error => {
       if (!cancelled) {
         setContentHydrated(true);
@@ -355,14 +414,11 @@ export const App: React.FC = () => {
       }
     });
     return () => { cancelled = true; };
-  }, [currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId,contentRefresh]);
+  }, [currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId,contentLoadMode,contentRefresh]);
 
   useEffect(()=>{
-    const previous=previousRouteRef.current;
-    previousRouteRef.current=currentRoute;
-    if(previous==='admin'&&currentRoute!=='admin'){
-      setContentRefresh(value=>value+1);
-    }
+    const required=dataModeForRoute(currentRoute);
+    setContentLoadMode(current=>current===required?current:required);
   },[currentRoute]);
 
   useEffect(() => {
@@ -652,8 +708,9 @@ export const App: React.FC = () => {
         {studyNotice && <div role="status" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#eef6ff', color: '#12457e', border: '1px solid #a9ccf5', borderRadius: '.75rem' }}>{studyNotice}</div>}
         {studyError && <div role="alert" style={{ margin: '.75rem auto', padding: '1rem', maxWidth: '60rem', width: 'min(100% - 2rem, 60rem)', background: '#fff2f2', color: '#9f1239', border: '1px solid #fda4af', borderRadius: '.75rem' }}>{studyError}</div>}
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
+          <React.Suspense fallback={<RouteLoading/>}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
-          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
+          {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={(language:LanguageCode) => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
           {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <LocalizationConsolePage currentUser={currentUser} onBack={goBack}/>} 
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
@@ -708,6 +765,7 @@ export const App: React.FC = () => {
               openStudyItem(activeGuide,lesson,initialPageIndex,'home')}
             onOpenCertificate={() => navigate('certificates')} />}
           {showDashboardShell && <HomeDashboard currentUser={currentUser} guides={guides} announcements={announcements} settings={settings} activeLanguage={activeLanguage} onSelectGuide={openGuide} onOpenCertificate={() => navigate('certificates')} onOpenBooks={() => navigate('resources')} onOpenPrayer={() => navigate('prayer')} onOpenRadio={() => navigate('radio')} onOpenSupport={() => navigate('support')} />}
+          </React.Suspense>
         </main>
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
