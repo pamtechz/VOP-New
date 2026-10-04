@@ -180,6 +180,11 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(admin,/ADMIN_NAV_GROUPS/);
   assert.match(admin,/Find an admin tool/);
   assert.match(admin,/expandedNavGroups/);
+  assert.doesNotMatch(admin,/renderLegacyStudio/);
+  assert.doesNotMatch(admin,/vop-editor-toolbar/);
+  assert.match(admin,/ViewModeToggle value=\{languageView\}/);
+  assert.match(admin,/Previous language page/);
+  assert.match(admin,/Next language page/);
 
   assert.match(organizations,/Delete selected/);
   assert.match(organizations,/Clear all/);
