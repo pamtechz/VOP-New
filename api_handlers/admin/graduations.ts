@@ -22,15 +22,17 @@ function stageConfig(data: Record<string, unknown>): ApprovalStage[] {
     id:'organization',label:'Organization review',
     approverRoles:['owner','admin','mentor'],enabled:true,
   }];
-  return raw.map(item => item && typeof item === 'object' ? item as Record<string, unknown> : null)
-    .map(item => item ? ({
-      id: text(item.id),
-      label: text(item.label),
-      approverRoles: Array.isArray(item.approverRoles) ? item.approverRoles.map(String).map(value => value.trim()).filter(Boolean) : [],
-      enabled: item.enabled !== false,
-    }) : null)
-    .filter((item): item is ApprovalStage => Boolean(item?.id && item.enabled && item.approverRoles?.length))
-    .slice(0, 20);
+  return raw.flatMap(item => {
+    const row=item&&typeof item==='object'?item as Record<string,unknown>:null;
+    if(!row)return [];
+    const stage:ApprovalStage={
+      id:text(row.id),
+      label:text(row.label),
+      approverRoles:Array.isArray(row.approverRoles)?row.approverRoles.map(String).map(value=>value.trim()).filter(Boolean):[],
+      enabled:row.enabled!==false,
+    };
+    return stage.id&&stage.enabled&&stage.approverRoles?.length?[stage]:[];
+  }).slice(0,20);
 }
 
 function requestStatus(stage: ApprovalStage | undefined) {
@@ -156,7 +158,7 @@ async function submit(req: Request, res: Response) {
 
   const stages = await loadWorkflow(ctx,ctx.organizationId);
   const lessonsSnapshot = await guideSnapshot.ref.collection('lessons').get();
-  const lessons = lessonsSnapshot.docs.map(item => ({ ...item.data(), id: item.id }));
+  const lessons = lessonsSnapshot.docs.map(item => ({ ...item.data(), id: item.id } as Record<string, unknown> & {id:string}));
   const publishedLessons = lessons.filter(item => item.published === true);
   const studyLessons = publishedLessons.filter(item => String(item.type ?? 'Lesson') === 'Lesson');
   const testLessons = publishedLessons.filter(item => String(item.type ?? '') === 'Test');
@@ -343,7 +345,7 @@ async function decide(req: Request, res: Response) {
     const threshold=configuredPassThreshold(certificationConfig.minimumScore)
       ??configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
     if (!language || threshold === null) return res.status(409).json({ error: 'The graduation assessment language or pass mark is not configured.' });
-    const records = (await guideSnapshot.ref.collection('lessons').get()).docs.map(item => ({ ...item.data(), id: item.id }));
+    const records = (await guideSnapshot.ref.collection('lessons').get()).docs.map(item => ({ ...item.data(), id: item.id } as Record<string, unknown> & {id:string}));
     if (!records.length || records.some(item => item.published !== true || item.archived === true)) {
       return res.status(409).json({ error: 'All graduation requirements must be published and active.' });
     }
