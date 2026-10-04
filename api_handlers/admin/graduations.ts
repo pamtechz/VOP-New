@@ -6,7 +6,8 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { revalidateAssessmentEvidence, verifiedAssessmentEvidence, type AssessmentEvidence } from '../../server/assessmentEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 import { createNotification } from '../../server/notifications.js';
-import { awardApprovedCertificate, certificationPortfolioEvidence } from '../../server/certificateAward.js';
+import { awardApprovedCertificate,awardApprovedProgramCertificate,certificationPortfolioEvidence } from '../../server/certificateAward.js';
+import {programCompletionEvidence,revalidateProgramCompletion,type ProgramCompletionEvidence} from '../../server/programGraduationAutomation.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -45,7 +46,9 @@ function requestId(organizationId: string, candidateId: string, guideId: string)
 function safeRequest(id: string, data: Record<string, unknown>) {
   return {
     id, candidateId: text(data.candidateId), candidateName: text(data.candidateName), candidateEmail: text(data.candidateEmail),
-    organizationId: text(data.organizationId), guideId: text(data.guideId), guideTitle: text(data.guideTitle),
+    organizationId: text(data.organizationId), targetKind:text(data.targetKind)||'guide',
+    guideId: text(data.guideId), guideTitle: text(data.guideTitle),
+    programId:text(data.programId),programTitle:text(data.programTitle),
     churchId: text(data.churchId), districtId: text(data.districtId), conferenceId: text(data.conferenceId), unionId: text(data.unionId),
     averageScore: Number(data.averageScore), status: text(data.status), workflowStageId: text(data.workflowStageId),
     workflowStageIndex: Number(data.workflowStageIndex ?? 0), revision: Number(data.revision ?? 0),
@@ -302,7 +305,26 @@ async function decide(req: Request, res: Response) {
     studyLessons:{id:string}[];testLessons:{id:string}[];
     assessmentEvidence:AssessmentEvidence;
   } | null = null;
+  let programApprovalEvidence:ProgramCompletionEvidence|null=null;
   if (decision === 'approve') {
+    if(text(current.targetKind)==='program'){
+      const programId=text(current.programId);
+      if(!/^[A-Za-z0-9_-]{1,120}$/.test(programId)){
+        return res.status(409).json({error:'The graduation request has an invalid program reference.'});
+      }
+      const checked=await programCompletionEvidence(ctx.db,text(current.candidateId),programId);
+      if(!checked.evidence){
+        return res.status(409).json({error:'The candidate no longer satisfies the program certificate requirements: '+checked.reason.replaceAll('_',' ')+'.'});
+      }
+      if(checked.evidence.organizationId!==requestOrganizationId){
+        return res.status(409).json({error:'The program graduation evidence belongs to another organization.'});
+      }
+      const certificationConfig=await loadCertificationConfig(ctx,requestOrganizationId);
+      if(stageIndex===stages.length-1&&certificationConfig.enabled!==true){
+        return res.status(409).json({error:'Official certification is currently disabled.'});
+      }
+      programApprovalEvidence=checked.evidence;
+    }else{
     const guideId = text(current.guideId);
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(guideId)) return res.status(409).json({ error: 'The graduation request has an invalid guide reference.' });
     const [guideSnapshot, certificationConfig, settingsSnapshot] = await Promise.all([
@@ -363,6 +385,7 @@ async function decide(req: Request, res: Response) {
       return res.status(409).json({error:'The candidate has not passed all required assessments.'});
     }
     approvalEvidence={guideId,language,threshold,studyLessons,testLessons,assessmentEvidence:currentAssessmentEvidence};
+    }
   }
 
   const result = await ctx.db.runTransaction(async transaction => {
@@ -382,6 +405,17 @@ async function decide(req: Request, res: Response) {
     decisions.push({ stageId: stage.id, stageLabel: stage.label || stage.id, decision, notes, approverUid: ctx.auth.uid, approverRole: profileRole || membershipRole, decidedAt: new Date().toISOString() });
     const nextIndex = stageIndex + 1, nextStage = stages[nextIndex];
     const nextData: Record<string, unknown> = { decisions, revision: revision + 1, approverNotes: notes, updatedAt: timestamp };
+    if(decision==='approve'&&programApprovalEvidence){
+      if(text(data.organizationId)!==requestOrganizationId
+        ||text(data.targetKind)!=='program'
+        ||text(data.programId)!==programApprovalEvidence.programId){
+        throw new Error('The candidate organization or program graduation request changed before approval.');
+      }
+      if(!(await revalidateProgramCompletion(transaction,candidateRef,programApprovalEvidence))){
+        throw new Error('The candidate no longer satisfies all program completion requirements.');
+      }
+      nextData.averageScore=programApprovalEvidence.averageScore;
+    }
     if (decision === 'approve' && approvalEvidence) {
       if (text(data.organizationId) !== requestOrganizationId || text(data.guideId) !== approvalEvidence.guideId ||
           text(candidateData.organizationId) !== requestOrganizationId) {
@@ -432,7 +466,9 @@ async function decide(req: Request, res: Response) {
   let certificateAwardError='';
   if(decision==='approve'&&text(result.status)==='approved'&&candidateId){
     try{
-      certificateAward=await awardApprovedCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.guideId));
+      certificateAward=text(result.targetKind)==='program'
+        ?await awardApprovedProgramCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.programId))
+        :await awardApprovedCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.guideId));
     }catch(error){
       certificateAwardError=error instanceof Error?error.message:'The approved certificate could not be published.';
       await ref.set({
