@@ -5,6 +5,7 @@ import {auth} from '../lib/firebase';
 import type {CurriculumProgramDraft} from '../../shared/programModel';
 import './program-manager.css';
 import { appConfirm } from '../components/layout/AppDialog';
+import { ShimmerCards } from '../components/layout/Shimmer';
 
 type Guide={
   id:string;title:string;language:string;organizationId?:string;
@@ -267,8 +268,8 @@ export default function ProgramManager({
             {index+1}. Unavailable guide (outside your current access scope)</div>;
         })}
       </div>:<p className="vop-program-empty">Add guides to begin authoring this course.</p>}
-    </div>:loading?<div className="vop-program-empty">Loading programs…</div>
-    :visible.length?<div className="vop-program-grid">
+    </div>:loading&&programs.length===0?<ShimmerCards cards={4} label="Loading programs"/>
+    :visible.length?<div className={'vop-program-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
       {visible.map(program=><article key={program.id} className="vop-program-card">
         <div className="vop-program-card-image">
           {program.coverImageUrl?<img src={program.coverImageUrl} alt=""/>
