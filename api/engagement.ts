@@ -118,6 +118,52 @@ function canManagePortfolio(actor: Profile) {
   return ['super_admin','union_admin','conference_admin','district_admin','church_admin','owner','admin','mentor','teacher'].includes(role(actor));
 }
 
+type EngagementPointKind='soloChallenge'|'duelChallenge'|'memoryReview'|'practiceQuiz'|'chapterQuiz'|'finalExam';
+const DEFAULT_ENGAGEMENT_POINTS:Record<EngagementPointKind,number>={
+  soloChallenge:10,duelChallenge:15,memoryReview:1,practiceQuiz:5,chapterQuiz:10,finalExam:25,
+};
+function pointValue(raw:unknown,fallback:number){
+  const value=Number(raw);
+  return Number.isInteger(value)&&value>=0&&value<=10000?value:fallback;
+}
+async function organizationPointRules(db:FirebaseFirestore.Firestore,organizationId:string){
+  if(!organizationId)return DEFAULT_ENGAGEMENT_POINTS;
+  const settings=await db.doc(`organizations/${organizationId}/settings/settings`).get();
+  const configured=settings.data()?.engagementPoints;
+  const rows=configured&&typeof configured==='object'?configured as Record<string,unknown>:{};
+  return {
+    soloChallenge:pointValue(rows.soloChallenge,DEFAULT_ENGAGEMENT_POINTS.soloChallenge),
+    duelChallenge:pointValue(rows.duelChallenge,DEFAULT_ENGAGEMENT_POINTS.duelChallenge),
+    memoryReview:pointValue(rows.memoryReview,DEFAULT_ENGAGEMENT_POINTS.memoryReview),
+    practiceQuiz:pointValue(rows.practiceQuiz,DEFAULT_ENGAGEMENT_POINTS.practiceQuiz),
+    chapterQuiz:pointValue(rows.chapterQuiz,DEFAULT_ENGAGEMENT_POINTS.chapterQuiz),
+    finalExam:pointValue(rows.finalExam,DEFAULT_ENGAGEMENT_POINTS.finalExam),
+  };
+}
+function pointsLedgerRef(db:FirebaseFirestore.Firestore,uid:string,kind:EngagementPointKind,eventId:string){
+  return db.doc(`users/${cleanId(uid,'user')}/pointsLedger/${kind}-${cleanId(eventId,'point event')}`);
+}
+async function awardPointsInTransaction(
+  transaction:FirebaseFirestore.Transaction,
+  db:FirebaseFirestore.Firestore,
+  uid:string,
+  organizationId:string,
+  kind:EngagementPointKind,
+  eventId:string,
+  points:number,
+){
+  const ledger=pointsLedgerRef(db,uid,kind,eventId);
+  const existing=await transaction.get(ledger);
+  if(existing.exists)return 0;
+  transaction.create(ledger,{
+    kind,eventId,points,organizationId,awardedAt:FieldValue.serverTimestamp(),
+  });
+  if(points>0)transaction.set(db.doc(`users/${cleanId(uid,'user')}`),{
+    engagementPoints:FieldValue.increment(points),updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return points;
+}
+
 function nowIso() { return new Date().toISOString(); }
 function revisionOf(value: Record<string,unknown>) {
   const revision=Number(value.revision);
@@ -402,6 +448,8 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     const ref = db.doc(`users/${actor.uid}/scriptureMemoryState/${deckId}:${verseId}`);
     const legacyRef = db.doc(`users/${actor.uid}/scriptureMemoryState/${verseId}`);
     const reviewRef = db.collection(`users/${actor.uid}/scriptureMemoryReviews`).doc();
+    const pointRules=await organizationPointRules(db,orgOf(actor));
+    let pointsAwarded=0;
     const next = await db.runTransaction(async transaction => {
       const current = await transaction.get(ref);
       const legacy = current.exists ? null : await transaction.get(legacyRef);
@@ -410,9 +458,10 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
       const updated = nextMemoryState(oldState, rating);
       transaction.set(ref, { deckId, verseId, ...updated, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       transaction.create(reviewRef, { deckId, verseId, rating: Math.round(rating), reviewedAt: FieldValue.serverTimestamp() });
+      pointsAwarded=await awardPointsInTransaction(transaction,db,String(actor.uid),orgOf(actor),'memoryReview',reviewRef.id,pointRules.memoryReview);
       return updated;
     });
-    return { state: next };
+    return { state: next, pointsAwarded };
   }
   throw new Error('Unsupported Scripture memory action.');
 }
@@ -435,6 +484,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
         displayName:String(doc.data().displayName || 'Learner').slice(0,100),
         rating:Number.isFinite(Number(doc.data().scriptureDuelRating))
           ? Number(doc.data().scriptureDuelRating) : 1200,
+        points:Math.max(0,Number(doc.data().engagementPoints||0)),
       }))
       .sort((a,b)=>b.rating-a.rating || a.displayName.localeCompare(b.displayName))
       .slice(0,50);
@@ -474,6 +524,97 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     return { questions: snapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization))
       .map(doc => ({ id: doc.id, question: doc.data().question, options: doc.data().options, scriptureRef: doc.data().scriptureRef })) };
   }
+  if(action==='duelSoloCreate'){
+    const questionSnapshot=await db.collection('scriptureDuelQuestions').where('status','==','published').limit(30).get();
+    const questions=questionSnapshot.docs.filter(doc=>contentVisibleToLearner(actor,doc.data()||{},organization))
+      .map(doc=>({id:doc.id,...doc.data()}));
+    if(questions.length<3)throw new Error('At least three published Scripture challenge questions are required.');
+    const selected=questions.sort(()=>Math.random()-.5).slice(0,Math.min(10,questions.length));
+    const challengeId=randomUUID();
+    await db.doc(`scriptureSoloChallenges/${challengeId}`).set({
+      challengeId,organizationId:orgOf(actor),playerId:String(actor.uid),status:'active',
+      questionIds:selected.map(question=>question.id),answers:{},score:0,
+      createdAt:FieldValue.serverTimestamp(),expiresAt:new Date(Date.now()+30*60_000).toISOString(),
+    });
+    return {challengeId,questions:selected.map(question=>({
+      id:question.id,question:question.question,options:question.options,scriptureRef:question.scriptureRef,
+    }))};
+  }
+  if(action==='duelSoloJoin'){
+    const challengeId=cleanId(b.challengeId,'challenge');
+    const challenge=await db.doc(`scriptureSoloChallenges/${challengeId}`).get();
+    const data=challenge.data()||{};
+    if(!challenge.exists||data.status!=='active'||String(data.playerId||'')!==String(actor.uid)
+      ||String(data.organizationId||'')!==orgOf(actor))throw new Error('This solo challenge is unavailable to you.');
+    const ids=Array.isArray(data.questionIds)?data.questionIds.map(String).slice(0,20):[];
+    const questionDocs=await Promise.all(ids.map(questionId=>db.doc(`scriptureDuelQuestions/${cleanId(questionId,'question')}`).get()));
+    const questions=questionDocs.filter(document=>document.exists&&document.data()?.status==='published')
+      .map(document=>({id:document.id,question:document.data()?.question,options:document.data()?.options,scriptureRef:document.data()?.scriptureRef}));
+    const answers=data.answers&&typeof data.answers==='object'?data.answers as Record<string,unknown>:{};
+    return {challengeId,questions,answeredQuestionIds:ids.filter(questionId=>Object.hasOwnProperty.call(answers,questionId)),expiresAt:data.expiresAt};
+  }
+  if(action==='duelSoloAnswer'){
+    const challengeId=cleanId(b.challengeId,'challenge');
+    const questionId=cleanId(b.questionId,'question');
+    const answer=String(b.answer??'').trim();
+    if(!answer)throw new Error('An answer is required.');
+    const [challenge,question]=await Promise.all([
+      db.doc(`scriptureSoloChallenges/${challengeId}`).get(),
+      db.doc(`scriptureDuelQuestions/${questionId}`).get(),
+    ]);
+    const data=challenge.data()||{};
+    if(!challenge.exists||data.status!=='active'||String(data.playerId||'')!==String(actor.uid)
+      ||String(data.organizationId||'')!==orgOf(actor)||!Array.isArray(data.questionIds)||!data.questionIds.includes(questionId)){
+      throw new Error('This solo challenge question is unavailable to you.');
+    }
+    if(!question.exists||question.data()?.status!=='published')throw new Error('This question is not available.');
+    const options=Array.isArray(question.data()?.options)?question.data()?.options as unknown[]:[];
+    if(!options.some(option=>typeof option==='string'&&option.trim().toLowerCase()===answer.toLowerCase()))throw new Error('Choose one of the available answer options.');
+    const correct=String(question.data()?.answer||'').trim().toLowerCase()===answer.toLowerCase();
+    const ref=db.doc(`scriptureSoloChallenges/${challengeId}`);
+    return db.runTransaction(async transaction=>{
+      const latest=await transaction.get(ref);
+      const current=latest.data()||{};
+      if(!latest.exists||current.status!=='active'||String(current.playerId||'')!==String(actor.uid))throw new Error('This solo challenge is no longer active.');
+      const answers=current.answers&&typeof current.answers==='object'?current.answers as Record<string,unknown>:{};
+      if(Object.hasOwnProperty.call(answers,questionId))return {accepted:true,duplicate:true};
+      transaction.update(ref,{
+        answers:{...answers,[questionId]:{answer:answer.slice(0,300),correct,answeredAt:nowIso()}},
+        score:Number(current.score||0)+Number(correct),updatedAt:FieldValue.serverTimestamp(),
+      });
+      return {accepted:true,correct};
+    });
+  }
+  if(action==='duelSoloFinish'){
+    const challengeId=cleanId(b.challengeId,'challenge');
+    const ref=db.doc(`scriptureSoloChallenges/${challengeId}`);
+    const pointRules=await organizationPointRules(db,orgOf(actor));
+    return db.runTransaction(async transaction=>{
+      const latest=await transaction.get(ref);
+      const current=latest.data()||{};
+      if(!latest.exists||String(current.playerId||'')!==String(actor.uid)||String(current.organizationId||'')!==orgOf(actor))
+        throw new Error('This solo challenge is unavailable to you.');
+      if(current.status==='completed'){
+        return {completed:true,score:Number(current.finalScore??current.score||0),pointsAwarded:0,replayed:true};
+      }
+      if(current.status!=='active')throw new Error('This solo challenge is no longer active.');
+      const ids=Array.isArray(current.questionIds)?current.questionIds.map(String):[];
+      const answers=current.answers&&typeof current.answers==='object'?current.answers as Record<string,unknown>:{};
+      const expired=new Date(String(current.expiresAt||0)).getTime()<Date.now();
+      if(!expired&&!ids.every(questionId=>Object.hasOwnProperty.call(answers,questionId))){
+        throw new Error('Answer every question before finishing the solo challenge.');
+      }
+      const score=Number(current.score||0);
+      transaction.update(ref,{status:'completed',finalScore:score,finishedAt:FieldValue.serverTimestamp()});
+      const pointsAwarded=await awardPointsInTransaction(transaction,db,String(actor.uid),orgOf(actor),'soloChallenge',challengeId,pointRules.soloChallenge);
+      transaction.set(db.doc(`scriptureChallengeResults/${challengeId}`),{
+        challengeId,organizationId:orgOf(actor),playerId:String(actor.uid),mode:'solo',
+        score,questionCount:ids.length,pointsAwarded,completedAt:FieldValue.serverTimestamp(),
+      });
+      return {completed:true,score,questionCount:ids.length,pointsAwarded};
+    });
+  }
+
   if (action === 'duelCreate') {
     const opponentId = cleanId(b.opponentId, 'opponent');
     if (opponentId === String(actor.uid)) throw new Error('You cannot challenge yourself.');
@@ -542,6 +683,7 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   }
 
   if (action === 'duelFinish') {
+    const pointRules=await organizationPointRules(db,orgOf(actor));
     return db.runTransaction(async transaction => {
       const latest = await transaction.get(matchRef);
       const current = latest.data() || {};
@@ -583,10 +725,12 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       transaction.update(matchRef, { status: 'completed', winner, finishedAt: FieldValue.serverTimestamp(), finalScores: { [a]: aScore, [c]: bScore } });
       transaction.set(refA, { scriptureDuelRating: nextA }, { merge: true });
       transaction.set(refB, { scriptureDuelRating: nextB }, { merge: true });
+      const pointsA=await awardPointsInTransaction(transaction,db,a,String(current.organizationId||''),'duelChallenge',matchId,pointRules.duelChallenge);
+      const pointsB=await awardPointsInTransaction(transaction,db,c,String(current.organizationId||''),'duelChallenge',matchId,pointRules.duelChallenge);
       transaction.set(db.doc(`scriptureDuelResults/${matchId}`), { matchId, organizationId: String(current.organizationId || ''), playerA: a, playerB: c,
-        scores: { [a]: aScore, [c]: bScore }, winner, ratings: { [a]: nextA, [c]: nextB }, answerCount: Object.keys(answers).length,
-        completedAt: FieldValue.serverTimestamp() });
-      return { winner, scores: { [a]: aScore, [c]: bScore }, ratings: { [a]: nextA, [c]: nextB } };
+        scores: { [a]: aScore, [c]: bScore }, winner, ratings: { [a]: nextA, [c]: nextB }, pointsAwarded:{[a]:pointsA,[c]:pointsB},
+        answerCount: Object.keys(answers).length, completedAt: FieldValue.serverTimestamp() });
+      return { winner, scores: { [a]: aScore, [c]: bScore }, ratings: { [a]: nextA, [c]: nextB }, pointsAwarded:{[a]:pointsA,[c]:pointsB} };
     });
   }
   throw new Error('Unsupported Scripture Duel action.');
@@ -640,7 +784,8 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, ...(await memoryAction(db, actor, b)) });
     }
     if (action.startsWith('duel')) {
-      await requirePermissionForProfile(db, actor, 'duels', action === 'duelCreate' || action === 'duelAnswer' ? 'create' : 'read');
+      await requirePermissionForProfile(db, actor, 'duels',
+        ['duelCreate','duelAnswer','duelSoloCreate','duelSoloAnswer'].includes(action) ? 'create' : 'read');
       return res.status(200).json({ ok: true, ...(await duelAction(db, actor, b)) });
     }
     throw new Error('Unsupported engagement action.');
