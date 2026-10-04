@@ -401,19 +401,48 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
     };
   }, []);
 
+  // The admin shell used to subscribe to every large collection at mount.
+  // Keep the small settings stream live, then attach each heavy dataset only
+  // when the active workspace needs it. Existing state is retained between
+  // tabs so returning to a workspace paints immediately while it revalidates.
+  useEffect(() => subscribeSettings(setSettings, err => setError(err.message)), []);
+
   useEffect(() => {
-    const unsubs = [
-      subscribeLanguages(setLanguages, err => setError(err.message)),
-      subscribeSettings(setSettings, err => setError(err.message)),
-      subscribeCandidates(setCandidates, err => setError(err.message)),
-      subscribeChurches(setChurches, err => setError(err.message)),
-      subscribeAnnouncements(setAnnouncements, err => setError(err.message)),
-    ];
-    void loadFirestoreGuides(undefined,currentUser).then(setGuides).catch(reason => setError(reason instanceof Error ? reason.message : 'Could not load curriculum.'));
-    if (currentUser.role === 'super_admin') void loadCertification();
-    if (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) void loadPermissionMatrix();
-    return () => unsubs.forEach(unsub => unsub());
+    if (!['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))) return;
+    void loadPermissionMatrix();
   }, []);
+
+  useEffect(() => {
+    const needsLanguages = [
+      'dashboard','settings','languages','curriculum','announcements','events','materials','radio',
+    ].includes(activeTab);
+    if(!needsLanguages)return;
+    return subscribeLanguages(setLanguages,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(activeTab!=='dashboard')return;
+    return subscribeCandidates(setCandidates,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(activeTab!=='dashboard')return;
+    return subscribeChurches(setChurches,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(activeTab!=='dashboard')return;
+    return subscribeAnnouncements(setAnnouncements,err=>setError(err.message));
+  },[activeTab]);
+
+  useEffect(() => {
+    if(!['dashboard','mentorship','accountInvitations'].includes(activeTab))return;
+    let active=true;
+    void loadFirestoreGuides(undefined,currentUser)
+      .then(items=>{if(active)setGuides(items)})
+      .catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'Could not load curriculum.')});
+    return()=>{active=false};
+  },[activeTab,currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId]);
 
   const scopedLanguages = useMemo(
     ()=>languages.filter(item=>item.enabled!==false),
