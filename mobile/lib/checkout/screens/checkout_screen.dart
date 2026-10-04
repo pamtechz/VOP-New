@@ -52,7 +52,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _submitOrder() async {
     if (!_formKey.currentState!.validate()) return;
-    final cartItems = ref.read(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
 
     setState(() => _isSubmitting = true);

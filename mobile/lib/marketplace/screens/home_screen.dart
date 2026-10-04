@@ -261,7 +261,7 @@ class _ProductGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 16),
-    child: SliverGrid(
+    sliver: SliverGrid(
       delegate: SliverChildBuilderDelegate(
         (ctx, i) => _ProductCard(product: products[i]),
         childCount: products.length,
