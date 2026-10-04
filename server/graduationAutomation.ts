@@ -143,7 +143,7 @@ export async function ensureAutomaticGraduationReview(
   }
   const config=await certificationConfigFor(db,organizationId);
   if(config.enabled!==true)return {eligible:false,created:false,reason:'certification_disabled'};
-  const releaseMode=text(config.releaseMode)==='automatic'?'automatic':'review';
+  const releaseMode=text(config.releaseMode)==='review'?'review':'automatic';
   const stages=releaseMode==='review'?stagesFromConfig(config):[];
   if(releaseMode==='review'&&!stages.length)return {eligible:false,created:false,reason:'approval_workflow_not_configured'};
 
