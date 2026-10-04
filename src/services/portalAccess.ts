@@ -8,11 +8,14 @@ function normalized(value: unknown) {
   return String(value || '').trim().toLowerCase();
 }
 
+export function isOrganizationPortalAccount(user: Pick<User,'organizationRole'|'organizationId'>): boolean {
+  return Boolean(user.organizationId) && ADMIN_ORGANIZATION_ROLES.has(normalized(user.organizationRole));
+}
+
 export function hasAdminPortalAccess(user: Pick<User,'role'|'organizationRole'|'organizationId'>): boolean {
   const role = normalized(user.role);
   if (ADMIN_ROLES.has(role)) return true;
-  const organizationRole = normalized(user.organizationRole);
-  return Boolean(user.organizationId) && ADMIN_ORGANIZATION_ROLES.has(organizationRole);
+  return isOrganizationPortalAccount(user);
 }
 
 export function hasMentorPortalAccess(user: Pick<User,'role'|'organizationRole'|'organizationId'>): boolean {
