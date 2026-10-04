@@ -126,3 +126,11 @@
   .vop-user-table{min-width:720px}
   .vop-user-side{grid-template-columns:1fr}
 }
+
+.vop-user-view-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:0 2px}
+.vop-user-view-row>label{display:inline-flex;align-items:center;gap:7px;color:var(--text-muted,#6c819e);font-size:10px;font-weight:750}
+.vop-user-card-grid{margin-bottom:4px}
+.vop-user-record-card .vop-user-cell{min-width:0}
+.vop-user-record-card .vop-user-cell strong{white-space:normal}
+.vop-user-card-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+@media(max-width:640px){.vop-user-view-row{align-items:flex-start}.vop-user-view-row>label{min-height:38px}}

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Award, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, FileText,
-  Filter, GraduationCap, Info, Mail, MoreVertical, Printer, Search, Share2, Users, X
+  Filter, GraduationCap, Info, LayoutGrid, List, Mail, MoreVertical, Printer, Search, Share2, Users, X
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { auth } from '../lib/firebase';
@@ -35,6 +35,7 @@ export interface CertificateRecord {
   guideTitle?: string;
   status: CertificateStatus;
   downloadCount?: number;
+  presentationSnapshot?: CertificationConfig;
 }
 
 interface CertificationApprovalStage { id: string; label: string; approverRoles: string[]; enabled?: boolean; }
@@ -55,6 +56,7 @@ interface CertificationConfig {
   backgroundUrl?: string;
   verificationEnabled?: boolean;
   minimumScore?: number;
+  releaseMode?: 'automatic' | 'review';
   verificationBaseUrl?: string;
   template?: CertificateTemplateConfig;
   approvalStages?: CertificationApprovalStage[];
@@ -151,14 +153,17 @@ export const CertificationManager: React.FC<Props> = ({
   const [issuerOpen, setIssuerOpen] = useState(false);
   const [issuerSearch, setIssuerSearch] = useState('');
   const [issuingCandidateId, setIssuingCandidateId] = useState<string | null>(null);
-  const pageSize = 5;
+  const [viewMode,setViewMode]=useState<'table'|'cards'>(() => {
+    try{return localStorage.getItem('vop-certification-view')==='cards'?'cards':'table';}catch{return 'table';}
+  });
+  const pageSize = 8;
 
   const load = async () => {
     setLoading(true);
     try {
       const [certificateResponse, configResponse, requestResponse] = await Promise.all([
         adminContent('list', 'certificates'),
-        isSuperAdmin ? adminContent('list', 'certificationConfig') : Promise.resolve({ items: [] }),
+        adminContent('list', 'certificationConfig'),
         adminContent('list', 'graduationRequests'),
       ]);
       setCertificates(((certificateResponse.items || []) as CertificateRecord[])
@@ -175,6 +180,7 @@ export const CertificationManager: React.FC<Props> = ({
   };
 
   useEffect(() => { void load(); }, []);
+  useEffect(()=>{try{localStorage.setItem('vop-certification-view',viewMode);}catch{/* storage unavailable */}},[viewMode]);
 
   const courses = useMemo(() => Array.from(new Set(certificates.map(item => item.courseName).filter(Boolean))).sort(), [certificates]);
   const conferences = useMemo(() => Array.from(new Set(certificates.map(item => item.conferenceName).filter(Boolean))).sort(), [certificates]);
@@ -222,6 +228,7 @@ export const CertificationManager: React.FC<Props> = ({
       enabled: nextConfig.enabled === true,
       verificationEnabled: nextConfig.verificationEnabled === true,
       minimumScore: nextConfig.minimumScore,
+      releaseMode: nextConfig.releaseMode || 'automatic',
       courseName: nextConfig.courseName || '',
       courseCode: nextConfig.courseCode || '',
       certificateTitle: nextConfig.certificateTitle || '',
@@ -413,7 +420,7 @@ export const CertificationManager: React.FC<Props> = ({
               <div><dt>{t('common.union','Union')}</dt><dd>{selected.unionName || '—'}</dd></div>
             </dl>
           </aside>
-          <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={config} /></section>
+          <section className="vop-cert-preview-stage"><CertificateArtwork certificate={selected} config={selected.presentationSnapshot||config} /></section>
           <aside className="vop-cert-action-card">
             <div className="vop-cert-info"><Info size={22} /><p>The certificate design is controlled by certification configuration. Generated records use the stored candidate and completion data.</p></div>
             <button className="vop-cert-primary-button" type="button" onClick={() => void downloadCertificate()} disabled={exporting}><Download size={18} />{exporting ? 'Generating…' : 'Download Certificate'}</button>
@@ -433,8 +440,8 @@ export const CertificationManager: React.FC<Props> = ({
       <div className="vop-cert-list-head">
         <div><div className="vop-cert-kicker">{t('admin.certification','Certification')}</div><h1>{t('admin.certified_candidates','Certified Candidates')}</h1><p>View and manage candidates who have successfully completed VOP courses.</p></div>
         <div className="vop-cert-head-actions">
-          {isSuperAdmin && <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />{t('admin.certificate_settings','Certificate Settings')}</button>}
-          {isSuperAdmin && <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setIssuerOpen(true)}><Award size={18} />{t('admin.issue_certificate','Issue Certificate')}</button>}
+          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" onClick={() => setView('config')}><Award size={18} />{isSuperAdmin?'Platform certificate settings':'Organization certificate settings'}</button>
+          <button className="vop-cert-secondary-button vop-cert-issue-trigger" type="button" disabled={!featureAvailable} onClick={() => setIssuerOpen(true)}><Award size={18} />{t('admin.issue_certificate','Issue Certificate')}</button>
           <button className="vop-cert-export-button" type="button" onClick={() => window.print()}><Download size={18} />{t('admin.export_pdf','Export List (PDF)')}</button>
         </div>
       </div>
@@ -484,10 +491,14 @@ export const CertificationManager: React.FC<Props> = ({
         <select value={conferenceFilter} onChange={e => { setConferenceFilter(e.target.value); setPage(1); }}><option value="">All Conferences</option>{conferences.map(item => <option key={item} value={item}>{item}</option>)}</select>
         <select value={dateFilter} onChange={e => { setDateFilter(e.target.value as 'all' | 'year' | 'month'); setPage(1); }}><option value="all">{t('common.all_time','All Time')}</option><option value="year">{t('common.this_year','This Year')}</option><option value="month">{t('common.this_month','This Month')}</option></select>
         <button className="vop-cert-filter-button" type="button"><Filter size={18} />{t('common.filter','Filter')}</button>
+        <div className="vop-view-switch" role="group" aria-label="Certificate view">
+          <button type="button" className={viewMode==='table'?'active':''} onClick={()=>setViewMode('table')} title="Table view"><List size={17}/><span>Table</span></button>
+          <button type="button" className={viewMode==='cards'?'active':''} onClick={()=>setViewMode('cards')} title="Card view"><LayoutGrid size={17}/><span>Cards</span></button>
+        </div>
       </div>
       {loading ? <div className="vop-cert-empty"><Award size={36} /><strong>Loading certified candidates…</strong></div> : (
         <>
-          <div className="vop-cert-table-wrap">
+          {viewMode==='table'?<div className="vop-cert-table-wrap">
             <table className="vop-cert-table">
               <thead><tr><th>#</th><th>Candidate</th><th>Course</th><th>Certificate No.</th><th>{t('common.completion_date','Completion Date')}</th><th>Church / District</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>{visible.map((item, index) => (
@@ -502,7 +513,14 @@ export const CertificationManager: React.FC<Props> = ({
               ))}</tbody>
             </table>
             {visible.length === 0 && <div className="vop-cert-empty"><Award size={36} /><strong>No certified candidates are recorded.</strong><span>Certified candidates will appear here when certificates are issued and stored in Firestore.</span></div>}
-          </div>
+          </div>:<div className="vop-cert-card-grid">
+            {visible.map(item=><article className="vop-cert-record-card" key={item.id}>
+              <div className="vop-cert-record-card-head">{item.candidatePhotoURL?<img src={item.candidatePhotoURL} alt=""/>:<EmptyAvatar/>}<div><strong>{item.candidateName||'Unnamed candidate'}</strong><span>{item.candidateEmail||item.certificateNumber}</span></div><span className="vop-cert-status">{item.status}</span></div>
+              <dl><div><dt>Course</dt><dd>{item.courseName||'—'}</dd></div><div><dt>Certificate</dt><dd>{item.certificateNumber||'—'}</dd></div><div><dt>Completed</dt><dd>{dateText(item.completionDate)}</dd></div><div><dt>Organization</dt><dd>{item.churchName||item.districtName||item.conferenceName||'—'}</dd></div></dl>
+              <div className="vop-cert-record-card-actions"><button type="button" className="vop-cert-secondary-button" onClick={()=>openPreview(item)}><Eye size={16}/>View</button>{item.status==='Certified'&&featureAvailable&&<button type="button" className="vop-cert-secondary-button" onClick={()=>void changeCertificateLifecycle(item,'replace')}>Replace</button>}</div>
+            </article>)}
+            {visible.length===0&&<div className="vop-cert-empty"><Award size={36}/><strong>No certified candidates are recorded.</strong></div>}
+          </div>}
           <div className="vop-cert-pager"><span>Showing {filtered.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} certified candidates</span><div><button disabled={page === 1} onClick={() => setPage(value => Math.max(1, value - 1))}><ChevronLeft size={18} /></button>{Array.from({ length: Math.min(5, totalPages) }, (_, index) => index + 1).map(number => <button key={number} className={page === number ? 'active' : ''} onClick={() => setPage(number)}>{number}</button>)}<button disabled={page === totalPages} onClick={() => setPage(value => Math.min(totalPages, value + 1))}><ChevronRight size={18} /></button></div></div>
         </>
       )}

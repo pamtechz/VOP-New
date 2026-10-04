@@ -53,6 +53,14 @@ export interface AppSettings {
   quizMaxAttempts?: number;
   /** Waiting period after an attempt before another submission is accepted. */
   quizRetakeCooldownMinutes?: number;
+  engagementPoints?: {
+    soloChallenge?: number;
+    duelChallenge?: number;
+    memoryReview?: number;
+    practiceQuiz?: number;
+    chapterQuiz?: number;
+    finalExam?: number;
+  };
   defaultLanguage: LanguageCode;
   customLanguages?: CustomLanguage[];
   customTranslations?: Record<string, Record<string, string>>;
@@ -323,6 +331,9 @@ export interface CurriculumProgram {
   guideIds:string[];
   organizationId:string;
   sharingScope:'private'|'organization'|'shared';
+  certificateEligible?:boolean;
+  certificateDocumentType?:string;
+  certificateTypeName?:string;
   published:boolean;
   archived:boolean;
 }

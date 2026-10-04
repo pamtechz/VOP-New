@@ -1,0 +1,30 @@
+.vop-org-account-page{display:grid;gap:16px}
+.vop-org-account-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.vop-org-account-head h1{margin:5px 0 4px;color:var(--vop-text);font-size:28px}
+.vop-org-account-head p{max-width:760px;margin:0;color:var(--vop-muted);font-size:13px;line-height:1.55}
+.vop-org-account-kicker{display:inline-flex;align-items:center;gap:7px;color:#1d5fc7;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+.vop-org-account-grid{display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:16px;align-items:start}
+.vop-org-account-summary,.vop-org-account-form{padding:20px}
+.vop-org-account-summary{display:grid;justify-items:center;text-align:center;gap:10px}
+.vop-org-account-summary h2{margin:2px 0 0;color:var(--vop-text);font-size:18px}
+.vop-org-account-summary>p{margin:0;color:var(--vop-muted);font-size:12px;overflow-wrap:anywhere}
+.vop-org-account-avatar{width:76px;height:76px;border-radius:22px;object-fit:cover;border:1px solid var(--theme-border)}
+.vop-org-account-avatar.initials{display:grid;place-items:center;background:var(--theme-surface-soft);color:#1d5fc7;font-size:26px;font-weight:900}
+.vop-org-account-membership{width:100%;display:grid;gap:7px;padding:12px;border:1px solid var(--theme-border);border-radius:12px;background:var(--theme-surface-soft)}
+.vop-org-account-membership span{display:flex;align-items:center;justify-content:center;gap:7px;color:var(--vop-muted);font-size:11px}
+.vop-org-account-membership strong{color:var(--vop-text)}
+.vop-org-account-form{display:grid;gap:15px}
+.vop-org-account-section-title{display:flex;align-items:flex-start;gap:10px}
+.vop-org-account-section-title h2{margin:0;color:var(--vop-text);font-size:17px}
+.vop-org-account-section-title p{margin:3px 0 0;color:var(--vop-muted);font-size:11px;line-height:1.5}
+.vop-org-account-input,.vop-org-account-readonly{min-height:45px;display:flex;align-items:center;gap:8px;border:1px solid var(--theme-border-strong);border-radius:10px;padding:0 12px;background:var(--vop-card);color:var(--vop-muted)}
+.vop-org-account-input input,.vop-org-account-input textarea{width:100%;border:0;outline:0;background:transparent;color:var(--vop-text);font:inherit}
+.vop-org-account-input.textarea{align-items:flex-start;padding-top:12px}
+.vop-org-account-input textarea{resize:vertical}
+.vop-org-account-readonly{background:var(--theme-surface-soft);overflow-wrap:anywhere}
+.vop-org-account-security-note{display:flex;align-items:flex-start;gap:9px;padding:11px 12px;border-radius:10px;background:var(--theme-surface-soft);color:var(--vop-muted);font-size:11px;line-height:1.5}
+.vop-org-account-actions{display:flex;justify-content:flex-end}
+.vop-org-account-message{display:flex;align-items:center;gap:8px;padding:11px 13px;border-radius:10px;font-size:12px;font-weight:700}
+.vop-org-account-message.success{background:color-mix(in srgb,#16a34a 10%,var(--vop-card));color:var(--vop-text);border:1px solid color-mix(in srgb,#16a34a 34%,var(--theme-border))}
+.vop-org-account-message.error{background:color-mix(in srgb,#dc2626 10%,var(--vop-card));color:var(--vop-text);border:1px solid color-mix(in srgb,#dc2626 34%,var(--theme-border))}
+@media(max-width:850px){.vop-org-account-head{flex-direction:column}.vop-org-account-grid{grid-template-columns:1fr}.vop-org-account-head .vop-secondary{width:100%;justify-content:center}}

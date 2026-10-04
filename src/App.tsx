@@ -52,9 +52,11 @@ import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
+import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
+const PORTAL_SESSION_STORAGE_KEY='vop-portal-session-user-v1';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
@@ -151,6 +153,8 @@ export const App: React.FC = () => {
         setLocalizationOrganizationScope('');
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
+        restoredNavigationUid.current='';
+        try{sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);}catch{/* storage may be unavailable */}
         // Clear cached tenant-only labels before showing the anonymous registry.
         void initializeLocalization(settings);
         return;
@@ -180,6 +184,32 @@ export const App: React.FC = () => {
         // Reload the authenticated tenant language registry and overlays.
         void initializeLocalization(settings);
         setAllUsers([profile]);
+
+        // Enter the account's primary workspace on a fresh sign-in. A normal
+        // refresh in the same browser tab keeps the current authorized route.
+        // Protected deep links are checked against the same portal policy.
+        const requestedPortalRoute=String(params.get('route')||'') as AppRoute;
+        if(isPortalRoute(requestedPortalRoute)){
+          const target=canAccessPortalRoute(profile,requestedPortalRoute)
+            ? requestedPortalRoute
+            : defaultPortalRoute(profile);
+          setCurrentRoute(target);
+          replaceLearnerLocation(profile.uid,{route:target},0);
+          restoredNavigationUid.current=profile.uid;
+        }else{
+          let alreadyInPortalSession=false;
+          try{alreadyInPortalSession=sessionStorage.getItem(PORTAL_SESSION_STORAGE_KEY)===profile.uid;}catch{/* storage may be unavailable */}
+          if(!alreadyInPortalSession&&!explicitNavigation.current){
+            const target=defaultPortalRoute(profile);
+            if(target!=='home'){
+              setCurrentRoute(target);
+              replaceLearnerLocation(profile.uid,{route:target},0);
+              restoredNavigationUid.current=profile.uid;
+            }
+          }
+        }
+        try{sessionStorage.setItem(PORTAL_SESSION_STORAGE_KEY,profile.uid);}catch{/* storage may be unavailable */}
+
         if (shareCode && firebaseAuth.currentUser) {
           try {
             const token = await firebaseAuth.currentUser.getIdToken();
@@ -392,11 +422,8 @@ export const App: React.FC = () => {
   }, [currentUser.uid,settings.security?.sessionTimeoutMinutes]);
 
   const applyLearnerLocation = useCallback((location:LearnerLocation):LearnerLocation|null => {
-    const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin']
-      .includes(String(currentUser.role||''))||['owner','admin'].includes(String(currentUser.organizationRole||''));
-    if(location.route==='admin'&&!privileged)return null;
-    const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
-    if(location.route==='mentor'&&!mentorAccess)return null;
+    if(isPortalRoute(location.route)&&!canAccessPortalRoute(currentUser,location.route))return null;
+    if(isOrganizationPortalAccount(currentUser)&&location.route!=='admin'&&location.route!=='certificate-verification')return null;
     const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
         && (!location.guideLanguage||item.language===location.guideLanguage))
@@ -425,7 +452,7 @@ export const App: React.FC = () => {
     setStudyError('');
     setIsMenuOpen(false);
     return applied;
-  },[currentUser.role,currentUser.organizationRole,guides]);
+  },[currentUser,guides]);
 
   useEffect(()=>{
     const uid=currentUser.uid;
@@ -439,9 +466,9 @@ export const App: React.FC = () => {
     if(stored&&restored){
       replaceLearnerLocation(uid,restored,stored.depth);
     }else{
-      const home:LearnerLocation={route:'home'};
-      applyLearnerLocation(home);
-      replaceLearnerLocation(uid,home,0);
+      const fallback:LearnerLocation={route:defaultPortalRoute(currentUser)};
+      applyLearnerLocation(fallback);
+      replaceLearnerLocation(uid,fallback,0);
     }
     restoredNavigationUid.current=uid;
   },[currentUser.uid,contentHydrated,applyLearnerLocation]);
@@ -559,13 +586,19 @@ export const App: React.FC = () => {
     setActiveLesson(null);
     setStudyError('');
     setIsMenuOpen(false);
-    const privileged=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
-      || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
-    if (route === 'admin' && !privileged) return;
-    const mentorAccess=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
-    if (route === 'mentor' && !mentorAccess) return;
-    const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
-    if(route==='localization'&&!localizationAccess)return;
+    if(isPortalRoute(route)&&!canAccessPortalRoute(currentUser,route)){
+      const fallback=defaultPortalRoute(currentUser);
+      setStudyNotice('This account does not have access to the requested workspace.');
+      setCurrentRoute(fallback);
+      rememberLocation({route:fallback},true);
+      return;
+    }
+    if(isOrganizationPortalAccount(currentUser)&&route!=='admin'&&route!=='certificate-verification'){
+      setStudyNotice('Organization staff accounts use the organization portal. Learner pages are kept separate.');
+      setCurrentRoute('admin');
+      rememberLocation({route:'admin'},true);
+      return;
+    }
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -588,8 +621,7 @@ export const App: React.FC = () => {
   };
   const showDashboardShell = currentRoute === 'home' && !activeGuide;
   const showCourse = currentRoute === 'home' && activeGuide !== null;
-  const privilegedUser=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || ''))
-    || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
+  const privilegedUser=hasAdminPortalAccess(currentUser)||hasMentorPortalAccess(currentUser);
   const maintenanceActive=settings.systemOptions?.maintenanceMode===true&&!privilegedUser;
 
   if(maintenanceActive){
@@ -658,13 +690,18 @@ export const App: React.FC = () => {
               if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
             }}/>}
                     {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
-          {currentRoute === 'mentor' && (currentUser.role==='mentor'||currentUser.organizationRole==='mentor') && <MentorWorkspace onBack={goBack} guides={guides}/>}
+          {currentRoute === 'mentor' && hasMentorPortalAccess(currentUser) && <MentorWorkspace onBack={goBack} guides={guides}/>}
 
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
-          {currentRoute === 'admin' && (['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''))) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
+          {currentRoute === 'admin' && hasAdminPortalAccess(currentUser) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
+              onAccountChanged={async()=>{
+                if(!auth?.currentUser)return;
+                const refreshed=await loadFirestoreUser(auth.currentUser.uid);
+                if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
+              }}
               onLogout={() => void firebaseSignOut()} />}
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>

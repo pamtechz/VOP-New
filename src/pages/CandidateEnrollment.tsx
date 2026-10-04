@@ -6,6 +6,7 @@ import {
 import { auth } from '../lib/firebase';
 import type { User } from '../types';
 import { ModalLayer } from '../components/layout/ModalLayer';
+import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import './candidate-management.css';
 
 type Course={id:string;title?:string;language?:string;published?:boolean;archived?:boolean};
@@ -47,6 +48,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
   const [name,setName]=useState(''); const [email,setEmail]=useState(''); const [phone,setPhone]=useState(''); const [password,setPassword]=useState('');
   const [search,setSearch]=useState(''); const [status,setStatus]=useState<'all'|'active'|'graduated'|'graduating'|'scheduled'|'baptized'>('all');
   const [page,setPage]=useState(1); const pageSize=10;
+  const [viewMode,setViewMode]=useState<AdminViewMode>('table');
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false);
   const [message,setMessage]=useState(''); const [error,setError]=useState('');
   const [enrollOpen,setEnrollOpen]=useState(false);
@@ -206,11 +208,32 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
           <option value="all">All candidates</option><option value="active">Active</option>
           <option value="graduating">Graduating</option><option value="graduated">Graduated</option><option value="scheduled">Baptism scheduled</option><option value="baptized">Baptized</option>
         </select>
+        <ViewModeToggle value={viewMode} onChange={setViewMode} label="Candidate list view"/>
       </div>
-      <div className="vop-candidate-table-wrap">
-        {loading?<div className="vop-empty">Loading candidates…</div>:rows.length===0?<div className="vop-empty">No candidates match this view.</div>:
-        <table className="vop-candidate-table"><thead><tr><th>#</th><th>Candidate</th><th>Organization</th><th>Enrollment</th><th>Ministry status</th><th>Baptism tracking</th><th>Account</th></tr></thead>
-          <tbody>{rows.map((candidate,index)=>{
+      {loading?<div className="vop-candidate-table-wrap"><div className="vop-empty">Loading candidates…</div></div>
+        :rows.length===0?<div className="vop-candidate-table-wrap"><div className="vop-empty">No candidates match this view.</div></div>
+        :viewMode==='table'?<div className="vop-candidate-table-wrap">
+          <table className="vop-candidate-table"><thead><tr><th>#</th><th>Candidate</th><th>Organization</th><th>Enrollment</th><th>Ministry status</th><th>Baptism tracking</th><th>Account</th></tr></thead>
+            <tbody>{rows.map((candidate,index)=>{
+              const info=candidate.information||{};
+              const ministry=info.baptized?'Baptized':info.baptismCandidate?'Baptism scheduled':info.graduated?'Graduated':info.graduating?'Graduating':'Studying';
+              const baptismLabel=info.baptized
+                ? `Baptized · ${dateLabel(info.baptismDate)}`
+                : info.baptismCandidate
+                  ? `Scheduled · ${dateLabel(info.baptismScheduledDate)}`
+                  : 'Not scheduled';
+              return <tr key={candidate.uid}>
+                <td>{(page-1)*pageSize+index+1}</td>
+                <td><div className="vop-candidate-person"><span>{initials(candidate.displayName)}</span><div><strong>{candidate.displayName||'Unnamed candidate'}</strong><small>{candidate.email||candidate.phoneNumber||candidate.userCode||'No contact recorded'}</small></div></div></td>
+                <td><strong>{candidate.organizationName||'Platform / unassigned'}</strong><small>{[candidate.conferenceName,candidate.districtName].filter(Boolean).join(' · ')||'No hierarchy assignment'}</small></td>
+                <td>{dateLabel(info.enrollmentDate||candidate.createdAt)}</td>
+                <td><span className="vop-candidate-ministry-status">{ministry}</span></td>
+                <td><div style={{display:'grid',gap:6}}><small>{baptismLabel}</small><button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage</button></div></td>
+                <td><span className={'vop-status '+(candidate.disabled?'disabled':'enabled')}>{candidate.disabled?'Inactive':'Active'}</span></td>
+              </tr>;
+            })}</tbody></table>
+        </div>:<div className="vop-admin-record-cards vop-candidate-card-grid">
+          {rows.map(candidate=>{
             const info=candidate.information||{};
             const ministry=info.baptized?'Baptized':info.baptismCandidate?'Baptism scheduled':info.graduated?'Graduated':info.graduating?'Graduating':'Studying';
             const baptismLabel=info.baptized
@@ -218,17 +241,19 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
               : info.baptismCandidate
                 ? `Scheduled · ${dateLabel(info.baptismScheduledDate)}`
                 : 'Not scheduled';
-            return <tr key={candidate.uid}>
-              <td>{(page-1)*pageSize+index+1}</td>
-              <td><div className="vop-candidate-person"><span>{initials(candidate.displayName)}</span><div><strong>{candidate.displayName||'Unnamed candidate'}</strong><small>{candidate.email||candidate.phoneNumber||candidate.userCode||'No contact recorded'}</small></div></div></td>
-              <td><strong>{candidate.organizationName||'Platform / unassigned'}</strong><small>{[candidate.conferenceName,candidate.districtName].filter(Boolean).join(' · ')||'No hierarchy assignment'}</small></td>
-              <td>{dateLabel(info.enrollmentDate||candidate.createdAt)}</td>
-              <td><span className="vop-candidate-ministry-status">{ministry}</span></td>
-              <td><div style={{display:'grid',gap:6}}><small>{baptismLabel}</small><button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage</button></div></td>
-              <td><span className={'vop-status '+(candidate.disabled?'disabled':'enabled')}>{candidate.disabled?'Inactive':'Active'}</span></td>
-            </tr>;
-          })}</tbody></table>}
-      </div>
+            return <article key={candidate.uid} className="vop-admin-record-card">
+              <div className="vop-admin-record-card-head"><div className="vop-candidate-person"><span>{initials(candidate.displayName)}</span><div><strong>{candidate.displayName||'Unnamed candidate'}</strong><small>{candidate.email||candidate.phoneNumber||candidate.userCode||'No contact recorded'}</small></div></div><span className={'vop-status '+(candidate.disabled?'disabled':'enabled')}>{candidate.disabled?'Inactive':'Active'}</span></div>
+              <span className="vop-candidate-ministry-status">{ministry}</span>
+              <div className="vop-admin-record-card-meta">
+                <div><small>Organization</small><strong>{candidate.organizationName||'Platform / unassigned'}</strong></div>
+                <div><small>Enrollment</small><strong>{dateLabel(info.enrollmentDate||candidate.createdAt)}</strong></div>
+                <div><small>Hierarchy</small><strong>{[candidate.conferenceName,candidate.districtName].filter(Boolean).join(' · ')||'Not assigned'}</strong></div>
+                <div><small>Baptism</small><strong>{baptismLabel}</strong></div>
+              </div>
+              <div className="vop-admin-record-card-actions"><button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage baptism</button></div>
+            </article>;
+          })}
+        </div>}
       <div className="vop-candidate-pager"><span>Showing {filtered.length?((page-1)*pageSize+1):0}–{Math.min(page*pageSize,filtered.length)} of {filtered.length}</span>
         <div><button type="button" disabled={page<=1} onClick={()=>setPage(v=>Math.max(1,v-1))}><ChevronLeft size={16}/></button><span>Page {page} of {totalPages}</span><button type="button" disabled={page>=totalPages} onClick={()=>setPage(v=>Math.min(totalPages,v+1))}><ChevronRight size={16}/></button></div>
       </div>

@@ -8,6 +8,7 @@ import { getTranslation } from '../services/i18n';
 import { ModalLayer } from '../components/layout/ModalLayer';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
 import { StructureActionsMenu } from '../components/admin/StructureActionsMenu';
+import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import './userManagement.css';
 
 type ManagedUser = {
@@ -108,6 +109,7 @@ export default function UserManagement({ onBack, scope }: Props) {
   const [conferenceFilter, setConferenceFilter] = useState('all');
   const [districtFilter, setDistrictFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [viewMode,setViewMode]=useState<AdminViewMode>('table');
   const [selected, setSelected] = useState<ManagedUser | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -424,40 +426,60 @@ export default function UserManagement({ onBack, scope }: Props) {
             <button className="vop-secondary vop-user-filter" type="button" onClick={()=>{setSearch('');setRoleFilter('all');setStatusFilter('all');setConferenceFilter('all');setDistrictFilter('all')}}><Filter size={17}/>Clear filters</button>
           </div>
 
-          <div className="vop-user-table-wrap">
-            {loading ? <div className="vop-user-empty">{t('admin.loading_users','Loading users…')}</div> : pageRows.length === 0 ? <div className="vop-user-empty">{t('admin.no_users_match','No users match the current filters.')}</div> : (
+          <div className="vop-user-view-row">
+            <label><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(user => selectedRows.has(user.uid))} onChange={toggleAll}/> Select page</label>
+            <ViewModeToggle value={viewMode} onChange={setViewMode} label="User list view"/>
+          </div>
+
+          {loading ? <div className="vop-user-table-wrap"><div className="vop-user-empty">{t('admin.loading_users','Loading users…')}</div></div>
+            : pageRows.length === 0 ? <div className="vop-user-table-wrap"><div className="vop-user-empty">{t('admin.no_users_match','No users match the current filters.')}</div></div>
+            : viewMode==='table' ? <div className="vop-user-table-wrap">
               <table className="vop-user-table">
                 <thead><tr>
                   <th><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(user => selectedRows.has(user.uid))} onChange={toggleAll}/></th>
                   <th>{t('common.user','User')}</th><th>{t('common.role','Role')}</th><th>Assignment / Scope</th><th>{t('common.status','Status')}</th><th>{t('admin.last_login','Last Login')}</th><th>{t('common.actions','Actions')}</th>
                 </tr></thead>
-                <tbody>
-                  {pageRows.map(user => (
-                    <tr key={user.uid}>
-                      <td><input type="checkbox" checked={selectedRows.has(user.uid)} onChange={() => toggleRow(user.uid)}/></td>
-                      <td><div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email || 'No email recorded'}</span><small>{user.userCode}</small></div></div></td>
-                      <td><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span></td>
-                      <td><div className="vop-user-scope-cell"><strong>{user.organizationName || user.conferenceName || user.districtName || user.unionName || 'Platform / not assigned'}</strong><span>{user.organizationName ? [user.conferenceName,user.districtName].filter(Boolean).join(' · ') || 'Organisation scope' : user.adminNodeType && user.adminNodeId ? user.adminNodeType.replace(/^./,value=>value.toUpperCase()) + ' administrator' : 'No tenant assignment'}</span></div></td>
-                      <td><span className={'vop-user-status ' + (user.disabled ? 'inactive' : 'active')}>{user.disabled ? t('common.inactive','Inactive') : t('common.active','Active')}</span></td>
-                      <td className="vop-user-last-login">{formatLastLogin(user.lastLogin)}</td>
-                      <td>
-                        <div className="vop-user-actions">
-                          <button type="button" title={t('common.view','View')} onClick={() => setSelected(user)}><Eye size={16}/></button>
-                          <button type="button" title={t('common.edit','Edit')} onClick={() => openEdit(user)}><Edit3 size={16}/></button>
-                          <StructureActionsMenu label={(user.displayName || user.email || 'User')+' actions'}>
-                            <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>{t('admin.edit_user','Edit User')}</button>
-                            <button type="button" onClick={() => void setStatus(user, !user.disabled)}><Activity size={15}/>{user.disabled ? t('admin.activate_user','Activate User') : t('admin.disable_user','Disable User')}</button>
-                            <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
-                            <button type="button" className="vop-structure-delete" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
-                          </StructureActionsMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <tbody>{pageRows.map(user => <tr key={user.uid}>
+                  <td><input type="checkbox" checked={selectedRows.has(user.uid)} onChange={() => toggleRow(user.uid)}/></td>
+                  <td><div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email || 'No email recorded'}</span><small>{user.userCode}</small></div></div></td>
+                  <td><span className={'vop-user-role-pill ' + user.roleColor}>{user.roleLabel}</span></td>
+                  <td><div className="vop-user-scope-cell"><strong>{user.organizationName || user.conferenceName || user.districtName || user.unionName || 'Platform / not assigned'}</strong><span>{user.organizationName ? [user.conferenceName,user.districtName].filter(Boolean).join(' · ') || 'Organisation scope' : user.adminNodeType && user.adminNodeId ? user.adminNodeType.replace(/^./,value=>value.toUpperCase()) + ' administrator' : 'No tenant assignment'}</span></div></td>
+                  <td><span className={'vop-user-status ' + (user.disabled ? 'inactive' : 'active')}>{user.disabled ? t('common.inactive','Inactive') : t('common.active','Active')}</span></td>
+                  <td className="vop-user-last-login">{formatLastLogin(user.lastLogin)}</td>
+                  <td><div className="vop-user-actions">
+                    <button type="button" title={t('common.view','View')} onClick={() => setSelected(user)}><Eye size={16}/></button>
+                    <button type="button" title={t('common.edit','Edit')} onClick={() => openEdit(user)}><Edit3 size={16}/></button>
+                    <StructureActionsMenu label={(user.displayName || user.email || 'User')+' actions'}>
+                      <button type="button" onClick={() => openEdit(user)}><Edit3 size={15}/>{t('admin.edit_user','Edit User')}</button>
+                      <button type="button" onClick={() => void setStatus(user, !user.disabled)}><Activity size={15}/>{user.disabled ? t('admin.activate_user','Activate User') : t('admin.disable_user','Disable User')}</button>
+                      <button type="button" onClick={() => void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+                      <button type="button" className="vop-structure-delete" onClick={() => void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
+                    </StructureActionsMenu>
+                  </div></td>
+                </tr>)}</tbody>
               </table>
-            )}
-          </div>
+            </div> : <div className="vop-admin-record-cards vop-user-card-grid">
+              {pageRows.map(user=><article key={user.uid} className="vop-admin-record-card vop-user-record-card">
+                <div className="vop-admin-record-card-head">
+                  <div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email||'No email recorded'}</span><small>{user.userCode}</small></div></div>
+                  <input type="checkbox" aria-label={'Select '+user.displayName} checked={selectedRows.has(user.uid)} onChange={()=>toggleRow(user.uid)}/>
+                </div>
+                <div className="vop-user-card-pills"><span className={'vop-user-role-pill '+user.roleColor}>{user.roleLabel}</span><span className={'vop-user-status '+(user.disabled?'inactive':'active')}>{user.disabled?t('common.inactive','Inactive'):t('common.active','Active')}</span></div>
+                <div className="vop-admin-record-card-meta">
+                  <div><small>Assignment / scope</small><strong>{user.organizationName||user.conferenceName||user.districtName||user.unionName||'Platform / not assigned'}</strong></div>
+                  <div><small>Last login</small><strong>{formatLastLogin(user.lastLogin)}</strong></div>
+                </div>
+                <div className="vop-admin-record-card-actions">
+                  <button className="vop-secondary" type="button" onClick={()=>setSelected(user)}><Eye size={15}/>View</button>
+                  <button className="vop-secondary" type="button" onClick={()=>openEdit(user)}><Edit3 size={15}/>Edit</button>
+                  <StructureActionsMenu label={(user.displayName||user.email||'User')+' actions'}>
+                    <button type="button" onClick={()=>void setStatus(user,!user.disabled)}><Activity size={15}/>{user.disabled?t('admin.activate_user','Activate User'):t('admin.disable_user','Disable User')}</button>
+                    <button type="button" onClick={()=>void resetPassword(user)}><KeyRound size={15}/>{t('admin.reset_password','Reset Password')}</button>
+                    <button type="button" className="vop-structure-delete" onClick={()=>void deleteUser(user)}><Trash2 size={15}/>{t('admin.delete_user','Delete User')}</button>
+                  </StructureActionsMenu>
+                </div>
+              </article>)}
+            </div>}
 
           <div className="vop-user-pager">
             <span>Showing {filtered.length ? ((page - 1) * pageSize + 1) : 0}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} users</span>

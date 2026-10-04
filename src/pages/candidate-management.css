@@ -4,7 +4,7 @@
 .vop-candidate-metrics>div>span{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#edf5ff;color:#14569a}
 .vop-candidate-metrics small{display:block;color:var(--text-muted,#75879f);font-size:10px;font-weight:700}.vop-candidate-metrics strong{display:block;margin-top:2px;color:var(--text-primary,#143e70);font-size:20px}
 .vop-candidate-alert{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #ffcaca;border-radius:9px;background:var(--vop-error-bg);color:var(--vop-error)}.vop-candidate-alert span{flex:1}.vop-candidate-alert button{border:0;background:transparent;color:inherit;cursor:pointer}
-.vop-candidate-list-card{padding:0;overflow:hidden}.vop-candidate-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:9px;padding:11px;border-bottom:1px solid var(--border-subtle,#e1e9f2)}
+.vop-candidate-list-card{padding:0;overflow:hidden}.vop-candidate-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 190px auto;gap:9px;padding:11px;border-bottom:1px solid var(--border-subtle,#e1e9f2);align-items:center}
 .vop-candidate-table-wrap{overflow:auto}.vop-candidate-table{width:100%;border-collapse:collapse}.vop-candidate-table th{padding:10px 11px;background:var(--bg-secondary,#f7f9fc);color:#60758f;font-size:10px;text-align:left;white-space:nowrap}.vop-candidate-table td{padding:10px 11px;border-top:1px solid var(--border-subtle,#edf2f7);color:var(--text-secondary,#355675);font-size:11px;vertical-align:middle}.vop-candidate-table td>small{display:block;margin-top:3px;color:var(--text-muted,#8292a6)}
 .vop-candidate-person{display:flex;align-items:center;gap:9px;min-width:190px}.vop-candidate-person>span{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:#eaf3ff;color:#15599c;font-weight:850}.vop-candidate-person>div{display:grid;gap:2px}.vop-candidate-person strong{color:var(--text-primary,#153f72);font-size:11px}.vop-candidate-person small{color:var(--text-muted,#7b8da3);font-size:9px}
 .vop-candidate-ministry-status{display:inline-flex;padding:5px 7px;border-radius:999px;background:#eef5fd;color:#285f96;font-size:9px;font-weight:800}
@@ -16,3 +16,9 @@
 .vop-candidate-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:17px}
 @media(max-width:900px){.vop-candidate-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.vop-candidate-metrics{grid-template-columns:1fr 1fr}.vop-candidate-toolbar{grid-template-columns:1fr}.vop-candidate-pager{align-items:flex-start;flex-direction:column}.vop-candidate-modal{padding:13px}.vop-candidate-modal-actions{display:grid;grid-template-columns:1fr}.vop-candidate-modal-actions button{width:100%}}
+
+.vop-candidate-card-grid{padding:12px}
+.vop-candidate-card-grid .vop-candidate-person{min-width:0}
+.vop-candidate-card-grid .vop-candidate-person>div{min-width:0}
+.vop-candidate-card-grid .vop-candidate-person strong,.vop-candidate-card-grid .vop-candidate-person small{overflow-wrap:anywhere}
+@media(max-width:800px){.vop-candidate-toolbar{grid-template-columns:minmax(0,1fr) auto}.vop-candidate-toolbar .vop-filter{grid-column:1/-1;grid-row:2}}

@@ -5,6 +5,10 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { configuredPassThreshold, validStudyId, validStudyLanguage } from '../../shared/studyValidation.js';
 import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculumStructure.js';
 import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
+import {ensureAutomaticProgramGraduationReviews} from '../../server/programGraduationAutomation.js';
+import {organizationPointRules,pointKindForAssessment} from '../../server/engagementPoints.js';
+import {awardApprovedCertificate,awardApprovedProgramCertificate} from '../../server/certificateAward.js';
+import {createNotification} from '../../server/notifications.js';
 
 const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
 
@@ -59,6 +63,56 @@ function positiveOverride(value:unknown,fallback:number,max:number){
   const parsed=Number(value??0);
   return Number.isInteger(parsed)&&parsed>0&&parsed<=max?parsed:fallback;
 }
+async function finalizeAutomaticCertificateRelease(
+  db:FirebaseFirestore.Firestore,
+  candidateId:string,
+  guideId:string,
+  guideReview:{status?:string}|null,
+  programReviews:Array<{status?:string;programId?:string}>,
+  createdBy:string,
+){
+  if(guideReview?.status==='approved'){
+    try{
+      const award=await awardApprovedCertificate(db,candidateId,createdBy,guideId);
+      if(award.created){
+        const candidate=await db.doc(`users/${candidateId}`).get();
+        const organizationId=String(candidate.data()?.organizationId||'').trim();
+        await createNotification(db,{
+          organizationId,recipientId:candidateId,type:'certificate',
+          title:'Certificate awarded',
+          body:'Your course certificate was issued automatically after all completion and assessment requirements were verified.',
+          actionUrl:'/certificates',
+          metadata:{source:'automatic-certificate-release',guideId},
+          createdBy,
+        });
+      }
+    }catch(error){
+      console.error('Automatic guide certificate release failed',error);
+    }
+  }
+  for(const review of programReviews){
+    const programId=String(review.programId||'').trim();
+    if(review.status!=='approved'||!programId)continue;
+    try{
+      const award=await awardApprovedProgramCertificate(db,candidateId,createdBy,programId);
+      if(award.created){
+        const candidate=await db.doc(`users/${candidateId}`).get();
+        const organizationId=String(candidate.data()?.organizationId||'').trim();
+        await createNotification(db,{
+          organizationId,recipientId:candidateId,type:'certificate',
+          title:'Program certificate awarded',
+          body:'Your program certificate was issued automatically after every required guide, lesson and assessment was verified.',
+          actionUrl:'/certificates',
+          metadata:{source:'automatic-program-certificate-release',programId},
+          createdBy,
+        });
+      }
+    }catch(error){
+      console.error('Automatic program certificate release failed',error);
+    }
+  }
+}
+
 function assessmentPolicy(lesson:Record<string,unknown>,settings:Record<string,unknown>){
   const configured=configuredPassThreshold(lesson.assessmentPassThreshold)
     ?? configuredPassThreshold(settings.quizPassThreshold);
@@ -686,6 +740,8 @@ export default async function handler(
       if(useTenantGuide&&guideId!=='discover'){
         try{
           certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:lesson-completion');
+          const programReviews=await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-lesson-completion');
+          await finalizeAutomaticCertificateRelease(db,decoded.uid,guideId,certificateReview,programReviews,'system:lesson-completion');
         }catch(reviewError){
           // Study completion is authoritative even if a downstream review
           // notification/configuration is temporarily unavailable. A later
@@ -850,6 +906,10 @@ export default async function handler(
     // naturally idempotent across retries and concurrent duplicate requests.
     const attemptId=sessionId;
     const attemptRef = userRef.collection('assessmentAttempts').doc(attemptId);
+    const assessmentPointKind=pointKindForAssessment(lessonData.assessmentKind);
+    const pointRules=await organizationPointRules(db,policyOrganizationId);
+    const assessmentPoints=pointRules[assessmentPointKind];
+    const pointsLedgerRef=userRef.collection('pointsLedger').doc(`${assessmentPointKind}-${attemptId}`);
     const policyRef = userRef.collection('assessmentAttemptPolicy').doc(
       retakePolicyKey(policyOrganizationId, language, effectiveGuideId, lessonId),
     );
@@ -892,8 +952,11 @@ export default async function handler(
     };
 
     const policyResult = await db.runTransaction(async transaction => {
-      const snapshot = await transaction.get(userRef);
-      const transactionalSession = sessionRef ? await transaction.get(sessionRef) : null;
+      const [snapshot,transactionalSession,pointsLedger]=await Promise.all([
+        transaction.get(userRef),
+        sessionRef?transaction.get(sessionRef):Promise.resolve(null),
+        transaction.get(pointsLedgerRef),
+      ]);
       if (!snapshot.exists) throw new Error('VOP account profile was not found.');
       if(!transactionalSession?.exists)throw new Error('This assessment attempt session is no longer valid.');
       const transactionalSessionData=transactionalSession.data()||{};
@@ -935,8 +998,16 @@ export default async function handler(
           },
           updatedAt: FieldValue.serverTimestamp(),
         },
+        ...(!pointsLedger.exists&&assessmentPoints>0?{engagementPoints:FieldValue.increment(assessmentPoints)}:{}),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+      if(!pointsLedger.exists){
+        transaction.create(pointsLedgerRef,{
+          kind:assessmentPointKind,eventId:attemptId,points:assessmentPoints,
+          organizationId:policyOrganizationId,assessmentId:lessonId,guideId:effectiveGuideId,
+          awardedAt:FieldValue.serverTimestamp(),
+        });
+      }
 
       transaction.set(attemptRef, {
         candidateId: decoded.uid,userId: decoded.uid,sessionId,
@@ -978,7 +1049,7 @@ export default async function handler(
         lastSubmittedAt:attemptTimeIso,lastCompletedAttemptNumber:attemptsUsed,
         updatedAt:FieldValue.serverTimestamp(),
       },{merge:true});
-      return {attemptsUsed,replayed:false,replay:null};
+      return {attemptsUsed,replayed:false,replay:null,pointsAwarded:pointsLedger.exists?0:assessmentPoints};
     });
 
     if(policyResult.replayed&&policyResult.replay){
@@ -991,6 +1062,8 @@ export default async function handler(
     if(useTenantGuide&&guideId!=='discover'){
       try{
         certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:assessment-completion');
+        const programReviews=await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-assessment-completion');
+        await finalizeAutomaticCertificateRelease(db,decoded.uid,guideId,certificateReview,programReviews,'system:assessment-completion');
       }catch(reviewError){
         console.warn('Automatic certificate review could not be created after assessment completion',reviewError);
       }
@@ -1001,7 +1074,7 @@ export default async function handler(
     const committed=storedSubmissionPayload({...storedResult,attemptsUsed:policyResult.attemptsUsed});
     if(!committed)throw new Error('The saved assessment result could not be reconstructed.');
     return res.status(200).json({
-      ok:true,replayed:false,scoreKey,...committed,certificateReview,
+      ok:true,replayed:false,scoreKey,...committed,certificateReview,pointsAwarded:policyResult.pointsAwarded||0,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Study progress could not be saved.';

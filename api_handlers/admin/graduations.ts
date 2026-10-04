@@ -6,7 +6,8 @@ import { configuredPassThreshold } from '../../shared/studyValidation.js';
 import { revalidateAssessmentEvidence, verifiedAssessmentEvidence, type AssessmentEvidence } from '../../server/assessmentEvidence.js';
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 import { createNotification } from '../../server/notifications.js';
-import { awardApprovedCertificate, certificationPortfolioEvidence } from '../../server/certificateAward.js';
+import { awardApprovedCertificate,awardApprovedProgramCertificate,certificationPortfolioEvidence } from '../../server/certificateAward.js';
+import {programCompletionEvidence,revalidateProgramCompletion,type ProgramCompletionEvidence} from '../../server/programGraduationAutomation.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -45,7 +46,9 @@ function requestId(organizationId: string, candidateId: string, guideId: string)
 function safeRequest(id: string, data: Record<string, unknown>) {
   return {
     id, candidateId: text(data.candidateId), candidateName: text(data.candidateName), candidateEmail: text(data.candidateEmail),
-    organizationId: text(data.organizationId), guideId: text(data.guideId), guideTitle: text(data.guideTitle),
+    organizationId: text(data.organizationId), targetKind:text(data.targetKind)||'guide',
+    guideId: text(data.guideId), guideTitle: text(data.guideTitle),
+    programId:text(data.programId),programTitle:text(data.programTitle),
     churchId: text(data.churchId), districtId: text(data.districtId), conferenceId: text(data.conferenceId), unionId: text(data.unionId),
     averageScore: Number(data.averageScore), status: text(data.status), workflowStageId: text(data.workflowStageId),
     workflowStageIndex: Number(data.workflowStageIndex ?? 0), revision: Number(data.revision ?? 0),
@@ -54,10 +57,23 @@ function safeRequest(id: string, data: Record<string, unknown>) {
   };
 }
 
-async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>) {
-  const snapshot = await ctx.db.doc('system/certification').get();
-  const stages = stageConfig(snapshot.exists ? snapshot.data() || {} : {});
-  if (!stages.length) throw new Error('Graduation approval stages are not configured. Configure at least one enabled approval stage before accepting graduation requests.');
+async function loadCertificationConfig(
+  ctx:Awaited<ReturnType<typeof authenticateTenant>>,
+  organizationId:string,
+){
+  const [platform,scoped]=await Promise.all([
+    ctx.db.doc('system/certification').get(),
+    organizationId?ctx.db.doc(`organizations/${organizationId}/settings/certification`).get():Promise.resolve(null),
+  ]);
+  return {...(platform.data()||{}),...(scoped?.data()||{})} as Record<string,unknown>;
+}
+async function loadWorkflow(
+  ctx:Awaited<ReturnType<typeof authenticateTenant>>,
+  organizationId=ctx.organizationId,
+) {
+  const config=await loadCertificationConfig(ctx,organizationId);
+  const stages=stageConfig(config);
+  if(!stages.length)throw new Error('Graduation approval stages are not configured. Configure at least one enabled approval stage before accepting graduation requests.');
   return stages;
 }
 
@@ -138,7 +154,7 @@ async function submit(req: Request, res: Response) {
   if (guide.published !== true || guide.archived === true || guide.certificateEligible !== true) return res.status(409).json({ error: 'The selected guide is not currently eligible for graduation.' });
   if (organizationSnapshot.data()?.status !== 'active') return res.status(409).json({ error: 'The candidate organization is not active.' });
 
-  const stages = await loadWorkflow(ctx);
+  const stages = await loadWorkflow(ctx,ctx.organizationId);
   const lessonsSnapshot = await guideSnapshot.ref.collection('lessons').get();
   const lessons = lessonsSnapshot.docs.map(item => ({ ...item.data(), id: item.id }));
   const publishedLessons = lessons.filter(item => item.published === true);
@@ -148,11 +164,13 @@ async function submit(req: Request, res: Response) {
   if (publishedLessons.length !== lessons.length || !studyLessons.length || !testLessons.length) {
     return res.status(409).json({ error: 'The candidate cannot submit graduation until the certificate-eligible guide has all required published lessons and assessments.' });
   }
-  const certificationConfigSnapshot = await ctx.db.doc('system/certification').get();
-  const certificationConfig = certificationConfigSnapshot.exists ? certificationConfigSnapshot.data() || {} : {};
-  const organizationSettingsSnapshot = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/settings`).get();
-  const threshold = configuredPassThreshold(certificationConfig.minimumScore)
-    ?? configuredPassThreshold(organizationSettingsSnapshot.data()?.quizPassThreshold);
+  const [certificationConfig,organizationSettingsSnapshot]=await Promise.all([
+    loadCertificationConfig(ctx,ctx.organizationId),
+    ctx.db.doc(`organizations/${ctx.organizationId}/settings/settings`).get(),
+  ]);
+  if(certificationConfig.enabled!==true)return res.status(409).json({error:'Official certification is currently disabled for this organization.'});
+  const threshold=configuredPassThreshold(certificationConfig.minimumScore)
+    ??configuredPassThreshold(organizationSettingsSnapshot.data()?.quizPassThreshold);
   if (threshold === null) {
     return res.status(409).json({ error: 'The certification pass mark is not configured for this organization.' });
   }
@@ -260,7 +278,7 @@ async function decide(req: Request, res: Response) {
     }
   }
   await requireSubscriptionFeature(ctx,'certification',requestOrganizationId);
-  const stages = await loadWorkflow(ctx);
+  const stages = await loadWorkflow(ctx,requestOrganizationId);
   if (['approved', 'rejected'].includes(text(current.status))) return res.status(409).json({ error: 'This graduation request has already reached a final decision.' });
 
   const stageIndex = Number(current.workflowStageIndex), stageId = text(current.workflowStageId), stage = stages[stageIndex];
@@ -287,12 +305,31 @@ async function decide(req: Request, res: Response) {
     studyLessons:{id:string}[];testLessons:{id:string}[];
     assessmentEvidence:AssessmentEvidence;
   } | null = null;
+  let programApprovalEvidence:ProgramCompletionEvidence|null=null;
   if (decision === 'approve') {
+    if(text(current.targetKind)==='program'){
+      const programId=text(current.programId);
+      if(!/^[A-Za-z0-9_-]{1,120}$/.test(programId)){
+        return res.status(409).json({error:'The graduation request has an invalid program reference.'});
+      }
+      const checked=await programCompletionEvidence(ctx.db,text(current.candidateId),programId);
+      if(!checked.evidence){
+        return res.status(409).json({error:'The candidate no longer satisfies the program certificate requirements: '+checked.reason.replaceAll('_',' ')+'.'});
+      }
+      if(checked.evidence.organizationId!==requestOrganizationId){
+        return res.status(409).json({error:'The program graduation evidence belongs to another organization.'});
+      }
+      const certificationConfig=await loadCertificationConfig(ctx,requestOrganizationId);
+      if(stageIndex===stages.length-1&&certificationConfig.enabled!==true){
+        return res.status(409).json({error:'Official certification is currently disabled.'});
+      }
+      programApprovalEvidence=checked.evidence;
+    }else{
     const guideId = text(current.guideId);
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(guideId)) return res.status(409).json({ error: 'The graduation request has an invalid guide reference.' });
-    const [guideSnapshot, configSnapshot, settingsSnapshot] = await Promise.all([
+    const [guideSnapshot, certificationConfig, settingsSnapshot] = await Promise.all([
       ctx.db.doc(`guides/${guideId}`).get(),
-      ctx.db.doc('system/certification').get(),
+      loadCertificationConfig(ctx,requestOrganizationId),
       ctx.db.doc(`organizations/${requestOrganizationId}/settings/settings`).get(),
     ]);
     const guide = guideSnapshot.data() || {};
@@ -303,8 +340,8 @@ async function decide(req: Request, res: Response) {
       return res.status(409).json({ error: 'The graduation guide is no longer eligible for approval.' });
     }
     const language = text(guide.language);
-    const threshold = configuredPassThreshold(configSnapshot.data()?.minimumScore)
-      ?? configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
+    const threshold=configuredPassThreshold(certificationConfig.minimumScore)
+      ??configuredPassThreshold(settingsSnapshot.data()?.quizPassThreshold);
     if (!language || threshold === null) return res.status(409).json({ error: 'The graduation assessment language or pass mark is not configured.' });
     const records = (await guideSnapshot.ref.collection('lessons').get()).docs.map(item => ({ ...item.data(), id: item.id }));
     if (!records.length || records.some(item => item.published !== true || item.archived === true)) {
@@ -321,7 +358,7 @@ async function decide(req: Request, res: Response) {
     // saving that final decision, verify any additional configured portfolio
     // evidence/signatures so an approved request can always be awarded.
     if(stageIndex===stages.length-1){
-      if(configSnapshot.data()?.enabled!==true){
+      if(certificationConfig.enabled!==true){
         return res.status(409).json({error:'Official certification is currently disabled.'});
       }
       const requirementIds=Array.isArray(guide.certificationRequirementIds)
@@ -348,6 +385,7 @@ async function decide(req: Request, res: Response) {
       return res.status(409).json({error:'The candidate has not passed all required assessments.'});
     }
     approvalEvidence={guideId,language,threshold,studyLessons,testLessons,assessmentEvidence:currentAssessmentEvidence};
+    }
   }
 
   const result = await ctx.db.runTransaction(async transaction => {
@@ -367,6 +405,17 @@ async function decide(req: Request, res: Response) {
     decisions.push({ stageId: stage.id, stageLabel: stage.label || stage.id, decision, notes, approverUid: ctx.auth.uid, approverRole: profileRole || membershipRole, decidedAt: new Date().toISOString() });
     const nextIndex = stageIndex + 1, nextStage = stages[nextIndex];
     const nextData: Record<string, unknown> = { decisions, revision: revision + 1, approverNotes: notes, updatedAt: timestamp };
+    if(decision==='approve'&&programApprovalEvidence){
+      if(text(data.organizationId)!==requestOrganizationId
+        ||text(data.targetKind)!=='program'
+        ||text(data.programId)!==programApprovalEvidence.programId){
+        throw new Error('The candidate organization or program graduation request changed before approval.');
+      }
+      if(!(await revalidateProgramCompletion(transaction,candidateRef,programApprovalEvidence))){
+        throw new Error('The candidate no longer satisfies all program completion requirements.');
+      }
+      nextData.averageScore=programApprovalEvidence.averageScore;
+    }
     if (decision === 'approve' && approvalEvidence) {
       if (text(data.organizationId) !== requestOrganizationId || text(data.guideId) !== approvalEvidence.guideId ||
           text(candidateData.organizationId) !== requestOrganizationId) {
@@ -417,7 +466,9 @@ async function decide(req: Request, res: Response) {
   let certificateAwardError='';
   if(decision==='approve'&&text(result.status)==='approved'&&candidateId){
     try{
-      certificateAward=await awardApprovedCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.guideId));
+      certificateAward=text(result.targetKind)==='program'
+        ?await awardApprovedProgramCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.programId))
+        :await awardApprovedCertificate(ctx.db,candidateId,ctx.auth.uid,text(result.guideId));
     }catch(error){
       certificateAwardError=error instanceof Error?error.message:'The approved certificate could not be published.';
       await ref.set({

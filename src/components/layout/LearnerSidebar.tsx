@@ -6,6 +6,7 @@ import {
 import type { AppRoute, AppSettings, User } from '../../types';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './sidebar-system.css';
+import { hasAdminPortalAccess, hasMentorPortalAccess, hasLocalizationPortalAccess } from '../../services/portalAccess';
 
 type NavItem = { route:AppRoute; label:string; icon:LucideIcon };
 type Props = {
@@ -21,12 +22,11 @@ type Props = {
  * focus-trapped overlay. Only a visual preference is stored on the device. */
 export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onToggle,onNavigate}:Props){
   const t=(key:string,english:string)=>getTranslation(key,getUiLocale(),settings.customTranslations,english,'LearnerSidebar');
-  const isAdmin=['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role||''))
-    || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole||''));
-  const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+  const isAdmin=hasAdminPortalAccess(currentUser);
+  const isMentor=hasMentorPortalAccess(currentUser);
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
-  const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
+  const localizationAccess=hasLocalizationPortalAccess(currentUser);
   const groups:{name:string;items:NavItem[]}[]=[
     {name:t('navigation.learning','Learning'),items:[
       {route:'home',label:t('navigation.discover','Discover'),icon:House},

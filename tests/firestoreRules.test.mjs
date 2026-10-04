@@ -127,6 +127,21 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
       await adminDb.doc('users/org-admin').set({
         uid:'org-admin', role:'student', organizationId:'org-1', organizationRole:'admin',
       });
+      // These profiles deliberately retain stale tenant metadata. Neither a
+      // missing membership document nor an inactive membership may authorize
+      // tenant reads/writes.
+      await adminDb.doc('users/stale-org-admin').set({
+        uid:'stale-org-admin', role:'student', organizationId:'org-1', organizationRole:'admin',
+      });
+      await adminDb.doc('users/inactive-org-admin').set({
+        uid:'inactive-org-admin', role:'student', organizationId:'org-1', organizationRole:'admin',
+      });
+      await adminDb.doc('organizations/org-1/members/inactive-org-admin').set({
+        uid:'inactive-org-admin', organizationId:'org-1', role:'admin', active:false,
+      });
+      await adminDb.doc('organizations/org-1/settings/settings').set({
+        organizationName:'Scoped Organization',
+      });
       await adminDb.doc('announcements/org-owned').set({
         ownerUid:'org-admin', ownerOrganizationId:'org-1', organizationId:'org-1',
         sharingScope:'private', published:false, title:'Owned',
@@ -214,6 +229,18 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     const superAdmin = environment.authenticatedContext('super-admin').firestore();
     const unionAdmin = environment.authenticatedContext('union-admin').firestore();
     const orgAdmin = environment.authenticatedContext('org-admin').firestore();
+    const staleOrgAdmin = environment.authenticatedContext('stale-org-admin').firestore();
+    const inactiveOrgAdmin = environment.authenticatedContext('inactive-org-admin').firestore();
+
+    // Profile fields are routing metadata only. A live, active membership
+    // document is required by Firestore authorization.
+    for (const revoked of [staleOrgAdmin,inactiveOrgAdmin]) {
+      await assertFails(revoked.doc('organizations/org-1').get());
+      await assertFails(revoked.doc('organizations/org-1/settings/settings').get());
+      await assertFails(revoked.doc('announcements/org-owned').update({title:'stale tenant bypass'}));
+      await assertFails(revoked.doc('certificates/cert-org-1').get());
+    }
+
     await assertSucceeds(unionAdmin.doc('organizations/org-1').get());
     await assertFails(unionAdmin.doc('organizations/org-2').get());
     await assertSucceeds(unionAdmin.doc('organizations/org-1/members/union-admin').get());

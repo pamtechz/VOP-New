@@ -4,6 +4,7 @@ import {configuredPassThreshold} from '../shared/studyValidation.js';
 import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 import {createNotification} from './notifications.js';
+import {certificationPortfolioEvidence} from './certificateAward.js';
 import {organizationSubscriptionFeatureBlockReason} from './permissions.js';
 
 type ApprovalStage={id:string;label:string;approverRoles:string[]};
@@ -17,6 +18,18 @@ type AutoReviewResult={
 };
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
+async function certificationConfigFor(db:FirebaseFirestore.Firestore,organizationId:string){
+  const [platform,scoped]=await Promise.all([
+    db.doc('system/certification').get(),
+    organizationId?db.doc(`organizations/${organizationId}/settings/certification`).get():Promise.resolve(null),
+  ]);
+  return {
+    ...(platform.data()||{}),
+    ...(scoped?.data()||{}),
+    scope:scoped?.exists?'organization':'platform',
+    inherited:!scoped?.exists,
+  } as Record<string,unknown>;
+}
 function requestId(organizationId:string,candidateId:string,guideId:string){
   return 'grad-'+createHash('sha256').update(organizationId+':'+candidateId+':'+guideId).digest('hex').slice(0,48);
 }
@@ -94,10 +107,10 @@ async function notifyApprovers(
 }
 
 /**
- * Creates the organization review record automatically once a learner has
- * completed every published study lesson and passed every required assessment.
- * It is intentionally idempotent: repeated progress writes never duplicate a
- * graduation/certificate review.
+ * Resolves certificate eligibility automatically once a learner has completed
+ * every published study lesson and passed every required assessment. Depending
+ * on the organization's release policy it either creates a review gate or an
+ * already-approved issuance record. Repeated progress writes are idempotent.
  */
 export async function ensureAutomaticGraduationReview(
   db:FirebaseFirestore.Firestore,
@@ -106,10 +119,9 @@ export async function ensureAutomaticGraduationReview(
   createdBy='system:completion',
 ):Promise<AutoReviewResult>{
   if(!candidateId||!guideId)return {eligible:false,created:false,reason:'missing_candidate_or_guide'};
-  const [candidateSnapshot,guideSnapshot,configSnapshot]=await Promise.all([
+  const [candidateSnapshot,guideSnapshot]=await Promise.all([
     db.doc(`users/${candidateId}`).get(),
     db.doc(`guides/${guideId}`).get(),
-    db.doc('system/certification').get(),
   ]);
   if(!candidateSnapshot.exists||!guideSnapshot.exists)return {eligible:false,created:false,reason:'missing_record'};
   const candidate=candidateSnapshot.data()||{};
@@ -129,10 +141,11 @@ export async function ensureAutomaticGraduationReview(
   if(guide.published!==true||guide.archived===true||guide.certificateEligible!==true){
     return {eligible:false,created:false,reason:'guide_not_certificate_eligible'};
   }
-  const config=configSnapshot.data()||{};
+  const config=await certificationConfigFor(db,organizationId);
   if(config.enabled!==true)return {eligible:false,created:false,reason:'certification_disabled'};
-  const stages=stagesFromConfig(config);
-  if(!stages.length)return {eligible:false,created:false,reason:'approval_workflow_not_configured'};
+  const releaseMode=text(config.releaseMode)==='review'?'review':'automatic';
+  const stages=releaseMode==='review'?stagesFromConfig(config):[];
+  if(releaseMode==='review'&&!stages.length)return {eligible:false,created:false,reason:'approval_workflow_not_configured'};
 
   const [lessonsSnapshot,settingsSnapshot]=await Promise.all([
     guideSnapshot.ref.collection('lessons').get(),
@@ -169,10 +182,16 @@ export async function ensureAutomaticGraduationReview(
   );
   if(!evidence)return {eligible:false,created:false,reason:'assessments_incomplete_or_failed'};
   const average=evidence.averageScore;
+  if(releaseMode==='automatic'){
+    const requirementIds=Array.isArray(guide.certificationRequirementIds)
+      ?guide.certificationRequirementIds.map(String).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)):[];
+    const portfolio=await certificationPortfolioEvidence(db,candidateId,organizationId,requirementIds);
+    if(portfolio.reasons.length)return {eligible:false,created:false,reason:'certification_requirements_incomplete'};
+  }
 
   const ref=db.doc(`graduationRequests/${requestId(organizationId,candidateId,guideId)}`);
   const userRef=db.doc(`users/${candidateId}`);
-  const firstStage=stages[0];
+  const firstStage=stages[0]||{id:'automatic',label:'Automatic release',approverRoles:[]};
   const result=await db.runTransaction(async transaction=>{
     const [existing,freshCandidate]=await Promise.all([transaction.get(ref),transaction.get(userRef)]);
     if(!freshCandidate.exists)throw new Error('The learner account no longer exists.');
@@ -210,14 +229,18 @@ export async function ensureAutomaticGraduationReview(
       conferenceId:text(fresh.conferenceId),
       unionId:text(fresh.unionId),
       averageScore:verifiedAverage,
-      status:pendingStatus(firstStage),
+      status:releaseMode==='automatic'?'approved':pendingStatus(firstStage),
       workflowStageId:firstStage.id,
-      workflowStageIndex:0,
+      workflowStageIndex:releaseMode==='automatic'?-1:0,
       revision:existing.exists?Math.max(1,Number(current.revision||0)+1):1,
       submittedAt:now,
-      approvedAt:null,
-      approverNotes:'',
-      decisions:[],
+      approvedAt:releaseMode==='automatic'?now:null,
+      approverNotes:releaseMode==='automatic'?'Automatically verified from server-side completion evidence.':'',
+      decisions:releaseMode==='automatic'?[{
+        stageId:'automatic',stageLabel:'Automatic release',decision:'approve',
+        notes:'Server-side completion and assessment evidence verified.',
+        approverUid:'system',approverRole:'system',decidedAt:new Date().toISOString(),
+      }]:[],
       automatic:true,
       source:'completion',
       updatedAt:now,
@@ -226,7 +249,10 @@ export async function ensureAutomaticGraduationReview(
     transaction.set(userRef,{
       information:{
         ...information,
-        graduating:true,
+        graduating:releaseMode!=='automatic',
+        graduated:releaseMode==='automatic'?true:information.graduated===true,
+        decisionDate:releaseMode==='automatic'?new Date().toISOString():(information.decisionDate??null),
+        graduationDate:releaseMode==='automatic'?new Date().toISOString():(information.graduationDate??null),
         completionDate:text(information.completionDate)||new Date().toISOString(),
       },
       updatedAt:now,
@@ -234,7 +260,7 @@ export async function ensureAutomaticGraduationReview(
     return {created:true,status:String(data.status),data:{id:ref.id,...data}};
   });
 
-  if(result.created){
+  if(result.created&&releaseMode==='review'){
     await notifyApprovers(db,result.data as Record<string,unknown>,firstStage,createdBy);
     await createNotification(db,{
       organizationId,
