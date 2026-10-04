@@ -10,8 +10,8 @@ const vite=await createServer({
 });
 after(async()=>vite.close());
 
-const {quizManagementItem}=await vite.ssrLoadModule('/shared/quizManagementVisibility.ts')
-  as typeof import('../shared/quizManagementVisibility.ts');
+const visibility=await vite.ssrLoadModule('/shared/quizManagementVisibility.ts') as typeof import('../shared/quizManagementVisibility.ts');
+const {quizManagementItem}=visibility;
 
 const record = {
   title:'Lesson quiz', description:'Description', language:'en',
