@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase-browser';
-import { useRouter } from 'next/navigation';
-import { Store, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ShieldCheck, Loader2, AlertCircle, Eye, EyeOff, Lock } from 'lucide-react';
+
+const ALLOWED_ADMIN_ROLES = ['super_admin', 'marketplace_admin', 'finance_admin', 'support_agent'];
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [email, setEmail] = useState('');
@@ -15,21 +18,52 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (searchParams.get('error') === 'unauthorized') {
+      setError('Access Denied: Your account does not have administrator privileges.');
+    }
+  }, [searchParams]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      // 1. Authenticate with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (authError) {
-      setError(authError.message);
+      if (authError || !authData.user) {
+        setError(authError?.message || 'Invalid email or password.');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Query user role from public.profiles
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, full_name')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      if (profileError || !profile || !ALLOWED_ADMIN_ROLES.includes(profile.role)) {
+        // Sign out immediately
+        await supabase.auth.signOut();
+        setError('Access Denied: This account does not have administrator privileges. Regular marketplace users cannot access the Admin Portal.');
+        setLoading(false);
+        return;
+      }
+
+      // 3. User is verified admin
+      router.push('/');
+      router.refresh();
+    } catch (err: any) {
+      setError(err?.message || 'An unexpected authentication error occurred.');
       setLoading(false);
-      return;
     }
-
-    router.push('/');
-    router.refresh();
   };
 
   return (
@@ -44,10 +78,10 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 mb-5 shadow-2xl shadow-blue-500/25">
-            <Store className="w-7 h-7 text-white" />
+            <Lock className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Admin Portal</h1>
-          <p className="text-slate-400 text-sm mt-1.5">Sign in to manage your marketplace</p>
+          <h1 className="text-2xl font-bold text-white">Ubuy Admin Portal</h1>
+          <p className="text-slate-400 text-sm mt-1.5">Strict administrator access only</p>
         </div>
 
         {/* Card */}
@@ -62,7 +96,7 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Email Address
+                Administrator Email
               </label>
               <input
                 type="email"
@@ -70,7 +104,7 @@ export default function LoginPage() {
                 onChange={e => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                placeholder="admin@marketplace.com"
+                placeholder="admin@store.com"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all"
               />
             </div>
@@ -102,19 +136,27 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm py-3 rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 mt-2"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-semibold text-sm rounded-xl transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
             >
               {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying Permissions...</span>
+                </>
               ) : (
-                'Sign In'
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Sign In as Admin</span>
+                </>
               )}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-700 mt-6">
-          Admin access only · Managed via Supabase Auth
+        {/* Security Notice */}
+        <p className="text-center text-xs text-slate-500 mt-6 flex items-center justify-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          <span>RBAC enforced • Unauthorized access attempts logged</span>
         </p>
       </div>
     </div>
