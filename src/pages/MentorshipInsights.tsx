@@ -227,7 +227,6 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
   const openConversation=async(item:any)=>{
     setSelectedConversation({...item,unread:false});
     setTab('support');
-    setSupportPanel('conversations');
     try{
       const result=await mentoringApi('messages',{conversationId:item.id});
       setMessages((result.items||[]) as ChatMessage[]);
@@ -350,7 +349,6 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       setDraft(result.item||null);
       setNotice('Performance-based draft created.');
       setTab('operations');
-      setOperationsPanel('drafts');
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not create draft.');}
   };
 
@@ -508,10 +506,10 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <button type="button" className={highPrioritySupport.length?'urgent':''} onClick={()=>{setSupportPriority('high');setSupportStatus('all');setTab('support')}}>
               <span><AlertCircle size={18}/></span><div><strong>{highPrioritySupport.length} high-priority support request{highPrioritySupport.length===1?'':'s'}</strong><small>Candidate questions marked as needing help soon</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>{setTab('operations');setOperationsPanel('allocation')}}>
+            <button type="button" onClick={()=>setTab('operations')}>
               <span><UserPlus size={18}/></span><div><strong>{unassignedStudents.length} learner{unassignedStudents.length===1?'':'s'} without a mentor</strong><small>Allocate an active mentor for accountable follow-up</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>{setTab('support');setSupportPanel('conversations')}}>
+            <button type="button" onClick={()=>setTab('support')}>
               <span><MessageCircle size={18}/></span><div><strong>{unreadSummary.total} unread conversation{unreadSummary.total===1?'':'s'}</strong><small>Mentor chats and candidate support waiting to be read</small></div><ChevronRight size={17}/>
             </button>
             <button type="button" className={awaitingFirstResponse.length?'urgent':''} onClick={()=>{setSupportStatus('open');setTab('support')}}>
