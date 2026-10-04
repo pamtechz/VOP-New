@@ -486,8 +486,43 @@ export default async function handler(req: Request, res: Response) {
       requireOrgRole(ctx, ['owner','admin']);
     }
     if (action === 'listAudit') {
-      const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(100).get();
+      const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(200).get();
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
+    }
+
+    if(action==='deleteAudit'){
+      const requested=Array.isArray(body.auditIds)?body.auditIds:[body.auditId];
+      const auditIds=[...new Set(requested.map(value=>String(value||'').trim()).filter(value=>/^[A-Za-z0-9_-]{1,180}$/.test(value)))].slice(0,200);
+      if(!auditIds.length)throw new Error('Select at least one audit record to delete.');
+      const collection=ctx.db.collection(`organizations/${managedOrganizationId}/audit`);
+      const refs=auditIds.map(auditId=>collection.doc(auditId));
+      const snapshots=await ctx.db.getAll(...refs);
+      const found=snapshots.filter(snapshot=>snapshot.exists);
+      if(found.length){
+        const batch=ctx.db.batch();
+        found.forEach(snapshot=>batch.delete(snapshot.ref));
+        await batch.commit();
+      }
+      await writeTenantAudit(ctx,'audit.history.delete',`organizations/${managedOrganizationId}/audit`,
+        {deletedIds:found.map(snapshot=>snapshot.id)},{deletedCount:found.length});
+      return res.status(200).json({ok:true,deleted:found.length});
+    }
+
+    if(action==='clearAudit'){
+      const collection=ctx.db.collection(`organizations/${managedOrganizationId}/audit`);
+      let deleted=0;
+      for(let pass=0;pass<20;pass+=1){
+        const snapshot=await collection.limit(400).get();
+        if(snapshot.empty)break;
+        const batch=ctx.db.batch();
+        snapshot.docs.forEach(document=>batch.delete(document.ref));
+        await batch.commit();
+        deleted+=snapshot.size;
+        if(snapshot.size<400)break;
+      }
+      await writeTenantAudit(ctx,'audit.history.clear',`organizations/${managedOrganizationId}/audit`,
+        {cleared:true},{deletedCount:deleted});
+      return res.status(200).json({ok:true,deleted});
     }
 
     if (action === 'getUsage') {
