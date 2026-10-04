@@ -50,6 +50,7 @@ test('loading and invitation transitions stay inside the mounted VOP shell', () 
   const rootSource = readFileSync(join(root, 'src/Root.tsx'), 'utf8');
   const admin = readFileSync(join(root, 'src/pages/AdminPage.tsx'), 'utf8');
   const shimmer = readFileSync(join(root, 'src/components/layout/Shimmer.tsx'), 'utf8');
+  const styles = readFileSync(join(root, 'src/index.css'), 'utf8');
   const users = readFileSync(join(root, 'src/pages/UserManagement.tsx'), 'utf8');
   const candidates = readFileSync(join(root, 'src/pages/CandidateEnrollment.tsx'), 'utf8');
   const inbox = readFileSync(join(root, 'src/pages/InboxPage.tsx'), 'utf8');
@@ -60,7 +61,8 @@ test('loading and invitation transitions stay inside the mounted VOP shell', () 
   assert.match(app, /sectionIndex/);
   assert.match(rootSource, /RouteShimmer/);
   assert.match(admin, /RouteShimmer/);
-  assert.match(shimmer, /vop-shimmer-overlay/);
+  assert.match(shimmer, /vop-shimmer-list/);
+  assert.match(styles, /\.vop-shimmer-overlay/);
   assert.match(users, /loading && users\.length===0/);
   assert.match(candidates, /loading&&candidates\.length===0/);
   assert.match(inbox, /busy&&!notifications\.length/);
