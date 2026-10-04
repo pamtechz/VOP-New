@@ -44,7 +44,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password reset email sent. Check your inbox.')),
       );
-      setState(() => _showReset = false);
     }
   }
 
