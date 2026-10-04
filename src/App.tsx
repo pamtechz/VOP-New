@@ -423,6 +423,7 @@ export const App: React.FC = () => {
 
   const applyLearnerLocation = useCallback((location:LearnerLocation):LearnerLocation|null => {
     if(isPortalRoute(location.route)&&!canAccessPortalRoute(currentUser,location.route))return null;
+    if(isOrganizationPortalAccount(currentUser)&&location.route!=='admin'&&location.route!=='certificate-verification')return null;
     const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
         && (!location.guideLanguage||item.language===location.guideLanguage))
@@ -465,9 +466,9 @@ export const App: React.FC = () => {
     if(stored&&restored){
       replaceLearnerLocation(uid,restored,stored.depth);
     }else{
-      const home:LearnerLocation={route:'home'};
-      applyLearnerLocation(home);
-      replaceLearnerLocation(uid,home,0);
+      const fallback:LearnerLocation={route:defaultPortalRoute(currentUser)};
+      applyLearnerLocation(fallback);
+      replaceLearnerLocation(uid,fallback,0);
     }
     restoredNavigationUid.current=uid;
   },[currentUser.uid,contentHydrated,applyLearnerLocation]);
