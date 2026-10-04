@@ -4,7 +4,7 @@ import {
   type CurriculumChapter,
   type CurriculumSection,
   type CurriculumBlock,
-} from './curriculumStructure.ts';
+} from './curriculumStructure.js';
 import {studyPlateLegacyBlocks, type StudyPlateDocument} from './studyPlateDocument.js';
 
 export type TransferKind = 'chapter' | 'section' | 'block';
