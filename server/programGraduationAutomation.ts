@@ -227,7 +227,7 @@ export async function ensureAutomaticProgramGraduationReviews(
     const evidence=checked.evidence;
     const config=await certificationConfigFor(db,organizationId);
     if(config.enabled!==true){results.push({eligible:false,created:false,reason:'certification_disabled'});continue;}
-    const releaseMode=text(config.releaseMode)==='automatic'?'automatic':'review';
+    const releaseMode=text(config.releaseMode)==='review'?'review':'automatic';
     const stages=releaseMode==='review'?stagesFromConfig(config):[];
     if(releaseMode==='review'&&!stages.length){results.push({eligible:false,created:false,reason:'approval_workflow_not_configured'});continue;}
     const firstStage=stages[0]||{id:'automatic',label:'Automatic release',approverRoles:[]};
