@@ -15,8 +15,9 @@ export function hasAdminPortalAccess(user: Pick<User,'role'|'organizationRole'|'
   return Boolean(user.organizationId) && ADMIN_ORGANIZATION_ROLES.has(organizationRole);
 }
 
-export function hasMentorPortalAccess(user: Pick<User,'role'|'organizationRole'>): boolean {
-  return MENTOR_ROLES.has(normalized(user.role)) || MENTOR_ROLES.has(normalized(user.organizationRole));
+export function hasMentorPortalAccess(user: Pick<User,'role'|'organizationRole'|'organizationId'>): boolean {
+  if (MENTOR_ROLES.has(normalized(user.role))) return true;
+  return Boolean(user.organizationId) && MENTOR_ROLES.has(normalized(user.organizationRole));
 }
 
 export function hasLocalizationPortalAccess(user: Pick<User,'localizationAccess'>): boolean {
