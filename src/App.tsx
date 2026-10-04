@@ -52,7 +52,7 @@ import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
-import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isPortalRoute } from './services/portalAccess';
+import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -592,6 +592,12 @@ export const App: React.FC = () => {
       rememberLocation({route:fallback},true);
       return;
     }
+    if(isOrganizationPortalAccount(currentUser)&&route!=='admin'&&route!=='certificate-verification'){
+      setStudyNotice('Organization staff accounts use the organization portal. Learner pages are kept separate.');
+      setCurrentRoute('admin');
+      rememberLocation({route:'admin'},true);
+      return;
+    }
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {
       radio:'radio',announcements:'announcements',events:'announcements',certificates:'certification',
     };
@@ -690,6 +696,11 @@ export const App: React.FC = () => {
           {currentRoute === 'admin' && hasAdminPortalAccess(currentUser) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
+              onAccountChanged={async()=>{
+                if(!auth?.currentUser)return;
+                const refreshed=await loadFirestoreUser(auth.currentUser.uid);
+                if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
+              }}
               onLogout={() => void firebaseSignOut()} />}
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
