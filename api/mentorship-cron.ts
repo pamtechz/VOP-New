@@ -121,7 +121,6 @@ export default async function handler(req: { method?: string; headers?: Record<s
     }
 
       }
-    }
 
     return res.status(200).json({ ok:true, processed, created, sent });
   } catch (error) {
