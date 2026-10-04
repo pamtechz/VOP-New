@@ -61,17 +61,41 @@ async function currentOrganizationId(): Promise<string> {
   return String(profile.data()?.organizationId || '').trim();
 }
 
-async function currentTenantScope(): Promise<{ role:string; nodeId:string; organizationId:string; superAdmin:boolean }> {
-  if (!auth?.currentUser) return { role:'', nodeId:'', organizationId:'', superAdmin:false };
-  const profile = await getDoc(doc(getDb(), 'users', auth.currentUser.uid));
-  const data = profile.data() || {};
-  const role = String(data.role || '');
-  return {
-    role,
-    nodeId: String(data.adminNodeId || '').trim(),
-    organizationId: String(data.organizationId || '').trim(),
-    superAdmin: role === 'super_admin',
-  };
+type TenantScope={ role:string; nodeId:string; organizationId:string; superAdmin:boolean };
+const EMPTY_TENANT_SCOPE:TenantScope={role:'',nodeId:'',organizationId:'',superAdmin:false};
+let tenantScopeCache:{uid:string;value:TenantScope;expiresAt:number}|null=null;
+let tenantScopeInflight:{uid:string;promise:Promise<TenantScope>}|null=null;
+
+export function clearAdminTenantScopeCache(){
+  tenantScopeCache=null;
+  tenantScopeInflight=null;
+}
+
+if(typeof window!=='undefined'){
+  window.addEventListener('vop_profile_updated',clearAdminTenantScopeCache);
+}
+
+async function currentTenantScope(): Promise<TenantScope> {
+  const uid=auth?.currentUser?.uid||'';
+  if(!uid)return EMPTY_TENANT_SCOPE;
+  if(tenantScopeCache?.uid===uid&&tenantScopeCache.expiresAt>Date.now())return tenantScopeCache.value;
+  if(tenantScopeInflight?.uid===uid)return tenantScopeInflight.promise;
+  const promise=getDoc(doc(getDb(),'users',uid)).then(profile=>{
+    const data=profile.data()||{};
+    const role=String(data.role||'');
+    const value:TenantScope={
+      role,
+      nodeId:String(data.adminNodeId||'').trim(),
+      organizationId:String(data.organizationId||'').trim(),
+      superAdmin:role==='super_admin',
+    };
+    tenantScopeCache={uid,value,expiresAt:Date.now()+60_000};
+    return value;
+  }).finally(()=>{
+    if(tenantScopeInflight?.uid===uid)tenantScopeInflight=null;
+  });
+  tenantScopeInflight={uid,promise};
+  return promise;
 }
 
 function globalCollectionSubscription(
