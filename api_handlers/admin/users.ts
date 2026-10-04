@@ -206,9 +206,18 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
 }
 
 
-async function syncOwnProfile(decoded: { uid: string; email?: string; name?: string; picture?: string }, db: Firestore) {
-  const ref = db.doc(`users/${decoded.uid}`);
-  const snap = await ref.get();
+async function syncOwnProfile(decoded: { uid: string; email?: string; name?: string; picture?: string; organizationId?: unknown }, db: Firestore) {
+  const ref=db.doc(`users/${decoded.uid}`);
+  // Custom claims are only a performance hint. Membership remains the source
+  // of truth, but on the normal path the claimed organization lets us overlap
+  // the profile and membership reads instead of paying two network phases.
+  const claimedOrganizationId=String(decoded.organizationId||'').trim();
+  const [snap,claimedMembership]=await Promise.all([
+    ref.get(),
+    claimedOrganizationId
+      ?db.doc(`organizations/${claimedOrganizationId}/members/${decoded.uid}`).get()
+      :Promise.resolve(null),
+  ]);
   const existing = snap.exists ? snap.data() || {} : {};
 
   // Organization membership is the authorization source of truth. A stale
@@ -219,7 +228,9 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
   let organizationRole=String(existing.organizationRole || '').trim();
   let role=String(existing.role || 'student').trim() || 'student';
   if(organizationId){
-    const membership=await db.doc(`organizations/${organizationId}/members/${decoded.uid}`).get();
+    const membership=claimedOrganizationId===organizationId&&claimedMembership
+      ?claimedMembership
+      :await db.doc(`organizations/${organizationId}/members/${decoded.uid}`).get();
     if(membership.exists && membership.data()?.active===true){
       organizationRole=String(membership.data()?.role || organizationRole || 'learner').trim().toLowerCase();
       // Tenant mentor access follows the live membership role. This prevents a
