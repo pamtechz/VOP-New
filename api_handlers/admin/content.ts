@@ -793,6 +793,11 @@ export default async function handler(req: Request, res: Response) {
       if (collection === 'certificationConfig') {
         const enabled = incoming.enabled;
         if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error('Certification enabled must be true or false.');
+        if (Object.hasOwn(incoming,'releaseMode')) {
+          const releaseMode=String(incoming.releaseMode||'').trim().toLowerCase();
+          if(!['automatic','review'].includes(releaseMode)) throw new Error('Certificate release mode must be automatic or review.');
+          incoming.releaseMode=releaseMode;
+        }
         if (Object.hasOwn(incoming,'minimumScore')) {
           const raw = incoming.minimumScore;
           if (raw === '' || raw === null || raw === 0 || raw === '0') incoming.minimumScore = 0;
