@@ -4,7 +4,6 @@ import {
   Settings, ShieldCheck, Swords, Brain, UserRound, Bell, UserPlus, WalletCards, type LucideIcon,
 } from 'lucide-react';
 import type { AppRoute, AppSettings, User } from '../../types';
-import { hasAdminPortalAccess, hasMentorPortalAccess } from '../../services/portalAccess';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './sidebar-system.css';
 import { hasAdminPortalAccess, hasMentorPortalAccess, hasLocalizationPortalAccess } from '../../services/portalAccess';
