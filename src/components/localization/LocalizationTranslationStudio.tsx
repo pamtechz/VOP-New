@@ -95,9 +95,9 @@ export function LocalizationTranslationStudio({
 
   const pendingByKey=useMemo(()=>{
     const map=new Map<string,LocalizationProposal>();
-    for(const proposal of proposals)if(proposal.languageId===selectedLanguage&&proposal.status!=='rejected')map.set(proposal.key,proposal);
+    for(const proposal of proposals)if(proposal.languageId===selectedLanguage&&proposal.proposerUid===collaborator.uid&&proposal.status!=='rejected')map.set(proposal.key,proposal);
     return map;
-  },[proposals,selectedLanguage]);
+  },[proposals,selectedLanguage,collaborator.uid]);
 
   const allKeys=useMemo(()=>Array.from(new Set([
     ...Object.keys(sourceValues),...Object.keys(publishedValues),...Object.keys(drafts),
@@ -174,7 +174,7 @@ export function LocalizationTranslationStudio({
       setMessage(result.autoPublished
         ?'Reviewer recommendations reached the publication threshold. The translation was published automatically.'
         :'Review recorded. Current recommendation: '+Number(result.recommendationPercent||0).toFixed(0)+'%.');
-      await Promise.all([refreshProposals(),selectedLanguage?loadWorkspace():Promise.resolve()]);
+      if(selectedLanguage)await loadWorkspace(); else await refreshProposals();
     }catch(reason){setError(reason instanceof Error?reason.message:'Review could not be recorded.');}
     finally{setBusyKey('');}
   };
@@ -256,8 +256,10 @@ export function LocalizationTranslationStudio({
           {item.currentValue&&<div><small>Current published translation</small><p>{item.currentValue}</p></div>}
           <div><small>Proposed translation</small><p>{item.proposedValue}</p></div>
           {item.reason&&<div><small>Context</small><p>{item.reason}</p></div>}
-          <footer><button className="vop-secondary" type="button" disabled={Boolean(busyKey)} onClick={()=>void recommend(item,'reject')}><XCircle size={15}/>Do not recommend</button>
-            <button className="vop-primary" type="button" disabled={Boolean(busyKey)} onClick={()=>void recommend(item,'recommend')}><ShieldCheck size={15}/>Recommend</button></footer>
+          <footer>{item.proposerUid===collaborator.uid
+            ?<span className="vop-localization-awaiting">Your proposal · another assigned reviewer must review it.</span>
+            :<><button className="vop-secondary" type="button" disabled={Boolean(busyKey)} onClick={()=>void recommend(item,'reject')}><XCircle size={15}/>Do not recommend</button>
+              <button className="vop-primary" type="button" disabled={Boolean(busyKey)} onClick={()=>void recommend(item,'recommend')}><ShieldCheck size={15}/>Recommend</button></>}</footer>
         </article>)}
     </div>}
   </section>;
