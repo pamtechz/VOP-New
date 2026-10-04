@@ -800,6 +800,9 @@ test('Firestore client reads avoid route-change reloads and aggressive notificat
   assert.match(app,/10\*60\*1000/);
   assert.match(app,/vop_public_content_changed/);
   assert.match(app,/loadPublicContent\(currentUser\.uid \? currentUser : undefined,loadMode\)/);
+  assert.match(app,/dataModeForRoute\(currentRoute\)/);
+  assert.match(app,/contentLoadMode,contentRefresh/);
+  assert.doesNotMatch(app,/currentRoute,contentRefresh/);
   assert.match(publicData,/loadPublicContent\(scopeUser\?: User,mode:PublicContentLoadMode='full'\)/);
   assert.match(publicData,/mode==='portal'/);
   assert.match(publicData,/loadFirestoreGuides\(undefined,scopeUser\)/);
