@@ -6,6 +6,7 @@ import type {
 } from './types';
 import {
   getActiveLanguage, setActiveLanguage,
+  getStoredSettings,getStoredGuides,getStoredAnnouncements,getStoredBooks,getStoredUnions,getStoredConferences,getStoredDistricts,getStoredChurches,getStoredRadioBroadcasts,
   saveSettings, saveGuides, saveAnnouncements, saveBooks, saveUnions, saveConferences, saveDistricts, saveChurches, saveRadioBroadcasts,
 } from './services/storage';
 import { completeLesson, submitQuizAnswers } from './services/localStudy';
@@ -59,29 +60,55 @@ const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enroll
 const PORTAL_SESSION_STORAGE_KEY='vop-portal-session-user-v1';
 
 interface AppProps{initialUser?:User|null}
+const STARTUP_CACHE_META_KEY='vop-startup-cache-v2';
+type StartupCacheMeta={scope:string;mode:PublicContentLoadMode;savedAt:number};
+function startupScope(user:User|null|undefined){
+  if(!user?.uid)return 'anonymous';
+  return [user.uid,user.organizationId||'',user.role||'',user.organizationRole||'',user.adminNodeId||''].join('|');
+}
+function readStartupSeed(user:User|null|undefined){
+  if(typeof window==='undefined'||!user?.uid)return null;
+  try{
+    const meta=JSON.parse(sessionStorage.getItem(STARTUP_CACHE_META_KEY)||'null') as StartupCacheMeta|null;
+    if(!meta||meta.scope!==startupScope(user)||Date.now()-Number(meta.savedAt||0)>30*60*1000)return null;
+    return {
+      meta,
+      settings:getStoredSettings(),
+      guides:meta.mode==='portal'?[]:getStoredGuides(),
+      announcements:meta.mode==='full'?getStoredAnnouncements():[],
+      books:meta.mode==='full'?getStoredBooks():[],
+      unions:meta.mode==='full'?getStoredUnions():[],
+      conferences:meta.mode==='full'?getStoredConferences():[],
+      districts:meta.mode==='full'?getStoredDistricts():[],
+      churches:meta.mode==='full'?getStoredChurches():[],
+      radioBroadcasts:meta.mode==='full'?getStoredRadioBroadcasts():[],
+    };
+  }catch{return null;}
+}
 
 export const App: React.FC<AppProps> = ({initialUser=null}) => {
-  const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
+  const [startupSeed]=useState(()=>readStartupSeed(initialUser));
+  const [settings, setSettings] = useState<AppSettings>(()=>startupSeed?.settings||EMPTY_SETTINGS);
   const { locale: uiLocale } = useLocalization(settings);
   const [activeLanguage, setActiveLang] = useState<LanguageCode>(getActiveLanguage());
   const [currentUser, setCurrentUser] = useState<User>(()=>initialUser||EMPTY_USER);
   const [allUsers, setAllUsers] = useState<User[]>(()=>initialUser?[initialUser]:[]);
   const initialProfileRef=useRef<User|null>(initialUser);
-  const [guides, setGuides] = useState<DiscoverGuide[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [guides, setGuides] = useState<DiscoverGuide[]>(()=>startupSeed?.guides||[]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(()=>startupSeed?.announcements||[]);
   const [events, setEvents] = useState<MinistryEvent[]>([]);
-  const [books, setBooks] = useState<BookResource[]>([]);
-  const [unions, setUnions] = useState<Union[]>([]);
-  const [conferences, setConferences] = useState<Conference[]>([]);
-  const [districts, setDistricts] = useState<District[]>([]);
-  const [churches, setChurches] = useState<ChurchOrganization[]>([]);
+  const [books, setBooks] = useState<BookResource[]>(()=>startupSeed?.books||[]);
+  const [unions, setUnions] = useState<Union[]>(()=>startupSeed?.unions||[]);
+  const [conferences, setConferences] = useState<Conference[]>(()=>startupSeed?.conferences||[]);
+  const [districts, setDistricts] = useState<District[]>(()=>startupSeed?.districts||[]);
+  const [churches, setChurches] = useState<ChurchOrganization[]>(()=>startupSeed?.churches||[]);
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
-  const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>([]);
+  const [radioBroadcasts, setRadioBroadcasts] = useState<RadioBroadcast[]>(()=>startupSeed?.radioBroadcasts||[]);
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(()=>
     initialUser?.uid?defaultPortalRoute(initialUser):'home');
   const [contentRefresh, setContentRefresh] = useState(0);
-  const [contentHydrated,setContentHydrated] = useState(false);
+  const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
   const previousRouteRef=useRef<AppRoute>('home');
   const appliedDeepLink = useRef(false);
@@ -158,7 +185,10 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         setCurrentUser(EMPTY_USER);
         setAllUsers([]);
         restoredNavigationUid.current='';
-        try{sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);}catch{/* storage may be unavailable */}
+        try{
+          sessionStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
+          sessionStorage.removeItem(STARTUP_CACHE_META_KEY);
+        }catch{/* storage may be unavailable */}
         // Clear cached tenant-only labels before showing the anonymous registry.
         void initializeLocalization(settings);
         return;
@@ -365,6 +395,12 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         saveDistricts(snapshot.districts);
         saveChurches(snapshot.churches);
         saveRadioBroadcasts(snapshot.radioBroadcasts);
+      }
+      if(currentUser.uid){
+        try{
+          const meta:StartupCacheMeta={scope:startupScope(currentUser),mode:loadMode,savedAt:Date.now()};
+          sessionStorage.setItem(STARTUP_CACHE_META_KEY,JSON.stringify(meta));
+        }catch{/* Startup cache is an optimization only. */}
       }
     }).catch(error => {
       if (!cancelled) {
