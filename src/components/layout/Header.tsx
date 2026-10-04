@@ -3,6 +3,7 @@ import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
 import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, WalletCards, Settings as SettingsIcon } from 'lucide-react';
 import { CommunicationTools } from './CommunicationTools';
+import { hasAdminPortalAccess } from '../../services/portalAccess';
 
 interface HeaderProps {
   currentUser: User;
@@ -23,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
   const t = (key: string, fallback?: string) => getTranslation(key, getUiLocale(), settings?.customTranslations, fallback);
   useLocalization(settings);
   const availableLanguages = getAvailableLanguages(settings);
-  const isPrivileged = ['super_admin','union_admin','conference_admin','district_admin','church_admin'].includes(String(currentUser.role || '')) || ['owner','admin','editor','teacher','mentor','staff'].includes(String(currentUser.organizationRole || ''));
+  const isPrivileged = hasAdminPortalAccess(currentUser);
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
   const nav = (route: AppRoute) => { if (onNavigate) onNavigate(route); };
