@@ -177,6 +177,44 @@ export async function loadPublicContent(scopeUser?: User,mode:PublicContentLoadM
     ?Promise.resolve([] as Awaited<ReturnType<typeof loadFirestoreGuides>>)
     :loadFirestoreGuides(undefined,scopeUser);
 
+  const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
+    const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;
+    if (!currentUser) return null;
+    if (hierarchyRole === 'super_admin') return getDocs(ref);
+    if (hierarchyRole === 'union_admin' && idField === 'unionId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    if (hierarchyRole === 'conference_admin' && idField === 'conferenceId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    if (hierarchyRole === 'district_admin' && idField === 'districtId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    if (hierarchyRole === 'church_admin' && idField === 'churchId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
+    const id = ownHierarchyIds[idField];
+    return id ? getDocs(query(ref, where('__name__', '==', id))) : null;
+  };
+
+  // Start all full learner catalogue reads before awaiting settings. Previously
+  // these requests waited for the settings round-trip even though they are
+  // independent, adding a full network phase to every cold start.
+  const languageDocsPromise=mode==='full'?loadScoped('languages','enabled'):Promise.resolve([]);
+  const organizationLanguageDocsPromise=mode==='full'&&organizationId&&currentUser
+    ?getDocs(collection(firestore,'organizations',organizationId,'languages')).then(snapshot=>snapshot.docs).catch(()=>[])
+    :Promise.resolve([]);
+  const translationDocsPromise=mode==='full'
+    ?(organizationId
+      ?Promise.all([
+          getDocs(query(collection(firestore,'translations'),where('organizationId','==',organizationId))),
+          getDocs(query(collection(firestore,'translations'),where('sharingScope','==','shared'))),
+          getDocs(query(collection(firestore,'translations'),where('organizationId','==',''),where('sharingScope','==','shared'))),
+        ]).then(snapshots=>snapshots.flatMap(snapshot=>snapshot.docs))
+      :getDocs(query(collection(firestore,'translations'),where('organizationId','==',''),where('sharingScope','==','shared'))).then(snapshot=>snapshot.docs))
+    :Promise.resolve([]);
+  const announcementDocsPromise=mode==='full'?loadScoped('announcements','published'):Promise.resolve([]);
+  const eventDocsPromise=mode==='full'?loadScoped('events','published'):Promise.resolve([]);
+  const bookDocsPromise=mode==='full'?loadScoped('books','published'):Promise.resolve([]);
+  const radioDocsPromise=mode==='full'?loadScoped('radioBroadcasts','published'):Promise.resolve([]);
+  const playlistDocsPromise=mode==='full'?loadScoped('playlists','published'):Promise.resolve([]);
+  const unionsPromise=mode==='full'?loadHierarchy<Union>('unions','unionId'):Promise.resolve(null);
+  const conferencesPromise=mode==='full'?loadHierarchy<Conference>('conferences','conferenceId'):Promise.resolve(null);
+  const districtsPromise=mode==='full'?loadHierarchy<District>('districts','districtId'):Promise.resolve(null);
+  const churchesPromise=mode==='full'?loadHierarchy<ChurchOrganization>('churches','churchId'):Promise.resolve(null);
+
   const [systemSettingsSnap, scopedSettingsSnap, scopedOrganizationSnap] = await Promise.all([
     getDoc(doc(firestore, 'system', 'settings')),
     organizationId
@@ -255,56 +293,13 @@ export async function loadPublicContent(scopeUser?: User,mode:PublicContentLoadM
     };
   }
 
-  const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
-    const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;
-    if (!currentUser) return null;
-    if (hierarchyRole === 'super_admin') return getDocs(ref);
-    if (hierarchyRole === 'union_admin' && idField === 'unionId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
-    if (hierarchyRole === 'conference_admin' && idField === 'conferenceId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
-    if (hierarchyRole === 'district_admin' && idField === 'districtId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
-    if (hierarchyRole === 'church_admin' && idField === 'churchId') return getDocs(query(ref, where('__name__', '==', hierarchyNodeId)));
-    const id = ownHierarchyIds[idField];
-    return id ? getDocs(query(ref, where('__name__', '==', id))) : null;
-  };
-
   const [
-    languageDocs,
-    organizationLanguageDocs,
-    translationDocs,
-    announcementDocs,
-    eventDocs,
-    bookDocs,
-    radioDocs,
-    playlistDocs,
-    unionsSnap,
-    conferencesSnap,
-    districtsSnap,
-    churchesSnap,
-    guides,
-  ] = await Promise.all([
-    loadScoped('languages', 'enabled'),
-    organizationId && currentUser
-      ? getDocs(collection(firestore,'organizations',organizationId,'languages'))
-          .then(snapshot=>snapshot.docs)
-          .catch(()=>[])
-      : Promise.resolve([]),
-    organizationId
-      ? Promise.all([
-          getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', organizationId))),
-          getDocs(query(collection(firestore, 'translations'), where('sharingScope', '==', 'shared'))),
-          getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''), where('sharingScope', '==', 'shared'))),
-        ]).then(snapshots => snapshots.flatMap(snapshot => snapshot.docs))
-      : getDocs(query(collection(firestore, 'translations'), where('organizationId', '==', ''), where('sharingScope', '==', 'shared'))).then(snapshot => snapshot.docs),
-    loadScoped('announcements', 'published'),
-    loadScoped('events', 'published'),
-    loadScoped('books', 'published'),
-    loadScoped('radioBroadcasts', 'published'),
-    loadScoped('playlists', 'published'),
-    loadHierarchy<Union>('unions', 'unionId'),
-    loadHierarchy<Conference>('conferences', 'conferenceId'),
-    loadHierarchy<District>('districts', 'districtId'),
-    loadHierarchy<ChurchOrganization>('churches', 'churchId'),
-    guidesPromise,
+    languageDocs,organizationLanguageDocs,translationDocs,announcementDocs,eventDocs,
+    bookDocs,radioDocs,playlistDocs,unionsSnap,conferencesSnap,districtsSnap,churchesSnap,guides,
+  ]=await Promise.all([
+    languageDocsPromise,organizationLanguageDocsPromise,translationDocsPromise,announcementDocsPromise,
+    eventDocsPromise,bookDocsPromise,radioDocsPromise,playlistDocsPromise,
+    unionsPromise,conferencesPromise,districtsPromise,churchesPromise,guidesPromise,
   ]);
 
   const globalLanguages=languageDocs.map(item=>normalizeLanguage(item.id,item.data()))
