@@ -51,6 +51,7 @@ async function organizationInviteApi(data:Record<string,unknown>={}){
 }
 
 type Tab='overview'|'operations'|'support'|'insights'|'outreach';
+type CommunicationView='support'|'conversations';
 type SupportStatusFilter='all'|'open'|'in_progress'|'resolved'|'closed';
 type PriorityFilter='all'|'high'|'normal';
 
@@ -74,6 +75,7 @@ function supportAgeHours(item:any){
 
 export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
   const [tab,setTab]=useState<Tab>('overview');
+  const [communicationView,setCommunicationView]=useState<CommunicationView>('support');
   const [students,setStudents]=useState<any[]>([]);
   const [mentors,setMentors]=useState<any[]>([]);
   const [assignments,setAssignments]=useState<any[]>([]);
@@ -203,7 +205,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   const refreshWorkspace=async()=>{
     await loadCore();
-    if(tab==='support')await loadConversations();
+    if(tab==='support'&&communicationView==='conversations')await loadConversations();
     if(tab==='outreach')await loadShares();
   };
 
@@ -226,6 +228,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   const openConversation=async(item:any)=>{
     setSelectedConversation({...item,unread:false});
+    setSelectedSupportRequest(null);
+    setCommunicationView('conversations');
     setTab('support');
     try{
       const result=await mentoringApi('messages',{conversationId:item.id});
@@ -270,6 +274,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   const openSupportRequest=async(item:any)=>{
     setSelectedSupportRequest(item);
+    setSelectedConversation(null);
+    setCommunicationView('support');
     setFollowUpAt(item.followUpScheduledAt?new Date(item.followUpScheduledAt).toISOString().slice(0,16):'');
     setSelectedStudent(String(item.candidateId||''));
     setTab('support');
@@ -382,9 +388,9 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   useEffect(()=>{void loadCore();},[]);
   useEffect(()=>{
-    if(tab==='support')void loadConversations();
+    if(tab==='support'&&communicationView==='conversations')void loadConversations();
     if(tab==='outreach'&&!sharesLoaded)void loadShares();
-  },[tab,selectedStudent]);
+  },[tab,communicationView,selectedStudent]);
 
   const activeAssignments=assignments.filter(item=>item.status==='active');
   const assignedStudentIds=new Set(activeAssignments.map(item=>String(item.studentId||'')));
@@ -484,8 +490,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
     <section className="vop-mentoring-stats" aria-label="Mentoring summary">
       <button type="button" onClick={()=>setTab('operations')}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
       <button type="button" onClick={()=>setTab('operations')}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
-      <button type="button" onClick={()=>setTab('support')}><span className="metric-icon"><HeartHandshake size={19}/></span><span>Open support</span><strong>{openSupport.length}</strong><small>{highPrioritySupport.length} high priority</small></button>
-      <button type="button" onClick={()=>setTab('support')}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
+      <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><span className="metric-icon"><HeartHandshake size={19}/></span><span>Open support</span><strong>{openSupport.length}</strong><small>{highPrioritySupport.length} high priority</small></button>
+      <button type="button" onClick={()=>{setCommunicationView(unreadSummary.supportRequests>0?'support':'conversations');setTab('support')}}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
       <button type="button" onClick={()=>setTab('insights')}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
     </section>
 
@@ -503,7 +509,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         <article className="vop-mentoring-card">
           <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Action queue</span><h2>Needs attention</h2><p>Prioritized operational work for the mentoring team.</p></div><Inbox size={20}/></div>
           <div className="vop-action-queue">
-            <button type="button" className={highPrioritySupport.length?'urgent':''} onClick={()=>{setSupportPriority('high');setSupportStatus('all');setTab('support')}}>
+            <button type="button" className={highPrioritySupport.length?'urgent':''} onClick={()=>{setSupportPriority('high');setSupportStatus('all');setCommunicationView('support');setTab('support')}}>
               <span><AlertCircle size={18}/></span><div><strong>{highPrioritySupport.length} high-priority support request{highPrioritySupport.length===1?'':'s'}</strong><small>Candidate questions marked as needing help soon</small></div><ChevronRight size={17}/>
             </button>
             <button type="button" onClick={()=>setTab('operations')}>
@@ -512,7 +518,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <button type="button" onClick={()=>setTab('support')}>
               <span><MessageCircle size={18}/></span><div><strong>{unreadSummary.total} unread conversation{unreadSummary.total===1?'':'s'}</strong><small>Mentor chats and candidate support waiting to be read</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" className={awaitingFirstResponse.length?'urgent':''} onClick={()=>{setSupportStatus('open');setTab('support')}}>
+            <button type="button" className={awaitingFirstResponse.length?'urgent':''} onClick={()=>{setSupportStatus('open');setCommunicationView('support');setTab('support')}}>
               <span><Clock3 size={18}/></span><div><strong>{awaitingFirstResponse.length} request{awaitingFirstResponse.length===1?'':'s'} waiting 24h+ for first response</strong><small>Service-level follow-up indicator</small></div><ChevronRight size={17}/>
             </button>
           </div>
@@ -552,7 +558,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         <article className="vop-mentoring-card vop-quick-actions">
           <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Quick actions</span><h2>Start work</h2></div></div>
           <button type="button" onClick={()=>setTab('operations')}><UserPlus size={16}/>Assign a mentor</button>
-          <button type="button" onClick={()=>setTab('support')}><HeartHandshake size={16}/>Open support inbox</button>
+          <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><HeartHandshake size={16}/>Open support inbox</button>
           <button type="button" onClick={()=>setTab('insights')}><BarChart3 size={16}/>Review learner performance</button>
           <button type="button" onClick={()=>setTab('outreach')}><Link2 size={16}/>Create study invitation</button>
         </article>
@@ -572,92 +578,100 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       </tbody></table>{!filteredAssignments.length&&!loading&&<div className="vop-empty-state"><UserPlus size={28}/><strong>No matching mentor assignments</strong><span>Use the controls above to allocate a mentor or change the search.</span></div>}</div>
     </section>}
 
-    {tab==='support'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Candidate support inbox</span><h2>Learning & spiritual support</h2><p>Triage questions, respond in context and progress evangelism follow-up without losing the conversation history.</p></div><span className="vop-summary-pill">{openSupport.length} open</span></div>
-      <div className="vop-mentoring-toolbar">
-        <label className="vop-search-field"><Search size={16}/><input value={supportSearch} onChange={e=>setSupportSearch(e.target.value)} placeholder="Search candidate, subject, topic or doctrine"/></label>
-        <select value={supportStatus} onChange={e=>setSupportStatus(e.target.value as SupportStatusFilter)}><option value="all">All statuses</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select>
-        <select value={supportPriority} onChange={e=>setSupportPriority(e.target.value as PriorityFilter)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option></select>
-        <button className="vop-secondary" type="button" onClick={()=>void loadCore()}><RefreshCw size={15}/>Refresh queue</button>
+    {tab==='support'&&<section className="vop-mentoring-card vop-communication-workspace">
+      <div className="vop-mentoring-card-head">
+        <div><span className="vop-section-kicker">Unified communications</span><h2>Support & conversations</h2><p>One communication workspace, with support cases and mentor–learner conversations clearly separated by type.</p></div>
+        <span className="vop-summary-pill">{unreadSummary.total} unread</span>
       </div>
-      <div className="vop-support-mini-stats">
-        <button type="button" onClick={()=>setSupportSearch('')}><span>Bible study</span><strong>{supportRequests.filter(item=>item.spiritualInterest==='bible_study').length}</strong></button>
-        <button type="button" onClick={()=>setSupportSearch('')}><span>Baptism</span><strong>{supportRequests.filter(item=>item.spiritualInterest==='baptism').length}</strong></button>
-        <button type="button" onClick={()=>setSupportSearch('One Voice 27')}><span>One Voice 27</span><strong>{supportRequests.filter(item=>item.campaignTag==='one_voice_27'||item.spiritualInterest==='one_voice_27').length}</strong></button>
-        <button type="button" onClick={()=>setSupportSearch('')}><span>Visits requested</span><strong>{supportRequests.filter(item=>['church_visit','home_visit'].includes(String(item.spiritualInterest||''))).length}</strong></button>
+
+      <div className="vop-mentoring-subtabs vop-communication-tabs" role="tablist" aria-label="Support and conversation type">
+        <button type="button" role="tab" aria-selected={communicationView==='support'} className={communicationView==='support'?'active':''}
+          onClick={()=>setCommunicationView('support')}><HeartHandshake size={15}/><span>Support requests</span>{Boolean(unreadSummary.supportRequests)&&<b>{unreadSummary.supportRequests}</b>}</button>
+        <button type="button" role="tab" aria-selected={communicationView==='conversations'} className={communicationView==='conversations'?'active':''}
+          onClick={()=>setCommunicationView('conversations')}><MessageCircle size={15}/><span>Mentor conversations</span>{Boolean(unreadSummary.conversations)&&<b>{unreadSummary.conversations}</b>}</button>
       </div>
-      <div className="vop-mentoring-split">
-        <aside className="vop-mentoring-queue" aria-label="Support requests">
-          <div className="vop-queue-head"><span>{filteredSupport.length} request{filteredSupport.length===1?'':'s'}</span><small>Unread and high priority first</small></div>
-          <div className="vop-queue-list">
-            {filteredSupport.map(item=><button key={item.id} type="button" className={selectedSupportRequest?.id===item.id?'selected':''} onClick={()=>void openSupportRequest(item)}>
-              <span className={'vop-inbox-dot '+(item.unread?'unread':'')}/>
-              <div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||'Candidate'}</strong><span>{item.subject||statusLabel(item.category)}</span><small>{statusLabel(item.status)} · {dateTime(item.lastMessageAt||item.createdAt)}</small></div>
-              <span className={'vop-priority-chip '+String(item.priority||'normal')}>{String(item.priority||'normal')}</span>
-            </button>)}
-            {!filteredSupport.length&&!loading&&<div className="vop-empty-state compact"><HeartHandshake size={24}/><strong>No requests match these filters</strong><span>Try another status, priority or search term.</span></div>}
-          </div>
-        </aside>
-        <div className="vop-mentoring-detail">
-          {!selectedSupportRequest?<div className="vop-empty-state large"><Inbox size={34}/><strong>Select a support request</strong><span>Review the candidate’s question, study references, conversation and spiritual follow-up in one place.</span></div>:<>
-            <div className="vop-detail-head">
-              <div><span className="vop-section-kicker">{selectedSupportRequest.candidateName||studentMap.get(selectedSupportRequest.candidateId)?.displayName||'Candidate'}</span><h3>{selectedSupportRequest.subject||'Support request'}</h3><div className="vop-detail-chips"><span>{statusLabel(selectedSupportRequest.category)}</span><span className={String(selectedSupportRequest.priority)==='high'?'danger':''}>{String(selectedSupportRequest.priority||'normal')} priority</span><span>{statusLabel(selectedSupportRequest.status)}</span></div></div>
-              <div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void updateSupportStatus('in_progress')}>Mark in progress</button><button className="vop-primary" type="button" onClick={()=>void updateSupportStatus('resolved')}><CheckCircle2 size={15}/>Resolve</button></div>
+
+      {communicationView==='support'?<>
+        <div className="vop-communication-type-banner support"><HeartHandshake size={16}/><div><strong>Support request</strong><span>Formal learner/candidate help, triage, priority, resolution and evangelism follow-up.</span></div></div>
+        <div className="vop-mentoring-toolbar">
+          <label className="vop-search-field"><Search size={16}/><input value={supportSearch} onChange={e=>setSupportSearch(e.target.value)} placeholder="Search candidate, subject, topic or doctrine"/></label>
+          <select value={supportStatus} onChange={e=>setSupportStatus(e.target.value as SupportStatusFilter)}><option value="all">All statuses</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select>
+          <select value={supportPriority} onChange={e=>setSupportPriority(e.target.value as PriorityFilter)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option></select>
+          <button className="vop-secondary" type="button" onClick={()=>void loadCore()}><RefreshCw size={15}/>Refresh queue</button>
+        </div>
+        <div className="vop-support-mini-stats">
+          <button type="button" onClick={()=>setSupportSearch('')}><span>Bible study</span><strong>{supportRequests.filter(item=>item.spiritualInterest==='bible_study').length}</strong></button>
+          <button type="button" onClick={()=>setSupportSearch('')}><span>Baptism</span><strong>{supportRequests.filter(item=>item.spiritualInterest==='baptism').length}</strong></button>
+          <button type="button" onClick={()=>setSupportSearch('One Voice 27')}><span>One Voice 27</span><strong>{supportRequests.filter(item=>item.campaignTag==='one_voice_27'||item.spiritualInterest==='one_voice_27').length}</strong></button>
+          <button type="button" onClick={()=>setSupportSearch('')}><span>Visits requested</span><strong>{supportRequests.filter(item=>['church_visit','home_visit'].includes(String(item.spiritualInterest||''))).length}</strong></button>
+        </div>
+        <div className="vop-mentoring-split">
+          <aside className="vop-mentoring-queue" aria-label="Support requests">
+            <div className="vop-queue-head"><span>Support requests · {filteredSupport.length}</span><small>Unread and high priority first</small></div>
+            <div className="vop-queue-list">
+              {filteredSupport.map(item=><button key={item.id} type="button" className={selectedSupportRequest?.id===item.id?'selected':''} onClick={()=>void openSupportRequest(item)}>
+                <span className={'vop-inbox-dot '+(item.unread?'unread':'')}/>
+                <div><strong>{item.candidateName||studentMap.get(item.candidateId)?.displayName||'Candidate'}</strong><span>{item.subject||statusLabel(item.category)}</span><small>Support · {statusLabel(item.status)} · {dateTime(item.lastMessageAt||item.createdAt)}</small></div>
+                <span className={'vop-priority-chip '+String(item.priority||'normal')}>{String(item.priority||'normal')}</span>
+              </button>)}
+              {!filteredSupport.length&&!loading&&<div className="vop-empty-state compact"><HeartHandshake size={24}/><strong>No support requests match</strong><span>Try another status, priority or search term.</span></div>}
             </div>
-
-            {(selectedSupportRequest.references||[]).length>0&&<div className="vop-reference-strip">{selectedSupportRequest.references.map((ref:any)=><span key={ref.type+ref.id}><Tag size={13}/><b>{ref.label}</b><small>{ref.type}</small></span>)}</div>}
-
-            {selectedSupportRequest.spiritualInterest&&selectedSupportRequest.spiritualInterest!=='none'&&<div className="vop-followup-panel">
-              <div className="vop-followup-title"><HeartHandshake size={18}/><div><strong>Evangelism follow-up</strong><span>{statusLabel(selectedSupportRequest.spiritualInterest)}{selectedSupportRequest.campaignTag==='one_voice_27'?' · One Voice 27':''}</span></div></div>
-              <div className="vop-followup-controls">
-                <label><span>Stage</span><select value={selectedSupportRequest.followUpStatus||'new'} onChange={e=>void updateEvangelismFollowUp(e.target.value as 'new'|'contacted'|'scheduled'|'completed')}><option value="new">New interest</option><option value="contacted">Contacted</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option></select></label>
-                <label><span>Visit / follow-up date</span><input type="datetime-local" value={followUpAt} onChange={e=>setFollowUpAt(e.target.value)}/></label>
-                <button className="vop-secondary" type="button" disabled={!followUpAt} onClick={()=>void updateEvangelismFollowUp('scheduled')}>Schedule</button>
-                <button className="vop-primary" type="button" onClick={()=>void updateEvangelismFollowUp('completed')}><CheckCircle2 size={15}/>Complete</button>
+          </aside>
+          <div className="vop-mentoring-detail">
+            {!selectedSupportRequest?<div className="vop-empty-state large"><Inbox size={34}/><strong>Select a support request</strong><span>Support requests are formal cases with status, priority, context and follow-up controls.</span></div>:<>
+              <div className="vop-detail-head">
+                <div><span className="vop-section-kicker">Support request · {selectedSupportRequest.candidateName||studentMap.get(selectedSupportRequest.candidateId)?.displayName||'Candidate'}</span><h3>{selectedSupportRequest.subject||'Support request'}</h3><div className="vop-detail-chips"><span>support</span><span>{statusLabel(selectedSupportRequest.category)}</span><span className={String(selectedSupportRequest.priority)==='high'?'danger':''}>{String(selectedSupportRequest.priority||'normal')} priority</span><span>{statusLabel(selectedSupportRequest.status)}</span></div></div>
+                <div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void updateSupportStatus('in_progress')}>Mark in progress</button><button className="vop-primary" type="button" onClick={()=>void updateSupportStatus('resolved')}><CheckCircle2 size={15}/>Resolve</button></div>
               </div>
-            </div>}
-
-            <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={supportMessages} draft={supportReply} onDraftChange={setSupportReply}
-              guides={guides} placeholder="Reply with Bible study help, clarification or follow-up…" emptyText="No messages in this support request yet."
-              sendLabel="Send reply" onSend={replySupportRequest} onEdit={editAdminSupportMessage} onDelete={deleteAdminSupportMessage}/>
-
-            {Array.isArray(selectedSupportRequest.whatsappTargets)&&selectedSupportRequest.whatsappTargets.length>0&&<div className="vop-whatsapp-actions">
-              {selectedSupportRequest.whatsappTargets.map((target:any)=><a key={target.kind+target.number} className="vop-secondary"
-                href={'https://wa.me/'+String(target.number).replace(/\D/g,'')+'?text='+encodeURIComponent('VOP Support #'+selectedSupportRequest.id+' · '+(selectedSupportRequest.subject||''))}
-                target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/>WhatsApp {target.label}</a>)}
-            </div>}
-          </>}
-        </div>
-      </div>
-    </section>}
-
-    {tab==='support'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Mentor communications</span><h2>Conversations</h2><p>Review mentor–learner threads and participate without leaving the workspace.</p></div><span className="vop-summary-pill">{unreadSummary.conversations} unread</span></div>
-      <div className="vop-mentoring-toolbar">
-        <label className="vop-search-field"><Search size={16}/><input value={conversationSearch} onChange={e=>setConversationSearch(e.target.value)} placeholder="Search learner or mentor"/></label>
-        <select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">All learners</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
-        <button className="vop-secondary" type="button" onClick={()=>void loadConversations()}><RefreshCw size={15}/>Refresh</button>
-      </div>
-      <div className="vop-mentoring-split">
-        <aside className="vop-mentoring-queue">
-          <div className="vop-queue-head"><span>{filteredConversations.length} thread{filteredConversations.length===1?'':'s'}</span><small>Unread first</small></div>
-          <div className="vop-queue-list">
-            {filteredConversations.map(item=><button key={item.id} type="button" className={selectedConversation?.id===item.id?'selected':''} onClick={()=>void openConversation(item)}>
-              <span className={'vop-inbox-dot '+(item.unread?'unread':'')}/>
-              <div><strong>{studentMap.get(item.studentId)?.displayName||item.studentId}</strong><span>Mentor: {mentorMap.get(item.mentorId)?.displayName||item.mentorId}</span><small>{dateTime(item.lastMessageAt)}</small></div>
-              <ChevronRight size={16}/>
-            </button>)}
-            {!filteredConversations.length&&!loading&&<div className="vop-empty-state compact"><MessageCircle size={24}/><strong>No conversations found</strong><span>Mentor conversations will appear after messaging begins.</span></div>}
+              {(selectedSupportRequest.references||[]).length>0&&<div className="vop-reference-strip">{selectedSupportRequest.references.map((ref:any)=><span key={ref.type+ref.id}><Tag size={13}/><b>{ref.label}</b><small>{ref.type}</small></span>)}</div>}
+              {selectedSupportRequest.spiritualInterest&&selectedSupportRequest.spiritualInterest!=='none'&&<div className="vop-followup-panel">
+                <div className="vop-followup-title"><HeartHandshake size={18}/><div><strong>Evangelism follow-up</strong><span>{statusLabel(selectedSupportRequest.spiritualInterest)}{selectedSupportRequest.campaignTag==='one_voice_27'?' · One Voice 27':''}</span></div></div>
+                <div className="vop-followup-controls">
+                  <label><span>Stage</span><select value={selectedSupportRequest.followUpStatus||'new'} onChange={e=>void updateEvangelismFollowUp(e.target.value as 'new'|'contacted'|'scheduled'|'completed')}><option value="new">New interest</option><option value="contacted">Contacted</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option></select></label>
+                  <label><span>Visit / follow-up date</span><input type="datetime-local" value={followUpAt} onChange={e=>setFollowUpAt(e.target.value)}/></label>
+                  <button className="vop-secondary" type="button" disabled={!followUpAt} onClick={()=>void updateEvangelismFollowUp('scheduled')}>Schedule</button>
+                  <button className="vop-primary" type="button" onClick={()=>void updateEvangelismFollowUp('completed')}><CheckCircle2 size={15}/>Complete</button>
+                </div>
+              </div>}
+              <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={supportMessages} draft={supportReply} onDraftChange={setSupportReply}
+                guides={guides} placeholder="Reply with Bible study help, clarification or follow-up…" emptyText="No messages in this support request yet."
+                sendLabel="Send support reply" onSend={replySupportRequest} onEdit={editAdminSupportMessage} onDelete={deleteAdminSupportMessage}/>
+              {Array.isArray(selectedSupportRequest.whatsappTargets)&&selectedSupportRequest.whatsappTargets.length>0&&<div className="vop-whatsapp-actions">
+                {selectedSupportRequest.whatsappTargets.map((target:any)=><a key={target.kind+target.number} className="vop-secondary"
+                  href={'https://wa.me/'+String(target.number).replace(/\D/g,'')+'?text='+encodeURIComponent('VOP Support #'+selectedSupportRequest.id+' · '+(selectedSupportRequest.subject||''))}
+                  target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/>WhatsApp {target.label}</a>)}
+              </div>}
+            </>}
           </div>
-        </aside>
-        <div className="vop-mentoring-detail">
-          {!selectedConversation?<div className="vop-empty-state large"><MessageCircle size={34}/><strong>Select a conversation</strong><span>Open a learner–mentor thread to review context, attach lessons and reply.</span></div>
-          :<><div className="vop-detail-head"><div><span className="vop-section-kicker">Conversation</span><h3>{studentMap.get(selectedConversation.studentId)?.displayName||selectedConversation.studentId}</h3><p>Mentor: {mentorMap.get(selectedConversation.mentorId)?.displayName||selectedConversation.mentorId}</p></div></div>
-            <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={messages} draft={adminMessage} onDraftChange={setAdminMessage}
-              guides={guides} placeholder="Write a message…" emptyText="No messages in this conversation yet."
-              sendLabel="Send" onSend={sendAdminMessage} onEdit={editAdminMessage} onDelete={deleteAdminMessage}/></>}
         </div>
-      </div>
+      </>:<>
+        <div className="vop-communication-type-banner conversation"><MessageCircle size={16}/><div><strong>Mentor conversation</strong><span>Ongoing mentor–learner chat. It is not a support ticket and has no case status or priority.</span></div></div>
+        <div className="vop-mentoring-toolbar">
+          <label className="vop-search-field"><Search size={16}/><input value={conversationSearch} onChange={e=>setConversationSearch(e.target.value)} placeholder="Search learner or mentor"/></label>
+          <select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">All learners</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
+          <button className="vop-secondary" type="button" onClick={()=>void loadConversations()}><RefreshCw size={15}/>Refresh conversations</button>
+        </div>
+        <div className="vop-mentoring-split">
+          <aside className="vop-mentoring-queue" aria-label="Mentor conversations">
+            <div className="vop-queue-head"><span>Mentor conversations · {filteredConversations.length}</span><small>Unread first</small></div>
+            <div className="vop-queue-list">
+              {filteredConversations.map(item=><button key={item.id} type="button" className={selectedConversation?.id===item.id?'selected':''} onClick={()=>void openConversation(item)}>
+                <span className={'vop-inbox-dot '+(item.unread?'unread':'')}/>
+                <div><strong>{studentMap.get(item.studentId)?.displayName||item.studentId}</strong><span>Mentor: {mentorMap.get(item.mentorId)?.displayName||item.mentorId}</span><small>Conversation · {dateTime(item.lastMessageAt)}</small></div>
+                <ChevronRight size={16}/>
+              </button>)}
+              {!filteredConversations.length&&!loading&&<div className="vop-empty-state compact"><MessageCircle size={24}/><strong>No mentor conversations found</strong><span>Mentor conversations appear here after learner–mentor messaging begins.</span></div>}
+            </div>
+          </aside>
+          <div className="vop-mentoring-detail">
+            {!selectedConversation?<div className="vop-empty-state large"><MessageCircle size={34}/><strong>Select a mentor conversation</strong><span>Conversations are ongoing mentor–learner chats and remain separate from formal support requests.</span></div>
+            :<><div className="vop-detail-head"><div><span className="vop-section-kicker">Mentor conversation</span><h3>{studentMap.get(selectedConversation.studentId)?.displayName||selectedConversation.studentId}</h3><p>Mentor: {mentorMap.get(selectedConversation.mentorId)?.displayName||selectedConversation.mentorId}</p><div className="vop-detail-chips"><span>conversation</span><span>mentor chat</span></div></div></div>
+              <ChatThread currentUserId={auth?.currentUser?.uid||''} messages={messages} draft={adminMessage} onDraftChange={setAdminMessage}
+                guides={guides} placeholder="Write a mentor conversation message…" emptyText="No messages in this mentor conversation yet."
+                sendLabel="Send message" onSend={sendAdminMessage} onEdit={editAdminMessage} onDelete={deleteAdminMessage}/></>}
+          </div>
+        </div>
+      </>}
     </section>}
 
     {tab==='insights'&&<section className="vop-mentoring-card">
