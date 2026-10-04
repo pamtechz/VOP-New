@@ -1,9 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, CheckCircle2, GraduationCap, Plus, RefreshCw, Save, Search, ShieldCheck, Swords, Trash2, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, GraduationCap, Plus, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Swords, Trash2, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import type { User } from '../types';
 import { appConfirm } from '../components/layout/AppDialog';
+import ViewModeToggle,{type AdminViewMode} from '../components/admin/ViewModeToggle';
+
+type PointsConfig={
+  soloChallenge:number;duelChallenge:number;memoryDeck:number;
+  practiceQuiz:number;chapterQuiz:number;finalExam:number;
+};
+const defaultPoints:PointsConfig={soloChallenge:1,duelChallenge:1,memoryDeck:1,practiceQuiz:1,chapterQuiz:1,finalExam:1};
 
 type Kind = 'requirements' | 'memoryDecks' | 'duelQuestions';
 type Status = 'draft' | 'published' | 'archived';
@@ -55,6 +62,7 @@ async function engagementRequest(payload: Record<string,unknown>) {
   const json = await response.json().catch(() => ({})) as {
     error?:string;items?:Item[];item?:Item;learners?:Reviewer[];
     portfolio?:Portfolio;requirements?:Array<Record<string,unknown>>;
+    points?:PointsConfig;
   };
   if (!response.ok) throw new Error(json.error || 'The ministry content could not be saved.');
   return json;
@@ -80,6 +88,9 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
   const [reviewPortfolio,setReviewPortfolio] = useState<Portfolio|null>(null);
   const [reviewRequirements,setReviewRequirements] = useState<Array<Record<string,unknown>>>([]);
   const [reviewNotes,setReviewNotes] = useState('');
+  const [points,setPoints]=useState<PointsConfig>(defaultPoints);
+  const [pointsLoaded,setPointsLoaded]=useState(false);
+  const [viewMode,setViewMode]=useState<AdminViewMode>(()=>{try{return localStorage.getItem('vop-engagement-studio-view')==='cards'?'cards':'table';}catch{return 'table';}});
 
   useEffect(() => {
     if (!platformAdmin && !hierarchyAdmin) return;
@@ -98,6 +109,30 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     })();
     return () => { alive=false; };
   },[platformAdmin,hierarchyAdmin]);
+
+  const pointOrganizationId=organizationId||(!platformAdmin&&!hierarchyAdmin?String(currentUser.organizationId||''):'');
+  const loadPoints=useCallback(async()=>{
+    if(!pointOrganizationId){setPoints(defaultPoints);setPointsLoaded(false);return;}
+    try{
+      const result=await engagementRequest({action:'pointsConfigGet',organizationId:pointOrganizationId});
+      setPoints(result.points||defaultPoints);setPointsLoaded(true);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:'Could not load engagement point settings.');
+      setPointsLoaded(false);
+    }
+  },[pointOrganizationId]);
+  useEffect(()=>{void loadPoints();},[loadPoints]);
+  const savePoints=async()=>{
+    if(!pointOrganizationId||busy)return;
+    setBusy(true);setError('');setMessage('');
+    try{
+      const result=await engagementRequest({action:'pointsConfigSave',organizationId:pointOrganizationId,points});
+      setPoints(result.points||points);setPointsLoaded(true);
+      setMessage('Engagement points saved. New completed activities use these values.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Could not save engagement points.');}
+    finally{setBusy(false);}
+  };
+  const changeViewMode=(next:AdminViewMode)=>{setViewMode(next);try{localStorage.setItem('vop-engagement-studio-view',next);}catch{/* optional */}};
 
   const load = useCallback(async (cancelled?:()=>boolean) => {
     setLoading(true); setError('');
@@ -213,8 +248,24 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
         <option value="">{platformAdmin ? 'System-wide (all organizations)' : 'My hierarchy tenant'}</option>
         {organizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}
       </select>
-      <small>Publishing without an organization targets the {platformAdmin?'VOP platform':'selected hierarchy'}; choosing an organization restricts the content to its authorized scope.</small>
+      <small>Publishing without an organization targets the {platformAdmin?'VOP platform':'selected hierarchy'}; choose an organization to manage its points and organization-only engagement content.</small>
     </div>}
+    <section className="vop-card vop-engagement-points-config">
+      <div className="vop-section-title"><div><h2>Activity points</h2><p>Set how many engagement points a learner earns for each completed activity. Awards are server-side and idempotent, so retries do not create duplicate points.</p></div><SlidersHorizontal size={20}/></div>
+      {!pointOrganizationId?<div className="vop-empty">Select an organization above to configure its activity points.</div>:<>
+        <div className="vop-engagement-points-grid">
+          {([
+            ['soloChallenge','Solo challenge'],
+            ['duelChallenge','Head-to-head challenge'],
+            ['memoryDeck','Memory deck session'],
+            ['practiceQuiz','Practice quiz / test'],
+            ['chapterQuiz','Chapter quiz'],
+            ['finalExam','Final exam'],
+          ] as const).map(([key,label])=><label className="vop-field" key={key}><span>{label}</span><input type="number" min="0" max="10000" step="1" value={points[key]} onChange={e=>setPoints(current=>({...current,[key]:Math.max(0,Math.min(10000,Math.trunc(Number(e.target.value)||0)))}))}/></label>)}
+        </div>
+        <div className="vop-engagement-points-footer"><small>{pointsLoaded?'Organization values loaded.':'Using safe defaults until saved.'} Memory-deck points are awarded once per deck study session/day to prevent repeated-click farming.</small><button type="button" className="vop-primary" disabled={busy} onClick={()=>void savePoints()}><Save size={15}/>Save points</button></div>
+      </>}
+    </section>
     <div className="vop-reference-actions" role="tablist" aria-label="Engagement content category" style={{flexWrap:'wrap',marginBottom:18}}>
       {options.map(({value,label,Icon})=><button key={value} type="button" role="tab" aria-selected={kind===value}
         className={kind===value?'vop-primary':'vop-secondary'} onClick={()=>setKind(value)}><Icon size={16}/>{label}</button>)}
@@ -301,10 +352,11 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
     </form>}
     <div className="vop-toolbar" style={{marginBottom:15}}><div className="vop-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search titles and descriptions…" aria-label="Search content"/></div>
       <select className="vop-filter" value={status} onChange={e=>setStatus(e.target.value as typeof status)} aria-label="Filter publication state"><option value="all">All states</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select>
+      <ViewModeToggle value={viewMode} onChange={changeViewMode} label="Engagement content view"/>
     </div>
     {loading?<div className="vop-empty" role="status">Loading ministry content…</div>:
       filtered.length===0?<div className="vop-empty" role="status">No {labels[kind]}s match your filters. Create one or select another publishing scope.</div>:
-      <div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>Content</th><th>Visibility</th><th>Publication</th><th>Actions</th></tr></thead><tbody>
+      viewMode==='table'?<div className="vop-reference-table-wrap"><table className="vop-reference-table"><thead><tr><th>Content</th><th>Visibility</th><th>Publication</th><th>Actions</th></tr></thead><tbody>
         {filtered.map(item=><tr key={item.id}><td><strong>{item.title}</strong><div>{item.description || (kind==='duelQuestions'?item.question:'No description')}</div></td>
           <td>{item.sharingScope || 'organization'}</td><td>{item.status || 'Draft'}</td><td>
             <div className="vop-reference-action-cell">
@@ -312,6 +364,6 @@ export default function EngagementStudio({ currentUser }: { currentUser: User })
               <button type="button" className="vop-actions" disabled={item.canEdit===false||item.status==='archived'||busy} onClick={()=>void archive(item)} title="Archive content" aria-label={'Archive '+item.title}><Trash2 size={16}/></button>
             </div>
           </td></tr>)}
-      </tbody></table></div>}
+      </tbody></table></div>:<div className="vop-engagement-admin-cards">{filtered.map(item=><article key={item.id}><header><div><strong>{item.title}</strong><span>{item.status||'draft'}</span></div><small>{item.sharingScope||'organization'}</small></header><p>{item.description||(kind==='duelQuestions'?item.question:'No description')}</p><footer><button type="button" className="vop-secondary" disabled={item.canEdit===false||busy} onClick={()=>open(item)}>{item.canEdit===false?'Read-only':'Edit'}</button><button type="button" className="vop-actions" disabled={item.canEdit===false||item.status==='archived'||busy} onClick={()=>void archive(item)} aria-label={'Archive '+item.title}><Trash2 size={15}/></button></footer></article>)}</div>}
   </div>;
 }
