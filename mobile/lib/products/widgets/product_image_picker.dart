@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../core/services/supabase_service.dart';
 
 /// Result returned after any image attachment operation.
 class ImageAttachResult {
@@ -79,8 +77,15 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
   }
 
   Future<void> _attachExternalUrl(String inputUrl) async {
-    final resolvedUrl = ExternalImageResolver.resolve(inputUrl);
-    if (resolvedUrl.isEmpty) return;
+    final trimmed = inputUrl.trim();
+    if (trimmed.isEmpty) return;
+
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      setState(() => _errorMessage = 'Please enter a valid URL starting with http:// or https://');
+      return;
+    }
+
+    final resolvedUrl = ExternalImageResolver.resolve(trimmed);
 
     setState(() {
       _isLoading = true;
@@ -88,36 +93,13 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
     });
 
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      String finalUrl = resolvedUrl;
-      String? shortCode;
-
-      // Try shortening / registering via RPC if available
-      try {
-        final result = await SupabaseService.client.rpc(
-          'attach_shortened_url_to_product_image',
-          params: {
-            'p_product_id': widget.productId,
-            'p_external_url': resolvedUrl,
-            'p_created_by': user?.id,
-          },
-        );
-        if (result != null && result['short_url'] != null) {
-          finalUrl = result['short_url'] as String;
-          shortCode = result['code'] as String?;
-        }
-      } catch (_) {
-        // Fallback: use the resolved direct URL directly
-        finalUrl = resolvedUrl;
-      }
-
       widget.onImageAttached(ImageAttachResult(
-        displayUrl: finalUrl,
-        shortCode: shortCode,
-        isShortened: shortCode != null,
+        displayUrl: resolvedUrl,
+        shortCode: null,
+        isShortened: false,
       ));
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to link image. Please check URL.');
+      setState(() => _errorMessage = 'Failed to attach image: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
