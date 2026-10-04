@@ -18,6 +18,7 @@ test('graduation: completion auto-queues review and final approval auto-awards t
     const { default: graduation } = await vite.ssrLoadModule('/api_handlers/admin/graduations.ts');
     const { default: certificates } = await vite.ssrLoadModule('/api/certificates.ts');
     const { ensureAutomaticGraduationReview } = await vite.ssrLoadModule('/server/graduationAutomation.ts');
+    const { awardApprovedCertificate } = await vite.ssrLoadModule('/server/certificateAward.ts');
     async function identity(name, organizationId, membershipRole='learner') {
       const response=await fetch('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+
         '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key',{
@@ -308,6 +309,40 @@ test('graduation: completion auto-queues review and final approval auto-awards t
       assert.equal(foreign.status,409,JSON.stringify(foreign));
       const requests=await db.collection('graduationRequests').where('candidateId','==',another.uid).get();
       assert.equal(requests.empty,true);
+    });
+
+    await t.test('organization automatic release approves verified completion without a review click',async()=>{
+      const automaticCandidate=await identity('graduation-automatic',org);
+      await db.doc('users/'+automaticCandidate.uid).update({
+        progress:{completedLessons:[lang+':'+guide+':lesson-one'],guideScores:scores},
+      });
+      await db.doc('masterGuidePortfolios/'+automaticCandidate.uid).set({
+        learnerId:automaticCandidate.uid,organizationId:org,
+        activities:[{id:'auto-activity',requirementId:'cert-req',status:'submitted',revision:1,requiredSignatures:2}],
+        evidence:[{id:'auto-evidence',requirementId:'cert-req',title:'Signed log',url:'https://example.org/auto-log',revision:1}],
+        signoffs:[
+          {id:'auto-approval-1',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-one'},
+          {id:'auto-approval-2',requirementId:'cert-req',revision:1,decision:'approved',evaluatorId:'mentor-two'},
+        ],
+      });
+      await db.doc('organizations/'+org+'/settings/certification').set({releaseMode:'automatic'},{merge:true});
+
+      const automatic=await ensureAutomaticGraduationReview(db,automaticCandidate.uid,guide,'test:automatic-release');
+      assert.equal(automatic.eligible,true,JSON.stringify(automatic));
+      assert.equal(automatic.created,true,JSON.stringify(automatic));
+      assert.equal(automatic.status,'approved');
+      const request=await db.doc('graduationRequests/'+automatic.requestId).get();
+      assert.equal(request.data()?.workflowStageId,'automatic');
+      assert.equal(request.data()?.approvedAt!=null,true);
+      const learner=await db.doc('users/'+automaticCandidate.uid).get();
+      assert.equal(learner.data()?.information?.graduating,false);
+      assert.equal(learner.data()?.information?.graduated,true);
+
+      const award=await awardApprovedCertificate(db,automaticCandidate.uid,'system:test-automatic',guide);
+      assert.equal(award.created,true,JSON.stringify(award));
+      assert.equal(award.certificate.organizationId,org);
+      const duplicate=await awardApprovedCertificate(db,automaticCandidate.uid,'system:test-automatic-retry',guide);
+      assert.equal(duplicate.created,false,'automatic certificate issuance must be idempotent');
     });
   } finally {
     await vite.close();
