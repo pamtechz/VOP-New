@@ -5,6 +5,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { awardApprovedCertificate } from '../server/certificateAward.js';
 import { ensureAutomaticGraduationReview } from '../server/graduationAutomation.js';
 import { effectiveCertificationConfig } from '../server/certificationConfig.js';
+import { awardProgramCertificate, ensureAutomaticProgramCertificates } from '../server/programCertificateAward.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -39,8 +40,11 @@ async function mine(req:Request,res:Response){
  const completedGuideIds=[...new Set(completedKeys.map(key=>key.split(':')[1]).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)))].slice(0,20);
  if(String(profileData.role||'')==='student'&&completedGuideIds.length){
    await Promise.all(completedGuideIds.map(async guideId=>{
-     try{await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:certificate-reconciliation');}
-     catch(error){console.warn('Certificate review reconciliation skipped',guideId,error);}
+     try{
+       await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:certificate-reconciliation');
+       await ensureAutomaticProgramCertificates(db,decoded.uid,guideId,'system:certificate-reconciliation');
+     }
+     catch(error){console.warn('Certificate reconciliation skipped',guideId,error);}
    }));
  }
  const organizationId=String(profileData.organizationId||'').trim();
@@ -140,6 +144,7 @@ async function issue(req:Request,res:Response){
  const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
  const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
  const guideId=typeof body.guideId==='string'?body.guideId.trim():'';
+ const programId=typeof body.programId==='string'?body.programId.trim():'';
  if(!candidateId||candidateId.length>128||candidateId.includes('/')){
    return res.status(400).json({error:'A valid candidate ID is required.'});
  }
@@ -160,7 +165,9 @@ async function issue(req:Request,res:Response){
        &&(String(candidate[hField]||'')===actorNodeId||String(hierarchy[hField]||'')===actorNodeId));
    if(!inScope)return res.status(403).json({error:'The candidate is outside your authorized tenant scope.'});
  }
- const result=await awardApprovedCertificate(db,candidateId,decoded.uid,guideId);
+ const result=programId
+   ?await awardProgramCertificate(db,candidateId,programId,decoded.uid)
+   :await awardApprovedCertificate(db,candidateId,decoded.uid,guideId);
  return res.status(result.created?201:200).json({ok:true,...result});
 }
 
