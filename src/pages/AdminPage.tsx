@@ -633,10 +633,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   }, [currentUser, permissionMatrix, activeLanguage, settings?.customTranslations, settings?.features, isSuperAdmin, isOrganizationPortal, subscriptionFeatures]);
 
   useEffect(()=>{
-    if(subscriptionFeatures===null)return;
     if(visibleNav.some(item=>item.id===activeTab))return;
     navigateAdminTab('dashboard','replace');
-  },[subscriptionFeatures,visibleNav,activeTab]);
+  },[visibleNav,activeTab]);
 
   const currentPage = NAV.find(item => item.id === activeTab);
   const currentPageLabel = activeTab === 'curriculum'
