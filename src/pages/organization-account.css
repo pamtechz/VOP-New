@@ -25,6 +25,6 @@
 .vop-org-account-security-note{display:flex;align-items:flex-start;gap:9px;padding:11px 12px;border-radius:10px;background:var(--theme-surface-soft);color:var(--vop-muted);font-size:11px;line-height:1.5}
 .vop-org-account-actions{display:flex;justify-content:flex-end}
 .vop-org-account-message{display:flex;align-items:center;gap:8px;padding:11px 13px;border-radius:10px;font-size:12px;font-weight:700}
-.vop-org-account-message.success{background:#ecfdf5;color:#166534;border:1px solid #bbf7d0}
-.vop-org-account-message.error{background:#fff1f2;color:#9f1239;border:1px solid #fecdd3}
+.vop-org-account-message.success{background:color-mix(in srgb,#16a34a 10%,var(--vop-card));color:var(--vop-text);border:1px solid color-mix(in srgb,#16a34a 34%,var(--theme-border))}
+.vop-org-account-message.error{background:color-mix(in srgb,#dc2626 10%,var(--vop-card));color:var(--vop-text);border:1px solid color-mix(in srgb,#dc2626 34%,var(--theme-border))}
 @media(max-width:850px){.vop-org-account-head{flex-direction:column}.vop-org-account-grid{grid-template-columns:1fr}.vop-org-account-head .vop-secondary{width:100%;justify-content:center}}
