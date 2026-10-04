@@ -2,8 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { awardApprovedCertificate } from '../server/certificateAward.js';
-import { ensureAutomaticGraduationReview } from '../server/graduationAutomation.js';
+import {awardApprovedCertificate,awardApprovedProgramCertificate} from '../server/certificateAward.js';
+import {ensureAutomaticGraduationReview} from '../server/graduationAutomation.js';
+import {ensureAutomaticProgramGraduationReviews} from '../server/programGraduationAutomation.js';
 
 type Request = { method?: string; headers?: Record<string,string|string[]|undefined>; query?: Record<string,string|string[]|undefined>; body?: unknown };
 type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
@@ -11,7 +12,7 @@ type Response = { status:(code:number)=>Response; json:(body:unknown)=>void };
 function header(req:Request,name:string){const v=req.headers?.[name]??req.headers?.[name.toLowerCase()];return Array.isArray(v)?v[0]??'':v??'';}
 function admin(){if(getApps().length)return getApps()[0];const projectId=process.env.FIREBASE_ADMIN_PROJECT_ID||process.env.FIREBASE_PROJECT_ID;const clientEmail=process.env.FIREBASE_ADMIN_CLIENT_EMAIL;const privateKey=process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g,'\n');if(!projectId||!clientEmail||!privateKey)throw new Error('Server-side Firebase administration is not configured.');return initializeApp({credential:cert({projectId,clientEmail,privateKey})});}
 function dateValue(value:unknown):string|null{if(!value)return null;if(typeof value==='string')return value;if(typeof value==='number')return new Date(value).toISOString();if(typeof value==='object'&&value!==null){const x=value as {toDate?:()=>Date;_seconds?:number;seconds?:number};if(typeof x.toDate==='function')return x.toDate().toISOString();const s=Number(x._seconds??x.seconds);if(Number.isFinite(s))return new Date(s*1000).toISOString();}return null;}
-function safe(data:Record<string,unknown>){return {id:String(data.id??''),certificateNumber:String(data.certificateNumber??''),candidateName:String(data.candidateName??''),courseName:String(data.courseName??''),courseCode:String(data.courseCode??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),completionDate:dateValue(data.completionDate),issuedAt:dateValue(data.issuedAt),churchName:String(data.churchName??''),districtName:String(data.districtName??''),conferenceName:String(data.conferenceName??''),unionName:String(data.unionName??''),guideTitle:String(data.guideTitle??''),language:String(data.language??''),status:String(data.status??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??''),verificationEnabled:data.verificationEnabled===true};}
+function safe(data:Record<string,unknown>){return {id:String(data.id??''),certificateNumber:String(data.certificateNumber??''),candidateName:String(data.candidateName??''),courseName:String(data.courseName??''),courseCode:String(data.courseCode??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),completionDate:dateValue(data.completionDate),issuedAt:dateValue(data.issuedAt),churchName:String(data.churchName??''),districtName:String(data.districtName??''),conferenceName:String(data.conferenceName??''),unionName:String(data.unionName??''),guideTitle:String(data.guideTitle??''),programId:String(data.programId??''),programTitle:String(data.programTitle??''),targetKind:String(data.targetKind??'guide'),language:String(data.language??''),status:String(data.status??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??''),verificationEnabled:data.verificationEnabled===true};}
 function publicStatus(id:string,data:Record<string,unknown>){return {id,certificateNumber:String(data.certificateNumber??''),status:String(data.status??''),documentType:String(data.documentType??'course'),certificateTypeName:String(data.certificateTypeName??''),replacedByCertificateNumber:String(data.replacedByCertificateNumber??'')};}
 function publicConfig(data:Record<string,unknown>){return {certificateTitle:String(data.certificateTitle??''),certificateBodyText:String(data.certificateBodyText??''),issuerName:String(data.issuerName??''),issuerSubtitle:String(data.issuerSubtitle??''),courseName:String(data.courseName??''),directorName:String(data.directorName??''),directorTitle:String(data.directorTitle??''),signatureUrl:String(data.signatureUrl??''),sealUrl:String(data.sealUrl??''),logoUrl:String(data.logoUrl??''),backgroundUrl:String(data.backgroundUrl??''),verificationEnabled:data.verificationEnabled===true,verificationBaseUrl:String(data.verificationBaseUrl??''),template:data.template&&typeof data.template==='object'?data.template:null};}
 function queryValue(req:Request,key:string){const v=req.query?.[key];return Array.isArray(v)?v[0]??'':v??'';}
@@ -38,8 +39,10 @@ async function mine(req:Request,res:Response){
  const completedGuideIds=[...new Set(completedKeys.map(key=>key.split(':')[1]).filter(value=>/^[A-Za-z0-9_-]{1,120}$/.test(value)))].slice(0,20);
  if(String(profileData.role||'')==='student'&&completedGuideIds.length){
    await Promise.all(completedGuideIds.map(async guideId=>{
-     try{await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:certificate-reconciliation');}
-     catch(error){console.warn('Certificate review reconciliation skipped',guideId,error);}
+     try{
+       await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:certificate-reconciliation');
+       await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-certificate-reconciliation');
+     }catch(error){console.warn('Certificate review reconciliation skipped',guideId,error);}
    }));
  }
  const organizationId=String(profileData.organizationId||'').trim();
@@ -134,6 +137,8 @@ async function issue(req:Request,res:Response){
  const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
  const candidateId=typeof body.candidateId==='string'?body.candidateId.trim():'';
  const guideId=typeof body.guideId==='string'?body.guideId.trim():'';
+ const programId=typeof body.programId==='string'?body.programId.trim():'';
+ const targetKind=String(body.targetKind||'guide').trim()==='program'?'program':'guide';
  if(!candidateId||candidateId.length>128||candidateId.includes('/')){
    return res.status(400).json({error:'A valid candidate ID is required.'});
  }
@@ -154,7 +159,9 @@ async function issue(req:Request,res:Response){
        &&(String(candidate[hField]||'')===actorNodeId||String(hierarchy[hField]||'')===actorNodeId));
    if(!inScope)return res.status(403).json({error:'The candidate is outside your authorized tenant scope.'});
  }
- const result=await awardApprovedCertificate(db,candidateId,decoded.uid,guideId);
+ const result=targetKind==='program'
+   ?await awardApprovedProgramCertificate(db,candidateId,decoded.uid,programId||guideId)
+   :await awardApprovedCertificate(db,candidateId,decoded.uid,guideId);
  return res.status(result.created?201:200).json({ok:true,...result});
 }
 
