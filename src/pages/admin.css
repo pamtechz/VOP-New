@@ -1412,6 +1412,14 @@
 .vop-communication-type-banner>div{display:grid;gap:2px}.vop-communication-type-banner strong{font-size:10px;color:var(--mentor-text)}.vop-communication-type-banner span{font-size:9px;line-height:1.45}
 .vop-communication-type-banner.support{border-inline-start:3px solid var(--mentor-accent)}
 .vop-communication-type-banner.conversation{border-inline-start:3px solid color-mix(in srgb,var(--mentor-accent) 55%,var(--mentor-muted))}
+.vop-workspace-tabs{margin:0 0 10px;padding:6px;border:1px solid var(--mentor-border);border-radius:12px;background:var(--mentor-soft)}
+.vop-workspace-tabs button{flex:1;justify-content:center;border-radius:9px;min-height:40px}
+.vop-workspace-type-banner{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;border:1px solid var(--mentor-border);border-radius:10px;margin-bottom:12px;background:var(--mentor-soft);color:var(--mentor-muted)}
+.vop-workspace-type-banner>svg{flex:0 0 auto;margin-top:1px;color:var(--mentor-accent)}
+.vop-workspace-type-banner>div{display:grid;gap:2px}.vop-workspace-type-banner strong{font-size:10px;color:var(--mentor-text)}.vop-workspace-type-banner span{font-size:9px;line-height:1.45}
+.vop-workspace-type-banner.allocation,.vop-workspace-type-banner.learner{border-inline-start:3px solid var(--mentor-accent)}
+.vop-workspace-type-banner.outreach,.vop-workspace-type-banner.assessment{border-inline-start:3px solid color-mix(in srgb,var(--mentor-accent) 65%,var(--mentor-muted))}
+.vop-workspace-type-banner.automation{border-inline-start:3px solid color-mix(in srgb,var(--mentor-accent) 40%,var(--mentor-muted))}
 
 .vop-mentoring-card{background:var(--mentor-surface);border:1px solid var(--mentor-border);border-radius:16px;padding:18px;box-shadow:0 6px 22px rgba(18,54,109,.035);min-width:0}
 .vop-mentoring-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:15px}.vop-mentoring-card-head>div{min-width:0}.vop-mentoring-card-head h2,.vop-mentoring-card-head h3{margin:2px 0 0;color:var(--mentor-text);font-size:18px;letter-spacing:-.015em}.vop-mentoring-card-head p{margin:4px 0 0;color:var(--mentor-muted);font-size:11px;line-height:1.5}.vop-section-kicker{display:block;color:var(--mentor-accent)!important;font-size:9px!important;font-weight:850!important;text-transform:uppercase;letter-spacing:.08em!important}

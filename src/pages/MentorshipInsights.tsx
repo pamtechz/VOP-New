@@ -52,6 +52,8 @@ async function organizationInviteApi(data:Record<string,unknown>={}){
 
 type Tab='overview'|'operations'|'support'|'insights'|'outreach';
 type CommunicationView='support'|'conversations';
+type OperationsView='allocation'|'outreach'|'automation';
+type InsightsView='learner'|'assessment';
 type SupportStatusFilter='all'|'open'|'in_progress'|'resolved'|'closed';
 type PriorityFilter='all'|'high'|'normal';
 
@@ -76,6 +78,8 @@ function supportAgeHours(item:any){
 export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
   const [tab,setTab]=useState<Tab>('overview');
   const [communicationView,setCommunicationView]=useState<CommunicationView>('support');
+  const [operationsView,setOperationsView]=useState<OperationsView>('allocation');
+  const [insightsView,setInsightsView]=useState<InsightsView>('learner');
   const [students,setStudents]=useState<any[]>([]);
   const [mentors,setMentors]=useState<any[]>([]);
   const [assignments,setAssignments]=useState<any[]>([]);
@@ -354,6 +358,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       const result=await mentoringApi('createDraft',{studentId:selectedStudent,channel});
       setDraft(result.item||null);
       setNotice('Performance-based draft created.');
+      setOperationsView('outreach');
       setTab('operations');
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not create draft.');}
   };
@@ -488,11 +493,11 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
     {notice&&<div className="vop-mentoring-alert success"><CheckCircle2 size={17}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label="Dismiss message"><X size={16}/></button></div>}
 
     <section className="vop-mentoring-stats" aria-label="Mentoring summary">
-      <button type="button" onClick={()=>setTab('operations')}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
-      <button type="button" onClick={()=>setTab('operations')}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
+      <button type="button" onClick={()=>{setOperationsView('allocation');setTab('operations')}}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
+      <button type="button" onClick={()=>{setOperationsView('allocation');setTab('operations')}}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
       <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><span className="metric-icon"><HeartHandshake size={19}/></span><span>Open support</span><strong>{openSupport.length}</strong><small>{highPrioritySupport.length} high priority</small></button>
       <button type="button" onClick={()=>{setCommunicationView(unreadSummary.supportRequests>0?'support':'conversations');setTab('support')}}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
-      <button type="button" onClick={()=>setTab('insights')}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
+      <button type="button" onClick={()=>{setInsightsView('assessment');setTab('insights')}}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
     </section>
 
     <nav className="vop-mentoring-tabs" aria-label="Mentoring workspace sections">
@@ -512,7 +517,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <button type="button" className={highPrioritySupport.length?'urgent':''} onClick={()=>{setSupportPriority('high');setSupportStatus('all');setCommunicationView('support');setTab('support')}}>
               <span><AlertCircle size={18}/></span><div><strong>{highPrioritySupport.length} high-priority support request{highPrioritySupport.length===1?'':'s'}</strong><small>Candidate questions marked as needing help soon</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>setTab('operations')}>
+            <button type="button" onClick={()=>{setOperationsView('allocation');setTab('operations')}}>
               <span><UserPlus size={18}/></span><div><strong>{unassignedStudents.length} learner{unassignedStudents.length===1?'':'s'} without a mentor</strong><small>Allocate an active mentor for accountable follow-up</small></div><ChevronRight size={17}/>
             </button>
             <button type="button" onClick={()=>{setCommunicationView(unreadSummary.supportRequests>0?'support':'conversations');setTab('support')}}>
@@ -557,25 +562,54 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
         <article className="vop-mentoring-card vop-quick-actions">
           <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Quick actions</span><h2>Start work</h2></div></div>
-          <button type="button" onClick={()=>setTab('operations')}><UserPlus size={16}/>Assign a mentor</button>
+          <button type="button" onClick={()=>{setOperationsView('allocation');setTab('operations')}}><UserPlus size={16}/>Assign a mentor</button>
           <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><HeartHandshake size={16}/>Open support inbox</button>
-          <button type="button" onClick={()=>setTab('insights')}><BarChart3 size={16}/>Review learner performance</button>
+          <button type="button" onClick={()=>{setInsightsView('learner');setTab('insights')}}><BarChart3 size={16}/>Review learner performance</button>
           <button type="button" onClick={()=>setTab('outreach')}><Link2 size={16}/>Create study invitation</button>
         </article>
       </aside>
     </section>}
 
-    {tab==='operations'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">People & ownership</span><h2>Mentor allocation</h2><p>Assign accountable mentors and inspect current learner coverage.</p></div><span className="vop-summary-pill">{unassignedStudents.length} unassigned</span></div>
-      <div className="vop-mentoring-toolbar">
-        <label className="vop-search-field"><Search size={16}/><input value={assignmentSearch} onChange={e=>setAssignmentSearch(e.target.value)} placeholder="Search learner or mentor"/></label>
-        <select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
-        <select value={selectedMentor} onChange={e=>setSelectedMentor(e.target.value)}><option value="">Select mentor</option>{mentors.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
-        <button className="vop-primary" type="button" onClick={()=>void assign()} disabled={!selectedStudent||!selectedMentor}><UserPlus size={16}/>Assign mentor</button>
+    {tab==='operations'&&<section className="vop-mentoring-card vop-operations-workspace">
+      <div className="vop-mentoring-card-head">
+        <div><span className="vop-section-kicker">Unified operations</span><h2>Mentoring operations</h2><p>One operational workspace for mentor allocation, proactive outreach and support automation, with each function clearly separated.</p></div>
+        <span className="vop-summary-pill">{unassignedStudents.length} unassigned</span>
       </div>
-      <div className="vop-mentoring-table-wrap"><table className="vop-table"><thead><tr><th>Learner</th><th>Mentor</th><th>Status</th><th>Assigned</th><th aria-label="Actions"/></tr></thead><tbody>
-        {filteredAssignments.map(item=><tr key={item.id}><td><strong>{item.student?.displayName||item.studentId}</strong><div className="vop-row-desc">{item.student?.email||''}</div></td><td><strong>{item.mentor?.displayName||item.mentorId}</strong><div className="vop-row-desc">{item.mentor?.email||''}</div></td><td><span className={'vop-status '+(item.status==='active'?'enabled':'')}>{statusLabel(item.status)}</span></td><td>{dateOnly(item.assignedAt)}</td><td><button className="vop-actions" type="button" title="View learner performance" onClick={()=>{setSelectedStudent(item.studentId);setTab('insights');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button></td></tr>)}
-      </tbody></table>{!filteredAssignments.length&&!loading&&<div className="vop-empty-state"><UserPlus size={28}/><strong>No matching mentor assignments</strong><span>Use the controls above to allocate a mentor or change the search.</span></div>}</div>
+      <div className="vop-mentoring-subtabs vop-workspace-tabs" role="tablist" aria-label="Mentoring operation type">
+        <button type="button" role="tab" aria-selected={operationsView==='allocation'} className={operationsView==='allocation'?'active':''}
+          onClick={()=>setOperationsView('allocation')}><UserPlus size={15}/><span>Mentor allocation</span>{Boolean(unassignedStudents.length)&&<b>{unassignedStudents.length}</b>}</button>
+        <button type="button" role="tab" aria-selected={operationsView==='outreach'} className={operationsView==='outreach'?'active':''}
+          onClick={()=>setOperationsView('outreach')}><Send size={15}/><span>Outreach drafts</span></button>
+        <button type="button" role="tab" aria-selected={operationsView==='automation'} className={operationsView==='automation'?'active':''}
+          onClick={()=>setOperationsView('automation')}><Settings2 size={15}/><span>Automation</span></button>
+      </div>
+
+      {operationsView==='allocation'?<>
+        <div className="vop-workspace-type-banner allocation"><UserPlus size={16}/><div><strong>Mentor allocation</strong><span>Assign accountable mentors and review learner coverage. This changes learner ownership, not messaging automation.</span></div></div>
+        <div className="vop-mentoring-toolbar">
+          <label className="vop-search-field"><Search size={16}/><input value={assignmentSearch} onChange={e=>setAssignmentSearch(e.target.value)} placeholder="Search learner or mentor"/></label>
+          <select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
+          <select value={selectedMentor} onChange={e=>setSelectedMentor(e.target.value)}><option value="">Select mentor</option>{mentors.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
+          <button className="vop-primary" type="button" onClick={()=>void assign()} disabled={!selectedStudent||!selectedMentor}><UserPlus size={16}/>Assign mentor</button>
+        </div>
+        <div className="vop-mentoring-table-wrap"><table className="vop-table"><thead><tr><th>Learner</th><th>Mentor</th><th>Status</th><th>Assigned</th><th aria-label="Actions"/></tr></thead><tbody>
+          {filteredAssignments.map(item=><tr key={item.id}><td><strong>{item.student?.displayName||item.studentId}</strong><div className="vop-row-desc">{item.student?.email||''}</div></td><td><strong>{item.mentor?.displayName||item.mentorId}</strong><div className="vop-row-desc">{item.mentor?.email||''}</div></td><td><span className={'vop-status '+(item.status==='active'?'enabled':'')}>{statusLabel(item.status)}</span></td><td>{dateOnly(item.assignedAt)}</td><td><button className="vop-actions" type="button" title="View learner performance" onClick={()=>{setSelectedStudent(item.studentId);setInsightsView('learner');setTab('insights');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button></td></tr>)}
+        </tbody></table>{!filteredAssignments.length&&!loading&&<div className="vop-empty-state"><UserPlus size={28}/><strong>No matching mentor assignments</strong><span>Use the controls above to allocate a mentor or change the search.</span></div>}</div>
+      </>:operationsView==='outreach'?<>
+        <div className="vop-workspace-type-banner outreach"><Send size={16}/><div><strong>Performance-based outreach draft</strong><span>Create a human-reviewed message from recorded learner performance. Nothing is sent until an authorized user approves the draft.</span></div></div>
+        <div className="vop-message-tools"><select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select><select value={draftChannel} onChange={e=>setDraftChannel(e.target.value as 'in_app'|'email')}><option value="in_app">In-app</option><option value="email">Email</option></select><button className="vop-secondary" type="button" onClick={()=>void createDraft(draftChannel)} disabled={!selectedStudent}>Generate draft</button></div>
+        {draft?<div className="vop-draft"><label><span>Subject</span><input value={draft.subject} onChange={e=>setDraft({...draft,subject:e.target.value})}/></label><label><span>Message</span><textarea value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/></label><div className="vop-performance-actions"><button className="vop-primary" type="button" onClick={()=>void sendDraft()}><Send size={16}/>Send {draft.channel==='email'?'email':'message'}</button></div></div>:<div className="vop-empty-state large"><Send size={32}/><strong>No outreach draft open</strong><span>Select a learner and generate a message from recorded performance.</span></div>}
+      </>:<>
+        <div className="vop-workspace-type-banner automation"><Settings2 size={16}/><div><strong>Support automation</strong><span>Configure guardrailed, scheduled outreach thresholds and cooldowns. This does not change mentor assignments or send an immediate draft.</span></div></div>
+        <div className="vop-automation-grid">
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Enable daily support automation</div><div className="vop-setting-help">Runs once each day and respects the configured cooldown.</div></div><button type="button" className={'vop-toggle '+(automation.enabled?'on':'')} onClick={()=>setAutomation(current=>({...current,enabled:!current.enabled}))}><span/></button></div>
+          <label className="vop-field"><span>Delivery channel</span><select value={automation.channel} onChange={e=>setAutomation(current=>({...current,channel:e.target.value as 'in_app'|'email'}))}><option value="in_app">In-app message</option><option value="email">Email</option></select></label>
+          <label className="vop-field"><span>Trigger when assessment average is at or below (%)</span><input type="number" min="0" max="100" value={automation.minAverageScore||''} onChange={e=>setAutomation(current=>({...current,minAverageScore:Number(e.target.value)||0}))}/></label>
+          <label className="vop-field"><span>Trigger when progress is at or below (%)</span><input type="number" min="0" max="100" value={automation.maxProgressPercent||''} onChange={e=>setAutomation(current=>({...current,maxProgressPercent:Number(e.target.value)||0}))}/></label>
+          <label className="vop-field"><span>Cooldown (days)</span><input type="number" min="1" max="90" value={automation.cooldownDays} onChange={e=>setAutomation(current=>({...current,cooldownDays:Number(e.target.value)||1}))}/></label>
+        </div>
+        <div className="vop-performance-actions"><button className="vop-primary" type="button" onClick={()=>void saveAutomation()}><Settings2 size={16}/>Save automation settings</button></div>
+      </>}
     </section>}
 
     {tab==='support'&&<section className="vop-mentoring-card vop-communication-workspace">
@@ -674,20 +708,33 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       </>}
     </section>}
 
-    {tab==='insights'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Individual learner</span><h2>Performance review</h2><p>Use recorded study progress and server-graded assessment evidence to plan support.</p></div><select value={selectedStudent} onChange={e=>{setSelectedStudent(e.target.value);void loadPerformance(e.target.value)}}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select></div>
-      {!performance?<div className="vop-empty-state large"><BarChart3 size={34}/><strong>Select a learner</strong><span>Performance metrics, weak questions and support drafting will appear here.</span></div>:<div>
-        <div className="vop-performance-stats"><div><span>Learning progress</span><strong>{Math.round(performance.progressPercent||0)}%</strong></div><div><span>Assessment average</span><strong>{Math.round(performance.averageScore||0)}%</strong></div><div><span>Passed</span><strong>{performance.passedAssessments||0}</strong></div><div><span>Failed</span><strong>{performance.failedAssessments||0}</strong></div></div>
-        <div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void createDraft('in_app')}><MessageCircle size={15}/>Draft in-app support</button><button className="vop-primary" type="button" onClick={()=>void createDraft('email')}><Send size={15}/>Draft email</button></div>
-        <div className="vop-subsection-head"><div><h3>Questions needing attention</h3><p>Use repeated failures as prompts for teaching—not as labels about the learner.</p></div></div>
-        <div className="vop-weak-list">{(performance.weakQuestions||[]).map((item:any)=><div key={item.key}><strong>{item.question||item.key}</strong><span>{item.failedCount} failed of {item.answeredCount} attempts</span></div>)}{!performance.weakQuestions?.length&&<div className="vop-empty-state compact"><CheckCircle2 size={24}/><strong>No repeated question difficulty</strong><span>No question-level weakness is currently recorded.</span></div>}</div>
-      </div>}
-    </section>}
+    {tab==='insights'&&<section className="vop-mentoring-card vop-insights-workspace">
+      <div className="vop-mentoring-card-head">
+        <div><span className="vop-section-kicker">Unified evidence</span><h2>Performance & insights</h2><p>One evidence workspace with individual learner performance and organization assessment patterns clearly separated.</p></div>
+      </div>
+      <div className="vop-mentoring-subtabs vop-workspace-tabs" role="tablist" aria-label="Performance and insight type">
+        <button type="button" role="tab" aria-selected={insightsView==='learner'} className={insightsView==='learner'?'active':''}
+          onClick={()=>setInsightsView('learner')}><UserCheck size={15}/><span>Learner performance</span></button>
+        <button type="button" role="tab" aria-selected={insightsView==='assessment'} className={insightsView==='assessment'?'active':''}
+          onClick={()=>setInsightsView('assessment')}><BookOpenCheck size={15}/><span>Assessment insights</span>{Boolean(failures.length)&&<b>{failures.length}</b>}</button>
+      </div>
 
-    {tab==='insights'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Assessment evidence</span><h2>Commonly missed questions</h2><p>Organization-level patterns from server-graded assessment attempts.</p></div></div>
-      <div className="vop-mentoring-toolbar"><label className="vop-search-field"><Search size={16}/><input value={insightSearch} onChange={e=>setInsightSearch(e.target.value)} placeholder="Search question or lesson"/></label></div>
-      <div className="vop-weak-list">{filteredFailures.map(item=><div key={item.id}><strong>{item.question||item.key}</strong><span>{Number(item.failedCount||0)} failed · {Number(item.answeredCount||0)} answered · {item.lessonId||'Lesson not recorded'}</span></div>)}{!filteredFailures.length&&!loading&&<div className="vop-empty-state large"><BookOpenCheck size={32}/><strong>No matching assessment difficulties</strong><span>Question-level patterns will appear after graded attempts are recorded.</span></div>}</div>
+      {insightsView==='learner'?<>
+        <div className="vop-workspace-type-banner learner"><UserCheck size={16}/><div><strong>Individual learner performance</strong><span>Progress and assessment evidence for one selected learner. Use it for intervention planning, not organization-wide conclusions.</span></div></div>
+        <div className="vop-mentoring-toolbar">
+          <select value={selectedStudent} onChange={e=>{setSelectedStudent(e.target.value);void loadPerformance(e.target.value)}}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select>
+        </div>
+        {!performance?<div className="vop-empty-state large"><BarChart3 size={34}/><strong>Select a learner</strong><span>Performance metrics, weak questions and support drafting will appear here.</span></div>:<div>
+          <div className="vop-performance-stats"><div><span>Learning progress</span><strong>{Math.round(performance.progressPercent||0)}%</strong></div><div><span>Assessment average</span><strong>{Math.round(performance.averageScore||0)}%</strong></div><div><span>Passed</span><strong>{performance.passedAssessments||0}</strong></div><div><span>Failed</span><strong>{performance.failedAssessments||0}</strong></div></div>
+          <div className="vop-performance-actions"><button className="vop-secondary" type="button" onClick={()=>void createDraft('in_app')}><MessageCircle size={15}/>Draft in-app support</button><button className="vop-primary" type="button" onClick={()=>void createDraft('email')}><Send size={15}/>Draft email</button></div>
+          <div className="vop-subsection-head"><div><h3>Questions needing attention</h3><p>Use repeated failures as prompts for teaching—not as labels about the learner.</p></div></div>
+          <div className="vop-weak-list">{(performance.weakQuestions||[]).map((item:any)=><div key={item.key}><strong>{item.question||item.key}</strong><span>{item.failedCount} failed of {item.answeredCount} attempts</span></div>)}{!performance.weakQuestions?.length&&<div className="vop-empty-state compact"><CheckCircle2 size={24}/><strong>No repeated question difficulty</strong><span>No question-level weakness is currently recorded.</span></div>}</div>
+        </div>}
+      </>:<>
+        <div className="vop-workspace-type-banner assessment"><BookOpenCheck size={16}/><div><strong>Assessment insights</strong><span>Organization-level patterns from server-graded attempts. These trends are separate from an individual learner review.</span></div></div>
+        <div className="vop-mentoring-toolbar"><label className="vop-search-field"><Search size={16}/><input value={insightSearch} onChange={e=>setInsightSearch(e.target.value)} placeholder="Search question or lesson"/></label></div>
+        <div className="vop-weak-list">{filteredFailures.map(item=><div key={item.id}><strong>{item.question||item.key}</strong><span>{Number(item.failedCount||0)} failed · {Number(item.answeredCount||0)} answered · {item.lessonId||'Lesson not recorded'}</span></div>)}{!filteredFailures.length&&!loading&&<div className="vop-empty-state large"><BookOpenCheck size={32}/><strong>No matching assessment difficulties</strong><span>Question-level patterns will appear after graded attempts are recorded.</span></div>}</div>
+      </>}
     </section>}
 
     {tab==='outreach'&&<section className="vop-mentoring-card">
@@ -703,23 +750,6 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       <div className="vop-share-list">{shareLinks.map(item=><div key={item.code}><span><strong>{item.label||item.targetPath}</strong><small>{item.targetPath}</small></span><b>{Number(item.clicks||0)} opens</b><a href={item.url||'#'} target="_blank" rel="noreferrer" aria-label="Open invitation"><ExternalLink size={15}/></a></div>)}{!shareLinks.length&&!loading&&<div className="vop-empty-state large"><Link2 size={30}/><strong>No tracked invitations yet</strong><span>Create a guide or lesson invitation above.</span></div>}</div>
     </section>}
 
-    {tab==='operations'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Proactive support</span><h2>Performance-based outreach drafts</h2><p>Create a support message from real learner progress, review it, then send it in-app or by email.</p></div></div>
-      <div className="vop-message-tools"><select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select><select value={draftChannel} onChange={e=>setDraftChannel(e.target.value as 'in_app'|'email')}><option value="in_app">In-app</option><option value="email">Email</option></select><button className="vop-secondary" type="button" onClick={()=>void createDraft(draftChannel)} disabled={!selectedStudent}>Generate draft</button></div>
-      {draft?<div className="vop-draft"><label><span>Subject</span><input value={draft.subject} onChange={e=>setDraft({...draft,subject:e.target.value})}/></label><label><span>Message</span><textarea value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/></label><div className="vop-performance-actions"><button className="vop-primary" type="button" onClick={()=>void sendDraft()}><Send size={16}/>Send {draft.channel==='email'?'email':'message'}</button></div></div>:<div className="vop-empty-state large"><Send size={32}/><strong>No draft open</strong><span>Select a learner and generate an outreach message from recorded performance.</span></div>}
-    </section>}
-
-    {tab==='operations'&&<section className="vop-mentoring-card">
-      <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Guardrailed automation</span><h2>Performance-based support automation</h2><p>Automate supportive outreach from recorded learner progress while respecting cooldowns and administrator control.</p></div></div>
-      <div className="vop-automation-grid">
-        <div className="vop-setting-row"><div><div className="vop-setting-name">Enable daily support automation</div><div className="vop-setting-help">Runs once each day and respects the configured cooldown.</div></div><button type="button" className={'vop-toggle '+(automation.enabled?'on':'')} onClick={()=>setAutomation(current=>({...current,enabled:!current.enabled}))}><span/></button></div>
-        <label className="vop-field"><span>Delivery channel</span><select value={automation.channel} onChange={e=>setAutomation(current=>({...current,channel:e.target.value as 'in_app'|'email'}))}><option value="in_app">In-app message</option><option value="email">Email</option></select></label>
-        <label className="vop-field"><span>Trigger when assessment average is at or below (%)</span><input type="number" min="0" max="100" value={automation.minAverageScore||''} onChange={e=>setAutomation(current=>({...current,minAverageScore:Number(e.target.value)||0}))}/></label>
-        <label className="vop-field"><span>Trigger when progress is at or below (%)</span><input type="number" min="0" max="100" value={automation.maxProgressPercent||''} onChange={e=>setAutomation(current=>({...current,maxProgressPercent:Number(e.target.value)||0}))}/></label>
-        <label className="vop-field"><span>Cooldown (days)</span><input type="number" min="1" max="90" value={automation.cooldownDays} onChange={e=>setAutomation(current=>({...current,cooldownDays:Number(e.target.value)||1}))}/></label>
-      </div>
-      <div className="vop-performance-actions"><button className="vop-primary" type="button" onClick={()=>void saveAutomation()}><Settings2 size={16}/>Save automation settings</button></div>
-    </section>}
   </div>;
 };
 

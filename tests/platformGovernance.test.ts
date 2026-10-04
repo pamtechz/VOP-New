@@ -155,7 +155,7 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(page,/Conversations are ongoing mentor–learner chats and remain separate from formal support requests/);
   assert.match(page,/Draft in-app support/);
   assert.match(page,/Outreach links/);
-  assert.match(page,/Guardrailed automation/);
+  assert.match(page,/Support automation/);
 
   assert.match(api,/collection\('mentorAssignments'\)\.where\('organizationId','==',organizationId\)\.limit\(500\)/);
   assert.match(api,/collection\('mentorConversations'\)\.where\('organizationId','==',organizationId\)\.limit\(300\)/);
@@ -195,17 +195,27 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.doesNotMatch(mentoring,/type SupportPanel=/);
   assert.doesNotMatch(mentoring,/type InsightsPanel=/);
   assert.match(mentoring,/type CommunicationView='support'\|'conversations'/);
+  assert.match(mentoring,/type OperationsView='allocation'\|'outreach'\|'automation'/);
+  assert.match(mentoring,/type InsightsView='learner'\|'assessment'/);
   assert.match(mentoring,/vop-mentoring-subtabs vop-communication-tabs/);
+  assert.match(mentoring,/vop-mentoring-subtabs vop-workspace-tabs/);
   assert.match(mentoring,/communicationView==='support'/);
   assert.match(mentoring,/communicationView==='conversations'/);
   assert.match(mentoring,/Support request/);
   assert.match(mentoring,/Mentor conversation/);
-  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Mentor allocation/);
-  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Performance-based outreach drafts/);
-  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Performance-based support automation/);
+  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Mentoring operations/);
+  assert.match(mentoring,/operationsView==='allocation'/);
+  assert.match(mentoring,/operationsView==='outreach'/);
+  assert.match(mentoring,/operationsView==='automation'/);
+  assert.match(mentoring,/Mentor allocation/);
+  assert.match(mentoring,/Performance-based outreach draft/);
+  assert.match(mentoring,/Support automation/);
   assert.match(mentoring,/tab==='support'&&<section[\s\S]*Support & conversations/);
-  assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Individual learner/);
-  assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Assessment evidence/);
+  assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Performance & insights/);
+  assert.match(mentoring,/insightsView==='learner'/);
+  assert.match(mentoring,/insightsView==='assessment'/);
+  assert.match(mentoring,/Individual learner performance/);
+  assert.match(mentoring,/Assessment insights/);
 
   assert.match(admin,/ADMIN_NAV_GROUPS/);
   assert.match(admin,/Find an admin tool/);
@@ -297,7 +307,9 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
 
   assert.match(api,/action === 'createSupportRequest'/);
   assert.match(api,/learningSupportRequests/);
-  assert.match(api,/\['guide','lesson','section','topic','doctrine','question','quiz','scripture','block'\]/);
+  assert.match(api,/CHAT_REFERENCE_TYPES/);
+  assert.match(api,/'challenge','duel','resource','event','prayer','media','announcement'/);
+  assert.match(api,/CHAT_REFERENCE_ROUTES/);
   assert.match(api,/supportTeamRecipients/);
   assert.match(api,/activeMentorFor/);
   assert.match(api,/one_voice_27/);
@@ -786,7 +798,7 @@ test('passkey sign-in is server-verified and keeps biometric data on the device'
   assert.match(rules,/match \/passkeyCredentials\/\{credentialId\}[\s\S]*allow read, write: if false/);
 });
 
-test('messaging supports unread banners, edit/delete and inline lesson attachments without leaving chat',()=>{
+test('messaging supports unread banners, edit/delete and rich in-app attachments without leaving chat',()=>{
   const api=read('api/mentorship.ts');
   const chat=read('src/components/messaging/ChatThread.tsx');
   const support=read('src/pages/SupportPage.tsx');
@@ -798,12 +810,19 @@ test('messaging supports unread banners, edit/delete and inline lesson attachmen
   assert.match(api,/action==='editMessage'\|\|action==='deleteMessage'/);
   assert.match(api,/action==='editSupportMessage'\|\|action==='deleteSupportMessage'/);
   assert.match(api,/You can only change messages you sent/);
-  assert.match(chat,/Attach a lesson/);
-  assert.match(chat,/Search the curriculum without leaving this conversation/);
+  assert.match(chat,/Attach VOP content/);
+  assert.match(chat,/App activities & games/);
+  assert.match(chat,/Solo Scripture Challenge/);
+  assert.match(chat,/Ranked Scripture Duel/);
+  assert.match(chat,/Scripture Arena/);
+  assert.match(chat,/attachmentOptions/);
+  assert.match(chat,/Open in VOP/);
   assert.match(chat,/onEdit/);
   assert.match(chat,/onDelete/);
   assert.match(chat,/Message deleted/);
   assert.match(support,/ChatThread/);
+  assert.match(support,/APP_CHAT_REFERENCES/);
+  assert.match(support,/Attach VOP activity \/ game/);
   assert.match(support,/onEdit=\{editRequestMessage\}/);
   assert.match(support,/onDelete=\{deleteMentorMessage\}/);
   assert.match(mentor,/onEdit=\{editMessage\}/);
