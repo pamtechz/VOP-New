@@ -490,11 +490,11 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
     {notice&&<div className="vop-mentoring-alert success"><CheckCircle2 size={17}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label="Dismiss message"><X size={16}/></button></div>}
 
     <section className="vop-mentoring-stats" aria-label="Mentoring summary">
-      <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
-      <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
+      <button type="button" onClick={()=>{setTab('operations');setOperationsPanel('allocation')}}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
+      <button type="button" onClick={()=>{setTab('operations');setOperationsPanel('allocation')}}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
       <button type="button" onClick={()=>setTab('support')}><span className="metric-icon"><HeartHandshake size={19}/></span><span>Open support</span><strong>{openSupport.length}</strong><small>{highPrioritySupport.length} high priority</small></button>
-      <button type="button" onClick={()=>setTab('support');setSupportPanel('conversations')}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
-      <button type="button" onClick={()=>setTab('insights');setInsightsPanel('assessment')}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
+      <button type="button" onClick={()=>{setTab('support');setSupportPanel('conversations')}}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
+      <button type="button" onClick={()=>{setTab('insights');setInsightsPanel('assessment')}}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
     </section>
 
     <nav className="vop-mentoring-tabs" aria-label="Mentoring workspace sections">
@@ -528,10 +528,10 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <button type="button" className={highPrioritySupport.length?'urgent':''} onClick={()=>{setSupportPriority('high');setSupportStatus('all');setTab('support')}}>
               <span><AlertCircle size={18}/></span><div><strong>{highPrioritySupport.length} high-priority support request{highPrioritySupport.length===1?'':'s'}</strong><small>Candidate questions marked as needing help soon</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}>
+            <button type="button" onClick={()=>{setTab('operations');setOperationsPanel('allocation')}}>
               <span><UserPlus size={18}/></span><div><strong>{unassignedStudents.length} learner{unassignedStudents.length===1?'':'s'} without a mentor</strong><small>Allocate an active mentor for accountable follow-up</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>setTab('support');setSupportPanel('conversations')}>
+            <button type="button" onClick={()=>{setTab('support');setSupportPanel('conversations')}}>
               <span><MessageCircle size={18}/></span><div><strong>{unreadSummary.total} unread conversation{unreadSummary.total===1?'':'s'}</strong><small>Mentor chats and candidate support waiting to be read</small></div><ChevronRight size={17}/>
             </button>
             <button type="button" className={awaitingFirstResponse.length?'urgent':''} onClick={()=>{setSupportStatus('open');setTab('support')}}>
@@ -573,9 +573,9 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
         <article className="vop-mentoring-card vop-quick-actions">
           <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Quick actions</span><h2>Start work</h2></div></div>
-          <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}><UserPlus size={16}/>Assign a mentor</button>
+          <button type="button" onClick={()=>{setTab('operations');setOperationsPanel('allocation')}}><UserPlus size={16}/>Assign a mentor</button>
           <button type="button" onClick={()=>setTab('support')}><HeartHandshake size={16}/>Open support inbox</button>
-          <button type="button" onClick={()=>setTab('insights');setInsightsPanel('learner')}><BarChart3 size={16}/>Review learner performance</button>
+          <button type="button" onClick={()=>{setTab('insights');setInsightsPanel('learner')}}><BarChart3 size={16}/>Review learner performance</button>
           <button type="button" onClick={()=>setTab('outreach')}><Link2 size={16}/>Create study invitation</button>
         </article>
       </aside>
