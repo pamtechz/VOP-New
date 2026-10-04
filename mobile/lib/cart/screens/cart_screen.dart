@@ -45,7 +45,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.rose),
+                const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
                 const SizedBox(height: 12),
                 Text('Error loading cart: $e', textAlign: TextAlign.center),
                 const SizedBox(height: 16),
