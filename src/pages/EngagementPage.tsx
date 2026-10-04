@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { auth } from '../lib/firebase';
-import { ArrowLeft, Sparkles, Brain, Swords, ShieldCheck, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown } from 'lucide-react';
+import { ArrowLeft, Sparkles, Brain, Swords, Share2, CheckCircle2, RefreshCw, Trophy, Medal, Target, Star, Zap, Clock3, Crown, ChevronRight } from 'lucide-react';
 
 export type EngagementMode = 'master-guide' | 'memory' | 'duels';
 interface Props { mode: EngagementMode; onBack: () => void; }
