@@ -1,0 +1,43 @@
+# ── Repository-wide .gitignore ────────────────────────────────────────────────
+
+# Node / Next.js
+node_modules/
+admin/node_modules/
+admin/.next/
+admin/out/
+admin/build/
+.next/
+
+# Flutter / Dart
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/.pub-cache/
+mobile/.pub/
+*.lock
+!mobile/pubspec.lock
+!admin/package-lock.json
+
+# Admin portal — env files that contain real credentials (NEVER commit these)
+admin/.env
+admin/.env.local
+admin/.env*.local
+admin/.env.production
+admin/.env.development
+.env
+.env.local
+
+# Flutter — dart-define values should be passed at CLI
+mobile/.env
+mobile/.env.local
+mobile/dart_defines*.json
+mobile/dart_defines*.sh
+
+# OS / editor artefacts
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
