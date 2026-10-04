@@ -65,7 +65,13 @@ GoRouter buildAppRouter(Ref ref) {
           slug: state.pathParameters['slug'] ?? '',
         ),
       ),
-      GoRoute(path: '/search', builder: (_, __) => const SearchScreen()),
+      GoRoute(
+        path: '/search',
+        builder: (_, state) => SearchScreen(
+          initialCategory: state.uri.queryParameters['category'],
+          initialQuery: state.uri.queryParameters['q'],
+        ),
+      ),
 
       // ── Cart & Checkout ───────────────────────────────────────────────────
       GoRoute(path: '/cart', builder: (_, __) => const CartScreen()),
