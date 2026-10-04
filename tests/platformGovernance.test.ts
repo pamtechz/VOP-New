@@ -145,11 +145,14 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(page,/Needs attention/);
   assert.match(page,/Mentor coverage/);
   assert.match(page,/Interest pipeline/);
-  assert.match(page,/Candidate support inbox/);
+  assert.match(page,/Unified communications/);
+  assert.match(page,/Support & conversations/);
+  assert.match(page,/Support requests/);
+  assert.match(page,/Mentor conversations/);
   assert.match(page,/Unread and high priority first/);
   assert.match(page,/vop-mentoring-split/);
   assert.match(page,/Search candidate, subject, topic or doctrine/);
-  assert.match(page,/Open a learner–mentor thread to review context, attach lessons and reply/);
+  assert.match(page,/Conversations are ongoing mentor–learner chats and remain separate from formal support requests/);
   assert.match(page,/Draft in-app support/);
   assert.match(page,/Outreach links/);
   assert.match(page,/Guardrailed automation/);
@@ -181,6 +184,8 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   const users=read('src/pages/UserManagement.tsx');
   const candidates=read('src/pages/CandidateEnrollment.tsx');
   const engagementStudio=read('src/pages/EngagementStudio.tsx');
+  const engagementPage=read('src/pages/EngagementPage.tsx');
+  const learningCss=read('src/pages/learning.css');
   const viewModeToggle=read('src/components/admin/ViewModeToggle.tsx');
   const organizationAccount=read('src/pages/OrganizationAccountProfilePage.tsx');
   const personalSettings=read('src/pages/PersonalSettingsPage.tsx');
@@ -189,12 +194,16 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.doesNotMatch(mentoring,/type OperationsPanel=/);
   assert.doesNotMatch(mentoring,/type SupportPanel=/);
   assert.doesNotMatch(mentoring,/type InsightsPanel=/);
-  assert.doesNotMatch(mentoring,/vop-mentoring-subtabs/);
+  assert.match(mentoring,/type CommunicationView='support'\|'conversations'/);
+  assert.match(mentoring,/vop-mentoring-subtabs vop-communication-tabs/);
+  assert.match(mentoring,/communicationView==='support'/);
+  assert.match(mentoring,/communicationView==='conversations'/);
+  assert.match(mentoring,/Support request/);
+  assert.match(mentoring,/Mentor conversation/);
   assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Mentor allocation/);
   assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Performance-based outreach drafts/);
   assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Performance-based support automation/);
-  assert.match(mentoring,/tab==='support'&&<section[\s\S]*Candidate support inbox/);
-  assert.match(mentoring,/tab==='support'&&<section[\s\S]*Mentor communications/);
+  assert.match(mentoring,/tab==='support'&&<section[\s\S]*Support & conversations/);
   assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Individual learner/);
   assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Assessment evidence/);
 
@@ -245,7 +254,19 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   }
   assert.match(engagement,/mode:'solo'/);
   assert.match(engagement,/kind:'duelChallenge'/);
+  assert.match(engagement,/soloChallenges/);
+  assert.match(engagement,/arena:\{/);
+  assert.match(engagement,/rewards:\{soloChallenge:pointRules\.soloChallenge,duelChallenge:pointRules\.duelChallenge\}/);
+  assert.match(engagement,/scriptureChallengeResults/);
+  assert.match(engagement,/timestampMillis/);
   assert.match(points,/pointsLedger/);
+  assert.match(engagementPage,/Scripture Arena/);
+  assert.match(engagementPage,/Arena missions/);
+  assert.match(engagementPage,/duelSoloJoin/);
+  assert.match(engagementPage,/Recent Arena results/);
+  assert.match(engagementPage,/Level \{arena\.level\}/);
+  assert.match(learningCss,/\.vop-arena-dashboard/);
+  assert.match(learningCss,/\.vop-arena-mode-grid/);
 
   assert.match(portal,/hasAdminPortalAccess/);
   assert.match(portal,/Boolean\(user\.organizationId\).*ADMIN_ORGANIZATION_ROLES/);
