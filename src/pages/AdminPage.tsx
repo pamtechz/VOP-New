@@ -1019,6 +1019,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
                 aria-describedby="vop-assessment-retake-delay-help"/>
               <small id="vop-assessment-retake-delay-help">Use 0 for an immediate retake. Otherwise the next attempt is blocked until this waiting period has elapsed.</small>
             </div>
+            <div className="vop-field vop-settings-wide">
+              <label>Points & challenge rewards</label>
+              <small>Set the points earned for each completed activity. Awards are calculated on the server and recorded once per attempt/challenge/review.</small>
+              <div className="vop-points-settings-grid">
+                {([
+                  ['soloChallenge','Solo challenge',10],
+                  ['duelChallenge','Head-to-head challenge',15],
+                  ['memoryReview','Memory review / deck activity',1],
+                  ['practiceQuiz','Practice quiz / test',5],
+                  ['chapterQuiz','Chapter quiz',10],
+                  ['finalExam','Final exam',25],
+                ] as const).map(([key,label,fallback])=><label key={key}><span>{label}</span><input type="number" min="0" max="10000" step="1"
+                  value={settings.engagementPoints?.[key]??fallback}
+                  onChange={e=>setSettings({...settings,engagementPoints:{...settings.engagementPoints,[key]:Math.max(0,Math.trunc(Number(e.target.value)||0))}})}/></label>)}
+              </div>
+            </div>
             <div className="vop-field"><label>Timezone</label><input value={settings.timezone || detectedTimeZone} onChange={e=>setSettings({...settings,timezone:e.target.value})} placeholder="Detected automatically"/><small>Uses the device timezone automatically when no explicit value is configured.</small></div>
             <div className="vop-field"><label>Website</label><input value={settings.website || ''} onChange={e=>setSettings({...settings,website:e.target.value})}/></div>
             <div className="vop-field"><label>Welcome Message</label><input value={settings.welcomeMessage || ''} onChange={e=>setSettings({...settings,welcomeMessage:e.target.value})}/></div>
