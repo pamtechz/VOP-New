@@ -5,6 +5,7 @@ import { calculateCurriculumProgress } from '../../services/progress';
 import { getTranslation, getUiLocale } from '../../services/i18n';
 import './menu-drawer.css';
 import { ModalLayer } from './ModalLayer';
+import { hasAdminPortalAccess, hasMentorPortalAccess } from '../../services/portalAccess';
 
 interface MenuDrawerProps {
   isOpen: boolean;
@@ -71,9 +72,8 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const t = (key: string, english: string) =>
     getTranslation(key, getUiLocale(), settings.customTranslations, english, 'MenuDrawer');
   const navigate = (route: AppRoute) => { onClose(); onNavigate(route); };
-  const isAdmin = ['super_admin', 'union_admin', 'conference_admin', 'district_admin', 'church_admin']
-    .includes(String(currentUser.role || '')) || ['owner', 'admin', 'editor', 'teacher', 'mentor', 'staff'].includes(String(currentUser.organizationRole || ''));
-  const isMentor=String(currentUser.role||'')==='mentor'||String(currentUser.organizationRole||'')==='mentor';
+  const isAdmin=hasAdminPortalAccess(currentUser);
+  const isMentor=hasMentorPortalAccess(currentUser);
   const canSeekSupport=['student','learner','candidate'].includes(String(currentUser.role||'').toLowerCase())
     ||['student','learner','candidate'].includes(String(currentUser.organizationRole||'').toLowerCase());
   const localizationAccess=['invited','active'].includes(String(currentUser.localizationAccess?.status||''));
