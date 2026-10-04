@@ -6,9 +6,8 @@ import '../../core/services/supabase_service.dart';
 // ── Provider ─────────────────────────────────────────────────────────────────
 final myOrdersProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final user = Supabase.instance.client.auth.currentUser;
-  if (user == null) return [];
 
-  final data = await SupabaseService.client
+  var query = SupabaseService.client
       .from('orders')
       .select('''
         id, public_ref, status, payment_status, total_amount, created_at,
@@ -19,10 +18,13 @@ final myOrdersProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
             product_name_at_purchase, variant_name_at_purchase
           )
         )
-      ''')
-      .eq('buyer_id', user.id)
-      .order('created_at', ascending: false)
-      .limit(30);
+      ''');
+
+  if (user != null) {
+    query = query.eq('buyer_id', user.id);
+  }
+
+  final data = await query.order('created_at', ascending: false).limit(30);
   return List<Map<String, dynamic>>.from(data as List);
 });
 

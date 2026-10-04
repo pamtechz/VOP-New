@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
+import '../../cart/providers/cart_provider.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
@@ -45,7 +46,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         title: const Text('Product Details'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined),
+            icon: Badge(
+              isLabelVisible: ref.watch(cartProvider).isNotEmpty,
+              label: Text('${ref.watch(cartProvider.notifier).totalItemCount}'),
+              child: const Icon(Icons.shopping_cart_outlined),
+            ),
+            tooltip: 'Cart',
             onPressed: () => context.push('/cart'),
           ),
         ],
@@ -335,11 +341,31 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       label: Text(stockQty > 0 ? 'Add to Cart' : 'Out of Stock'),
                       onPressed: stockQty > 0
                           ? () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Added to cart!')),
+                              final images = product['product_images'] as List? ?? [];
+                              final firstImg = images.isNotEmpty ? (images[0]['url'] as String?) : null;
+                              final price = (product['price'] as num?)?.toDouble() ?? 0.0;
+                              final title = product['title'] as String? ?? 'Product';
+                              final storeName = store?['name'] as String? ?? 'Seller';
+
+                              ref.read(cartProvider.notifier).addItem(
+                                productId: widget.productId,
+                                title: title,
+                                price: price,
+                                imageUrl: firstImg,
+                                storeId: storeId,
+                                storeName: storeName,
+                                quantity: selectedQuantity,
                               );
-                              context.push('/cart');
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Added $title to cart!'),
+                                  action: SnackBarAction(
+                                    label: 'View Cart',
+                                    onPressed: () => context.push('/cart'),
+                                  ),
+                                ),
+                              );
                             }
                           : null,
                     ),

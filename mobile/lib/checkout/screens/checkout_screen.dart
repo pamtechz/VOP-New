@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
+import '../../cart/providers/cart_provider.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -30,8 +31,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (profile != null) {
       _nameController.text = profile['full_name'] as String? ?? '';
       _phoneController.text = profile['phone'] as String? ?? '';
-      if (profile['city'] != null) _cityController.text = profile['city'];
-      if (profile['area'] != null) _areaController.text = profile['area'];
+      if (profile['city'] != null && (profile['city'] as String).isNotEmpty) {
+        _cityController.text = profile['city'];
+      }
+      if (profile['area'] != null && (profile['area'] as String).isNotEmpty) {
+        _areaController.text = profile['area'];
+      }
     }
   }
 
@@ -47,14 +52,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _submitOrder() async {
     if (!_formKey.currentState!.validate()) return;
+    final cartItems = ref.read(cartProvider);
+    final cartNotifier = ref.read(cartProvider.notifier);
+
     setState(() => _isSubmitting = true);
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
       final userId = user?.id;
 
-      // Create an order in Supabase
-      await SupabaseService.client
+      final itemsByStore = cartNotifier.itemsByStore;
+      final subtotal = cartNotifier.subtotal;
+      const shippingFeePerStore = 35.0;
+      final totalShipping = (itemsByStore.length * shippingFeePerStore);
+      final grandTotal = subtotal + totalShipping;
+
+      // 1. Create Parent Order
+      final parentOrder = await SupabaseService.client
           .from('orders')
           .insert({
             'buyer_id': userId,
@@ -68,15 +82,61 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'status': 'processing',
             'payment_status': 'paid',
             'payment_method': _selectedPaymentMethod,
-            'total_amount': 1250.00,
-            'shipping_amount': 50.00,
+            'total_amount': grandTotal > 0 ? grandTotal : 1250.00,
+            'shipping_amount': totalShipping > 0 ? totalShipping : 50.00,
             'discount_amount': 0.00,
+          })
+          .select()
+          .single();
+
+      final parentOrderId = parentOrder['id'] as String;
+
+      // 2. Create Seller Sub-Orders & Order Items for each store
+      for (final entry in itemsByStore.entries) {
+        final storeId = entry.key;
+        final items = entry.value;
+        final storeSubtotal = items.fold(0.0, (sum, i) => sum + (i.price * i.quantity));
+        const commissionRate = 0.05;
+        final commissionAmount = storeSubtotal * commissionRate;
+        final sellerProceeds = storeSubtotal - commissionAmount;
+
+        final sellerOrder = await SupabaseService.client
+            .from('seller_orders')
+            .insert({
+              'parent_order_id': parentOrderId,
+              'store_id': storeId,
+              'status': 'processing',
+              'subtotal': storeSubtotal,
+              'shipping_fee': shippingFeePerStore,
+              'platform_commission_rate': commissionRate,
+              'platform_commission_amount': commissionAmount,
+              'seller_proceeds': sellerProceeds,
+            })
+            .select()
+            .single();
+
+        final sellerOrderId = sellerOrder['id'] as String;
+
+        // Insert individual item snapshots
+        for (final item in items) {
+          await SupabaseService.client.from('order_items').insert({
+            'seller_order_id': sellerOrderId,
+            'product_id': item.productId,
+            'product_name_at_purchase': item.title,
+            'quantity': item.quantity,
+            'unit_price': item.price,
+            'commission_rate_applied': commissionRate,
           });
+        }
+      }
+
+      // 3. Clear cart
+      cartNotifier.clear();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Order placed successfully!'),
+            content: Text('Order placed and confirmed successfully!'),
             backgroundColor: Color(0xFF10B981),
           ),
         );
@@ -100,6 +160,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final cartNotifier = ref.watch(cartProvider.notifier);
+    final itemsByStore = cartNotifier.itemsByStore;
+    final subtotal = cartNotifier.subtotal;
+    final shippingFee = itemsByStore.isNotEmpty ? itemsByStore.length * 35.0 : 50.0;
+    final totalToPay = subtotal > 0 ? (subtotal + shippingFee) : 1300.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -150,6 +215,39 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               const SizedBox(height: 24),
 
+              // Multi-Seller Split Breakdown
+              if (itemsByStore.isNotEmpty) ...[
+                Text('Multi-Seller Order Split', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('Items are dispatched directly by each store:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 8),
+                ...itemsByStore.entries.map((entry) {
+                  final storeName = entry.value.first.storeName;
+                  final storeSum = entry.value.fold(0.0, (s, i) => s + (i.price * i.quantity));
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.storefront, size: 16, color: scheme.primary),
+                              const SizedBox(width: 8),
+                              Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            ],
+                          ),
+                          Text('K${storeSum.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 20),
+              ],
+
               Text('Payment Method', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Card(
@@ -179,24 +277,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: scheme.surfaceVariant.withOpacity(0.5),
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   children: [
-                    const Row(
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Subtotal', style: TextStyle(color: Colors.grey)),
-                        Text('K1,250.00', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text('Subtotal', style: TextStyle(color: Colors.grey)),
+                        Text('K${(subtotal > 0 ? subtotal : 1250.00).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    const Row(
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Delivery Fee', style: TextStyle(color: Colors.grey)),
-                        Text('K50.00', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text('Delivery Fee', style: TextStyle(color: Colors.grey)),
+                        Text('K${shippingFee.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const Divider(height: 20),
@@ -205,7 +303,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       children: [
                         const Text('Total to Pay', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         Text(
-                          'K1,300.00',
+                          'K${totalToPay.toStringAsFixed(2)}',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: scheme.primary),
                         ),
                       ],

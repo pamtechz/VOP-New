@@ -72,14 +72,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ],
       ),
       body: _query.length < 2
-          ? Center(
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.search_rounded, size: 64, color: scheme.outline),
-                  const SizedBox(height: 16),
-                  Text('Type at least 2 characters to search',
-                      style: TextStyle(color: scheme.outline)),
+                  Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.search_rounded, size: 56, color: scheme.outline),
+                        const SizedBox(height: 12),
+                        Text('Search products across stores', style: TextStyle(color: scheme.outline, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Text('Popular Searches', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      'Headphones',
+                      'Fast Charger',
+                      'Smart Watch',
+                      'Leather Bag',
+                      'Cushion',
+                      'Electronics',
+                    ].map((tag) {
+                      return ActionChip(
+                        label: Text(tag),
+                        avatar: const Icon(Icons.trending_up, size: 14),
+                        onPressed: () {
+                          _searchController.text = tag;
+                          setState(() => _query = tag);
+                        },
+                      );
+                    }).toList(),
+                  ),
                 ],
               ),
             )

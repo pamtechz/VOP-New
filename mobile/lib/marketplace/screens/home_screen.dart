@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
+import '../../cart/providers/cart_provider.dart';
 
 // ── Data providers (real Supabase queries) ─────────────────────────────────
 
@@ -74,7 +75,11 @@ class HomeScreen extends ConsumerWidget {
             onPressed: () => context.push('/search'),
           ),
           IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined),
+            icon: Badge(
+              isLabelVisible: ref.watch(cartProvider).isNotEmpty,
+              label: Text('${ref.watch(cartProvider.notifier).totalItemCount}'),
+              child: const Icon(Icons.shopping_cart_outlined),
+            ),
             tooltip: 'Cart',
             onPressed: () => context.push('/cart'),
           ),
