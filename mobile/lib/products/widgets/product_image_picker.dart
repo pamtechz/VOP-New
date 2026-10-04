@@ -1,46 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../core/services/media_link_interceptor.dart';
 
 /// Result returned after any image attachment operation.
 class ImageAttachResult {
   final String displayUrl;
-  final String? shortCode;
-  final bool isShortened;
+  final String shortCode;
+  final String sourcePlatform;
 
   const ImageAttachResult({
     required this.displayUrl,
-    this.shortCode,
-    required this.isShortened,
+    required this.shortCode,
+    required this.sourcePlatform,
   });
 }
 
-/// Helper to convert external links (Cloudinary, Google Drive, direct URLs) into embeddable image URLs.
-class ExternalImageResolver {
-  static String resolve(String rawUrl) {
-    final trimmed = rawUrl.trim();
-    if (trimmed.isEmpty) return trimmed;
-
-    // Google Drive share link converter
-    // Matches: https://drive.google.com/file/d/FILE_ID/view...
-    final driveFileMatch = RegExp(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)').firstMatch(trimmed);
-    if (driveFileMatch != null) {
-      final fileId = driveFileMatch.group(1);
-      return 'https://lh3.googleusercontent.com/d/$fileId';
-    }
-
-    // Matches: https://drive.google.com/open?id=FILE_ID or https://drive.google.com/uc?id=FILE_ID
-    final driveIdMatch = RegExp(r'drive\.google\.com/(?:open|uc)\?.*id=([a-zA-Z0-9_-]+)').firstMatch(trimmed);
-    if (driveIdMatch != null) {
-      final fileId = driveIdMatch.group(1);
-      return 'https://lh3.googleusercontent.com/d/$fileId';
-    }
-
-    return trimmed;
-  }
-}
-
-/// External image picker widget tailored for Cloudinary & Google Drive integration.
+/// External cloud image picker widget tailored for Cloudinary, Google Drive, and Dropbox.
 class ProductImagePicker extends ConsumerStatefulWidget {
   final String productId;
   final String storeId;
@@ -72,7 +48,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
   }
 
   bool _isAtLimit(bool isAdmin) {
-    if (isAdmin) return false; // Admin is never restricted by subscription quotas
+    if (isAdmin) return false;
     return widget.currentImageCount >= widget.maxImages;
   }
 
@@ -85,21 +61,21 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
       return;
     }
 
-    final resolvedUrl = ExternalImageResolver.resolve(trimmed);
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
+      final intercepted = await MediaLinkInterceptor.interceptAndRegister(trimmed);
+
       widget.onImageAttached(ImageAttachResult(
-        displayUrl: resolvedUrl,
-        shortCode: null,
-        isShortened: false,
+        displayUrl: intercepted.directDisplayUrl,
+        shortCode: intercepted.shortCode,
+        sourcePlatform: intercepted.sourcePlatform,
       ));
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to attach image: $e');
+      setState(() => _errorMessage = 'Failed to attach cloud image: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -142,9 +118,9 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                       prefixIcon: Icon(Icons.link),
                     ),
                     onChanged: (val) {
-                      final resolved = ExternalImageResolver.resolve(val);
+                      final parsed = MediaLinkInterceptor.parse(val);
                       setDialogState(() {
-                        previewUrl = resolved.isNotEmpty ? resolved : null;
+                        previewUrl = parsed.directDisplayUrl.isNotEmpty ? parsed.directDisplayUrl : null;
                       });
                     },
                   ),
@@ -180,6 +156,20 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                             '2. Right click file -> Share -> Change to "Anyone with the link"\n'
                             '3. Copy the link and paste it here.\n'
                             '4. Our system converts it automatically into a direct product image!',
+                          );
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.folder_shared, size: 14, color: Colors.cyan),
+                        label: const Text('Dropbox', style: TextStyle(fontSize: 11)),
+                        onPressed: () {
+                          _showGuideDialog(
+                            context,
+                            'Dropbox Guide',
+                            '1. Upload your image to Dropbox\n'
+                            '2. Click "Share" -> "Create Link" -> "Copy link"\n'
+                            '3. Paste it here.\n'
+                            '4. The system automatically routes raw streaming direct to your product.',
                           );
                         },
                       ),

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
 
+import '../../core/widgets/app_network_image.dart';
+
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, id) async {
@@ -130,15 +132,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                               itemCount: imageUrls.length,
                               onPageChanged: (i) =>
                                   setState(() => _imageIndex = i),
-                              itemBuilder: (_, i) => Image.network(
-                                imageUrls[i],
+                              itemBuilder: (_, i) => AppNetworkImage(
+                                imageUrlOrCode: imageUrls[i],
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: scheme.surfaceContainerHighest,
-                                  child: Icon(Icons.broken_image,
-                                      size: 48, color: scheme.outline),
-                                ),
                               ),
                             ),
                             if (imageUrls.length > 1)

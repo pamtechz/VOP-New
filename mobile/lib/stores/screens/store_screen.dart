@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/widgets/app_network_image.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final storeDetailProvider =
@@ -75,19 +76,17 @@ class StoreScreen extends ConsumerWidget {
                   title: Text(storeName,
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 16)),
-                  background: store['cover_url'] != null
-                      ? Image.network(store['cover_url'] as String,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                                color: scheme.primaryContainer,
-                              ))
-                      : Container(
-                          color: scheme.primaryContainer,
-                          child: Icon(Icons.storefront_rounded,
-                              size: 80,
-                              color: scheme.onPrimaryContainer
-                                  .withOpacity(0.3)),
-                        ),
+                  background: AppNetworkImage(
+                    imageUrlOrCode: store['cover_url'] as String?,
+                    fit: BoxFit.cover,
+                    errorWidget: Container(
+                      color: scheme.primaryContainer,
+                      child: Icon(Icons.storefront_rounded,
+                          size: 80,
+                          color: scheme.onPrimaryContainer
+                              .withOpacity(0.3)),
+                    ),
+                  ),
                 ),
               ),
 
@@ -225,24 +224,16 @@ class StoreScreen extends ConsumerWidget {
                                         top: Radius.circular(12)),
                                     child: AspectRatio(
                                       aspectRatio: 1,
-                                      child: imgUrl != null
-                                          ? Image.network(imgUrl,
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (_, __, ___) => Container(
-                                                    color: scheme
-                                                        .surfaceContainerHighest,
-                                                    child: Icon(
-                                                        Icons.image_outlined,
-                                                        color: scheme.outline),
-                                                  ))
-                                          : Container(
-                                              color: scheme
-                                                  .surfaceContainerHighest,
-                                              child: Icon(
-                                                  Icons.image_outlined,
-                                                  color: scheme.outline),
-                                            ),
+                                      child: AppNetworkImage(
+                                        imageUrlOrCode: imgUrl,
+                                        fit: BoxFit.cover,
+                                        errorWidget: Container(
+                                          color: scheme.surfaceContainerHighest,
+                                          child: Icon(
+                                              Icons.image_outlined,
+                                              color: scheme.outline),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                   Padding(

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/services/media_link_interceptor.dart';
 import '../widgets/product_image_picker.dart';
+import '../../core/widgets/app_network_image.dart';
 import 'manage_products_screen.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
@@ -111,12 +113,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         'reserved_quantity': 0,
       });
 
-      // Insert images if attached
+      // Intercept and persist media links via internal shortening layer
       if (_imageUrls.isNotEmpty) {
         for (int i = 0; i < _imageUrls.length; i++) {
+          final intercepted = await MediaLinkInterceptor.interceptAndRegister(_imageUrls[i]);
           await SupabaseService.client.from('product_images').insert({
             'product_id': productId,
-            'url': _imageUrls[i],
+            'url': intercepted.shortCode.isNotEmpty ? intercepted.shortCode : intercepted.directDisplayUrl,
             'display_order': i + 1,
             'file_size_bytes': 75000,
           });
@@ -235,20 +238,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     final url = _imageUrls[idx];
                     return Stack(
                       children: [
-                        ClipRRect(
+                        AppNetworkImage(
+                          imageUrlOrCode: url,
+                          width: 90,
+                          height: 90,
                           borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 90,
-                            height: 90,
-                            color: Colors.black12,
-                            child: Image.network(
-                              url,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Center(
-                                child: Icon(Icons.broken_image, size: 28, color: Colors.grey),
-                              ),
-                            ),
-                          ),
+                          fit: BoxFit.cover,
                         ),
                         Positioned(
                           top: 4,

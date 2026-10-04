@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/cart_provider.dart';
+import '../../core/widgets/app_network_image.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
@@ -109,19 +110,20 @@ class CartScreen extends ConsumerWidget {
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      ClipRRect(
+                                      AppNetworkImage(
+                                        imageUrlOrCode: item.imageUrl,
+                                        width: 60,
+                                        height: 60,
                                         borderRadius: BorderRadius.circular(8),
-                                        child: Container(
+                                        fit: BoxFit.cover,
+                                        errorWidget: Container(
                                           width: 60,
                                           height: 60,
-                                          color: scheme.surfaceContainerHighest,
-                                          child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                                              ? Image.network(
-                                                  item.imageUrl!,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
-                                                )
-                                              : const Icon(Icons.shopping_bag_outlined),
+                                          decoration: BoxDecoration(
+                                            color: scheme.surfaceContainerHighest,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.shopping_bag_outlined),
                                         ),
                                       ),
                                       const SizedBox(width: 12),

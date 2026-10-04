@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/widgets/app_network_image.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final searchResultsProvider =
@@ -153,25 +154,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
-                        leading: ClipRRect(
+                        leading: AppNetworkImage(
+                          imageUrlOrCode: imageUrl,
+                          width: 56,
+                          height: 56,
                           borderRadius: BorderRadius.circular(8),
-                          child: SizedBox(
+                          fit: BoxFit.cover,
+                          errorWidget: Container(
                             width: 56,
                             height: 56,
-                            child: imageUrl != null
-                                ? Image.network(imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        Container(
-                                          color: scheme.surfaceContainerHighest,
-                                          child: Icon(Icons.image_outlined,
-                                              color: scheme.outline),
-                                        ))
-                                : Container(
-                                    color: scheme.surfaceContainerHighest,
-                                    child: Icon(Icons.shopping_bag_outlined,
-                                        color: scheme.outline),
-                                  ),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.shopping_bag_outlined, color: scheme.outline),
                           ),
                         ),
                         title: Text(p['title'] as String? ?? '',

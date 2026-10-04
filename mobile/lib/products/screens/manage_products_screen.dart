@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/widgets/app_network_image.dart';
 
 final sellerProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final user = Supabase.instance.client.auth.currentUser;
@@ -111,15 +112,20 @@ class ManageProductsScreen extends ConsumerWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(12),
-                    leading: ClipRRect(
+                    leading: AppNetworkImage(
+                      imageUrlOrCode: imageUrl,
+                      width: 54,
+                      height: 54,
                       borderRadius: BorderRadius.circular(8),
-                      child: Container(
+                      fit: BoxFit.cover,
+                      errorWidget: Container(
                         width: 54,
                         height: 54,
-                        color: scheme.surfaceVariant,
-                        child: imageUrl != null && imageUrl.isNotEmpty
-                            ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
-                            : const Icon(Icons.shopping_bag_outlined),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.shopping_bag_outlined),
                       ),
                     ),
                     title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),

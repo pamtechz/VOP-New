@@ -5,6 +5,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
 
+import '../../core/widgets/app_network_image.dart';
+
 // ── Data providers (real Supabase queries) ─────────────────────────────────
 
 final featuredProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -122,7 +124,59 @@ class HomeScreen extends ConsumerWidget {
         },
         child: CustomScrollView(
           slivers: [
-            // ── Categories ───────────────────────────────────────────────
+            // ── Hero Search Bar (DubiCars / Dropify Inspiration) ─────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Find what you need today',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.3,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => context.push('/search'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.search_rounded, size: 22, color: scheme.primary),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Search products, electronics, crafts...',
+                                style: TextStyle(color: scheme.outline, fontSize: 13),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: scheme.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.tune_rounded, size: 16, color: scheme.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Categories Pills ──────────────────────────────────────────
             SliverToBoxAdapter(
               child: categories.when(
                 data: (cats) => cats.isEmpty
@@ -134,19 +188,19 @@ class HomeScreen extends ConsumerWidget {
             ),
 
             // ── Featured Products ────────────────────────────────────────
-            const SliverToBoxAdapter(child: _SectionHeader(title: 'Featured')),
+            const SliverToBoxAdapter(child: _SectionHeader(title: 'Featured Collections')),
             SliverToBoxAdapter(
               child: featured.when(
                 data: (prods) => prods.isEmpty
                     ? const _EmptyState(message: 'No featured products yet')
                     : _HorizontalProductList(products: prods),
-                loading: () => const _SectionSkeleton(height: 220),
+                loading: () => const _SectionSkeleton(height: 240),
                 error: (e, _) => _ErrorTile(message: e.toString()),
               ),
             ),
 
             // ── Recently Added ───────────────────────────────────────────
-            const SliverToBoxAdapter(child: _SectionHeader(title: 'Recently Added')),
+            const SliverToBoxAdapter(child: _SectionHeader(title: 'Explore Catalogue')),
             recent.when(
               data: (prods) => prods.isEmpty
                   ? const SliverToBoxAdapter(
@@ -162,11 +216,11 @@ class HomeScreen extends ConsumerWidget {
       ),
       bottomNavigationBar: NavigationBar(
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.search), label: 'Search'),
-          NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), selectedIcon: Icon(Icons.shopping_bag), label: 'Orders'),
-          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Sell'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.search_rounded), label: 'Search'),
+          NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), selectedIcon: Icon(Icons.shopping_bag_rounded), label: 'Orders'),
+          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront_rounded), label: 'Sell'),
+          NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
         ],
         selectedIndex: 0,
         onDestinationSelected: (i) {
@@ -187,7 +241,13 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-    child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        Text('See All', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+      ],
+    ),
   );
 }
 
@@ -202,21 +262,36 @@ class _CategoryRow extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       itemCount: categories.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 16),
+      separatorBuilder: (_, __) => const SizedBox(width: 14),
       itemBuilder: (ctx, i) {
         final cat = categories[i];
+        final scheme = Theme.of(ctx).colorScheme;
         return GestureDetector(
           onTap: () => ctx.push('/search?category=${cat['slug']}'),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: Theme.of(ctx).colorScheme.primaryContainer,
-                backgroundImage: (cat['icon_url'] as String?)?.isNotEmpty == true
-                    ? NetworkImage(cat['icon_url'] as String) : null,
-                child: (cat['icon_url'] as String?)?.isNotEmpty != true
-                    ? const Icon(Icons.category_outlined, size: 20) : null,
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.3)),
+                ),
+                child: Center(
+                  child: (cat['icon_url'] as String?)?.isNotEmpty == true
+                      ? ClipOval(
+                          child: AppNetworkImage(
+                            imageUrlOrCode: cat['icon_url'] as String,
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                            errorWidget: Icon(Icons.category_outlined, size: 24, color: scheme.primary),
+                          ),
+                        )
+                      : Icon(Icons.category_outlined, size: 24, color: scheme.primary),
+                ),
               ),
               const SizedBox(height: 6),
               SizedBox(
@@ -224,7 +299,7 @@ class _CategoryRow extends StatelessWidget {
                 child: Text(
                   cat['name'] as String? ?? '',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -243,13 +318,13 @@ class _HorizontalProductList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 255,
+    height: 265,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: products.length,
       separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (ctx, i) => _ProductCard(product: products[i], width: 155),
+      itemBuilder: (ctx, i) => _ProductCard(product: products[i], width: 165),
     ),
   );
 }
@@ -270,13 +345,13 @@ class _ProductGrid extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 0.65,
+        childAspectRatio: 0.62,
       ),
     ),
   );
 }
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends ConsumerWidget {
   final Map<String, dynamic> product;
   final double? width;
   const _ProductCard({required this.product, this.width});
@@ -291,10 +366,14 @@ class _ProductCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final price = product['price'] as num? ?? 0;
-    final storeName = (product['stores'] as Map?)?['name'] as String? ?? '';
+    final price = (product['price'] as num?)?.toDouble() ?? 0.0;
+    final title = product['title'] as String? ?? 'Product';
+    final store = product['stores'] as Map?;
+    final storeName = store?['name'] as String? ?? 'Merchant';
+    final storeId = store?['id'] as String? ?? '';
+    final imageUrl = _firstImageUrl;
 
     return GestureDetector(
       onTap: () => context.push('/product/${product['id']}'),
@@ -302,55 +381,98 @@ class _ProductCard extends StatelessWidget {
         width: width,
         decoration: BoxDecoration(
           color: scheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: AspectRatio(
-                aspectRatio: 1,
-                child: _firstImageUrl != null
-                    ? Image.network(
-                        _firstImageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _imagePlaceholder(scheme),
-                      )
-                    : _imagePlaceholder(scheme),
+                aspectRatio: 1.05,
+                child: AppNetworkImage(
+                  imageUrlOrCode: imageUrl,
+                  fit: BoxFit.cover,
+                  errorWidget: _imagePlaceholder(scheme),
+                ),
               ),
             ),
             // Info
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product['title'] as String? ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    storeName,
-                    style: TextStyle(fontSize: 11, color: scheme.primary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'KES ${price.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: scheme.primary,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          storeName,
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: scheme.primary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          title,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.2),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'KES ${price.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: scheme.primary,
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            ref.read(cartProvider.notifier).addItem(
+                              productId: product['id'] as String,
+                              title: title,
+                              price: price,
+                              imageUrl: imageUrl,
+                              storeId: storeId,
+                              storeName: storeName,
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Added $title to cart'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.add_shopping_cart, size: 15, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
