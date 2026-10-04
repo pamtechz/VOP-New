@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Building2, Check, Copy, CreditCard, Edit3, Plus, QrCode, RefreshCw, Shield, Users, UserPlus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building2, Check, Copy, CreditCard, Edit3, LayoutGrid, List, Plus, QrCode, RefreshCw, Shield, Users, UserPlus, Search, Trash2 } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import { appConfirm } from '../components/layout/AppDialog';
@@ -30,11 +30,16 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   const [ownerSearch,setOwnerSearch]=useState(''),[ownerMatches,setOwnerMatches]=useState<DirectoryUser[]>([]),[selectedOwner,setSelectedOwner]=useState<DirectoryUser|null>(null);
   const [showCreateMember,setShowCreateMember]=useState(false),[newMemberName,setNewMemberName]=useState(''),[newMemberEmail,setNewMemberEmail]=useState(''),[newMemberPassword,setNewMemberPassword]=useState('');
   const [saving,setSaving]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[error,setError]=useState('');
+  const [selectedAuditIds,setSelectedAuditIds]=useState<Set<string>>(new Set());
+  const [organizationView,setOrganizationView]=useState<'cards'|'table'>(()=>{try{return localStorage.getItem('vop-organizations-view')==='table'?'table':'cards'}catch{return 'cards'}});
+  const [auditView,setAuditView]=useState<'table'|'cards'>(()=>{try{return localStorage.getItem('vop-audit-view')==='cards'?'cards':'table'}catch{return 'table'}});
   const viewStorageKey='vop-admin-organization-view-v1:'+(auth?.currentUser?.uid||'anonymous');
 
-  const loadDetails=async(id:string)=>{try{const [m,a]=await Promise.all([api('listMembers',{organizationId:id}),api('listAudit',{organizationId:id})]);setMembers((m.items||[]) as Member[]);setAudit((a.items||[]) as Array<Record<string,unknown>>)}catch(e){setError(e instanceof Error?e.message:'Could not load organization details.')}};
+  const loadDetails=async(id:string)=>{try{const [m,a]=await Promise.all([api('listMembers',{organizationId:id}),api('listAudit',{organizationId:id})]);setMembers((m.items||[]) as Member[]);setAudit((a.items||[]) as Array<Record<string,unknown>>);setSelectedAuditIds(new Set())}catch(e){setError(e instanceof Error?e.message:'Could not load organization details.')}};
   const load=async()=>{setLoading(true);setError('');try{const body=await api('list');const next=(body.items||[]) as Organization[];setItems(next);if(selected){const fresh=next.find(x=>x.id===selected.id);if(fresh){setSelected(fresh);if(detailsOpen)await loadDetails(fresh.id)}}}catch(e){setError(e instanceof Error?e.message:'Could not load organizations.')}finally{setLoading(false)}};
   useEffect(()=>{void load()},[]);
+  useEffect(()=>{try{localStorage.setItem('vop-organizations-view',organizationView)}catch{/* ignore */}},[organizationView]);
+  useEffect(()=>{try{localStorage.setItem('vop-audit-view',auditView)}catch{/* ignore */}},[auditView]);
 
   const restoreOrganizationFields=(item:Organization)=>{setName(item.name);setBillingCountry(item.billingCountry||item.billingProfile?.countryName||(item.countryCode==='ZM'?'Zambia':'International'));setPlan(item.plan||'unsubscribed');setStatus(item.status||'active');setMemberSearch('');setMemberMatches([]);setSelectedUser(null);setOwnerSearch('');setOwnerMatches([]);setSelectedOwner(null);setInviteEmail('');setInviteUrl('');setShowCreateMember(false)};
   const writeOrganizationLocation=(item:Organization|null,mode:'push'|'replace',fromList=false)=>{
@@ -116,6 +121,32 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
   }catch(e){setError(e instanceof Error?e.message:'Could not create shareable invitation.')}finally{setSaving(false)}};
 
 
+  const toggleAuditSelection=(id:string)=>setSelectedAuditIds(current=>{
+    const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;
+  });
+  const toggleAllAudit=()=>setSelectedAuditIds(current=>current.size===audit.length?new Set():new Set(audit.map(item=>String(item.id))));
+  const deleteAuditRecords=async(ids:string[])=>{
+    if(!selected||!ids.length)return;
+    if(!await appConfirm(`Delete ${ids.length} selected audit record${ids.length===1?'':'s'}? A maintenance record will remain so the cleanup itself stays traceable.`,{title:'Delete audit records',confirmLabel:'Delete',tone:'danger'}))return;
+    setSaving(true);setError('');
+    try{
+      await api('deleteAudit',{organizationId:selected.id,auditIds:ids});
+      setMessage(ids.length===1?'Audit record deleted.':'Selected audit records deleted.');
+      await loadDetails(selected.id);
+    }catch(e){setError(e instanceof Error?e.message:'Could not delete audit records.')}finally{setSaving(false);}
+  };
+  const clearAuditHistory=async()=>{
+    if(!selected||!audit.length)return;
+    if(!await appConfirm('Clear the organization audit history? A new maintenance event will be kept to record who cleared it and when.',{title:'Clear audit history',confirmLabel:'Clear history',tone:'danger'}))return;
+    setSaving(true);setError('');
+    try{
+      await api('clearAudit',{organizationId:selected.id});
+      setMessage('Audit history cleared. The cleanup event remains in the audit trail.');
+      await loadDetails(selected.id);
+    }catch(e){setError(e instanceof Error?e.message:'Could not clear audit history.')}finally{setSaving(false);}
+  };
+
+
   const candidateRoles=new Set(['learner','student','candidate']);
   const institutionalMembers=members.filter(item=>!candidateRoles.has(String(item.role||'').toLowerCase()));
   const candidateRecords=members.filter(item=>candidateRoles.has(String(item.role||'').toLowerCase()));
@@ -130,10 +161,12 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
 
     {!detailsOpen&&isSuperAdmin&&<div className="vop-card vop-form-card" style={{marginBottom:16}}><div className="vop-section-title"><div><h2>{t('admin.create_organization','Create organization')}</h2><p>Create an isolated SaaS tenant workspace. Billing country determines whether the organization is charged in USD or receives a Zambia ZMW conversion.</p></div><Shield size={22}/></div><div className="vop-form-grid"><div className="vop-field"><label>Organization name *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Organization name"/></div><div className="vop-field"><label>Organization ID <small>(optional)</small></label><input value={organizationId} onChange={e=>setOrganizationId(e.target.value)} placeholder="Generated automatically"/></div><div className="vop-field"><label>Billing country</label><input value={billingCountry} onChange={e=>setBillingCountry(e.target.value)} placeholder="e.g. Zambia"/><small>Use the organization’s legal billing country. Zambia is billed in ZMW; all other countries use USD.</small></div><div style={{display:'flex',alignItems:'end'}}><button className="vop-primary" type="button" disabled={saving||!name.trim()} onClick={()=>void create()}><Plus size={17}/>{t('admin.create_organization','Create Organization')}</button></div></div></div>}
 
-    {!detailsOpen&&<div className="vop-grid-2 vop-org-workspace"><div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>{isSuperAdmin?t('admin.tenant_workspaces','Tenant workspaces'):t('admin.my_organization','My Organization')}</h2><p>{isSuperAdmin?`${items.length} configured organization${items.length===1?'':'s'}.`:'Your organization account and its members.'}</p></div><Building2 size={22}/></div><div style={{display:'grid',gap:9}}>
+    {!detailsOpen&&<div className="vop-grid-2 vop-org-workspace"><div className="vop-card vop-form-card"><div className="vop-section-title"><div><h2>{isSuperAdmin?t('admin.tenant_workspaces','Tenant workspaces'):t('admin.my_organization','My Organization')}</h2><p>{isSuperAdmin?`${items.length} configured organization${items.length===1?'':'s'}.`:'Your organization account and its members.'}</p></div><div className="vop-view-switch" role="group" aria-label="Organization view"><button type="button" className={organizationView==='cards'?'active':''} onClick={()=>setOrganizationView('cards')}><LayoutGrid size={16}/>Cards</button><button type="button" className={organizationView==='table'?'active':''} onClick={()=>setOrganizationView('table')}><List size={16}/>Table</button></div></div>
+    {organizationView==='cards'?<div style={{display:'grid',gap:9}}>
       {items.map(item=><div key={item.id} className={'vop-org-list-card'+(selected?.id===item.id?' selected':'')}><button type="button" className="vop-org-list-main" onClick={()=>openOrganization(item)} aria-label={'Open '+item.name}><div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center'}}><strong>{item.name}</strong><span className="vop-chip">{item.status}</span></div><div style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>{item.memberCount} active member{item.memberCount===1?'':'s'} · {item.candidateCount||0} candidate{Number(item.candidateCount||0)===1?'':'s'} · {item.plan}</div></button><div className="vop-org-list-actions"><button type="button" className="vop-actions" onClick={()=>openOrganization(item)} title="View organization" aria-label="View organization"><Building2 size={16}/></button>{isSuperAdmin&&<button type="button" className="vop-actions vop-actions-delete" disabled={saving} onClick={()=>void deleteOrganization(item)} title={t('common.delete','Delete organization')} aria-label={t('common.delete','Delete organization')}><Trash2 size={16}/></button>}</div></div>)}
       {!items.length&&!loading&&<div className="vop-empty">No organizations have been configured.</div>}
-    </div></div></div>}
+    </div>:<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Organization</th><th>Status</th><th>Members</th><th>Candidates</th><th>Plan</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.name}</strong></td><td><span className="vop-chip">{item.status}</span></td><td>{item.memberCount}</td><td>{item.candidateCount||0}</td><td>{item.plan}</td><td><button className="vop-actions" type="button" onClick={()=>openOrganization(item)}><Building2 size={16}/></button>{isSuperAdmin&&<button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteOrganization(item)}><Trash2 size={16}/></button>}</td></tr>)}</tbody></table>{!items.length&&!loading&&<div className="vop-empty">No organizations have been configured.</div>}</div>}
+    </div></div>}
 
     {detailsOpen&&selected&&<section className="vop-org-detail-page">
       <div className="vop-org-detail-toolbar">
@@ -169,7 +202,11 @@ export default function OrganizationManagement({isSuperAdmin,onOpenBilling,onOpe
         <div className="vop-form-grid"><div className="vop-field"><label>Email <small>(for a private email invite)</small></label><input type="email" value={inviteEmail} disabled={!editing} onChange={e=>setInviteEmail(e.target.value)} placeholder="member@example.org"/></div><div className="vop-field"><label>Role</label><select value={inviteRole} disabled={!editing} onChange={e=>setInviteRole(e.target.value)}>{memberRoleOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div style={{display:'flex',alignItems:'end',gap:8,flexWrap:'wrap'}}><button className="vop-secondary" type="button" disabled={!editing||saving||!inviteEmail.trim()} onClick={()=>void invite()}><Users size={16}/>{t('admin.create_invitation','Email Invite')}</button><button className="vop-primary" type="button" disabled={!editing||saving} onClick={()=>void createShareInvite()}><QrCode size={16}/>Create Share Link</button></div></div>
         {inviteUrl&&<div className="vop-org-invite-result"><div><div className="vop-setting-name">Invitation link</div><div className="vop-setting-help">Share this HTTPS link. If the native VOP app is installed and app links are verified, it opens the app; otherwise it opens the website.</div><input readOnly value={inviteUrl}/><button className="vop-secondary" type="button" onClick={()=>void navigator.clipboard?.writeText(inviteUrl)}><Copy size={16}/>Copy Link</button></div><div><img src={'https://quickchart.io/qr?size=240&text='+encodeURIComponent(inviteUrl)} alt="QR code for organization invitation"/><small><QrCode size={13}/>Scan with VOP or a normal camera</small></div></div>}
       </div>
-      <div style={{marginTop:18}}><div className="vop-section-title"><div><h3>{t('admin.audit_history','Audit history')}</h3><p>Privileged organization changes are retained automatically.</p></div></div><div className="vop-table-wrap"><table className="vop-table"><thead><tr><th>Action</th><th>Target</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(item=><tr key={String(item.id)}><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td></tr>)}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div></div>
+      <div style={{marginTop:18}} className="vop-audit-workspace">
+        <div className="vop-section-title"><div><h3>{t('admin.audit_history','Audit history')}</h3><p>Privileged organization changes are retained automatically. Deleting history also records a maintenance event so the cleanup remains traceable.</p></div><div className="vop-audit-actions"><div className="vop-view-switch" role="group" aria-label="Audit history view"><button type="button" className={auditView==='table'?'active':''} onClick={()=>setAuditView('table')}><List size={15}/>Table</button><button type="button" className={auditView==='cards'?'active':''} onClick={()=>setAuditView('cards')}><LayoutGrid size={15}/>Cards</button></div>{selectedAuditIds.size>0&&<button className="vop-secondary" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([...selectedAuditIds])}><Trash2 size={15}/>Delete selected ({selectedAuditIds.size})</button>}<button className="vop-secondary" type="button" disabled={saving||!audit.length} onClick={()=>void clearAuditHistory()}><Trash2 size={15}/>Clear all</button></div></div>
+        {auditView==='table'?<div className="vop-table-wrap"><table className="vop-table"><thead><tr><th><input type="checkbox" aria-label="Select all audit records" checked={audit.length>0&&selectedAuditIds.size===audit.length} onChange={toggleAllAudit}/></th><th>Action</th><th>Target</th><th>Actor</th><th>Time</th><th aria-label="Actions"/></tr></thead><tbody>{audit.map(item=>{const id=String(item.id);return <tr key={id}><td><input type="checkbox" aria-label={'Select audit '+id} checked={selectedAuditIds.has(id)} onChange={()=>toggleAuditSelection(id)}/></td><td>{String(item.action||'')}</td><td>{String(item.target||'')}</td><td>{String(item.actorEmail||item.actorUid||'')}</td><td>{item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</td><td><button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([id])} title="Delete audit record"><Trash2 size={15}/></button></td></tr>})}</tbody></table>{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>
+        :<div className="vop-audit-card-grid">{audit.map(item=>{const id=String(item.id);return <article key={id} className={'vop-audit-card'+(selectedAuditIds.has(id)?' selected':'')}><label><input type="checkbox" checked={selectedAuditIds.has(id)} onChange={()=>toggleAuditSelection(id)}/><strong>{String(item.action||'Audit event')}</strong></label><span>{String(item.target||'')}</span><small>{String(item.actorEmail||item.actorUid||'')} · {item.timestamp&&typeof item.timestamp==='object'?'Recorded':String(item.timestamp||'')}</small><button className="vop-actions vop-actions-delete" type="button" disabled={saving} onClick={()=>void deleteAuditRecords([id])}><Trash2 size={15}/></button></article>})}{!audit.length&&<div className="vop-empty">No privileged changes have been recorded.</div>}</div>}
+      </div>
     </div></section>}
   </div>;
 }
