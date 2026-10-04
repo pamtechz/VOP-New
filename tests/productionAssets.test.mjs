@@ -43,3 +43,25 @@ test('production bundle does not ship legacy demo UI or its hardcoded users', ()
   assert.ok(!contents.includes('vop_demo_users'), 'Legacy demonstration user storage must not ship in production.');
   assert.ok(!contents.includes('VITE_VOP_ENABLE_DEMO'), 'Legacy demo runtime switch must not ship in production.');
 });
+
+
+test('loading and invitation transitions stay inside the mounted VOP shell', () => {
+  const app = readFileSync(join(root, 'src/App.tsx'), 'utf8');
+  const rootSource = readFileSync(join(root, 'src/Root.tsx'), 'utf8');
+  const admin = readFileSync(join(root, 'src/pages/AdminPage.tsx'), 'utf8');
+  const shimmer = readFileSync(join(root, 'src/components/layout/Shimmer.tsx'), 'utf8');
+  const users = readFileSync(join(root, 'src/pages/UserManagement.tsx'), 'utf8');
+  const candidates = readFileSync(join(root, 'src/pages/CandidateEnrollment.tsx'), 'utf8');
+  const inbox = readFileSync(join(root, 'src/pages/InboxPage.tsx'), 'utf8');
+
+  assert.doesNotMatch(app, /window\.location\.assign\(safe\)/,
+    'Invitation acceptance must not reload the browser.');
+  assert.match(app, /openInvitationTarget/);
+  assert.match(app, /sectionIndex/);
+  assert.match(rootSource, /RouteShimmer/);
+  assert.match(admin, /RouteShimmer/);
+  assert.match(shimmer, /vop-shimmer-overlay/);
+  assert.match(users, /loading && users\.length===0/);
+  assert.match(candidates, /loading&&candidates\.length===0/);
+  assert.match(inbox, /busy&&!notifications\.length/);
+});
