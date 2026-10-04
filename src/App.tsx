@@ -38,22 +38,24 @@ import './pages/learning.css';
 import { PrayerPage } from './pages/PrayerPage';
 import { RadioPage } from './pages/RadioPage';
 import { CertificatesPage } from './pages/CertificatesPage';
-import { AdminPage } from './pages/AdminPage';
 import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
 import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { EventsPage } from './pages/EventsPage';
 import PaymentsPage from './pages/PaymentsPage';
 import { SupportPage } from './pages/SupportPage';
 import { PersonalSettingsPage } from './pages/PersonalSettingsPage';
-import LocalizationConsolePage from './pages/LocalizationConsolePage';
 import NotificationsPage from './pages/NotificationsPage';
 import InvitationsPage from './pages/InvitationsPage';
-import MentorWorkspace from './pages/MentorWorkspace';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
 import { lessonScoreForDisplay } from './services/lessonProgress';
 import { saveSupportContextPrefill } from './services/supportContext';
 import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
+
+const AdminPage=React.lazy(()=>import('./pages/AdminPage').then(module=>({default:module.AdminPage})));
+const LocalizationConsolePage=React.lazy(()=>import('./pages/LocalizationConsolePage'));
+const MentorWorkspace=React.lazy(()=>import('./pages/MentorWorkspace'));
+const PortalLoading=()=> <div className="vop-empty" role="status" aria-live="polite">Opening workspace…</div>;
 
 const EMPTY_SETTINGS: AppSettings = { appName:'', organizationName:'', schoolName:'', copyrightText:'', versionLabel:'', directorName:'', directorTitle:'', contactPhone:'', whatsappNumber:'', contactEmail:'', quizPassThreshold:0, quizMaxAttempts:0, quizRetakeCooldownMinutes:0, defaultLanguage:'', customLanguages:[], customTranslations:{}, themeColor:'', certificateTitle:'', certificateBodyText:'', detailPages:{aboutUsMission:'',aboutUsHistory:'',aboutUsLeadership:'',aboutAppDescription:'',aboutAppVersion:'',aboutAppCredits:'',contactOfficeAddress:'',contactOfficeHours:'',contactPhoneNumbers:[],contactEmails:[],contactWhatsAppNumbers:[],socialLinks:{}} };
 const EMPTY_USER: User = { uid:'', displayName:'', email:'', information:{enrollmentDate:'',graduating:false,graduated:false,baptismCandidate:false,baptized:false}, privileges:{admin:false,guardian:false,editor:false,manager:false,developer:false}, progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]} };
@@ -709,7 +711,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         <main className="vop-app-content" style={{ flex: 1, minWidth: 0 }}>
           {currentRoute === 'about' && <AboutPage settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'personal-settings' && <PersonalSettingsPage onStudyLanguageChange={language => { setActiveLang(language); setActiveLanguage(language); }} currentUser={currentUser} onBack={goBack} />}
-          {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <LocalizationConsolePage currentUser={currentUser} onBack={goBack}/>} 
+          {currentRoute === 'localization' && ['invited','active'].includes(String(currentUser.localizationAccess?.status||'')) && <React.Suspense fallback={<PortalLoading/>}><LocalizationConsolePage currentUser={currentUser} onBack={goBack}/></React.Suspense>} 
           {currentRoute === 'profile' && <ReferenceProfilePage currentUser={currentUser} allUsers={allUsers} guides={guides} unions={unions} conferences={conferences} districts={districts} churches={churches} settings={settings} activeLanguage={activeLanguage} onBack={goBack} onNavigateToCertificates={() => navigate('certificates')} />}
           {currentRoute === 'resources' && <ResourcesPage books={books} onBack={goBack} />}
           {currentRoute === 'lessons' && <LessonsPage guides={guides} currentUser={currentUser}
@@ -745,11 +747,11 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
               if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
             }}/>}
                     {currentRoute === 'support' && <SupportPage currentUser={currentUser} guides={guides} onBack={goBack} />}
-          {currentRoute === 'mentor' && hasMentorPortalAccess(currentUser) && <MentorWorkspace onBack={goBack} guides={guides}/>}
+          {currentRoute === 'mentor' && hasMentorPortalAccess(currentUser) && <React.Suspense fallback={<PortalLoading/>}><MentorWorkspace onBack={goBack} guides={guides}/></React.Suspense>}
 
           {currentRoute === 'certificates' && <CertificatesPage currentUser={currentUser} settings={settings} activeLanguage={activeLanguage} onBack={goBack} />}
           {currentRoute === 'certificate-verification' && <CertificateVerificationPage onBack={goBack} />}
-          {currentRoute === 'admin' && hasAdminPortalAccess(currentUser) && <AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
+          {currentRoute === 'admin' && hasAdminPortalAccess(currentUser) && <React.Suspense fallback={<PortalLoading/>}><AdminPage currentUser={currentUser} activeLanguage={activeLanguage} onBack={goBack}
               onNavigate={navigate} uiLocale={uiLocale}
               sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleDesktopSidebar}
               onAccountChanged={async()=>{
@@ -757,7 +759,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
                 const refreshed=await loadFirestoreUser(auth.currentUser.uid);
                 if(refreshed){setCurrentUser(refreshed);setAllUsers([refreshed]);setLocalizationOrganizationScope(refreshed.organizationId||'');}
               }}
-              onLogout={() => void firebaseSignOut()} />}
+              onLogout={() => void firebaseSignOut()} /></React.Suspense>}
           {showCourse && activeGuide && <DiscoverGuideView guide={activeGuide} currentUser={currentUser}
             onBack={goBack} onSelectLesson={(lesson,initialPageIndex) =>
               openStudyItem(activeGuide,lesson,initialPageIndex,'home')}
