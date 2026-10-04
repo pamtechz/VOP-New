@@ -581,12 +581,13 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if(questions.length<3)throw new Error('At least three published Scripture challenge questions are required.');
     const selected=questions.sort(()=>Math.random()-.5).slice(0,Math.min(10,questions.length));
     const challengeId=randomUUID();
+    const expiresAt=new Date(Date.now()+30*60_000).toISOString();
     await db.doc(`scriptureSoloChallenges/${challengeId}`).set({
       challengeId,organizationId:orgOf(actor),playerId:String(actor.uid),status:'active',
       questionIds:selected.map(question=>question.id),answers:{},score:0,
-      createdAt:FieldValue.serverTimestamp(),expiresAt:new Date(Date.now()+30*60_000).toISOString(),
+      createdAt:FieldValue.serverTimestamp(),expiresAt,
     });
-    return {challengeId,questions:selected.map(question=>({
+    return {challengeId,expiresAt,questions:selected.map(question=>({
       id:question.id,question:question.question,options:question.options,scriptureRef:question.scriptureRef,
     }))};
   }
@@ -690,11 +691,12 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     if (questions.length < 3) throw new Error('At least three published Scripture Duel questions are required.');
     const selected = questions.sort(() => Math.random() - 0.5).slice(0, Math.min(10, questions.length));
     const matchId = randomUUID();
-    await db.doc(`scriptureDuels/${matchId}`).set({ matchId, organizationId: orgOf(actor), playerA: String(actor.uid), playerB: opponentId, status: 'active', questionIds: selected.map(q => q.id), answers: {}, scores: { [String(actor.uid)]: 0, [opponentId]: 0 }, createdAt: FieldValue.serverTimestamp(), expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
+    const expiresAt=new Date(Date.now()+30*60_000).toISOString();
+    await db.doc(`scriptureDuels/${matchId}`).set({ matchId, organizationId: orgOf(actor), playerA: String(actor.uid), playerB: opponentId, status: 'active', questionIds: selected.map(q => q.id), answers: {}, scores: { [String(actor.uid)]: 0, [opponentId]: 0 }, createdAt: FieldValue.serverTimestamp(), expiresAt });
     await createNotification(db, { organizationId: orgOf(actor), recipientId: opponentId, type: 'assignment',
       title: 'Scripture Duel invitation', body: `${String(actor.displayName || 'A learner').slice(0, 80)} invited you to a Scripture challenge. Open Library → Iron Duels to participate.`,
       metadata: { matchId, source: 'scripture-duel' } });
-    return { matchId, questions: selected.map(q => ({ id: q.id, question: q.question, options: q.options, scriptureRef: q.scriptureRef })) };
+    return { matchId, expiresAt, questions: selected.map(q => ({ id: q.id, question: q.question, options: q.options, scriptureRef: q.scriptureRef })) };
   }
   if (action === 'duelHistory') {
     const snapshot = await db.collection('scriptureDuelResults').where('organizationId', '==', orgOf(actor)).limit(100).get();
