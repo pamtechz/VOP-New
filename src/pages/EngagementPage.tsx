@@ -46,9 +46,11 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
   const [decks, setDecks] = useState<Array<Record<string, unknown>>>([]);
   const [due, setDue] = useState<Array<Record<string, unknown>>>([]);
   const [opponentId, setOpponentId] = useState('');
+  const [challengeMode,setChallengeMode]=useState<'solo'|'head_to_head'>('head_to_head');
+  const [engagementPoints,setEngagementPoints]=useState(0);
   const [opponents, setOpponents] = useState<Array<{ uid: string; displayName: string }>>([]);
   const [duelOptIn, setDuelOptIn] = useState(false);
-  const [activeMatches, setActiveMatches] = useState<Array<{ id: string; opponentName: string }>>([]);
+  const [activeMatches, setActiveMatches] = useState<Array<{ id: string; opponentName: string;mode?:string }>>([]);
   const [leaderboard, setLeaderboard] = useState<Array<{rank:number;displayName:string;rating:number}>>([]);
   const [answeredQuestionIds, setAnsweredQuestionIds] = useState<string[]>([]);
   const [matchId, setMatchId] = useState('');
@@ -70,6 +72,7 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
       setOpponents((result.opponents as Array<{uid:string;displayName:string}>) || []);
       setActiveMatches((result.matches as Array<{id:string;opponentName:string}>) || []);
       setDuelOptIn(result.optIn === true);
+      setEngagementPoints(Math.max(0,Number(result.points||0)));
       setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number}>) || []);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,19 +149,24 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
 
         {tab === 'memory' && <section style={{ display:'grid', gap:'1rem' }}>
           <article className="vop-material-card"><div className="vop-material-body"><h2>Scripture Memory</h2><p>Review verses using persisted spaced repetition. Your schedule and mastery are stored against your account.</p><select value={deckId} onChange={event => setDeckId(event.target.value)} disabled={busy} aria-label="Scripture memory deck"><option value="">Select a deck</option>{decks.map(deck => <option key={String(deck.id)} value={String(deck.id)}>{String(deck.title || deck.name || deck.id)}</option>)}</select></div></article>
-          {due.map(verse => <article className="vop-material-card" key={String(verse.id)}><div className="vop-material-body"><span className="vop-material-kicker"><Brain size={14}/> Due for review</span><h2>{String(verse.reference || verse.title || 'Scripture')}</h2><p>{String(verse.text || verse.content || '')}</p><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating) => <button key={rating} type="button" aria-label={label} title={label} disabled={busy} onClick={() => void run(async () => { await engagement({ action:'memoryReview', deckId, verseId:String(verse.id), rating }); const result=await engagement({action:'memoryDue',deckId}); setDue((result.due as Array<Record<string,unknown>>) || []); setMessage('Review saved and next review scheduled.'); })}>{label}</button>)}</div></div></article>)}
+          {due.map(verse => <article className="vop-material-card" key={String(verse.id)}><div className="vop-material-body"><span className="vop-material-kicker"><Brain size={14}/> Due for review</span><h2>{String(verse.reference || verse.title || 'Scripture')}</h2><p>{String(verse.text || verse.content || '')}</p><div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>{['0 · Not recalled','1 · Very hard','2 · Partial','3 · Recalled','4 · Strong','5 · Easy'].map((label,rating) => <button key={rating} type="button" aria-label={label} title={label} disabled={busy} onClick={() => void run(async () => { const review=await engagement({ action:'memoryReview', deckId, verseId:String(verse.id), rating }); const result=await engagement({action:'memoryDue',deckId}); setDue((result.due as Array<Record<string,unknown>>) || []); const award=review.pointAward as {awarded?:boolean;points?:number}|undefined; if(award?.awarded)setEngagementPoints(current=>current+Number(award.points||0)); setMessage(award?.awarded?`Review saved. +${Number(award.points||0)} engagement point${Number(award.points||0)===1?'':'s'} for today’s deck session.`:'Review saved and next review scheduled.'); })}>{label}</button>)}</div></div></article>)}
           {!due.length && deckId && <div className="vop-materials-empty"><Brain size={40}/><h2>Nothing due</h2><p>Your Scripture memory queue is clear for this deck.</p></div>}
         </section>}
 
         {tab === 'duels' && <section style={{ display:'grid', gap:'1rem' }}>
-          <article className="vop-material-card"><div className="vop-material-body"><h2>Iron Duels</h2><p>Start a secure 1v1 Scripture challenge. Scoring happens on the server and completed matches update the players' ratings.</p><label style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.75rem'}}><input type="checkbox" checked={duelOptIn} disabled={busy} onChange={event => { const enabled=event.target.checked; void run(async()=>{ const result=await engagement({action:'duelAvailability',enabled}); setDuelOptIn(result.optIn === true); setMessage(enabled?'You can now receive Scripture Duel challenges.':'Your name is hidden from new challenge invitations.'); }); }}/><span>Allow learners in my organization to invite me to Scripture Duels</span></label><select value={opponentId} onChange={event => setOpponentId(event.target.value)} aria-label="Choose a Scripture Duel opponent"><option value="">Choose a learner in your organization</option>{opponents.map(person => <option key={person.uid} value={person.uid}>{person.displayName}</option>)}</select><button type="button" disabled={busy || !opponentId} onClick={() => void run(async () => { const result=await engagement({action:'duelCreate',opponentId}); setMatchId(String(result.matchId)); setDuelQuestions((result.questions as Array<Record<string,unknown>>) || []); setAnsweredQuestionIds([]); setMessage('Duel created. Both participants must answer before the match can finish, or wait until it expires.'); })}><Swords size={15}/> Start duel</button></div></article>
+          <article className="vop-material-card"><div className="vop-material-body">
+            <div style={{display:'flex',justifyContent:'space-between',gap:'1rem',alignItems:'flex-start',flexWrap:'wrap'}}><div><h2>Iron Duels & Solo Challenges</h2><p>Practice alone or challenge another learner. Questions and scoring are server-controlled, and completed activities earn the points configured by your organization.</p></div><div className="vop-engagement-points-badge"><Sparkles size={16}/><strong>{engagementPoints}</strong><span>engagement points</span></div></div>
+            <div className="vop-challenge-mode-switch" role="group" aria-label="Challenge mode"><button type="button" className={challengeMode==='solo'?'active':''} onClick={()=>{setChallengeMode('solo');setOpponentId('')}}>Solo challenge</button><button type="button" className={challengeMode==='head_to_head'?'active':''} onClick={()=>setChallengeMode('head_to_head')}>Challenge someone</button></div>
+            {challengeMode==='head_to_head'&&<><label style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.75rem'}}><input type="checkbox" checked={duelOptIn} disabled={busy} onChange={event => { const enabled=event.target.checked; void run(async()=>{ const result=await engagement({action:'duelAvailability',enabled}); setDuelOptIn(result.optIn === true); setMessage(enabled?'You can now receive Scripture Duel challenges.':'Your name is hidden from new challenge invitations.'); }); }}/><span>Allow learners in my organization to invite me to Scripture Duels</span></label><select value={opponentId} onChange={event => setOpponentId(event.target.value)} aria-label="Choose a Scripture Duel opponent"><option value="">Choose a learner in your organization</option>{opponents.map(person => <option key={person.uid} value={person.uid}>{person.displayName}</option>)}</select></>}
+            <button type="button" disabled={busy || (challengeMode==='head_to_head'&&!opponentId)} onClick={() => void run(async () => { const result=await engagement({action:'duelCreate',mode:challengeMode,...(challengeMode==='head_to_head'?{opponentId}:{})}); setMatchId(String(result.matchId)); setDuelQuestions((result.questions as Array<Record<string,unknown>>) || []); setAnsweredQuestionIds([]); setMessage(challengeMode==='solo'?'Solo challenge started. Answer every question, then finish the challenge.':'Duel created. Both participants must answer before the match can finish, or wait until it expires.'); })}><Swords size={15}/>{challengeMode==='solo'?'Start solo challenge':'Start duel'}</button>
+          </div></article>
           {activeMatches.length > 0 && <article className="vop-material-card"><div className="vop-material-body"><h3>Your active challenges</h3>{activeMatches.map(match => <button type="button" key={match.id} disabled={busy} onClick={() => void run(async () => { const result = await engagement({ action:'duelJoin', matchId:match.id }); setMatchId(String(result.matchId)); setDuelQuestions((result.questions as Array<Record<string,unknown>>) || []); setAnsweredQuestionIds((result.answeredQuestionIds as string[]) || []); setMessage('Challenge opened.'); })}>Open challenge with {match.opponentName}</button>)}</div></article>}
           <article className="vop-material-card"><div className="vop-material-body">
             <h2>Organization Scripture Duel rankings</h2>
             <p>Only learners who opted in to Duel participation appear here. Ratings change only when both players complete a ranked match.</p>
             {leaderboard.length ? <ol style={{display:'grid',gap:8,marginTop:12}}>
               {leaderboard.map(item=><li key={item.rank} style={{display:'flex',justifyContent:'space-between',gap:12}}>
-                <span>{item.rank}. {item.displayName}</span><strong>{item.rating} points</strong>
+                <span>{item.rank}. {item.displayName}</span><strong>{item.rating} rating</strong>
               </li>)}
             </ol> : <p>No learners have opted in to the rankings yet.</p>}
             <button type="button" disabled={busy} onClick={()=>void run(async()=>{
@@ -170,20 +178,27 @@ export const EngagementPage: React.FC<Props> = ({ mode, onBack }) => {
           {matchId && <button type="button" disabled={busy} onClick={() => void run(async () => {
             const result=await engagement({action:'duelFinish',matchId});
             const winner=String(result.winner || '');
-            const outcome=winner==='unranked'?'Challenge expired without a ranked result.'
-              : winner==='draw'?'Duel completed in a draw.'
-              : winner===auth?.currentUser?.uid?'Duel completed. You won!'
-              : 'Duel completed. Your opponent won.';
+            const mode=String(result.mode||'head_to_head');
+            const awards=Array.isArray(result.pointAwards)?result.pointAwards as Array<{uid?:string;awarded?:boolean;points?:number}>:[];
+            const myAward=awards.find(item=>item.uid===auth?.currentUser?.uid&&item.awarded===true);
+            if(myAward)setEngagementPoints(current=>current+Number(myAward.points||0));
+            const pointText=myAward?` +${Number(myAward.points||0)} engagement point${Number(myAward.points||0)===1?'':'s'}.`:'';
+            const outcome=mode==='solo'
+              ?winner==='unranked'?'Solo challenge expired before completion.':`Solo challenge completed.${pointText}`
+              :winner==='unranked'?'Challenge expired without a ranked result.'
+              :winner==='draw'?`Duel completed in a draw.${pointText}`
+              :winner===auth?.currentUser?.uid?`Duel completed. You won!${pointText}`
+              :`Duel completed. Your opponent won.${pointText}`;
             const [overview,standings]=await Promise.all([
               engagement({action:'duelOverview'}),engagement({action:'duelLeaderboard'}),
             ]);
             setOpponents((overview.opponents as Array<{uid:string;displayName:string}>) || []);
-            setActiveMatches((overview.matches as Array<{id:string;opponentName:string}>) || []);
+            setActiveMatches((overview.matches as Array<{id:string;opponentName:string;mode?:string}>) || []);
             setLeaderboard((standings.leaderboard as Array<{rank:number;displayName:string;rating:number}>) || []);
             setMatchId('');setDuelQuestions([]);setAnsweredQuestionIds([]);
             setMessage(outcome);
           })}>Finish duel</button>}
-          {!matchId && !activeMatches.length && <div className="vop-materials-empty"><Swords size={40}/><h2>No active challenges</h2><p>Choose a learner to start a Scripture Duel.</p></div>}
+          {!matchId && !activeMatches.length && <div className="vop-materials-empty"><Swords size={40}/><h2>No active challenges</h2><p>Start a solo Scripture challenge or invite another learner.</p></div>}
         </section>}
       </div>
     </main>
