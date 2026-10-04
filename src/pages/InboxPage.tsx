@@ -3,6 +3,7 @@ import {ArrowLeft,Bell,BookOpen,Check,CheckCheck,Clock3,Copy,ExternalLink,Link2,
 import {auth} from '../lib/firebase';
 import type {AppRoute,DiscoverGuide,Lesson,User} from '../types';
 import {notificationRoute,prepareNotificationNavigation} from '../services/notificationRouting';
+import {ShimmerList} from '../components/layout/Shimmer';
 import './inbox.css';
 
 type NotificationItem={
@@ -246,8 +247,8 @@ export default function InboxPage({
         <header><div><h2>Notification inbox</h2><p>Unread items stay highlighted until opened or marked read.</p></div>
           <div className="vop-inbox-actions"><button type="button" onClick={()=>void markAll()} disabled={!notifications.length}><CheckCheck size={15}/>Mark all read</button><button type="button" className="danger" onClick={()=>void clearAll()} disabled={!notifications.length}><Trash2 size={15}/>Delete all</button></div>
         </header>
-        {!notifications.length?<div className="vop-inbox-empty"><Bell size={34}/><strong>No notifications</strong><span>New messages, invitations and workflow updates will appear here.</span></div>
-        :<div className="vop-inbox-list">{notifications.map(item=><article key={item.id} className={'vop-inbox-item '+(item.read?'':'unread')}>
+        {busy&&!notifications.length?<ShimmerList rows={5} compact label="Loading notifications"/>:!notifications.length?<div className="vop-inbox-empty"><Bell size={34}/><strong>No notifications</strong><span>New messages, invitations and workflow updates will appear here.</span></div>
+        :<div className={'vop-inbox-list'+(busy?' vop-refreshing vop-shimmer-overlay':'')}>{notifications.map(item=><article key={item.id} className={'vop-inbox-item '+(item.read?'':'unread')}>
           <button type="button" className="vop-inbox-open" onClick={()=>void openNotification(item)}>
             <span className="vop-inbox-icon">{item.type==='invitation'?<UserPlus size={18}/>:item.type==='mentor-feedback'?<Mail size={18}/>:<Bell size={18}/>}</span>
             <span className="vop-inbox-copy"><strong>{item.title||'Notification'}</strong><span>{item.body||''}</span><small><Clock3 size={12}/>{dateText(item.createdAt)}</small></span>
@@ -302,7 +303,7 @@ export default function InboxPage({
         <section className="vop-inbox-panel">
           <header><div><h2>Invitations</h2><p>Received invitations require your decision. Sent invitations can be shared again or cancelled.</p></div>
             <div className="vop-inbox-actions"><button type="button" onClick={()=>void clearInviteHistory()} disabled={busy||!invites.some(item=>item.status!=='pending')}><Trash2 size={15}/>Clear completed history</button></div></header>
-          <div className="vop-invite-columns">
+          {busy&&!invites.length?<ShimmerList rows={5} compact label="Loading invitations"/>:<div className={'vop-invite-columns'+(busy?' vop-refreshing vop-shimmer-overlay':'')}>
             <div><h3><Mail size={16}/>Received</h3>{!received.length?<div className="vop-inbox-empty compact">No received invitations.</div>:received.map(invite=><article key={'received:'+invite.token} className="vop-invite-card">
               <div><strong>{invite.organizationName||invite.organizationId}</strong><span>Role: {invite.role}</span><span>Opens: {invite.targetLabel||'Organization home'}</span><small>{invite.status} · expires {dateText(invite.expiresAt)}</small></div>
               <footer>{invite.status==='pending'?<><button type="button" className="vop-primary" disabled={busy} onClick={()=>void acceptInvite(invite)}><Check size={15}/>Accept</button><button type="button" className="vop-secondary" disabled={busy} onClick={()=>void declineInvite(invite)}><X size={15}/>Decline</button></>:<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void dismissInvite(invite)}><Trash2 size={15}/>Delete</button>}</footer>
@@ -311,7 +312,7 @@ export default function InboxPage({
               <div><strong>{invite.email||'Shareable member link'}</strong><span>{invite.organizationName||invite.organizationId} · {invite.role}</span><span>Opens: {invite.targetLabel||'Organization home'}</span><small>{invite.status} · expires {dateText(invite.expiresAt)}</small></div>
               <footer>{invite.inviteUrl&&<button type="button" className="vop-secondary" onClick={()=>void navigator.clipboard?.writeText(String(invite.inviteUrl||''))}><Copy size={14}/>Copy</button>}{invite.status==='pending'?<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void cancelInvite(invite)}><Trash2 size={15}/>Cancel invite</button>:<button type="button" className="vop-secondary danger" disabled={busy} onClick={()=>void dismissInvite(invite)}><Trash2 size={15}/>Delete</button>}</footer>
             </article>)}</div>
-          </div>
+          </div>}
         </section>
       </div>}
     </div>
