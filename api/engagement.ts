@@ -5,6 +5,9 @@ import { getAuth } from 'firebase-admin/auth';
 import { requirePermissionForProfile } from '../server/permissions.js';
 import { createNotification } from '../server/notifications.js';
 import { engagementCatalog } from '../server/engagementCatalog.js';
+import {
+  awardEngagementPoints,effectiveEngagementPoints,engagementPointsConfigPath,normalizeEngagementPoints,
+} from '../server/engagementPoints.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -53,6 +56,20 @@ function sameOrg(actor: Profile, target: Profile) {
   const a = orgOf(actor);
   const b = orgOf(target);
   return Boolean(a && b && a === b);
+}
+async function actorMayManageOrganization(db:FirebaseFirestore.Firestore,actor:Profile,organizationId:string){
+  if(String(actor.role||'')==='super_admin')return true;
+  if(orgOf(actor)===organizationId)return true;
+  const role=String(actor.role||'');
+  const field=role==='union_admin'?'unionId':role==='conference_admin'?'conferenceId'
+    :role==='district_admin'?'districtId':role==='church_admin'?'churchId':'';
+  const nodeId=String(actor.adminNodeId||'').trim();
+  if(!field||!nodeId)return false;
+  const snapshot=await db.doc('organizations/'+cleanId(organizationId,'organization')).get();
+  if(!snapshot.exists)return false;
+  const data=snapshot.data()||{};
+  const hierarchy=data.hierarchy&&typeof data.hierarchy==='object'?data.hierarchy as Record<string,unknown>:{};
+  return String(data[field]||hierarchy[field]||'')===nodeId;
 }
 
 /** Hierarchy evaluators can review only their descendant organizations. */
@@ -412,7 +429,12 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
       transaction.create(reviewRef, { deckId, verseId, rating: Math.round(rating), reviewedAt: FieldValue.serverTimestamp() });
       return updated;
     });
-    return { state: next };
+    const organizationId=orgOf(actor);
+    const day=new Date().toISOString().slice(0,10);
+    const pointAward=organizationId
+      ?await awardEngagementPoints(db,String(actor.uid),organizationId,'memoryDeck','memory-deck-session',deckId+':'+day,{deckId})
+      :{awarded:false,points:0,total:null};
+    return { state: next, pointAward };
   }
   throw new Error('Unsupported Scripture memory action.');
 }
@@ -452,8 +474,15 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       .map(doc => ({ uid: doc.id, displayName: String(doc.data().displayName || 'Learner') }));
     const matches = active.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(item => item.status === 'active' && (item.playerA === String(actor.uid) || item.playerB === String(actor.uid)))
-      .map(item => ({ id: item.id, opponentName: names.get(item.playerA === String(actor.uid) ? String(item.playerB) : String(item.playerA)) || 'Learner', expiresAt: item.expiresAt }));
-    return { opponents, matches, optIn: actor.scriptureDuelOptIn === true };
+      .map(item => ({
+        id:item.id,
+        mode:String(item.mode||'head_to_head'),
+        opponentName:String(item.mode||'head_to_head')==='solo'
+          ?'Solo challenge'
+          :names.get(item.playerA===String(actor.uid)?String(item.playerB):String(item.playerA))||'Learner',
+        expiresAt:item.expiresAt,
+      }));
+    return { opponents, matches, optIn: actor.scriptureDuelOptIn === true, points:Number(actor.engagementPoints||0) };
   }
   if (action === 'duelJoin') {
     const matchId = cleanId(b.matchId, 'match');
@@ -475,26 +504,46 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       .map(doc => ({ id: doc.id, question: doc.data().question, options: doc.data().options, scriptureRef: doc.data().scriptureRef })) };
   }
   if (action === 'duelCreate') {
-    const opponentId = cleanId(b.opponentId, 'opponent');
-    if (opponentId === String(actor.uid)) throw new Error('You cannot challenge yourself.');
-    const opponent = await profile(db, opponentId);
-    const outstanding = await db.collection('scriptureDuels')
-      .where('playerA', '==', String(actor.uid)).where('status', '==', 'active').limit(20).get();
-    if (outstanding.docs.filter(doc => new Date(String(doc.data()?.expiresAt || 0)).getTime() > Date.now()).length >= 3) {
-      throw new Error('Complete or expire an existing Scripture Duel before sending more invitations.');
+    const mode=String(b.mode||'head_to_head')==='solo'?'solo':'head_to_head';
+    const organizationId=orgOf(actor);
+    if(!organizationId)throw new Error('Your learner account is not linked to an organization.');
+    let opponentId='';
+    let opponent:Profile|null=null;
+    if(mode==='head_to_head'){
+      opponentId=cleanId(b.opponentId,'opponent');
+      if(opponentId===String(actor.uid))throw new Error('Choose solo mode instead of challenging yourself.');
+      opponent=await profile(db,opponentId);
+      if(!sameOrg(actor,opponent))throw new Error('You can only challenge a learner in your organization.');
+      if(opponent.scriptureDuelOptIn!==true||opponent.disabled===true||!['student','learner'].includes(String(opponent.role||'student'))){
+        throw new Error('This learner is not accepting challenges.');
+      }
     }
-    if (!sameOrg(actor, opponent)) throw new Error('You can only challenge a learner in your organization.');
-    if (opponent.scriptureDuelOptIn !== true || opponent.disabled === true || !['student', 'learner'].includes(String(opponent.role || 'student'))) throw new Error('This learner is not accepting challenges.');
-    const questionSnapshot = await db.collection('scriptureDuelQuestions').where('status', '==', 'published').limit(20).get();
-    const questions = questionSnapshot.docs.filter(doc => contentVisibleToLearner(actor, doc.data() || {},organization)).map(doc => ({ id: doc.id, ...doc.data() }));
-    if (questions.length < 3) throw new Error('At least three published Scripture Duel questions are required.');
-    const selected = questions.sort(() => Math.random() - 0.5).slice(0, Math.min(10, questions.length));
-    const matchId = randomUUID();
-    await db.doc(`scriptureDuels/${matchId}`).set({ matchId, organizationId: orgOf(actor), playerA: String(actor.uid), playerB: opponentId, status: 'active', questionIds: selected.map(q => q.id), answers: {}, scores: { [String(actor.uid)]: 0, [opponentId]: 0 }, createdAt: FieldValue.serverTimestamp(), expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
-    await createNotification(db, { organizationId: orgOf(actor), recipientId: opponentId, type: 'assignment',
-      title: 'Scripture Duel invitation', body: `${String(actor.displayName || 'A learner').slice(0, 80)} invited you to a Scripture challenge. Open Library → Iron Duels to participate.`,
-      metadata: { matchId, source: 'scripture-duel' } });
-    return { matchId, questions: selected.map(q => ({ id: q.id, question: q.question, options: q.options, scriptureRef: q.scriptureRef })) };
+    const outstanding=await db.collection('scriptureDuels')
+      .where('playerA','==',String(actor.uid)).where('status','==','active').limit(20).get();
+    if(outstanding.docs.filter(doc=>new Date(String(doc.data()?.expiresAt||0)).getTime()>Date.now()).length>=3){
+      throw new Error('Complete or expire an existing Scripture challenge before starting more.');
+    }
+    const questionSnapshot=await db.collection('scriptureDuelQuestions').where('status','==','published').limit(20).get();
+    const questions=questionSnapshot.docs.filter(doc=>contentVisibleToLearner(actor,doc.data()||{},organization))
+      .map(doc=>({id:doc.id,...doc.data()}));
+    if(questions.length<3)throw new Error('At least three published Scripture challenge questions are required.');
+    const selected=questions.sort(()=>Math.random()-0.5).slice(0,Math.min(10,questions.length));
+    const matchId=randomUUID();
+    await db.doc(`scriptureDuels/${matchId}`).set({
+      matchId,mode,organizationId,playerA:String(actor.uid),playerB:opponentId,status:'active',
+      questionIds:selected.map(q=>q.id),answers:{},
+      scores:{[String(actor.uid)]:0,...(opponentId?{[opponentId]:0}:{})},
+      createdAt:FieldValue.serverTimestamp(),expiresAt:new Date(Date.now()+30*60_000).toISOString(),
+    });
+    if(mode==='head_to_head'&&opponentId){
+      await createNotification(db,{organizationId,recipientId:opponentId,type:'assignment',
+        title:'Scripture Duel invitation',body:`${String(actor.displayName||'A learner').slice(0,80)} invited you to a Scripture challenge. Open Library → Iron Duels to participate.`,
+        metadata:{matchId,source:'scripture-duel'}});
+    }
+    return {
+      matchId,mode,
+      questions:selected.map(q=>({id:q.id,question:q.question,options:q.options,scriptureRef:q.scriptureRef})),
+    };
   }
   if (action === 'duelHistory') {
     const snapshot = await db.collection('scriptureDuelResults').where('organizationId', '==', orgOf(actor)).limit(100).get();
@@ -542,52 +591,78 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
   }
 
   if (action === 'duelFinish') {
-    return db.runTransaction(async transaction => {
-      const latest = await transaction.get(matchRef);
-      const current = latest.data() || {};
-      if (!latest.exists || current.status !== 'active') throw new Error('This duel has already finished or is unavailable.');
-      const a = String(current.playerA || '');
-      const c = String(current.playerB || '');
-      if (String(actor.uid) !== a && String(actor.uid) !== c) throw new Error('You are not a participant in this duel.');
-      const questionIds = Array.isArray(current.questionIds) ? current.questionIds : [];
-      const answers = current.answers && typeof current.answers === 'object' ? current.answers as Record<string, unknown> : {};
-      const expired = new Date(String(current.expiresAt || 0)).getTime() < Date.now();
-      const answered = questionIds.every(id => Object.prototype.hasOwnProperty.call(answers, `${a}:${id}`) &&
-        Object.prototype.hasOwnProperty.call(answers, `${c}:${id}`));
-      if (!expired && !answered) throw new Error('Both players must answer every question before finishing the duel.');
-      if (expired && !answered) {
-        // An unanswered invitation must never inflate the challenger's rating.
-        const priorScores = current.scores && typeof current.scores === 'object' ? current.scores as Record<string, unknown> : {};
-        const unrankedScores = { [a]:Number(priorScores[a] || 0),[c]:Number(priorScores[c] || 0) };
-        transaction.update(matchRef, {status:'expired',winner:'unranked',finishedAt:FieldValue.serverTimestamp(),
-          finalScores:unrankedScores});
-        transaction.set(db.doc(`scriptureDuelResults/${matchId}`), {
-          matchId,organizationId:String(current.organizationId || ''),playerA:a,playerB:c,
+    const result=await db.runTransaction(async transaction=>{
+      const latest=await transaction.get(matchRef);
+      const current=latest.data()||{};
+      if(!latest.exists||current.status!=='active')throw new Error('This challenge has already finished or is unavailable.');
+      const a=String(current.playerA||'');
+      const c=String(current.playerB||'');
+      const mode=String(current.mode||'head_to_head')==='solo'?'solo':'head_to_head';
+      if(String(actor.uid)!==a&&String(actor.uid)!==c)throw new Error('You are not a participant in this challenge.');
+      const questionIds=Array.isArray(current.questionIds)?current.questionIds.map(String):[];
+      const answers=current.answers&&typeof current.answers==='object'?current.answers as Record<string,unknown>:{};
+      const expired=new Date(String(current.expiresAt||0)).getTime()<Date.now();
+      const actorAnswered=questionIds.every(id=>Object.prototype.hasOwnProperty.call(answers,`${String(actor.uid)}:${id}`));
+      if(mode==='solo'){
+        if(!expired&&!actorAnswered)throw new Error('Answer every question before finishing the solo challenge.');
+        const priorScores=current.scores&&typeof current.scores==='object'?current.scores as Record<string,unknown>:{};
+        const score=Number(priorScores[String(actor.uid)]||0);
+        const status=actorAnswered?'completed':'expired';
+        transaction.update(matchRef,{status,winner:actorAnswered?String(actor.uid):'unranked',finishedAt:FieldValue.serverTimestamp(),
+          finalScores:{[String(actor.uid)]:score}});
+        transaction.set(db.doc(`scriptureDuelResults/${matchId}`),{
+          matchId,mode:'solo',organizationId:String(current.organizationId||''),playerA:a,playerB:'',
+          scores:{[a]:score},winner:actorAnswered?a:'unranked',ranked:false,
+          answerCount:Object.keys(answers).length,completedAt:FieldValue.serverTimestamp(),
+        });
+        return {mode:'solo',completed:actorAnswered,winner:actorAnswered?a:'unranked',scores:{[a]:score},ranked:false,participants:[a]};
+      }
+      const answered=questionIds.every(id=>Object.prototype.hasOwnProperty.call(answers,`${a}:${id}`)
+        &&Object.prototype.hasOwnProperty.call(answers,`${c}:${id}`));
+      if(!expired&&!answered)throw new Error('Both players must answer every question before finishing the duel.');
+      if(expired&&!answered){
+        const priorScores=current.scores&&typeof current.scores==='object'?current.scores as Record<string,unknown>:{};
+        const unrankedScores={[a]:Number(priorScores[a]||0),[c]:Number(priorScores[c]||0)};
+        transaction.update(matchRef,{status:'expired',winner:'unranked',finishedAt:FieldValue.serverTimestamp(),finalScores:unrankedScores});
+        transaction.set(db.doc(`scriptureDuelResults/${matchId}`),{
+          matchId,mode:'head_to_head',organizationId:String(current.organizationId||''),playerA:a,playerB:c,
           scores:unrankedScores,winner:'unranked',ranked:false,
           answerCount:Object.keys(answers).length,completedAt:FieldValue.serverTimestamp(),
         });
-        return {winner:'unranked',scores:unrankedScores,ranked:false};
+        return {mode:'head_to_head',completed:false,winner:'unranked',scores:unrankedScores,ranked:false,participants:[a,c]};
       }
-      const refA = db.doc(`users/${a}`);
-      const refB = db.doc(`users/${c}`);
-      const [snapA, snapB] = await Promise.all([transaction.get(refA), transaction.get(refB)]);
-      if (!snapA.exists || !snapB.exists) throw new Error('A duel participant was not found.');
-      const scores = current.scores && typeof current.scores === 'object' ? current.scores as Record<string, unknown> : {};
-      const aScore = Number(scores[a] || 0);
-      const bScore = Number(scores[c] || 0);
-      const winner = aScore === bScore ? 'draw' : aScore > bScore ? a : c;
-      const ratingA = Number(snapA.data()?.scriptureDuelRating || 1200);
-      const ratingB = Number(snapB.data()?.scriptureDuelRating || 1200);
-      const nextA = elo(ratingA, ratingB, winner === 'draw' ? 0.5 : winner === a ? 1 : 0);
-      const nextB = elo(ratingB, ratingA, winner === 'draw' ? 0.5 : winner === c ? 1 : 0);
-      transaction.update(matchRef, { status: 'completed', winner, finishedAt: FieldValue.serverTimestamp(), finalScores: { [a]: aScore, [c]: bScore } });
-      transaction.set(refA, { scriptureDuelRating: nextA }, { merge: true });
-      transaction.set(refB, { scriptureDuelRating: nextB }, { merge: true });
-      transaction.set(db.doc(`scriptureDuelResults/${matchId}`), { matchId, organizationId: String(current.organizationId || ''), playerA: a, playerB: c,
-        scores: { [a]: aScore, [c]: bScore }, winner, ratings: { [a]: nextA, [c]: nextB }, answerCount: Object.keys(answers).length,
-        completedAt: FieldValue.serverTimestamp() });
-      return { winner, scores: { [a]: aScore, [c]: bScore }, ratings: { [a]: nextA, [c]: nextB } };
+      const refA=db.doc(`users/${a}`),refB=db.doc(`users/${c}`);
+      const [snapA,snapB]=await Promise.all([transaction.get(refA),transaction.get(refB)]);
+      if(!snapA.exists||!snapB.exists)throw new Error('A duel participant was not found.');
+      const scores=current.scores&&typeof current.scores==='object'?current.scores as Record<string,unknown>:{};
+      const aScore=Number(scores[a]||0),bScore=Number(scores[c]||0);
+      const winner=aScore===bScore?'draw':aScore>bScore?a:c;
+      const ratingA=Number(snapA.data()?.scriptureDuelRating||1200),ratingB=Number(snapB.data()?.scriptureDuelRating||1200);
+      const nextA=elo(ratingA,ratingB,winner==='draw'?0.5:winner===a?1:0);
+      const nextB=elo(ratingB,ratingA,winner==='draw'?0.5:winner===c?1:0);
+      transaction.update(matchRef,{status:'completed',winner,finishedAt:FieldValue.serverTimestamp(),finalScores:{[a]:aScore,[c]:bScore}});
+      transaction.set(refA,{scriptureDuelRating:nextA},{merge:true});
+      transaction.set(refB,{scriptureDuelRating:nextB},{merge:true});
+      transaction.set(db.doc(`scriptureDuelResults/${matchId}`),{
+        matchId,mode:'head_to_head',organizationId:String(current.organizationId||''),playerA:a,playerB:c,
+        scores:{[a]:aScore,[c]:bScore},winner,ratings:{[a]:nextA,[c]:nextB},
+        answerCount:Object.keys(answers).length,completedAt:FieldValue.serverTimestamp(),
+      });
+      return {mode:'head_to_head',completed:true,winner,scores:{[a]:aScore,[c]:bScore},ratings:{[a]:nextA,[c]:nextB},participants:[a,c]};
     });
+    const organizationId=orgOf(actor);
+    const pointAwards:Array<{uid:string;awarded:boolean;points:number;total:null}>=[];
+    if(result.completed&&organizationId){
+      const key=result.mode==='solo'?'soloChallenge':'duelChallenge';
+      for(const participant of result.participants){
+        if(participant){
+          pointAwards.push({uid:participant,...await awardEngagementPoints(
+            db,participant,organizationId,key,'scripture-challenge',matchId,{mode:result.mode},
+          )});
+        }
+      }
+    }
+    return {...result,pointAwards};
   }
   throw new Error('Unsupported Scripture Duel action.');
 }
@@ -631,6 +706,28 @@ export default async function handler(req: Request, res: Response) {
     }
     const uid = await authUid(req);
     const actor = await profile(db, uid);
+    if(action==='pointsSummary'){
+      return res.status(200).json({ok:true,points:Math.max(0,Number(actor.engagementPoints||0))});
+    }
+    if(action==='pointsConfigGet'||action==='pointsConfigSave'){
+      await requirePermissionForProfile(db,actor,'settings',action==='pointsConfigSave'?'update':'read');
+      const organizationId=String(b.organizationId||orgOf(actor)).trim();
+      if(!organizationId)throw new Error('Select an organization to configure engagement points.');
+      if(!(await actorMayManageOrganization(db,actor,organizationId)))throw new Error('This organization is outside your authorized scope.');
+      if(action==='pointsConfigGet'){
+        return res.status(200).json({ok:true,organizationId,points:await effectiveEngagementPoints(db,organizationId)});
+      }
+      const points=normalizeEngagementPoints(b.points);
+      await db.doc(engagementPointsConfigPath(organizationId)).set({
+        organizationId,points,updatedBy:String(actor.uid),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
+      await db.collection(`organizations/${organizationId}/audit`).add({
+        action:'engagement.points.update',target:engagementPointsConfigPath(organizationId),
+        actorUid:String(actor.uid),actorEmail:String(actor.email||''),after:{points},
+        timestamp:FieldValue.serverTimestamp(),
+      });
+      return res.status(200).json({ok:true,organizationId,points});
+    }
     if (action.startsWith('portfolio')) {
       await requirePermissionForProfile(db, actor, 'portfolio', action === 'portfolioGet' ? 'read' : 'manage');
       return res.status(200).json({ ok: true, ...(await portfolioAction(db, actor, b)) });
@@ -640,7 +737,7 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok: true, ...(await memoryAction(db, actor, b)) });
     }
     if (action.startsWith('duel')) {
-      await requirePermissionForProfile(db, actor, 'duels', action === 'duelCreate' || action === 'duelAnswer' ? 'create' : 'read');
+      await requirePermissionForProfile(db, actor, 'duels', action === 'duelCreate' || action === 'duelAnswer' ? 'create' : action==='duelFinish'?'update':'read');
       return res.status(200).json({ ok: true, ...(await duelAction(db, actor, b)) });
     }
     throw new Error('Unsupported engagement action.');
