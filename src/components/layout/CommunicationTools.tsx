@@ -3,6 +3,7 @@ import {Bell,Check,ExternalLink,MessageCircle,Search,Trash2,X} from 'lucide-reac
 import {auth} from '../../lib/firebase';
 import type {AppRoute} from '../../types';
 import {notificationRoute,prepareNotificationNavigation} from '../../services/notificationRouting';
+import { ShimmerList } from './Shimmer';
 
 type SearchItem={type:string;id:string;title:string;description:string;actionUrl:string};
 type NotificationItem={id:string;title?:string;body?:string;read?:boolean;actionUrl?:string;type?:string;metadata?:Record<string,unknown>;createdAt?:unknown};
