@@ -515,8 +515,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <button type="button" onClick={()=>setTab('operations')}>
               <span><UserPlus size={18}/></span><div><strong>{unassignedStudents.length} learner{unassignedStudents.length===1?'':'s'} without a mentor</strong><small>Allocate an active mentor for accountable follow-up</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>setTab('support')}>
-              <span><MessageCircle size={18}/></span><div><strong>{unreadSummary.total} unread conversation{unreadSummary.total===1?'':'s'}</strong><small>Mentor chats and candidate support waiting to be read</small></div><ChevronRight size={17}/>
+            <button type="button" onClick={()=>{setCommunicationView(unreadSummary.supportRequests>0?'support':'conversations');setTab('support')}}>
+              <span><MessageCircle size={18}/></span><div><strong>{unreadSummary.total} unread communication{unreadSummary.total===1?'':'s'}</strong><small>Support requests and mentor conversations waiting to be read</small></div><ChevronRight size={17}/>
             </button>
             <button type="button" className={awaitingFirstResponse.length?'urgent':''} onClick={()=>{setSupportStatus('open');setCommunicationView('support');setTab('support')}}>
               <span><Clock3 size={18}/></span><div><strong>{awaitingFirstResponse.length} request{awaitingFirstResponse.length===1?'':'s'} waiting 24h+ for first response</strong><small>Service-level follow-up indicator</small></div><ChevronRight size={17}/>
@@ -525,7 +525,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         </article>
 
         <article className="vop-mentoring-card">
-          <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Recent support</span><h2>Candidate inbox</h2><p>Most recent learning and spiritual-support activity.</p></div><button type="button" className="vop-link-button" onClick={()=>setTab('support')}>View all <ChevronRight size={14}/></button></div>
+          <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Recent support</span><h2>Candidate inbox</h2><p>Most recent learning and spiritual-support activity.</p></div><button type="button" className="vop-link-button" onClick={()=>{setCommunicationView('support');setTab('support')}}>View all <ChevronRight size={14}/></button></div>
           <div className="vop-recent-support">
             {supportRequests.slice(0,5).map(item=><button key={item.id} type="button" onClick={()=>void openSupportRequest(item)}>
               <span className={'vop-inbox-dot '+(item.unread?'unread':'')}/>
@@ -547,10 +547,10 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         <article className="vop-mentoring-card">
           <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Evangelism follow-up</span><h2>Interest pipeline</h2></div><Sparkles size={20}/></div>
           <div className="vop-pipeline-grid">
-            <button type="button" onClick={()=>setTab('support')}><span>New</span><strong>{evangelismStages.new}</strong></button>
-            <button type="button" onClick={()=>setTab('support')}><span>Contacted</span><strong>{evangelismStages.contacted}</strong></button>
-            <button type="button" onClick={()=>setTab('support')}><span>Scheduled</span><strong>{evangelismStages.scheduled}</strong></button>
-            <button type="button" onClick={()=>setTab('support')}><span>Completed</span><strong>{evangelismStages.completed}</strong></button>
+            <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><span>New</span><strong>{evangelismStages.new}</strong></button>
+            <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><span>Contacted</span><strong>{evangelismStages.contacted}</strong></button>
+            <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><span>Scheduled</span><strong>{evangelismStages.scheduled}</strong></button>
+            <button type="button" onClick={()=>{setCommunicationView('support');setTab('support')}}><span>Completed</span><strong>{evangelismStages.completed}</strong></button>
           </div>
           <div className="vop-pipeline-note"><HeartHandshake size={16}/><span>{pendingFollowUps.length} active spiritual follow-up{pendingFollowUps.length===1?'':'s'}, including Bible study, baptism, visits and One Voice 27.</span></div>
         </article>
