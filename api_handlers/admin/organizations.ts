@@ -490,6 +490,48 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
     }
 
+    if(action==='deleteAudit'){
+      const values=Array.isArray(body.auditIds)?body.auditIds.map(value=>String(value||'').trim()):[];
+      const auditIds=[...new Set(values.filter(value=>/^[A-Za-z0-9_-]{1,160}$/.test(value)))].slice(0,100);
+      if(!auditIds.length)throw new Error('Select at least one audit entry to delete.');
+      const refs=auditIds.map(auditId=>ctx.db.doc(`organizations/${managedOrganizationId}/audit/${auditId}`));
+      const snapshots=await ctx.db.getAll(...refs);
+      const batch=ctx.db.batch();
+      let deleted=0;
+      snapshots.forEach((snapshot,index)=>{
+        if(snapshot.exists){batch.delete(refs[index]);deleted+=1;}
+      });
+      if(deleted)await batch.commit();
+      await ctx.db.collection('platformAudit').add({
+        action:'audit.delete',actorUid:ctx.auth.uid,actorRole:String(ctx.profile.role||ctx.membership?.role||''),
+        tenantType:'organization',tenantId:managedOrganizationId,targetedOrganizationId:managedOrganizationId,
+        target:`organizations/${managedOrganizationId}/audit`,deletedCount:deleted,
+        requestedCount:auditIds.length,timestamp:FieldValue.serverTimestamp(),
+      });
+      return res.status(200).json({ok:true,deleted});
+    }
+
+    if(action==='clearAudit'){
+      const auditCollection=ctx.db.collection(`organizations/${managedOrganizationId}/audit`);
+      let deleted=0;
+      for(let page=0;page<25;page+=1){
+        const snapshot=await auditCollection.limit(400).get();
+        if(snapshot.empty)break;
+        const batch=ctx.db.batch();
+        snapshot.docs.forEach(document=>batch.delete(document.ref));
+        await batch.commit();
+        deleted+=snapshot.size;
+        if(snapshot.size<400)break;
+      }
+      await ctx.db.collection('platformAudit').add({
+        action:'audit.clear',actorUid:ctx.auth.uid,actorRole:String(ctx.profile.role||ctx.membership?.role||''),
+        tenantType:'organization',tenantId:managedOrganizationId,targetedOrganizationId:managedOrganizationId,
+        target:`organizations/${managedOrganizationId}/audit`,deletedCount:deleted,
+        timestamp:FieldValue.serverTimestamp(),
+      });
+      return res.status(200).json({ok:true,deleted});
+    }
+
     if (action === 'getUsage') {
       const usage=await organizationUsageSnapshot(ctx.db,managedOrganizationId);
       return res.status(200).json({ok:true,usage});
