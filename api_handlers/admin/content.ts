@@ -749,7 +749,7 @@ export default async function handler(req: Request, res: Response) {
       const existing = await ref.get();
       const incoming = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
 
-      if (collection === 'settings' && Object.hasOwn(incoming, 'quizPassThreshold')) {
+      if (collection === 'settings' && Object.prototype.hasOwnProperty.call(incoming, 'quizPassThreshold')) {
         const rawMark = incoming.quizPassThreshold;
         // Zero represents deliberately unconfigured; an undefined, malformed,
         // negative or out-of-range value must never masquerade as a pass mark.
@@ -761,21 +761,21 @@ export default async function handler(req: Request, res: Response) {
           incoming.quizPassThreshold = normalized;
         }
       }
-      if (collection === 'settings' && Object.hasOwn(incoming, 'quizMaxAttempts')) {
+      if (collection === 'settings' && Object.prototype.hasOwnProperty.call(incoming, 'quizMaxAttempts')) {
         const attempts = Number(incoming.quizMaxAttempts);
         if (!Number.isInteger(attempts) || attempts < 0 || attempts > 100) {
           throw new Error('Maximum assessment attempts must be a whole number from 0 to 100.');
         }
         incoming.quizMaxAttempts = attempts;
       }
-      if (collection === 'settings' && Object.hasOwn(incoming, 'quizRetakeCooldownMinutes')) {
+      if (collection === 'settings' && Object.prototype.hasOwnProperty.call(incoming, 'quizRetakeCooldownMinutes')) {
         const minutes = Number(incoming.quizRetakeCooldownMinutes);
         if (!Number.isInteger(minutes) || minutes < 0 || minutes > 10080) {
           throw new Error('Assessment retake waiting period must be a whole number from 0 to 10,080 minutes.');
         }
         incoming.quizRetakeCooldownMinutes = minutes;
       }
-      if(collection==='settings'&&Object.hasOwn(incoming,'engagementPoints')){
+      if(collection==='settings'&&Object.prototype.hasOwnProperty.call(incoming,'engagementPoints')){
         const raw=incoming.engagementPoints&&typeof incoming.engagementPoints==='object'
           ?incoming.engagementPoints as Record<string,unknown>:{};
         const defaults={soloChallenge:10,duelChallenge:15,memoryReview:1,practiceQuiz:5,chapterQuiz:10,finalExam:25};
@@ -793,12 +793,12 @@ export default async function handler(req: Request, res: Response) {
       if (collection === 'certificationConfig') {
         const enabled = incoming.enabled;
         if (enabled !== undefined && typeof enabled !== 'boolean') throw new Error('Certification enabled must be true or false.');
-        if (Object.hasOwn(incoming,'releaseMode')) {
+        if (Object.prototype.hasOwnProperty.call(incoming,'releaseMode')) {
           const releaseMode=String(incoming.releaseMode||'').trim().toLowerCase();
           if(!['automatic','review'].includes(releaseMode)) throw new Error('Certificate release mode must be automatic or review.');
           incoming.releaseMode=releaseMode;
         }
-        if (Object.hasOwn(incoming,'minimumScore')) {
+        if (Object.prototype.hasOwnProperty.call(incoming,'minimumScore')) {
           const raw = incoming.minimumScore;
           if (raw === '' || raw === null || raw === 0 || raw === '0') incoming.minimumScore = 0;
           else {
@@ -807,7 +807,7 @@ export default async function handler(req: Request, res: Response) {
             incoming.minimumScore=mark;
           }
         }
-        if (Object.hasOwn(incoming,'approvalStages')) {
+        if (Object.prototype.hasOwnProperty.call(incoming,'approvalStages')) {
           const stages=Array.isArray(incoming.approvalStages)?incoming.approvalStages:[];
           if(stages.length>20)throw new Error('Configure at most 20 certificate approval stages.');
           incoming.approvalStages=stages.map(value=>{
@@ -998,7 +998,7 @@ export default async function handler(req: Request, res: Response) {
               id:d.id,
               ...d.data(),
               canEdit: String(d.data().ownerUid || '') === ctx.auth.uid,
-              proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() })).sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
+              proposals: proposals.docs.map(p => ({ id:p.id, ...p.data() } as Record<string, unknown> & {id:string})).sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
             };
           }));
           return res.status(200).json({ ok:true, items });
