@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
 
@@ -104,83 +105,99 @@ class OrdersScreen extends ConsumerWidget {
                 margin: const EdgeInsets.only(bottom: 12),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(ref,
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: scheme.primary,
-                                  fontFamily: 'monospace')),
-                          _StatusBadge(status: status),
-                        ],
-                      ),
-                      if (createdAt != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '${createdAt.day}/${createdAt.month}/${createdAt.year}',
-                          style: TextStyle(
-                              color: scheme.outline, fontSize: 12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => context.push('/orders/${order['id']}'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(ref,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: scheme.primary,
+                                    fontFamily: 'monospace')),
+                            _StatusBadge(status: status),
+                          ],
                         ),
-                      ],
-                      const Divider(height: 20),
+                        if (createdAt != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '${createdAt.day}/${createdAt.month}/${createdAt.year}',
+                            style: TextStyle(
+                                color: scheme.outline, fontSize: 12),
+                          ),
+                        ],
+                        const Divider(height: 20),
 
-                      // Items via seller_orders → order_items
-                      ...() {
-                        final sellerOrders = order['seller_orders'] as List? ?? [];
-                        final allItems = <Map<String, dynamic>>[];
-                        for (final so in sellerOrders) {
-                          final soItems = (so as Map)['order_items'] as List? ?? [];
-                          allItems.addAll(soItems.cast<Map<String, dynamic>>());
-                        }
-                        return allItems.map((item) {
-                          final qty = item['quantity'] as int? ?? 1;
-                          final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
-                          final name = item['product_name_at_purchase'] as String? ?? 'Product';
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    name,
-                                    style: const TextStyle(fontSize: 13),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                        // Items via seller_orders → order_items
+                        ...() {
+                          final sellerOrders = order['seller_orders'] as List? ?? [];
+                          final allItems = <Map<String, dynamic>>[];
+                          for (final so in sellerOrders) {
+                            final soItems = (so as Map)['order_items'] as List? ?? [];
+                            allItems.addAll(soItems.cast<Map<String, dynamic>>());
+                          }
+                          return allItems.map((item) {
+                            final qty = item['quantity'] as int? ?? 1;
+                            final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
+                            final name = item['product_name_at_purchase'] as String? ?? 'Product';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: const TextStyle(fontSize: 13),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${qty}x KES ${unitPrice.toStringAsFixed(0)}',
+                                    style: TextStyle(fontSize: 13, color: scheme.outline),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList();
+                        }(),
+
+                        const Divider(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.local_shipping_outlined, size: 16, color: scheme.primary),
+                                const SizedBox(width: 6),
                                 Text(
-                                  '${qty}x KES ${unitPrice.toStringAsFixed(0)}',
-                                  style: TextStyle(fontSize: 13, color: scheme.outline),
+                                  'Track Delivery',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.primary,
+                                  ),
                                 ),
                               ],
                             ),
-                          );
-                        }).toList();
-                      }(),
-
-                      const Divider(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(
-                            'KES ${total.toStringAsFixed(0)}',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: scheme.primary),
-                          ),
-                        ],
-                      ),
-                    ],
+                            Text(
+                              'KES ${total.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: scheme.primary),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

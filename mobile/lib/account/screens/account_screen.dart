@@ -234,19 +234,19 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   leading: const Icon(Icons.location_on_outlined),
                   title: const Text('Saved Addresses'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () => context.push('/addresses'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.notifications_outlined),
                   title: const Text('Notifications'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () => context.push('/notifications'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.security_outlined),
                   title: const Text('Security & Password'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () => context.push('/security'),
                 ),
 
                 const Divider(height: 24),

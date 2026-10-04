@@ -19,6 +19,13 @@ import '../products/screens/add_product_screen.dart';
 import '../account/screens/account_screen.dart';
 import '../wallet/screens/wallet_ledger_screen.dart';
 
+import '../account/screens/saved_addresses_screen.dart';
+import '../account/screens/notifications_screen.dart';
+import '../account/screens/security_screen.dart';
+import '../orders/screens/order_tracking_screen.dart';
+import '../messaging/screens/chat_screen.dart';
+import '../subscriptions/screens/subscription_plans_screen.dart';
+
 final _routerKey = GlobalKey<NavigatorState>();
 
 GoRouter buildAppRouter(Ref ref) {
@@ -64,16 +71,34 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(path: '/cart', builder: (_, __) => const CartScreen()),
       GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),
 
-      // ── Orders ────────────────────────────────────────────────────────────
+      // ── Orders & Tracking ──────────────────────────────────────────────────
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
+      GoRoute(
+        path: '/orders/:orderId',
+        builder: (_, state) => OrderTrackingScreen(
+          orderId: state.pathParameters['orderId'] ?? '',
+        ),
+      ),
+
+      // ── Messaging ─────────────────────────────────────────────────────────
+      GoRoute(
+        path: '/chat/:storeId',
+        builder: (_, state) => ChatScreen(
+          storeId: state.pathParameters['storeId'] ?? '',
+        ),
+      ),
 
       // ── Seller ────────────────────────────────────────────────────────────
       GoRoute(path: '/seller', builder: (_, __) => const SellerCentreScreen()),
       GoRoute(path: '/seller/products', builder: (_, __) => const ManageProductsScreen()),
       GoRoute(path: '/seller/products/add', builder: (_, __) => const AddProductScreen()),
+      GoRoute(path: '/plans', builder: (_, __) => const SubscriptionPlansScreen()),
 
       // ── Profile & Wallet ──────────────────────────────────────────────────
       GoRoute(path: '/profile', builder: (_, __) => const AccountScreen()),
+      GoRoute(path: '/addresses', builder: (_, __) => const SavedAddressesScreen()),
+      GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
+      GoRoute(path: '/security', builder: (_, __) => const SecurityScreen()),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletLedgerScreen()),
     ],
     errorBuilder: (_, state) => Scaffold(

@@ -1,158 +1,256 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/supabase_service.dart';
 
-class OrderTrackingScreen extends StatelessWidget {
+final orderDetailProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, orderId) async {
+  final data = await SupabaseService.client
+      .from('orders')
+      .select('''
+        id, public_ref, status, payment_status, total_amount, shipping_amount, created_at,
+        buyer_name, shipping_address,
+        seller_orders(
+          id, public_ref, status, subtotal, shipping_fee,
+          stores(name),
+          order_items(
+            id, quantity, unit_price,
+            product_name_at_purchase
+          )
+        )
+      ''')
+      .or('id.eq.$orderId,public_ref.eq.$orderId')
+      .maybeSingle();
+
+  return data;
+});
+
+class OrderTrackingScreen extends ConsumerWidget {
   final String orderId;
   const OrderTrackingScreen({super.key, required this.orderId});
 
   @override
-  Widget build(BuildContext themeContext) {
-    final theme = Theme.of(themeContext);
-
-    final Map<String, dynamic> orderDetails = {
-      'parent_ref': 'ORD-2610-A8J4P',
-      'created_at': '2026-10-04 14:30',
-      'status': 'processing',
-      'total_amount': 1700.00,
-      'buyer_name': 'John Doe',
-      'shipping_address': 'Plot 42, Independence Avenue, Woodlands, Lusaka',
-      'seller_orders': [
-        {
-          'public_ref': 'SORD-2610-S812A',
-          'store_name': 'Alpha Electronics',
-          'subtotal': 1250.00,
-          'status': 'processing',
-          'item': 'Wireless Noise Cancelling Headphones (x1)',
-        },
-        {
-          'public_ref': 'SORD-2610-S812B',
-          'store_name': 'Beta Crafts',
-          'subtotal': 450.00,
-          'status': 'shipped',
-          'item': 'Handcrafted Leather Crossbody Bag (x1)',
-        },
-      ]
-    };
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final orderAsync = ref.watch(orderDetailProvider(orderId));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order & Delivery Tracking'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Order Reference Banner
-            Card(
-              color: theme.colorScheme.primaryContainer,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      body: orderAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (order) {
+          if (order == null) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: scheme.outline),
+                  const SizedBox(height: 12),
+                  const Text('Order not found'),
+                ],
+              ),
+            );
+          }
+
+          final refStr = order['public_ref'] as String? ?? (order['id'] as String).substring(0, 8).toUpperCase();
+          final status = order['status'] as String? ?? 'processing';
+          final paymentStatus = order['payment_status'] as String? ?? 'paid';
+          final total = double.tryParse(order['total_amount']?.toString() ?? '0') ?? 0.0;
+          final dateStr = order['created_at'] != null
+              ? DateTime.tryParse(order['created_at'])?.toLocal().toString().substring(0, 16) ?? ''
+              : '';
+          final address = order['shipping_address'] as Map<String, dynamic>?;
+          final addressStr = address != null
+              ? '${address['address'] ?? ''}, ${address['area'] ?? ''}, ${address['city'] ?? ''}'
+              : 'Standard Delivery';
+
+          final sellerOrders = order['seller_orders'] as List? ?? [];
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Order Reference Banner
+                Card(
+                  color: scheme.primaryContainer,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('ORDER REFERENCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                        Text(orderDetails['parent_ref'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text(orderDetails['created_at'], style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('ORDER REFERENCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: scheme.onPrimaryContainer.withValues(alpha: 0.7))),
+                            const SizedBox(height: 2),
+                            Text(refStr, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: scheme.onPrimaryContainer)),
+                            Text(dateStr, style: TextStyle(fontSize: 12, color: scheme.onPrimaryContainer.withValues(alpha: 0.8))),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: scheme.primary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            status.toUpperCase(),
+                            style: TextStyle(color: scheme.onPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ],
                     ),
-                    Text(
-                      'K${orderDetails['total_amount'].toStringAsFixed(2)}',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-            // Delivery Status Timeline
-            Text('Delivery Progress', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            _buildTimelineStep('Order Placed', 'Payment authorized and order confirmed', true),
-            _buildTimelineStep('Processing by Sellers', 'Sellers are packing your items', true),
-            _buildTimelineStep('Out for Delivery', 'Local courier dispatched', false),
-            _buildTimelineStep('Delivered', 'Item handed to recipient', false),
-            const SizedBox(height: 24),
+                // Tracking Timeline
+                Text('Delivery Progress', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        _buildTimelineStep(context, 'Order Placed', 'Payment confirmed ($paymentStatus)', true, true),
+                        _buildTimelineStep(context, 'Store Processing', 'Merchant packing items', status != 'pending', true),
+                        _buildTimelineStep(context, 'Out for Delivery', 'Dispatched with local courier', status == 'shipped' || status == 'delivered', true),
+                        _buildTimelineStep(context, 'Delivered & Completed', 'Delivered to recipient address', status == 'completed' || status == 'delivered', false),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
 
-            // Seller Sub-Orders Breakdown
-            Text('Seller Sub-Orders (${orderDetails['seller_orders'].length})', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ... (orderDetails['seller_orders'] as List).map((so) {
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Multi-Seller Sub-Orders Breakdown
+                Text('Package Breakdown (${sellerOrders.length} Seller${sellerOrders.length != 1 ? 's' : ''})', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                ...sellerOrders.map((so) {
+                  final storeName = (so['stores'] as Map?)?['name'] as String? ?? 'Merchant';
+                  final items = so['order_items'] as List? ?? [];
+                  final subtotal = double.tryParse(so['subtotal']?.toString() ?? '0') ?? 0.0;
+                  final soStatus = so['status'] as String? ?? 'processing';
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(so['store_name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: so['status'] == 'shipped' ? Colors.blue.shade100 : Colors.amber.shade100,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              so['status'].toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: so['status'] == 'shipped' ? Colors.blue.shade800 : Colors.amber.shade900,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.storefront, size: 18, color: scheme.primary),
+                                  const SizedBox(width: 8),
+                                  Text(storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                ],
                               ),
-                            ),
+                              Text(
+                                soStatus.toUpperCase(),
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 16),
+                          ...items.map((it) {
+                            final title = it['product_name_at_purchase'] as String? ?? 'Item';
+                            final qty = it['quantity'] as int? ?? 1;
+                            final uPrice = double.tryParse(it['unit_price']?.toString() ?? '0') ?? 0.0;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(child: Text('$qty× $title', style: const TextStyle(fontSize: 13))),
+                                  Text('K${(uPrice * qty).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                ],
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text('Store Subtotal: K${subtotal.toStringAsFixed(2)}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: scheme.primary)),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(so['item'], style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text('Ref: ${so['public_ref']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                    ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+
+                // Delivery Info
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
+                    title: const Text('Delivery Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: Text(addressStr, style: const TextStyle(fontSize: 12)),
                   ),
                 ),
-              );
-            }).toList(),
-          ],
-        ),
+                const SizedBox(height: 12),
+
+                // Grand Total
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Total Amount Paid', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text('KES ${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: scheme.primary)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildTimelineStep(String title, String subtitle, bool isCompleted) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isCompleted ? const Color(0xFF10B981) : Colors.grey,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Column(
+  Widget _buildTimelineStep(BuildContext context, String title, String subtitle, bool isDone, bool showLine) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            CircleAvatar(
+              radius: 10,
+              backgroundColor: isDone ? const Color(0xFF10B981) : Colors.grey.shade400,
+              child: Icon(Icons.check, size: 12, color: isDone ? Colors.white : Colors.transparent),
+            ),
+            if (showLine)
+              Container(
+                width: 2,
+                height: 32,
+                color: isDone ? const Color(0xFF10B981) : Colors.grey.shade300,
+              ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: isCompleted ? Colors.white : Colors.grey,
-                ),
-              ),
+              Text(title, style: TextStyle(fontWeight: isDone ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
               Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              const SizedBox(height: 14),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
