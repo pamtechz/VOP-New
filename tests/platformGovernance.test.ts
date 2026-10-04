@@ -155,7 +155,7 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(page,/Conversations are ongoing mentor–learner chats and remain separate from formal support requests/);
   assert.match(page,/Draft in-app support/);
   assert.match(page,/Outreach links/);
-  assert.match(page,/Guardrailed automation/);
+  assert.match(page,/Support automation/);
 
   assert.match(api,/collection\('mentorAssignments'\)\.where\('organizationId','==',organizationId\)\.limit\(500\)/);
   assert.match(api,/collection\('mentorConversations'\)\.where\('organizationId','==',organizationId\)\.limit\(300\)/);
