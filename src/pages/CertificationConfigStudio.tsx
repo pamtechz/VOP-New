@@ -7,6 +7,7 @@ export interface CertificationConfig {
   enabled?: boolean;
   verificationEnabled?: boolean;
   minimumScore?: number;
+  releaseMode?: 'automatic' | 'review';
   courseName?: string;
   courseCode?: string;
   certificateTitle?: string;
@@ -103,7 +104,7 @@ function normalizeBaseUrl(value: string) {
 function stringValue(config: CertificationConfig, key: keyof CertificationConfig) { const value = config[key]; return typeof value === 'string' ? value : ''; }
 
 export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onBack }) => {
-  const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }));
+  const [draft, setDraft] = useState<CertificationConfig>(() => ({ ...(config || {}), releaseMode:config?.releaseMode||'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }));
   const [selectedId, setSelectedId] = useState('certify');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -111,12 +112,12 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
 
   useEffect(() => {
     const nextTemplate = normalizeTemplate(config?.template, config?.backgroundUrl);
-    setDraft({ ...(config || {}), id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: nextTemplate });
+    setDraft({ ...(config || {}), releaseMode:config?.releaseMode||'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: nextTemplate });
     setSelectedId(nextTemplate.elements?.[0]?.id || 'certify');
     setError('');
   }, [config]);
 
-  const baseline = useMemo(() => ({ ...(config || {}), id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }), [config]);
+  const baseline = useMemo(() => ({ ...(config || {}), releaseMode:config?.releaseMode||'automatic', id: config?.id || 'certification', backgroundUrl: config?.backgroundUrl || DEFAULT_BACKGROUND, template: normalizeTemplate(config?.template, config?.backgroundUrl || DEFAULT_BACKGROUND) }), [config]);
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(baseline), [draft, baseline]);
   const template = draft.template || DEFAULT_TEMPLATE;
   const elements = template.elements || [];
@@ -281,7 +282,7 @@ export const CertificationConfigStudio: React.FC<Props> = ({ config, onSave, onB
         </aside>
       </div>
 
-      <details className="vop-cert-template-advanced"><summary>Certification rules & assets</summary><div className="vop-cert-config-grid"><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Certification Rules</h2><p>Platform issuance controls.</p></div><LockKeyhole size={20}/></div><div className="vop-cert-toggle-list"><label className="vop-cert-toggle-row"><span><strong>Official certification</strong><small>Allow the server to issue official certificates.</small></span><input type="checkbox" checked={draft.enabled === true} onChange={event => update('enabled', event.target.checked)}/></label><label className="vop-cert-toggle-row"><span><strong>Public verification</strong><small>Allow certificate-number verification.</small></span><input type="checkbox" checked={draft.verificationEnabled === true} onChange={event => update('verificationEnabled', event.target.checked)}/></label></div><label className="vop-cert-config-field"><span>Minimum certification score (%)</span><input type="number" min="0" max="100" step="1" value={draft.minimumScore ?? ''} onChange={event => update('minimumScore', event.target.value === '' ? undefined : Number(event.target.value))}/><small>Server-side certification threshold.</small></label></section><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Identity & assets</h2><p>Compatibility fields used by certificate issuance.</p></div><ExternalLink size={20}/></div><div className="vop-cert-config-fields">{TEXT_FIELDS.concat(ASSET_FIELDS).map(field => <label className="vop-cert-config-field" key={field.key}><span>{field.label}</span>{field.multiline ? <textarea rows={4} value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)}/> : <input value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)}/>}<small>{field.hint}</small></label>)}</div></section></div></details>
+      <details className="vop-cert-template-advanced"><summary>Certification rules & assets</summary><div className="vop-cert-config-grid"><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Certification Rules</h2><p>Platform issuance controls.</p></div><LockKeyhole size={20}/></div><div className="vop-cert-toggle-list"><label className="vop-cert-toggle-row"><span><strong>Official certification</strong><small>Allow the server to issue official certificates.</small></span><input type="checkbox" checked={draft.enabled === true} onChange={event => update('enabled', event.target.checked)}/></label><label className="vop-cert-toggle-row"><span><strong>Public verification</strong><small>Allow certificate-number verification.</small></span><input type="checkbox" checked={draft.verificationEnabled === true} onChange={event => update('verificationEnabled', event.target.checked)}/></label></div><label className="vop-cert-config-field"><span>Certificate release</span><select value={draft.releaseMode||'automatic'} onChange={event=>update('releaseMode',event.target.value as 'automatic'|'review')}><option value="automatic">Automatic — issue immediately after verified completion</option><option value="review">Withhold for organization review before release</option></select><small>Automatic still revalidates every lesson and assessment on the server. Manual certificate issuance remains available for authorized exceptions.</small></label><label className="vop-cert-config-field"><span>Minimum certification score (%)</span><input type="number" min="0" max="100" step="1" value={draft.minimumScore ?? ''} onChange={event => update('minimumScore', event.target.value === '' ? undefined : Number(event.target.value))}/><small>Server-side certification threshold.</small></label></section><section className="vop-cert-config-card"><div className="vop-cert-config-card-head"><div><h2>Identity & assets</h2><p>Compatibility fields used by certificate issuance.</p></div><ExternalLink size={20}/></div><div className="vop-cert-config-fields">{TEXT_FIELDS.concat(ASSET_FIELDS).map(field => <label className="vop-cert-config-field" key={field.key}><span>{field.label}</span>{field.multiline ? <textarea rows={4} value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)}/> : <input value={stringValue(draft, field.key)} onChange={event => update(field.key, event.target.value)}/>}<small>{field.hint}</small></label>)}</div></section></div></details>
 
       <section className="vop-cert-config-card vop-cert-config-preview"><div className="vop-cert-config-card-head"><div><h2>Live Certificate Preview</h2><p>The same renderer is used for issued certificates and public verification.</p></div><ExternalLink size={20}/></div><div className="vop-cert-live-artwork"><CertificateArtwork certificate={previewCertificate} config={draft} verification={false}/></div></section>
       <div className="vop-cert-note"><ShieldCheck size={22}/><div><strong>One-source certificate design</strong><span>All placement, wording and artwork controls are saved from Certificate Configuration and reused everywhere.</span></div></div>
