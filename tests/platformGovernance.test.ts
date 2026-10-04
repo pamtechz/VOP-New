@@ -146,6 +146,63 @@ test('Mentoring & Insights is an operational inbox with responsive drill-down an
   assert.match(css,/--mentor-surface:var\(--theme-surface/);
 });
 
+test('admin UX consolidation, portal isolation, audit controls and engagement rewards remain wired end-to-end',()=>{
+  const admin=read('src/pages/AdminPage.tsx');
+  const mentoring=read('src/pages/MentorshipInsights.tsx');
+  const organizations=read('src/pages/OrganizationManagement.tsx');
+  const engagement=read('api/engagement.ts');
+  const points=read('server/engagementPoints.ts');
+  const portal=read('src/services/portalAccess.ts');
+  const app=read('src/App.tsx');
+  const rules=read('firestore.rules');
+  const certification=read('src/pages/CertificationConfigStudio.tsx');
+  const progress=read('api/study/progress.ts');
+  const graduation=read('server/graduationAutomation.ts');
+  const programGraduation=read('server/programGraduationAutomation.ts');
+
+  assert.match(mentoring,/type Tab='overview'\|'operations'\|'support'\|'insights'\|'outreach'/);
+  assert.match(mentoring,/type OperationsPanel='allocation'\|'drafts'\|'automation'/);
+  assert.match(mentoring,/type SupportPanel='requests'\|'conversations'/);
+  assert.match(mentoring,/type InsightsPanel='learner'\|'assessment'/);
+
+  assert.match(admin,/ADMIN_NAV_GROUPS/);
+  assert.match(admin,/Find an admin tool/);
+  assert.match(admin,/expandedNavGroups/);
+
+  assert.match(organizations,/Delete selected/);
+  assert.match(organizations,/Clear all/);
+  assert.match(organizations,/Select all audit records/);
+  assert.match(organizations,/auditView==='table'/);
+  assert.match(organizations,/auditView==='cards'/);
+  assert.match(organizations,/organizationView==='table'/);
+  assert.match(organizations,/organizationView==='cards'/);
+
+  for(const key of ['soloChallenge','duelChallenge','memoryReview','practiceQuiz','chapterQuiz','finalExam']){
+    assert.match(points,new RegExp(key));
+    assert.match(admin,new RegExp(key));
+  }
+  assert.match(engagement,/mode:'solo'/);
+  assert.match(engagement,/kind:'duelChallenge'/);
+  assert.match(points,/pointsLedger/);
+
+  assert.match(portal,/hasAdminPortalAccess/);
+  assert.match(portal,/Boolean\(user\.organizationId\).*ADMIN_ORGANIZATION_ROLES/);
+  assert.match(portal,/Boolean\(user\.organizationId\).*MENTOR_ROLES/);
+  assert.match(portal,/defaultPortalRoute/);
+  assert.match(app,/PORTAL_SESSION_STORAGE_KEY/);
+  assert.match(app,/defaultPortalRoute\(profile\)/);
+  assert.match(rules,/exists\(\/databases\/\$\(database\)\/documents\/organizations\/\$\(orgId\)\/members\/\$\(request\.auth\.uid\)\)/);
+  assert.match(rules,/members\/\$\(request\.auth\.uid\)\)\.data\.get\('active', false\) == true/);
+
+  assert.match(certification,/releaseMode\?: 'automatic' \| 'review'/);
+  assert.match(certification,/Automatic — issue immediately after verified completion/);
+  assert.match(progress,/finalizeAutomaticCertificateRelease/);
+  assert.match(progress,/awardApprovedCertificate/);
+  assert.match(progress,/awardApprovedProgramCertificate/);
+  assert.match(graduation,/text\(config\.releaseMode\)==='review'\?'review':'automatic'/);
+  assert.match(programGraduation,/text\(config\.releaseMode\)==='review'\?'review':'automatic'/);
+});
+
 test('candidate contextual support covers doctrine, lesson references, mentor/team routing and evangelism follow-up',()=>{
   const support=read('src/pages/SupportPage.tsx');
   const api=read('api/mentorship.ts');
