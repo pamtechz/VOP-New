@@ -24,6 +24,7 @@ const blank=(organizationId:string):CurriculumProgramDraft=>({
   title:'',description:'',coverImageUrl:'',
   entryMode:'lessons',guideIds:[],
   sharingScope:organizationId?'organization':'shared',
+  certificateEligible:false,certificateDocumentType:'program',certificateTypeName:'',certificationRequirementIds:[],
   published:false,archived:false,
 });
 async function programApi(action:'list'|'upsert'|'delete',
@@ -110,6 +111,8 @@ export default function ProgramManager({
         title:program.title,description:program.description,
         coverImageUrl:program.coverImageUrl,entryMode:program.entryMode,
         guideIds:program.guideIds,sharingScope:program.sharingScope,
+        certificateEligible:program.certificateEligible,certificateDocumentType:program.certificateDocumentType,
+        certificateTypeName:program.certificateTypeName,certificationRequirementIds:program.certificationRequirementIds||[],
         archived:false,published:false,
       });
       await load();setNotice('Program restored as an unpublished draft.');
@@ -176,6 +179,8 @@ export default function ProgramManager({
         <label className="vop-program-wide">Featured image URL
           <input type="url" placeholder="https://..." value={editing.coverImageUrl}
             onChange={event=>setEditing({...editing,coverImageUrl:event.target.value})}/></label>
+        <label className="vop-program-wide vop-program-certification-option"><span><input type="checkbox" checked={editing.certificateEligible} onChange={event=>setEditing({...editing,certificateEligible:event.target.checked})}/> Award a program certificate after every guide/module, lesson and required assessment in this program is completed and passed</span><small>Automatic issuance follows the organization certificate workflow. Manual certificate issuance remains available to authorized administrators.</small></label>
+        {editing.certificateEligible&&<><label>Certificate document type<input maxLength={80} value={editing.certificateDocumentType} onChange={event=>setEditing({...editing,certificateDocumentType:event.target.value})} placeholder="program"/></label><label>Certificate name<input maxLength={160} value={editing.certificateTypeName} onChange={event=>setEditing({...editing,certificateTypeName:event.target.value})} placeholder="Certificate of Completion"/></label></>}
       </div>
       <fieldset className="vop-program-guides">
         <legend>Guide / module order</legend>
