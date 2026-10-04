@@ -8,6 +8,7 @@ import { getTranslation, getUiLocale } from '../services/i18n';
 import { getStoredSettings } from '../services/storage';
 import { consumeSupportContextPrefill } from '../services/supportContext';
 import ChatThread, { APP_CHAT_REFERENCES, type ChatMessage, type ChatReference } from '../components/messaging/ChatThread';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 interface SupportPageProps {
   currentUser: User;
@@ -352,8 +353,8 @@ export const SupportPage: React.FC<SupportPageProps> = ({ currentUser, guides, o
             </div>
           </div>
 
-          <div className="vop-support-messages" style={{marginTop:14}}>
-            {loading?<div className="vop-support-empty-inline">Loading your support requests…</div>:requests.length===0
+          <div className={'vop-support-messages'+(loading&&requests.length?' vop-refreshing vop-shimmer-overlay':'')} style={{marginTop:14}}>
+            {loading&&requests.length===0?<ShimmerList rows={4} compact label="Loading support requests"/>:requests.length===0
               ?<div className="vop-support-empty-inline">No support requests yet. Ask whenever a lesson, doctrine or Bible topic is unclear.</div>
               :requests.map(item=><article key={item.id} className={activeRequest?.id===item.id?'mine':'theirs'} style={{cursor:'pointer'}} onClick={()=>void openRequest(item)}>
                 <strong>{item.subject||labelForCategory(item.category)}{item.unread?' · New':''}</strong>

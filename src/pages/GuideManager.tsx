@@ -7,6 +7,7 @@ import {
 import type { CustomLanguage, DiscoverGuide } from '../types';
 import { auth } from '../lib/firebase';
 import { appConfirm } from '../components/layout/AppDialog';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 type GuideRecord = {
   id: string;
@@ -482,8 +483,8 @@ export default function GuideManager({ languages, guides, onSaved, onOpenSetting
         </div>
       )}
 
-      <div className="vop-reference-table-wrap">
-        {loading ? <div className="vop-empty">Loading guide records…</div> : pageRows.length === 0 ? (
+      <div className={'vop-reference-table-wrap'+(loading&&records.length?' vop-refreshing vop-shimmer-overlay':'')}>
+        {loading&&records.length===0 ? <ShimmerList rows={6} compact label="Loading guide records"/> : pageRows.length === 0 ? (
           <div className="vop-empty"><ImageIcon size={26}/><span>No guide records are configured.</span></div>
         ) : (
           <table className="vop-reference-table">

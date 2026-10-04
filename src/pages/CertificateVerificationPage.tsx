@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ShimmerCards } from '../components/layout/Shimmer';
 import { ArrowLeft, Award, CheckCircle2, Search, ShieldCheck, XCircle, Printer } from 'lucide-react';
 import CertificateArtwork, { CertificateTemplateConfig } from '../components/certificates/CertificateArtwork';
 import { getTranslation, getUiLocale } from '../services/i18n';
@@ -121,6 +122,8 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
           </div>
           <button type="button" onClick={() => void verify()} disabled={loading}>{loading ? t('verifying','Verifying…') : t('verify_certificate','Verify Certificate')}</button>
         </div>
+
+        {loading && <ShimmerCards cards={1} label={t('verifying','Verifying certificate')}/>}
 
         {error && <div className="vop-certificate-verification-result invalid"><XCircle size={25} /><div><strong>{
           verificationState==='revoked'?'Certificate revoked':

@@ -7,6 +7,7 @@ import { auth } from '../lib/firebase';
 import { getTranslation } from '../services/i18n';
 import { ModalLayer } from '../components/layout/ModalLayer';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
+import { ShimmerList } from '../components/layout/Shimmer';
 import { StructureActionsMenu } from '../components/admin/StructureActionsMenu';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import './userManagement.css';
@@ -431,9 +432,9 @@ export default function UserManagement({ onBack, scope }: Props) {
             <ViewModeToggle value={viewMode} onChange={setViewMode} label="User list view"/>
           </div>
 
-          {loading ? <div className="vop-user-table-wrap"><div className="vop-user-empty">{t('admin.loading_users','Loading users…')}</div></div>
+          {loading && users.length===0 ? <div className="vop-user-table-wrap"><ShimmerList rows={8} compact label={t('admin.loading_users','Loading users')}/></div>
             : pageRows.length === 0 ? <div className="vop-user-table-wrap"><div className="vop-user-empty">{t('admin.no_users_match','No users match the current filters.')}</div></div>
-            : viewMode==='table' ? <div className="vop-user-table-wrap">
+            : viewMode==='table' ? <div className={'vop-user-table-wrap'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
               <table className="vop-user-table">
                 <thead><tr>
                   <th><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(user => selectedRows.has(user.uid))} onChange={toggleAll}/></th>
@@ -458,7 +459,7 @@ export default function UserManagement({ onBack, scope }: Props) {
                   </div></td>
                 </tr>)}</tbody>
               </table>
-            </div> : <div className="vop-admin-record-cards vop-user-card-grid">
+            </div> : <div className={'vop-admin-record-cards vop-user-card-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
               {pageRows.map(user=><article key={user.uid} className="vop-admin-record-card vop-user-record-card">
                 <div className="vop-admin-record-card-head">
                   <div className="vop-user-cell"><Avatar user={user}/><div><strong>{user.displayName}</strong><span>{user.email||'No email recorded'}</span><small>{user.userCode}</small></div></div>

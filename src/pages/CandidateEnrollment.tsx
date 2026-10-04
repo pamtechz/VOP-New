@@ -6,6 +6,7 @@ import {
 import { auth } from '../lib/firebase';
 import type { User } from '../types';
 import { ModalLayer } from '../components/layout/ModalLayer';
+import { ShimmerList } from '../components/layout/Shimmer';
 import { ViewModeToggle, type AdminViewMode } from '../components/admin/ViewModeToggle';
 import './candidate-management.css';
 
@@ -185,7 +186,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
         <div><h1>Candidates</h1><p>View candidates in your authorized scope and enroll learners into published courses.</p></div>
       </div>
       <div className="vop-reference-actions">
-        <button className="vop-secondary" type="button" disabled={loading} onClick={()=>void refresh()}><RefreshCw size={16}/>{loading?'Loading…':'Refresh'}</button>
+        <button className="vop-secondary" type="button" disabled={loading} onClick={()=>void refresh()}><RefreshCw size={16}/>{loading?'Refreshing…':'Refresh'}</button>
         <button className="vop-primary" type="button" onClick={()=>setEnrollOpen(true)}><UserPlus size={17}/>Add candidate</button>
       </div>
     </div>
@@ -210,9 +211,9 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
         </select>
         <ViewModeToggle value={viewMode} onChange={setViewMode} label="Candidate list view"/>
       </div>
-      {loading?<div className="vop-candidate-table-wrap"><div className="vop-empty">Loading candidates…</div></div>
+      {loading&&candidates.length===0?<div className="vop-candidate-table-wrap"><ShimmerList rows={7} compact label="Loading candidates"/></div>
         :rows.length===0?<div className="vop-candidate-table-wrap"><div className="vop-empty">No candidates match this view.</div></div>
-        :viewMode==='table'?<div className="vop-candidate-table-wrap">
+        :viewMode==='table'?<div className={'vop-candidate-table-wrap'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
           <table className="vop-candidate-table"><thead><tr><th>#</th><th>Candidate</th><th>Organization</th><th>Enrollment</th><th>Ministry status</th><th>Baptism tracking</th><th>Account</th></tr></thead>
             <tbody>{rows.map((candidate,index)=>{
               const info=candidate.information||{};
@@ -232,7 +233,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
                 <td><span className={'vop-status '+(candidate.disabled?'disabled':'enabled')}>{candidate.disabled?'Inactive':'Active'}</span></td>
               </tr>;
             })}</tbody></table>
-        </div>:<div className="vop-admin-record-cards vop-candidate-card-grid">
+        </div>:<div className={'vop-admin-record-cards vop-candidate-card-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
           {rows.map(candidate=>{
             const info=candidate.information||{};
             const ministry=info.baptized?'Baptized':info.baptismCandidate?'Baptism scheduled':info.graduated?'Graduated':info.graduating?'Graduating':'Studying';

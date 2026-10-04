@@ -3,6 +3,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, firebaseConfigured } from '../lib/firebase';
 import { firebaseSignOut } from '../services/firebaseAuth';
 import { readOfflineManifest, type OfflineManifest } from '../services/offlineManifest';
+import { RouteShimmer, ShimmerList } from '../components/layout/Shimmer';
 
 const LessonViewer = lazy(async () => ({ default: (await import('./LessonViewer')).LessonViewer }));
 const SignInPage = lazy(async () => ({ default: (await import('./SignInPage')).SignInPage }));
@@ -92,19 +93,19 @@ export function FirebaseStudyApp() {
         {signOutError && <p role="alert">{signOutError}</p>}
       </header>
       {showSignIn && !user ? (
-        <Suspense fallback={<main aria-busy="true"><p>Opening sign-in…</p></main>}>
+        <Suspense fallback={<RouteShimmer label="Opening sign-in"/>}>
           <SignInPage />
         </Suspense>
       ) : (
         <main style={{ padding: '1rem', maxWidth: '70rem', margin: '0 auto' }}>
-          {catalogLoading && <p role="status">Opening packaged lesson catalog…</p>}
+          {catalogLoading && !manifest && <ShimmerList rows={6} compact label="Opening packaged lesson catalog"/>}
           {manifestError && <p role="alert">{manifestError} No demonstration lessons or accounts will be substituted.</p>}
           {manifest && lessonId && languageLabel && (
-            <Suspense fallback={<p role="status">Opening lesson reader…</p>}>
+            <Suspense fallback={<RouteShimmer label="Opening lesson reader"/>}>
               <LessonViewer key={`${language}/${lessonId}`} lang={language} languageLabel={languageLabel} lessonId={lessonId} onBack={() => setLessonId(null)} />
             </Suspense>
           )}
-          {manifest && !lessonId && (!selectedTitles || !languageLabel) && <p role="status">Selecting your study language…</p>}
+          {manifest && !lessonId && (!selectedTitles || !languageLabel) && <ShimmerList rows={4} compact label="Selecting study language"/>}
           {manifest && !lessonId && selectedTitles && languageLabel && (
             <>
               <label htmlFor="vop-study-language">Study language</label>{' '}

@@ -5,6 +5,7 @@ import type { PrayerRequest, User } from '../types';
 import { getTranslation, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
 import { ModalLayer } from '../components/layout/ModalLayer';
+import { ShimmerList } from '../components/layout/Shimmer';
 import { appConfirm } from '../components/layout/AppDialog';
 
 interface PrayerPageProps {
@@ -152,9 +153,9 @@ export const PrayerPage: React.FC<PrayerPageProps> = ({ currentUser, onBack }) =
         {notice && <div className="vop-prayer-notice success"><Check size={16}/>{notice}</div>}
         {error && <div className="vop-prayer-notice error">{error}</div>}
 
-        {loading ? <div className="vop-prayer-loading"><div className="vop-spinner"/>Loading prayer ministry…</div> :
+        {loading && requests.length===0 ? <ShimmerList rows={5} label="Loading prayer ministry"/> :
           visible.length === 0 ? <div className="vop-prayer-empty"><HeartHandshake size={42}/><h2>{tab === 'mine' ? t('prayer.empty_title','Your prayer journal is ready.') : t('prayer.no_requests','No requests to show.')}</h2><p>{tab === 'mine' ? 'Start by sharing a prayer request with the ministry.' : 'There are no requests matching the selected filters.'}</p>{tab === 'mine' && <button onClick={() => setShowComposer(true)}><Plus size={16}/> Share a request</button>}</div> :
-          <section className="vop-prayer-list">
+          <section className={'vop-prayer-list'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
             {visible.map(request => (
               <article className="vop-prayer-card" key={request.id}>
                 <div className="vop-prayer-card-head">

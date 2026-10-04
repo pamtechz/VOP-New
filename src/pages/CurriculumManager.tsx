@@ -21,6 +21,7 @@ import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurricu
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 export type CurriculumStudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
@@ -1273,9 +1274,9 @@ export default function CurriculumManager({ languages, currentUser, initialTab =
               {' '}Answer keys are stored in the private Quiz Library.</span>
           </div>
           <div className="vop-module-item-list">
-            {loading?<div className="vop-empty">Loading module content…</div>
+            {loading&&moduleLessons.length===0?<ShimmerList rows={6} compact label="Loading module content"/>
             :programContext?.entryMode==='sections'&&moduleLessons.some(item=>item.type!=='Test')
-              ?<div className="vop-admin-section-first">
+              ?<div className={'vop-admin-section-first'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>
                 <div className="vop-admin-direct-sections-head">
                   <div><span>SECTION-FIRST COURSE</span><h3>Learner pages in reading order</h3>
                     <p>The lesson remains the progress/certification owner, but it is not an extra navigation step in this course.</p></div>
