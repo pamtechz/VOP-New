@@ -130,7 +130,7 @@ export async function awardApprovedCertificate(
   if(!organizationId)throw new Error('The candidate is not linked to a tenant organization.');
   if(config.enabled!==true)throw new Error('Official certification is disabled in certification settings.');
   const approved=requestsSnapshot.docs
-    .map(snapshot=>({id:snapshot.id,...snapshot.data()}))
+    .map(snapshot=>({id:snapshot.id,...snapshot.data()} as Record<string, unknown> & {id:string}))
     .filter(record=>{
       const approvedAt=certificateDateValue(record.approvedAt);
       return text(record.organizationId)===organizationId
