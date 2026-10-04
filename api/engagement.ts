@@ -5,7 +5,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { requirePermissionForProfile } from '../server/permissions.js';
 import { createNotification } from '../server/notifications.js';
 import { engagementCatalog } from '../server/engagementCatalog.js';
-import {awardPointsInTransaction,organizationPointRules} from '../server/engagementPoints.js';
+import {organizationPointRules} from '../server/engagementPoints.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -405,15 +405,26 @@ async function memoryAction(db: FirebaseFirestore.Firestore, actor: Profile, b: 
     const reviewRef = db.collection(`users/${actor.uid}/scriptureMemoryReviews`).doc();
     const pointRules=await organizationPointRules(db,orgOf(actor));
     let pointsAwarded=0;
+    const ledgerRef=db.doc(`users/${actor.uid}/pointsLedger/memoryReview-${reviewRef.id}`);
     const next = await db.runTransaction(async transaction => {
       const current = await transaction.get(ref);
-      const legacy = current.exists ? null : await transaction.get(legacyRef);
+      const [legacy,ledger]=await Promise.all([
+        current.exists?Promise.resolve(null):transaction.get(legacyRef),
+        transaction.get(ledgerRef),
+      ]);
       const oldState = current.data() ||
         (legacy?.data()?.deckId === deckId ? legacy.data() : {}) || {};
       const updated = nextMemoryState(oldState, rating);
+      pointsAwarded=ledger.exists?0:pointRules.memoryReview;
+      if(!ledger.exists){
+        transaction.create(ledgerRef,{kind:'memoryReview',eventId:reviewRef.id,points:pointRules.memoryReview,
+          organizationId:orgOf(actor),awardedAt:FieldValue.serverTimestamp()});
+        if(pointRules.memoryReview>0)transaction.set(db.doc(`users/${actor.uid}`),{
+          engagementPoints:FieldValue.increment(pointRules.memoryReview),updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      }
       transaction.set(ref, { deckId, verseId, ...updated, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       transaction.create(reviewRef, { deckId, verseId, rating: Math.round(rating), reviewedAt: FieldValue.serverTimestamp() });
-      pointsAwarded=await awardPointsInTransaction(transaction,db,String(actor.uid),orgOf(actor),'memoryReview',reviewRef.id,pointRules.memoryReview);
       return updated;
     });
     return { state: next, pointsAwarded };
@@ -560,8 +571,17 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
         throw new Error('Answer every question before finishing the solo challenge.');
       }
       const score=Number(current.score||0);
+      const ledgerRef=db.doc(`users/${actor.uid}/pointsLedger/soloChallenge-${challengeId}`);
+      const ledger=await transaction.get(ledgerRef);
+      const pointsAwarded=ledger.exists?0:pointRules.soloChallenge;
+      if(!ledger.exists){
+        transaction.create(ledgerRef,{kind:'soloChallenge',eventId:challengeId,points:pointRules.soloChallenge,
+          organizationId:orgOf(actor),awardedAt:FieldValue.serverTimestamp()});
+        if(pointRules.soloChallenge>0)transaction.set(db.doc(`users/${actor.uid}`),{
+          engagementPoints:FieldValue.increment(pointRules.soloChallenge),updatedAt:FieldValue.serverTimestamp(),
+        },{merge:true});
+      }
       transaction.update(ref,{status:'completed',finalScore:score,finishedAt:FieldValue.serverTimestamp()});
-      const pointsAwarded=await awardPointsInTransaction(transaction,db,String(actor.uid),orgOf(actor),'soloChallenge',challengeId,pointRules.soloChallenge);
       transaction.set(db.doc(`scriptureChallengeResults/${challengeId}`),{
         challengeId,organizationId:orgOf(actor),playerId:String(actor.uid),mode:'solo',
         score,questionCount:ids.length,pointsAwarded,completedAt:FieldValue.serverTimestamp(),
@@ -667,7 +687,11 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       }
       const refA = db.doc(`users/${a}`);
       const refB = db.doc(`users/${c}`);
-      const [snapA, snapB] = await Promise.all([transaction.get(refA), transaction.get(refB)]);
+      const ledgerA=db.doc(`users/${a}/pointsLedger/duelChallenge-${matchId}`);
+      const ledgerB=db.doc(`users/${c}/pointsLedger/duelChallenge-${matchId}`);
+      const [snapA,snapB,pointsSnapshotA,pointsSnapshotB]=await Promise.all([
+        transaction.get(refA),transaction.get(refB),transaction.get(ledgerA),transaction.get(ledgerB),
+      ]);
       if (!snapA.exists || !snapB.exists) throw new Error('A duel participant was not found.');
       const scores = current.scores && typeof current.scores === 'object' ? current.scores as Record<string, unknown> : {};
       const aScore = Number(scores[a] || 0);
@@ -677,11 +701,21 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       const ratingB = Number(snapB.data()?.scriptureDuelRating || 1200);
       const nextA = elo(ratingA, ratingB, winner === 'draw' ? 0.5 : winner === a ? 1 : 0);
       const nextB = elo(ratingB, ratingA, winner === 'draw' ? 0.5 : winner === c ? 1 : 0);
+      const pointsA=pointsSnapshotA.exists?0:pointRules.duelChallenge;
+      const pointsB=pointsSnapshotB.exists?0:pointRules.duelChallenge;
       transaction.update(matchRef, { status: 'completed', winner, finishedAt: FieldValue.serverTimestamp(), finalScores: { [a]: aScore, [c]: bScore } });
-      transaction.set(refA, { scriptureDuelRating: nextA }, { merge: true });
-      transaction.set(refB, { scriptureDuelRating: nextB }, { merge: true });
-      const pointsA=await awardPointsInTransaction(transaction,db,a,String(current.organizationId||''),'duelChallenge',matchId,pointRules.duelChallenge);
-      const pointsB=await awardPointsInTransaction(transaction,db,c,String(current.organizationId||''),'duelChallenge',matchId,pointRules.duelChallenge);
+      transaction.set(refA, {
+        scriptureDuelRating:nextA,
+        ...(!pointsSnapshotA.exists&&pointRules.duelChallenge>0?{engagementPoints:FieldValue.increment(pointRules.duelChallenge)}:{}),
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(refB, {
+        scriptureDuelRating:nextB,
+        ...(!pointsSnapshotB.exists&&pointRules.duelChallenge>0?{engagementPoints:FieldValue.increment(pointRules.duelChallenge)}:{}),
+        updatedAt:FieldValue.serverTimestamp(),
+      }, { merge: true });
+      if(!pointsSnapshotA.exists)transaction.create(ledgerA,{kind:'duelChallenge',eventId:matchId,points:pointRules.duelChallenge,organizationId:String(current.organizationId||''),awardedAt:FieldValue.serverTimestamp()});
+      if(!pointsSnapshotB.exists)transaction.create(ledgerB,{kind:'duelChallenge',eventId:matchId,points:pointRules.duelChallenge,organizationId:String(current.organizationId||''),awardedAt:FieldValue.serverTimestamp()});
       transaction.set(db.doc(`scriptureDuelResults/${matchId}`), { matchId, organizationId: String(current.organizationId || ''), playerA: a, playerB: c,
         scores: { [a]: aScore, [c]: bScore }, winner, ratings: { [a]: nextA, [c]: nextB }, pointsAwarded:{[a]:pointsA,[c]:pointsB},
         answerCount: Object.keys(answers).length, completedAt: FieldValue.serverTimestamp() });
