@@ -240,7 +240,7 @@ export default async function handler(req: Request, res: Response) {
           updatedAt:FieldValue.serverTimestamp(),
         });
       });
-      const authService = getAuth(bootstrapDb.app);
+      const authService = getAuth();
       const currentRole = String(ctx.profile.role || '').trim();
       const preservedPlatformRole = ['union_admin','conference_admin','district_admin','church_admin'].includes(currentRole) ? currentRole : 'student';
       await authService.setCustomUserClaims(ctx.auth.uid, {
@@ -292,7 +292,7 @@ export default async function handler(req: Request, res: Response) {
         ...item,
         organizationName:names.get(String(item.organizationId||''))||String(item.organizationId||''),
         inviteUrl:origin?`${origin}/?invite=${item.token}`:'',
-      })).sort((a,b)=>Date.parse(String(b.createdAt||0))-Date.parse(String(a.createdAt||0)));
+      } as Record<string,unknown>&{token:string;direction:'received'|'sent'})).sort((a,b)=>Date.parse(String(b.createdAt||0))-Date.parse(String(a.createdAt||0)));
       return res.status(200).json({ok:true,items});
     }
 
@@ -406,7 +406,7 @@ export default async function handler(req: Request, res: Response) {
         for (const invite of inviteSnap.docs) transaction.delete(invite.ref);
       });
 
-      const authService = getAuth(bootstrapDb.app);
+      const authService = getAuth();
       await Promise.all(memberProfiles.map(async entry => {
         try {
           const profile = entry.profile.data() || {};
@@ -682,7 +682,7 @@ export default async function handler(req: Request, res: Response) {
         transaction.set(organizationRef, { ownerUid:uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       });
 
-      const authService = getAuth(bootstrapDb.app);
+      const authService = getAuth();
       await authService.setCustomUserClaims(uid, { role: ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? platformRole : 'student', ...( ['union_admin','conference_admin','district_admin','church_admin'].includes(platformRole) ? { adminNodeType:targetProfile.adminNodeType, adminNodeId:targetProfile.adminNodeId } : {} ), organizationId, organizationRole:'owner' });
       if (previousOwnerUid && previousOwnerUid !== uid) {
         await authService.setCustomUserClaims(previousOwnerUid, { role: hierarchyRole(String((await previousOwnerProfileRef?.get())?.data()?.role || '')) || 'student', organizationId, organizationRole:'admin' }).catch(() => undefined);
@@ -703,7 +703,7 @@ export default async function handler(req: Request, res: Response) {
       if (!searchOrganizationId) throw new Error('Select an organization before searching accounts.');
       if (query.length < 2) return res.status(200).json({ ok:true, items:[] });
       const users = await ctx.db.collection('users').limit(1000).get();
-      const items = users.docs.map(doc => ({ uid:doc.id, ...(doc.data() || {}) }))
+      const items = users.docs.map(doc => ({ uid:doc.id, ...(doc.data() || {}) } as Record<string,unknown>&{uid:string}))
         .filter(user => {
           const orgId = String(user.organizationId || '').trim();
           const platformRole = String(user.role || '').trim();
@@ -745,7 +745,7 @@ export default async function handler(req: Request, res: Response) {
       if (!['admin','editor','mentor','teacher','learner','viewer'].includes(role)) throw new Error('A valid organization role is required.');
       if (password && password.length < 6) throw new Error('Password must contain at least 6 characters.');
       await enforceOrganizationMembershipQuotas(ctx,managedOrganizationId,role);
-      const authService = getAuth(ctx.db.app);
+      const authService = getAuth();
       let created;
       try {
         created = await authService.createUser({ email, displayName, ...(password ? { password } : {}), disabled:false });
@@ -811,7 +811,7 @@ export default async function handler(req: Request, res: Response) {
           organizationId: managedOrganizationId, organizationRole: memberRole, updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       });
-      const authService = getAuth(ctx.db.app);
+      const authService = getAuth();
       await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(existingData.role || '')) || 'student', ...(hierarchyRole(String(existingData.role || '')) ? { adminNodeType:existingData.adminNodeType, adminNodeId:existingData.adminNodeId } : {}), organizationId:managedOrganizationId, organizationRole:memberRole });
       await writeTenantAudit(ctx, 'membership.upsert', targetMemberRef.path, existingMember.exists ? existingMember.data() : undefined, { uid, role:memberRole, active:body.active !== false, previousOrganizationId: existingOrganizationId || null });
       return res.status(200).json({ ok: true });
@@ -851,8 +851,8 @@ export default async function handler(req: Request, res: Response) {
           }, { merge:true });
         }
       });
-      const authService = getAuth(ctx.db.app);
-      await authService.setCustomUserClaims(uid, hierarchyRole(String(profileData.role || '')) || 'student');
+      const authService = getAuth();
+      await authService.setCustomUserClaims(uid, { role: hierarchyRole(String(profileData.role || '')) || 'student', organizationId:'', organizationRole:'learner' });
       await writeTenantAudit(ctx, 'membership.remove', memberSnap.ref.path, memberData, { uid, active:false, removedBy:ctx.auth.uid });
       return res.status(200).json({ ok:true });
     }
