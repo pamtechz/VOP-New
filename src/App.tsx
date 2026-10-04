@@ -68,6 +68,9 @@ function startupScope(user:User|null|undefined){
   if(!user?.uid)return 'anonymous';
   return [user.uid,user.organizationId||'',user.role||'',user.organizationRole||'',user.adminNodeId||''].join('|');
 }
+function dataModeForRoute(route:AppRoute):PublicContentLoadMode{
+  return route==='admin'||route==='localization'?'portal':route==='mentor'?'mentor':'full';
+}
 function readStartupSeed(user:User|null|undefined){
   if(typeof window==='undefined'||!user?.uid)return null;
   try{
@@ -109,14 +112,11 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const [radioPlaylists, setRadioPlaylists] = useState<RadioPlaylist[]>([]);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(()=>
     initialUser?.uid?defaultPortalRoute(initialUser):'home');
-  const dataModeForRoute=(route:AppRoute):PublicContentLoadMode=>
-    route==='admin'||route==='localization'?'portal':route==='mentor'?'mentor':'full';
   const [contentLoadMode,setContentLoadMode]=useState<PublicContentLoadMode>(()=>
     dataModeForRoute(initialUser?.uid?defaultPortalRoute(initialUser):'home'));
   const [contentRefresh, setContentRefresh] = useState(0);
   const [contentHydrated,setContentHydrated] = useState(()=>Boolean(startupSeed));
   const lastPublicContentLoadAt=useRef(0);
-  const previousRouteRef=useRef<AppRoute>('home');
   const appliedDeepLink = useRef(false);
   const explicitNavigation = useRef(false);
   const restoredNavigationUid = useRef('');
@@ -417,7 +417,6 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   }, [currentUser.uid,currentUser.organizationId,currentUser.role,currentUser.adminNodeId,contentLoadMode,contentRefresh]);
 
   useEffect(()=>{
-    previousRouteRef.current=currentRoute;
     const required=dataModeForRoute(currentRoute);
     setContentLoadMode(current=>current===required?current:required);
   },[currentRoute]);
