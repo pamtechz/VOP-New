@@ -21,6 +21,7 @@ import { PlateCurriculumAuthoringReview } from '../components/admin/PlateCurricu
 import { StudyPlateContent } from '../components/reader/StudyPlateContent';
 import './curriculum-structure.css';
 import { AppAlertDialog, appConfirm } from '../components/layout/AppDialog';
+import { ShimmerList } from '../components/layout/Shimmer';
 
 export type CurriculumStudioTab = 'programs' | 'lessons' | 'guides' | 'quizzes' | 'paths' | 'topics' | 'seasons';
 
