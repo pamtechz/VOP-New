@@ -125,7 +125,6 @@ export default async function handler(request: Request, response: Response) {
       });
 
       await getAuth(getFirebaseAdmin()).setCustomUserClaims(decoded.uid, {
-        ...(decoded as { role?: string }).role ? { role: (decoded as { role: string }).role } : {},
         role: 'super_admin',
         adminNodeType: 'super',
         adminNodeId: 'super',
