@@ -1400,6 +1400,11 @@
 .vop-mentoring-tabs button:hover{background:var(--mentor-surface);color:var(--mentor-text)}
 .vop-mentoring-tabs button.active{background:var(--mentor-surface);color:var(--mentor-accent);border-color:var(--mentor-border);box-shadow:0 2px 9px rgba(18,54,109,.055)}
 .vop-mentoring-tabs button b{min-width:19px;height:19px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:var(--mentor-accent);color:#fff;font-size:9px}
+.vop-mentoring-subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:-3px 0 13px;padding:0 2px}
+.vop-mentoring-subtabs button{border:1px solid var(--mentor-border);background:var(--mentor-surface);color:var(--mentor-muted);border-radius:999px;padding:7px 10px;display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;cursor:pointer}
+.vop-mentoring-subtabs button:hover{border-color:var(--mentor-border-strong);color:var(--mentor-text)}
+.vop-mentoring-subtabs button.active{background:color-mix(in srgb,var(--mentor-accent) 9%,var(--mentor-surface));border-color:color-mix(in srgb,var(--mentor-accent) 28%,var(--mentor-border));color:var(--mentor-accent)}
+.vop-mentoring-subtabs button b{min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:var(--mentor-accent);color:#fff;font-size:8px}
 
 .vop-mentoring-card{background:var(--mentor-surface);border:1px solid var(--mentor-border);border-radius:16px;padding:18px;box-shadow:0 6px 22px rgba(18,54,109,.035);min-width:0}
 .vop-mentoring-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:15px}.vop-mentoring-card-head>div{min-width:0}.vop-mentoring-card-head h2,.vop-mentoring-card-head h3{margin:2px 0 0;color:var(--mentor-text);font-size:18px;letter-spacing:-.015em}.vop-mentoring-card-head p{margin:4px 0 0;color:var(--mentor-muted);font-size:11px;line-height:1.5}.vop-section-kicker{display:block;color:var(--mentor-accent)!important;font-size:9px!important;font-weight:850!important;text-transform:uppercase;letter-spacing:.08em!important}
