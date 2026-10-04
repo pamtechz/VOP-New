@@ -16,8 +16,10 @@ export function hasAdminPortalAccess(user: Pick<User,'role'|'organizationRole'|'
 }
 
 export function hasMentorPortalAccess(user: Pick<User,'role'|'organizationRole'|'organizationId'>): boolean {
-  if (MENTOR_ROLES.has(normalized(user.role))) return true;
-  return Boolean(user.organizationId) && MENTOR_ROLES.has(normalized(user.organizationRole));
+  // Mentoring is tenant-scoped. Even a legacy top-level mentor flag must not
+  // open the mentor workspace after the account loses its active organization.
+  return Boolean(user.organizationId)
+    && (MENTOR_ROLES.has(normalized(user.role)) || MENTOR_ROLES.has(normalized(user.organizationRole)));
 }
 
 export function hasLocalizationPortalAccess(user: Pick<User,'localizationAccess'>): boolean {
