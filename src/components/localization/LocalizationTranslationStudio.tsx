@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import { ShimmerList } from '../layout/Shimmer';
 import {Check,CheckCircle2,RefreshCw,Search,Send,ShieldCheck,XCircle} from 'lucide-react';
 import {getStoredAutoLocalization} from '../../services/storage';
 import {translationSourceLabel} from '../../services/i18n';
@@ -199,7 +200,7 @@ export function LocalizationTranslationStudio({
 
     <div className="vop-translation-target vop-localization-studio-target">
       <div className="vop-section-title"><div><h2>Target language</h2><p>Only languages assigned to this localization account are available.</p></div>
-        <button className="vop-secondary" type="button" disabled={loading||!selectedLanguage} onClick={()=>void loadWorkspace()}><RefreshCw size={15}/>{loading?'Loading…':'Refresh'}</button>
+        <button className="vop-secondary" type="button" disabled={loading||!selectedLanguage} onClick={()=>void loadWorkspace()}><RefreshCw size={15}/>{loading?'Refreshing…':'Refresh'}</button>
       </div>
       <label className="vop-field">Assigned language<select value={selectedLanguage} onChange={event=>setSelectedLanguage(event.target.value)}>
         {!languageOptions.length&&<option value="">No language assigned</option>}
@@ -223,8 +224,8 @@ export function LocalizationTranslationStudio({
           {([['all','All'],['missing','Needs Translation'],['translated','Translated']] as const).map(([value,label])=><button type="button" key={value} className={filter===value?'active':''} onClick={()=>setFilter(value)}>{label}</button>)}
         </div>
       </div>
-      <div className="vop-translation-list">
-        {rows.map(row=><div className="vop-translation-row vop-translation-auto-row" key={row.key}>
+      <div className={'vop-translation-list'+(loading&&rows.length?' vop-refreshing vop-shimmer-overlay':'')}>
+        {loading&&rows.length===0?<ShimmerList rows={7} compact label="Loading translation entries"/>:rows.map(row=><div className="vop-translation-row vop-translation-auto-row" key={row.key}>
           <div className="vop-translation-source"><strong>{row.english}</strong><small>{row.component} · {row.key}</small>
             {row.pending&&<span className="vop-localization-awaiting">Proposal awaiting review · {Number(row.pending.recommendationPercent||0).toFixed(0)}% recommended</span>}</div>
           <div className={'vop-translation-input-wrap'+(row.value.trim()?' has-value':'')}>
