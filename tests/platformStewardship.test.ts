@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertMutableTenantResource, platformStewardedResource } from '../shared/platformStewardship.ts';
+import { assertMutableTenantResource, platformStewardedResource } from '../shared/platformStewardship.js';
 
 test('published shared or adopted records are platform stewarded', () => {
   assert.equal(platformStewardedResource({sharingScope:'shared',published:true}),true);
