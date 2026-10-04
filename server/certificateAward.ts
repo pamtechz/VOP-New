@@ -5,6 +5,18 @@ import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assess
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
+async function certificationConfigFor(db:FirebaseFirestore.Firestore,organizationId:string){
+  const [platform,scoped]=await Promise.all([
+    db.doc('system/certification').get(),
+    organizationId?db.doc(`organizations/${organizationId}/settings/certification`).get():Promise.resolve(null),
+  ]);
+  return {
+    ...(platform.data()||{}),
+    ...(scoped?.data()||{}),
+    scope:scoped?.exists?'organization':'platform',
+    inherited:!scoped?.exists,
+  } as Record<string,unknown>;
+}
 export function certificateDateValue(value:unknown):string|null{
   if(!value)return null;
   if(typeof value==='string')return value;
@@ -106,15 +118,14 @@ export async function awardApprovedCertificate(
   issuedBy:string,
   requestedGuideId='',
 ){
-  const [candidateSnapshot,configSnapshot,requestsSnapshot]=await Promise.all([
+  const [candidateSnapshot,requestsSnapshot]=await Promise.all([
     db.doc('users/'+candidateId).get(),
-    db.doc('system/certification').get(),
     db.collection('graduationRequests').where('candidateId','==',candidateId).limit(100).get(),
   ]);
   if(!candidateSnapshot.exists)throw new Error('Candidate account was not found.');
   const candidate=candidateSnapshot.data()||{};
-  const config=configSnapshot.data()||{};
   const organizationId=text(candidate.organizationId);
+  const config=await certificationConfigFor(db,organizationId);
   if(!organizationId)throw new Error('The candidate is not linked to a tenant organization.');
   if(config.enabled!==true)throw new Error('Official certification is disabled in certification settings.');
   const approved=requestsSnapshot.docs
@@ -237,6 +248,16 @@ export async function awardApprovedCertificate(
     guideId,guideTitle:text(guide.title),assessmentAverageScore:average,
     eligibilitySnapshot,
     issuer:{name:text(config.issuerName),subtitle:text(config.issuerSubtitle),actorUid:issuedBy,organizationId},
+    presentationSnapshot:{
+      certificateTitle:text(config.certificateTitle),
+      certificateBodyText:text(config.certificateBodyText),
+      issuerName:text(config.issuerName),issuerSubtitle:text(config.issuerSubtitle),
+      courseCode:text(config.courseCode),directorName:text(config.directorName),directorTitle:text(config.directorTitle),
+      signatureUrl:text(config.signatureUrl),sealUrl:text(config.sealUrl),logoUrl:text(config.logoUrl),
+      backgroundUrl:text(config.backgroundUrl),
+      template:config.template&&typeof config.template==='object'?config.template:null,
+      configurationScope:text(config.scope)||'platform',
+    },
     status:'Certified',downloadCount:0,issuedBy,
     verificationEnabled:config.verificationEnabled===true,
     lifecycleHistory:[{action:'issued',at:new Date().toISOString(),by:issuedBy}],
