@@ -8,6 +8,9 @@ export type CurriculumProgramDraft={
   entryMode:ProgramEntryMode;
   guideIds:string[];
   sharingScope:'private'|'organization'|'shared';
+  certificateEligible:boolean;
+  certificateDocumentType:string;
+  certificateTypeName:string;
   published:boolean;
   archived:boolean;
 };
@@ -40,6 +43,9 @@ export function normalizeProgramDraft(value:unknown):CurriculumProgramDraft{
     entryMode:data.entryMode==='sections'?'sections':'lessons',
     guideIds,
     sharingScope:data.sharingScope==='shared'?'shared':data.sharingScope==='private'?'private':'organization',
+    certificateEligible:data.certificateEligible===true,
+    certificateDocumentType:String(data.certificateDocumentType||'program').trim().slice(0,80)||'program',
+    certificateTypeName:String(data.certificateTypeName||'').trim().slice(0,160),
     published:data.published===true,
     archived:data.archived===true,
   };
