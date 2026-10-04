@@ -21,6 +21,7 @@ export function Root() {
   const [authReady, setAuthReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
+  const [resolvedProfile,setResolvedProfile]=useState<User|null>(null);
   const syncingUid = useRef<string | null>(null);
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isBootstrapRoute = pathname === '/admin/bootstrap';
@@ -42,6 +43,7 @@ export function Root() {
         setAccount(firebaseUser);
         setAuthReady(true);
         setDataError('');
+        setResolvedProfile(null);
         setDataReady(false);
 
         if (!isKnownRoute || isBootstrapRoute) {
@@ -59,33 +61,15 @@ export function Root() {
 
         void (async () => {
           try {
-            let profile: User | null = null;
-            try {
-              const token = await firebaseUser.getIdToken();
-              const response = await fetch('/api/admin/users', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ action: 'profile' }),
-              });
-              if (response.ok) {
-                const body = await response.json().catch(() => ({})) as { error?: string; profile?: User };
-                if (body.profile) {
-                  profile = body.profile;
-                }
-              }
-            } catch (apiErr) {
-              console.warn('API profile sync unavailable, using client fallback:', apiErr);
-            }
-
-            if (!profile) {
-              try {
-                profile = await loadFirestoreUser(firebaseUser.uid);
-              } catch (fsErr) {
-                console.warn('Direct account data load error:', fsErr);
-              }
+            // loadFirestoreUser already performs the authoritative profile API
+            // synchronization and a Firestore fallback. Calling that API here
+            // separately caused every cold start to request the same profile
+            // twice before the application could render.
+            let profile:User|null=null;
+            try{
+              profile=await loadFirestoreUser(firebaseUser.uid);
+            }catch(profileError){
+              console.warn('Account profile load error:',profileError);
             }
 
             if (!profile) {
@@ -101,6 +85,7 @@ export function Root() {
               );
             }
 
+            setResolvedProfile(profile);
             window.dispatchEvent(new Event('vop_data_updated'));
           } catch (error) {
             console.error(error);
@@ -167,5 +152,5 @@ export function Root() {
     return <ErrorPage message={dataError} title="We could not load your VOP data" />;
   }
 
-  return <App />;
+  return <App initialUser={resolvedProfile}/>;
 }
