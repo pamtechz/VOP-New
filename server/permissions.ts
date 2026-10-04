@@ -63,7 +63,7 @@ export async function billingTenantSubscriptionFeatureBlockReason(
   const termBlock=await billingTenantSubscriptionTermBlockReason(db,billingTenantType,billingTenantId);
   if(termBlock)return termBlock;
   const entitlements=entitlementRecord(data.featureEntitlements);
-  if(Object.hasOwn(entitlements,feature)&&entitlements[feature]!==true){
+  if(Object.prototype.hasOwnProperty.call(entitlements,feature)&&entitlements[feature]!==true){
     const label=SUBSCRIPTION_FEATURE_LABELS[feature]||feature;
     return 'This '+billingTenantType+' subscription plan does not include '+label+'. Upgrade the subscription package to use this capability.';
   }
