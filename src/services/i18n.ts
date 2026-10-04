@@ -14,6 +14,7 @@ let localeAccountScope = '';
 let localeOrganizationScope = '';
 const listeners = new Set<() => void>();
 let localeRequest = 0;
+let localizationInitInflight:{key:string;promise:Promise<void>}|null=null;
 
 function notify() { listeners.forEach(listener => listener()); }
 function clearForAccountChange() {
@@ -220,11 +221,27 @@ if (typeof window !== 'undefined') {
 }
 
 export const initializeLocalization = async (settings?: AppSettings) => {
-  const locale = getUiLocale(settings);
-  localeState.value = locale;
-  localeState.version += 1;
-  await loadUiLocaleRegistry();
-  await loadUiLocale(locale, 'en');
+  clearForAccountChange();
+  const locale=getUiLocale(settings);
+  const key=localeAccountScope+'|'+locale;
+  if(localizationInitInflight?.key===key)return localizationInitInflight.promise;
+  const resolved=resolveRegisteredLocale(locale)||locale;
+  if(localeRegistryLoaded&&dictionaryCache[resolved]){
+    localeState.value=resolved;
+    document.documentElement.dir=localeDirections[resolved]||'ltr';
+    document.documentElement.lang=resolved;
+    return;
+  }
+  const promise=(async()=>{
+    localeState.value=locale;
+    localeState.version+=1;
+    if(!localeRegistryLoaded)await loadUiLocaleRegistry();
+    await loadUiLocale(locale,'en');
+  })().finally(()=>{
+    if(localizationInitInflight?.key===key)localizationInitInflight=null;
+  });
+  localizationInitInflight={key,promise};
+  return promise;
 };
 
 export { getActiveLanguage, setActiveLanguage } from './storage';
