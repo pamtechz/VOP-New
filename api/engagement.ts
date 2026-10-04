@@ -120,6 +120,17 @@ function canManagePortfolio(actor: Profile) {
 }
 
 function nowIso() { return new Date().toISOString(); }
+function timestampMillis(value:unknown){
+  if(!value)return 0;
+  if(typeof value==='object'){
+    const item=value as {toMillis?:()=>number;toDate?:()=>Date;seconds?:number};
+    if(typeof item.toMillis==='function')return item.toMillis();
+    if(typeof item.toDate==='function')return item.toDate().getTime();
+    if(Number.isFinite(Number(item.seconds)))return Number(item.seconds)*1000;
+  }
+  const parsed=new Date(String(value)).getTime();
+  return Number.isFinite(parsed)?parsed:0;
+}
 function revisionOf(value: Record<string,unknown>) {
   const revision=Number(value.revision);
   return Number.isInteger(revision) && revision >= 1 ? revision : 1;
@@ -457,19 +468,92 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     return { leaderboard:eligible.map((item,index)=>({rank:index+1,...item})) };
   }
   if (action === 'duelOverview') {
-    const organizationId = orgOf(actor);
-    if (!organizationId) return { opponents: [], matches: [], optIn: false };
-    const [people, active] = await Promise.all([
-      db.collection('users').where('organizationId', '==', organizationId).limit(200).get(),
-      db.collection('scriptureDuels').where('organizationId', '==', organizationId).limit(200).get(),
+    const organizationId=orgOf(actor);
+    if(!organizationId)return {
+      opponents:[],matches:[],soloChallenges:[],optIn:false,
+      arena:{points:0,rating:1200,level:1,levelProgress:0,nextLevelAt:100,duelsCompleted:0,duelWins:0,draws:0,losses:0,soloCompleted:0,perfectSolo:0,totalChallenges:0,recent:[]},
+      rewards:{soloChallenge:0,duelChallenge:0},
+    };
+    const uid=String(actor.uid);
+    const [people,active,soloActive,duelResults,soloResults,pointRules]=await Promise.all([
+      db.collection('users').where('organizationId','==',organizationId).limit(200).get(),
+      db.collection('scriptureDuels').where('organizationId','==',organizationId).limit(200).get(),
+      db.collection('scriptureSoloChallenges').where('playerId','==',uid).limit(50).get(),
+      db.collection('scriptureDuelResults').where('organizationId','==',organizationId).limit(100).get(),
+      db.collection('scriptureChallengeResults').where('playerId','==',uid).limit(100).get(),
+      organizationPointRules(db,organizationId),
     ]);
-    const names = new Map(people.docs.map(doc => [doc.id, String(doc.data().displayName || 'Learner')]));
-    const opponents = people.docs.filter(doc => doc.id !== String(actor.uid) && doc.data().disabled !== true && doc.data().scriptureDuelOptIn === true && ['student', 'learner'].includes(String(doc.data().role || 'student')))
-      .map(doc => ({ uid: doc.id, displayName: String(doc.data().displayName || 'Learner') }));
-    const matches = active.docs.map(doc => ({ id: doc.id, ...doc.data() } as Record<string,unknown>&{id:string}))
-      .filter(item => item.status === 'active' && (item.playerA === String(actor.uid) || item.playerB === String(actor.uid)))
-      .map(item => ({ id: item.id, opponentName: names.get(item.playerA === String(actor.uid) ? String(item.playerB) : String(item.playerA)) || 'Learner', expiresAt: item.expiresAt }));
-    return { opponents, matches, optIn: actor.scriptureDuelOptIn === true };
+    const names=new Map(people.docs.map(doc=>[doc.id,String(doc.data().displayName||'Learner')]));
+    const opponents=people.docs.filter(doc=>doc.id!==uid&&doc.data().disabled!==true&&doc.data().scriptureDuelOptIn===true&&['student','learner'].includes(String(doc.data().role||'student')))
+      .map(doc=>({uid:doc.id,displayName:String(doc.data().displayName||'Learner')}));
+    const matches=active.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}))
+      .filter(item=>item.status==='active'&&(item.playerA===uid||item.playerB===uid))
+      .map(item=>({
+        id:item.id,
+        opponentName:names.get(item.playerA===uid?String(item.playerB):String(item.playerA))||'Learner',
+        expiresAt:item.expiresAt,
+      }));
+    const soloChallenges=soloActive.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}))
+      .filter(item=>item.status==='active'&&new Date(String(item.expiresAt||0)).getTime()>Date.now())
+      .map(item=>{
+        const ids=Array.isArray(item.questionIds)?item.questionIds.map(String):[];
+        const answers=item.answers&&typeof item.answers==='object'?item.answers as Record<string,unknown>:{};
+        return {
+          id:item.id,
+          score:Math.max(0,Number(item.score||0)),
+          answeredCount:ids.filter(questionId=>Object.hasOwnProperty.call(answers,questionId)).length,
+          questionCount:ids.length,
+          expiresAt:item.expiresAt,
+        };
+      });
+
+    const duelHistory=duelResults.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}))
+      .filter(item=>item.playerA===uid||item.playerB===uid);
+    const rankedDuels=duelHistory.filter(item=>item.ranked!==false&&item.winner!=='unranked');
+    const duelWins=rankedDuels.filter(item=>String(item.winner||'')===uid).length;
+    const draws=rankedDuels.filter(item=>item.winner==='draw').length;
+    const losses=Math.max(0,rankedDuels.length-duelWins-draws);
+    const soloHistory=soloResults.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}));
+    const perfectSolo=soloHistory.filter(item=>{
+      const questions=Math.max(0,Number(item.questionCount||0));
+      return questions>0&&Number(item.score||0)>=questions;
+    }).length;
+    const points=Math.max(0,Number(actor.engagementPoints||0));
+    const level=Math.floor(points/100)+1;
+    const levelFloor=(level-1)*100;
+    const rating=Number.isFinite(Number(actor.scriptureDuelRating))?Number(actor.scriptureDuelRating):1200;
+    const recent=[
+      ...duelHistory.map(item=>{
+        const opponentId=item.playerA===uid?String(item.playerB||''):String(item.playerA||'');
+        const scores=item.scores&&typeof item.scores==='object'?item.scores as Record<string,unknown>:{};
+        const winner=String(item.winner||'');
+        return {
+          id:item.id,kind:'duel',
+          outcome:winner==='unranked'?'expired':winner==='draw'?'draw':winner===uid?'win':'loss',
+          opponentName:names.get(opponentId)||'Learner',
+          score:Number(scores[uid]||0),
+          completedAt:item.completedAt,
+          completedAtMs:timestampMillis(item.completedAt),
+        };
+      }),
+      ...soloHistory.map(item=>({
+        id:item.id,kind:'solo',outcome:Number(item.questionCount||0)>0&&Number(item.score||0)>=Number(item.questionCount||0)?'perfect':'completed',
+        score:Number(item.score||0),questionCount:Number(item.questionCount||0),
+        completedAt:item.completedAt,completedAtMs:timestampMillis(item.completedAt),
+      })),
+    ].sort((a,b)=>b.completedAtMs-a.completedAtMs).slice(0,6)
+      .map(({completedAtMs:_,...item})=>item);
+
+    return {
+      opponents,matches,soloChallenges,optIn:actor.scriptureDuelOptIn===true,
+      rewards:{soloChallenge:pointRules.soloChallenge,duelChallenge:pointRules.duelChallenge},
+      arena:{
+        points,rating,level,levelProgress:points-levelFloor,nextLevelAt:level*100,
+        duelsCompleted:rankedDuels.length,duelWins,draws,losses,
+        soloCompleted:soloHistory.length,perfectSolo,totalChallenges:rankedDuels.length+soloHistory.length,
+        recent,
+      },
+    };
   }
   if (action === 'duelJoin') {
     const matchId = cleanId(b.matchId, 'match');
