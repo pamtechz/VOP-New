@@ -161,9 +161,17 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   const programGraduation=read('server/programGraduationAutomation.ts');
 
   assert.match(mentoring,/type Tab='overview'\|'operations'\|'support'\|'insights'\|'outreach'/);
-  assert.match(mentoring,/type OperationsPanel='allocation'\|'drafts'\|'automation'/);
-  assert.match(mentoring,/type SupportPanel='requests'\|'conversations'/);
-  assert.match(mentoring,/type InsightsPanel='learner'\|'assessment'/);
+  assert.doesNotMatch(mentoring,/type OperationsPanel=/);
+  assert.doesNotMatch(mentoring,/type SupportPanel=/);
+  assert.doesNotMatch(mentoring,/type InsightsPanel=/);
+  assert.doesNotMatch(mentoring,/vop-mentoring-subtabs/);
+  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Mentor allocation/);
+  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Performance-based outreach drafts/);
+  assert.match(mentoring,/tab==='operations'&&<section[\s\S]*Performance-based support automation/);
+  assert.match(mentoring,/tab==='support'&&<section[\s\S]*Candidate support inbox/);
+  assert.match(mentoring,/tab==='support'&&<section[\s\S]*Mentor communications/);
+  assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Individual learner/);
+  assert.match(mentoring,/tab==='insights'&&<section[\s\S]*Assessment evidence/);
 
   assert.match(admin,/ADMIN_NAV_GROUPS/);
   assert.match(admin,/Find an admin tool/);
