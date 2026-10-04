@@ -26,8 +26,10 @@ async function buildLanguageRegistry(db: FirebaseFirestore.Firestore) {
       nativeName:String(data.nativeName||data.name||code).trim(),
       enabled:data.enabled!==false,
       sortOrder:Number(data.sortOrder||0),
+      rtl:data.rtl===true,
       direction:data.rtl===true?'rtl':'ltr',
       fallback:normalize(data.fallback||''),
+      version:Number(data.version||1),
     };
   }).filter(item=>item.enabled&&LOCALE_RE.test(item.code)).sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name));
 }
@@ -79,7 +81,7 @@ export default async function handler(req:Request,res:Response){
       await ref.set({code:locale,name,nativeName,enabled:body.enabled!==false,direction:String(body.direction||'ltr')==='rtl'?'rtl':'ltr',fallback:body.fallback?cleanLocale(body.fallback):'',version:Number(current.data()?.version||1),updatedAt:FieldValue.serverTimestamp(),updatedBy:ctx.auth.uid},{merge:true});
       return res.status(200).json({ok:true,locale});
     }
-    if(action==='list'){ await requirePermission(ctx,'translations','view'); const requestedNamespace=String(body.namespace||'').trim(); const snap=await db.collection(`locales/${locale}/translations`).get(); const items=snap.docs.map(doc=>({id:doc.id,...doc.data()})).filter(item=>!requestedNamespace||String(item.namespace||'')===requestedNamespace); return res.status(200).json({ok:true,items}); }
+    if(action==='list'){ await requirePermission(ctx,'translations','view'); const requestedNamespace=String(body.namespace||'').trim(); const snap=await db.collection(`locales/${locale}/translations`).get(); const items=snap.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string})).filter(item=>!requestedNamespace||String(item.namespace||'')===requestedNamespace); return res.status(200).json({ok:true,items}); }
     if(action==='bulksave'){
       await requirePermission(ctx,'translations','update');
       const values=body.values&&typeof body.values==='object'?body.values as Record<string,unknown>:{};
