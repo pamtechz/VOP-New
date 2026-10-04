@@ -7,6 +7,8 @@ import { revalidateAssessmentEvidence, verifiedAssessmentEvidence, type Assessme
 import { hasRequiredFinalExam } from '../../shared/curriculumStructure.js';
 import { createNotification } from '../../server/notifications.js';
 import { awardApprovedCertificate, certificationPortfolioEvidence } from '../../server/certificateAward.js';
+import { effectiveCertificationConfig } from '../../server/certificationConfig.js';
+import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -54,10 +56,10 @@ function safeRequest(id: string, data: Record<string, unknown>) {
   };
 }
 
-async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>) {
-  const snapshot = await ctx.db.doc('system/certification').get();
-  const stages = stageConfig(snapshot.exists ? snapshot.data() || {} : {});
-  if (!stages.length) throw new Error('Graduation approval stages are not configured. Configure at least one enabled approval stage before accepting graduation requests.');
+async function loadWorkflow(ctx: Awaited<ReturnType<typeof authenticateTenant>>, organizationId:string) {
+  const config=await effectiveCertificationConfig(ctx.db,organizationId);
+  const stages=stageConfig(config);
+  if (!stages.length) throw new Error('Graduation approval stages are not configured. Configure at least one enabled approval stage before accepting reviewed graduation requests.');
   return stages;
 }
 
@@ -138,7 +140,16 @@ async function submit(req: Request, res: Response) {
   if (guide.published !== true || guide.archived === true || guide.certificateEligible !== true) return res.status(409).json({ error: 'The selected guide is not currently eligible for graduation.' });
   if (organizationSnapshot.data()?.status !== 'active') return res.status(409).json({ error: 'The candidate organization is not active.' });
 
-  const stages = await loadWorkflow(ctx);
+  const certificationConfig=await effectiveCertificationConfig(ctx.db,ctx.organizationId);
+  if(certificationConfig.enabled!==true)return res.status(409).json({error:'Official certification is disabled for this organization.'});
+  if(certificationConfig.issuanceMode==='automatic'){
+    const result=await ensureAutomaticGraduationReview(ctx.db,ctx.auth.uid,guideId,'system:self-service-completion');
+    if(!result.eligible)return res.status(409).json({error:'The course is not yet eligible for automatic certification.',reason:result.reason});
+    return res.status(result.created?201:200).json({ok:true,created:result.created,automatic:true,request:{
+      id:result.requestId,status:result.status,guideId,organizationId:ctx.organizationId,averageScore:result.averageScore,
+    },certificateId:result.certificateId,certificateNumber:result.certificateNumber});
+  }
+  const stages = await loadWorkflow(ctx,ctx.organizationId);
   const lessonsSnapshot = await guideSnapshot.ref.collection('lessons').get();
   const lessons = lessonsSnapshot.docs.map(item => ({ ...item.data(), id: item.id }));
   const publishedLessons = lessons.filter(item => item.published === true);
@@ -148,8 +159,6 @@ async function submit(req: Request, res: Response) {
   if (publishedLessons.length !== lessons.length || !studyLessons.length || !testLessons.length) {
     return res.status(409).json({ error: 'The candidate cannot submit graduation until the certificate-eligible guide has all required published lessons and assessments.' });
   }
-  const certificationConfigSnapshot = await ctx.db.doc('system/certification').get();
-  const certificationConfig = certificationConfigSnapshot.exists ? certificationConfigSnapshot.data() || {} : {};
   const organizationSettingsSnapshot = await ctx.db.doc(`organizations/${ctx.organizationId}/settings/settings`).get();
   const threshold = configuredPassThreshold(certificationConfig.minimumScore)
     ?? configuredPassThreshold(organizationSettingsSnapshot.data()?.quizPassThreshold);
@@ -260,7 +269,7 @@ async function decide(req: Request, res: Response) {
     }
   }
   await requireSubscriptionFeature(ctx,'certification',requestOrganizationId);
-  const stages = await loadWorkflow(ctx);
+  const stages = await loadWorkflow(ctx,requestOrganizationId);
   if (['approved', 'rejected'].includes(text(current.status))) return res.status(409).json({ error: 'This graduation request has already reached a final decision.' });
 
   const stageIndex = Number(current.workflowStageIndex), stageId = text(current.workflowStageId), stage = stages[stageIndex];
