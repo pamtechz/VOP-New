@@ -15,6 +15,8 @@ import { db, auth } from '../lib/firebase';
 import { loadFirestoreGuides } from './firestoreData';
 import { resolveAboutProfile } from './aboutSettings';
 
+export type PublicContentLoadMode='full'|'portal'|'mentor';
+
 export interface PublicContentSnapshot {
   settings: AppSettings;
   languages: CustomLanguage[];
@@ -113,7 +115,7 @@ function published<T extends { published?: boolean }>(data: Record<string, unkno
   } as T;
 }
 
-export async function loadPublicContent(scopeUser?: User): Promise<PublicContentSnapshot> {
+export async function loadPublicContent(scopeUser?: User,mode:PublicContentLoadMode='full'): Promise<PublicContentSnapshot> {
   const firestore = requireDb();
   const currentUser = auth?.currentUser;
   let organizationId = '';
@@ -167,6 +169,13 @@ export async function loadPublicContent(scopeUser?: User): Promise<PublicContent
     : ownHierarchyIds.conferenceId ? 'conference_admin:' + ownHierarchyIds.conferenceId
     : ownHierarchyIds.unionId ? 'union_admin:' + ownHierarchyIds.unionId
     : '';
+
+  // Curriculum is one of the most expensive startup reads. Start it while the
+  // small settings documents are loading instead of waiting for every public
+  // collection first. Dedicated admin/localization portals do not need it.
+  const guidesPromise=mode==='portal'
+    ?Promise.resolve([] as Awaited<ReturnType<typeof loadFirestoreGuides>>)
+    :loadFirestoreGuides(undefined,scopeUser);
 
   const [systemSettingsSnap, scopedSettingsSnap, scopedOrganizationSnap] = await Promise.all([
     getDoc(doc(firestore, 'system', 'settings')),
@@ -232,6 +241,20 @@ export async function loadPublicContent(scopeUser?: User): Promise<PublicContent
     ...aboutProfile,
   };
 
+  if(mode==='portal'){
+    return {
+      settings:effectiveSettings,languages:[],translations:{},announcements:[],events:[],books:[],
+      radioBroadcasts:[],radioPlaylists:[],unions:[],conferences:[],districts:[],churches:[],guides:[],
+    };
+  }
+  if(mode==='mentor'){
+    return {
+      settings:effectiveSettings,languages:[],translations:{},announcements:[],events:[],books:[],
+      radioBroadcasts:[],radioPlaylists:[],unions:[],conferences:[],districts:[],churches:[],
+      guides:await guidesPromise,
+    };
+  }
+
   const loadHierarchy = async <T>(collectionName: string, idField: keyof typeof ownHierarchyIds): Promise<import('firebase/firestore').QuerySnapshot<T> | null> => {
     const ref = collection(firestore, collectionName) as import('firebase/firestore').CollectionReference<T>;
     if (!currentUser) return null;
@@ -257,6 +280,7 @@ export async function loadPublicContent(scopeUser?: User): Promise<PublicContent
     conferencesSnap,
     districtsSnap,
     churchesSnap,
+    guides,
   ] = await Promise.all([
     loadScoped('languages', 'enabled'),
     organizationId && currentUser
@@ -280,6 +304,7 @@ export async function loadPublicContent(scopeUser?: User): Promise<PublicContent
     loadHierarchy<Conference>('conferences', 'conferenceId'),
     loadHierarchy<District>('districts', 'districtId'),
     loadHierarchy<ChurchOrganization>('churches', 'churchId'),
+    guidesPromise,
   ]);
 
   const globalLanguages=languageDocs.map(item=>normalizeLanguage(item.id,item.data()))
@@ -334,8 +359,6 @@ export async function loadPublicContent(scopeUser?: User): Promise<PublicContent
   const radioPlaylists = playlistDocs
     .map(item => { const data = item.data() as Record<string, unknown>; return ({ id:item.id, ...data, itemIds:Array.isArray(data.itemIds) ? data.itemIds.map(String) : [] } as RadioPlaylist); })
     .filter(item => item.published === true && item.name.trim());
-
-  const guides = await loadFirestoreGuides(undefined, scopeUser);
 
   return {
     settings: effectiveSettings,
