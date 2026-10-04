@@ -56,6 +56,7 @@ interface CertificationConfig {
   backgroundUrl?: string;
   verificationEnabled?: boolean;
   minimumScore?: number;
+  releaseMode?: 'automatic' | 'review';
   verificationBaseUrl?: string;
   template?: CertificateTemplateConfig;
   approvalStages?: CertificationApprovalStage[];
@@ -227,6 +228,7 @@ export const CertificationManager: React.FC<Props> = ({
       enabled: nextConfig.enabled === true,
       verificationEnabled: nextConfig.verificationEnabled === true,
       minimumScore: nextConfig.minimumScore,
+      releaseMode: nextConfig.releaseMode || 'automatic',
       courseName: nextConfig.courseName || '',
       courseCode: nextConfig.courseCode || '',
       certificateTitle: nextConfig.certificateTitle || '',
