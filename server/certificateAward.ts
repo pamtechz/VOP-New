@@ -3,6 +3,7 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {configuredPassThreshold} from '../shared/studyValidation.js';
 import {revalidateAssessmentEvidence, verifiedAssessmentEvidence} from './assessmentEvidence.js';
 import {hasRequiredFinalExam} from '../shared/curriculumStructure.js';
+import {programCompletionEvidence,revalidateProgramCompletion} from './programGraduationAutomation.js';
 
 function text(value:unknown){return typeof value==='string'?value.trim():'';}
 async function certificationConfigFor(db:FirebaseFirestore.Firestore,organizationId:string){
@@ -303,6 +304,132 @@ export async function awardApprovedCertificate(
       certificateNumber,
       certificateIssuedAt:FieldValue.serverTimestamp(),
       certificateStatus:'issued',
+      updatedAt:FieldValue.serverTimestamp(),
+    },{merge:true});
+    return {created:true,ref:certificateRef};
+  });
+  const saved=await result.ref.get();
+  return {created:result.created,certificate:{id:saved.id,...saved.data()}};
+}
+
+
+export async function awardApprovedProgramCertificate(
+  db:FirebaseFirestore.Firestore,
+  candidateId:string,
+  issuedBy:string,
+  requestedProgramId='',
+){
+  const [candidateSnapshot,requestsSnapshot]=await Promise.all([
+    db.doc('users/'+candidateId).get(),
+    db.collection('graduationRequests').where('candidateId','==',candidateId).limit(100).get(),
+  ]);
+  if(!candidateSnapshot.exists)throw new Error('Candidate account was not found.');
+  const candidate=candidateSnapshot.data()||{};
+  const organizationId=text(candidate.organizationId);
+  if(!organizationId)throw new Error('The candidate is not linked to a tenant organization.');
+  const config=await certificationConfigFor(db,organizationId);
+  if(config.enabled!==true)throw new Error('Official certification is disabled in certification settings.');
+  const approved=requestsSnapshot.docs
+    .map(snapshot=>({id:snapshot.id,...snapshot.data()}))
+    .filter(record=>{
+      const approvedAt=certificateDateValue(record.approvedAt);
+      return text(record.organizationId)===organizationId
+        &&text(record.targetKind)==='program'
+        &&record.status==='approved'
+        &&(!requestedProgramId||text(record.programId)===requestedProgramId)
+        &&Boolean(approvedAt)
+        &&Date.parse(String(approvedAt))<=Date.now();
+    })
+    .sort((a,b)=>Date.parse(String(certificateDateValue(b.approvedAt)||''))-Date.parse(String(certificateDateValue(a.approvedAt)||'')))[0];
+  if(!approved)throw new Error('The candidate does not have an approved program graduation record.');
+  const programId=text(approved.programId);
+  if(!programId)throw new Error('The approved graduation record is missing its program reference.');
+  const checked=await programCompletionEvidence(db,candidateId,programId);
+  if(!checked.evidence)throw new Error('Program certificate eligibility is incomplete: '+checked.reason.replaceAll('_',' ')+'.');
+  const evidence=checked.evidence;
+  const programSnapshot=await db.doc(`programs/${programId}`).get();
+  if(!programSnapshot.exists)throw new Error('The approved graduation program is no longer available.');
+  const program=programSnapshot.data()||{};
+
+  const [church,district,conference,union]=await Promise.all([
+    candidate.churchId?db.doc('churches/'+candidate.churchId).get():Promise.resolve(null),
+    candidate.districtId?db.doc('districts/'+candidate.districtId).get():Promise.resolve(null),
+    candidate.conferenceId?db.doc('conferences/'+candidate.conferenceId).get():Promise.resolve(null),
+    candidate.unionId?db.doc('unions/'+candidate.unionId).get():Promise.resolve(null),
+  ]);
+  const certificateId='cert-program-'+createHash('sha256')
+    .update([organizationId,candidateId,programId].join(':')).digest('hex').slice(0,44);
+  const certificateRef=db.collection('certificates').doc(certificateId);
+  const issuedAt=FieldValue.serverTimestamp();
+  const certificateNumber='VOP-'+new Date().getUTCFullYear()+'-'+certificateId.toUpperCase();
+  const documentType=text(program.certificateDocumentType)||'program';
+  const certificateTypeName=text(program.certificateTypeName)||text(config.certificateTitle)||text(program.title)||'Program Completion Certificate';
+  const courseName=text(program.title)||text(config.courseName);
+  const information=candidate.information&&typeof candidate.information==='object'
+    ?candidate.information as Record<string,unknown>:{};
+  const completionDate=text(information.completionDate)||new Date().toISOString();
+  const certificate={
+    candidateId,organizationId,
+    unionId:text(candidate.unionId),conferenceId:text(candidate.conferenceId),
+    districtId:text(candidate.districtId),churchId:text(candidate.churchId),
+    candidateName:text(candidate.displayName),candidateEmail:text(candidate.email),
+    candidatePhotoURL:text(candidate.photoURL),language:'multi',courseName,
+    courseCode:text(config.courseCode),documentType,certificateTypeName,
+    certificateNumber,completionDate,issuedAt,
+    churchName:church?.exists?text(church.data()?.name):'',
+    districtName:district?.exists?text(district.data()?.name):'',
+    conferenceName:conference?.exists?text(conference.data()?.name):'',
+    unionName:union?.exists?text(union.data()?.name):'',
+    targetKind:'program',programId,programTitle:text(program.title),
+    guideTitle:text(program.title),assessmentAverageScore:evidence.averageScore,
+    eligibilitySnapshot:{
+      organizationId,candidateId,targetKind:'program',programId,programTitle:text(program.title),
+      guideIds:evidence.guides.map(guide=>guide.guideId),
+      guides:evidence.guides.map(guide=>({
+        guideId:guide.guideId,guideTitle:guide.guideTitle,language:guide.language,
+        requiredLessonIds:guide.studyLessonIds,
+        assessmentEvidence:guide.assessmentEvidence.rows,
+      })),
+      assessmentAverageScore:evidence.averageScore,
+      graduationRequestId:String(approved.id),
+      graduationApprovedAt:certificateDateValue(approved.approvedAt),
+      capturedAt:new Date().toISOString(),
+    },
+    issuer:{name:text(config.issuerName),subtitle:text(config.issuerSubtitle),actorUid:issuedBy,organizationId},
+    presentationSnapshot:{
+      certificateTitle:text(config.certificateTitle),certificateBodyText:text(config.certificateBodyText),
+      issuerName:text(config.issuerName),issuerSubtitle:text(config.issuerSubtitle),
+      courseCode:text(config.courseCode),directorName:text(config.directorName),directorTitle:text(config.directorTitle),
+      signatureUrl:text(config.signatureUrl),sealUrl:text(config.sealUrl),logoUrl:text(config.logoUrl),
+      backgroundUrl:text(config.backgroundUrl),
+      template:config.template&&typeof config.template==='object'?config.template:null,
+      configurationScope:text(config.scope)||'platform',
+    },
+    status:'Certified',downloadCount:0,issuedBy,
+    verificationEnabled:config.verificationEnabled===true,
+    lifecycleHistory:[{action:'issued',at:new Date().toISOString(),by:issuedBy}],
+    createdAt:issuedAt,updatedAt:issuedAt,
+  };
+  const candidateRef=db.doc(`users/${candidateId}`);
+  const requestRef=db.doc(`graduationRequests/${String(approved.id)}`);
+  const result=await db.runTransaction(async transaction=>{
+    const [existing,requestFresh]=await Promise.all([
+      transaction.get(certificateRef),transaction.get(requestRef),
+    ]);
+    if(existing.exists)return {created:false,ref:certificateRef};
+    if(!requestFresh.exists||requestFresh.data()?.status!=='approved'
+      ||text(requestFresh.data()?.organizationId)!==organizationId
+      ||text(requestFresh.data()?.targetKind)!=='program'
+      ||text(requestFresh.data()?.programId)!==programId){
+      throw new Error('The approved program graduation record changed before certificate issuance.');
+    }
+    if(!(await revalidateProgramCompletion(transaction,candidateRef,evidence))){
+      throw new Error('The candidate program completion evidence changed before certificate issuance.');
+    }
+    transaction.create(certificateRef,certificate);
+    transaction.set(requestRef,{
+      certificateId:certificateRef.id,certificateNumber,
+      certificateIssuedAt:FieldValue.serverTimestamp(),certificateStatus:'issued',
       updatedAt:FieldValue.serverTimestamp(),
     },{merge:true});
     return {created:true,ref:certificateRef};
