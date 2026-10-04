@@ -24,6 +24,7 @@ const blank=(organizationId:string):CurriculumProgramDraft=>({
   title:'',description:'',coverImageUrl:'',
   entryMode:'lessons',guideIds:[],
   sharingScope:organizationId?'organization':'shared',
+  certificateEligible:false,certificateDocumentType:'program',certificateTypeName:'',
   published:false,archived:false,
 });
 async function programApi(action:'list'|'upsert'|'delete',
@@ -110,6 +111,8 @@ export default function ProgramManager({
         title:program.title,description:program.description,
         coverImageUrl:program.coverImageUrl,entryMode:program.entryMode,
         guideIds:program.guideIds,sharingScope:program.sharingScope,
+        certificateEligible:program.certificateEligible,certificateDocumentType:program.certificateDocumentType,
+        certificateTypeName:program.certificateTypeName,
         archived:false,published:false,
       });
       await load();setNotice('Program restored as an unpublished draft.');
@@ -132,6 +135,8 @@ export default function ProgramManager({
       id:program.id,title:program.title,description:program.description,
       coverImageUrl:program.coverImageUrl,entryMode:program.entryMode,
       guideIds:[...program.guideIds],sharingScope:program.sharingScope,
+      certificateEligible:program.certificateEligible,certificateDocumentType:program.certificateDocumentType,
+      certificateTypeName:program.certificateTypeName,
       published:program.published,archived:program.archived,
     });
   };
@@ -176,6 +181,12 @@ export default function ProgramManager({
         <label className="vop-program-wide">Featured image URL
           <input type="url" placeholder="https://..." value={editing.coverImageUrl}
             onChange={event=>setEditing({...editing,coverImageUrl:event.target.value})}/></label>
+        <label className="vop-program-publish"><input type="checkbox" checked={editing.certificateEligible}
+          onChange={event=>setEditing({...editing,certificateEligible:event.target.checked})}/> Award a program certificate after every guide/module is completed and all required assessments are passed</label>
+        {editing.certificateEligible&&<><label>Certificate document type<input value={editing.certificateDocumentType}
+          onChange={event=>setEditing({...editing,certificateDocumentType:event.target.value})} placeholder="program"/></label>
+        <label>Certificate type name<input value={editing.certificateTypeName}
+          onChange={event=>setEditing({...editing,certificateTypeName:event.target.value})} placeholder="Program Completion Certificate"/></label></>}
       </div>
       <fieldset className="vop-program-guides">
         <legend>Guide / module order</legend>
@@ -267,7 +278,7 @@ export default function ProgramManager({
           <span>{program.published?'PUBLISHED':'DRAFT'} · {program.organizationId?'ORGANIZATION':'PLATFORM'}</span>
           <h3>{program.title}</h3><p>{program.description||'Open the curriculum for this program.'}</p>
           <small><BookOpen size={14}/>{program.guideIds.length} guides ·
-            {program.entryMode==='sections'?' section-first':' lesson-first'}</small>
+            {program.entryMode==='sections'?' section-first':' lesson-first'}{program.certificateEligible?' · certificate eligible':''}</small>
         </div>
         <button type="button" onClick={()=>setSelectedId(program.id)}>
           View curriculum <ChevronRight size={15}/></button>
