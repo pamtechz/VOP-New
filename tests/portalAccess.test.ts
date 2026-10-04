@@ -34,7 +34,7 @@ test('portal routing sends each account to its authorized primary workspace',()=
   assert.equal(hasAdminPortalAccess(superAdmin),true);
   assert.equal(defaultPortalRoute(superAdmin),'admin');
 
-  for(const organizationRole of ['owner','admin','editor','teacher']){
+  for(const organizationRole of ['owner','admin','editor','teacher','staff']){
     const organizationAdmin=user({role:'student',organizationId:'org-1',organizationRole});
     assert.equal(hasAdminPortalAccess(organizationAdmin),true,organizationRole);
     assert.equal(isOrganizationPortalAccount(organizationAdmin),true,organizationRole);
