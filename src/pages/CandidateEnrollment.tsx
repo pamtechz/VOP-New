@@ -253,7 +253,7 @@ export default function CandidateEnrollment({currentUser}:{currentUser:User}){
               <div className="vop-admin-record-card-actions"><button type="button" className="vop-secondary" onClick={()=>openBaptismTracking(candidate)}><Droplets size={14}/>Manage baptism</button></div>
             </article>;
           })}
-        </div>
+        </div>}
       <div className="vop-candidate-pager"><span>Showing {filtered.length?((page-1)*pageSize+1):0}–{Math.min(page*pageSize,filtered.length)} of {filtered.length}</span>
         <div><button type="button" disabled={page<=1} onClick={()=>setPage(v=>Math.max(1,v-1))}><ChevronLeft size={16}/></button><span>Page {page} of {totalPages}</span><button type="button" disabled={page>=totalPages} onClick={()=>setPage(v=>Math.min(totalPages,v+1))}><ChevronRight size={16}/></button></div>
       </div>
