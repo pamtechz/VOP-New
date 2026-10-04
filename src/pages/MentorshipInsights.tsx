@@ -50,7 +50,10 @@ async function organizationInviteApi(data:Record<string,unknown>={}){
   return body;
 }
 
-type Tab='overview'|'assignments'|'support'|'conversations'|'performance'|'questions'|'sharing'|'messages'|'automation';
+type Tab='overview'|'operations'|'support'|'insights'|'outreach';
+type OperationsPanel='allocation'|'drafts'|'automation';
+type SupportPanel='requests'|'conversations';
+type InsightsPanel='learner'|'assessment';
 type SupportStatusFilter='all'|'open'|'in_progress'|'resolved'|'closed';
 type PriorityFilter='all'|'high'|'normal';
 
@@ -74,6 +77,9 @@ function supportAgeHours(item:any){
 
 export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
   const [tab,setTab]=useState<Tab>('overview');
+  const [operationsPanel,setOperationsPanel]=useState<OperationsPanel>('allocation');
+  const [supportPanel,setSupportPanel]=useState<SupportPanel>('requests');
+  const [insightsPanel,setInsightsPanel]=useState<InsightsPanel>('learner');
   const [students,setStudents]=useState<any[]>([]);
   const [mentors,setMentors]=useState<any[]>([]);
   const [assignments,setAssignments]=useState<any[]>([]);
@@ -203,8 +209,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   const refreshWorkspace=async()=>{
     await loadCore();
-    if(tab==='conversations')await loadConversations();
-    if(tab==='sharing')await loadShares();
+    if(tab==='support'&&supportPanel==='conversations')await loadConversations();
+    if(tab==='outreach')await loadShares();
   };
 
   const saveAutomation=async()=>{
@@ -226,7 +232,9 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   const openConversation=async(item:any)=>{
     setSelectedConversation({...item,unread:false});
-    setTab('conversations');
+    setTab('support');
+    setSupportPanel('requests');
+    setSupportPanel('conversations');
     try{
       const result=await mentoringApi('messages',{conversationId:item.id});
       setMessages((result.items||[]) as ChatMessage[]);
@@ -348,7 +356,8 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       const result=await mentoringApi('createDraft',{studentId:selectedStudent,channel});
       setDraft(result.item||null);
       setNotice('Performance-based draft created.');
-      setTab('messages');
+      setTab('operations');
+      setOperationsPanel('drafts');
     }catch(reason){setError(reason instanceof Error?reason.message:'Could not create draft.');}
   };
 
@@ -382,9 +391,9 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   useEffect(()=>{void loadCore();},[]);
   useEffect(()=>{
-    if(tab==='conversations')void loadConversations();
-    if(tab==='sharing'&&!sharesLoaded)void loadShares();
-  },[tab,selectedStudent]);
+    if(tab==='support'&&supportPanel==='conversations')void loadConversations();
+    if(tab==='outreach'&&!sharesLoaded)void loadShares();
+  },[tab,supportPanel,selectedStudent]);
 
   const activeAssignments=assignments.filter(item=>item.status==='active');
   const assignedStudentIds=new Set(activeAssignments.map(item=>String(item.studentId||'')));
@@ -457,14 +466,10 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
   const tabItems:Array<{id:Tab;label:string;icon:React.ComponentType<{size?:number}>;badge?:number}>=[
     {id:'overview',label:'Overview',icon:Activity},
-    {id:'assignments',label:'Mentor allocation',icon:UserPlus,badge:unassignedStudents.length},
-    {id:'support',label:'Support inbox',icon:HeartHandshake,badge:unreadSummary.supportRequests},
-    {id:'conversations',label:'Conversations',icon:MessageCircle,badge:unreadSummary.conversations},
-    {id:'performance',label:'Learner performance',icon:BarChart3},
-    {id:'questions',label:'Assessment insights',icon:BookOpenCheck},
-    {id:'sharing',label:'Outreach links',icon:Link2},
-    {id:'messages',label:'Outreach drafts',icon:Send},
-    {id:'automation',label:'Automation',icon:Settings2},
+    {id:'operations',label:'Mentoring operations',icon:UserCheck,badge:unassignedStudents.length},
+    {id:'support',label:'Support & conversations',icon:MessageCircle,badge:unreadSummary.total},
+    {id:'insights',label:'Performance & insights',icon:BarChart3},
+    {id:'outreach',label:'Outreach links',icon:Link2},
   ];
 
   return <div className="vop-mentoring">
@@ -486,11 +491,11 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
     {notice&&<div className="vop-mentoring-alert success"><CheckCircle2 size={17}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label="Dismiss message"><X size={16}/></button></div>}
 
     <section className="vop-mentoring-stats" aria-label="Mentoring summary">
-      <button type="button" onClick={()=>setTab('assignments')}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
-      <button type="button" onClick={()=>setTab('assignments')}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
+      <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}><span className="metric-icon"><Users size={19}/></span><span>Learners</span><strong>{students.length}</strong><small>{unassignedStudents.length} need mentor allocation</small></button>
+      <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}><span className="metric-icon"><UserCheck size={19}/></span><span>Mentor coverage</span><strong>{mentorCoverage}%</strong><small>{activeAssignments.length} active assignment{activeAssignments.length===1?'':'s'}</small></button>
       <button type="button" onClick={()=>setTab('support')}><span className="metric-icon"><HeartHandshake size={19}/></span><span>Open support</span><strong>{openSupport.length}</strong><small>{highPrioritySupport.length} high priority</small></button>
-      <button type="button" onClick={()=>setTab('conversations')}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
-      <button type="button" onClick={()=>setTab('questions')}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
+      <button type="button" onClick={()=>setTab('support');setSupportPanel('conversations')}><span className="metric-icon"><MessageCircle size={19}/></span><span>Unread</span><strong>{unreadSummary.total}</strong><small>Support + mentor conversations</small></button>
+      <button type="button" onClick={()=>setTab('insights');setInsightsPanel('assessment')}><span className="metric-icon"><BarChart3 size={19}/></span><span>Weak questions</span><strong>{failures.length}</strong><small>Assessment concepts to revisit</small></button>
     </section>
 
     <nav className="vop-mentoring-tabs" aria-label="Mentoring workspace sections">
@@ -502,6 +507,20 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       })}
     </nav>
 
+    {tab==='operations'&&<div className="vop-mentoring-subtabs" role="tablist" aria-label="Mentoring operations">
+      <button type="button" className={operationsPanel==='allocation'?'active':''} onClick={()=>setOperationsPanel('allocation')}><UserPlus size={14}/>Mentor allocation</button>
+      <button type="button" className={operationsPanel==='drafts'?'active':''} onClick={()=>setOperationsPanel('drafts')}><Send size={14}/>Outreach drafts</button>
+      <button type="button" className={operationsPanel==='automation'?'active':''} onClick={()=>setOperationsPanel('automation')}><Settings2 size={14}/>Automation</button>
+    </div>}
+    {tab==='support'&&<div className="vop-mentoring-subtabs" role="tablist" aria-label="Support and conversations">
+      <button type="button" className={supportPanel==='requests'?'active':''} onClick={()=>setSupportPanel('requests')}><HeartHandshake size={14}/>Support inbox{unreadSummary.supportRequests>0&&<b>{unreadSummary.supportRequests}</b>}</button>
+      <button type="button" className={supportPanel==='conversations'?'active':''} onClick={()=>setSupportPanel('conversations')}><MessageCircle size={14}/>Mentor conversations{unreadSummary.conversations>0&&<b>{unreadSummary.conversations}</b>}</button>
+    </div>}
+    {tab==='insights'&&<div className="vop-mentoring-subtabs" role="tablist" aria-label="Performance and assessment insights">
+      <button type="button" className={insightsPanel==='learner'?'active':''} onClick={()=>setInsightsPanel('learner')}><BarChart3 size={14}/>Learner performance</button>
+      <button type="button" className={insightsPanel==='assessment'?'active':''} onClick={()=>setInsightsPanel('assessment')}><BookOpenCheck size={14}/>Assessment insights</button>
+    </div>}
+
     {tab==='overview'&&<section className="vop-mentoring-overview">
       <div className="vop-mentoring-overview-main">
         <article className="vop-mentoring-card">
@@ -510,10 +529,10 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
             <button type="button" className={highPrioritySupport.length?'urgent':''} onClick={()=>{setSupportPriority('high');setSupportStatus('all');setTab('support')}}>
               <span><AlertCircle size={18}/></span><div><strong>{highPrioritySupport.length} high-priority support request{highPrioritySupport.length===1?'':'s'}</strong><small>Candidate questions marked as needing help soon</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>setTab('assignments')}>
+            <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}>
               <span><UserPlus size={18}/></span><div><strong>{unassignedStudents.length} learner{unassignedStudents.length===1?'':'s'} without a mentor</strong><small>Allocate an active mentor for accountable follow-up</small></div><ChevronRight size={17}/>
             </button>
-            <button type="button" onClick={()=>setTab('conversations')}>
+            <button type="button" onClick={()=>setTab('support');setSupportPanel('conversations')}>
               <span><MessageCircle size={18}/></span><div><strong>{unreadSummary.total} unread conversation{unreadSummary.total===1?'':'s'}</strong><small>Mentor chats and candidate support waiting to be read</small></div><ChevronRight size={17}/>
             </button>
             <button type="button" className={awaitingFirstResponse.length?'urgent':''} onClick={()=>{setSupportStatus('open');setTab('support')}}>
@@ -555,15 +574,15 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
 
         <article className="vop-mentoring-card vop-quick-actions">
           <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Quick actions</span><h2>Start work</h2></div></div>
-          <button type="button" onClick={()=>setTab('assignments')}><UserPlus size={16}/>Assign a mentor</button>
+          <button type="button" onClick={()=>setTab('operations');setOperationsPanel('allocation')}><UserPlus size={16}/>Assign a mentor</button>
           <button type="button" onClick={()=>setTab('support')}><HeartHandshake size={16}/>Open support inbox</button>
-          <button type="button" onClick={()=>setTab('performance')}><BarChart3 size={16}/>Review learner performance</button>
-          <button type="button" onClick={()=>setTab('sharing')}><Link2 size={16}/>Create study invitation</button>
+          <button type="button" onClick={()=>setTab('insights');setInsightsPanel('learner')}><BarChart3 size={16}/>Review learner performance</button>
+          <button type="button" onClick={()=>setTab('outreach')}><Link2 size={16}/>Create study invitation</button>
         </article>
       </aside>
     </section>}
 
-    {tab==='assignments'&&<section className="vop-mentoring-card">
+    {tab==='operations'&&operationsPanel==='allocation'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">People & ownership</span><h2>Mentor allocation</h2><p>Assign accountable mentors and inspect current learner coverage.</p></div><span className="vop-summary-pill">{unassignedStudents.length} unassigned</span></div>
       <div className="vop-mentoring-toolbar">
         <label className="vop-search-field"><Search size={16}/><input value={assignmentSearch} onChange={e=>setAssignmentSearch(e.target.value)} placeholder="Search learner or mentor"/></label>
@@ -572,11 +591,11 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
         <button className="vop-primary" type="button" onClick={()=>void assign()} disabled={!selectedStudent||!selectedMentor}><UserPlus size={16}/>Assign mentor</button>
       </div>
       <div className="vop-mentoring-table-wrap"><table className="vop-table"><thead><tr><th>Learner</th><th>Mentor</th><th>Status</th><th>Assigned</th><th aria-label="Actions"/></tr></thead><tbody>
-        {filteredAssignments.map(item=><tr key={item.id}><td><strong>{item.student?.displayName||item.studentId}</strong><div className="vop-row-desc">{item.student?.email||''}</div></td><td><strong>{item.mentor?.displayName||item.mentorId}</strong><div className="vop-row-desc">{item.mentor?.email||''}</div></td><td><span className={'vop-status '+(item.status==='active'?'enabled':'')}>{statusLabel(item.status)}</span></td><td>{dateOnly(item.assignedAt)}</td><td><button className="vop-actions" type="button" title="View learner performance" onClick={()=>{setSelectedStudent(item.studentId);setTab('performance');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button></td></tr>)}
+        {filteredAssignments.map(item=><tr key={item.id}><td><strong>{item.student?.displayName||item.studentId}</strong><div className="vop-row-desc">{item.student?.email||''}</div></td><td><strong>{item.mentor?.displayName||item.mentorId}</strong><div className="vop-row-desc">{item.mentor?.email||''}</div></td><td><span className={'vop-status '+(item.status==='active'?'enabled':'')}>{statusLabel(item.status)}</span></td><td>{dateOnly(item.assignedAt)}</td><td><button className="vop-actions" type="button" title="View learner performance" onClick={()=>{setSelectedStudent(item.studentId);setTab('insights');setInsightsPanel('learner');void loadPerformance(item.studentId)}}><BarChart3 size={16}/></button></td></tr>)}
       </tbody></table>{!filteredAssignments.length&&!loading&&<div className="vop-empty-state"><UserPlus size={28}/><strong>No matching mentor assignments</strong><span>Use the controls above to allocate a mentor or change the search.</span></div>}</div>
     </section>}
 
-    {tab==='support'&&<section className="vop-mentoring-card">
+    {tab==='support'&&supportPanel==='requests'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Candidate support inbox</span><h2>Learning & spiritual support</h2><p>Triage questions, respond in context and progress evangelism follow-up without losing the conversation history.</p></div><span className="vop-summary-pill">{openSupport.length} open</span></div>
       <div className="vop-mentoring-toolbar">
         <label className="vop-search-field"><Search size={16}/><input value={supportSearch} onChange={e=>setSupportSearch(e.target.value)} placeholder="Search candidate, subject, topic or doctrine"/></label>
@@ -635,7 +654,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       </div>
     </section>}
 
-    {tab==='conversations'&&<section className="vop-mentoring-card">
+    {tab==='support'&&supportPanel==='conversations'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Mentor communications</span><h2>Conversations</h2><p>Review mentor–learner threads and participate without leaving the workspace.</p></div><span className="vop-summary-pill">{unreadSummary.conversations} unread</span></div>
       <div className="vop-mentoring-toolbar">
         <label className="vop-search-field"><Search size={16}/><input value={conversationSearch} onChange={e=>setConversationSearch(e.target.value)} placeholder="Search learner or mentor"/></label>
@@ -664,7 +683,7 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       </div>
     </section>}
 
-    {tab==='performance'&&<section className="vop-mentoring-card">
+    {tab==='insights'&&insightsPanel==='learner'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Individual learner</span><h2>Performance review</h2><p>Use recorded study progress and server-graded assessment evidence to plan support.</p></div><select value={selectedStudent} onChange={e=>{setSelectedStudent(e.target.value);void loadPerformance(e.target.value)}}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select></div>
       {!performance?<div className="vop-empty-state large"><BarChart3 size={34}/><strong>Select a learner</strong><span>Performance metrics, weak questions and support drafting will appear here.</span></div>:<div>
         <div className="vop-performance-stats"><div><span>Learning progress</span><strong>{Math.round(performance.progressPercent||0)}%</strong></div><div><span>Assessment average</span><strong>{Math.round(performance.averageScore||0)}%</strong></div><div><span>Passed</span><strong>{performance.passedAssessments||0}</strong></div><div><span>Failed</span><strong>{performance.failedAssessments||0}</strong></div></div>
@@ -674,13 +693,13 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       </div>}
     </section>}
 
-    {tab==='questions'&&<section className="vop-mentoring-card">
+    {tab==='insights'&&insightsPanel==='assessment'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Assessment evidence</span><h2>Commonly missed questions</h2><p>Organization-level patterns from server-graded assessment attempts.</p></div></div>
       <div className="vop-mentoring-toolbar"><label className="vop-search-field"><Search size={16}/><input value={insightSearch} onChange={e=>setInsightSearch(e.target.value)} placeholder="Search question or lesson"/></label></div>
       <div className="vop-weak-list">{filteredFailures.map(item=><div key={item.id}><strong>{item.question||item.key}</strong><span>{Number(item.failedCount||0)} failed · {Number(item.answeredCount||0)} answered · {item.lessonId||'Lesson not recorded'}</span></div>)}{!filteredFailures.length&&!loading&&<div className="vop-empty-state large"><BookOpenCheck size={32}/><strong>No matching assessment difficulties</strong><span>Question-level patterns will appear after graded attempts are recorded.</span></div>}</div>
     </section>}
 
-    {tab==='sharing'&&<section className="vop-mentoring-card">
+    {tab==='outreach'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Evangelism outreach</span><h2>Lesson & chapter invitations</h2><p>Create trackable organization invitations that return people to the selected guide or lesson after joining.</p></div></div>
       <div className="vop-share-form">
         <select value={shareGuideId} onChange={e=>{setShareGuideId(e.target.value);setShareLessonId('')}}><option value="">Select a course / guide</option>{shareGuides.map(item=><option key={item.id} value={item.id}>{item.title||item.name||item.id}</option>)}</select>
@@ -693,13 +712,13 @@ export const MentorshipInsights:React.FC<{guides:DiscoverGuide[]}>=({guides})=>{
       <div className="vop-share-list">{shareLinks.map(item=><div key={item.code}><span><strong>{item.label||item.targetPath}</strong><small>{item.targetPath}</small></span><b>{Number(item.clicks||0)} opens</b><a href={item.url||'#'} target="_blank" rel="noreferrer" aria-label="Open invitation"><ExternalLink size={15}/></a></div>)}{!shareLinks.length&&!loading&&<div className="vop-empty-state large"><Link2 size={30}/><strong>No tracked invitations yet</strong><span>Create a guide or lesson invitation above.</span></div>}</div>
     </section>}
 
-    {tab==='messages'&&<section className="vop-mentoring-card">
+    {tab==='operations'&&operationsPanel==='drafts'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Proactive support</span><h2>Performance-based outreach drafts</h2><p>Create a support message from real learner progress, review it, then send it in-app or by email.</p></div></div>
       <div className="vop-message-tools"><select value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">Select learner</option>{students.map(item=><option key={item.uid} value={item.uid}>{item.displayName||item.email}</option>)}</select><select value={draftChannel} onChange={e=>setDraftChannel(e.target.value as 'in_app'|'email')}><option value="in_app">In-app</option><option value="email">Email</option></select><button className="vop-secondary" type="button" onClick={()=>void createDraft(draftChannel)} disabled={!selectedStudent}>Generate draft</button></div>
       {draft?<div className="vop-draft"><label><span>Subject</span><input value={draft.subject} onChange={e=>setDraft({...draft,subject:e.target.value})}/></label><label><span>Message</span><textarea value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/></label><div className="vop-performance-actions"><button className="vop-primary" type="button" onClick={()=>void sendDraft()}><Send size={16}/>Send {draft.channel==='email'?'email':'message'}</button></div></div>:<div className="vop-empty-state large"><Send size={32}/><strong>No draft open</strong><span>Select a learner and generate an outreach message from recorded performance.</span></div>}
     </section>}
 
-    {tab==='automation'&&<section className="vop-mentoring-card">
+    {tab==='operations'&&operationsPanel==='automation'&&<section className="vop-mentoring-card">
       <div className="vop-mentoring-card-head"><div><span className="vop-section-kicker">Guardrailed automation</span><h2>Performance-based support automation</h2><p>Automate supportive outreach from recorded learner progress while respecting cooldowns and administrator control.</p></div></div>
       <div className="vop-automation-grid">
         <div className="vop-setting-row"><div><div className="vop-setting-name">Enable daily support automation</div><div className="vop-setting-help">Runs once each day and respects the configured cooldown.</div></div><button type="button" className={'vop-toggle '+(automation.enabled?'on':'')} onClick={()=>setAutomation(current=>({...current,enabled:!current.enabled}))}><span/></button></div>
