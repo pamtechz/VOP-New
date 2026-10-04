@@ -27,6 +27,7 @@ import { appConfirm } from '../components/layout/AppDialog';
 import { consumeNotificationAdminTarget } from '../services/notificationRouting';
 import { SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS, type SubscriptionFeatureKey } from '../../shared/subscriptions';
 import { isOrganizationPortalAccount } from '../services/portalAccess';
+import { RouteShimmer } from '../components/layout/Shimmer';
 
 const AdminRecordsPanel=React.lazy(()=>import('./AdminRecordsPanel'));
 const CurriculumManager=React.lazy(()=>import('./CurriculumManager'));
@@ -47,7 +48,7 @@ const PersonalSettingsPage=React.lazy(()=>import('./PersonalSettingsPage').then(
 const CertificatesPage=React.lazy(()=>import('./CertificatesPage'));
 const AboutPage=React.lazy(()=>import('./AboutPage').then(module=>({default:module.AboutPage})));
 const OrganizationAccountProfilePage=React.lazy(()=>import('./OrganizationAccountProfilePage'));
-const AdminPanelLoading=()=> <div className="vop-empty" role="status" aria-live="polite">Loading this workspace…</div>;
+const AdminPanelLoading=()=> <RouteShimmer label="Loading this workspace"/>;
 
 interface AdminPageProps {
   currentUser: User;
