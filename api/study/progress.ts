@@ -7,6 +7,8 @@ import { curriculumAnchorExists, curriculumPages } from '../../shared/curriculum
 import { ensureAutomaticGraduationReview } from '../../server/graduationAutomation.js';
 import {ensureAutomaticProgramGraduationReviews} from '../../server/programGraduationAutomation.js';
 import {organizationPointRules,pointKindForAssessment} from '../../server/engagementPoints.js';
+import {awardApprovedCertificate,awardApprovedProgramCertificate} from '../../server/certificateAward.js';
+import {createNotification} from '../../server/notifications.js';
 
 const ASSESSMENT_ATTEMPT_POLICY_VERSION = 2;
 
@@ -61,6 +63,56 @@ function positiveOverride(value:unknown,fallback:number,max:number){
   const parsed=Number(value??0);
   return Number.isInteger(parsed)&&parsed>0&&parsed<=max?parsed:fallback;
 }
+async function finalizeAutomaticCertificateRelease(
+  db:FirebaseFirestore.Firestore,
+  candidateId:string,
+  guideId:string,
+  guideReview:{status?:string}|null,
+  programReviews:Array<{status?:string;programId?:string}>,
+  createdBy:string,
+){
+  if(guideReview?.status==='approved'){
+    try{
+      const award=await awardApprovedCertificate(db,candidateId,createdBy,guideId);
+      if(award.created){
+        const candidate=await db.doc(`users/${candidateId}`).get();
+        const organizationId=String(candidate.data()?.organizationId||'').trim();
+        await createNotification(db,{
+          organizationId,recipientId:candidateId,type:'certificate',
+          title:'Certificate awarded',
+          body:'Your course certificate was issued automatically after all completion and assessment requirements were verified.',
+          actionUrl:'/certificates',
+          metadata:{source:'automatic-certificate-release',guideId},
+          createdBy,
+        });
+      }
+    }catch(error){
+      console.error('Automatic guide certificate release failed',error);
+    }
+  }
+  for(const review of programReviews){
+    const programId=String(review.programId||'').trim();
+    if(review.status!=='approved'||!programId)continue;
+    try{
+      const award=await awardApprovedProgramCertificate(db,candidateId,createdBy,programId);
+      if(award.created){
+        const candidate=await db.doc(`users/${candidateId}`).get();
+        const organizationId=String(candidate.data()?.organizationId||'').trim();
+        await createNotification(db,{
+          organizationId,recipientId:candidateId,type:'certificate',
+          title:'Program certificate awarded',
+          body:'Your program certificate was issued automatically after every required guide, lesson and assessment was verified.',
+          actionUrl:'/certificates',
+          metadata:{source:'automatic-program-certificate-release',programId},
+          createdBy,
+        });
+      }
+    }catch(error){
+      console.error('Automatic program certificate release failed',error);
+    }
+  }
+}
+
 function assessmentPolicy(lesson:Record<string,unknown>,settings:Record<string,unknown>){
   const configured=configuredPassThreshold(lesson.assessmentPassThreshold)
     ?? configuredPassThreshold(settings.quizPassThreshold);
@@ -688,7 +740,8 @@ export default async function handler(
       if(useTenantGuide&&guideId!=='discover'){
         try{
           certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:lesson-completion');
-          await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-lesson-completion');
+          const programReviews=await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-lesson-completion');
+          await finalizeAutomaticCertificateRelease(db,decoded.uid,guideId,certificateReview,programReviews,'system:lesson-completion');
         }catch(reviewError){
           // Study completion is authoritative even if a downstream review
           // notification/configuration is temporarily unavailable. A later
@@ -1009,7 +1062,8 @@ export default async function handler(
     if(useTenantGuide&&guideId!=='discover'){
       try{
         certificateReview=await ensureAutomaticGraduationReview(db,decoded.uid,guideId,'system:assessment-completion');
-        await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-assessment-completion');
+        const programReviews=await ensureAutomaticProgramGraduationReviews(db,decoded.uid,guideId,'system:program-assessment-completion');
+        await finalizeAutomaticCertificateRelease(db,decoded.uid,guideId,certificateReview,programReviews,'system:assessment-completion');
       }catch(reviewError){
         console.warn('Automatic certificate review could not be created after assessment completion',reviewError);
       }
