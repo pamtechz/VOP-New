@@ -45,6 +45,7 @@ test('organization administrators retain candidates while language governance st
 test('localization workflow requires invite acceptance, scopes assigned languages and supports governed language requests',()=>{
   const server=read('api_handlers/admin/localization.ts');
   const participation=read('src/components/localization/LocalizationParticipation.tsx');
+  const contributorStudio=read('src/components/localization/LocalizationTranslationStudio.tsx');
   const governance=read('src/pages/LocalizationGovernancePanel.tsx');
   const consolePage=read('src/pages/LocalizationConsolePage.tsx');
   const sidebar=read('src/components/layout/LearnerSidebar.tsx');
@@ -61,7 +62,15 @@ test('localization workflow requires invite acceptance, scopes assigned language
   assert.match(server,/if\(percent>=90\)/);
   assert.match(server,/publishProposal\(db,code,proposalId,uid,'automatic'\)/);
   assert.match(participation,/Accept invitation/);
-  assert.match(participation,/assignedLanguageOptions/);
+  assert.match(participation,/LocalizationTranslationStudio/);
+  assert.match(contributorStudio,/Translation Studio/);
+  assert.match(contributorStudio,/assigned\.includes\('\*'\)\|\|assigned\.includes\(language\.code\)/);
+  assert.match(contributorStudio,/canTranslate/);
+  assert.match(contributorStudio,/canReview/);
+  assert.match(contributorStudio,/submitProposal/);
+  assert.match(contributorStudio,/action.*recommend|localizationRequest.*recommend/s);
+  assert.match(contributorStudio,/Submit changed/);
+  assert.match(contributorStudio,/Needs Translation/);
   assert.match(participation,/Request another language/);
   assert.match(participation,/Existing translation/);
   assert.match(participation,/New language/);
@@ -74,6 +83,15 @@ test('localization workflow requires invite acceptance, scopes assigned language
   assert.match(consolePage,/LocalizationParticipation/);
   assert.match(sidebar,/localization_console/);
   assert.match(userLoader,/localizationAccess/);
+});
+
+test('platform stewardship keeps both runtime JS and TypeScript compatibility entry points',()=>{
+  const runtime=read('shared/platformStewardship.js');
+  const compatibility=read('shared/platformStewardship.ts');
+  const programManager=read('server/programManager.ts');
+  assert.match(runtime,/platformStewardedResource/);
+  assert.match(compatibility,/from '\.\/platformStewardship\.js'/);
+  assert.match(programManager,/from '\.\.\/shared\/platformStewardship\.js'/);
 });
 
 test('system-wide curriculum, automatic certificate review and baptism tracking stay server-governed',()=>{
