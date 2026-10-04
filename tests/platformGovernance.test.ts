@@ -312,7 +312,9 @@ test('candidate contextual support covers doctrine, lesson references, mentor/te
   assert.match(support,/One Voice 27 follow-up/);
   assert.match(support,/I want to discuss baptism/);
   assert.match(mentor,/Candidate support queue/);
-  assert.match(admin,/Candidate support inbox/);
+  assert.match(admin,/Support & conversations/);
+  assert.match(admin,/Support requests/);
+  assert.match(admin,/Mentor conversations/);
   assert.match(admin,/WhatsApp \{target\.label\}/);
   assert.match(sidebar,/Learning & spiritual support/);
   assert.match(drawer,/Learning & spiritual support/);
