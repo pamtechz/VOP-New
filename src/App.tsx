@@ -27,9 +27,6 @@ import { LearnerSidebar } from './components/layout/LearnerSidebar';
 import { persistSidebarCollapsed, readSidebarCollapsed } from './components/layout/sidebarPreference';
 import { BottomNav } from './components/layout/BottomNav';
 import { HomeDashboard } from './components/home/HomeDashboard';
-import { DiscoverGuideView } from './components/guide/DiscoverGuideView';
-import { LessonReaderModal } from './components/reader/LessonReaderModal';
-import { QuizModal } from './components/quiz/QuizModal';
 import './pages/learning.css';
 import './components/layout/navigation-header.css';
 import { applyThemePreference, persistThemePreference, readThemePreference } from './services/themePreference';
@@ -38,6 +35,12 @@ import { saveSupportContextPrefill } from './services/supportContext';
 import { canAccessPortalRoute, defaultPortalRoute, hasAdminPortalAccess, hasMentorPortalAccess, isOrganizationPortalAccount, isPortalRoute } from './services/portalAccess';
 import { RouteShimmer } from './components/layout/Shimmer';
 
+const loadDiscoverGuideView=()=>import('./components/guide/DiscoverGuideView');
+const loadLessonReaderModal=()=>import('./components/reader/LessonReaderModal');
+const loadQuizModal=()=>import('./components/quiz/QuizModal');
+const DiscoverGuideView=React.lazy(()=>loadDiscoverGuideView().then(module=>({default:module.DiscoverGuideView})));
+const LessonReaderModal=React.lazy(()=>loadLessonReaderModal().then(module=>({default:module.LessonReaderModal})));
+const QuizModal=React.lazy(()=>loadQuizModal().then(module=>({default:module.QuizModal})));
 const AboutPage=React.lazy(()=>import('./pages/AboutPage').then(module=>({default:module.AboutPage})));
 const ReferenceProfilePage=React.lazy(()=>import('./pages/ReferenceProfilePage').then(module=>({default:module.ReferenceProfilePage})));
 const ResourcesPage=React.lazy(()=>import('./pages/ResourcesPage').then(module=>({default:module.ResourcesPage})));
@@ -629,6 +632,8 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   },[currentUser.uid,applyLearnerLocation]);
 
   const openGuide=useCallback((guide:DiscoverGuide)=>{
+    void loadDiscoverGuideView();
+    void loadLessonReaderModal();
     setStudyError('');
     setActiveProgramId('');
     setActiveGuide(guide);
@@ -639,6 +644,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
 
   const openStudyItem=useCallback((guide:DiscoverGuide,lesson:Lesson,pageIndex?:number,route?:AppRoute)=>{
     const isStudyLesson=lesson.type==='Lesson';
+    if(isStudyLesson)void loadLessonReaderModal(); else void loadQuizModal();
     const pageCount=isStudyLesson?Math.max(1,lesson.contentPages?.length||1):1;
     const resumeKey=`${guide.language}:${guide.id}:${lesson.id}`;
     const storedPage=isStudyLesson
@@ -878,6 +884,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         {currentRoute !== 'admin' && <BottomNav currentRoute={currentRoute} onNavigate={navigate} currentUser={currentUser} />}
       </div>
       <MenuDrawer isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} currentRoute={currentRoute} currentUser={currentUser} guides={guides} settings={settings} activeLanguage={activeLanguage} onNavigate={navigate} />
+      <React.Suspense fallback={<RouteLoading/>}>
       {activeLesson?.type === 'Lesson' && activeGuide && <LessonReaderModal lesson={activeLesson} guide={activeGuide} currentUser={currentUser} initialPageIndex={deepLinkPageIndex}
         onPageChange={rememberStudyPage}
         onOpenQuiz={quiz=>openStudyItem(activeGuide,quiz,0,currentRoute)}
@@ -909,6 +916,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
         if (auth?.currentUser) { const refreshedUser = await loadFirestoreUser(auth.currentUser.uid); if (refreshedUser) { setCurrentUser(refreshedUser); setAllUsers([refreshedUser]); } }
         return result;
       }} onOpenCertificate={() => navigate('certificates')} />}
+      </React.Suspense>
     </div>
   );
 };
