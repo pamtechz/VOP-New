@@ -99,10 +99,14 @@ export function createLocalApiMiddleware(server: {
     // Without this, localhost incorrectly tries to import files such as
     // /api/payments/history.ts even though all payment routes live in api/payments.ts.
     const isPaymentsRoute=route.startsWith('payments/');
+    const isAccountLifecycleCron=route==='account-lifecycle-cron';
     if(isPaymentsRoute)query.__vopPaymentRoute=route.slice('payments/'.length);
+    if(isAccountLifecycleCron)query.__vopAccountRoute='lifecycle-cron';
     const modulePath = isPaymentsRoute
       ? '/api/payments.ts'
-      : route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
+      : isAccountLifecycleCron
+        ? '/api/account.ts'
+        : route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
 
     try {
       const module = await server.ssrLoadModule(modulePath);
