@@ -17,8 +17,7 @@ const read = file => fs.readFileSync(path.join(root,file),'utf8');
 verifyCertificateBackgroundAsset();
 
 const checks = [
-  ['server/tenant.ts', ['canEditCanonicalContent','tenantOwnerKey','ownerTenantId','ownerUid','tenantType: \'platform\' | \'organization\' | \'hierarchy\'','accessibleOrganizationIds','canManageOrganizationContent','appendImmutableAudit']],
-  ['server/auditLedger.ts', ['appendImmutableAudit','auditIntegrityHeads','previousHash','entryHash','transaction.create(recordRef','applyOrganizationAuditVisibility']],
+  ['server/tenant.ts', ['canEditCanonicalContent','tenantOwnerKey','ownerTenantId','ownerUid','tenantType: \'platform\' | \'organization\' | \'hierarchy\'','accessibleOrganizationIds','canManageOrganizationContent','platformAudit']],
   ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2','Updated Scoped Tenant','system/permissions','cert-org-1','cert-org-2']],
   ['firestore.rules', ["'union_admin'","'conference_admin'","'district_admin'","'church_admin'",'organizationIdForUser()','canEditOwnedContent','tenantSettings/{tenantId}/settings/{settingId}','canViewHierarchyCertificate','hierarchyOrganizationScope(resource.data.get(\'organizationId\',\'\'))','canManageHierarchyUser','unionAdminForCreateUpdate','isHierarchyTenant','hierarchyTenantId']],
   ['shared/permissions.ts', ['DEFAULT_PERMISSION_MATRIX','PERMISSION_ROLES','PERMISSION_RESOURCES','PERMISSION_ACTIONS','normalizePermissionMatrix','billing']],
@@ -51,10 +50,10 @@ const checks = [
   ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
   ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
   ['scripts/mtn-momo-sandbox-provision.mjs', ['/v1_0/apiuser','/apikey','providerCallbackHost','MTN_MOMO_SUBSCRIPTION_KEY']],
-  ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds','requireSuperAdminFinanceControl','requireInstitutionalSubscriptionConsumer','billingTenantSubscriptionRef','selectProviderForMethod','scopedTransactionProjection']],
+  ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds','requireSuperAdminFinanceControl','requireInstitutionalSubscriptionConsumer','billingTenantSubscriptionRef','selectProviderForMethod','consumerPaymentQuotes','quoteAmountForCurrency','providerSettlementCurrency','scopedTransactionProjection']],
   ['api/payments.ts', ["name.startsWith('webhooks/')",'getPaymentProvider','callbackMethods','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
-  ['src/pages/PaymentsPage.tsx', ['Payments & receipts','Subscription packages','startPaymentCheckout','verifyPayment']],
-  ['src/pages/PaymentManagement.tsx', ['Billing & Subscriptions','Plans & subscriptions','SubscriptionWorkspace','Payable items','Providers','Reconciliation','isSuperAdmin']],
+  ['src/pages/PaymentsPage.tsx', ['Payments & Billing','Subscription packages','methodQuotes','startPaymentCheckout','verifyPayment']],
+  ['src/pages/PaymentManagement.tsx', ['Payments & Billing','Pay & receipts','Plans & subscriptions','SubscriptionWorkspace','Payable items','Providers','Reconciliation','isSuperAdmin']],
   ['src/components/admin/SubscriptionWorkspace.tsx', ['Plan, subscription & usage','Usage against plan limits','Plan entitlements','Cancel at period end','Assign manually']],
   ['shared/subscriptions.ts', ['SUBSCRIPTION_QUOTAS','SUBSCRIPTION_FEATURES','normalizeSubscriptionQuotas','subscriptionQuotaLimit']],
 
