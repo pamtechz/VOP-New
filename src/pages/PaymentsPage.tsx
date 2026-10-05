@@ -11,7 +11,7 @@ import {
 import { ShimmerCards, ShimmerList } from '../components/layout/Shimmer';
 import './payments.css';
 
-interface Props{currentUser:User;onBack:()=>void}
+interface Props{currentUser:User;onBack?:()=>void;embedded?:boolean}
 
 type LencoApi={getPaid:(options:Record<string,unknown>)=>void};
 
@@ -30,8 +30,16 @@ function friendlyStatus(payment:ClientPayment){
   if(payment.status==='processing'||payment.status==='pending')return 'Payment confirmation pending';
   return paymentStatusLabel(payment.status as never);
 }
+function singleCheckoutQuote(item:PayableItem){
+  const quotes=(item.allowedMethods||[])
+    .map(method=>item.methodQuotes?.[method])
+    .filter((quote):quote is NonNullable<typeof quote>=>Boolean(quote));
+  if(!quotes.length)return null;
+  const first=quotes[0];
+  return quotes.every(quote=>quote.currency===first.currency&&quote.amountDecimal===first.amountDecimal)?first:null;
+}
 
-const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
+const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
   const [items,setItems]=useState<PayableItem[]>([]);
   const [history,setHistory]=useState<ClientPayment[]>([]);
   const [selected,setSelected]=useState<PayableItem|null>(null);
@@ -51,6 +59,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
   );
   const subscriptionItems=useMemo(()=>items.filter(item=>item.itemType==='organization_subscription'),[items]);
   const otherItems=useMemo(()=>items.filter(item=>item.itemType!=='organization_subscription'),[items]);
+  const selectedQuote=useMemo(()=>selected?.methodQuotes?.[method]||null,[selected,method]);
 
   const refresh=async()=>{
     setLoading(true);setError('');
@@ -158,10 +167,10 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     catch(reason){setError(reason instanceof Error?reason.message:'Receipt is not available yet.');}
   };
 
-  return <main className="vop-payments-page">
+  return <div className={'vop-payments-page'+(embedded?' embedded':'')}>
     <header className="vop-payments-head">
-      <button type="button" className="vop-back-button" onClick={onBack}><ArrowLeft size={18}/>Back</button>
-      <div><span>Secure VOP payments</span><h1>Payments & receipts</h1><p>Pay configured VOP charges and track server-verified transactions.</p></div>
+      {!embedded&&onBack&&<button type="button" className="vop-back-button" onClick={onBack}><ArrowLeft size={18}/>Back</button>}
+      <div><span>Secure VOP payments</span><h1>Payments & Billing</h1><p>Pay available charges, manage applicable subscriptions and keep server-verified receipts in one place.</p></div>
       <button type="button" className="btn btn-outline" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={16}/>Refresh</button>
     </header>
 
@@ -172,7 +181,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
       <div className="vop-payment-section-title"><div><span>Organization billing</span><h2>Subscription packages</h2></div><WalletCards size={24}/></div>
       <div className={'vop-payable-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>{subscriptionItems.map(item=><article key={item.id} className="vop-payable-card">
         <div><span className="vop-payment-type">Organization subscription</span><h3>{item.name}</h3><p>{item.description||'VOP organization subscription package'}</p>{item.pricing?.baseAmountDecimal&&item.currency!=='USD'&&<small>Base price: USD {item.pricing.baseAmountDecimal} · billed in {item.currency} for this organization</small>}{item.currency==='USD'&&<small>International billing · canonical USD price</small>}</div>
-        <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
+        <div className="vop-payable-footer">{singleCheckoutQuote(item)?<strong>{singleCheckoutQuote(item)?.currency} {singleCheckoutQuote(item)?.amountDecimal}</strong>:<strong>{item.currency} {item.amountDecimal}</strong>}
           <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Choose package</button></div>
       </article>)}</div>
     </section>}
@@ -182,7 +191,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
       {loading&&items.length===0?<ShimmerCards cards={3} label="Loading secure payment options"/>:
       otherItems.length?<div className={'vop-payable-grid'+(loading?' vop-refreshing vop-shimmer-overlay':'')}>{otherItems.map(item=><article key={item.id} className="vop-payable-card">
         <div><span className="vop-payment-type">{item.itemType.replaceAll('_',' ')}</span><h3>{item.name}</h3><p>{item.description||'Available VOP payment'}</p></div>
-        <div className="vop-payable-footer"><strong>{item.currency} {item.amountDecimal}</strong>
+        <div className="vop-payable-footer">{singleCheckoutQuote(item)?<strong>{singleCheckoutQuote(item)?.currency} {singleCheckoutQuote(item)?.amountDecimal}</strong>:<strong>{item.currency} {item.amountDecimal}</strong>}
           <button type="button" className="btn btn-primary" onClick={()=>{setSelected(item);setCheckoutReference('');setCheckoutStatus('Ready');}}>Pay now</button></div>
       </article>)}</div>:<div className="vop-payment-empty">{subscriptionItems.length?'No other charges are currently available.':'There are no payment options available to your account.'}</div>}
     </section>
@@ -200,14 +209,14 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     {selected&&<div className="vop-payment-modal-layer" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setSelected(null)}}>
       <section className="vop-payment-modal" role="dialog" aria-modal="true" aria-labelledby="vop-payment-title">
         <header><div><span>Secure checkout</span><h2 id="vop-payment-title">{selected.name}</h2></div><button onClick={()=>setSelected(null)} disabled={busy} aria-label="Close">×</button></header>
-        <dl><div><dt>Amount</dt><dd>{selected.currency} {selected.amountDecimal}</dd></div>{selected.itemType==='organization_subscription'&&selected.pricing?.baseAmountDecimal&&selected.currency!=='USD'&&<div><dt>Canonical price</dt><dd>USD {selected.pricing.baseAmountDecimal}</dd></div>}{selected.itemType==='organization_subscription'&&selected.pricing?.exchangeRate&&selected.currency!=='USD'&&<div><dt>Exchange rate</dt><dd>1 USD = {Number(selected.pricing.exchangeRate).toFixed(4)} {selected.currency}</dd></div>}<div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
-        {!availableMethods.length?<div className="vop-payment-alert danger"><XCircle size={17}/>No payment method is currently available for this charge.</div>:<>
+        <dl><div><dt>Amount to pay</dt><dd>{selectedQuote?.currency||selected.currency} {selectedQuote?.amountDecimal||selected.amountDecimal}</dd></div>{selectedQuote&&selectedQuote.currency!==selectedQuote.baseCurrency&&<><div><dt>Original price</dt><dd>{selectedQuote.baseCurrency} {selectedQuote.baseAmountDecimal}</dd></div><div><dt>Today's exchange rate</dt><dd>1 {selectedQuote.baseCurrency} = {Number(selectedQuote.exchangeRate).toFixed(4)} {selectedQuote.currency}</dd></div></>}{selected.itemType==='organization_subscription'&&selected.pricing?.baseAmountDecimal&&selected.currency!=='USD'&&!selectedQuote?.baseAmountDecimal&&<div><dt>Canonical price</dt><dd>USD {selected.pricing.baseAmountDecimal}</dd></div>}<div><dt>Payer</dt><dd>{currentUser.displayName||currentUser.email}</dd></div>{selected.organizationName&&<div><dt>Organization</dt><dd>{selected.organizationName}</dd></div>}{checkoutReference&&<div><dt>Payment reference</dt><dd>{checkoutReference}</dd></div>}<div><dt>Status</dt><dd>{checkoutStatus}</dd></div></dl>
+        {!availableMethods.length?<div className="vop-payment-alert danger"><XCircle size={17}/>This payment option is temporarily unavailable. Refresh to load the currently configured methods.</div>:<>
           <fieldset><legend>Payment method</legend><div className="vop-payment-methods">
             {availableMethods.map(value=><button type="button" key={value} className={method===value?'active':''} onClick={()=>setMethod(value)} disabled={busy}>{methodIcon(value)}<span>{paymentMethodLabel(value)}</span></button>)}
           </div></fieldset>
           {method!=='card'&&<label className="vop-payment-phone"><span>Mobile money number</span><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="097..." inputMode="tel" disabled={busy}/><small>You will approve the request on this phone.</small></label>}
-          <div className="vop-payment-security"><CreditCard size={18}/><p>{selected.itemType==='organization_subscription'&&selected.currency!=='USD'?'The subscription has a canonical USD price. This organization is billed in ZMW using the server-issued exchange-rate quote shown above. ':selected.itemType==='organization_subscription'?'This organization is billed at the canonical USD subscription price. ':''}VOP activates access only after independent server-side payment verification.</p></div>
-          <button type="button" className="btn btn-primary vop-payment-submit" onClick={()=>void pay()} disabled={busy||!availableMethods.length}>{busy?<><LoaderCircle className="spin" size={17}/>Starting secure payment…</>:<>Pay {selected.currency} {selected.amountDecimal}</>}</button>
+          <div className="vop-payment-security"><CreditCard size={18}/><p>{selectedQuote&&selectedQuote.currency!==selectedQuote.baseCurrency?'The amount above is a server-issued daily exchange-rate quote for the selected payment method. ':''}Only configured payment methods are shown. VOP recalculates the quote server-side when checkout starts and activates access only after independent payment verification.</p></div>
+          <button type="button" className="btn btn-primary vop-payment-submit" onClick={()=>void pay()} disabled={busy||!availableMethods.length}>{busy?<><LoaderCircle className="spin" size={17}/>Starting secure payment…</>:<>Pay {selectedQuote?.currency||selected.currency} {selectedQuote?.amountDecimal||selected.amountDecimal}</>}</button>
         </>}
       </section>
     </div>}
@@ -224,7 +233,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
         </dl>
       </section>
     </div>}
-  </main>;
+  </div>;
 };
 
 export default PaymentsPage;

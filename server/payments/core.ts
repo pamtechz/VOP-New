@@ -13,9 +13,9 @@ import {
   validateBillingTenantPlanCapacity, writeTenantAudit, type BillingTenantType, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
-import { quoteSubscriptionPlanForTenant } from '../billing.js';
+import { organizationBillingProfile, quoteAmountForCurrency, quoteSubscriptionPlanForTenant } from '../billing.js';
 import {
-  getPaymentProvider, paymentProviderCatalog, registeredPaymentProviderKeys,
+  getPaymentProvider, paymentProviderCatalog, providerSettlementCountry, providerSettlementCurrency, registeredPaymentProviderKeys,
   type ProviderVerification,
 } from './providers.js';
 
@@ -94,11 +94,16 @@ async function providerConfig(db:Firestore,key:string){
   const adapter=getPaymentProvider(key);
   const snap=await db.doc('paymentProviderConfigs/'+key).get();
   const data=snap.data()||{};
+  const publicConfig=adapter.publicConfiguration();
+  const adapterMethods=stringArray(publicConfig.methods).filter(method=>PAYMENT_METHODS.includes(method as never));
+  const storedMethods=stringArray(data.methods).filter(method=>PAYMENT_METHODS.includes(method as never));
+  const desiredMethods=storedMethods.length?storedMethods:adapterMethods;
   return {
     key,
     enabled:snap.exists?data.enabled!==false:adapter.configured(),
-    methods:stringArray(data.methods).length?stringArray(data.methods):stringArray(adapter.publicConfiguration().methods),
-    environment:text(adapter.publicConfiguration().environment),
+    // Persisted administration may narrow live capabilities, never widen them.
+    methods:desiredMethods.filter(method=>adapterMethods.includes(method)),
+    environment:text(publicConfig.environment),
     configured:adapter.configured(),
     capabilities:adapter.capabilities,
   };
@@ -278,27 +283,77 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
-async function consumerPaymentMethods(db:Firestore,data:DocumentData,billingCurrency=''){
+async function paymentCountryCode(
+  ctx:TenantContext,
+  billingTarget:{type:BillingTenantType;id:string}|null,
+  organizationId:string,
+){
+  if(billingTarget){
+    const target=await billingTenantRef(ctx.db,billingTarget.type,billingTarget.id).get();
+    if(target.exists)return organizationBillingProfile(target.data()).countryCode;
+  }
+  if(organizationId){
+    const organization=await ctx.db.doc('organizations/'+organizationId).get();
+    if(organization.exists)return organizationBillingProfile(organization.data()).countryCode;
+  }
+  const profileBilling=object(ctx.profile.billingProfile);
+  const explicit=text(profileBilling.countryCode||ctx.profile.countryCode).toUpperCase();
+  return /^[A-Z]{2}$/.test(explicit)?explicit:'';
+}
+
+async function consumerPaymentQuotes(
+  db:Firestore,
+  data:DocumentData,
+  amountMinor:number,
+  baseCurrency:string,
+  billingCountryCode='',
+){
   const allowedMethods=stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never));
   const configuredProviders=stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const providerKeys=configuredProviders.length?configuredProviders:registeredPaymentProviderKeys();
-  const methods=new Set<string>();
+  const candidates=new Set<PaymentMethod>();
   for(const key of providerKeys){
-    const config=await providerConfig(db,key);
+    let config;
+    try{config=await providerConfig(db,key);}catch{continue;}
     if(!config.enabled||!config.configured)continue;
-    for(const method of config.methods){
-      if(billingCurrency&&billingCurrency!=='ZMW'&&method!=='card')continue;
-      if((!allowedMethods.length||allowedMethods.includes(method))&&PAYMENT_METHODS.includes(method as never)
-        &&method!=='manual'&&method!=='bank')methods.add(method);
+    for(const methodValue of config.methods){
+      const method=methodValue as PaymentMethod;
+      if((!allowedMethods.length||allowedMethods.includes(method))
+        &&PAYMENT_METHODS.includes(method as never)&&method!=='manual'&&method!=='bank')candidates.add(method);
     }
   }
-  return [...methods] as PaymentMethod[];
+  const allowed:PaymentMethod[]=[];
+  const methodQuotes:Record<string,Record<string,unknown>>={};
+  for(const method of candidates){
+    try{
+      const {provider}=await selectProviderForMethod(db,data,method,billingCountryCode);
+      const providerCurrency=providerSettlementCurrency(provider,method);
+      if(method!=='card'&&!providerCurrency)continue;
+      const quote=await quoteAmountForCurrency(db,amountMinor,baseCurrency,providerCurrency||baseCurrency);
+      allowed.push(method);
+      methodQuotes[method]={
+        currency:quote.billingCurrency,
+        amountMinor:quote.amountMinor,
+        amountDecimal:quote.amountDecimal,
+        baseCurrency:quote.baseCurrency,
+        baseAmountDecimal:quote.baseAmountDecimal,
+        exchangeRate:quote.exchangeRate,
+        fxSource:quote.fxSource,
+        fxUpdatedAt:quote.fxUpdatedAt,
+      };
+    }catch{
+      // A method is not presented unless provider availability and its current
+      // settlement-currency quote can both be established server-side.
+    }
+  }
+  return {allowedMethods:allowed,methodQuotes};
 }
 
 async function consumerPayableItem(
   db:Firestore,id:string,data:DocumentData,
   billingTarget:{type:BillingTenantType;id:string}|null,
   organizationId='',
+  billingCountryCode='',
 ){
   let currency=text(data.currency),amountMinor=Number(data.amountMinor||0),amountDecimal=text(data.amountDecimal);
   let pricing:Record<string,unknown>={};
@@ -314,6 +369,7 @@ async function consumerPayableItem(
       exchangeRate:quote.exchangeRate,fxSource:quote.fxSource,fxUpdatedAt:quote.fxUpdatedAt,
     };
   }
+  const checkout=await consumerPaymentQuotes(db,data,amountMinor,currency,billingCountryCode);
   return {
     id,
     name:text(data.name),
@@ -322,7 +378,8 @@ async function consumerPayableItem(
     organizationName:text(data.organizationName),
     currency,amountMinor,amountDecimal,pricing,
     repeatable:bool(data.repeatable,false),
-    allowedMethods:await consumerPaymentMethods(db,data,currency),
+    allowedMethods:checkout.allowedMethods,
+    methodQuotes:checkout.methodQuotes,
   };
 }
 
@@ -344,9 +401,14 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
         catch{continue;}
         if(!billingTarget)continue;
       }
-      items.push(await consumerPayableItem(
-        ctx.db,doc.id,data,billingTarget,ctx.organizationId||text(ctx.profile.organizationId),
-      ));
+      const consumerOrganizationId=ctx.organizationId||text(ctx.profile.organizationId);
+      const countryCode=await paymentCountryCode(ctx,billingTarget,consumerOrganizationId);
+      const consumerItem=await consumerPayableItem(
+        ctx.db,doc.id,data,billingTarget,consumerOrganizationId,countryCode,
+      );
+      // Do not send unusable charges to consumers. The administrative catalog
+      // remains intact, but users only see payment options that can complete now.
+      if(consumerItem.allowedMethods.length)items.push(consumerItem);
     }
   }
   return items.sort((a,b)=>text(a.name).localeCompare(text(b.name)));
@@ -429,7 +491,9 @@ async function providerAllowed(db:Firestore,item:DocumentData,providerKey:string
   return getPaymentProvider(providerKey);
 }
 
-async function selectProviderForMethod(db:Firestore,item:DocumentData,method:PaymentMethod){
+async function selectProviderForMethod(
+  db:Firestore,item:DocumentData,method:PaymentMethod,billingCountryCode='',
+){
   const allowedProviders=stringArray(item.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const candidates=allowedProviders.length?allowedProviders:registeredPaymentProviderKeys();
   const preferred=method==='airtel_money'?'airtel_money':method==='mtn_money'?'mtn_momo':method==='card'?'lenco':'';
@@ -439,10 +503,14 @@ async function selectProviderForMethod(db:Firestore,item:DocumentData,method:Pay
   for(const providerKey of ordered){
     try{
       const provider=await providerAllowed(db,item,providerKey,method);
+      if(method!=='card'&&billingCountryCode){
+        const providerCountry=providerSettlementCountry(provider,method);
+        if(providerCountry&&providerCountry!==billingCountryCode)continue;
+      }
       return {providerKey,provider};
     }catch{/* try the next configured provider */}
   }
-  throw new Error('The selected payment method is currently unavailable.');
+  throw new Error('The selected payment method is currently unavailable in this billing country.');
 }
 
 export async function createCheckout(ctx:TenantContext,input:Record<string,unknown>){
@@ -474,7 +542,6 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     await validateBillingTenantPlanCapacity(ctx.db,billingTarget.type,billingTarget.id,object(plan.data()?.quotas));
     const quote=await quoteSubscriptionPlanForTenant(ctx.db,billingTarget.type,billingTarget.id,plan.data()||{});
     amountMinor=quote.amountMinor;currency=quote.billingCurrency;
-    if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
     pricingSnapshot={
       baseCurrency:quote.baseCurrency,baseAmountMinor:quote.baseAmountMinor,baseAmountDecimal:quote.baseAmountDecimal,
       billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
@@ -494,7 +561,35 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     }
   }
   if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
-  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
+  const billingCountryCode=text(pricingSnapshot.billingCountryCode)
+    ||await paymentCountryCode(ctx,billingTarget,organizationId||text(ctx.profile.organizationId));
+  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method,billingCountryCode);
+  const checkoutBaseAmountMinor=amountMinor;
+  const checkoutBaseCurrency=currency;
+  const settlementCurrency=method==='card'
+    ?checkoutBaseCurrency
+    :providerSettlementCurrency(provider,method);
+  if(method!=='card'&&!settlementCurrency){
+    throw new Error('The selected mobile-money method does not have a configured settlement currency.');
+  }
+  const methodQuote=await quoteAmountForCurrency(
+    ctx.db,checkoutBaseAmountMinor,checkoutBaseCurrency,settlementCurrency||checkoutBaseCurrency,
+  );
+  amountMinor=methodQuote.amountMinor;
+  currency=methodQuote.billingCurrency;
+  pricingSnapshot={
+    ...pricingSnapshot,
+    checkoutBaseCurrency,
+    checkoutBaseAmountMinor,
+    checkoutBaseAmountDecimal:minorToDecimal(checkoutBaseAmountMinor,checkoutBaseCurrency),
+    paymentMethod:method,
+    settlementCurrency:methodQuote.billingCurrency,
+    settlementAmountMinor:methodQuote.amountMinor,
+    settlementAmountDecimal:methodQuote.amountDecimal,
+    settlementExchangeRate:methodQuote.exchangeRate,
+    settlementFxSource:methodQuote.fxSource,
+    settlementFxUpdatedAt:methodQuote.fxUpdatedAt,
+  };
   const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+billingTenantType+':'+billingTenantId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
   const paymentId='pay_'+randomUUID().replaceAll('-','');

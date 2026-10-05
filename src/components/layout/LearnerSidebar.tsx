@@ -49,7 +49,7 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
     {name:t('navigation.account','Account'),items:[
       {route:'notifications',label:t('navigation.notifications','Notifications'),icon:Bell},
       {route:'invites',label:t('navigation.invites','Invitations'),icon:UserPlus},
-      {route:'payments',label:t('navigation.payments','Payments & receipts'),icon:WalletCards},
+      {route:'payments',label:t('navigation.payments','Payments & Billing'),icon:WalletCards},
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
       {route:'personal-settings',label:t('navigation.personal_settings','Personal settings'),icon:Settings},
       ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),icon:ScrollText}]:[]),

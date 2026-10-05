@@ -137,9 +137,13 @@ The SaaS domain has one source of truth:
 
 Organization settings cannot directly edit `plan`, `quotas` or `featureEntitlements`. A plan edit changes future activations; it does not silently shrink an already-active organization's current entitlement snapshot. Downgrades and manual assignments are rejected when current usage is above the target plan. Cancellation defaults to end-of-period; immediate cancellation is a Super Admin operation and suspends paid feature access.
 
-### Subscription currency and daily FX
+### Currency and daily FX
 
-Plan catalog prices are canonical USD. For organizations billed in Zambia, the server obtains the daily USD→ZMW rate from the public Frankfurter API and caches the verified rate in `system/billing`; there is no browser-side FX calculation and no Frankfurter API key. A stale rate is refreshed before a ZMW quote is created. If the upstream service is temporarily unavailable, VOP may use only a previously verified rate no more than 72 hours old; otherwise checkout fails closed rather than inventing a rate. The existing reconciliation cron also refreshes the daily rate, and Super Admin has an audited manual refresh/override control.
+Plan catalog prices remain canonical USD. VOP also supports method-specific settlement quotes for every payable item. The consumer catalog returns only payment methods whose provider is both configured and enabled. For each visible method, the server determines the provider settlement currency and issues the amount for that method; provider names and routing remain hidden from consumers.
+
+When the configured mobile-money provider settles in a different currency from the item price, VOP obtains the current direct currency-pair rate from the public Frankfurter API and caches verified currency-pair quotes in the `system/billing.fxRates` map. For example, a USD charge routed to a Zambia mobile-money provider is quoted and charged in ZMW. The browser never supplies an authoritative exchange rate, amount, or settlement currency: checkout recalculates the quote server-side immediately before the transaction is created.
+
+Fresh pair quotes are reused for up to 26 hours. If the upstream daily feed is temporarily unavailable, VOP may use only a previously verified rate no more than 72 hours old; otherwise that payment method is hidden from the consumer catalog and checkout fails closed. Subscription pricing keeps its institutional billing-country policy, while the final provider settlement quote applies consistently to subscriptions, programmes, events, materials, services, donations and custom charges.
 
 ## Payment lifecycle
 
