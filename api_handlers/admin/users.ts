@@ -940,7 +940,7 @@ export default async function handler(request: Request, response: Response) {
       return response.status(403).json({ error: message });
     }
     if (/not found|does not exist/i.test(message)) return response.status(404).json({ error: message });
-    if (/required|select |valid |password|name and email|cannot delete their own|transfer organization ownership|assign another administrator/i.test(message)) {
+    if (/required|select |valid |password|name and email|cannot delete their own|transfer organization ownership|assign another administrator|invalid personal|unsupported personal|personal .* must|invalid privacy|unsupported privacy|study reminders must|unsupported study preference/i.test(message)) {
       return response.status(400).json({ error: message });
     }
     console.error('VOP user management failed', error);
