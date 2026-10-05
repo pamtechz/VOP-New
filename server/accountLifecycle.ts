@@ -346,7 +346,7 @@ async function deletePersonalRecords(db:Firestore,uid:string,email:string) {
     ['scriptureSoloChallenges','playerId','=='],['scriptureChallengeResults','playerId','=='],
     ['masterGuidePortfolioShares','learnerId','=='],['courseEnrollments','uid','=='],
     ['programEnrollments','uid','=='],['eventRegistrations','uid','=='],
-    ['passkeyCredentials','uid','=='],
+    ['passkeyCredentials','uid','=='],['passkeyChallenges','uid','=='],
   ] as const;
   let pending=false;
   for(const [collection,field,operator] of operations){
