@@ -301,7 +301,7 @@ export async function loadFirestorePrograms(_user?:User):Promise<CurriculumProgr
   })).filter(item=>item.id&&item.title&&item.published&&!item.archived);
 }
 
-export async function loadFirestoreUser(uid: string): Promise<User | null> {
+export async function loadFirestoreUser(uid: string, inviteToken = ''): Promise<User | null> {
   const firestore = requireDb();
   // Profile bootstrap is server-authoritative. This creates the profile for a
   // newly registered Firebase account before any client-side Firestore read,
@@ -312,7 +312,7 @@ export async function loadFirestoreUser(uid: string): Promise<User | null> {
       const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ action: 'profile' }),
+        body: JSON.stringify({ action: 'profile', inviteToken }),
       });
       if (response.ok) {
         const body = await response.json() as { profile?: Record<string, unknown> };
@@ -418,6 +418,7 @@ export async function createFirestoreStudentProfile(
   email: string,
   displayName: string,
   photoURL?: string | null,
+  inviteToken = '',
 ): Promise<User> {
   // Operational profiles are server-authoritative. The browser only requests
   // synchronization through the authenticated admin/users endpoint.
@@ -437,6 +438,7 @@ export async function createFirestoreStudentProfile(
         displayName: displayName.trim(),
         photoURL: photoURL ?? null,
       },
+      inviteToken,
     }),
   });
   const body = await response.json().catch(() => ({})) as { profile?: Record<string, unknown>; error?: string };
