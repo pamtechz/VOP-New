@@ -533,7 +533,7 @@ export default async function handler(req: Request, res: Response) {
     if (action === 'update') {
       const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
       if (data.plan !== undefined || data.quotas !== undefined || data.featureEntitlements !== undefined) {
-        throw new Error('Plan, feature entitlements and usage limits are managed through Billing & Subscriptions.');
+        throw new Error('Plan, feature entitlements and usage limits are managed through Payments & Billing.');
       }
       if (!ctx.isSuperAdmin && data.billingCountry !== undefined) throw new Error('Only the VOP Super Admin can change an organization billing country.');
       const nextBillingCountry=data.billingCountry!==undefined?normalizedBillingCountryName(data.billingCountry):undefined;
