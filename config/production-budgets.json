@@ -1,0 +1,13 @@
+{
+  "uiLocalization": {
+    "maxCandidateLiterals": 1973
+  },
+  "bundle": {
+    "maxSingleJsBytes": 1050000,
+    "maxSingleCssBytes": 400000,
+    "maxTotalJsBytes": 4000000,
+    "maxTotalCssBytes": 900000,
+    "largeJsThresholdBytes": 500000,
+    "maxLargeJsChunks": 2
+  }
+}
