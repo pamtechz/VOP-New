@@ -103,7 +103,7 @@ test('learner assessment and module status use localization keys, and the invent
     'guide.lessons_progress','guide.section_count','guide.lesson_count',
     'guide.page_count','guide.read_minutes','guide.final_exam_locked_label',
   ]) assert.ok(guide.includes("'"+key+"'"),key);
-  assert.match(inventory,/const EXT = \/\\\.\(tsx\|jsx\|ts\|js\)\$\//);
+  assert.match(inventory,/const EXT\s*=\s*\/\\\.\(tsx\|jsx\|ts\|js\)\$\//);
   assert.match(inventory,/split\(\/\\r\?\\n\/\)/);
   assert.doesNotMatch(inventory,/const EXT = \/\\\\\\\.\(tsx\|jsx\|ts\|js\)\$\//);
 });
