@@ -3,9 +3,14 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 
 const operationsModule=(async()=>{
-  const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
+  const vite=await createServer({
+    configFile:false,
+    server:{middlewareMode:true,hmr:false},
+    appType:'custom',
+    logLevel:'error',
+  });
   try{
-    return await vite.ssrLoadModule('/server/operations.ts') as typeof import('../server/operations.ts');
+    return await vite.ssrLoadModule('/server/operations.ts');
   }finally{
     await vite.close();
   }
