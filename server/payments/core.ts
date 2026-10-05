@@ -509,7 +509,6 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     await validateBillingTenantPlanCapacity(ctx.db,billingTarget.type,billingTarget.id,object(plan.data()?.quotas));
     const quote=await quoteSubscriptionPlanForTenant(ctx.db,billingTarget.type,billingTarget.id,plan.data()||{});
     amountMinor=quote.amountMinor;currency=quote.billingCurrency;
-    if(currency!=='ZMW'&&method!=='card')throw new Error('International subscription payments are processed in USD by card.');
     pricingSnapshot={
       baseCurrency:quote.baseCurrency,baseAmountMinor:quote.baseAmountMinor,baseAmountDecimal:quote.baseAmountDecimal,
       billingCountryCode:quote.countryCode,billingCurrency:quote.billingCurrency,
@@ -530,6 +529,32 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
   }
   if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
   const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
+  const checkoutBaseAmountMinor=amountMinor;
+  const checkoutBaseCurrency=currency;
+  const settlementCurrency=method==='card'
+    ?checkoutBaseCurrency
+    :providerSettlementCurrency(provider,method);
+  if(method!=='card'&&!settlementCurrency){
+    throw new Error('The selected mobile-money method does not have a configured settlement currency.');
+  }
+  const methodQuote=await quoteAmountForCurrency(
+    ctx.db,checkoutBaseAmountMinor,checkoutBaseCurrency,settlementCurrency||checkoutBaseCurrency,
+  );
+  amountMinor=methodQuote.amountMinor;
+  currency=methodQuote.billingCurrency;
+  pricingSnapshot={
+    ...pricingSnapshot,
+    checkoutBaseCurrency,
+    checkoutBaseAmountMinor,
+    checkoutBaseAmountDecimal:minorToDecimal(checkoutBaseAmountMinor,checkoutBaseCurrency),
+    paymentMethod:method,
+    settlementCurrency:methodQuote.billingCurrency,
+    settlementAmountMinor:methodQuote.amountMinor,
+    settlementAmountDecimal:methodQuote.amountDecimal,
+    settlementExchangeRate:methodQuote.exchangeRate,
+    settlementFxSource:methodQuote.fxSource,
+    settlementFxUpdatedAt:methodQuote.fxUpdatedAt,
+  };
   const lockKey=hash(ctx.auth.uid+':'+payableItemId+':'+billingTenantType+':'+billingTenantId+':'+organizationId);
   const lockRef=ctx.db.doc('paymentLocks/'+lockKey);
   const paymentId='pay_'+randomUUID().replaceAll('-','');
