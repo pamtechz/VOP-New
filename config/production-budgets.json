@@ -3,11 +3,12 @@
     "maxCandidateLiterals": 2017
   },
   "bundle": {
-    "maxSingleJsBytes": 1050000,
+    "maxSingleJsBytes": 675000,
     "maxSingleCssBytes": 400000,
-    "maxTotalJsBytes": 4000000,
+    "maxTotalJsBytes": 3000000,
     "maxTotalCssBytes": 900000,
     "largeJsThresholdBytes": 500000,
-    "maxLargeJsChunks": 2
+    "maxLargeJsChunks": 2,
+    "maxEntryJsBytes": 450000
   }
 }
