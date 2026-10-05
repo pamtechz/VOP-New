@@ -170,7 +170,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
   return <div className={'vop-payments-page'+(embedded?' embedded':'')}>
     <header className="vop-payments-head">
       {!embedded&&onBack&&<button type="button" className="vop-back-button" onClick={onBack}><ArrowLeft size={18}/>Back</button>}
-      <div><span>Secure VOP payments</span><h1>Payments & receipts</h1><p>Pay configured VOP charges and track server-verified transactions.</p></div>
+      <div><span>Secure VOP payments</span><h1>Payments & Billing</h1><p>Pay available charges, manage applicable subscriptions and keep server-verified receipts in one place.</p></div>
       <button type="button" className="btn btn-outline" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={16}/>Refresh</button>
     </header>
 
