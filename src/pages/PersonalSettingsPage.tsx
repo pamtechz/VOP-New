@@ -12,7 +12,8 @@ import {
   deletePasskey, listPasskeys, passkeysSupported, platformPasskeyAvailable, registerPasskey, type PasskeyRecord,
 } from '../services/passkeys';
 import {
-  applyAccessibilityPreferences, loadPersonalSettings, savePersonalSettings, type PersonalSettings,
+  applyAccessibilityPreferences, loadNotificationCapabilities, loadPersonalSettings, savePersonalSettings,
+  type NotificationCapabilities, type PersonalSettings,
 } from '../services/personalSettings';
 
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; }
@@ -34,6 +35,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [passkeyCapable,setPasskeyCapable]=useState(passkeysSupported);
   const [platformBiometric,setPlatformBiometric]=useState(false);
   const [passkeyBusy,setPasskeyBusy]=useState(false);
+  const [notificationCapabilities,setNotificationCapabilities]=useState<NotificationCapabilities|null>(null);
   const changeTrustedDevice = async (enabled: boolean) => {
     if (enabled && !await appConfirm(
       'Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.',
@@ -64,6 +66,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadLanguages=loadUiLocaleRegistry()
       .then(items=>{if(active){setUiLocales(items);setLanguages(items)}})
       .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Configured languages could not be loaded.');});
+    const loadNotificationStatus=loadNotificationCapabilities()
+      .then(value=>{if(active)setNotificationCapabilities(value)})
+      .catch(()=>{if(active)setNotificationCapabilities(null)});
     const supported=passkeysSupported();
     setPasskeyCapable(supported);
     const loadSecurity=supported
@@ -72,7 +77,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           listPasskeys().then(items=>{if(active)setPasskeys(items)}),
         ]).catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Passkey status could not be loaded.');})
       :Promise.resolve();
-    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity]).finally(() => {
+    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity,loadNotificationStatus]).finally(() => {
       if (active) setBusy(false);
     });
     return () => { active = false; };
@@ -147,6 +152,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       <section className="vop-personal-card vop-card">
         <h2><Bell size={19}/> Notifications</h2>
         {(['enabled','email','announcements','certificates'] as const).map(key => <label key={key} className="vop-personal-toggle"><input type="checkbox" checked={settings.notifications?.[key] !== false} onChange={e => patch('notifications', { ...settings.notifications, [key]: e.target.checked })}/>{key === 'enabled' ? 'Enable notifications' : key.charAt(0).toUpperCase()+key.slice(1)+' notifications'}</label>)}
+        {notificationCapabilities&&!notificationCapabilities.email.available&&<small role="status">
+          Email delivery is not currently available from this VOP deployment. Your preference is saved and will be enforced when the administrator enables and configures the mail provider.
+        </small>}
       </section>
       <section className="vop-personal-card vop-card">
         <h2><Accessibility size={19}/> Accessibility</h2>
@@ -156,11 +164,6 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           applyAccessibilityPreferences(accessibility);
         }}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
       </section>
-      {!organizationAccount&&<section className="vop-personal-card vop-card">
-        <h2><BookOpen size={19}/> Study preferences</h2>
-        <label className="vop-personal-toggle"><input type="checkbox" checked={settings.studyPreferences?.reminders !== false} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, reminders: e.target.checked })}/> Study reminders</label>
-        <label>Preferred study time<input type="time" value={settings.studyPreferences?.preferredStudyTime || ''} onChange={e => patch('studyPreferences', { ...settings.studyPreferences, preferredStudyTime: e.target.value })}/></label>
-      </section>}
       {!organizationAccount&&<section className="vop-personal-card vop-card">
         <h2><BookOpen size={19}/> Offline study on this device</h2>
         <label className="vop-personal-toggle"><input type="checkbox" checked={trustedDevice} onChange={e => void changeTrustedDevice(e.target.checked)}/> Remember previously opened study materials for offline reading</label>
