@@ -30,6 +30,7 @@ test('personal notifications are account-scoped and survive stale tenant/profile
 
   try{
     const {default:notifications}=await vite.ssrLoadModule('/api_handlers/admin/notifications.ts');
+    const {deliverNotification,notifyOrganizationMembers}=await vite.ssrLoadModule('/server/notifications.ts');
 
     async function api(user,{method='GET',query={},body}={}){
       let status=200,output;
@@ -89,6 +90,57 @@ test('personal notifications are account-scoped and survive stale tenant/profile
       },
     });
     assert.equal(blockedSend.status,403,JSON.stringify(blockedSend));
+
+    const preferenceUser=await identity('notification-preferences',{
+      role:'student',organizationId:'org-notification-prefs',email:'notification-preferences@notifications.invalid',
+    });
+    await db.doc('organizations/org-notification-prefs').set({id:'org-notification-prefs',status:'active'});
+    await db.doc('organizations/org-notification-prefs/members/'+preferenceUser.uid).set({
+      uid:preferenceUser.uid,organizationId:'org-notification-prefs',role:'learner',active:true,
+    });
+
+    await db.doc('users/'+preferenceUser.uid+'/settings/personal').set({
+      notifications:{enabled:false,email:false,announcements:false,certificates:false},
+    });
+    const suppressed=await deliverNotification(db,{
+      organizationId:'org-notification-prefs',recipientId:preferenceUser.uid,
+      type:'learning-support',title:'Support',body:'This should respect the disabled preference.',
+    });
+    assert.equal(suppressed.status,'suppressed');
+    assert.equal(suppressed.channel,'none');
+    assert.equal((await db.collection('notifications').where('recipientId','==',preferenceUser.uid).get()).empty,true);
+
+    const mandatory=await deliverNotification(db,{
+      organizationId:'org-notification-prefs',recipientId:preferenceUser.uid,
+      type:'invitation',title:'Invitation',body:'Transactional invitations remain available.',
+    });
+    assert.equal(mandatory.status,'sent');
+    assert.equal(mandatory.channel,'in_app');
+
+    await db.doc('users/'+preferenceUser.uid+'/settings/personal').set({
+      notifications:{enabled:true,email:false,announcements:false,certificates:false},
+    });
+    const emailFallback=await deliverNotification(db,{
+      organizationId:'org-notification-prefs',recipientId:preferenceUser.uid,
+      type:'learning-support',channel:'email',title:'Email support',body:'Email-disabled accounts receive an in-app fallback.',
+    });
+    assert.equal(emailFallback.status,'fallback_in_app');
+    assert.equal(emailFallback.channel,'in_app');
+    assert.equal(emailFallback.reason,'email_notifications_disabled');
+
+    const certificate=await deliverNotification(db,{
+      organizationId:'org-notification-prefs',recipientId:preferenceUser.uid,
+      type:'certificate',title:'Certificate',body:'Certificate preferences are enforced.',
+    });
+    assert.equal(certificate.status,'suppressed');
+
+    const publication=await notifyOrganizationMembers(db,{
+      organizationId:'org-notification-prefs',sourceId:'announcement-prefs',
+      type:'announcement',title:'Announcement',body:'Suppressed publication',
+      actionUrl:'/announcements',createdBy:'system',targetAudience:'all',
+    });
+    assert.equal(publication.delivered,0);
+    assert.equal(publication.suppressed,1);
 
     const unauthenticated=await api(null,{query:{action:'list'}});
     assert.equal(unauthenticated.status,401,JSON.stringify(unauthenticated));
