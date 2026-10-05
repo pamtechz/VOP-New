@@ -287,10 +287,6 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
       },
     });
-    await db.doc('system/billing/rates/USD_ZMW').set({
-      baseCurrency:'USD',billingCurrency:'ZMW',rate:25,source:'integration-test',
-      providerDate:'2026-10-05',fetchedAt:new Date().toISOString(),
-    });
     await db.doc('organizations/'+orgA).set({
       id:orgA,name:'Payment Org A',status:'active',billingCountry:'Zambia',countryCode:'ZM',
       billingProfile:{countryCode:'ZM',countryName:'Zambia',billingCurrency:'ZMW',pricingRegion:'zambia'},
@@ -410,6 +406,17 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       assert.equal(unavailable.status,200,JSON.stringify(unavailable));
       assert.equal(unavailable.items.some(candidate=>candidate.id===item.id),false);
       await db.doc('paymentProviderConfigs/mtn_momo').set({enabled:true,methods:['mtn_money']},{merge:false});
+      const internationalItem=await createItem('International USD charge','custom_charge','',{
+        amount:20,currency:'USD',organizationId:orgIntl,
+        allowedProviders:['mtn_momo'],allowedMethods:['mtn_money'],
+      });
+      const internationalCatalog=await call(internationalLearner,'catalog',{});
+      assert.equal(internationalCatalog.status,200,JSON.stringify(internationalCatalog));
+      assert.equal(
+        internationalCatalog.items.some(candidate=>candidate.id===internationalItem.id),
+        false,
+        'a Zambia-only mobile-money provider must not be offered to a US-billed tenant',
+      );
     });
 
     await t.test('free subscription plans quote zero safely, auto-provision organizations and activate without checkout',async()=>{
