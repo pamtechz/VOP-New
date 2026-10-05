@@ -1,12 +1,12 @@
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
-  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithCustomToken,
   signOut,
 } from 'firebase/auth';
 import { auth, authPersistenceReady } from '../lib/firebase';
@@ -22,10 +22,20 @@ export const emailSignIn = async (email: string, password: string) => {
   return signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
 };
 
-export const emailSignUp = async (email: string, password: string) => {
+export const emailSignUp = async (email: string, password: string, inviteToken = '') => {
   const firebaseAuth = requireAuth();
   await authPersistenceReady;
-  return createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
+  const response = await fetch('/api/auth-register', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:email.trim(),password,inviteToken}),
+  });
+  const payload = await response.json().catch(() => ({})) as {customToken?:string;approvalRequired?:boolean;message?:string;error?:string};
+  if (!response.ok) throw new Error(payload.error || payload.message || 'Registration failed.');
+  if (payload.approvalRequired) return { approvalRequired:true, message:payload.message || 'Your account is awaiting approval.' };
+  if (!payload.customToken) throw new Error('Registration completed without a sign-in token.');
+  await signInWithCustomToken(firebaseAuth,payload.customToken);
+  return { approvalRequired:false, message:'' };
 };
 
 export const resetPassword = (email: string) =>
