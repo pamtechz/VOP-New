@@ -7,12 +7,13 @@ import { adminPaymentRequest, type ClientPayment, type PaymentProviderDescriptor
 import { auth } from '../lib/firebase';
 import { appConfirm, appPrompt } from '../components/layout/AppDialog';
 import SubscriptionWorkspace, { type BillingTenantOption, type SubscriptionPackageView } from '../components/admin/SubscriptionWorkspace';
+import PaymentsPage from './PaymentsPage';
 import { SUBSCRIPTION_FEATURES, SUBSCRIPTION_QUOTAS, type SubscriptionQuotaKey } from '../../shared/subscriptions';
 import { ShimmerList } from '../components/layout/Shimmer';
 import './payments.css';
 
-interface Props{currentUser:User;onOpenCheckout?:(planId?:string)=>void}
-type Tab='transactions'|'subscriptions'|'items'|'providers'|'reconciliation';
+interface Props{currentUser:User}
+type Tab='checkout'|'transactions'|'subscriptions'|'items'|'providers'|'reconciliation';
 type Organization={id:string;name:string};
 type Target={id:string;name:string};
 type SubscriptionPackage=SubscriptionPackageView;
@@ -32,8 +33,8 @@ async function adminApi(path:string,body:Record<string,unknown>){
 function typeLabel(value:string){return value.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());}
 function statusClass(value:string){return value==='paid'?'success':['failed','cancelled','expired'].includes(value)?'danger':'warning';}
 
-const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
-  const [tab,setTab]=useState<Tab>('transactions');
+const PaymentManagement:React.FC<Props>=({currentUser})=>{
+  const [tab,setTab]=useState<Tab>(currentUser.role==='super_admin'?'transactions':'checkout');
   const [transactions,setTransactions]=useState<ClientPayment[]>([]);
   const [items,setItems]=useState<PayableItem[]>([]);
   const [providers,setProviders]=useState<PaymentProviderDescriptor[]>([]);
@@ -143,7 +144,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
             :organizationRows.map(item=>({...item,type:'organization' as const})),
         );
         setItems([]);setProviders([]);setPackages([]);
-        if(!canManageOwnSubscription&&tab!=='transactions')setTab('transactions');
+        if(!canManageOwnSubscription&&!['checkout','transactions'].includes(tab))setTab('checkout');
       }
     }catch(reason){setError(reason instanceof Error?reason.message:'Payments could not be loaded.');}
     finally{setLoading(false);}
@@ -411,20 +412,30 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
   };
 
   const filtered=useMemo(()=>transactions,[transactions]);
+  const openConsumerCheckout=(planId?:string)=>{
+    try{
+      if(planId)sessionStorage.setItem('vop-subscription-checkout-plan',planId);
+      else sessionStorage.removeItem('vop-subscription-checkout-plan');
+    }catch{/* storage may be unavailable */}
+    setTab('checkout');
+  };
+
 
   return <div className="vop-payment-admin">
-    <div className="vop-page-header"><div><span className="vop-page-kicker">Financial operations</span><h1>Billing & Subscriptions</h1><p>{isSuperAdmin?'Manage SaaS plans, institutional subscriptions, live usage, charges, payment providers and transaction operations from one billing workspace.':canManageOwnSubscription?'Manage your institution subscription and review its payment transactions.':'Review payment transactions within your authorized tenant scope.'}</p></div>
+    <div className="vop-page-header"><div><span className="vop-page-kicker">Financial operations</span><h1>Payments & Billing</h1><p>{isSuperAdmin?'Manage plans, subscriptions, charges, configured payment methods and transaction operations from one finance workspace.':canManageOwnSubscription?'Pay charges, download receipts, manage your institution subscription and review transactions in one place.':'Pay available charges, download receipts and review transactions in one place.'}</p></div>
       <div className="vop-payment-admin-actions"><button className="btn btn-outline" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/>Refresh</button>{isSuperAdmin&&tab==='items'&&<button className="btn btn-primary" onClick={startCreate}><Plus size={16}/>New payable item</button>}</div></div>
     <div className="vop-payment-admin-tabs">
       {(isSuperAdmin
         ?([['transactions','Transactions'],['subscriptions','Plans & subscriptions'],['items','Payable items'],['providers','Providers'],['reconciliation','Reconciliation']] as Array<[Tab,string]>)
         :canManageOwnSubscription
-          ?([['transactions','Transactions'],['subscriptions','Plan & subscription']] as Array<[Tab,string]>)
-          :([['transactions','Transactions']] as Array<[Tab,string]>)
+          ?([['checkout','Pay & receipts'],['subscriptions','Plan & subscription'],['transactions','Transactions']] as Array<[Tab,string]>)
+          :([['checkout','Pay & receipts'],['transactions','Transactions']] as Array<[Tab,string]>)
       ).map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
     </div>
     {error&&<div className="vop-payment-alert danger"><XCircle size={17}/><span>{error}</span><button onClick={()=>setError('')}>×</button></div>}
     {message&&<div className="vop-payment-alert success"><CheckCircle2 size={17}/><span>{message}</span><button onClick={()=>setMessage('')}>×</button></div>}
+
+    {!isSuperAdmin&&tab==='checkout'&&<PaymentsPage currentUser={currentUser} embedded/>}
 
     {tab==='transactions'&&<>
       <div className="vop-payment-admin-toolbar vop-payment-filter-grid">
@@ -453,7 +464,7 @@ const PaymentManagement:React.FC<Props>=({currentUser,onOpenCheckout})=>{
         onCreatePlan={isSuperAdmin?startPackageCreate:undefined}
         onEditPlan={isSuperAdmin?startPackageEdit:undefined}
         onDeletePlan={isSuperAdmin?deletePackage:undefined}
-        onOpenCheckout={onOpenCheckout}
+        onOpenCheckout={openConsumerCheckout}
       />
       {isSuperAdmin&&<section className="vop-payment-reconciliation vop-billing-policy-card"><Settings2 size={34}/><div><h2>Billing & subscription policy</h2><p>Plans have one canonical USD price. Zambian institutions receive a locked ZMW quote from the daily Frankfurter USD→ZMW rate. Subscription policy is institutional by default; learners/candidates are excluded from individual subscription billing unless Super Admin explicitly enables it.</p><div className="vop-payable-editor-grid"><label><span>USD → ZMW rate</span><input inputMode="decimal" value={billingSettings.usdToZmwRate} onChange={e=>setBillingSettings(v=>({...v,usdToZmwRate:e.target.value,fxSource:'manual'}))} placeholder="Daily rate"/></label><label><span>Rate source</span><input value={billingSettings.fxSource} readOnly disabled/></label><label><span>Quote validity (minutes)</span><input inputMode="numeric" value={billingSettings.fxQuoteTtlMinutes} onChange={e=>setBillingSettings(v=>({...v,fxQuoteTtlMinutes:e.target.value}))}/></label></div><fieldset className="vop-billing-audience"><legend>Subscription-bearing accounts</legend><label className="vop-checkbox"><input type="checkbox" checked={billingSettings.subscriptionAudience.learnersCandidates} onChange={e=>setBillingSettings(v=>({...v,subscriptionAudience:{...v.subscriptionAudience,learnersCandidates:e.target.checked}}))}/>Learners / candidates require subscription billing</label><p className="vop-payment-security">Currently off: learner, student and candidate accounts do not require an individual subscription and do not consume member/staff seats. Institutional subscription policy remains enabled for organizations, churches, districts, conferences and unions.</p></fieldset><div className="vop-payment-admin-actions"><button className="btn btn-primary" disabled={busy} onClick={()=>void refreshBillingRate()}><RefreshCw size={16}/>Refresh daily rate</button><button className="btn btn-outline" disabled={busy} onClick={()=>void saveBillingSettings()}><Settings2 size={16}/>Save billing policy</button></div>{billingSettings.fxUpdatedAt&&<small>Last refreshed: {new Date(billingSettings.fxUpdatedAt).toLocaleString()}{billingSettings.fxProviderDate?' · provider date '+billingSettings.fxProviderDate:''}</small>}</div></section>}
     </>}
