@@ -98,6 +98,6 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
       </div>
     </section>
     <section className="vop-public-cta"><span>YOUR NEXT CHAPTER STARTS HERE</span><h2>Ready to begin?</h2><p>Continue your Bible study journey with Voice of Prophecy.</p><div>{registrationAllowed&&<button type="button" onClick={onRegister}>Create your VOP account <ArrowRight size={17}/></button>}<button type="button" onClick={onSignIn}>{registrationAllowed?'I already have an account':'Sign in to VOP'}</button></div>{!registrationAllowed&&<small>New public registrations are currently closed. Organization invitation links can still be used to create an account.</small>}</section>
-    <footer className="vop-public-footer"><span><img src="/assets/vop_logo_2.png" alt=""/> Voice of Prophecy</span><p>One Digital Platform. One Connected Ministry. A Stronger Church.</p><small>© {new Date().getFullYear()} Voice of Prophecy</small></footer>
+    <footer className="vop-public-footer"><span><img src="/assets/vop_logo_2.png" alt=""/> Voice of Prophecy</span><p>One Digital Platform. One Connected Ministry. A Stronger Church.</p><p><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a></p><small>© {new Date().getFullYear()} Voice of Prophecy</small></footer>
   </main>;
 };
