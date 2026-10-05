@@ -51,6 +51,7 @@ const checks = [
   ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','providerSettlementCurrency','providerSettlementCountry','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
   ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
   ['scripts/mtn-momo-sandbox-provision.mjs', ['/v1_0/apiuser','/apikey','providerCallbackHost','MTN_MOMO_SUBSCRIPTION_KEY']],
+  ['server/notifications.ts', ['deliverNotification','retryPendingEmailNotifications','ensureInAppEmailFallback','fallbackEmailDelivery','fallback_in_app','notificationDeliveries']],
   ['server/operations.ts', ['runDailyOperationalMaintenance','operationalHealth','backupOutputPrefix','exportDocuments','operationsBackupRuns','operationalAlerts','FIRESTORE_BACKUP_BUCKET','backupRpoHours:24','backupStaleAfterHours:36']],
   ['api_handlers/admin/health.ts', ['Operational health check failed','Only the VOP Super Admin can view detailed operational health','X-Request-Id']],
   ['scripts/firestore-restore.mjs', ['importDocuments','VOP_FIRESTORE_RESTORE_CONFIRM','VOP_FIRESTORE_RESTORE_SOURCE_CONFIRMED','--apply','--status']],
