@@ -205,8 +205,8 @@ export async function requestAccountDeletion(db:Firestore,uid:string,confirmatio
   if(role==='super_admin')throw new Error('A Super Admin account cannot be self-deleted. Transfer platform administration first.');
   if(organizationRole==='owner')throw new Error('An organization owner must transfer ownership before requesting account deletion.');
   if(role==='mentor'){
-    const active=await db.collection('mentorAssignments').where('mentorId','==',uid).where('status','!=','inactive').limit(1).get();
-    if(!active.empty)throw new Error('This mentor still has active learner assignments. Reassign them before deleting the account.');
+    const assignments=await db.collection('mentorAssignments').where('mentorId','==',uid).limit(25).get();
+    if(assignments.docs.some(document=>String(document.data()?.status||'active')!=='inactive'))throw new Error('This mentor still has active learner assignments. Reassign them before deleting the account.');
   }
   const now=new Date().toISOString();
   const scheduledFor=plusDays(ACCOUNT_DELETION_GRACE_DAYS);
@@ -371,8 +371,8 @@ export async function processAccountDeletion(db:Firestore,uid:string,now=new Dat
     await ref.set({status:'blocked',reason:'Administrative ownership must be transferred before deletion.',updatedAt:FieldValue.serverTimestamp()},{merge:true});
     return {processed:false,status:'blocked' as const};
   }
-  const activeMentor=await db.collection('mentorAssignments').where('mentorId','==',uid).where('status','!=','inactive').limit(1).get();
-  if(!activeMentor.empty){
+  const mentorAssignments=await db.collection('mentorAssignments').where('mentorId','==',uid).limit(25).get();
+  if(mentorAssignments.docs.some(document=>String(document.data()?.status||'active')!=='inactive')){
     await ref.set({status:'blocked',reason:'Active mentor assignments must be reassigned before deletion.',updatedAt:FieldValue.serverTimestamp()},{merge:true});
     return {processed:false,status:'blocked' as const};
   }
