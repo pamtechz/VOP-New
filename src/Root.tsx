@@ -13,6 +13,7 @@ import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
 import { RouteShimmer } from './components/layout/Shimmer';
 import { loadPublicAuthPolicy, type PublicAuthPolicy } from './services/authPolicy';
+import { resetPersonalRuntimeSettings } from './services/personalRuntimeSettings';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
@@ -61,6 +62,7 @@ export function Root() {
         }
 
         if (!firebaseUser) {
+          resetPersonalRuntimeSettings();
           setDataReady(true);
           return;
         }
