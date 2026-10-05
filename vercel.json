@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/account-lifecycle-cron",
+      "destination": "/api/account?__vopAccountRoute=lifecycle-cron"
+    },
+    {
       "source": "/api/admin/:route*",
       "destination": "/api/admin?__vopRoute=:route*"
     },
