@@ -219,6 +219,10 @@ export async function operationalHealth(db=getAdminDb(),now=new Date()){
     database:'ok',
     latencyMs:Date.now()-started,
     maintenance:{status:maintenanceStatus,lastRunAt:maintenanceAt},
+    securityCleanup:{
+      expiredPasskeyChallenges,
+      expiredAuthRateLimits,
+    },
     backup:{
       status:backupStatus,
       configured,
@@ -232,7 +236,28 @@ export async function operationalHealth(db=getAdminDb(),now=new Date()){
   };
 }
 
+async function purgeExpiredServerRecords(
+  db:Firestore,
+  collection:string,
+  now:Date,
+  limit=250,
+){
+  const snapshot=await db.collection(collection)
+    .where('expiresAt','<',now.toISOString())
+    .limit(Math.max(1,Math.min(450,limit)))
+    .get();
+  if(snapshot.empty)return 0;
+  const batch=db.batch();
+  snapshot.docs.forEach(document=>batch.delete(document.ref));
+  await batch.commit();
+  return snapshot.size;
+}
+
 export async function runDailyOperationalMaintenance(db=getAdminDb(),now=new Date()){
+  const [expiredPasskeyChallenges,expiredAuthRateLimits]=await Promise.all([
+    purgeExpiredServerRecords(db,'passkeyChallenges',now),
+    purgeExpiredServerRecords(db,'authRateLimits',now),
+  ]);
   let bucket='',configurationError='';
   try{bucket=backupBucket();}catch(error){configurationError=safeError(error);}
   const configured=Boolean(bucket)&&!configurationError;
@@ -303,6 +328,7 @@ export async function runDailyOperationalMaintenance(db=getAdminDb(),now=new Dat
   }
   return {
     status:backupStatus,
+    securityCleanup:{expiredPasskeyChallenges,expiredAuthRateLimits},
     backup:{...requested,refresh,latest,stale,configured,configurationError:configurationError||null,failure:backupFailure||null},
     alert,
   };
