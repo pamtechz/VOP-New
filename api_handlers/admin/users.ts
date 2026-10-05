@@ -883,7 +883,7 @@ export default async function handler(request: Request, response: Response) {
     if (message.includes('Firebase Admin server configuration is missing')) {
       return response.status(503).json({ error: 'Server-side Firebase administration is not configured.' });
     }
-    if (/permission|only |outside your|another organization|authorized tenant|cannot access|not a member|belongs to another/i.test(message)) {
+    if (/permission|only |outside your|another organization|authorized tenant|cannot access|not a member|belongs to another|registration is currently closed|awaiting administrator approval/i.test(message)) {
       return response.status(403).json({ error: message });
     }
     if (/not found|does not exist/i.test(message)) return response.status(404).json({ error: message });
