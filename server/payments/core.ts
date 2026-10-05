@@ -94,11 +94,16 @@ async function providerConfig(db:Firestore,key:string){
   const adapter=getPaymentProvider(key);
   const snap=await db.doc('paymentProviderConfigs/'+key).get();
   const data=snap.data()||{};
+  const publicConfig=adapter.publicConfiguration();
+  const adapterMethods=stringArray(publicConfig.methods).filter(method=>PAYMENT_METHODS.includes(method as never));
+  const storedMethods=stringArray(data.methods).filter(method=>PAYMENT_METHODS.includes(method as never));
+  const desiredMethods=storedMethods.length?storedMethods:adapterMethods;
   return {
     key,
     enabled:snap.exists?data.enabled!==false:adapter.configured(),
-    methods:stringArray(data.methods).length?stringArray(data.methods):stringArray(adapter.publicConfiguration().methods),
-    environment:text(adapter.publicConfiguration().environment),
+    // Persisted administration may narrow live capabilities, never widen them.
+    methods:desiredMethods.filter(method=>adapterMethods.includes(method)),
+    environment:text(publicConfig.environment),
     configured:adapter.configured(),
     capabilities:adapter.capabilities,
   };
