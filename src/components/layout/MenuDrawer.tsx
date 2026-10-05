@@ -106,7 +106,7 @@ export const MenuDrawer: React.FC<MenuDrawerProps> = ({
   const account: MenuItem[] = [
     { route: 'notifications', label: t('navigation.notifications', 'Notifications'), detail: t('navigation.notifications_detail', 'Messages and workflow updates'), icon: Bell },
     { route: 'invites', label: t('navigation.invites', 'Invitations'), detail: t('navigation.invites_detail', 'Received and sent invitations'), icon: UserPlus },
-    { route: 'payments', label: t('navigation.payments', 'Payments & receipts'), detail: t('navigation.payments_detail', 'Secure checkout and payment history'), icon: WalletCards },
+    { route: 'payments', label: t('navigation.payments', 'Payments & Billing'), detail: t('navigation.payments_detail', 'Payments, billing and receipts'), icon: WalletCards },
     { route: 'profile', label: t('navigation.profile', 'Profile'), detail: t('navigation.profile_detail', 'Your learner account'), icon: UserCheck },
     { route: 'personal-settings', label: t('navigation.personal_settings', 'Personal Settings'), detail: t('navigation.settings_detail', 'Language and preferences'), icon: UserCheck },
     ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),detail:t('navigation.localization_console_detail','Assigned translation and review work'),icon:Globe2}]:[]),
