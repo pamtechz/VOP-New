@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2 } from 'lucide-react';
-import { auth } from '../lib/firebase';
 import type { User, CustomLanguage } from '../types';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
@@ -12,33 +11,11 @@ import { persistThemePreference } from '../services/themePreference';
 import {
   deletePasskey, listPasskeys, passkeysSupported, platformPasskeyAvailable, registerPasskey, type PasskeyRecord,
 } from '../services/passkeys';
-
-type PersonalSettings = {
-  theme?: 'light' | 'dark' | 'system';
-  language?: string;
-  uiLocale?: string;
-  studyLanguage?: string;
-  notifications?: { enabled?: boolean; email?: boolean; announcements?: boolean; certificates?: boolean };
-  accessibility?: { reducedMotion?: boolean; largeText?: boolean; highContrast?: boolean };
-  privacy?: { profileVisibility?: 'private' | 'organization' };
-  studyPreferences?: { reminders?: boolean; preferredStudyTime?: string };
-};
+import {
+  applyAccessibilityPreferences, loadPersonalSettings, savePersonalSettings, type PersonalSettings,
+} from '../services/personalSettings';
 
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; }
-
-async function callPersonalSettings(operation: 'get' | 'save', settings?: PersonalSettings) {
-  const user = auth?.currentUser;
-  if (!user) throw new Error('Please sign in first.');
-  const token = await user.getIdToken();
-  const response = await fetch('/api/admin/users', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify(operation === 'get' ? { action: 'personalSettings', operation: 'get' } : { action: 'personalSettings', settings }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(payload.error || 'Could not save personal settings.'));
-  return payload.settings as PersonalSettings;
-}
 
 export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onStudyLanguageChange, context='learner' }) => {
   const organizationAccount=context==='organization';
@@ -76,8 +53,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
 
   useEffect(() => {
     let active = true;
-    const loadSettings = callPersonalSettings('get')
-      .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
+    const loadSettings = loadPersonalSettings()
+      .then(value => {
+        if (active && value) {
+          setSettings(previous => ({ ...previous, ...value }));
+          applyAccessibilityPreferences(value.accessibility);
+        }
+      })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
     const loadLanguages=loadUiLocaleRegistry()
       .then(items=>{if(active){setUiLocales(items);setLanguages(items)}})
@@ -127,8 +109,10 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const save = async () => {
     setSaving(true); setMessage('');
     try {
-      await callPersonalSettings('save', settings);
-      if (settings.theme) persistThemePreference(settings.theme==='light'?'light':'dark');
+      const persisted = await savePersonalSettings(settings);
+      setSettings(previous => ({ ...previous, ...persisted }));
+      applyAccessibilityPreferences(persisted.accessibility);
+      if (persisted.theme) persistThemePreference(persisted.theme==='light'?'light':'dark');
       if (settings.uiLocale) setUiLocale(settings.uiLocale);
       if (!organizationAccount && settings.studyLanguage !== undefined) onStudyLanguageChange(settings.studyLanguage || appSettings.defaultLanguage || '');
       setMessage(t('settings.saved', 'Your personal settings have been saved.'));
@@ -166,7 +150,11 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       </section>
       <section className="vop-personal-card vop-card">
         <h2><Accessibility size={19}/> Accessibility</h2>
-        {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => patch('accessibility', { ...settings.accessibility, [key]: e.target.checked })}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
+        {(['reducedMotion','largeText','highContrast'] as const).map(key => <label key={key}><input type="checkbox" checked={Boolean(settings.accessibility?.[key])} onChange={e => {
+          const accessibility={ ...settings.accessibility, [key]: e.target.checked };
+          patch('accessibility', accessibility);
+          applyAccessibilityPreferences(accessibility);
+        }}/>{key === 'reducedMotion' ? 'Reduce motion' : key === 'largeText' ? 'Use larger text' : 'Increase contrast'}</label>)}
       </section>
       {!organizationAccount&&<section className="vop-personal-card vop-card">
         <h2><BookOpen size={19}/> Study preferences</h2>
