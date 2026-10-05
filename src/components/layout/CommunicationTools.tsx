@@ -164,7 +164,7 @@ export function CommunicationTools({onNavigate,t}:{onNavigate?:(route:AppRoute)=
       <button type="button" onClick={()=>setSearchOpen(value=>!value)} className="btn btn-ghost" style={{color:'rgba(255,255,255,.9)',padding:'.4rem'}} aria-label={t('common.search','Search')} title={t('common.search','Search')}><Search size={17}/></button>
       {searchOpen&&<div className="vop-header-popover" style={{width:'min(430px,90vw)'}}>
         <div className="vop-header-searchbox"><Search size={15}/><input autoFocus value={query} onChange={event=>setQuery(event.target.value)} placeholder={t('common.search','Search')}/><button type="button" onClick={()=>setQuery('')} aria-label={t('common.clear','Clear')}><X size={14}/></button></div>
-        <div className={'vop-header-results'+(notificationBusy&&notifications.length?' vop-refreshing vop-shimmer-overlay':'')}>
+        <div className={'vop-header-results'+(searchBusy&&results.length?' vop-refreshing vop-shimmer-overlay':'')}>
           {searchBusy?<div className="vop-header-empty">{t('common.searching','Searching…')}</div>
           :query.trim().length<2?<div className="vop-header-empty">{t('common.search_hint','Type at least 2 characters')}</div>
           :!results.length?<div className="vop-header-empty">{t('common.no_results','No results')}</div>
