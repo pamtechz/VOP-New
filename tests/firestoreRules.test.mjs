@@ -62,6 +62,7 @@ test('Firestore rules enforce authenticated ownership and append-only unverified
       await assertFails(alice.doc(path('alice')).set(submission()));
       await assertFails(alice.doc(path('alice')).update({ practiceScore: 100 }));
       await assertFails(alice.doc(path('alice')).delete());
+      await assertFails(alice.doc('users/alice').set({ uid:'alice', role:'student' }));
       await assertFails(alice.doc('users/alice').set({ role: 'admin' }));
       await assertFails(alice.doc('users/alice/grades/official').set({ score: 100 }));
       await assertFails(alice.doc(path('not-alice')).set(submission()));

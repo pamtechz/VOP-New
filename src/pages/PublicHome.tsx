@@ -10,6 +10,7 @@ type Props = {
   onSignIn: () => void;
   onRegister: () => void;
   configurationMissing?: boolean;
+  registrationAllowed?: boolean;
 };
 
 const features = [
@@ -28,7 +29,7 @@ const steps = [
   { number:'04', title:'Follow your progress', text:'View verified results and any configured certification steps.' },
 ];
 
-export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMissing=false}) => {
+export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMissing=false,registrationAllowed=false}) => {
   const [menuOpen,setMenuOpen]=useState(false);
   const navigate=(hash:string)=>{setMenuOpen(false);document.getElementById(hash)?.scrollIntoView({behavior:'smooth'});};
   return <main className="vop-public">
@@ -46,7 +47,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
         </nav>
         <div className="vop-public-header-actions">
           <button type="button" className="vop-public-signin" onClick={onSignIn}>Sign in</button>
-          <button type="button" className="vop-public-join" onClick={onRegister}>Get started <ArrowRight size={16}/></button>
+          {registrationAllowed&&<button type="button" className="vop-public-join" onClick={onRegister}>Get started <ArrowRight size={16}/></button>}
           <button type="button" className="vop-public-menu-toggle" onClick={()=>setMenuOpen(value=>!value)}
             aria-expanded={menuOpen} aria-label={menuOpen?'Close navigation':'Open navigation'}>{menuOpen?<X size={22}/>:<Menu size={22}/>}</button>
         </div>
@@ -59,7 +60,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
           <h1>Study the Word.<br/><em>Grow in faith.</em><br/>Serve together.</h1>
           <p className="vop-public-lead">Bible study, discipleship, youth leadership and church connection—united in one secure, mobile-first ministry experience.</p>
           <div className="vop-public-hero-actions">
-            <button type="button" className="vop-public-primary" onClick={onRegister}>Begin your journey <ArrowRight size={19}/></button>
+            {registrationAllowed?<button type="button" className="vop-public-primary" onClick={onRegister}>Begin your journey <ArrowRight size={19}/></button>:<button type="button" className="vop-public-primary" onClick={onSignIn}>Sign in to continue <ArrowRight size={19}/></button>}
             <button type="button" className="vop-public-secondary" onClick={()=>navigate('features')}>Explore the platform <ChevronDown size={18}/></button>
           </div>
           <div className="vop-public-trust"><span><CheckCircle2 size={17}/> Self-paced lessons</span><span><CheckCircle2 size={17}/> Multilingual learning</span><span><CheckCircle2 size={17}/> Account-linked progress</span></div>
@@ -96,7 +97,7 @@ export const PublicHome: React.FC<Props> = ({onSignIn,onRegister,configurationMi
         <div className="vop-public-org-art" aria-hidden="true"><span className="vop-public-org-ring ring-one"/><span className="vop-public-org-ring ring-two"/><div className="vop-public-org-symbol"><img src="/assets/vop_logo_2.png" alt=""/></div></div>
       </div>
     </section>
-    <section className="vop-public-cta"><span>YOUR NEXT CHAPTER STARTS HERE</span><h2>Ready to begin?</h2><p>Continue your Bible study journey with Voice of Prophecy.</p><div><button type="button" onClick={onRegister}>Create your VOP account <ArrowRight size={17}/></button><button type="button" onClick={onSignIn}>I already have an account</button></div></section>
+    <section className="vop-public-cta"><span>YOUR NEXT CHAPTER STARTS HERE</span><h2>Ready to begin?</h2><p>Continue your Bible study journey with Voice of Prophecy.</p><div>{registrationAllowed&&<button type="button" onClick={onRegister}>Create your VOP account <ArrowRight size={17}/></button>}<button type="button" onClick={onSignIn}>{registrationAllowed?'I already have an account':'Sign in to VOP'}</button></div>{!registrationAllowed&&<small>New public registrations are currently closed. Organization invitation links can still be used to create an account.</small>}</section>
     <footer className="vop-public-footer"><span><img src="/assets/vop_logo_2.png" alt=""/> Voice of Prophecy</span><p>One Digital Platform. One Connected Ministry. A Stronger Church.</p><small>© {new Date().getFullYear()} Voice of Prophecy</small></footer>
   </main>;
 };

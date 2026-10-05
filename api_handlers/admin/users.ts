@@ -206,7 +206,34 @@ async function serializeUsers(db: Firestore, authUsers: UserRecord[]) {
 }
 
 
-async function syncOwnProfile(decoded: { uid: string; email?: string; name?: string; picture?: string; organizationId?: unknown }, db: Firestore) {
+async function validRegistrationInvite(db:Firestore,tokenValue:unknown,addressValue:unknown){
+  const token=String(tokenValue||'').trim();
+  if(!/^[A-Za-z0-9]{32,128}$/.test(token))return false;
+  const snapshot=await db.doc('organizationInvites/'+token).get();
+  if(!snapshot.exists)return false;
+  const data=snapshot.data()||{};
+  const expiresAt=Date.parse(String(data.expiresAt||''));
+  if(data.status!=='pending'||!Number.isFinite(expiresAt)||expiresAt<Date.now())return false;
+  const bound=String(data.email||'').trim().toLowerCase();
+  const address=String(addressValue||'').trim().toLowerCase();
+  return !bound||Boolean(address&&bound===address);
+}
+
+async function assertRegistrationAdmission(
+  decoded:{uid:string;email?:string},
+  db:Firestore,
+  invitationToken:unknown,
+){
+  const [settings,invited]=await Promise.all([
+    db.doc('system/settings').get(),
+    validRegistrationInvite(db,invitationToken,decoded.email),
+  ]);
+  const options=settings.data()?.systemOptions||{};
+  if(options.allowRegistrations===true||invited)return {invited,requireApproval:options.requireApproval===true};
+  throw new Error('New account registration is currently closed. Use a valid organization invitation or contact VOP administration.');
+}
+
+async function syncOwnProfile(decoded: { uid: string; email?: string; name?: string; picture?: string; organizationId?: unknown }, db: Firestore, invitationToken:unknown='') {
   const ref=db.doc(`users/${decoded.uid}`);
   // Custom claims are only a performance hint. Membership remains the source
   // of truth, but on the normal path the claimed organization lets us overlap
@@ -219,6 +246,22 @@ async function syncOwnProfile(decoded: { uid: string; email?: string; name?: str
       :Promise.resolve(null),
   ]);
   const existing = snap.exists ? snap.data() || {} : {};
+  if(!snap.exists){
+    const admission=await assertRegistrationAdmission(decoded,db,invitationToken);
+    if(admission.requireApproval&&!admission.invited){
+      await getAuth(getFirebaseAdmin()).updateUser(decoded.uid,{disabled:true});
+      await ref.set({
+        uid:decoded.uid,email:decoded.email||'',displayName:decoded.name||decoded.email?.split('@')[0]||'VOP Student',
+        role:'student',organizationId:'',organizationRole:'',
+        privileges:{admin:false,superAdmin:false,guardian:false,editor:false,manager:false,developer:false,coordinator:false},
+        information:{enrollmentDate:new Date().toISOString(),graduating:false,graduated:false,baptismCandidate:false,baptized:false},
+        progress:{discoverProgress:0,completedGuidesCount:0,totalGuidesCount:0,guideScores:{},completedLessons:[]},
+        registration:{source:'open_registration',approvalRequired:true,status:'pending_approval'},
+        createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      },{merge:false});
+      throw new Error('Your account is awaiting administrator approval.');
+    }
+  }
 
   // Organization membership is the authorization source of truth. A stale
   // organizationRole on a user profile must never resurrect access after the
@@ -347,7 +390,8 @@ export default async function handler(request: Request, response: Response) {
     const body = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
     const action = typeof body.action === 'string' ? body.action : 'list';
     if (action === 'profile') {
-      const profile = await syncOwnProfile(decoded, getFirestore(getFirebaseAdmin()));
+      const invitationToken=typeof body.inviteToken==='string'?body.inviteToken:'';
+      const profile = await syncOwnProfile(decoded, getFirestore(getFirebaseAdmin()), invitationToken);
       return response.status(200).json({ ok:true, profile });
     }
     if (action === 'updateOwnProfile') {
@@ -839,7 +883,7 @@ export default async function handler(request: Request, response: Response) {
     if (message.includes('Firebase Admin server configuration is missing')) {
       return response.status(503).json({ error: 'Server-side Firebase administration is not configured.' });
     }
-    if (/permission|only |outside your|another organization|authorized tenant|cannot access|not a member|belongs to another/i.test(message)) {
+    if (/permission|only |outside your|another organization|authorized tenant|cannot access|not a member|belongs to another|registration is currently closed|awaiting administrator approval/i.test(message)) {
       return response.status(403).json({ error: message });
     }
     if (/not found|does not exist/i.test(message)) return response.status(404).json({ error: message });

@@ -12,6 +12,7 @@ import { App } from './App';
 import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
 import { RouteShimmer } from './components/layout/Shimmer';
+import { loadPublicAuthPolicy, type PublicAuthPolicy } from './services/authPolicy';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
@@ -23,6 +24,7 @@ export function Root() {
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState('');
   const [resolvedProfile,setResolvedProfile]=useState<User|null>(null);
+  const [authPolicy,setAuthPolicy]=useState<PublicAuthPolicy|null>(null);
   const syncingUid = useRef<string | null>(null);
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isBootstrapRoute = pathname === '/admin/bootstrap';
@@ -30,6 +32,12 @@ export function Root() {
   const query = new URLSearchParams(window.location.search);
   const portfolioToken = pathname === '/' ? query.get('portfolio') || '' : '';
   const invitationToken = pathname === '/' ? query.get('invite') || '' : '';
+
+  useEffect(() => {
+    const controller=new AbortController();
+    void loadPublicAuthPolicy(controller.signal).then(setAuthPolicy);
+    return()=>controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!auth || !firebaseConfigured) {
@@ -68,7 +76,7 @@ export function Root() {
             // twice before the application could render.
             let profile:User|null=null;
             try{
-              profile=await loadFirestoreUser(firebaseUser.uid);
+              profile=await loadFirestoreUser(firebaseUser.uid,invitationToken);
             }catch(profileError){
               console.warn('Account profile load error:',profileError);
             }
@@ -83,6 +91,7 @@ export function Root() {
                 firebaseUser.email ?? '',
                 firebaseUser.displayName ?? '',
                 firebaseUser.photoURL,
+                invitationToken,
               );
             }
 
@@ -136,8 +145,11 @@ export function Root() {
     }
     return authView === 'home'
       ? <PublicHome onSignIn={() => setAuthView('sign-in')} onRegister={() => setAuthView('register')}
+          registrationAllowed={authPolicy?.registration.allowRegistrations===true}
           configurationMissing={!firebaseConfigured || !auth} />
       : <SignInPage initialMode={authView === 'register' ? 'register' : 'sign-in'}
+          registrationAllowed={authPolicy?.registration.allowRegistrations===true||Boolean(invitationToken)}
+          inviteToken={invitationToken}
           configurationMissing={!firebaseConfigured || !auth} onBack={() => setAuthView('home')} />;
   }
 
