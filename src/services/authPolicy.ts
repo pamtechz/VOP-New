@@ -1,10 +1,12 @@
 export type PublicAuthPolicy={
+  available:boolean;
   registration:{allowRegistrations:boolean;requireApproval:boolean};
   pwa:{enabled:boolean};
   maintenanceMode:boolean;
 };
 
 const CLOSED_POLICY:PublicAuthPolicy={
+  available:false,
   registration:{allowRegistrations:false,requireApproval:false},
   pwa:{enabled:false},
   maintenanceMode:false,
@@ -16,6 +18,7 @@ export async function loadPublicAuthPolicy(signal?:AbortSignal):Promise<PublicAu
     const payload=await response.json().catch(()=>({})) as Partial<PublicAuthPolicy>;
     if(!response.ok)return CLOSED_POLICY;
     return {
+      available:true,
       registration:{
         allowRegistrations:payload.registration?.allowRegistrations===true,
         requireApproval:payload.registration?.requireApproval===true,
