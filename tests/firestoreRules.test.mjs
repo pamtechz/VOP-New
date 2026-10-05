@@ -838,6 +838,9 @@ test('financial records are server-authoritative even for authenticated administ
       await db.doc('paymentWebhookEvents/event-1').set({provider:'lenco'});
       await db.doc('paymentRefunds/refund-1').set({paymentId:'payment-1',status:'completed'});
       await db.doc('paymentFulfilments/payment-1').set({status:'fulfilled'});
+      await db.doc('operationsBackupRuns/2026-10-05').set({status:'completed'});
+      await db.doc('operationalAlerts/firestore-backup-stale').set({lastNotifiedAt:'2026-10-05T00:00:00Z'});
+      await db.doc('system/operations').set({lastMaintenanceAt:'2026-10-05T00:00:00Z'});
     });
     const learner=environment.authenticatedContext('payment-user').firestore();
     const admin=environment.authenticatedContext('payment-super').firestore();
@@ -851,6 +854,10 @@ test('financial records are server-authoritative even for authenticated administ
       await assertFails(db.doc('paymentRefunds/refund-1').get());
       await assertFails(db.doc('paymentRefunds/refund-1').set({status:'completed'}));
       await assertFails(db.doc('paymentFulfilments/payment-1').get());
+      await assertFails(db.doc('operationsBackupRuns/2026-10-05').get());
+      await assertFails(db.doc('operationsBackupRuns/2026-10-05').set({status:'forged'}));
+      await assertFails(db.doc('operationalAlerts/firestore-backup-stale').get());
+      await assertFails(db.doc('system/operations').get());
     }
   } finally {
     await environment.cleanup();

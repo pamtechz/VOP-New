@@ -9,6 +9,10 @@
       "destination": "/api/admin?__vopRoute=account&__vopAccountRoute=lifecycle-cron"
     },
     {
+      "source": "/api/health",
+      "destination": "/api/admin?__vopRoute=health"
+    },
+    {
       "source": "/api/admin/:route*",
       "destination": "/api/admin?__vopRoute=:route*"
     },

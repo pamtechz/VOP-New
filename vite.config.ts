@@ -101,9 +101,11 @@ export function createLocalApiMiddleware(server: {
     const isPaymentsRoute=route.startsWith('payments/');
     const isAccountRoute=route==='account';
     const isAccountLifecycleCron=route==='account-lifecycle-cron';
+    const isHealthRoute=route==='health';
     if(isPaymentsRoute)query.__vopPaymentRoute=route.slice('payments/'.length);
     if(isAccountRoute||isAccountLifecycleCron)query.__vopRoute='account';
     if(isAccountLifecycleCron)query.__vopAccountRoute='lifecycle-cron';
+    if(isHealthRoute)query.__vopRoute='health';
     const modulePath = isPaymentsRoute
       ? '/api/payments.ts'
       : isAccountRoute||isAccountLifecycleCron
