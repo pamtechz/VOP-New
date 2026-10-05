@@ -249,6 +249,20 @@ test('engagement API: authenticated learner, mentor, memory and duel workflows',
       assert.ok(!(await api(learner, { action: 'duelOverview' })).opponents.some(item => item.uid === peer.uid));
       assert.equal((await api(learner, { action: 'duelCreate', opponentId: peer.uid })).status, 403);
       assert.equal((await api(peer, { action: 'duelAvailability', enabled: true })).status, 200);
+
+      await db.doc('users/' + peer.uid + '/settings/personal').set({
+        privacy:{profileVisibility:'private'},
+      },{merge:true});
+      const privateOverview=await api(learner,{action:'duelOverview'});
+      assert.ok(!privateOverview.opponents.some(item=>item.uid===peer.uid),
+        'Private profiles must not appear in peer opponent discovery.');
+      assert.equal((await api(learner,{action:'duelCreate',opponentId:peer.uid})).status,403);
+      const privateStandings=await api(learner,{action:'duelLeaderboard'});
+      assert.ok(!privateStandings.leaderboard.some(item=>item.displayName==='studentB'),
+        'Private profiles must not appear in organization leaderboards.');
+      await db.doc('users/' + peer.uid + '/settings/personal').set({
+        privacy:{profileVisibility:'organization'},
+      },{merge:true});
     });
 
     for (const [id, answer] of [['q-1', 'Genesis'], ['q-2', 'Exodus'], ['q-3', 'Leviticus']]) {
