@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import type { DiscoverGuide, Lesson, User, LanguageCode, LessonContentPage, Question, CurriculumProgram } from '../types';
 import { db, auth } from '../lib/firebase';
+import { applyPersonalRuntimeSettings } from './personalRuntimeSettings';
 
 function requireDb() {
   if (!db) throw new Error('Firestore is not configured for this deployment.');
@@ -315,7 +316,8 @@ export async function loadFirestoreUser(uid: string, inviteToken = ''): Promise<
         body: JSON.stringify({ action: 'profile', inviteToken }),
       });
       if (response.ok) {
-        const body = await response.json() as { profile?: Record<string, unknown> };
+        const body = await response.json() as { profile?: Record<string, unknown>; personalSettings?: Record<string, unknown> };
+        applyPersonalRuntimeSettings(body.personalSettings);
         const profile = body.profile;
         if (profile) return normalizeUserProfile(uid, profile);
       }
@@ -441,7 +443,8 @@ export async function createFirestoreStudentProfile(
       inviteToken,
     }),
   });
-  const body = await response.json().catch(() => ({})) as { profile?: Record<string, unknown>; error?: string };
+  const body = await response.json().catch(() => ({})) as { profile?: Record<string, unknown>; personalSettings?: Record<string, unknown>; error?: string };
+  applyPersonalRuntimeSettings(body.personalSettings);
   if (!response.ok || !body.profile) throw new Error(body.error || 'Unable to create your profile.');
   return normalizeUserProfile(uid, body.profile);
 }
