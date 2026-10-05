@@ -34,7 +34,7 @@ test('registration policy is server authoritative and invitation aware',async t=
   const auth=getAuth(app);
   const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
   try{
-    const {default:register}=await vite.ssrLoadModule('/api/auth-register.ts');
+    const {default:register}=await vite.ssrLoadModule('/api_handlers/admin/auth.ts');
     const {default:users}=await vite.ssrLoadModule('/api_handlers/admin/users.ts');
 
     const callRegister=async(body,ip='203.0.113.20')=>{
