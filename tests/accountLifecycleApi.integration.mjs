@@ -34,7 +34,7 @@ test('account privacy export and staged deletion are server authoritative',async
   const auth=getAuth(app);
   const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
   try{
-    const {default:account}=await vite.ssrLoadModule('/api/account.ts');
+    const {default:account}=await vite.ssrLoadModule('/api/admin.ts');
     const lifecycle=await vite.ssrLoadModule('/server/accountLifecycle.ts');
 
     const call=async(identity,method,action,body={})=>{
@@ -42,7 +42,7 @@ test('account privacy export and staged deletion are server authoritative',async
       await account({
         method,
         headers:{authorization:'Bearer '+identity.token},
-        query:method==='GET'?{action}:undefined,
+        query:method==='GET'?{__vopRoute:'account',action}:{__vopRoute:'account'},
         body:method==='POST'?{action,...body}:undefined,
       },res);
       return res;
