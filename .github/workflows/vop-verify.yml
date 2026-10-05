@@ -35,6 +35,12 @@ jobs:
       - name: Typecheck and build
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run build
+      - name: Enforce production bundle budget
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run verify:bundle-budget
+      - name: Enforce UI localization budget
+        working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run verify:ui-localization
       - name: Lint
         working-directory: vop-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run lint
