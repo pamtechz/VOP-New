@@ -25,10 +25,10 @@ export const emailSignIn = async (email: string, password: string) => {
 export const emailSignUp = async (email: string, password: string, inviteToken = '') => {
   const firebaseAuth = requireAuth();
   await authPersistenceReady;
-  const response = await fetch('/api/auth-register', {
+  const response = await fetch('/api/admin/auth', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({email:email.trim(),password,inviteToken}),
+    body:JSON.stringify({action:'register',email:email.trim(),password,inviteToken}),
   });
   const payload = await response.json().catch(() => ({})) as {customToken?:string;approvalRequired?:boolean;message?:string;error?:string};
   if (!response.ok) throw new Error(payload.error || payload.message || 'Registration failed.');
