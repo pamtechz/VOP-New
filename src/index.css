@@ -1391,3 +1391,76 @@ h1, h2, h3, h4, h5, h6 {
     animation: none;
   }
 }
+
+
+/* Personal accessibility preferences are applied on account load and persist
+   across every learner/admin workspace, not just the settings page. */
+html[data-vop-large-text="true"] {
+  font-size: 112.5%;
+}
+
+html[data-vop-high-contrast="true"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-glass: rgba(255,255,255,.98);
+  --border-subtle: #374151;
+  --border-strong: #111827;
+  --text-primary: #000000;
+  --text-secondary: #111827;
+  --text-muted: #374151;
+  --vop-navy-900: #002b63;
+  --vop-navy-800: #003b82;
+}
+
+html[data-theme="dark"][data-vop-high-contrast="true"],
+html.dark-theme[data-vop-high-contrast="true"] {
+  --bg-primary: #000000;
+  --bg-secondary: #080808;
+  --bg-card: #0b0b0b;
+  --bg-elevated: #111111;
+  --bg-glass: rgba(0,0,0,.98);
+  --border-subtle: #d1d5db;
+  --border-strong: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #f3f4f6;
+  --text-muted: #d1d5db;
+}
+
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+html[data-vop-high-contrast="true"] :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline-width: 4px;
+  outline-color: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+html[data-vop-reduced-motion="true"] {
+  scroll-behavior: auto;
+}
+
+html[data-vop-reduced-motion="true"] *,
+html[data-vop-reduced-motion="true"] *::before,
+html[data-vop-reduced-motion="true"] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: .01ms !important;
+}
