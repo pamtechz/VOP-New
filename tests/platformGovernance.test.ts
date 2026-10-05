@@ -228,7 +228,8 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(admin,/label:'Account'/);
   assert.match(admin,/accountNotifications/);
   assert.match(admin,/accountInvitations/);
-  assert.match(admin,/accountPayments/);
+  assert.doesNotMatch(admin,/accountPayments/);
+  assert.match(admin,/payments:'payments'/);
   assert.match(admin,/accountProfile/);
   assert.match(admin,/accountPersonalSettings/);
   assert.match(admin,/accountCertificates/);
@@ -441,6 +442,9 @@ test('platform finance administration is Super Admin-only while organizations co
   assert.match(core,/requireInstitutionalSubscriptionConsumer/);
   assert.match(core,/billingTenantSubscriptionRef/);
   assert.match(core,/selectProviderForMethod/);
+  assert.match(core,/consumerPaymentQuotes/);
+  assert.match(core,/quoteAmountForCurrency/);
+  assert.match(core,/providerSettlementCurrency/);
   assert.match(core,/scopedTransactionProjection/);
   assert.match(serverPermissions,/resource === 'payable_items'/);
   assert.match(sharedPermissions,/resource === 'payable_items'/);
@@ -450,7 +454,9 @@ test('platform finance administration is Super Admin-only while organizations co
   assert.match(plans,/Only the VOP Super Admin can access subscription package administration/);
   assert.match(plans,/subscription_'\+planId/);
   assert.match(plans,/upsertPayableItem/);
+  assert.match(consumer,/Payments & Billing/);
   assert.match(consumer,/Subscription packages/);
+  assert.match(consumer,/methodQuotes/);
   assert.doesNotMatch(consumer,/Payment provider/);
   assert.doesNotMatch(consumer,/selectedProvider/);
   assert.doesNotMatch(consumer,/providerKey/);
@@ -469,12 +475,14 @@ test('organization plan limits are consolidated into the subscription entitlemen
   assert.doesNotMatch(organizationPage,/api\('getUsage'/);
   assert.doesNotMatch(organizationPage,/admin\.usage_limits/);
   assert.match(organizationPage,/Subscription & plan/);
-  assert.match(organizationPage,/Open Billing & Subscriptions/);
-  assert.match(organizationApi,/Plan, feature entitlements and usage limits are managed through Billing & Subscriptions/);
+  assert.match(organizationPage,/Open Payments & Billing/);
+  assert.match(organizationApi,/Plan, feature entitlements and usage limits are managed through Payments & Billing/);
   assert.doesNotMatch(organizationApi,/plan: typeof data\.plan/);
   assert.doesNotMatch(organizationApi,/quotas: ctx\.isSuperAdmin/);
 
-  assert.match(paymentAdmin,/Billing & Subscriptions/);
+  assert.match(paymentAdmin,/Payments & Billing/);
+  assert.match(paymentAdmin,/Pay & receipts/);
+  assert.match(paymentAdmin,/PaymentsPage currentUser=\{currentUser\} embedded/);
   assert.match(paymentAdmin,/Plans & subscriptions/);
   assert.match(paymentAdmin,/SubscriptionWorkspace/);
   assert.match(workspace,/Usage against plan limits/);
