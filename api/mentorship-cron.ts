@@ -1,5 +1,6 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { deliverNotification, retryPendingEmailNotifications } from '../server/notifications.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -36,6 +37,9 @@ export default async function handler(req: { method?: string; headers?: Record<s
     let processed = 0;
     let created = 0;
     let sent = 0;
+    let suppressed = 0;
+    let failed = 0;
+    const retrySummary = await retryPendingEmailNotifications(db, 50);
     const now = Date.now();
 
     for (const organizationDoc of organizations) {
@@ -90,39 +94,35 @@ export default async function handler(req: { method?: string; headers?: Record<s
       });
       created += 1;
 
-      if (channel === 'email' && process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL && student.email) {
-        const emailResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM_EMAIL,
-            to: [String(student.email)],
-            subject: draft.subject,
-            html: draft.body.replace(/\\n/g, '<br/>'),
-          }),
-        });
-        if (emailResponse.ok) {
-          await draftRef.set({ status:'sent', sentAt:FieldValue.serverTimestamp(), delivery:'email' }, { merge:true });
-          sent += 1;
-        }
-      } else {
-        await db.collection('notifications').add({
-          organizationId,
-          recipientId: studentDoc.id,
-          title: draft.subject,
-          body: draft.body,
-          type: 'learning-support',
-          createdAt: FieldValue.serverTimestamp(),
-          read: false,
-        });
-        await draftRef.set({ status:'sent', sentAt:FieldValue.serverTimestamp(), delivery:'in_app' }, { merge:true });
-        sent += 1;
-      }
+      const delivery = await deliverNotification(db, {
+        organizationId,
+        recipientId: studentDoc.id,
+        title: draft.subject,
+        body: draft.body,
+        type: 'learning-support',
+        channel,
+        actionUrl: '/?route=support',
+        metadata: { source:'mentorship-automation', draftId:draftRef.id },
+        createdBy: 'system',
+      });
+      const delivered = delivery.state === 'sent' || delivery.state === 'delivered';
+      const wasSuppressed = delivery.state === 'suppressed_by_preference' || delivery.state === 'suppressed_by_policy';
+      await draftRef.set({
+        status: delivered ? 'sent' : wasSuppressed ? 'suppressed' : delivery.state,
+        sentAt: delivered ? FieldValue.serverTimestamp() : null,
+        delivery: channel,
+        deliveryId: delivery.id,
+        deliveryState: delivery.state,
+        suppressionReason: delivery.suppressionReason || null,
+      }, { merge:true });
+      if (delivered) sent += 1;
+      else if (wasSuppressed) suppressed += 1;
+      else if (delivery.state === 'failed') failed += 1;
     }
 
       }
 
-    return res.status(200).json({ ok:true, processed, created, sent });
+    return res.status(200).json({ ok:true, processed, created, sent, suppressed, failed, retries:retrySummary });
   } catch (error) {
     console.error('VOP mentorship automation failed', error);
     return res.status(500).json({ error:'Mentorship automation failed.' });

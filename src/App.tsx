@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { applyAccessibilityPreferences, loadPersonalSettings } from './services/personalSettings';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   User, DiscoverGuide, Lesson, AppSettings, LanguageCode, AppRoute,
@@ -491,6 +492,18 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   useEffect(() => {
     if (settings.themeColor) document.documentElement.style.setProperty('--vop-navy-900', settings.themeColor);
   }, [settings.themeColor]);
+
+  useEffect(() => {
+    if (!currentUser.uid) {
+      applyAccessibilityPreferences(undefined);
+      return;
+    }
+    let active=true;
+    void loadPersonalSettings()
+      .then(personal=>{ if(active) applyAccessibilityPreferences(personal.accessibility); })
+      .catch(()=>{ if(active) applyAccessibilityPreferences(undefined); });
+    return()=>{ active=false; };
+  }, [currentUser.uid]);
 
   useEffect(() => {
     const routeFeature:Partial<Record<AppRoute,keyof NonNullable<AppSettings['features']>>> = {

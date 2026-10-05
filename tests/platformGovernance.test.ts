@@ -764,7 +764,7 @@ test('notification and invitation workflows are visible, actionable and routed t
   assert.match(inbox,/clearInviteHistory/);
   assert.match(notifications,/action==='clearAll'/);
   assert.match(notifications,/authenticateNotificationAccount/);
-  assert.match(notifications,/const ownAction=\['summary','list','markRead','markUnread','delete','markAllRead','clearAll'\]/);
+  assert.match(notifications,/const ownAction=\['summary','list','capabilities','markRead','markUnread','delete','markAllRead','clearAll'\]/);
   assert.match(notifications,/\.where\('read','==',false\)[\s\S]*\.count\(\)\.get\(\)/);
   assert.match(notifications,/const account=await authenticateNotificationAccount\(req\)/);
   assert.match(notifications,/const ctx=await authenticateTenant\(req,requestedOrganization\|\|undefined,true\)/);

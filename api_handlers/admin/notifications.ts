@@ -2,7 +2,7 @@ import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, organizationInHierarchyScope } from '../../server/tenant.js';
 import { canPermission } from '../../server/permissions.js';
-import { createNotification, type NotificationType } from '../../server/notifications.js';
+import { deliverNotification, type NotificationType } from '../../server/notifications.js';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;body?:unknown;query?:Record<string,unknown>};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void};
@@ -62,10 +62,25 @@ export default async function handler(req:Request,res:Response){
   try{
     const requestedOrganization=value(req,'organizationId');
     const action=value(req,'action')||'list';
-    const ownAction=['summary','list','markRead','markUnread','delete','markAllRead','clearAll'].includes(action);
+    const ownAction=['summary','list','capabilities','markRead','markUnread','delete','markAllRead','clearAll'].includes(action);
 
     if(ownAction){
       const account=await authenticateNotificationAccount(req);
+      if(action==='capabilities'){
+        const settings=await account.db.doc('system/settings').get();
+        const data=settings.data()||{};
+        const options=data.systemOptions&&typeof data.systemOptions==='object'
+          ?data.systemOptions as Record<string,unknown>:{};
+        const notifications=data.notifications&&typeof data.notifications==='object'
+          ?data.notifications as Record<string,unknown>:{};
+        const enabledByPlatform=options.enableEmailNotifications===true||notifications.emailEnabled===true;
+        const providerConfigured=Boolean(String(process.env.RESEND_API_KEY||'').trim()&&String(process.env.RESEND_FROM_EMAIL||'').trim());
+        return res.status(200).json({
+          ok:true,
+          email:{enabledByPlatform,providerConfigured,available:enabledByPlatform&&providerConfigured},
+          push:{available:false},
+        });
+      }
       if(action==='summary'){
         const unreadAggregate=await account.db.collection('notifications')
           .where('recipientId','==',account.auth.uid)
@@ -128,9 +143,9 @@ export default async function handler(req:Request,res:Response){
       if(!recipient.exists)throw new Error('The selected recipient does not exist.');
       if(organizationId&&!(await recipientInOrganization(ctx,recipientId,organizationId)))throw new Error('The selected recipient does not belong to this organization.');
       const type=String(input.type||'system') as NotificationType;
-      const allowedTypes=new Set<NotificationType>(['learning-support','assignment','mentor-feedback','certificate','announcement','event','prayer','invitation','system']);
+      const allowedTypes=new Set<NotificationType>(['learning-support','assignment','mentor-feedback','certificate','announcement','event','prayer','invitation','system','payment','subscription','study-reminder','security']);
       if(!allowedTypes.has(type))throw new Error('Unsupported notification type.');
-      const id=await createNotification(ctx.db,{
+      const delivery=await deliverNotification(ctx.db,{
         organizationId,
         hierarchyId:ctx.tenantType==='hierarchy'?ctx.tenantId:'',
         recipientId,
@@ -141,8 +156,9 @@ export default async function handler(req:Request,res:Response){
         actionUrl:String(input.actionUrl||''),
         metadata:input.metadata&&typeof input.metadata==='object'?input.metadata as Record<string,unknown>:{},
         createdBy:ctx.auth.uid,
+        mandatory:input.mandatory===true&&type==='security',
       });
-      return res.status(201).json({ok:true,id});
+      return res.status(201).json({ok:true,id:delivery.id,delivery});
     }
 
     return res.status(400).json({error:'Unsupported notification action.'});

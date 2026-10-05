@@ -433,6 +433,58 @@ export default async function handler(request: Request, response: Response) {
         : {};
       const invalid = Object.keys(incoming).filter(key => !allowed.includes(key));
       if (invalid.length) return response.status(400).json({ error:'Unsupported personal setting.' });
+
+      const normalized: Record<string, unknown> = {};
+      if (incoming.theme !== undefined) {
+        const theme=String(incoming.theme||'');
+        if (!['light','dark','system'].includes(theme)) return response.status(400).json({ error:'Select a valid theme.' });
+        normalized.theme=theme;
+      }
+      if (incoming.language !== undefined) {
+        const language=String(incoming.language||'').trim().toLowerCase();
+        if (language.length>32) return response.status(400).json({ error:'Select a valid language.' });
+        normalized.language=language;
+      }
+
+      const booleanObject=(key:'notifications'|'accessibility',allowedKeys:string[])=>{
+        const raw=incoming[key];
+        if(raw===undefined)return;
+        if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('Invalid personal '+key+' settings.');
+        const values=raw as Record<string,unknown>;
+        if(Object.keys(values).some(name=>!allowedKeys.includes(name)))throw new Error('Unsupported personal '+key+' setting.');
+        if(Object.values(values).some(value=>typeof value!=='boolean'))throw new Error('Personal '+key+' settings must use true or false values.');
+        normalized[key]=Object.fromEntries(Object.entries(values));
+      };
+      booleanObject('notifications',['enabled','email','announcements','certificates']);
+      booleanObject('accessibility',['reducedMotion','largeText','highContrast']);
+
+      if(incoming.privacy!==undefined){
+        if(!incoming.privacy||typeof incoming.privacy!=='object'||Array.isArray(incoming.privacy))return response.status(400).json({error:'Invalid privacy settings.'});
+        const privacy=incoming.privacy as Record<string,unknown>;
+        if(Object.keys(privacy).some(key=>key!=='profileVisibility'))return response.status(400).json({error:'Unsupported privacy setting.'});
+        const visibility=String(privacy.profileVisibility||'organization');
+        if(!['private','organization'].includes(visibility))return response.status(400).json({error:'Select a valid profile visibility.'});
+        normalized.privacy={profileVisibility:visibility};
+      }
+
+      if(incoming.studyPreferences!==undefined){
+        if(!incoming.studyPreferences||typeof incoming.studyPreferences!=='object'||Array.isArray(incoming.studyPreferences))return response.status(400).json({error:'Invalid study preferences.'});
+        const study=incoming.studyPreferences as Record<string,unknown>;
+        const studyKeys=['reminders','preferredStudyTime','timezone'];
+        if(Object.keys(study).some(key=>!studyKeys.includes(key)))return response.status(400).json({error:'Unsupported study preference.'});
+        const reminders=study.reminders===undefined?undefined:study.reminders===true;
+        if(study.reminders!==undefined&&typeof study.reminders!=='boolean')return response.status(400).json({error:'Study reminders must use a true or false value.'});
+        const preferredStudyTime=String(study.preferredStudyTime||'').trim();
+        if(preferredStudyTime&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferredStudyTime))return response.status(400).json({error:'Select a valid preferred study time.'});
+        const timezone=String(study.timezone||'').trim();
+        if(timezone.length>80||timezone&&(timezone!=='UTC'&&!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)+$/.test(timezone)))return response.status(400).json({error:'Select a valid timezone.'});
+        normalized.studyPreferences={
+          ...(reminders!==undefined?{reminders}:{}),
+          preferredStudyTime,
+          timezone,
+        };
+      }
+
       const preferences: Record<string, string> = {};
       for (const key of ['uiLocale', 'studyLanguage']) {
         if (incoming[key] !== undefined) {
@@ -443,10 +495,11 @@ export default async function handler(request: Request, response: Response) {
             if (!language.exists || language.data()?.enabled === false) return response.status(400).json({ error:'Select an enabled language.' });
           }
           preferences[key] = locale;
+          normalized[key]=locale;
         }
       }
       const batch = db.batch();
-      batch.set(ref, { ...incoming, ...preferences, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
+      batch.set(ref, { ...normalized, uid:decoded.uid, updatedAt:FieldValue.serverTimestamp() }, { merge:true });
       if (Object.keys(preferences).length) batch.set(db.doc('users/' + decoded.uid), { preferences }, { merge:true });
       await batch.commit();
       const snapshot = await ref.get();
@@ -887,7 +940,7 @@ export default async function handler(request: Request, response: Response) {
       return response.status(403).json({ error: message });
     }
     if (/not found|does not exist/i.test(message)) return response.status(404).json({ error: message });
-    if (/required|select |valid |password|name and email|cannot delete their own|transfer organization ownership|assign another administrator/i.test(message)) {
+    if (/required|select |valid |password|name and email|cannot delete their own|transfer organization ownership|assign another administrator|invalid personal|unsupported personal|personal .* must|invalid privacy|unsupported privacy|study reminders must|unsupported study preference/i.test(message)) {
       return response.status(400).json({ error: message });
     }
     console.error('VOP user management failed', error);

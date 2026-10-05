@@ -679,6 +679,9 @@ test('events respect organization visibility and notifications remain recipient-
     await assertFails(memberB.doc('notifications/note-a').get());
     await assertFails(anonymous.doc('notifications/note-a').get());
     await assertFails(memberA.doc('notifications/note-a').update({read:true}));
+    await assertFails(memberA.doc('notificationDeliveries/delivery-a').get());
+    await assertFails(admin.doc('notificationDeliveries/delivery-a').get());
+    await assertFails(memberA.doc('notificationDeliveries/delivery-a').set({state:'sent'}));
   } finally {
     await environment.cleanup();
   }
