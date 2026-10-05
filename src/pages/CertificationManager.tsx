@@ -262,7 +262,7 @@ export const CertificationManager: React.FC<Props> = ({
 
   const decideGraduation = async (request: GraduationCandidate, decision: 'approve' | 'reject') => {
     if (!featureAvailable) {
-      showMessage('Certification is not included in the current subscription. Open Billing & Subscriptions to change the plan.');
+      showMessage('Certification is not included in the current subscription. Open Payments & Billing to change the plan.');
       return;
     }
     if (!auth?.currentUser || decidingRequestId) return;
@@ -292,7 +292,7 @@ export const CertificationManager: React.FC<Props> = ({
 
   const changeCertificateLifecycle = async (certificate:CertificateRecord, action:'revoke'|'replace') => {
     if(!featureAvailable){
-      showMessage('Certification is not included in the current subscription. Open Billing & Subscriptions to change the plan.');
+      showMessage('Certification is not included in the current subscription. Open Payments & Billing to change the plan.');
       return;
     }
     if(!auth?.currentUser||certificate.status!=='Certified')return;
