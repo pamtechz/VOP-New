@@ -2,6 +2,8 @@ import { authenticateTenant } from '../../server/tenant.js';
 import {
   buildAccountExport,cancelAccountDeletion,getAccountLifecycleStatus,processDueAccountDeletions,requestAccountDeletion,
 } from '../../server/accountLifecycle.js';
+import { runDailyOperationalMaintenance } from '../../server/operations.js';
+import { getAdminDb } from '../../server/tenant.js';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;query?:Record<string,string|string[]|undefined>;body?:unknown};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void;setHeader?:(name:string,value:string)=>void};
@@ -20,7 +22,16 @@ export default async function handler(req:Request,res:Response){
       const secret=String(process.env.CRON_SECRET||'');
       if(!secret)return res.status(503).json({error:'Account lifecycle automation is not configured.'});
       if(header(req,'authorization')!==('Bearer '+secret))return res.status(401).json({error:'Unauthorized.'});
-      return res.status(200).json({ok:true,...await processDueAccountDeletions(undefined,new Date(),10)});
+      const now=new Date();
+      const db=getAdminDb();
+      const lifecycle=await processDueAccountDeletions(db,now,10);
+      let operations:unknown;
+      try{operations=await runDailyOperationalMaintenance(db,now);}
+      catch(error){
+        console.error('VOP operational maintenance failed',error);
+        operations={ok:false,error:'Operational maintenance failed.'};
+      }
+      return res.status(200).json({ok:true,lifecycle,operations});
     }
     const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
     const action=req.method==='GET'?value(req.query?.action)||'status':String(body.action||'');
