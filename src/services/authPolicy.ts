@@ -12,7 +12,7 @@ const CLOSED_POLICY:PublicAuthPolicy={
 
 export async function loadPublicAuthPolicy(signal?:AbortSignal):Promise<PublicAuthPolicy>{
   try{
-    const response=await fetch('/api/auth-policy',{method:'GET',signal,headers:{Accept:'application/json'}});
+    const response=await fetch('/api/admin/auth?action=policy',{method:'GET',signal,headers:{Accept:'application/json'}});
     const payload=await response.json().catch(()=>({})) as Partial<PublicAuthPolicy>;
     if(!response.ok)return CLOSED_POLICY;
     return {
