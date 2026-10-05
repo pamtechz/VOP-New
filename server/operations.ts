@@ -153,12 +153,17 @@ async function refreshManagedExports(db:Firestore,now:Date){
 }
 
 async function latestCompletedBackup(db:Firestore){
-  const snapshot=await db.collection(BACKUP_RUN_COLLECTION).where('status','==','completed').orderBy('completedAt','desc').limit(1).get();
-  if(snapshot.empty)return null;
-  const doc=snapshot.docs[0];
-  const data=doc.data()||{};
+  const snapshot=await db.collection(BACKUP_RUN_COLLECTION).where('status','==','completed').limit(50).get();
+  let best:FirebaseFirestore.QueryDocumentSnapshot|null=null;
+  let bestTime=Number.NEGATIVE_INFINITY;
+  for(const document of snapshot.docs){
+    const completedAt=Date.parse(text(document.data()?.completedAt));
+    if(Number.isFinite(completedAt)&&completedAt>bestTime){best=document;bestTime=completedAt;}
+  }
+  if(!best)return null;
+  const data=best.data()||{};
   return {
-    runId:doc.id,
+    runId:best.id,
     completedAt:text(data.completedAt),
     outputUriPrefix:text(data.outputUriPrefix),
     operationName:text(data.operationName),
@@ -193,14 +198,19 @@ async function notifySuperAdminsOnce(db:Firestore,key:string,title:string,body:s
 export async function operationalHealth(db=getAdminDb(),now=new Date()){
   const started=Date.now();
   const operations=await db.doc(OPERATIONS_REF).get();
+  const state=operations.data()||{};
   const latest=await latestCompletedBackup(db);
-  const configured=Boolean(backupBucket());
+  let configured=false,configurationError='';
+  try{configured=Boolean(backupBucket());}catch(error){configurationError=safeError(error);}
   const completedAt=latest?.completedAt||'';
   const ageMs=completedAt?now.getTime()-Date.parse(completedAt):Number.POSITIVE_INFINITY;
-  const backupStatus=!configured?'not_configured'
+  const storedBackup=state.backup&&typeof state.backup==='object'?state.backup as Record<string,unknown>:{};
+  const currentStatus=text(storedBackup.currentStatus);
+  const backupStatus=configurationError?'configuration_error'
+    :!configured?'not_configured'
     :latest&&Number.isFinite(ageMs)&&ageMs<=BACKUP_STALE_AFTER_MS?'ok'
-    :latest?'stale':'missing';
-  const state=operations.data()||{};
+    :latest?'stale'
+    :['requesting','requested','running'].includes(currentStatus)?'pending':'missing';
   const maintenanceAt=text(state.lastMaintenanceAt);
   const maintenanceAge=maintenanceAt?now.getTime()-Date.parse(maintenanceAt):Number.POSITIVE_INFINITY;
   const maintenanceStatus=Number.isFinite(maintenanceAge)&&maintenanceAge<=48*60*60*1000?'ok':'stale';
@@ -212,8 +222,10 @@ export async function operationalHealth(db=getAdminDb(),now=new Date()){
     backup:{
       status:backupStatus,
       configured,
+      configurationError:configurationError||null,
       lastCompletedAt:completedAt||null,
       lastRunId:latest?.runId||null,
+      currentStatus:currentStatus||null,
       staleAfterHours:36,
     },
     deployment:{sha:text(process.env.VERCEL_GIT_COMMIT_SHA)||null},
@@ -221,24 +233,35 @@ export async function operationalHealth(db=getAdminDb(),now=new Date()){
 }
 
 export async function runDailyOperationalMaintenance(db=getAdminDb(),now=new Date()){
-  const refresh=backupBucket()?await refreshManagedExports(db,now):{checked:0,completed:0,failed:0,running:0};
-  let requested:{requested:boolean;status:string;runId:string;operationName:string}={requested:false,status:'not_configured',runId:isoDay(now),operationName:''};
-  let backupFailure='';
-  if(backupBucket()){
+  let bucket='',configurationError='';
+  try{bucket=backupBucket();}catch(error){configurationError=safeError(error);}
+  const configured=Boolean(bucket)&&!configurationError;
+  const refresh=configured?await refreshManagedExports(db,now):{checked:0,completed:0,failed:0,running:0};
+  let requested:{requested:boolean;status:string;runId:string;operationName:string}={
+    requested:false,status:configurationError?'configuration_error':'not_configured',runId:isoDay(now),operationName:'',
+  };
+  let backupFailure=configurationError;
+  if(configured){
     try{requested=await requestManagedExport(db,now);}
     catch(error){backupFailure=safeError(error);requested={requested:false,status:'failed',runId:isoDay(now),operationName:''};}
   }
   const latest=await latestCompletedBackup(db);
   const latestAt=Date.parse(latest?.completedAt||'');
-  const stale=Boolean(backupBucket())&&(!Number.isFinite(latestAt)||now.getTime()-latestAt>BACKUP_STALE_AFTER_MS);
-  const backupStatus=!backupBucket()?'not_configured':backupFailure?'failed':stale?'stale':requested.status;
+  const stale=Boolean(latest)&&Number.isFinite(latestAt)&&now.getTime()-latestAt>BACKUP_STALE_AFTER_MS;
+  const backupStatus=configurationError?'configuration_error'
+    :!configured?'not_configured'
+    :backupFailure?'failed'
+    :stale?'stale'
+    :latest?'ok'
+    :['requesting','requested','running'].includes(requested.status)?'pending':'missing';
   await db.doc(OPERATIONS_REF).set({
     lastMaintenanceAt:now.toISOString(),
     lastMaintenanceDeploymentSha:text(process.env.VERCEL_GIT_COMMIT_SHA)||null,
     backup:{
       status:backupStatus,
-      configured:Boolean(backupBucket()),
-      bucketConfigured:Boolean(backupBucket()),
+      configured,
+      bucketConfigured:Boolean(bucket),
+      configurationError:configurationError||null,
       lastCompletedAt:latest?.completedAt||null,
       lastRunId:latest?.runId||null,
       currentRunId:requested.runId,
@@ -249,7 +272,14 @@ export async function runDailyOperationalMaintenance(db=getAdminDb(),now=new Dat
   },{merge:true});
 
   let alert={sent:0,suppressed:false};
-  if(!backupBucket()){
+  if(configurationError){
+    alert=await notifySuperAdminsOnce(
+      db,'firestore-backup-configuration-invalid',
+      'Production Firestore backup configuration is invalid',
+      'VOP rejected the configured FIRESTORE_BACKUP_BUCKET value. Correct the Google Cloud Storage URI before the next scheduled maintenance run.',
+      now,
+    );
+  }else if(!configured){
     alert=await notifySuperAdminsOnce(
       db,'firestore-backup-not-configured',
       'Production Firestore backups are not configured',
@@ -271,7 +301,11 @@ export async function runDailyOperationalMaintenance(db=getAdminDb(),now=new Dat
       now,
     );
   }
-  return {backup:{...requested,refresh,latest,stale,failure:backupFailure||null},alert};
+  return {
+    status:backupStatus,
+    backup:{...requested,refresh,latest,stale,configured,configurationError:configurationError||null,failure:backupFailure||null},
+    alert,
+  };
 }
 
 export const OPERATIONS_POLICY={
