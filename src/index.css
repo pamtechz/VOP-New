@@ -1414,20 +1414,6 @@ html[data-vop-high-contrast="true"] {
   --vop-navy-800: #003b82;
 }
 
-html[data-theme="dark"][data-vop-high-contrast="true"],
-html.dark-theme[data-vop-high-contrast="true"] {
-  --bg-primary: #000000;
-  --bg-secondary: #080808;
-  --bg-card: #0b0b0b;
-  --bg-elevated: #111111;
-  --bg-glass: rgba(0,0,0,.98);
-  --border-subtle: #d1d5db;
-  --border-strong: #ffffff;
-  --text-primary: #ffffff;
-  --text-secondary: #f3f4f6;
-  --text-muted: #d1d5db;
-}
-
 :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
   outline: 3px solid #60a5fa;
   outline-offset: 3px;
