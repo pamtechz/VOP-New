@@ -1391,3 +1391,35 @@ h1, h2, h3, h4, h5, h6 {
     animation: none;
   }
 }
+
+
+/* ==========================================================================
+   Runtime accessibility preferences
+   ========================================================================== */
+html[data-vop-large-text] {
+  font-size: 112.5%;
+}
+
+html[data-vop-high-contrast] {
+  --text-muted: var(--text-secondary);
+  --border-subtle: color-mix(in srgb, var(--text-primary) 32%, transparent);
+  --border-strong: color-mix(in srgb, var(--text-primary) 52%, transparent);
+}
+
+html[data-vop-high-contrast] :focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+html[data-vop-reduced-motion] {
+  scroll-behavior: auto;
+}
+
+html[data-vop-reduced-motion] *,
+html[data-vop-reduced-motion] *::before,
+html[data-vop-reduced-motion] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
