@@ -11,7 +11,7 @@ function verifyCertificateBackgroundAsset() {
   const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
   if (width !== 1513 || height !== 1040) throw new Error(`Certificate background dimensions must be 1513x1040; found ${width}x${height}.`);
   const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
-  if (sha256 !== '3e3051618c632c7142b09e5257fc4526269bff98df6c0032af3a4743e8f59478') throw new Error('Certificate background does not match the supplied authoritative artwork.');
+  if (sha256 !== 'e3c37de3c0d5cb6aa60dfc2fff4fcc53078b0a1af25e3541850c599285a93023') throw new Error('Certificate background does not match the supplied authoritative artwork.');
 }
 const read = file => fs.readFileSync(path.join(root,file),'utf8');
 verifyCertificateBackgroundAsset();
