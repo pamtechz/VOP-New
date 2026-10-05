@@ -39,6 +39,10 @@ android/app/google-services.json
 *.sln
 *.sw?
 
+# Android distributable binaries belong in CI artifacts / GitHub Releases / Play Console
+*.apk
+*.aab
+
 # Android build outputs and caches
 android/.gradle
 android/build
