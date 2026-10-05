@@ -1,5 +1,6 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { deliverNotification } from '../server/notifications.js';
 
 function admin() {
   if (getApps().length) return getApps()[0];
@@ -90,34 +91,26 @@ export default async function handler(req: { method?: string; headers?: Record<s
       });
       created += 1;
 
-      if (channel === 'email' && process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL && student.email) {
-        const emailResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM_EMAIL,
-            to: [String(student.email)],
-            subject: draft.subject,
-            html: draft.body.replace(/\\n/g, '<br/>'),
-          }),
-        });
-        if (emailResponse.ok) {
-          await draftRef.set({ status:'sent', sentAt:FieldValue.serverTimestamp(), delivery:'email' }, { merge:true });
-          sent += 1;
-        }
-      } else {
-        await db.collection('notifications').add({
-          organizationId,
-          recipientId: studentDoc.id,
-          title: draft.subject,
-          body: draft.body,
-          type: 'learning-support',
-          createdAt: FieldValue.serverTimestamp(),
-          read: false,
-        });
-        await draftRef.set({ status:'sent', sentAt:FieldValue.serverTimestamp(), delivery:'in_app' }, { merge:true });
-        sent += 1;
-      }
+      const delivery=await deliverNotification(db,{
+        organizationId,
+        recipientId:studentDoc.id,
+        title:draft.subject,
+        body:draft.body,
+        type:'learning-support',
+        channel,
+        actionUrl:'/support',
+        metadata:{source:'mentorship-automation',draftId:draftRef.id},
+        createdBy:'system',
+      });
+      const draftStatus=delivery.status==='suppressed'?'suppressed':'sent';
+      await draftRef.set({
+        status:draftStatus,
+        sentAt:delivery.status==='suppressed'?null:FieldValue.serverTimestamp(),
+        delivery:delivery.channel,
+        deliveryStatus:delivery.status,
+        deliveryReason:delivery.reason||'',
+      },{merge:true});
+      if(delivery.status!=='suppressed')sent += 1;
     }
 
       }
