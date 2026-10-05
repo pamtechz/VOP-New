@@ -105,7 +105,8 @@ export default async function handler(req: { method?: string; headers?: Record<s
         metadata: { source:'mentorship-automation', draftId:draftRef.id },
         createdBy: 'system',
       });
-      const delivered = delivery.state === 'sent' || delivery.state === 'delivered';
+      const delivered = delivery.state === 'sent' || delivery.state === 'delivered'
+        || delivery.state === 'fallback_in_app' || Boolean(delivery.notificationId);
       const wasSuppressed = delivery.state === 'suppressed_by_preference' || delivery.state === 'suppressed_by_policy';
       await draftRef.set({
         status: delivered ? 'sent' : wasSuppressed ? 'suppressed' : delivery.state,
