@@ -126,9 +126,9 @@ CREATE TRIGGER trg_enforce_product_limits
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO public.platform_settings (key, value, description) VALUES
 ('marketplace_commission_percent', '5.0'::jsonb, 'Platform commission deducted from seller orders (%)'),
-('minimum_payout_amount', '100.0'::jsonb, 'Minimum wallet balance required to request a seller payout (KES)'),
-('default_currency', '"KES"'::jsonb, 'Default operating currency code for the marketplace'),
-('currency_symbol', '"KES"'::jsonb, 'Currency display symbol'),
+('minimum_payout_amount', '100.0'::jsonb, 'Minimum wallet balance required to request a seller payout (ZMW)'),
+('default_currency', '"ZMW"'::jsonb, 'Default operating currency code for the marketplace (Zambian Kwacha)'),
+('currency_symbol', '"K"'::jsonb, 'Currency display symbol (Kwacha)'),
 ('cloudinary_cloud_name', '"ubuy-store"'::jsonb, 'Cloudinary cloud name for direct external media delivery'),
 ('allowed_image_hosts', '["res.cloudinary.com", "cloudinary.com", "drive.google.com", "lh3.googleusercontent.com", "images.unsplash.com", "i.imgur.com"]'::jsonb, 'Whitelisted CDN and external cloud storage domains'),
 ('maintenance_mode', 'false'::jsonb, 'Global maintenance mode switch (locks non-admin checkout and writes)'),

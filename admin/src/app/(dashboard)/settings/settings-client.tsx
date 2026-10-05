@@ -286,7 +286,7 @@ export function SettingsClient({
               Minimum available wallet balance required for sellers to submit payout withdrawal requests.
             </p>
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300">Minimum Payout (KES)</label>
+              <label className="text-xs font-semibold text-slate-300">Minimum Payout (ZMW)</label>
               <div className="flex gap-3">
                 <input
                   type="number"
@@ -447,7 +447,7 @@ export function SettingsClient({
                 <tr>
                   <th className="p-4">Plan Name</th>
                   <th className="p-4">Code</th>
-                  <th className="p-4">Monthly Price (KES)</th>
+                  <th className="p-4">Monthly Price (ZMW)</th>
                   <th className="p-4">Max Products</th>
                   <th className="p-4">Max Images</th>
                   <th className="p-4">Featured Badge</th>

@@ -146,7 +146,7 @@ class StoreScreen extends ConsumerWidget {
                             icon: Icons.shopping_bag_outlined,
                             color: scheme.primary,
                             label:
-                                'KES ${(store['total_sales'] as num? ?? 0).toStringAsFixed(0)} sales',
+                                'K ${(store['total_sales'] as num? ?? 0).toStringAsFixed(0)} sales',
                           ),
                         ],
                       ),
@@ -252,7 +252,7 @@ class StoreScreen extends ConsumerWidget {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'KES ${price.toStringAsFixed(0)}',
+                                          'K ${price.toStringAsFixed(2)}',
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               color: scheme.primary,

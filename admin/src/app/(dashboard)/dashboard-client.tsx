@@ -8,12 +8,11 @@ import {
   CheckCircle2, XCircle, ArrowUpRight, RefreshCw,
 } from 'lucide-react';
 
-const CURRENCY = 'KES';
+const CURRENCY_CODE = 'ZMW';
+const CURRENCY_SYMBOL = 'K';
 
 function fmt(n: number) {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency', currency: CURRENCY, maximumFractionDigits: 0,
-  }).format(n);
+  return `${CURRENCY_SYMBOL} ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function timeAgo(iso: string) {

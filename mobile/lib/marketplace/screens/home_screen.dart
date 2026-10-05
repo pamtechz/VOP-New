@@ -677,7 +677,7 @@ class _ProductCard extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'ZMW ${price.toStringAsFixed(2)}',
+                                'K ${price.toStringAsFixed(2)}',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
@@ -686,7 +686,7 @@ class _ProductCard extends ConsumerWidget {
                               ),
                               if (compareAt != null && compareAt > price)
                                 Text(
-                                  'ZMW ${compareAt.toStringAsFixed(2)}',
+                                  'K ${compareAt.toStringAsFixed(2)}',
                                   style: TextStyle(
                                     decoration: TextDecoration.lineThrough,
                                     fontSize: 10,

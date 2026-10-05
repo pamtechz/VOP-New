@@ -195,7 +195,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       Row(
                         children: [
                           Text(
-                            'KES ${price.toStringAsFixed(0)}',
+                            'K ${price.toStringAsFixed(2)}',
                             style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
@@ -204,7 +204,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           if (compareAt != null && compareAt > price) ...[
                             const SizedBox(width: 10),
                             Text(
-                              'KES ${compareAt.toStringAsFixed(0)}',
+                              'K ${compareAt.toStringAsFixed(2)}',
                               style: const TextStyle(
                                   fontSize: 14,
                                   decoration: TextDecoration.lineThrough,

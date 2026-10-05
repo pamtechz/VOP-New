@@ -296,7 +296,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                   Row(
                                     children: [
                                       Text(
-                                        'ZMW ${price.toStringAsFixed(2)}',
+                                        'K ${price.toStringAsFixed(2)}',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
@@ -306,7 +306,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                       if (compareAt != null && compareAt > price) ...[
                                         const SizedBox(width: 8),
                                         Text(
-                                          'ZMW ${compareAt.toStringAsFixed(2)}',
+                                          'K ${compareAt.toStringAsFixed(2)}',
                                           style: TextStyle(
                                             decoration: TextDecoration.lineThrough,
                                             fontSize: 11,

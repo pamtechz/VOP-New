@@ -160,7 +160,7 @@ class OrdersScreen extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '${qty}x KES ${unitPrice.toStringAsFixed(0)}',
+                                    '${qty}x K ${unitPrice.toStringAsFixed(2)}',
                                     style: TextStyle(fontSize: 13, color: scheme.outline),
                                   ),
                                 ],
@@ -188,7 +188,7 @@ class OrdersScreen extends ConsumerWidget {
                               ],
                             ),
                             Text(
-                              'KES ${total.toStringAsFixed(0)}',
+                              'K ${total.toStringAsFixed(2)}',
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
