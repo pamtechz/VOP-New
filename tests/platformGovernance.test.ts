@@ -243,8 +243,9 @@ test('admin UX consolidation, portal isolation, audit controls and engagement re
   assert.match(personalSettings,/organizationAccount/);
   assert.match(personalSettings,/Light \(default\)/);
 
-  assert.match(organizations,/Delete selected/);
-  assert.match(organizations,/Clear all/);
+  assert.match(organizations,/Remove selected/);
+  assert.match(organizations,/Clear view/);
+  assert.match(organizations,/immutable ledger/);
   assert.match(organizations,/Select all audit records/);
   assert.match(organizations,/auditView==='table'/);
   assert.match(organizations,/auditView==='cards'/);
