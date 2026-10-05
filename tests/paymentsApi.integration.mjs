@@ -29,7 +29,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       key:'lenco',
       capabilities:{checkout:true,card:true,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
       configured(){return true;},
-      publicConfiguration(){return {key:'lenco',configured:true,environment:'test',methods:['card','airtel_money','mtn_money'],mobileMoneyCurrency:'ZMW',capabilities:this.capabilities};},
+      publicConfiguration(){return {key:'lenco',configured:true,environment:'test',methods:['card','airtel_money','mtn_money'],mobileMoneyCountry:'ZM',mobileMoneyCurrency:'ZMW',capabilities:this.capabilities};},
       async createPayment(input){
         if(state.nextCreateError){
           const message=state.nextCreateError;state.nextCreateError='';throw new Error(message);
