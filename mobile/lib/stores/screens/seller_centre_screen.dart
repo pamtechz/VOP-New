@@ -27,14 +27,14 @@ final sellerSummaryProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
       .maybeSingle();
 
   // Efficient DB counts without downloading thousands of IDs
-  final productsCountRes = await SupabaseService.client
+  final productsCount = await SupabaseService.client
       .from('products')
-      .select('*', const FetchOptions(count: CountOption.exact, head: true))
+      .count(CountOption.exact)
       .eq('store_id', storeId);
 
-  final ordersCountRes = await SupabaseService.client
+  final ordersCount = await SupabaseService.client
       .from('seller_orders')
-      .select('*', const FetchOptions(count: CountOption.exact, head: true))
+      .count(CountOption.exact)
       .eq('store_id', storeId);
 
   // Active subscription plan
@@ -56,8 +56,8 @@ final sellerSummaryProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
     'plan_name': planName,
     'available_balance': wallet?['balance_available'] ?? 0.0,
     'pending_balance': wallet?['balance_pending'] ?? 0.0,
-    'total_products': productsCountRes.count ?? 0,
-    'total_orders': ordersCountRes.count ?? 0,
+    'total_products': productsCount,
+    'total_orders': ordersCount,
   };
 });
 

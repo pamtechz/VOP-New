@@ -128,7 +128,7 @@ class _SponsoredAdBannerState extends ConsumerState<SponsoredAdBanner> {
                         ),
                         const SizedBox(width: 12),
                         FilledButton.tonal(
-                          style: FilledButton.tonalStyleFrom(
+                          style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
