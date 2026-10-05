@@ -4,7 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { organizationInHierarchyScope } from '../server/tenant.js';
 import { requirePermissionForProfile, requireOrganizationSubscriptionFeature } from '../server/permissions.js';
-import { createNotification } from '../server/notifications.js';
+import { createNotification, deliverNotification } from '../server/notifications.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -1154,35 +1154,27 @@ export default async function handler(req: Request, res: Response) {
       const student = await profile(db, String(draft.studentId || ''));
       if (!sameTenant(actor, student, organizationId)) return res.status(403).json({ error: 'You cannot access this learner.' });
       if (!sameScope(actor, student)) throw new Error('You cannot manage this learner.');
-      const channel = String(draft.channel || 'in_app');
-      let delivery = 'in_app';
-      if (channel === 'email') {
-        const apiKey = process.env.RESEND_API_KEY;
-        const from = process.env.RESEND_FROM_EMAIL;
-        const to = String(student.email || '');
-        if (!apiKey || !from) throw new Error('Email delivery is not configured.');
-        if (!to) throw new Error('The learner has no email address.');
-        const emailResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ from, to: [to], subject: String(draft.subject || ''), html: String(draft.body || '').replace(/\\n/g, '<br/>') }),
-        });
-        if (!emailResponse.ok) throw new Error('Email delivery failed.');
-        delivery = 'email';
-      } else {
-        await createNotification(db,{
-          organizationId:String(draft.organizationId||organizationId),
-          recipientId:String(draft.studentId||''),
-          title:String(draft.subject||'Learning support'),
-          body:String(draft.body||''),
-          type:'learning-support',
-          actionUrl:'/support',
-          metadata:{source:'mentorship-draft',draftId},
-          createdBy:decoded.uid,
-        });
-      }
-      await draftRef.set({ status: 'sent', sentAt: FieldValue.serverTimestamp(), delivery }, { merge: true });
-      return res.status(200).json({ ok: true, delivery });
+      const requestedChannel=String(draft.channel||'in_app')==='email'?'email':'in_app';
+      const delivery=await deliverNotification(db,{
+        organizationId:String(draft.organizationId||organizationId),
+        recipientId:String(draft.studentId||''),
+        title:String(draft.subject||'Learning support'),
+        body:String(draft.body||''),
+        type:'learning-support',
+        channel:requestedChannel,
+        actionUrl:'/support',
+        metadata:{source:'mentorship-draft',draftId},
+        createdBy:decoded.uid,
+      });
+      const draftStatus=delivery.status==='suppressed'?'suppressed':'sent';
+      await draftRef.set({
+        status:draftStatus,
+        sentAt:delivery.status==='suppressed'?null:FieldValue.serverTimestamp(),
+        delivery:delivery.channel,
+        deliveryStatus:delivery.status,
+        deliveryReason:delivery.reason||'',
+      },{merge:true});
+      return res.status(200).json({ok:true,delivery:delivery.channel,deliveryStatus:delivery.status,deliveryReason:delivery.reason||''});
     }
 
     return res.status(400).json({ error: 'Unsupported mentorship action.' });
