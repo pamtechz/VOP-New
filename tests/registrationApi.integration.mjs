@@ -39,7 +39,7 @@ test('registration policy is server authoritative and invitation aware',async t=
 
     const callRegister=async(body,ip='203.0.113.20')=>{
       const res=response();
-      await register({method:'POST',headers:{'x-forwarded-for':ip},body},res);
+      await register({method:'POST',headers:{'x-forwarded-for':ip},body:{action:'register',...body}},res);
       return res;
     };
     const callProfile=async(identity,inviteToken='')=>{
