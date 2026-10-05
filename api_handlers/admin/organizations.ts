@@ -4,6 +4,7 @@ import { authenticateTenant, ensureOrganizationDefaultSubscription, getAdminDb, 
 import { requirePermission } from '../../server/permissions.js';
 import { createNotification } from '../../server/notifications.js';
 import { normalizedBillingCountryName, organizationBillingProfile } from '../../server/billing.js';
+import { appendImmutableAudit, applyOrganizationAuditVisibility } from '../../server/auditLedger.js';
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
@@ -70,6 +71,29 @@ function invitationPublicView(data:Record<string,unknown>,organizationName:strin
     targetPath:String(data.targetPath||'/'),emailBound:Boolean(String(data.email||'').trim()),
   };
 }
+async function writeOrganizationAuditMaintenance(
+  ctx:Awaited<ReturnType<typeof authenticateTenant>>,
+  organizationId:string,
+  action:string,
+  before:Record<string,unknown>,
+  after:Record<string,unknown>,
+){
+  await appendImmutableAudit(ctx.db,{kind:'organization',organizationId},{
+    actorUid:ctx.auth.uid,
+    actorEmail:ctx.auth.email||'',
+    action,
+    target:'organizations/'+organizationId+'/audit',
+    organizationId,
+    tenantType:'organization',
+    tenantId:organizationId,
+    before,
+    after,
+  });
+  if(ctx.isSuperAdmin){
+    await writeTenantAudit(ctx,action,'organizations/'+organizationId+'/audit',before,{...after,organizationId});
+  }
+}
+
 function publicOrigin(req:Request){
   const origin=String(req.headers?.origin||'').trim();
   if(origin&&/^https?:\/\/[a-z0-9.-]+(?::\d{1,5})?$/i.test(origin))return origin.replace(/\/$/,'');
@@ -486,43 +510,66 @@ export default async function handler(req: Request, res: Response) {
       requireOrgRole(ctx, ['owner','admin']);
     }
     if (action === 'listAudit') {
-      const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(200).get();
-      return res.status(200).json({ ok:true, items:snap.docs.map(d=>({id:d.id,...d.data()})) });
+      const snap = await ctx.db.collection(`organizations/${managedOrganizationId}/audit`).orderBy('timestamp','desc').limit(250).get();
+      const visible=await applyOrganizationAuditVisibility(ctx.db,managedOrganizationId,snap.docs);
+      const items=visible.filter(item=>item.hiddenFromOrganizationView!==true).slice(0,200);
+      return res.status(200).json({
+        ok:true,
+        items,
+        hiddenCount:Math.max(0,visible.length-items.length),
+        immutable:true,
+      });
     }
 
     if(action==='deleteAudit'){
       const requested=Array.isArray(body.auditIds)?body.auditIds:[body.auditId];
       const auditIds=[...new Set(requested.map(value=>String(value||'').trim()).filter(value=>/^[A-Za-z0-9_-]{1,180}$/.test(value)))].slice(0,200);
-      if(!auditIds.length)throw new Error('Select at least one audit record to delete.');
+      if(!auditIds.length)throw new Error('Select at least one audit record to remove from this view.');
       const collection=ctx.db.collection(`organizations/${managedOrganizationId}/audit`);
       const refs=auditIds.map(auditId=>collection.doc(auditId));
       const snapshots=await ctx.db.getAll(...refs);
       const found=snapshots.filter(snapshot=>snapshot.exists);
       if(found.length){
         const batch=ctx.db.batch();
-        found.forEach(snapshot=>batch.delete(snapshot.ref));
+        found.forEach(snapshot=>batch.set(
+          ctx.db.doc(`organizations/${managedOrganizationId}/auditVisibility/${snapshot.id}`),
+          {
+            hidden:true,
+            hiddenAt:FieldValue.serverTimestamp(),
+            hiddenByUid:ctx.auth.uid,
+            hiddenByEmail:ctx.auth.email||'',
+            reason:'manual_hide',
+          },
+          {merge:false},
+        ));
         await batch.commit();
       }
-      await writeTenantAudit(ctx,'audit.history.delete',`organizations/${managedOrganizationId}/audit`,
-        {deletedIds:found.map(snapshot=>snapshot.id)},{deletedCount:found.length});
-      return res.status(200).json({ok:true,deleted:found.length});
+      await writeOrganizationAuditMaintenance(
+        ctx,managedOrganizationId,'audit.history.hide',
+        {auditIds:found.map(snapshot=>snapshot.id)},
+        {hiddenCount:found.length,immutableLedgerPreserved:true},
+      );
+      return res.status(200).json({ok:true,hidden:found.length,immutable:true});
     }
 
     if(action==='clearAudit'){
       const collection=ctx.db.collection(`organizations/${managedOrganizationId}/audit`);
-      let deleted=0;
-      for(let pass=0;pass<20;pass+=1){
-        const snapshot=await collection.limit(400).get();
-        if(snapshot.empty)break;
-        const batch=ctx.db.batch();
-        snapshot.docs.forEach(document=>batch.delete(document.ref));
-        await batch.commit();
-        deleted+=snapshot.size;
-        if(snapshot.size<400)break;
-      }
-      await writeTenantAudit(ctx,'audit.history.clear',`organizations/${managedOrganizationId}/audit`,
-        {cleared:true},{deletedCount:deleted});
-      return res.status(200).json({ok:true,deleted});
+      const count=await collection.count().get();
+      const hiddenBefore=new Date().toISOString();
+      await ctx.db.doc(`organizations/${managedOrganizationId}/auditVisibility/__cutoff`).set({
+        hiddenBefore,
+        hiddenByUid:ctx.auth.uid,
+        hiddenByEmail:ctx.auth.email||'',
+        updatedAt:FieldValue.serverTimestamp(),
+        reason:'clear_view',
+      },{merge:false});
+      const hidden=Math.max(0,Number(count.data().count||0));
+      await writeOrganizationAuditMaintenance(
+        ctx,managedOrganizationId,'audit.history.clear_view',
+        {hiddenBefore},
+        {hiddenCount:hidden,immutableLedgerPreserved:true},
+      );
+      return res.status(200).json({ok:true,hidden,hiddenBefore,immutable:true});
     }
 
     if (action === 'getUsage') {

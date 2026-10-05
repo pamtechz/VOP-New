@@ -1,6 +1,7 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type Firestore, type DocumentData } from 'firebase-admin/firestore';
+import { appendImmutableAudit } from './auditLedger.js';
 
 type Request = { headers?: Record<string, string | string[] | undefined> };
 
@@ -424,18 +425,18 @@ async function ensureHierarchyDefaultSubscription(
     assigned=true;
   });
   if(!assigned)return null;
-  await db.collection('tenantAudit').doc(hierarchyOwnerKey(type,tenantId)).collection('entries').add({
+  const auditTenantId=hierarchyOwnerKey(type,tenantId);
+  await appendImmutableAudit(db,{kind:'hierarchy',tenantId:auditTenantId},{
     actorUid,
     action:'subscription.auto_free_assign',
     target:subscriptionRef.path,
     organizationId:'',
     tenantType:'hierarchy',
-    tenantId:hierarchyOwnerKey(type,tenantId),
+    tenantId:auditTenantId,
     billingTenantType:type,
     billingTenantId:tenantId,
     before:subscription.exists?subscriptionData:null,
     after:{planId:selected.id,status:'active',activationSource:'automatic_free_plan',currentPeriodEnd:null},
-    timestamp:FieldValue.serverTimestamp(),
   });
   return assignedSnapshot?{planId:selected.id,planSnapshot:assignedSnapshot}:null;
 }
@@ -543,7 +544,7 @@ export async function ensureOrganizationDefaultSubscription(
     assigned=true;
   });
   if(!assigned)return null;
-  await db.collection(`organizations/${organizationId}/audit`).add({
+  await appendImmutableAudit(db,{kind:'organization',organizationId},{
     actorUid,
     action:'subscription.auto_free_assign',
     target:subscriptionRef.path,
@@ -557,7 +558,6 @@ export async function ensureOrganizationDefaultSubscription(
       activationSource:'automatic_free_plan',
       currentPeriodEnd:null,
     },
-    timestamp:FieldValue.serverTimestamp(),
   });
   return assignedSnapshot?{planId:selected.id,planSnapshot:assignedSnapshot}:null;
 }
@@ -875,27 +875,32 @@ export async function enforceQuota(ctx: TenantContext, collectionName: string, q
 
 export async function writeTenantAudit(ctx: TenantContext, action: string, target: string, before?: DocumentData, after?: DocumentData) {
   const tenantKey = tenantOwnerKey(ctx);
+  const organizationId=ctx.organizationId || String(after?.organizationId || before?.organizationId || '');
   const entry = {
     actorUid: ctx.auth.uid,
     actorEmail: ctx.auth.email || '',
     action,
     target,
-    organizationId: ctx.organizationId || String(after?.organizationId || before?.organizationId || ''),
+    organizationId,
     tenantType: ctx.tenantType,
     tenantId: tenantKey,
     before: before || null,
     after: after || null,
-    timestamp: FieldValue.serverTimestamp(),
   };
   if (ctx.isSuperAdmin) {
-    await ctx.db.collection('platformAudit').add({ ...entry, tenantType: 'platform', tenantId: '', targetedOrganizationId: entry.organizationId || null });
+    await appendImmutableAudit(ctx.db,{kind:'platform'},{
+      ...entry,
+      tenantType:'platform',
+      tenantId:'',
+      targetedOrganizationId:organizationId||null,
+    });
     return;
   }
   if (ctx.tenantType === 'organization' && ctx.organizationId) {
-    await ctx.db.collection(`organizations/${ctx.organizationId}/audit`).add(entry);
+    await appendImmutableAudit(ctx.db,{kind:'organization',organizationId:ctx.organizationId},entry);
     return;
   }
   if (ctx.tenantType === 'hierarchy' && tenantKey) {
-    await ctx.db.collection('tenantAudit').doc(tenantKey).collection('entries').add(entry);
+    await appendImmutableAudit(ctx.db,{kind:'hierarchy',tenantId:tenantKey},entry);
   }
 }
