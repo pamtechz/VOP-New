@@ -50,6 +50,7 @@ const checks = [
   ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
   ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
   ['scripts/mtn-momo-sandbox-provision.mjs', ['/v1_0/apiuser','/apikey','providerCallbackHost','MTN_MOMO_SUBSCRIPTION_KEY']],
+  ['server/billing.ts', ['fetchFrankfurterRate','refreshPlatformFxRate','quoteAmountForCurrency','quoteSubscriptionPlanForTenant','fxRates']],
   ['server/payments/core.ts', ['createCheckout','verifyAndApplyPayment','fulfilPaidPayment','adminRequestRefund','adminCompleteManualRefund','reconcilePendingRefunds','processProviderWebhook','loadPaymentByProviderTransactionId','reconcilePendingPayments','paymentLocks','paymentReceipts','paymentRefunds','requireSuperAdminFinanceControl','requireInstitutionalSubscriptionConsumer','billingTenantSubscriptionRef','selectProviderForMethod','consumerPaymentQuotes','quoteAmountForCurrency','providerSettlementCurrency','scopedTransactionProjection']],
   ['api/payments.ts', ["name.startsWith('webhooks/')",'getPaymentProvider','callbackMethods','reconcile-cron','admin/payable-items','admin/reconcile','admin/refunds']],
   ['src/pages/PaymentsPage.tsx', ['Payments & Billing','Subscription packages','methodQuotes','startPaymentCheckout','verifyPayment']],
