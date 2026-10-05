@@ -222,17 +222,28 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
     .map(doc => String(doc.data()?.uid || doc.id).trim())
     .filter(uid => /^[A-Za-z0-9:_-]{1,180}$/.test(uid));
   let delivered = 0;
-  for (let offset = 0; offset < recipients.length; offset += 400) {
-    const chunk = recipients.slice(offset, offset + 400);
+  let suppressed = 0;
+  for (let offset = 0; offset < recipients.length; offset += 200) {
+    const chunk = recipients.slice(offset, offset + 200);
     const refs = chunk.map(uid => db.collection('notifications').doc(
       publicationNotificationId(input.type, sourceId, uid),
     ));
-    const existing = await db.getAll(...refs);
+    const preferenceRefs=chunk.map(uid=>db.doc('users/'+uid+'/settings/personal'));
+    const [existing,preferenceSnapshots] = await Promise.all([
+      db.getAll(...refs),
+      db.getAll(...preferenceRefs),
+    ]);
     const batch = db.batch();
     let writes = 0;
     for (let index = 0; index < chunk.length; index += 1) {
       if (existing[index]?.exists) continue;
       const uid = chunk[index];
+      const decision=notificationPreferenceDecision(
+        normalizedPreferences(preferenceSnapshots[index]?.data()),
+        input.type,
+        'in_app',
+      );
+      if(!decision.allowed){suppressed+=1;continue;}
       batch.create(refs[index], {
         recipientId: uid,
         userId: uid,
@@ -242,10 +253,13 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
         body: String(input.body || '').trim().slice(0, 2000),
         type: input.type,
         channel: 'in_app',
+        requestedChannel:'in_app',
+        deliveryStatus:'sent',
         actionUrl: safeActionUrl(input.actionUrl),
         metadata: { ...(input.metadata || {}), sourceId, targetAudience:audience },
         createdBy: String(input.createdBy || '').trim(),
         createdAt: FieldValue.serverTimestamp(),
+        sentAt: FieldValue.serverTimestamp(),
         read: false,
         readAt: null,
         deliveryKey: `${input.type}:${sourceId}`,
@@ -255,5 +269,5 @@ export async function notifyOrganizationMembers(db: Firestore, input: NotifyOrga
     }
     if (writes) await batch.commit();
   }
-  return { delivered, recipients: recipients.length, audience };
+  return { delivered, suppressed, recipients: recipients.length, audience };
 }
