@@ -395,7 +395,7 @@ export const ContentStudio: React.FC<Props> = ({ activeLanguage }) => {
         </div>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? <>{t('common.edit','Edit')} record</> : <>{t('common.create','Create')} record</>}</h3><p className="text-xs text-slate-500">{{t('admin.' + active, TABS.find(tab => tab.id === active)?.label || active)} · {t('admin.data_securely_persisted','admin data is securely persisted')}</p></div></div>
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-black">{editingId ? <>{t('common.edit','Edit')} record</> : <>{t('common.create','Create')} record</>}</h3><p className="text-xs text-slate-500">{t('admin.' + active, TABS.find(tab => tab.id === active)?.label || active)} · {t('admin.data_securely_persisted','admin data is securely persisted')}</p></div></div>
           {renderEditor()}
           <button type="button" onClick={() => void save()} disabled={pending || (editingId !== '' && !editingCanEdit)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"><Save size={15} />{pending ? t('common.saving','Saving…') : editingId ? <>{t('common.save','Save')} changes</> : <>{t('common.create','Create')} record</>}</button>
         </div>
