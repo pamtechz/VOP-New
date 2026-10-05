@@ -85,9 +85,8 @@ export function Root() {
 
             if (!profile) {
               // New Firebase Authentication accounts may legitimately have no
-              // account profile yet. The account data policy permits a signed-in
-              // account to create only its own student profile. This keeps
-              // local clones usable even when the Admin SDK API is unavailable.
+              // VOP profile yet. Profile admission is server-authoritative and
+              // enforces registration/invitation policy before creating it.
               profile = await createFirestoreStudentProfile(
                 firebaseUser.uid,
                 firebaseUser.email ?? '',
