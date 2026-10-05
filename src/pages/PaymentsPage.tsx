@@ -11,7 +11,7 @@ import {
 import { ShimmerCards, ShimmerList } from '../components/layout/Shimmer';
 import './payments.css';
 
-interface Props{currentUser:User;onBack:()=>void}
+interface Props{currentUser:User;onBack?:()=>void;embedded?:boolean}
 
 type LencoApi={getPaid:(options:Record<string,unknown>)=>void};
 
@@ -39,7 +39,7 @@ function singleCheckoutQuote(item:PayableItem){
   return quotes.every(quote=>quote.currency===first.currency&&quote.amountDecimal===first.amountDecimal)?first:null;
 }
 
-const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
+const PaymentsPage:React.FC<Props>=({currentUser,onBack,embedded=false})=>{
   const [items,setItems]=useState<PayableItem[]>([]);
   const [history,setHistory]=useState<ClientPayment[]>([]);
   const [selected,setSelected]=useState<PayableItem|null>(null);
@@ -167,9 +167,9 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
     catch(reason){setError(reason instanceof Error?reason.message:'Receipt is not available yet.');}
   };
 
-  return <main className="vop-payments-page">
+  return <div className={'vop-payments-page'+(embedded?' embedded':'')}>
     <header className="vop-payments-head">
-      <button type="button" className="vop-back-button" onClick={onBack}><ArrowLeft size={18}/>Back</button>
+      {!embedded&&onBack&&<button type="button" className="vop-back-button" onClick={onBack}><ArrowLeft size={18}/>Back</button>}
       <div><span>Secure VOP payments</span><h1>Payments & receipts</h1><p>Pay configured VOP charges and track server-verified transactions.</p></div>
       <button type="button" className="btn btn-outline" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={16}/>Refresh</button>
     </header>
@@ -233,7 +233,7 @@ const PaymentsPage:React.FC<Props>=({currentUser,onBack})=>{
         </dl>
       </section>
     </div>}
-  </main>;
+  </div>;
 };
 
 export default PaymentsPage;
