@@ -17,7 +17,8 @@ const read = file => fs.readFileSync(path.join(root,file),'utf8');
 verifyCertificateBackgroundAsset();
 
 const checks = [
-  ['server/tenant.ts', ['canEditCanonicalContent','tenantOwnerKey','ownerTenantId','ownerUid','tenantType: \'platform\' | \'organization\' | \'hierarchy\'','accessibleOrganizationIds','canManageOrganizationContent','platformAudit']],
+  ['server/tenant.ts', ['canEditCanonicalContent','tenantOwnerKey','ownerTenantId','ownerUid','tenantType: \'platform\' | \'organization\' | \'hierarchy\'','accessibleOrganizationIds','canManageOrganizationContent','appendImmutableAudit']],
+  ['server/auditLedger.ts', ['appendImmutableAudit','auditIntegrityHeads','previousHash','entryHash','transaction.create(recordRef','applyOrganizationAuditVisibility']],
   ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2','Updated Scoped Tenant','system/permissions','cert-org-1','cert-org-2']],
   ['firestore.rules', ["'union_admin'","'conference_admin'","'district_admin'","'church_admin'",'organizationIdForUser()','canEditOwnedContent','tenantSettings/{tenantId}/settings/{settingId}','canViewHierarchyCertificate','hierarchyOrganizationScope(resource.data.get(\'organizationId\',\'\'))','canManageHierarchyUser','unionAdminForCreateUpdate','isHierarchyTenant','hierarchyTenantId']],
   ['shared/permissions.ts', ['DEFAULT_PERMISSION_MATRIX','PERMISSION_ROLES','PERMISSION_RESOURCES','PERMISSION_ACTIONS','normalizePermissionMatrix','billing']],
@@ -47,7 +48,7 @@ const checks = [
   ['api_handlers/admin/onboarding.ts', ['organization.initialize','onboarding','owner_assignment','invite_users','ensureOrganizationDefaultSubscription','defaultSubscriptionPlanId']],
   ['api_handlers/admin/plans.ts', ['system/plans/catalog','listAvailablePlans','assignPlan','cancelSubscription','featureEntitlements','externalSubscriptionId','subscription_','upsertPayableItem']],
   ['shared/payments.ts', ['PAYMENT_STATUSES','PAYABLE_ITEM_TYPES','amountToMinor','canTransitionPaymentStatus']],
-  ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
+  ['server/payments/providers.ts', ['PaymentProviderAdapter','parseWebhook','verifyLencoWebhookSignature','MtnMomoProvider','AirtelMoneyProvider','providerSettlementCurrency','/collection/v1_0/requesttopay','/merchant/v1/payments/','/standard/v1/payments/','registerPaymentProvider','/collections/status/']],
   ['server/payments/lencoSignature.ts', ['createHmac','timingSafeEqual','sha256','sha512']],
   ['scripts/mtn-momo-sandbox-provision.mjs', ['/v1_0/apiuser','/apikey','providerCallbackHost','MTN_MOMO_SUBSCRIPTION_KEY']],
   ['server/billing.ts', ['fetchFrankfurterRate','refreshPlatformFxRate','quoteAmountForCurrency','quoteSubscriptionPlanForTenant','fxRates']],
