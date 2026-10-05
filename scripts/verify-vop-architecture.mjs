@@ -17,7 +17,8 @@ const read = file => fs.readFileSync(path.join(root,file),'utf8');
 verifyCertificateBackgroundAsset();
 
 const checks = [
-  ['server/tenant.ts', ['canEditCanonicalContent','tenantOwnerKey','ownerTenantId','ownerUid','tenantType: \'platform\' | \'organization\' | \'hierarchy\'','accessibleOrganizationIds','canManageOrganizationContent','platformAudit']],
+  ['server/tenant.ts', ['canEditCanonicalContent','tenantOwnerKey','ownerTenantId','ownerUid','tenantType: \'platform\' | \'organization\' | \'hierarchy\'','accessibleOrganizationIds','canManageOrganizationContent','appendImmutableAudit']],
+  ['server/auditLedger.ts', ['appendImmutableAudit','auditIntegrityHeads','previousHash','entryHash','transaction.create(recordRef','applyOrganizationAuditVisibility']],
   ['tests/firestoreRules.test.mjs', ['hierarchy tenant scope','radio-owned','candidate-2','Updated Scoped Tenant','system/permissions','cert-org-1','cert-org-2']],
   ['firestore.rules', ["'union_admin'","'conference_admin'","'district_admin'","'church_admin'",'organizationIdForUser()','canEditOwnedContent','tenantSettings/{tenantId}/settings/{settingId}','canViewHierarchyCertificate','hierarchyOrganizationScope(resource.data.get(\'organizationId\',\'\'))','canManageHierarchyUser','unionAdminForCreateUpdate','isHierarchyTenant','hierarchyTenantId']],
   ['shared/permissions.ts', ['DEFAULT_PERMISSION_MATRIX','PERMISSION_ROLES','PERMISSION_RESOURCES','PERMISSION_ACTIONS','normalizePermissionMatrix','billing']],
