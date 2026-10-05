@@ -56,6 +56,19 @@ function sameOrg(actor: Profile, target: Profile) {
   return Boolean(a && b && a === b);
 }
 
+async function peerProfileVisibility(db:FirebaseFirestore.Firestore,uids:string[]){
+  const unique=[...new Set(uids.map(value=>String(value||'').trim()).filter(Boolean))];
+  if(!unique.length)return new Map<string,'private'|'organization'>();
+  const snapshots=await db.getAll(...unique.map(uid=>db.doc('users/'+uid+'/settings/personal')));
+  return new Map(unique.map((uid,index)=>{
+    const privacy=snapshots[index]?.data()?.privacy;
+    const visibility=privacy&&typeof privacy==='object'
+      ?String((privacy as Record<string,unknown>).profileVisibility||'organization')
+      :'organization';
+    return [uid,visibility==='private'?'private':'organization'] as const;
+  }));
+}
+
 /** Hierarchy evaluators can review only their descendant organizations. */
 async function evaluatorScope(db: FirebaseFirestore.Firestore, actor: Profile, learner: Profile) {
   if (String(actor.role || '') === 'super_admin') return true;
@@ -483,8 +496,10 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     const organizationId = orgOf(actor);
     if (!organizationId) return { leaderboard:[] };
     const people = await db.collection('users').where('organizationId','==',organizationId).limit(500).get();
-    const eligible = people.docs.filter(doc => doc.data().scriptureDuelOptIn === true
-      && doc.data().disabled !== true && ['student','learner'].includes(String(doc.data().role || 'student')))
+    const candidates=people.docs.filter(doc => doc.data().scriptureDuelOptIn === true
+      && doc.data().disabled !== true && ['student','learner'].includes(String(doc.data().role || 'student')));
+    const visibility=await peerProfileVisibility(db,candidates.map(doc=>doc.id));
+    const eligible = candidates.filter(doc=>visibility.get(doc.id)!=='private')
       .map(doc => ({
         displayName:String(doc.data().displayName || 'Learner').slice(0,100),
         rating:Number.isFinite(Number(doc.data().scriptureDuelRating))
@@ -511,8 +526,13 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
       db.collection('scriptureChallengeResults').where('playerId','==',uid).limit(100).get(),
       organizationPointRules(db,organizationId),
     ]);
-    const names=new Map(people.docs.map(doc=>[doc.id,String(doc.data().displayName||'Learner')]));
-    const opponents=people.docs.filter(doc=>doc.id!==uid&&doc.data().disabled!==true&&doc.data().scriptureDuelOptIn===true&&['student','learner'].includes(String(doc.data().role||'student')))
+    const visibility=await peerProfileVisibility(db,people.docs.map(doc=>doc.id));
+    const names=new Map(people.docs.map(doc=>[
+      doc.id,
+      visibility.get(doc.id)==='private'?'Private learner':String(doc.data().displayName||'Learner'),
+    ]));
+    const opponents=people.docs.filter(doc=>doc.id!==uid&&doc.data().disabled!==true&&doc.data().scriptureDuelOptIn===true
+        &&visibility.get(doc.id)!=='private'&&['student','learner'].includes(String(doc.data().role||'student')))
       .map(doc=>({uid:doc.id,displayName:String(doc.data().displayName||'Learner')}));
     const matches=active.docs.map(doc=>({id:doc.id,...doc.data()} as Record<string,unknown>&{id:string}))
       .filter(item=>item.status==='active'&&(item.playerA===uid||item.playerB===uid))
@@ -707,6 +727,8 @@ async function duelAction(db: FirebaseFirestore.Firestore, actor: Profile, b: Re
     const opponentId = cleanId(b.opponentId, 'opponent');
     if (opponentId === String(actor.uid)) throw new Error('You cannot challenge yourself.');
     const opponent = await profile(db, opponentId);
+    const opponentVisibility=await peerProfileVisibility(db,[opponentId]);
+    if(opponentVisibility.get(opponentId)==='private')throw new Error('This learner is not accepting peer challenges.');
     const outstanding = await db.collection('scriptureDuels')
       .where('playerA', '==', String(actor.uid)).where('status', '==', 'active').limit(20).get();
     if (outstanding.docs.filter(doc => new Date(String(doc.data()?.expiresAt || 0)).getTime() > Date.now()).length >= 3) {
