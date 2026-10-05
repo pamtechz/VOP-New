@@ -74,15 +74,28 @@ test('Android invitation links are wired to the native package and verified doma
 
   assert.equal(packageJson.dependencies['@capacitor/app'],'8.1.1');
   assert.match(manifest,/android:autoVerify="true"/);
-  assert.match(manifest,/android:scheme="https" android:host="vopapp\.org"/);
+  assert.match(manifest,/android:allowBackup="false"/);
+  assert.match(manifest,/android:fullBackupContent="false"/);
+  assert.match(manifest,/android:usesCleartextTraffic="false"/);
+  assert.match(manifest,/android:networkSecurityConfig="@xml\/network_security_config"/);
+  assert.match(manifest,/android:scheme="https" android:host="vopafrica\.vercel\.app"/);
   assert.match(manifest,/android:scheme="vop" android:host="invite"/);
   assert.equal(assetlinks[0].target.package_name,'com.sda.vop');
   assert.ok(assetlinks[0].target.sha256_cert_fingerprints.some(value=>
     /^[A-F0-9]{2}(?::[A-F0-9]{2}){31}$/.test(value)));
   assert.match(bridge,/CapacitorApp\.getLaunchUrl/);
   assert.match(bridge,/appUrlOpen/);
-  assert.match(bridge,/vopapp\.org/);
+  assert.match(bridge,/vopafrica\.vercel\.app/);
   assert.match(bridge,/url\.protocol==='vop:'/);
+  const gradle=readFileSync(join(projectRoot,'android/app/build.gradle'),'utf8');
+  assert.doesNotMatch(gradle,/versionCode\s+1\b/);
+  assert.doesNotMatch(gradle,/versionName\s+"1\.0"/);
+  assert.match(gradle,/VOP_VERSION_CODE/);
+  assert.match(gradle,/GITHUB_RUN_NUMBER/);
+  assert.match(gradle,/minifyEnabled true/);
+  assert.match(gradle,/shrinkResources true/);
+  const networkSecurity=readFileSync(join(projectRoot,'android/app/src/main/res/xml/network_security_config.xml'),'utf8');
+  assert.match(networkSecurity,/cleartextTrafficPermitted="false"/);
 });
 
 test('Android release verifies deployment identity, actual source sections and hashed image assets', async () => {
