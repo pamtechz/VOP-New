@@ -32,7 +32,7 @@ class SupabaseService {
     final user = client.auth.currentUser;
     if (user != null) {
       try {
-        await client.rpc('touch_user_activity', params: {'p_user_id': user.id});
+        await client.rpc('touch_current_user_activity');
       } catch (_) {
         // Non-blocking; user experience is unaffected.
       }

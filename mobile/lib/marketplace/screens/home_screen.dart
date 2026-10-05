@@ -6,6 +6,7 @@ import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../advertising/widgets/sponsored_ad_banner.dart';
 
 // ── Category Icon & Visual Style Helper ─────────────────────────────────────
 
@@ -332,6 +333,9 @@ class HomeScreen extends ConsumerWidget {
                   loading: () => const _SectionSkeleton(height: 250),
                   error: (e, _) => _ErrorTile(message: e.toString()),
                 ),
+              ),
+              const SliverToBoxAdapter(
+                child: SponsoredAdBanner(placement: 'home_hero'),
               ),
             ],
 

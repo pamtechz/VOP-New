@@ -20,11 +20,16 @@ final walletAccountProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
 
   final wallet = await SupabaseService.client
       .from('wallet_accounts')
-      .select('id, balance_available, balance_pending')
+      .select('id, store_id, balance_available, balance_pending, currency')
       .eq('store_id', store['id'])
       .maybeSingle();
 
-  return wallet;
+  if (wallet == null) return null;
+
+  return {
+    ...wallet,
+    'store_name': store['name'],
+  };
 });
 
 final walletLedgerProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -58,11 +63,178 @@ final walletLedgerProvider = FutureProvider<List<Map<String, dynamic>>>((ref) as
 });
 
 // ── Screen ──────────────────────────────────────────────────────────────────
-class WalletLedgerScreen extends ConsumerWidget {
+class WalletLedgerScreen extends ConsumerStatefulWidget {
   const WalletLedgerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WalletLedgerScreen> createState() => _WalletLedgerScreenState();
+}
+
+class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
+  bool _isRequestingPayout = false;
+
+  Future<void> _showPayoutDialog(BuildContext context, String storeId, double availableBalance, CurrencyConfig currency) async {
+    final amountController = TextEditingController(text: availableBalance.toStringAsFixed(2));
+    final phoneController = TextEditingController();
+    String selectedProvider = 'airtel';
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final scheme = Theme.of(context).colorScheme;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: scheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Request Wallet Payout', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Available balance: ${currency.format(availableBalance)} (Minimum payout: K50.00)',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Payout Amount (${currency.code})',
+                      prefixText: '${currency.symbol} ',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  const Text('Payout Destination', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: selectedProvider,
+                    decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                    items: const [
+                      DropdownMenuItem(value: 'airtel', child: Text('Airtel Money')),
+                      DropdownMenuItem(value: 'mtn', child: Text('MTN MoMo')),
+                      DropdownMenuItem(value: 'zamtel', child: Text('Zamtel Kwacha')),
+                      DropdownMenuItem(value: 'bank', child: Text('Local Bank Transfer')),
+                    ],
+                    onChanged: (val) => setModalState(() => selectedProvider = val!),
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: selectedProvider == 'bank' ? 'Account Number & Bank Name' : 'Registered Mobile Money Number',
+                      hintText: selectedProvider == 'bank' ? 'e.g. 0123456789 (ZANACO)' : 'e.g. +260 971 234567',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: () {
+                        final amt = double.tryParse(amountController.text.trim());
+                        final dest = phoneController.text.trim();
+                        if (amt == null || amt <= 0 || dest.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a valid amount and destination')),
+                          );
+                          return;
+                        }
+                        if (amt > availableBalance) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Requested amount exceeds available balance')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(ctx, true);
+                      },
+                      child: const Text('Submit Payout Request'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (confirmed == true) {
+      final amt = double.tryParse(amountController.text.trim()) ?? 0.0;
+      final dest = phoneController.text.trim();
+
+      setState(() => _isRequestingPayout = true);
+
+      try {
+        final res = await SupabaseService.client.rpc('request_payout', params: {
+          'p_store_id': storeId,
+          'p_amount': amt,
+          'p_destination': {
+            'provider': selectedProvider,
+            'account': dest,
+            'currency': currency.code,
+          },
+        });
+
+        ref.invalidate(walletAccountProvider);
+        ref.invalidate(walletLedgerProvider);
+
+        if (mounted) {
+          final resMap = res as Map<String, dynamic>?;
+          final refCode = resMap?['public_ref'] ?? 'PO';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payout request $refCode created for ${currency.format(amt)}!'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payout failed: ${e.toString().replaceAll("Exception: ", "")}'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isRequestingPayout = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
@@ -89,8 +261,26 @@ class WalletLedgerScreen extends ConsumerWidget {
                 loading: () => const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator())),
                 error: (e, _) => Card(child: Padding(padding: const EdgeInsets.all(16), child: Text('Wallet error: $e'))),
                 data: (wallet) {
-                  final available = double.tryParse(wallet?['balance_available']?.toString() ?? '0') ?? 0.0;
-                  final pending = double.tryParse(wallet?['balance_pending']?.toString() ?? '0') ?? 0.0;
+                  if (wallet == null) {
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.account_balance_wallet_outlined, size: 48, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            const Text('No seller wallet found for this account.'),
+                            const SizedBox(height: 4),
+                            const Text('Open a merchant store in Seller Centre to activate your wallet.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final storeId = wallet['store_id'] as String;
+                  final available = double.tryParse(wallet['balance_available']?.toString() ?? '0') ?? 0.0;
+                  final pending = double.tryParse(wallet['balance_pending']?.toString() ?? '0') ?? 0.0;
 
                   return Container(
                     padding: const EdgeInsets.all(20),
@@ -123,14 +313,12 @@ class WalletLedgerScreen extends ConsumerWidget {
                                 backgroundColor: scheme.primary,
                                 foregroundColor: scheme.onPrimary,
                               ),
-                              onPressed: available > 0
-                                  ? () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Payout request submitted for admin review!')),
-                                      );
-                                    }
+                              onPressed: (available >= 50.0 && !_isRequestingPayout)
+                                  ? () => _showPayoutDialog(context, storeId, available, currency)
                                   : null,
-                              child: const Text('Request Payout'),
+                              child: _isRequestingPayout
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                  : const Text('Request Payout'),
                             ),
                           ],
                         ),
@@ -145,7 +333,7 @@ class WalletLedgerScreen extends ConsumerWidget {
                                 Text('Pending Clearance: ${currency.format(pending)}', style: const TextStyle(fontSize: 12)),
                               ],
                             ),
-                            const Text('T+2 Settlement', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            const Text('T+2 Settlement Engine', style: TextStyle(fontSize: 11, color: Colors.grey)),
                           ],
                         ),
                       ],

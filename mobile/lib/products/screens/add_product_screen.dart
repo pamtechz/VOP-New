@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/media_link_interceptor.dart';
@@ -19,35 +20,75 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _priceController = TextEditingController();
-  final _stockController = TextEditingController(text: '10');
+  final _stockController = TextEditingController();
 
   String? _selectedCategoryId;
   List<Map<String, dynamic>> _categories = [];
   final List<String> _imageUrls = [];
   bool _isLoading = false;
+  bool _isCheckingStore = true;
+  String? _userStoreId;
+  String? _userStoreName;
+  int _maxImages = 5;
 
   @override
   void initState() {
     super.initState();
-    _fetchCategories();
+    _checkStoreAndFetchCategories();
   }
 
-  Future<void> _fetchCategories() async {
+  Future<void> _checkStoreAndFetchCategories() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isCheckingStore = false);
+      return;
+    }
+
     try {
-      final res = await SupabaseService.client
+      // 1. Check user store
+      final store = await SupabaseService.client
+          .from('stores')
+          .select('id, name')
+          .eq('owner_id', user.id)
+          .maybeSingle();
+
+      if (store != null) {
+        _userStoreId = store['id'] as String;
+        _userStoreName = store['name'] as String;
+
+        // Fetch subscription limits if active
+        final sub = await SupabaseService.client
+            .from('subscriptions')
+            .select('plan:subscription_plans(max_images_per_product)')
+            .eq('store_id', _userStoreId!)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (sub != null && sub['plan'] != null) {
+          final plan = sub['plan'] as Map<String, dynamic>;
+          _maxImages = (plan['max_images_per_product'] as int?) ?? 5;
+        }
+      }
+
+      // 2. Fetch categories
+      final catRes = await SupabaseService.client
           .from('categories')
           .select('id, name')
           .eq('is_active', true)
           .order('display_order');
+
       if (mounted) {
         setState(() {
-          _categories = List<Map<String, dynamic>>.from(res as List);
+          _categories = List<Map<String, dynamic>>.from(catRes as List);
           if (_categories.isNotEmpty) {
             _selectedCategoryId = _categories[0]['id'] as String;
           }
+          _isCheckingStore = false;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _isCheckingStore = false);
+    }
   }
 
   @override
@@ -59,40 +100,128 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     super.dispose();
   }
 
+  Future<void> _createStoreQuickOnboard() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final nameController = TextEditingController();
+    final slugController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Start Selling on Pamtechz'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Set up your store profile in seconds. All new sellers get an automatic Free subscription and wallet.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Store Name',
+                hintText: 'e.g. Lusaka Tech Hub',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (val) {
+                slugController.text = val.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: slugController,
+              decoration: const InputDecoration(
+                labelText: 'Store URL Slug',
+                hintText: 'e.g. lusaka-tech-hub',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Create Store'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && nameController.text.trim().isNotEmpty) {
+      setState(() => _isLoading = true);
+      try {
+        final storeName = nameController.text.trim();
+        var slug = slugController.text.trim();
+        if (slug.isEmpty) {
+          slug = storeName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+        }
+
+        // Call atomic server onboarding RPC
+        final onboardRes = await SupabaseService.client.rpc('start_selling_onboard_store', params: {
+          'p_store_name': storeName,
+          'p_store_slug': '$slug-${DateTime.now().millisecondsSinceEpoch % 10000}',
+          'p_description': 'Official marketplace seller store.',
+        });
+
+        final onboardMap = onboardRes as Map<String, dynamic>;
+        _userStoreId = onboardMap['store_id'] as String?;
+        _userStoreName = storeName;
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Store "$storeName" onboarded with Free Subscription!'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to onboard store: $e'), backgroundColor: Colors.redAccent),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_userStoreId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please create your store first to publish products.')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) throw Exception('Must be logged in to create product');
 
-      // Get or assign user's store
-      var store = await SupabaseService.client
-          .from('stores')
-          .select('id')
-          .eq('owner_id', user.id)
-          .maybeSingle();
-
-      String storeId;
-      if (store != null) {
-        storeId = store['id'] as String;
-      } else {
-        // Find first active store as fallback
-        final firstStore = await SupabaseService.client.from('stores').select('id').limit(1).single();
-        storeId = firstStore['id'] as String;
-      }
-
       final title = _titleController.text.trim();
       final slug = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-') + '-${DateTime.now().millisecondsSinceEpoch % 10000}';
       final price = double.parse(_priceController.text.trim());
-      final stock = int.tryParse(_stockController.text.trim()) ?? 10;
+      final stock = int.tryParse(_stockController.text.trim()) ?? 1;
 
-      // Insert product
+      // 1. Insert product
       final productRes = await SupabaseService.client
           .from('products')
           .insert({
-            'store_id': storeId,
+            'store_id': _userStoreId,
             'category_id': _selectedCategoryId,
             'title': title,
             'slug': slug,
@@ -106,14 +235,14 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       final productId = productRes['id'] as String;
 
-      // Insert inventory
+      // 2. Insert canonical inventory record
       await SupabaseService.client.from('inventory').insert({
         'product_id': productId,
         'quantity': stock,
         'reserved_quantity': 0,
       });
 
-      // Intercept and persist media links via internal shortening layer
+      // 3. Attach image references (file_size_bytes is null for external user-owned cloud links)
       if (_imageUrls.isNotEmpty) {
         for (int i = 0; i < _imageUrls.length; i++) {
           final intercepted = await MediaLinkInterceptor.interceptAndRegister(_imageUrls[i]);
@@ -121,7 +250,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             'product_id': productId,
             'url': intercepted.shortCode.isNotEmpty ? intercepted.shortCode : intercepted.directDisplayUrl,
             'display_order': i + 1,
-            'file_size_bytes': 75000,
+            'file_size_bytes': null,
           });
         }
       }
@@ -151,10 +280,49 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    if (_isCheckingStore) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Add New Product')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_userStoreId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Add New Product')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.storefront, size: 72, color: scheme.primary),
+                const SizedBox(height: 16),
+                Text('Create a Store First', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text(
+                  'To publish products on Pamtechz, you need an active merchant store. Starting a store is free and takes less than 30 seconds.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _isLoading ? null : _createStoreQuickOnboard,
+                  icon: const Icon(Icons.add_business),
+                  label: const Text('Start Selling / Open Store'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add New Product'),
+        title: Text('Add Product (${_userStoreName ?? "My Store"})'),
       ),
       body: Form(
         key: _formKey,
@@ -163,8 +331,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           children: [
             TextFormField(
               controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Product Title', border: OutlineInputBorder()),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              decoration: const InputDecoration(
+                labelText: 'Product Title',
+                hintText: 'e.g. Wireless Noise-Cancelling Headphones',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) => v == null || v.trim().isEmpty ? 'Product title is required' : null,
             ),
             const SizedBox(height: 14),
 
@@ -187,11 +359,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _priceController,
-                    decoration: const InputDecoration(labelText: 'Price (ZMW)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Price (ZMW)',
+                      hintText: 'e.g. 450.00',
+                      border: OutlineInputBorder(),
+                    ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (double.tryParse(v) == null) return 'Invalid number';
+                      if (v == null || v.trim().isEmpty) return 'Price is required';
+                      final parsed = double.tryParse(v);
+                      if (parsed == null || parsed <= 0) return 'Enter a valid price';
                       return null;
                     },
                   ),
@@ -200,8 +377,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _stockController,
-                    decoration: const InputDecoration(labelText: 'Initial Stock', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Available Stock',
+                      hintText: 'e.g. 5',
+                      border: OutlineInputBorder(),
+                    ),
                     keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Stock is required';
+                      final parsed = int.tryParse(v);
+                      if (parsed == null || parsed < 0) return 'Invalid stock';
+                      return null;
+                    },
                   ),
                 ),
               ],
@@ -210,16 +397,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
             TextFormField(
               controller: _descController,
-              decoration: const InputDecoration(labelText: 'Product Description', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Product Description',
+                hintText: 'Describe key specifications, features, and condition...',
+                border: OutlineInputBorder(),
+              ),
               maxLines: 3,
             ),
             const SizedBox(height: 20),
 
             ProductImagePicker(
-              productId: 'new-prod',
-              storeId: 'my-store',
+              productId: '',
+              storeId: _userStoreId!,
               currentImageCount: _imageUrls.length,
-              maxImages: 5,
+              maxImages: _maxImages,
               onImageAttached: (result) {
                 setState(() {
                   _imageUrls.add(result.displayUrl);
@@ -270,7 +461,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              Text('${_imageUrls.length} cloud image(s) attached', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF10B981))),
+              Text(
+                '${_imageUrls.length} image(s) attached',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF10B981)),
+              ),
             ],
             const SizedBox(height: 28),
 

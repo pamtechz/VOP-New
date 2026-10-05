@@ -1,17 +1,26 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../advertising/widgets/sponsored_ad_banner.dart';
 
 // ── Search & Filter State ───────────────────────────────────────────────────
 
 class SearchFilter {
   final String query;
   final String? categorySlug;
+  final int page;
+  final int pageSize;
 
-  const SearchFilter({this.query = '', this.categorySlug});
+  const SearchFilter({
+    this.query = '',
+    this.categorySlug,
+    this.page = 0,
+    this.pageSize = 20,
+  });
 
   @override
   bool operator ==(Object other) =>
@@ -19,10 +28,13 @@ class SearchFilter {
       other is SearchFilter &&
           runtimeType == other.runtimeType &&
           query == other.query &&
-          categorySlug == other.categorySlug;
+          categorySlug == other.categorySlug &&
+          page == other.page &&
+          pageSize == other.pageSize;
 
   @override
-  int get hashCode => query.hashCode ^ categorySlug.hashCode;
+  int get hashCode =>
+      query.hashCode ^ categorySlug.hashCode ^ page.hashCode ^ pageSize.hashCode;
 }
 
 // ── Providers ───────────────────────────────────────────────────────────────
@@ -56,7 +68,6 @@ final searchResultsProvider =
       .eq('status', 'active');
 
   if (catSlug != null && catSlug.isNotEmpty) {
-    // Lookup category id first
     final cat = await SupabaseService.client
         .from('categories')
         .select('id')
@@ -72,7 +83,11 @@ final searchResultsProvider =
     builder = builder.ilike('title', '%$query%');
   }
 
-  final data = await builder.order('created_at', ascending: false).limit(40);
+  final offset = filter.page * filter.pageSize;
+  final data = await builder
+      .order('created_at', ascending: false)
+      .range(offset, offset + filter.pageSize - 1);
+
   return List<Map<String, dynamic>>.from(data as List);
 });
 
@@ -94,24 +109,43 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   late final TextEditingController _searchController;
+  Timer? _debounceTimer;
   String? _selectedCategorySlug;
+  String _debouncedQuery = '';
+  int _page = 0;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialQuery ?? '');
+    _debouncedQuery = widget.initialQuery ?? '';
     _selectedCategorySlug = widget.initialCategory;
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String val) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        setState(() {
+          _debouncedQuery = val.trim();
+          _page = 0;
+        });
+      }
+    });
+  }
+
   SearchFilter get _currentFilter => SearchFilter(
-        query: _searchController.text.trim(),
+        query: _debouncedQuery,
         categorySlug: _selectedCategorySlug,
+        page: _page,
+        pageSize: 20,
       );
 
   @override
@@ -131,21 +165,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           controller: _searchController,
           autofocus: widget.initialQuery == null && widget.initialCategory == null,
           decoration: const InputDecoration(
-            hintText: 'Search products, electronics, cars...',
+            hintText: 'Search products, tech, fashion...',
             border: InputBorder.none,
           ),
-          onChanged: (val) {
-            setState(() {});
-          },
+          onChanged: _onSearchChanged,
         ),
         actions: [
           if (_searchController.text.isNotEmpty || _selectedCategorySlug != null)
             IconButton(
               icon: const Icon(Icons.clear),
               onPressed: () {
+                _debounceTimer?.cancel();
                 setState(() {
                   _searchController.clear();
+                  _debouncedQuery = '';
                   _selectedCategorySlug = null;
+                  _page = 0;
                 });
               },
             ),
@@ -173,7 +208,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         selected: isSelected,
                         onSelected: (selected) {
                           if (selected) {
-                            setState(() => _selectedCategorySlug = null);
+                            setState(() {
+                              _selectedCategorySlug = null;
+                              _page = 0;
+                            });
                           }
                         },
                       );
@@ -189,6 +227,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       onSelected: (selected) {
                         setState(() {
                           _selectedCategorySlug = selected ? slug : null;
+                          _page = 0;
                         });
                       },
                     );
@@ -245,9 +284,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(12),
-                        itemCount: products.length,
+                        itemCount: products.length + 1,
                         itemBuilder: (ctx, i) {
-                          final p = products[i];
+                          if (i == 0) {
+                            return const SponsoredAdBanner(
+                              placement: 'explore_inline',
+                              padding: EdgeInsets.only(bottom: 12),
+                            );
+                          }
+
+                          final p = products[i - 1];
                           final images = (p['product_images'] as List? ?? [])
                             ..sort((a, b) =>
                                 ((a['display_order'] as int?) ?? 0)
@@ -346,6 +392,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SponsoredAdBanner(
+            placement: 'explore_inline',
+            padding: EdgeInsets.only(bottom: 20),
+          ),
+
           Center(
             child: Column(
               children: [
@@ -389,6 +440,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     onPressed: () {
                       setState(() {
                         _selectedCategorySlug = slug;
+                        _page = 0;
                       });
                     },
                   );

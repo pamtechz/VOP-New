@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.pamtechz.store_marketplace",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:01:C2:C5:16:DF:8C:38:29:FF:7B:64:12:35:E4:05:43:86:96:A8:DF:99:99:43:53:9F:8A:28:B6:CA"
+      ]
+    }
+  }
+]
