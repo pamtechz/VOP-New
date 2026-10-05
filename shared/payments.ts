@@ -49,6 +49,16 @@ export interface PayableItem {
     fxSource?:string;
     fxUpdatedAt?:string;
   };
+  methodQuotes?:Partial<Record<PaymentMethod,{
+    currency:string;
+    amountMinor:number;
+    amountDecimal:string;
+    baseCurrency:string;
+    baseAmountDecimal:string;
+    exchangeRate:number;
+    fxSource:string;
+    fxUpdatedAt:string;
+  }>>;
   active:boolean;
   paymentRequired:boolean;
   repeatable:boolean;
