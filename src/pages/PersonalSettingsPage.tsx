@@ -9,11 +9,12 @@ import './personalSettings.css';
 import { appConfirm } from '../components/layout/AppDialog';
 import { LocalizationParticipation } from '../components/localization/LocalizationParticipation';
 import { persistThemePreference } from '../services/themePreference';
+import { applyPersonalRuntimeSettings, type PersonalRuntimeSettings } from '../services/personalRuntimeSettings';
 import {
   deletePasskey, listPasskeys, passkeysSupported, platformPasskeyAvailable, registerPasskey, type PasskeyRecord,
 } from '../services/passkeys';
 
-type PersonalSettings = {
+type PersonalSettings = PersonalRuntimeSettings & {
   theme?: 'light' | 'dark' | 'system';
   language?: string;
   uiLocale?: string;
@@ -77,7 +78,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   useEffect(() => {
     let active = true;
     const loadSettings = callPersonalSettings('get')
-      .then(value => { if (active && value) setSettings(previous => ({ ...previous, ...value })); })
+      .then(value => { if (active && value) { setSettings(previous => ({ ...previous, ...value })); applyPersonalRuntimeSettings(value); } })
       .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load your personal settings.'); });
     const loadLanguages=loadUiLocaleRegistry()
       .then(items=>{if(active){setUiLocales(items);setLanguages(items)}})
@@ -96,8 +97,13 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     return () => { active = false; };
   }, []);
 
-  const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) =>
-    setSettings(previous => ({ ...previous, [key]: value }));
+  const patch = <K extends keyof PersonalSettings>(key: K, value: PersonalSettings[K]) => {
+    setSettings(previous => {
+      const next={...previous,[key]:value};
+      if(key==='accessibility')applyPersonalRuntimeSettings(next);
+      return next;
+    });
+  };
 
   const enablePasskey=async()=>{
     if(!passkeyCapable)return;
