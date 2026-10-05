@@ -21,6 +21,10 @@
     {
       "path": "/api/payments/reconcile-cron",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/account-lifecycle-cron",
+      "schedule": "30 3 * * *"
     }
   ],
   "headers": [
