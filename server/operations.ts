@@ -219,10 +219,6 @@ export async function operationalHealth(db=getAdminDb(),now=new Date()){
     database:'ok',
     latencyMs:Date.now()-started,
     maintenance:{status:maintenanceStatus,lastRunAt:maintenanceAt},
-    securityCleanup:{
-      expiredPasskeyChallenges,
-      expiredAuthRateLimits,
-    },
     backup:{
       status:backupStatus,
       configured,
@@ -282,6 +278,10 @@ export async function runDailyOperationalMaintenance(db=getAdminDb(),now=new Dat
   await db.doc(OPERATIONS_REF).set({
     lastMaintenanceAt:now.toISOString(),
     lastMaintenanceDeploymentSha:text(process.env.VERCEL_GIT_COMMIT_SHA)||null,
+    securityCleanup:{
+      expiredPasskeyChallenges,
+      expiredAuthRateLimits,
+    },
     backup:{
       status:backupStatus,
       configured,
