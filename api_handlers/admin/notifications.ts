@@ -2,7 +2,7 @@ import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { authenticateTenant, getAdminDb, organizationInHierarchyScope } from '../../server/tenant.js';
 import { canPermission } from '../../server/permissions.js';
-import { createNotification, type NotificationType } from '../../server/notifications.js';
+import { deliverNotification, type NotificationType } from '../../server/notifications.js';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;body?:unknown;query?:Record<string,unknown>};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void};
@@ -130,7 +130,7 @@ export default async function handler(req:Request,res:Response){
       const type=String(input.type||'system') as NotificationType;
       const allowedTypes=new Set<NotificationType>(['learning-support','assignment','mentor-feedback','certificate','announcement','event','prayer','invitation','system']);
       if(!allowedTypes.has(type))throw new Error('Unsupported notification type.');
-      const id=await createNotification(ctx.db,{
+      const delivery=await deliverNotification(ctx.db,{
         organizationId,
         hierarchyId:ctx.tenantType==='hierarchy'?ctx.tenantId:'',
         recipientId,
@@ -142,7 +142,7 @@ export default async function handler(req:Request,res:Response){
         metadata:input.metadata&&typeof input.metadata==='object'?input.metadata as Record<string,unknown>:{},
         createdBy:ctx.auth.uid,
       });
-      return res.status(201).json({ok:true,id});
+      return res.status(201).json({ok:true,...delivery});
     }
 
     return res.status(400).json({error:'Unsupported notification action.'});
