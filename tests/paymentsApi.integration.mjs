@@ -796,7 +796,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         action:'update',organizationId:orgB,data:{quotas:{maxSeats:999}},
       });
       assert.equal(directQuotaEdit.status,400,JSON.stringify(directQuotaEdit));
-      assert.match(String(directQuotaEdit.error||''),/Billing & Subscriptions/i);
+      assert.match(String(directQuotaEdit.error||''),/Payments & Billing/i);
       assert.equal((await db.doc('organizations/'+orgB).get()).data()?.quotas?.maxSeats,10);
 
       const scheduled=await planCall(admin,{
