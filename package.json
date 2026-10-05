@@ -17,7 +17,9 @@
     "inventory:ui-localization": "node scripts/inventory-ui-localization.mjs",
     "verify:rules": "firebase emulators:exec --only firestore --project demo-vop-security-rules \"node --test tests/firestoreRules.test.mjs\"",
     "migrate:plate-lessons": "node scripts/migrate-legacy-lessons-to-plate.mjs",
-    "payments:mtn:provision-sandbox": "node scripts/mtn-momo-sandbox-provision.mjs"
+    "payments:mtn:provision-sandbox": "node scripts/mtn-momo-sandbox-provision.mjs",
+    "verify:ui-localization": "node scripts/inventory-ui-localization.mjs --check",
+    "verify:bundle-budget": "node scripts/verify-bundle-budget.mjs"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "8.5.2",
