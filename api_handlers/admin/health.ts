@@ -36,10 +36,16 @@ export default async function handler(req:Request,res:Response){
         checkedAt:now.toISOString(),requestId,
       });
     }
-    const ctx=await authenticateTenant(req,undefined,true);
+    let ctx;
+    try{ctx=await authenticateTenant(req,undefined,true);}
+    catch(error){
+      const message=error instanceof Error?error.message:'Authentication failed.';
+      const status=/sign in/i.test(message)?401:403;
+      return res.status(status).json({ok:false,error:message,requestId});
+    }
     if(!ctx.isSuperAdmin)return res.status(403).json({ok:false,error:'Only the VOP Super Admin can view detailed operational health.',requestId});
     const health=await operationalHealth(ctx.db,now);
-    return res.status(health.status==='ok'?200:207).json({
+    return res.status(200).json({
       ok:health.status==='ok',...health,checkedAt:now.toISOString(),requestId,
     });
   }catch(error){
