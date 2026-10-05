@@ -838,6 +838,9 @@ test('financial records are server-authoritative even for authenticated administ
       await db.doc('paymentWebhookEvents/event-1').set({provider:'lenco'});
       await db.doc('paymentRefunds/refund-1').set({paymentId:'payment-1',status:'completed'});
       await db.doc('paymentFulfilments/payment-1').set({status:'fulfilled'});
+      await db.doc('passkeyCredentials/passkey-test').set({uid:'payment-user',credentialId:'credential'});
+      await db.doc('passkeyChallenges/challenge-test').set({purpose:'authentication',expiresAt:'2026-10-05T21:00:00Z'});
+      await db.doc('authRateLimits/passkey-test').set({count:1,expiresAt:'2026-10-05T21:00:00Z'});
       await db.doc('operationsBackupRuns/2026-10-05').set({status:'completed'});
       await db.doc('operationalAlerts/firestore-backup-stale').set({lastNotifiedAt:'2026-10-05T00:00:00Z'});
       await db.doc('system/operations').set({lastMaintenanceAt:'2026-10-05T00:00:00Z'});
@@ -854,6 +857,11 @@ test('financial records are server-authoritative even for authenticated administ
       await assertFails(db.doc('paymentRefunds/refund-1').get());
       await assertFails(db.doc('paymentRefunds/refund-1').set({status:'completed'}));
       await assertFails(db.doc('paymentFulfilments/payment-1').get());
+      await assertFails(db.doc('passkeyCredentials/passkey-test').get());
+      await assertFails(db.doc('passkeyChallenges/challenge-test').get());
+      await assertFails(db.doc('passkeyChallenges/challenge-test').set({purpose:'forged'}));
+      await assertFails(db.doc('authRateLimits/passkey-test').get());
+      await assertFails(db.doc('authRateLimits/passkey-test').set({count:0}));
       await assertFails(db.doc('operationsBackupRuns/2026-10-05').get());
       await assertFails(db.doc('operationsBackupRuns/2026-10-05').set({status:'forged'}));
       await assertFails(db.doc('operationalAlerts/firestore-backup-stale').get());
