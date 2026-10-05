@@ -10,11 +10,24 @@ import './theme.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(registration => {
-      registration.update().catch(() => undefined);
-    }).catch(error => {
-      console.warn('[pwa] service worker registration failed', error);
-    });
+    void (async () => {
+      try {
+        const response = await fetch('/api/admin/auth?action=policy', { headers:{Accept:'application/json'} });
+        if (!response.ok) return;
+        const policy = await response.json() as {pwa?:{enabled?:boolean}};
+        if (policy.pwa?.enabled === true) {
+          const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+          registration.update().catch(() => undefined);
+          return;
+        }
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration => registration.unregister()));
+      } catch (error) {
+        // A temporary policy/network failure must not destroy an existing
+        // offline-capable installation. Reconcile again on the next online load.
+        console.warn('[pwa] service worker policy could not be reconciled', error);
+      }
+    })();
   });
 }
 
