@@ -99,13 +99,15 @@ export function createLocalApiMiddleware(server: {
     // Without this, localhost incorrectly tries to import files such as
     // /api/payments/history.ts even though all payment routes live in api/payments.ts.
     const isPaymentsRoute=route.startsWith('payments/');
+    const isAccountRoute=route==='account';
     const isAccountLifecycleCron=route==='account-lifecycle-cron';
     if(isPaymentsRoute)query.__vopPaymentRoute=route.slice('payments/'.length);
+    if(isAccountRoute||isAccountLifecycleCron)query.__vopRoute='account';
     if(isAccountLifecycleCron)query.__vopAccountRoute='lifecycle-cron';
     const modulePath = isPaymentsRoute
       ? '/api/payments.ts'
-      : isAccountLifecycleCron
-        ? '/api/account.ts'
+      : isAccountRoute||isAccountLifecycleCron
+        ? '/api/admin.ts'
         : route.startsWith('admin/') ? '/api_handlers/' + route + '.ts' : '/api/' + route + '.ts';
 
     try {
