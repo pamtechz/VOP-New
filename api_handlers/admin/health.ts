@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { operationalHealth } from '../../server/operations.js';
 import { authenticateTenant, getAdminDb } from '../../server/tenant.js';
 
@@ -15,7 +16,7 @@ type Response={
 function value(input:unknown){return Array.isArray(input)?String(input[0]||''):String(input||'');}
 
 export default async function handler(req:Request,res:Response){
-  const requestId=value(req.headers?.['x-vercel-id']||req.headers?.['x-request-id'])||crypto.randomUUID();
+  const requestId=value(req.headers?.['x-vercel-id']||req.headers?.['x-request-id'])||randomUUID();
   res.setHeader?.('X-Request-Id',requestId);
   res.setHeader?.('Cache-Control','no-store, max-age=0');
   if(req.method!=='GET')return res.status(405).json({ok:false,error:'Method not allowed.',requestId});
