@@ -27,7 +27,74 @@ function safeActionUrl(value: unknown) {
   return url.slice(0, 500);
 }
 
-export async function createNotification(db: Firestore, input: CreateNotificationInput) {
+type NotificationPreferences={
+  enabled:boolean;
+  email:boolean;
+  announcements:boolean;
+  certificates:boolean;
+};
+
+export type NotificationDeliveryResult={
+  id:string;
+  status:'sent'|'fallback_in_app'|'suppressed';
+  channel:NotificationChannel|'none';
+  reason?:string;
+};
+
+function normalizedPreferences(data:unknown):NotificationPreferences{
+  const settings=data&&typeof data==='object'?data as Record<string,unknown>:{};
+  const notifications=settings.notifications&&typeof settings.notifications==='object'
+    ?settings.notifications as Record<string,unknown>:{};
+  return {
+    enabled:notifications.enabled!==false,
+    email:notifications.email!==false,
+    announcements:notifications.announcements!==false,
+    certificates:notifications.certificates!==false,
+  };
+}
+
+export async function notificationPreferences(db:Firestore,recipientId:string){
+  const snapshot=await db.doc('users/'+recipientId+'/settings/personal').get();
+  return normalizedPreferences(snapshot.data());
+}
+
+export function notificationPreferenceDecision(
+  preferences:NotificationPreferences,
+  type:NotificationType,
+  requestedChannel:NotificationChannel='in_app',
+){
+  const mandatory=type==='system'||type==='invitation';
+  if(!mandatory&&!preferences.enabled)return {allowed:false,channel:'none' as const,reason:'all_notifications_disabled'};
+  if((type==='announcement'||type==='event')&&!preferences.announcements){
+    return {allowed:false,channel:'none' as const,reason:'announcement_notifications_disabled'};
+  }
+  if(type==='certificate'&&!preferences.certificates){
+    return {allowed:false,channel:'none' as const,reason:'certificate_notifications_disabled'};
+  }
+  if(requestedChannel==='email'&&!preferences.email){
+    return {allowed:true,channel:'in_app' as const,reason:'email_notifications_disabled'};
+  }
+  return {allowed:true,channel:requestedChannel};
+}
+
+function escapeHtml(value:string){
+  return value.replace(/[&<>"']/g,character=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+  }[character]||character));
+}
+
+async function recordSuppressedDelivery(db:Firestore,input:CreateNotificationInput,recipientId:string,reason:string){
+  const ref=db.collection('notificationDeliveries').doc();
+  await ref.set({
+    recipientId,organizationId:String(input.organizationId||'').trim(),
+    type:input.type,requestedChannel:input.channel||'in_app',
+    status:'suppressed',reason,createdBy:String(input.createdBy||'').trim(),
+    createdAt:FieldValue.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function deliverNotification(db: Firestore, input: CreateNotificationInput):Promise<NotificationDeliveryResult> {
   const recipientId = String(input.recipientId || '').trim();
   if (!/^[A-Za-z0-9:_-]{1,180}$/.test(recipientId)) throw new Error('A valid notification recipient is required.');
   const title = String(input.title || '').trim();
@@ -35,24 +102,66 @@ export async function createNotification(db: Firestore, input: CreateNotificatio
   if (!title || title.length > 180 || !body || body.length > 2000) {
     throw new Error('Notification title and message are required and must be within the allowed length.');
   }
+
+  const requestedChannel=input.channel||'in_app';
+  const preferences=await notificationPreferences(db,recipientId);
+  const decision=notificationPreferenceDecision(preferences,input.type,requestedChannel);
+  if(!decision.allowed){
+    const id=await recordSuppressedDelivery(db,input,recipientId,decision.reason||'preference');
+    return {id,status:'suppressed',channel:'none',reason:decision.reason};
+  }
+
+  let channel:NotificationChannel=decision.channel;
+  let status:'sent'|'fallback_in_app'='sent';
+  let fallbackReason=decision.reason||'';
+  if(channel==='email'){
+    const profile=await db.doc('users/'+recipientId).get();
+    const to=String(profile.data()?.email||'').trim();
+    const apiKey=String(process.env.RESEND_API_KEY||'').trim();
+    const from=String(process.env.RESEND_FROM_EMAIL||'').trim();
+    if(to&&apiKey&&from){
+      try{
+        const response=await fetch('https://api.resend.com/emails',{
+          method:'POST',
+          headers:{'Content-Type':'application/json',Authorization:'Bearer '+apiKey},
+          body:JSON.stringify({
+            from,to:[to],subject:title,
+            html:'<p>'+escapeHtml(body).replace(/\n/g,'<br/>')+'</p>',
+          }),
+        });
+        if(!response.ok)throw new Error('provider_rejected');
+      }catch{
+        channel='in_app';status='fallback_in_app';fallbackReason='email_delivery_failed';
+      }
+    }else{
+      channel='in_app';status='fallback_in_app';
+      fallbackReason=!preferences.email?'email_notifications_disabled':!to?'recipient_email_missing':'email_provider_not_configured';
+    }
+  }else if(requestedChannel==='email'&&decision.channel==='in_app'){
+    status='fallback_in_app';
+  }
+
   const ref = db.collection('notifications').doc();
   await ref.set({
-    recipientId,
-    userId: recipientId,
-    organizationId: String(input.organizationId || '').trim(),
-    hierarchyId: String(input.hierarchyId || '').trim(),
-    title,
-    body,
-    type: input.type,
-    channel: input.channel || 'in_app',
-    actionUrl: safeActionUrl(input.actionUrl),
-    metadata: input.metadata && typeof input.metadata === 'object' ? input.metadata : {},
-    createdBy: String(input.createdBy || '').trim(),
-    createdAt: FieldValue.serverTimestamp(),
-    read: false,
-    readAt: null,
+    recipientId,userId:recipientId,
+    organizationId:String(input.organizationId||'').trim(),
+    hierarchyId:String(input.hierarchyId||'').trim(),
+    title,body,type:input.type,channel,
+    requestedChannel,
+    deliveryStatus:status,
+    deliveryReason:fallbackReason,
+    actionUrl:safeActionUrl(input.actionUrl),
+    metadata:input.metadata&&typeof input.metadata==='object'?input.metadata:{},
+    createdBy:String(input.createdBy||'').trim(),
+    createdAt:FieldValue.serverTimestamp(),
+    sentAt:FieldValue.serverTimestamp(),
+    read:false,readAt:null,
   });
-  return ref.id;
+  return {id:ref.id,status,channel,reason:fallbackReason||undefined};
+}
+
+export async function createNotification(db: Firestore, input: CreateNotificationInput) {
+  return (await deliverNotification(db,input)).id;
 }
 
 
