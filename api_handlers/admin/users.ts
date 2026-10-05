@@ -391,8 +391,11 @@ export default async function handler(request: Request, response: Response) {
     const action = typeof body.action === 'string' ? body.action : 'list';
     if (action === 'profile') {
       const invitationToken=typeof body.inviteToken==='string'?body.inviteToken:'';
-      const profile = await syncOwnProfile(decoded, getFirestore(getFirebaseAdmin()), invitationToken);
-      return response.status(200).json({ ok:true, profile });
+      const db=getFirestore(getFirebaseAdmin());
+      const profile = await syncOwnProfile(decoded, db, invitationToken);
+      const settings=await db.doc('users/'+decoded.uid+'/settings/personal').get();
+      const personalSettings=settings.exists?settings.data()||{}:{};
+      return response.status(200).json({ ok:true, profile, personalSettings });
     }
     if (action === 'updateOwnProfile') {
       const db = getFirestore(getFirebaseAdmin());
