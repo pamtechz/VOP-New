@@ -41,7 +41,6 @@ const PrayerManagementPanel=React.lazy(()=>import('./PrayerManagementPanel'));
 const EngagementStudio=React.lazy(()=>import('./EngagementStudio'));
 const LocalizationGovernancePanel=React.lazy(()=>import('./LocalizationGovernancePanel'));
 const PaymentManagement=React.lazy(()=>import('./PaymentManagement'));
-const PaymentsPage=React.lazy(()=>import('./PaymentsPage'));
 const NotificationsPage=React.lazy(()=>import('./NotificationsPage'));
 const InvitationsPage=React.lazy(()=>import('./InvitationsPage'));
 const PersonalSettingsPage=React.lazy(()=>import('./PersonalSettingsPage').then(module=>({default:module.PersonalSettingsPage})));
@@ -67,7 +66,7 @@ type AdminTab =
   | 'dashboard' | 'userManagement' | 'settings' | 'candidates' | 'curriculum' | 'languages'
   | 'translations' | 'announcements' | 'events' | 'materials' | 'radio' | 'prayer' | 'engagement'
   | 'unions' | 'conferences' | 'districts' | 'churches' | 'certification' | 'mentorship' | 'organizations' | 'payments'
-  | 'accountNotifications' | 'accountInvitations' | 'accountPayments' | 'accountProfile'
+  | 'accountNotifications' | 'accountInvitations' | 'accountProfile'
   | 'accountPersonalSettings' | 'accountCertificates' | 'accountAbout';
 
 type SettingsSubtab = 'general' | 'appInfo' | 'features' | 'services' | 'security' | 'notifications' | 'permissions';
@@ -94,10 +93,9 @@ const NAV: Array<{id: AdminTab; label: string; icon: React.ComponentType<{size?:
   { id: 'certification', label: 'Certification', icon: Award },
   { id: 'mentorship', label: 'Mentoring & Insights', icon: UserCheck },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
-  { id: 'payments', label: 'Billing & Subscriptions', icon: WalletCards },
+  { id: 'payments', label: 'Payments & Billing', icon: WalletCards },
   { id: 'accountNotifications', label: 'Notifications', icon: Bell },
   { id: 'accountInvitations', label: 'Invitations', icon: UserPlus },
-  { id: 'accountPayments', label: 'Payments & receipts', icon: WalletCards },
   { id: 'accountProfile', label: 'Profile', icon: UserCheck },
   { id: 'accountPersonalSettings', label: 'Personal settings', icon: Settings },
   { id: 'accountCertificates', label: 'Certificates', icon: Award },
@@ -111,7 +109,7 @@ const ADMIN_NAV_GROUPS:Array<{id:AdminNavGroupId;label:string;ids:AdminTab[]}>= 
   {id:'community',label:'Community',ids:['announcements','events','radio','prayer','mentorship']},
   {id:'finance',label:'Finance',ids:['payments']},
   {id:'organization',label:'Organization',ids:['organizations','unions','conferences','districts','churches']},
-  {id:'account',label:'Account',ids:['accountNotifications','accountInvitations','accountPayments','accountProfile','accountPersonalSettings','accountCertificates','accountAbout']},
+  {id:'account',label:'Account',ids:['accountNotifications','accountInvitations','accountProfile','accountPersonalSettings','accountCertificates','accountAbout']},
 ];
 function adminNavGroupFor(tab:AdminTab):AdminNavGroupId {
   return ADMIN_NAV_GROUPS.find(group=>group.ids.includes(tab))?.id||'workspace';
@@ -119,7 +117,7 @@ function adminNavGroupFor(tab:AdminTab):AdminNavGroupId {
 
 const ADMIN_TAB_IDS=new Set<AdminTab>(NAV.map(item=>item.id));
 const ORGANIZATION_ACCOUNT_TABS=new Set<AdminTab>([
-  'accountNotifications','accountInvitations','accountPayments','accountProfile',
+  'accountNotifications','accountInvitations','accountProfile',
   'accountPersonalSettings','accountCertificates','accountAbout',
 ]);
 const ADMIN_TAB_STORAGE_PREFIX='vop-admin-tab-v1:';
@@ -682,7 +680,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
   const accountBack=()=>navigateAdminTab('dashboard');
   const navigateOrganizationRoute=(route:AppRoute)=>{
     const accountRouteMap:Partial<Record<AppRoute,AdminTab>>={
-      notifications:'accountNotifications',invites:'accountInvitations',payments:'accountPayments',
+      notifications:'accountNotifications',invites:'accountInvitations',payments:'payments',
       profile:'accountProfile','personal-settings':'accountPersonalSettings',
       certificates:'accountCertificates',about:'accountAbout',
       announcements:'announcements',events:'events',prayer:'prayer',
@@ -1339,18 +1337,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ currentUser, activeLanguag
         {activeTab==='engagement'&&<EngagementStudio currentUser={currentUser}/>}
         {activeTab==='mentorship'&&<MentorshipInsights guides={guides} />}
         {activeTab==='organizations'&&<OrganizationManagement isSuperAdmin={currentUser.role==='super_admin'} onOpenBilling={()=>navigateAdminTab('payments')} onOpenCandidates={()=>navigateAdminTab('candidates')} />}
-        {activeTab==='payments'&&<PaymentManagement currentUser={currentUser} onOpenCheckout={planId=>{
-          try{
-            if(planId)sessionStorage.setItem('vop-subscription-checkout-plan',planId);
-            else sessionStorage.removeItem('vop-subscription-checkout-plan');
-          }catch{/* storage may be unavailable */}
-          if(isOrganizationPortal)navigateAdminTab('accountPayments'); else onNavigate('payments');
-        }}/>}
+        {activeTab==='payments'&&<PaymentManagement currentUser={currentUser}/>}
         {isOrganizationPortal&&activeTab==='accountNotifications'&&<NotificationsPage onBack={accountBack} onNavigate={navigateOrganizationRoute}/>}
         {isOrganizationPortal&&activeTab==='accountInvitations'&&<InvitationsPage
           currentUser={currentUser} guides={guides} onBack={accountBack} onNavigate={navigateOrganizationRoute}
           onInvitationAccepted={()=>navigateAdminTab('accountInvitations')} onAccountChanged={onAccountChanged}/>}
-        {isOrganizationPortal&&activeTab==='accountPayments'&&<PaymentsPage currentUser={currentUser} onBack={accountBack}/>}
         {isOrganizationPortal&&activeTab==='accountProfile'&&<OrganizationAccountProfilePage
           currentUser={currentUser} organizationName={settings?.aboutContext?.organizationName||settings?.organizationName}
           onBack={accountBack} onUpdated={onAccountChanged} onOpenOrganization={()=>navigateAdminTab('settings')}/>}
