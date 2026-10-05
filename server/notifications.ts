@@ -164,10 +164,11 @@ async function ensureInAppEmailFallback(
   ref: DocumentReference,
   input: ReturnType<typeof normalizedInput>,
   reason: string,
-  context = await userDeliveryContext(db, input.recipientId),
+  context?: Awaited<ReturnType<typeof userDeliveryContext>>,
 ) {
+  const deliveryContext=context||await userDeliveryContext(db,input.recipientId);
   const inAppSuppression = preferenceSuppression(
-    context.preferences, input.type, 'in_app', input.mandatory,
+    deliveryContext.preferences, input.type, 'in_app', input.mandatory,
   );
   if (inAppSuppression) {
     return {notificationId:'',suppressionReason:inAppSuppression};
@@ -203,9 +204,10 @@ async function fallbackEmailDelivery(
   ref: DocumentReference,
   input: ReturnType<typeof normalizedInput>,
   reason: string,
-  context = await userDeliveryContext(db, input.recipientId),
+  context?: Awaited<ReturnType<typeof userDeliveryContext>>,
 ): Promise<NotificationDeliveryResult> {
-  const fallback = await ensureInAppEmailFallback(db,ref,input,reason,context);
+  const deliveryContext=context||await userDeliveryContext(db,input.recipientId);
+  const fallback = await ensureInAppEmailFallback(db,ref,input,reason,deliveryContext);
   if(!fallback.notificationId){
     await ref.set({
       state:'suppressed_by_preference',
