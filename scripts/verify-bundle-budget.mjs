@@ -21,17 +21,20 @@ const css=assets.filter(item=>item.ext==='.css');
 const sum=items=>items.reduce((total,item)=>total+item.bytes,0);
 const largest=items=>items.reduce((best,item)=>!best||item.bytes>best.bytes?item:best,null);
 const largestJs=largest(js),largestCss=largest(css);
+const entryJs=js.find(item=>/^assets\/index-[^/]+\.js$/.test(item.file))||null;
 const totalJs=sum(js),totalCss=sum(css);
 const largeThreshold=Number(budget.largeJsThresholdBytes);
 const largeChunks=js.filter(item=>item.bytes>largeThreshold);
 const failures=[];
+if(!entryJs)failures.push('Vite entry JS chunk assets/index-*.js was not found.');
+if(entryJs&&entryJs.bytes>Number(budget.maxEntryJsBytes))failures.push('entry JS '+entryJs.file+' is '+entryJs.bytes+' bytes > '+budget.maxEntryJsBytes);
 if(largestJs&&largestJs.bytes>Number(budget.maxSingleJsBytes))failures.push('largest JS '+largestJs.file+' is '+largestJs.bytes+' bytes > '+budget.maxSingleJsBytes);
 if(largestCss&&largestCss.bytes>Number(budget.maxSingleCssBytes))failures.push('largest CSS '+largestCss.file+' is '+largestCss.bytes+' bytes > '+budget.maxSingleCssBytes);
 if(totalJs>Number(budget.maxTotalJsBytes))failures.push('total JS is '+totalJs+' bytes > '+budget.maxTotalJsBytes);
 if(totalCss>Number(budget.maxTotalCssBytes))failures.push('total CSS is '+totalCss+' bytes > '+budget.maxTotalCssBytes);
 if(largeChunks.length>Number(budget.maxLargeJsChunks))failures.push(largeChunks.length+' JS chunks exceed '+largeThreshold+' bytes; maximum is '+budget.maxLargeJsChunks);
 console.log(JSON.stringify({
-  largestJs,largestCss,totalJs,totalCss,
+  entryJs,largestJs,largestCss,totalJs,totalCss,
   largeJsChunks:largeChunks.map(item=>({file:item.file,bytes:item.bytes})),
 },null,2));
 if(failures.length){
