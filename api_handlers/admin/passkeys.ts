@@ -111,7 +111,9 @@ export default async function handler(req:Request,res:Response){
     const db=getAdminDb();
 
     if(action==='beginAuthentication'||action==='finishAuthentication'){
-      await enforcePasskeyRateLimit(db,'anonymous:'+clientKey(req),40);
+      // One WebAuthn sign-in uses a begin + finish pair. Keep the network
+      // ceiling high enough for shared church/school NATs while still bounding abuse.
+      await enforcePasskeyRateLimit(db,'anonymous:'+clientKey(req),240);
     }
 
     if(action==='beginAuthentication'){
