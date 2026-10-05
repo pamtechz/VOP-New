@@ -818,6 +818,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Account lifecycle and deletion tombstones are server-authoritative privacy records.
+    match /accountLifecycle/{uid} {
+      allow read, write: if false;
+    }
+    match /accountDeletionTombstones/{id} {
+      allow read, write: if false;
+    }
+
     // Passkey public credentials are authentication material. They are managed
     // only by the authenticated server endpoint; browser clients never read,
     // enumerate, create, update or delete them directly.

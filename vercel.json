@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/account",
+      "destination": "/api/admin?__vopRoute=account"
+    },
+    {
+      "source": "/api/account-lifecycle-cron",
+      "destination": "/api/admin?__vopRoute=account&__vopAccountRoute=lifecycle-cron"
+    },
+    {
       "source": "/api/admin/:route*",
       "destination": "/api/admin?__vopRoute=:route*"
     },
@@ -21,6 +29,10 @@
     {
       "path": "/api/payments/reconcile-cron",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/account-lifecycle-cron",
+      "schedule": "30 3 * * *"
     }
   ],
   "headers": [

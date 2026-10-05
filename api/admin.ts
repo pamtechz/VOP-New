@@ -18,6 +18,7 @@ import h15 from '../api_handlers/admin/notifications.js';
 import h16 from '../api_handlers/admin/localization.js';
 import h17 from '../api_handlers/admin/passkeys.js';
 import h18 from '../api_handlers/admin/auth.js';
+import h19 from '../api_handlers/admin/account.js';
 
 type Req={url?:string;query?:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void};
@@ -41,6 +42,7 @@ const handlers:Record<string,(req:never,res:never)=>unknown>=Object.freeze({
   'localization': h16,
   'passkeys': h17,
   'auth': h18,
+  'account': h19,
 });
 export default async function handler(req:Req,res:Res){
   const value=req.query?.__vopRoute;

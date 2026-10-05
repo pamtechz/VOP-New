@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2 } from 'lucide-react';
+import { Save, UserRound, Bell, Globe2, Accessibility, ShieldCheck, BookOpen, Fingerprint, Trash2, Download, RotateCcw } from 'lucide-react';
 import type { User, CustomLanguage } from '../types';
 import { getTranslation, getAvailableUiLocales, loadUiLocaleRegistry, setUiLocale, getUiLocale } from '../services/i18n';
 import { getActiveLanguage, getStoredSettings } from '../services/storage';
@@ -15,6 +15,10 @@ import {
   applyAccessibilityPreferences, loadNotificationCapabilities, loadPersonalSettings, savePersonalSettings,
   type NotificationCapabilities, type PersonalSettings,
 } from '../services/personalSettings';
+import {
+  cancelAccountDeletion, downloadAccountExport, exportAccountData, loadAccountLifecycleStatus, requestAccountDeletion,
+  type AccountLifecycleStatus,
+} from '../services/accountLifecycle';
 
 interface Props { currentUser: User; onBack: () => void; onStudyLanguageChange: (language: string) => void; context?: 'learner'|'organization'; }
 
@@ -36,6 +40,10 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
   const [platformBiometric,setPlatformBiometric]=useState(false);
   const [passkeyBusy,setPasskeyBusy]=useState(false);
   const [notificationCapabilities,setNotificationCapabilities]=useState<NotificationCapabilities|null>(null);
+  const [accountLifecycle,setAccountLifecycle]=useState<AccountLifecycleStatus|null>(null);
+  const [privacyBusy,setPrivacyBusy]=useState(false);
+  const [deletionConfirmation,setDeletionConfirmation]=useState('');
+  const [deletionReason,setDeletionReason]=useState('');
   const changeTrustedDevice = async (enabled: boolean) => {
     if (enabled && !await appConfirm(
       'Store previously opened study materials on this device for offline reading? Only enable this on a private, trusted device. Other users of this browser may be able to access cached content.',
@@ -69,6 +77,9 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
     const loadNotificationStatus=loadNotificationCapabilities()
       .then(value=>{if(active)setNotificationCapabilities(value)})
       .catch(()=>{if(active)setNotificationCapabilities(null)});
+    const loadLifecycle=loadAccountLifecycleStatus()
+      .then(value=>{if(active)setAccountLifecycle(value)})
+      .catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Account privacy status could not be loaded.');});
     const supported=passkeysSupported();
     setPasskeyCapable(supported);
     const loadSecurity=supported
@@ -77,7 +88,7 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
           listPasskeys().then(items=>{if(active)setPasskeys(items)}),
         ]).catch(error=>{if(active)setMessage(error instanceof Error?error.message:'Passkey status could not be loaded.');})
       :Promise.resolve();
-    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity,loadNotificationStatus]).finally(() => {
+    void Promise.allSettled([loadSettings,loadLanguages,loadSecurity,loadNotificationStatus,loadLifecycle]).finally(() => {
       if (active) setBusy(false);
     });
     return () => { active = false; };
@@ -109,6 +120,45 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
       setMessage('Passkey removed.');
     }catch(error){setMessage(error instanceof Error?error.message:'Passkey could not be removed.');}
     finally{setPasskeyBusy(false);}
+  };
+
+  const downloadMyData=async()=>{
+    setPrivacyBusy(true);setMessage('');
+    try{
+      const data=await exportAccountData();
+      downloadAccountExport(data);
+      setMessage('Your VOP account export has been prepared and downloaded.');
+    }catch(error){setMessage(error instanceof Error?error.message:'Your account export could not be prepared.');}
+    finally{setPrivacyBusy(false);}
+  };
+  const submitDeletionRequest=async()=>{
+    if(deletionConfirmation!=='DELETE MY ACCOUNT'){
+      setMessage('Type DELETE MY ACCOUNT exactly before submitting a deletion request.');
+      return;
+    }
+    if(!await appConfirm(
+      'Submit an account deletion request? VOP will keep the account recoverable for 30 days. Required financial, audit and issued-certificate records follow the published retention policy.',
+      {title:'Request account deletion',confirmLabel:'Request deletion',tone:'danger'},
+    ))return;
+    setPrivacyBusy(true);setMessage('');
+    try{
+      const state=await requestAccountDeletion(deletionConfirmation,deletionReason);
+      setAccountLifecycle(state);
+      setDeletionConfirmation('');
+      setDeletionReason('');
+      setMessage('Deletion requested. You can cancel it before the scheduled deletion date shown below.');
+    }catch(error){setMessage(error instanceof Error?error.message:'Account deletion could not be requested.');}
+    finally{setPrivacyBusy(false);}
+  };
+  const undoDeletionRequest=async()=>{
+    if(!await appConfirm('Cancel the pending account deletion request?',{title:'Keep my VOP account',confirmLabel:'Cancel deletion'}))return;
+    setPrivacyBusy(true);setMessage('');
+    try{
+      const state=await cancelAccountDeletion();
+      setAccountLifecycle(state);
+      setMessage('The account deletion request has been cancelled.');
+    }catch(error){setMessage(error instanceof Error?error.message:'The deletion request could not be cancelled.');}
+    finally{setPrivacyBusy(false);}
   };
 
   const save = async () => {
@@ -189,8 +239,26 @@ export const PersonalSettingsPage: React.FC<Props> = ({ currentUser, onBack, onS
         </>}
       </section>
       <section className="vop-personal-card vop-card">
-        <h2><ShieldCheck size={19}/> Privacy</h2>
+        <h2><ShieldCheck size={19}/> Privacy & account data</h2>
         <label>Profile visibility<select value={settings.privacy?.profileVisibility || 'organization'} onChange={e => patch('privacy', { ...settings.privacy, profileVisibility: e.target.value as 'private' | 'organization' })}><option value="organization">My organization</option><option value="private">Private</option></select></label>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+          <button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void downloadMyData()}><Download size={16}/>Export my data</button>
+          <a className="vop-secondary" href="/privacy">Privacy Policy</a>
+          <a className="vop-secondary" href="/terms">Terms of Service</a>
+        </div>
+        {accountLifecycle&&['requested','processing','blocked'].includes(accountLifecycle.status)?<div className="vop-setting-list" style={{marginTop:12}}>
+          <div className="vop-setting-row"><div><div className="vop-setting-name">Deletion status: {accountLifecycle.status}</div><div className="vop-setting-help">
+            {accountLifecycle.scheduledFor?'Scheduled for '+new Date(accountLifecycle.scheduledFor).toLocaleDateString()+'. ':''}
+            {accountLifecycle.reason||'Your account remains recoverable until the grace period ends.'}
+          </div></div></div>
+          {accountLifecycle.status!=='processing'&&<button type="button" className="vop-secondary" disabled={privacyBusy} onClick={()=>void undoDeletionRequest()}><RotateCcw size={16}/>Cancel deletion request</button>}
+        </div>:<div style={{display:'grid',gap:8,marginTop:12}}>
+          <strong>Request account deletion</strong>
+          <small>A 30-day recovery period applies. Organization owners, Super Admins and mentors with active learner assignments must transfer those responsibilities first. Some certificate, financial and audit records are retained or pseudonymized under the Privacy Policy.</small>
+          <label>Optional reason<textarea value={deletionReason} maxLength={500} onChange={e=>setDeletionReason(e.target.value)} placeholder="Optional"/></label>
+          <label>Type DELETE MY ACCOUNT to confirm<input value={deletionConfirmation} autoComplete="off" onChange={e=>setDeletionConfirmation(e.target.value)}/></label>
+          <button type="button" className="vop-secondary danger" disabled={privacyBusy||deletionConfirmation!=='DELETE MY ACCOUNT'} onClick={()=>void submitDeletionRequest()}><Trash2 size={16}/>Request account deletion</button>
+        </div>}
       </section>
       {!organizationAccount&&<LocalizationParticipation/>}
       <button className="vop-personal-save vop-primary" type="button" disabled={saving} onClick={() => void save()}><Save size={18}/>{saving ? t('common.saving','Saving…') : t('settings.save','Save personal settings')}</button>
