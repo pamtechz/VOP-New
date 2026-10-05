@@ -134,10 +134,11 @@ export async function applyOrganizationAuditVisibility(
   documents:FirebaseFirestore.QueryDocumentSnapshot[],
 ){
   const cutoffRef=db.doc('organizations/'+organizationId+'/auditVisibility/__cutoff');
-  const [cutoff,...overlays]=await Promise.all([
-    cutoffRef.get(),
-    ...documents.map(document=>db.doc('organizations/'+organizationId+'/auditVisibility/'+document.id).get()),
-  ]);
+  const refs=[
+    cutoffRef,
+    ...documents.map(document=>db.doc('organizations/'+organizationId+'/auditVisibility/'+document.id)),
+  ];
+  const [cutoff,...overlays]=await db.getAll(...refs);
   const cutoffMillis=Date.parse(String(cutoff.data()?.hiddenBefore||''))||0;
   return documents.map((document,index)=>{
     const data=document.data()||{};
