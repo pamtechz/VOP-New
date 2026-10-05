@@ -39,7 +39,7 @@ for (const lesson of master.lessons) {
       pageNumber: Number.isSafeInteger(page.pageNumber) ? page.pageNumber : index + 1,
       title: String(page.title ?? ''),
       content: Array.isArray(page.blocks) ? page.blocks.filter(block => block?.type === 'text').map(block => String(block.text ?? '').trim()).filter(Boolean).join('\\n\\n') : '',
-      imageUrl: Array.isArray(page.blocks) ? ((page.blocks.find(block => block?.type === 'image')?.src) ? '/' + String(page.blocks.find(block => block?.type === 'image')?.src).replace(/^\\//, '') : null) : null
+      imageUrl: Array.isArray(page.blocks) ? ((page.blocks.find(block => block?.type === 'image')?.src) ? '/' + String(page.blocks.find(block => block?.type === 'image')?.src).replace(/^\/+/, '') : null) : null
     })) : [],
     quiz: Array.isArray(lesson.quiz) ? lesson.quiz : [],
     guideId: 'guide-' + lesson.lang,
