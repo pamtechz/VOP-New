@@ -779,6 +779,13 @@ export function providerSettlementCurrency(provider:PaymentProviderAdapter,metho
   return /^[A-Z]{3}$/.test(currency)?currency:'';
 }
 
+export function providerSettlementCountry(provider:PaymentProviderAdapter,method:PaymentMethod){
+  const config=provider.publicConfiguration();
+  if(method==='card')return '';
+  const country=text(config.country||config.mobileMoneyCountry).toUpperCase();
+  return /^[A-Z]{2}$/.test(country)?country:'';
+}
+
 export function paymentProviderCatalog(){
   return [...PROVIDERS.values()].map(provider=>provider.publicConfiguration());
 }
