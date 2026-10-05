@@ -675,7 +675,7 @@ test('free subscription plans never enter the positive-amount payment pipeline',
   const workspace=read('src/components/admin/SubscriptionWorkspace.tsx');
 
   assert.match(billing,/if\(priceUsd===0\)/);
-  assert.match(billing,/amountMinor:0,amountDecimal:'0\.00'/);
+  assert.match(billing,/amountMinor:0,amountDecimal:minorToDecimal\(0,billingCurrency\)/);
   assert.match(billing,/fxSource:'free-plan'/);
 
   assert.match(plans,/action === 'activateFreePlan'/);
