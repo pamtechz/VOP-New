@@ -1,7 +1,7 @@
-import { authenticateTenant } from '../server/tenant.js';
+import { authenticateTenant } from '../../server/tenant.js';
 import {
   buildAccountExport,cancelAccountDeletion,getAccountLifecycleStatus,processDueAccountDeletions,requestAccountDeletion,
-} from '../server/accountLifecycle.js';
+} from '../../server/accountLifecycle.js';
 
 type Request={method?:string;headers?:Record<string,string|string[]|undefined>;query?:Record<string,string|string[]|undefined>;body?:unknown};
 type Response={status:(code:number)=>Response;json:(body:unknown)=>void;setHeader?:(name:string,value:string)=>void};
