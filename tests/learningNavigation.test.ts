@@ -79,6 +79,19 @@ test('lesson reader, grading and offline completion follow each guide language',
   assert.match(app,/openStudyItem\(activeGuide,lesson/);
 });
 
+test('study interaction surfaces stay outside the initial application bundle',()=>{
+  const app=source('src/App.tsx');
+  assert.doesNotMatch(app,/^import \{ DiscoverGuideView \} from '\.\/components\/guide\/DiscoverGuideView';/m);
+  assert.doesNotMatch(app,/^import \{ LessonReaderModal \} from '\.\/components\/reader\/LessonReaderModal';/m);
+  assert.doesNotMatch(app,/^import \{ QuizModal \} from '\.\/components\/quiz\/QuizModal';/m);
+  assert.match(app,/const loadDiscoverGuideView=\(\)=>import\('\.\/components\/guide\/DiscoverGuideView'\)/);
+  assert.match(app,/const loadLessonReaderModal=\(\)=>import\('\.\/components\/reader\/LessonReaderModal'\)/);
+  assert.match(app,/const loadQuizModal=\(\)=>import\('\.\/components\/quiz\/QuizModal'\)/);
+  assert.match(app,/void loadLessonReaderModal\(\)/);
+  assert.match(app,/void loadQuizModal\(\)/);
+  assert.match(app,/<React\.Suspense fallback=\{<RouteLoading\/>\}>[\s\S]*<LessonReaderModal[\s\S]*<QuizModal/);
+});
+
 test('published lesson and guide status share server-scoped completion checks',()=>{
   for(const file of ['src/pages/LessonsPage.tsx','src/components/guide/DiscoverGuideView.tsx','src/components/home/HomeDashboard.tsx']){
     assert.match(source(file),/lessonIsComplete/);
