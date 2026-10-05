@@ -13,6 +13,7 @@ import { PortfolioVerificationPage } from './pages/PortfolioVerificationPage';
 import type { User } from './types';
 import { RouteShimmer } from './components/layout/Shimmer';
 import { loadPublicAuthPolicy, type PublicAuthPolicy } from './services/authPolicy';
+import { LegalPolicyPage } from './pages/LegalPolicyPage';
 
 export function Root() {
   const [account, setAccount] = useState<import('firebase/auth').User | null>(null);
@@ -28,7 +29,9 @@ export function Root() {
   const syncingUid = useRef<string | null>(null);
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
   const isBootstrapRoute = pathname === '/admin/bootstrap';
-  const isKnownRoute = pathname === '/' || isBootstrapRoute;
+  const isPrivacyRoute = pathname === '/privacy';
+  const isTermsRoute = pathname === '/terms';
+  const isKnownRoute = pathname === '/' || isBootstrapRoute || isPrivacyRoute || isTermsRoute;
   const query = new URLSearchParams(window.location.search);
   const portfolioToken = pathname === '/' ? query.get('portfolio') || '' : '';
   const invitationToken = pathname === '/' ? query.get('invite') || '' : '';
@@ -127,6 +130,8 @@ export function Root() {
   }
 
   if (!isKnownRoute) return <NotFoundPage />;
+  if (isPrivacyRoute) return <LegalPolicyPage kind="privacy"/>;
+  if (isTermsRoute) return <LegalPolicyPage kind="terms"/>;
 
   if (portfolioToken) return /^[A-Za-z0-9_-]{1,150}$/.test(portfolioToken)
     ? <PortfolioVerificationPage token={portfolioToken}/>
