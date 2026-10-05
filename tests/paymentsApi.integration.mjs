@@ -29,7 +29,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       key:'lenco',
       capabilities:{checkout:true,card:true,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
       configured(){return true;},
-      publicConfiguration(){return {key:'lenco',configured:true,environment:'test',methods:['card','airtel_money','mtn_money'],capabilities:this.capabilities};},
+      publicConfiguration(){return {key:'lenco',configured:true,environment:'test',methods:['card','airtel_money','mtn_money'],mobileMoneyCurrency:'ZMW',capabilities:this.capabilities};},
       async createPayment(input){
         if(state.nextCreateError){
           const message=state.nextCreateError;state.nextCreateError='';throw new Error(message);
@@ -89,7 +89,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       callbackMethods:['POST','PUT'],
       capabilities:{checkout:true,card:false,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
       configured(){return true;},
-      publicConfiguration(){return {key:'mtn_momo',configured:true,environment:'test',methods:['mtn_money'],capabilities:this.capabilities};},
+      publicConfiguration(){return {key:'mtn_momo',configured:true,environment:'test',methods:['mtn_money'],country:'ZM',currency:'ZMW',capabilities:this.capabilities};},
       async createPayment(input){
         const transactionId='11111111-1111-4111-8111-'+String(mtnCaptured.size+1).padStart(12,'0');
         mtnCaptured.set(input.reference,{...input,transactionId});
@@ -131,7 +131,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       callbackMethods:['POST'],
       capabilities:{checkout:true,card:false,mobileMoney:true,bank:false,refunds:false,partialRefunds:false,webhooks:true,reconciliation:true},
       configured(){return true;},
-      publicConfiguration(){return {key:'airtel_money',configured:true,environment:'test',methods:['airtel_money'],capabilities:this.capabilities};},
+      publicConfiguration(){return {key:'airtel_money',configured:true,environment:'test',methods:['airtel_money'],country:'ZM',currency:'ZMW',capabilities:this.capabilities};},
       async createPayment(input){
         const transactionId='22222222-2222-4222-8222-'+String(airtelCaptured.size+1).padStart(12,'0');
         airtelCaptured.set(input.reference,{...input,transactionId});
@@ -287,6 +287,10 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         learnersCandidates:false,organizations:true,churches:true,districts:true,conferences:true,unions:true,
       },
     });
+    await db.doc('system/billing/rates/USD_ZMW').set({
+      baseCurrency:'USD',billingCurrency:'ZMW',rate:25,source:'integration-test',
+      providerDate:'2026-10-05',fetchedAt:new Date().toISOString(),
+    });
     await db.doc('organizations/'+orgA).set({
       id:orgA,name:'Payment Org A',status:'active',billingCountry:'Zambia',countryCode:'ZM',
       billingProfile:{countryCode:'ZM',countryName:'Zambia',billingCurrency:'ZMW',pricingRegion:'zambia'},
@@ -335,7 +339,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       id:eventId,title:'Paid Event',organizationId:orgA,published:true,sharingScope:'organization',
     });
     async function createItem(name,itemType,itemId,{
-      repeatable=false,amount=125,organizationId=orgA,
+      repeatable=false,amount=125,currency='ZMW',organizationId=orgA,
       allowedProviders=['lenco'],allowedMethods=['card'],
     }={}){
       const response=await call(admin,'admin/payable-items',{
@@ -343,7 +347,7 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
         action:'upsert',
         item:{
           name,description:name+' charge',itemType,itemId,
-          organizationId,scope:'organization',amount,currency:'ZMW',
+          organizationId,scope:'organization',amount,currency,
           repeatable,active:true,paymentRequired:true,
           allowedProviders,allowedMethods,
         },
@@ -374,6 +378,38 @@ test('payments: server pricing, provider verification, tenant isolation and fulf
       const ownerRows=await call(organizationOwner,'admin/transactions',{filters:{organizationId:orgA}});
       assert.equal(ownerRows.status,200,JSON.stringify(ownerRows));
       assert.ok(ownerRows.items.every(item=>item.provider===''&&item.providerReference===''&&item.reconciliationStatus===''));
+    });
+
+    await t.test('USD charges expose only active methods and mobile money receives a daily local-currency quote',async()=>{
+      const item=await createItem('USD mobile money charge','custom_charge','',{
+        amount:20,currency:'USD',allowedProviders:['mtn_momo'],allowedMethods:['mtn_money'],
+      });
+      const catalog=await call(mtnLearner,'catalog',{});
+      assert.equal(catalog.status,200,JSON.stringify(catalog));
+      const visible=catalog.items.find(candidate=>candidate.id===item.id);
+      assert.ok(visible,JSON.stringify(catalog));
+      assert.deepEqual(visible.allowedMethods,['mtn_money']);
+      assert.equal(visible.methodQuotes.mtn_money.baseCurrency,'USD');
+      assert.equal(visible.methodQuotes.mtn_money.baseAmountDecimal,'20.00');
+      assert.equal(visible.methodQuotes.mtn_money.currency,'ZMW');
+      assert.equal(visible.methodQuotes.mtn_money.amountDecimal,'500.00');
+      assert.equal(visible.methodQuotes.mtn_money.exchangeRate,25);
+
+      const started=await call(mtnLearner,'checkout',{
+        payableItemId:item.id,paymentMethod:'mtn_money',phone:'0977000000',
+      });
+      assert.equal(started.status,200,JSON.stringify(started));
+      assert.equal(started.payment.currency,'ZMW');
+      assert.equal(started.payment.amountDecimal,'500.00');
+      const providerInput=mtnCaptured.get(started.payment.reference);
+      assert.equal(providerInput.currency,'ZMW');
+      assert.equal(providerInput.amountMinor,50000);
+
+      await db.doc('paymentProviderConfigs/mtn_momo').set({enabled:false,methods:['mtn_money']},{merge:false});
+      const unavailable=await call(mtnLearner,'catalog',{});
+      assert.equal(unavailable.status,200,JSON.stringify(unavailable));
+      assert.equal(unavailable.items.some(candidate=>candidate.id===item.id),false);
+      await db.doc('paymentProviderConfigs/mtn_momo').set({enabled:true,methods:['mtn_money']},{merge:false});
     });
 
     await t.test('free subscription plans quote zero safely, auto-provision organizations and activate without checkout',async()=>{
