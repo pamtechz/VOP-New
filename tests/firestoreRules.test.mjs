@@ -253,6 +253,11 @@ test('hierarchy tenant scope cannot cross organizations', async () => {
     await assertSucceeds(orgAdmin.doc('announcements/org-owned').update({ title:'Updated Owned' }));
     await assertFails(orgAdmin.doc('announcements/org-foreign').update({ title:'Blocked Foreign' }));
     await assertFails(orgAdmin.doc('announcements/org-foreign').delete());
+    // Audit evidence and operational visibility overlays are server-authoritative.
+    // Even privileged client SDK sessions cannot forge or erase the ledger.
+    await assertFails(orgAdmin.doc('organizations/org-1/audit/forged-org-audit').set({action:'forged',actorUid:'org-admin'}));
+    await assertFails(superAdmin.doc('organizations/org-1/audit/forged-super-audit').set({action:'forged',actorUid:'super-admin'}));
+    await assertFails(orgAdmin.doc('organizations/org-1/auditVisibility/forged').set({hidden:true}));
     await assertSucceeds(orgAdmin.doc('certificates/cert-org-1').get());
     await assertFails(orgAdmin.doc('certificates/cert-org-2').get());
     await assertSucceeds(unionAdmin.doc('certificates/cert-org-1').get());
