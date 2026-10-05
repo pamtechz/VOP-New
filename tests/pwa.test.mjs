@@ -23,8 +23,12 @@ test('service worker has versioned cache lifecycle and excludes API authority', 
   assert.match(source, /caches\.match\(request\)/);
 });
 
-test('production entry registers the service worker only for production', () => {
+test('production entry reconciles service worker registration with platform PWA policy', () => {
   const source = read('src/main.tsx');
-  assert.match(source, /navigator\.serviceWorker\.register\('\/sw\.js'/);
   assert.match(source, /import\.meta\.env\.PROD/);
+  assert.match(source, /\/api\/admin\/auth\?action=policy/);
+  assert.match(source, /policy\.pwa\?\.enabled === true/);
+  assert.match(source, /navigator\.serviceWorker\.register\('\/sw\.js'/);
+  assert.match(source, /navigator\.serviceWorker\.getRegistrations\(\)/);
+  assert.match(source, /registration => registration\.unregister\(\)/);
 });
