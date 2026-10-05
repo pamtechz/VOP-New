@@ -270,9 +270,13 @@ async function anonymizeQuery(query:Query,uid:string,patch:Record<string,unknown
   return {updated,pending:true};
 }
 
-async function anonymizeRetainedRecords(db:Firestore,uid:string,deletedAt:string) {
+async function anonymizeRetainedRecords(db:Firestore,uid:string,deletedAt:string,profile:DocumentData) {
   const anonymousId=pseudonym(uid);
   const common={accountDeletedAt:deletedAt,accountDeletionPseudonym:anonymousId};
+  const organizationId=String(profile.organizationId||'').trim();
+  const role=String(profile.role||'').trim();
+  const nodeId=String(profile.adminNodeId||'').trim();
+  const tenantKey=['union_admin','conference_admin','district_admin','church_admin'].includes(role)&&nodeId?role+':'+nodeId:'';
   const results=await Promise.all([
     anonymizeQuery(db.collection('certificates').where('candidateId','==',uid),uid,{
       ...common,candidateId:anonymousId,candidateEmail:FieldValue.delete(),email:FieldValue.delete(),
@@ -289,12 +293,12 @@ async function anonymizeRetainedRecords(db:Firestore,uid:string,deletedAt:string
     anonymizeQuery(db.collection('platformAudit').where('actorUid','==',uid),uid,{
       ...common,actorUid:anonymousId,actorEmail:FieldValue.delete(),
     }),
-    anonymizeQuery(db.collectionGroup('audit').where('actorUid','==',uid),uid,{
+    ...(organizationId?[anonymizeQuery(db.collection('organizations/'+organizationId+'/audit').where('actorUid','==',uid),uid,{
       ...common,actorUid:anonymousId,actorEmail:FieldValue.delete(),
-    }),
-    anonymizeQuery(db.collectionGroup('entries').where('actorUid','==',uid),uid,{
+    })]:[]),
+    ...(tenantKey?[anonymizeQuery(db.collection('tenantAudit/'+tenantKey+'/entries').where('actorUid','==',uid),uid,{
       ...common,actorUid:anonymousId,actorEmail:FieldValue.delete(),
-    }),
+    })]:[]),
   ]);
   return {anonymousId,pending:results.some(result=>result.pending)};
 }
@@ -379,7 +383,7 @@ export async function processAccountDeletion(db:Firestore,uid:string,now=new Dat
 
   const deletedAt=now.toISOString();
   await ref.set({status:'processing',processingStartedAt:record.processingStartedAt||deletedAt,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-  const retained=await anonymizeRetainedRecords(db,uid,deletedAt);
+  const retained=await anonymizeRetainedRecords(db,uid,deletedAt,profileData);
   const sharedPending=await anonymizeSharedEngagement(db,uid,deletedAt);
   const personalPending=await deletePersonalRecords(db,uid,String(profileData.email||'').trim().toLowerCase());
   if(retained.pending||sharedPending||personalPending){
