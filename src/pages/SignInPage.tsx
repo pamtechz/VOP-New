@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, Eye, EyeOff, Fingerprint, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import { emailSignIn, emailSignUp, googleSignIn, resetPassword } from '../services/firebaseAuth';
@@ -45,14 +45,25 @@ function firebaseMessage(error: unknown, mode: Mode): string {
   }
 }
 
-export function SignInPage({ configurationMissing = false, initialMode = 'sign-in', onBack }: { configurationMissing?: boolean; initialMode?: Mode; onBack?: () => void }) {
-  const [mode, setMode] = useState<Mode>(initialMode);
+export function SignInPage({
+  configurationMissing=false,initialMode='sign-in',onBack,registrationAllowed=false,inviteToken='',
+}:{
+  configurationMissing?:boolean;initialMode?:Mode;onBack?:()=>void;registrationAllowed?:boolean;inviteToken?:string;
+}) {
+  const [mode, setMode] = useState<Mode>(initialMode==='register'&&registrationAllowed?'register':'sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(()=>{
+    if(!registrationAllowed&&mode==='register'){
+      setMode('sign-in');
+      setError('New public registrations are currently closed. Use a valid organization invitation or sign in to an existing account.');
+    }
+  },[registrationAllowed,mode]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,8 +72,13 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
     setError('');
     setMessage('');
     try {
-      if (mode === 'register') await emailSignUp(email, password);
-      else await emailSignIn(email, password);
+      if (mode === 'register') {
+        const result=await emailSignUp(email,password,inviteToken);
+        if(result.approvalRequired){
+          setMode('sign-in');
+          setMessage(result.message||'Your account is awaiting administrator approval.');
+        }
+      } else await emailSignIn(email, password);
     } catch (reason) {
       setError(firebaseMessage(reason, mode));
     } finally {
@@ -155,8 +171,8 @@ export function SignInPage({ configurationMissing = false, initialMode = 'sign-i
           <div className="vop-login-mode-switch" role="tablist" aria-label="Account access mode">
             <button type="button" role="tab" aria-selected={mode==='sign-in'} className={mode==='sign-in'?'active':''}
               disabled={pending} onClick={()=>{setMode('sign-in');setError('');setMessage('')}}>Sign in</button>
-            <button type="button" role="tab" aria-selected={mode==='register'} className={mode==='register'?'active':''}
-              disabled={pending} onClick={()=>{setMode('register');setError('');setMessage('')}}>Create account</button>
+            {registrationAllowed&&<button type="button" role="tab" aria-selected={mode==='register'} className={mode==='register'?'active':''}
+              disabled={pending} onClick={()=>{setMode('register');setError('');setMessage('')}}>Create account</button>}
           </div>
 
           {configurationMissing ? (
