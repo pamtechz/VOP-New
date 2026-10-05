@@ -3,7 +3,10 @@ on:
   push:
     branches:
       - main
-      - fix/reference-design-and-certification-integrity
+      - 'prod/**'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 concurrency:
   group: vop-verify-${{ github.ref }}
@@ -12,7 +15,7 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: [self-hosted, KASAINSTITUTE]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       # Never reuse a checkout potentially owned by a different runner account.
