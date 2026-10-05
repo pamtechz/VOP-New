@@ -61,6 +61,15 @@ test('account privacy export and staged deletion are server authoritative',async
     await db.doc('paymentTransactions/pay-privacy').set({payerUid:learner.uid,payerEmail:learner.email,payerName:'Privacy Learner',status:'paid',amountMinor:5000,currency:'ZMW'});
     await db.doc('paymentReceipts/pay-privacy').set({payerUid:learner.uid,payerEmail:learner.email,payerName:'Privacy Learner',paymentId:'pay-privacy'});
     await db.doc('assessmentAttempts/attempt-privacy').set({candidateId:learner.uid,score:80,answers:{q1:'A'},correctOptionIndex:0});
+    await db.doc('passkeyCredentials/passkey-privacy').set({
+      uid:learner.uid,credentialId:'private-credential-id',publicKeyDer:'private-public-key-material',
+      algorithm:-7,label:'Privacy device',transports:['internal'],rpId:'localhost',
+      createdAt:new Date().toISOString(),
+    });
+    await db.doc('passkeyChallenges/passkey-pending-privacy').set({
+      uid:learner.uid,purpose:'registration',origin:'http://localhost',rpId:'localhost',
+      expiresAt:new Date(Date.now()+300000).toISOString(),
+    });
 
     await t.test('export returns owned data but strips official answer-key material',async()=>{
       const res=await call(learner,'GET','export');
@@ -70,6 +79,11 @@ test('account privacy export and staged deletion are server authoritative',async
       const attempt=res.payload.export.data.assessmentAttempts.find(item=>item.id==='attempt-privacy');
       assert.equal(attempt.answers.q1,'A');
       assert.equal('correctOptionIndex' in attempt,false);
+      assert.equal(res.payload.export.data.passkeys.length,1);
+      assert.equal(res.payload.export.data.passkeys[0].label,'Privacy device');
+      assert.equal(res.payload.export.data.passkeys[0].rpId,'localhost');
+      assert.equal('credentialId' in res.payload.export.data.passkeys[0],false);
+      assert.equal('publicKeyDer' in res.payload.export.data.passkeys[0],false);
     });
 
     await t.test('confirmation phrase is mandatory and a valid request remains cancellable',async()=>{
@@ -111,6 +125,8 @@ test('account privacy export and staged deletion are server authoritative',async
       assert.equal(result.status,'completed',JSON.stringify(result));
       assert.equal((await db.doc('users/'+learner.uid).get()).exists,false);
       assert.equal((await db.doc('prayerRequests/prayer-privacy').get()).exists,false);
+      assert.equal((await db.doc('passkeyCredentials/passkey-privacy').get()).exists,false);
+      assert.equal((await db.doc('passkeyChallenges/passkey-pending-privacy').get()).exists,false);
       await assert.rejects(()=>auth.getUser(learner.uid));
       const certificate=(await db.doc('certificates/cert-privacy').get()).data();
       assert.match(String(certificate.candidateId||''),/^deleted:/);
