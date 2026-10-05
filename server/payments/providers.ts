@@ -146,6 +146,8 @@ function lencoEnvironment(){
 }
 function lencoApiToken(){return text(process.env.LENCO_API_TOKEN);}
 function lencoPublicKey(){return text(process.env.LENCO_PUBLIC_KEY);}
+function lencoMobileMoneyCountry(){return text(process.env.LENCO_MOBILE_MONEY_COUNTRY||'ZM').toUpperCase();}
+function lencoMobileMoneyCurrency(){return text(process.env.LENCO_MOBILE_MONEY_CURRENCY||'ZMW').toUpperCase();}
 const LENCO_API_BASE='https://api.lenco.co/access/v2';
 
 async function lencoRequest(path:string,init:RequestInit={}):Promise<LencoResponse>{
@@ -221,6 +223,8 @@ class LencoProvider implements PaymentProviderAdapter{
       environment:lencoEnvironment(),
       callbackPath:'/api/payments/webhooks/lenco',
       methods:[...(lencoPublicKey()?['card']:[]),'airtel_money','mtn_money','zamtel_money'],
+      mobileMoneyCountry:lencoMobileMoneyCountry(),
+      mobileMoneyCurrency:lencoMobileMoneyCurrency(),
       capabilities:this.capabilities,
     };
   }
@@ -245,13 +249,14 @@ class LencoProvider implements PaymentProviderAdapter{
     }
     const operator=paymentMethodOperator(input.method);
     if(!operator)throw new Error('The selected Lenco payment method is not supported.');
+    if(input.currency.toUpperCase()!==lencoMobileMoneyCurrency())throw new Error('The mobile money currency does not match this merchant configuration.');
     if(!input.phone)throw new Error('A mobile money phone number is required.');
     const body={
       amount:Number(minorToDecimal(input.amountMinor,input.currency)),
       reference:input.reference,
       phone:input.phone,
       operator,
-      country:'zm',
+      country:lencoMobileMoneyCountry().toLowerCase(),
       bearer:'merchant',
     };
     const response=await lencoRequest('/collections/mobile-money',{method:'POST',body:JSON.stringify(body)});
@@ -320,6 +325,8 @@ function mtnBaseUrl(){
 function mtnTargetEnvironment(){
   return text(process.env.MTN_MOMO_TARGET_ENVIRONMENT||(mtnEnvironment()==='sandbox'?'sandbox':'mtnzambia'));
 }
+function mtnCountry(){return text(process.env.MTN_MOMO_COUNTRY||'ZM').toUpperCase();}
+function mtnCurrency(){return text(process.env.MTN_MOMO_CURRENCY||'ZMW').toUpperCase();}
 function mtnSubscriptionKey(){return text(process.env.MTN_MOMO_SUBSCRIPTION_KEY);}
 function mtnApiUser(){return text(process.env.MTN_MOMO_API_USER);}
 function mtnApiKey(){return text(process.env.MTN_MOMO_API_KEY);}
@@ -416,6 +423,8 @@ class MtnMomoProvider implements PaymentProviderAdapter{
       configured:this.configured(),
       environment:mtnEnvironment(),
       targetEnvironment:mtnTargetEnvironment(),
+      country:mtnCountry(),
+      currency:mtnCurrency(),
       callbackPath:'/api/payments/webhooks/mtn-momo',
       methods:['mtn_money'],
       callbackUrl:mtnCallbackUrl()?'configured':'not_configured',
@@ -426,6 +435,7 @@ class MtnMomoProvider implements PaymentProviderAdapter{
   async createPayment(input:ProviderPaymentRequest):Promise<ProviderPaymentResult>{
     if(!this.configured())throw new Error('MTN MoMo payment processing is not configured.');
     if(input.method!=='mtn_money')throw new Error('MTN MoMo supports the MTN Money payment method only.');
+    if(input.currency.toUpperCase()!==mtnCurrency())throw new Error('The MTN MoMo currency does not match this merchant configuration.');
     if(!input.phone)throw new Error('An MTN MoMo phone number is required.');
     const transactionId=randomUUID();
     const token=await mtnAccessToken();
@@ -760,6 +770,13 @@ export function getPaymentProvider(key:unknown){
   const provider=PROVIDERS.get(text(key).toLowerCase());
   if(!provider)throw new Error('The selected payment provider is not available.');
   return provider;
+}
+
+export function providerSettlementCurrency(provider:PaymentProviderAdapter,method:PaymentMethod){
+  const config=provider.publicConfiguration();
+  if(method==='card')return '';
+  const currency=text(config.currency||config.mobileMoneyCurrency).toUpperCase();
+  return /^[A-Z]{3}$/.test(currency)?currency:'';
 }
 
 export function paymentProviderCatalog(){
