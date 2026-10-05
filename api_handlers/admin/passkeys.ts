@@ -18,6 +18,60 @@ function header(req:Request,name:string){
   const raw=req.headers?.[name]??req.headers?.[name.toLowerCase()];
   return Array.isArray(raw)?String(raw[0]||''):String(raw||'');
 }
+function clientKey(req:Request){
+  const raw=header(req,'x-forwarded-for').split(',')[0]?.trim()
+    ||header(req,'x-real-ip').trim()
+    ||'unknown';
+  return raw.replace(/[^A-Za-z0-9:._-]/g,'_').slice(0,120)||'unknown';
+}
+async function enforcePasskeyRateLimit(
+  db:ReturnType<typeof getAdminDb>,
+  key:string,
+  limit:number,
+){
+  const bucket=Math.floor(Date.now()/900_000);
+  const ref=db.doc('authRateLimits/passkey:'+credentialDocumentId(key)+':'+bucket);
+  await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const count=Math.max(0,Number(snapshot.data()?.count||0));
+    if(count>=limit)throw new Error('Too many passkey attempts. Try again later.');
+    transaction.set(ref,{
+      count:count+1,
+      updatedAt:FieldValue.serverTimestamp(),
+      expiresAt:new Date(Date.now()+3_600_000).toISOString(),
+    },{merge:true});
+  });
+}
+type ChallengePayload=ReturnType<typeof verifyPasskeyChallenge>;
+function challengeRef(db:ReturnType<typeof getAdminDb>,payload:ChallengePayload){
+  return db.doc('passkeyChallenges/'+credentialDocumentId(payload.purpose+':'+payload.challenge));
+}
+async function issueChallenge(db:ReturnType<typeof getAdminDb>,payload:ChallengePayload){
+  await challengeRef(db,payload).create({
+    purpose:payload.purpose,
+    uid:payload.uid||'',
+    origin:payload.origin,
+    rpId:payload.rpId,
+    expiresAt:new Date(payload.exp).toISOString(),
+    createdAt:FieldValue.serverTimestamp(),
+  });
+}
+async function consumeChallenge(db:ReturnType<typeof getAdminDb>,payload:ChallengePayload){
+  const ref=challengeRef(db,payload);
+  await db.runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    if(!snapshot.exists)throw new Error('Passkey challenge was already used or expired. Start again.');
+    const data=snapshot.data()||{};
+    if(
+      String(data.purpose||'')!==payload.purpose
+      ||String(data.uid||'')!==String(payload.uid||'')
+      ||String(data.origin||'')!==payload.origin
+      ||String(data.rpId||'')!==payload.rpId
+      ||Date.parse(String(data.expiresAt||''))<Date.now()
+    )throw new Error('Passkey challenge is invalid or expired. Start again.');
+    transaction.delete(ref);
+  });
+}
 async function authenticated(req:Request):Promise<DecodedIdToken>{
   getAdminDb();
   const authorization=header(req,'authorization');
@@ -56,12 +110,17 @@ export default async function handler(req:Request,res:Response){
     const site=requestOrigin(req.headers);
     const db=getAdminDb();
 
+    if(action==='beginAuthentication'||action==='finishAuthentication'){
+      await enforcePasskeyRateLimit(db,'anonymous:'+clientKey(req),40);
+    }
+
     if(action==='beginAuthentication'){
       const challenge=randomChallenge();
       const payload={
         v:1 as const,purpose:'authentication' as const,challenge,
         origin:site.origin,rpId:site.rpId,exp:Date.now()+5*60*1000,
       };
+      await issueChallenge(db,payload);
       return res.status(200).json({
         ok:true,challenge,challengeToken:signPasskeyChallenge(payload),
         rpId:site.rpId,timeout:60000,
@@ -88,12 +147,11 @@ export default async function handler(req:Request,res:Response){
       const previousCount=Math.max(0,Number(stored.signCount||0));
       if(previousCount>0&&authData.signCount>0&&authData.signCount<=previousCount)
         throw new Error('Passkey counter validation failed. Remove and re-enroll this passkey.');
-      if(authData.signCount>0&&authData.signCount!==previousCount){
-        await credentialRef.set({
-          signCount:authData.signCount,
-          lastUsedAt:FieldValue.serverTimestamp(),
-        },{merge:true});
-      }
+      await consumeChallenge(db,payload);
+      await credentialRef.set({
+        ...(authData.signCount>0&&authData.signCount!==previousCount?{signCount:authData.signCount}:{}),
+        lastUsedAt:FieldValue.serverTimestamp(),
+      },{merge:true});
       const uid=clean(stored.uid,180);
       if(!uid)throw new Error('Passkey account mapping is invalid.');
       const [authUser,profile]=await Promise.all([
@@ -107,6 +165,9 @@ export default async function handler(req:Request,res:Response){
     }
 
     const actor=await authenticated(req);
+    if(action==='beginRegistration'||action==='finishRegistration'){
+      await enforcePasskeyRateLimit(db,'account:'+actor.uid,24);
+    }
 
     if(action==='status'){
       const snapshot=await db.collection('passkeyCredentials').where('uid','==',actor.uid).limit(20).get();
@@ -132,6 +193,7 @@ export default async function handler(req:Request,res:Response){
         v:1 as const,purpose:'registration' as const,challenge,uid:actor.uid,
         origin:site.origin,rpId:site.rpId,exp:Date.now()+5*60*1000,
       };
+      await issueChallenge(db,payload);
       return res.status(200).json({
         ok:true,challenge,challengeToken:signPasskeyChallenge(payload),
         rpId:site.rpId,rpName:'Voice of Prophecy',timeout:60000,
@@ -157,6 +219,7 @@ export default async function handler(req:Request,res:Response){
         throw new Error('This passkey is already registered to another account.');
       const transports=Array.isArray(input.transports)
         ?input.transports.map(value=>clean(value,40)).filter(Boolean).slice(0,10):[];
+      await consumeChallenge(db,payload);
       await ref.set({
         uid:actor.uid,credentialId:id,publicKeyDer,algorithm,
         signCount:registration.signCount,
@@ -182,7 +245,8 @@ export default async function handler(req:Request,res:Response){
     return res.status(400).json({error:'Unsupported passkey action.'});
   }catch(error){
     const message=error instanceof Error?error.message:'Passkey operation failed.';
-    const status=/sign in|id token|auth\//i.test(message)?401
+    const status=/too many passkey attempts/i.test(message)?429
+      :/sign in|id token|auth\//i.test(message)?401
       :/another account|cannot remove/i.test(message)?403
       :400;
     return res.status(status).json({error:message});
