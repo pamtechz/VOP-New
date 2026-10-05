@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+def versionCodeSource = System.getenv("VOP_VERSION_CODE") ?: System.getenv("GITHUB_RUN_NUMBER")
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+if (versionCodeSource && !(versionCodeSource ==~ /[1-9][0-9]*/)) {
+    throw new GradleException("VOP_VERSION_CODE/GITHUB_RUN_NUMBER must be a positive integer.")
+}
+if (releaseRequested && !versionCodeSource) {
+    throw new GradleException("Release version is not configured. Set VOP_VERSION_CODE or run in GitHub Actions with GITHUB_RUN_NUMBER.")
+}
+def resolvedVersionCode = versionCodeSource ? Integer.parseInt(versionCodeSource) : 1
+def resolvedVersionName = System.getenv("VOP_VERSION_NAME") ?: "0.0.${resolvedVersionCode}"
+
 android {
     namespace = "com.sda.vop"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +18,8 @@ android {
         applicationId "com.sda.vop"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode resolvedVersionCode
+        versionName resolvedVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -35,7 +46,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (System.getenv("VOP_RELEASE_STORE_FILE") &&
                     System.getenv("VOP_RELEASE_STORE_PASSWORD") &&
