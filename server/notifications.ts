@@ -7,7 +7,7 @@ export type NotificationType =
   | 'payment' | 'subscription' | 'study-reminder' | 'security';
 
 export type NotificationDeliveryState =
-  | 'queued' | 'sent' | 'delivered' | 'failed' | 'retrying'
+  | 'queued' | 'sent' | 'delivered' | 'failed' | 'retrying' | 'fallback_in_app'
   | 'suppressed_by_preference' | 'suppressed_by_policy';
 
 export interface CreateNotificationInput {
@@ -32,6 +32,7 @@ export interface NotificationDeliveryResult {
   channel: NotificationChannel;
   state: NotificationDeliveryState;
   suppressionReason?: string;
+  fallbackReason?: string;
   providerMessageId?: string;
 }
 
@@ -158,6 +159,78 @@ async function markSuppressed(
   return { id: ref.id, channel: input.channel, state, suppressionReason: reason } satisfies NotificationDeliveryResult;
 }
 
+async function ensureInAppEmailFallback(
+  db: Firestore,
+  ref: DocumentReference,
+  input: ReturnType<typeof normalizedInput>,
+  reason: string,
+  context = await userDeliveryContext(db, input.recipientId),
+) {
+  const inAppSuppression = preferenceSuppression(
+    context.preferences, input.type, 'in_app', input.mandatory,
+  );
+  if (inAppSuppression) {
+    return {notificationId:'',suppressionReason:inAppSuppression};
+  }
+  const notificationRef = db.collection('notifications').doc('email_fallback__' + ref.id);
+  await db.runTransaction(async transaction => {
+    const existing = await transaction.get(notificationRef);
+    if (existing.exists) return;
+    transaction.create(notificationRef, {
+      ...deliveryBase(input),
+      channel:'in_app',
+      requestedChannel:'email',
+      deliveryState:'sent',
+      deliveryReason:reason,
+      sourceDeliveryId:ref.id,
+      deliveredAt:FieldValue.serverTimestamp(),
+      createdAt:FieldValue.serverTimestamp(),
+      read:false,
+      readAt:null,
+    });
+  });
+  await ref.set({
+    fallbackNotificationId:notificationRef.id,
+    fallbackReason:reason,
+    fallbackAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return {notificationId:notificationRef.id,suppressionReason:''};
+}
+
+async function fallbackEmailDelivery(
+  db: Firestore,
+  ref: DocumentReference,
+  input: ReturnType<typeof normalizedInput>,
+  reason: string,
+  context = await userDeliveryContext(db, input.recipientId),
+): Promise<NotificationDeliveryResult> {
+  const fallback = await ensureInAppEmailFallback(db,ref,input,reason,context);
+  if(!fallback.notificationId){
+    await ref.set({
+      state:'suppressed_by_preference',
+      suppressionReason:fallback.suppressionReason,
+      updatedAt:FieldValue.serverTimestamp(),
+      nextAttemptAt:FieldValue.delete(),
+    },{merge:true});
+    return {
+      id:ref.id,channel:'email',state:'suppressed_by_preference',
+      suppressionReason:fallback.suppressionReason,
+    };
+  }
+  await ref.set({
+    state:'fallback_in_app',
+    fallbackReason:reason,
+    fallbackNotificationId:fallback.notificationId,
+    nextAttemptAt:FieldValue.delete(),
+    updatedAt:FieldValue.serverTimestamp(),
+  },{merge:true});
+  return {
+    id:ref.id,notificationId:fallback.notificationId,channel:'in_app',
+    state:'fallback_in_app',fallbackReason:reason,
+  };
+}
+
 async function attemptEmailDelivery(
   db: Firestore,
   ref: DocumentReference,
@@ -167,6 +240,9 @@ async function attemptEmailDelivery(
   const context = await userDeliveryContext(db, input.recipientId);
   const suppression = preferenceSuppression(context.preferences, input.type, 'email', input.mandatory);
   if (suppression) {
+    if(suppression==='email_notifications_disabled'){
+      return fallbackEmailDelivery(db,ref,input,suppression,context);
+    }
     await ref.set({
       state: 'suppressed_by_preference',
       suppressionReason: suppression,
@@ -176,35 +252,27 @@ async function attemptEmailDelivery(
   }
 
   if (!(await platformEmailEnabled(db))) {
-    const reason = 'platform_email_delivery_disabled';
-    await ref.set({
-      state: 'suppressed_by_policy',
-      suppressionReason: reason,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { id: ref.id, channel: 'email', state: 'suppressed_by_policy', suppressionReason: reason };
+    return fallbackEmailDelivery(db,ref,input,'platform_email_delivery_disabled',context);
   }
 
   if (!context.email) {
     await ref.set({
-      state: 'failed',
       failureCode: 'RECIPIENT_EMAIL_MISSING',
       failureMessage: 'The recipient account has no deliverable email address.',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { id: ref.id, channel: 'email', state: 'failed' };
+    return fallbackEmailDelivery(db,ref,input,'recipient_email_missing',context);
   }
 
   const apiKey = String(process.env.RESEND_API_KEY || '').trim();
   const from = String(process.env.RESEND_FROM_EMAIL || '').trim();
   if (!apiKey || !from) {
     await ref.set({
-      state: 'failed',
       failureCode: 'EMAIL_PROVIDER_NOT_CONFIGURED',
       failureMessage: 'Email delivery provider credentials are not configured.',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { id: ref.id, channel: 'email', state: 'failed' };
+    return fallbackEmailDelivery(db,ref,input,'email_provider_not_configured',context);
   }
 
   try {
@@ -241,16 +309,26 @@ async function attemptEmailDelivery(
     const transient = response.status === 429 || response.status >= 500;
     const nextCount = retryCount + 1;
     const retrying = transient && nextCount < 4;
+    const failureCode='RESEND_' + response.status;
+    const failureMessage=String(provider.message || provider.name || 'Email provider rejected the message.').slice(0, 500);
     await ref.set({
       state: retrying ? 'retrying' : 'failed',
       provider: 'resend',
       retryCount: nextCount,
-      failureCode: 'RESEND_' + response.status,
-      failureMessage: String(provider.message || provider.name || 'Email provider rejected the message.').slice(0, 500),
+      failureCode,
+      failureMessage,
       nextAttemptAt: retrying ? new Date(Date.now() + Math.min(24, 2 ** nextCount) * 60 * 60 * 1000).toISOString() : null,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { id: ref.id, channel: 'email', state: retrying ? 'retrying' : 'failed' };
+    if(!retrying)return fallbackEmailDelivery(db,ref,input,'email_provider_rejected',context);
+    const fallback=await ensureInAppEmailFallback(db,ref,input,'email_delivery_retrying',context);
+    if(!fallback.notificationId){
+      return {id:ref.id,channel:'email',state:'retrying',suppressionReason:fallback.suppressionReason};
+    }
+    return {
+      id:ref.id,notificationId:fallback.notificationId,channel:'email',
+      state:'retrying',fallbackReason:'email_delivery_retrying',
+    };
   } catch (error) {
     const nextCount = retryCount + 1;
     const retrying = nextCount < 4;
@@ -263,7 +341,16 @@ async function attemptEmailDelivery(
       nextAttemptAt: retrying ? new Date(Date.now() + Math.min(24, 2 ** nextCount) * 60 * 60 * 1000).toISOString() : null,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { id: ref.id, channel: 'email', state: retrying ? 'retrying' : 'failed' };
+    if(!retrying)return fallbackEmailDelivery(db,ref,input,'email_provider_network_failed',context);
+    const fallback=await ensureInAppEmailFallback(db,ref,input,'email_delivery_retrying',context);
+    return {
+      id:ref.id,
+      notificationId:fallback.notificationId||undefined,
+      channel:'email',
+      state:'retrying',
+      fallbackReason:fallback.notificationId?'email_delivery_retrying':undefined,
+      suppressionReason:fallback.suppressionReason||undefined,
+    };
   }
 }
 
@@ -273,6 +360,14 @@ export async function deliverNotification(db: Firestore, raw: CreateNotification
   const suppression = preferenceSuppression(context.preferences, input.type, input.channel, input.mandatory);
 
   if (suppression) {
+    if(input.channel==='email'&&suppression==='email_notifications_disabled'){
+      const ref=db.collection('notificationDeliveries').doc();
+      await ref.set({
+        ...deliveryBase(input),state:'queued',retryCount:0,
+        createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),
+      });
+      return fallbackEmailDelivery(db,ref,input,suppression,context);
+    }
     return markSuppressed(db, input, suppression, 'suppressed_by_preference');
   }
 
