@@ -1114,6 +1114,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Notification delivery telemetry can contain provider failure details,
+    // suppression reasons and destination metadata. It is server-only.
+    match /notificationDeliveries/{id} {
+      allow read, write: if false;
+    }
+
     // Notifications are private to the recipient, with administrator oversight
     // only within the recipient's organization.
     match /notifications/{id} {
