@@ -5,6 +5,7 @@ import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
 
 import '../../core/widgets/app_network_image.dart';
+import '../../core/providers/currency_provider.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
@@ -195,7 +196,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       Row(
                         children: [
                           Text(
-                            'K ${price.toStringAsFixed(2)}',
+                            ref.watch(currencyProvider).valueOrNull?.format(price) ?? 'K ${price.toStringAsFixed(2)}',
                             style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
@@ -204,7 +205,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           if (compareAt != null && compareAt > price) ...[
                             const SizedBox(width: 10),
                             Text(
-                              'K ${compareAt.toStringAsFixed(2)}',
+                              ref.watch(currencyProvider).valueOrNull?.format(compareAt) ?? 'K ${compareAt.toStringAsFixed(2)}',
                               style: const TextStyle(
                                   fontSize: 14,
                                   decoration: TextDecoration.lineThrough,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/widgets/app_network_image.dart';
+import '../../core/providers/currency_provider.dart';
 
 // ── Search & Filter State ───────────────────────────────────────────────────
 
@@ -117,6 +118,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
     final filter = _currentFilter;
     final results = ref.watch(searchResultsProvider(filter));
     final categoriesAsync = ref.watch(searchCategoriesProvider);
@@ -296,7 +298,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                   Row(
                                     children: [
                                       Text(
-                                        'K ${price.toStringAsFixed(2)}',
+                                        currency.format(price),
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
@@ -306,7 +308,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                       if (compareAt != null && compareAt > price) ...[
                                         const SizedBox(width: 8),
                                         Text(
-                                          'K ${compareAt.toStringAsFixed(2)}',
+                                          currency.format(compareAt),
                                           style: TextStyle(
                                             decoration: TextDecoration.lineThrough,
                                             fontSize: 11,

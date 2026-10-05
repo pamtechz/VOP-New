@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/providers/currency_provider.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final myOrdersProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -37,6 +38,7 @@ class OrdersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
     final ordersAsync = ref.watch(myOrdersProvider);
 
     return Scaffold(
@@ -94,7 +96,7 @@ class OrdersScreen extends ConsumerWidget {
             itemCount: orders.length,
             itemBuilder: (ctx, i) {
               final order = orders[i];
-              final ref = order['public_ref'] as String? ??
+              final publicRef = order['public_ref'] as String? ??
                   (order['id'] as String).substring(0, 8).toUpperCase();
               final status = order['payment_status'] as String? ?? 'pending';
               final total = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
@@ -116,7 +118,7 @@ class OrdersScreen extends ConsumerWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(ref,
+                            Text(publicRef,
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: scheme.primary,
@@ -160,7 +162,7 @@ class OrdersScreen extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '${qty}x K ${unitPrice.toStringAsFixed(2)}',
+                                    '${qty}x ${currency.format(unitPrice)}',
                                     style: TextStyle(fontSize: 13, color: scheme.outline),
                                   ),
                                 ],
@@ -188,7 +190,7 @@ class OrdersScreen extends ConsumerWidget {
                               ],
                             ),
                             Text(
-                              'K ${total.toStringAsFixed(2)}',
+                              currency.format(total),
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,

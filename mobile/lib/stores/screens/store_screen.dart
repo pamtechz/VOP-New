@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/widgets/app_network_image.dart';
+import '../../core/providers/currency_provider.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final storeDetailProvider =
@@ -146,7 +147,7 @@ class StoreScreen extends ConsumerWidget {
                             icon: Icons.shopping_bag_outlined,
                             color: scheme.primary,
                             label:
-                                'K ${(store['total_sales'] as num? ?? 0).toStringAsFixed(0)} sales',
+                                '${ref.watch(currencyProvider).valueOrNull?.format((store['total_sales'] as num? ?? 0).toDouble()) ?? 'K ${(store['total_sales'] as num? ?? 0).toStringAsFixed(0)}'} sales',
                           ),
                         ],
                       ),
@@ -252,7 +253,7 @@ class StoreScreen extends ConsumerWidget {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'K ${price.toStringAsFixed(2)}',
+                                          ref.watch(currencyProvider).valueOrNull?.format(price) ?? 'K ${price.toStringAsFixed(2)}',
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               color: scheme.primary,

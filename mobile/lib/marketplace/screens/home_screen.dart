@@ -5,6 +5,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../core/widgets/app_network_image.dart';
+import '../../core/providers/currency_provider.dart';
 
 // ── Category Icon & Visual Style Helper ─────────────────────────────────────
 
@@ -600,6 +601,7 @@ class _ProductCard extends ConsumerWidget {
     final store = product['stores'] as Map<String, dynamic>?;
     final storeName = store?['name'] as String? ?? '';
     final productId = product['id'] as String? ?? '';
+    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
 
     return GestureDetector(
       onTap: () => context.push('/product/$productId'),
@@ -677,7 +679,7 @@ class _ProductCard extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'K ${price.toStringAsFixed(2)}',
+                                currency.format(price),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
@@ -686,7 +688,7 @@ class _ProductCard extends ConsumerWidget {
                               ),
                               if (compareAt != null && compareAt > price)
                                 Text(
-                                  'K ${compareAt.toStringAsFixed(2)}',
+                                  currency.format(compareAt),
                                   style: TextStyle(
                                     decoration: TextDecoration.lineThrough,
                                     fontSize: 10,

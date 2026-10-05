@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/cart_provider.dart';
 import '../../core/widgets/app_network_image.dart';
+import '../../core/providers/currency_provider.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
@@ -11,6 +12,7 @@ class CartScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
     final cartItems = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
 
@@ -139,7 +141,7 @@ class CartScreen extends ConsumerWidget {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              'K${item.price.toStringAsFixed(2)}',
+                                              currency.format(item.price),
                                               style: TextStyle(
                                                 color: scheme.primary,
                                                 fontWeight: FontWeight.bold,
@@ -192,7 +194,7 @@ class CartScreen extends ConsumerWidget {
                           children: [
                             const Text('Total Amount', style: TextStyle(fontSize: 12, color: Colors.grey)),
                             Text(
-                              'K${subtotal.toStringAsFixed(2)}',
+                              currency.format(subtotal),
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,

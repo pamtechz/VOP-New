@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/providers/currency_provider.dart';
 
 final orderDetailProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, orderId) async {
@@ -165,13 +166,14 @@ class OrderTrackingScreen extends ConsumerWidget {
                             final title = it['product_name_at_purchase'] as String? ?? 'Item';
                             final qty = it['quantity'] as int? ?? 1;
                             final uPrice = double.tryParse(it['unit_price']?.toString() ?? '0') ?? 0.0;
+                            final curr = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(child: Text('$qty× $title', style: const TextStyle(fontSize: 13))),
-                                  Text('K${(uPrice * qty).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                  Text(curr.format(uPrice * qty), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                 ],
                               ),
                             );
@@ -179,7 +181,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                           const SizedBox(height: 6),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: Text('Store Subtotal: K${subtotal.toStringAsFixed(2)}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: scheme.primary)),
+                            child: Text('Store Subtotal: ${ref.watch(currencyProvider).valueOrNull?.format(subtotal) ?? 'K ${subtotal.toStringAsFixed(2)}'}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: scheme.primary)),
                           ),
                         ],
                       ),
@@ -206,7 +208,7 @@ class OrderTrackingScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Total Amount Paid', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        Text('K ${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: scheme.primary)),
+                        Text(ref.watch(currencyProvider).valueOrNull?.format(total) ?? 'K ${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: scheme.primary)),
                       ],
                     ),
                   ),

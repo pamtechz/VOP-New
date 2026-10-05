@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../core/services/supabase_service.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../core/providers/currency_provider.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -159,6 +160,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
     final cartNotifier = ref.watch(cartProvider.notifier);
     final itemsByStore = cartNotifier.itemsByStore;
     final subtotal = cartNotifier.subtotal;
@@ -238,7 +240,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                             ],
                           ),
-                          Text('K${storeSum.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(currency.format(storeSum), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -285,7 +287,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Subtotal', style: TextStyle(color: Colors.grey)),
-                        Text('K${(subtotal > 0 ? subtotal : 1250.00).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(currency.format(subtotal > 0 ? subtotal : 1250.00), style: const TextStyle(fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -293,7 +295,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Delivery Fee', style: TextStyle(color: Colors.grey)),
-                        Text('K${shippingFee.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(currency.format(shippingFee), style: const TextStyle(fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const Divider(height: 20),
@@ -302,7 +304,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       children: [
                         const Text('Total to Pay', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         Text(
-                          'K${totalToPay.toStringAsFixed(2)}',
+                          currency.format(totalToPay),
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: scheme.primary),
                         ),
                       ],

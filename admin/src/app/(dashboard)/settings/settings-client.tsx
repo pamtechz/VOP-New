@@ -316,6 +316,94 @@ export function SettingsClient({
               </div>
             </div>
           </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4 md:col-span-2">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-amber-400" />
+              Base Marketplace Currency
+            </h3>
+            <p className="text-xs text-slate-400">
+              Set the primary operating currency code and display symbol for the entire marketplace and mobile app.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300">Currency Code (ISO)</label>
+                <input
+                  type="text"
+                  value={settings['default_currency'] ?? 'ZMW'}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      default_currency: e.target.value.toUpperCase(),
+                    }))
+                  }
+                  placeholder="e.g. ZMW, USD, KES"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500 uppercase"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300">Display Symbol</label>
+                <input
+                  type="text"
+                  value={settings['currency_symbol'] ?? 'K'}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      currency_symbol: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. K, $, €, £"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Quick Currency Presets */}
+            <div className="space-y-1.5 pt-2">
+              <span className="text-xs text-slate-400 font-medium">Quick Presets:</span>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {[
+                  { label: 'Zambia (K / ZMW)', code: 'ZMW', symbol: 'K' },
+                  { label: 'US Dollar ($ / USD)', code: 'USD', symbol: '$' },
+                  { label: 'Kenya (KES)', code: 'KES', symbol: 'KES' },
+                  { label: 'South Africa (R / ZAR)', code: 'ZAR', symbol: 'R' },
+                  { label: 'Euro (€ / EUR)', code: 'EUR', symbol: '€' },
+                  { label: 'British Pound (£ / GBP)', code: 'GBP', symbol: '£' },
+                ].map((preset) => (
+                  <button
+                    key={preset.code}
+                    type="button"
+                    onClick={() => {
+                      setSettings((prev) => ({
+                        ...prev,
+                        default_currency: preset.code,
+                        currency_symbol: preset.symbol,
+                      }));
+                    }}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors border border-slate-700"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={async () => {
+                  await handleUpdateSetting('default_currency', settings['default_currency'] || 'ZMW');
+                  await handleUpdateSetting('currency_symbol', settings['currency_symbol'] || 'K');
+                }}
+                disabled={savingKey === 'default_currency' || savingKey === 'currency_symbol'}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                Save Base Currency
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

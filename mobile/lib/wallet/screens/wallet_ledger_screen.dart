@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/providers/currency_provider.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────────
 final walletAccountProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
@@ -64,6 +65,7 @@ class WalletLedgerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
     final walletAsync = ref.watch(walletAccountProvider);
     final ledgerAsync = ref.watch(walletLedgerProvider);
 
@@ -107,7 +109,7 @@ class WalletLedgerScreen extends ConsumerWidget {
                                 Text('Available for Payout', style: TextStyle(color: scheme.onPrimaryContainer.withOpacity(0.8), fontSize: 12)),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'K${available.toStringAsFixed(2)}',
+                                  currency.format(available),
                                   style: TextStyle(
                                     fontSize: 26,
                                     fontWeight: FontWeight.bold,
@@ -140,7 +142,7 @@ class WalletLedgerScreen extends ConsumerWidget {
                               children: [
                                 const Icon(Icons.hourglass_empty, size: 16, color: Colors.amber),
                                 const SizedBox(width: 6),
-                                Text('Pending Clearance: K${pending.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12)),
+                                Text('Pending Clearance: ${currency.format(pending)}', style: const TextStyle(fontSize: 12)),
                               ],
                             ),
                             const Text('T+2 Settlement', style: TextStyle(fontSize: 11, color: Colors.grey)),
@@ -213,7 +215,7 @@ class WalletLedgerScreen extends ConsumerWidget {
                             ],
                           ),
                           trailing: Text(
-                            '${isCredit ? '+' : ''}K${amount.abs().toStringAsFixed(2)}',
+                            '${isCredit ? '+' : '-'}${currency.format(amount.abs())}',
                             style: TextStyle(
                               color: isCredit ? const Color(0xFF10B981) : Colors.redAccent,
                               fontWeight: FontWeight.bold,
