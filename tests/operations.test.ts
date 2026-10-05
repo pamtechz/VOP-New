@@ -1,15 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { backupOutputPrefix, OPERATIONS_POLICY } from '../server/operations.ts';
+import { createServer } from 'vite';
 
-test('operations policy defines bounded backup and maintenance windows',()=>{
+const operationsModule=(async()=>{
+  const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},appType:'custom',logLevel:'error'});
+  try{
+    return await vite.ssrLoadModule('/server/operations.ts') as typeof import('../server/operations.ts');
+  }finally{
+    await vite.close();
+  }
+})();
+
+test('operations policy defines bounded backup and maintenance windows',async()=>{
+  const {OPERATIONS_POLICY}=await operationsModule;
   assert.equal(OPERATIONS_POLICY.backupRpoHours,24);
   assert.equal(OPERATIONS_POLICY.backupStaleAfterHours,36);
   assert.equal(OPERATIONS_POLICY.maintenanceStaleAfterHours,48);
   assert.equal(OPERATIONS_POLICY.alertCooldownHours,24);
 });
 
-test('backup output prefixes are deterministic per UTC day',()=>{
+test('backup output prefixes are deterministic per UTC day',async()=>{
+  const {backupOutputPrefix}=await operationsModule;
   const previous=process.env.FIRESTORE_BACKUP_BUCKET;
   try{
     process.env.FIRESTORE_BACKUP_BUCKET='gs://vop-production-backups';
@@ -28,7 +39,8 @@ test('backup output prefixes are deterministic per UTC day',()=>{
   }
 });
 
-test('invalid backup destinations fail before any cloud request',()=>{
+test('invalid backup destinations fail before any cloud request',async()=>{
+  const {backupOutputPrefix}=await operationsModule;
   const previous=process.env.FIRESTORE_BACKUP_BUCKET;
   try{
     process.env.FIRESTORE_BACKUP_BUCKET='https://example.com/not-a-gcs-bucket';
