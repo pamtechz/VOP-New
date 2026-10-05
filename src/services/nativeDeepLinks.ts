@@ -1,7 +1,7 @@
 import {App as CapacitorApp} from '@capacitor/app';
 import {Capacitor} from '@capacitor/core';
 
-const APP_LINK_HOSTS=new Set(['vopapp.org','www.vopapp.org']);
+const APP_LINK_HOSTS=new Set(['vopafrica.vercel.app']);
 
 export function normalizeNativeDeepLink(raw:string):string|null{
   try{
