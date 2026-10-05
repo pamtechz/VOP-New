@@ -807,6 +807,9 @@ test('passkey sign-in is server-verified and keeps biometric data on the device'
   assert.match(client,/userVerification:'required'/);
   assert.match(client,/attestationObject:encode\(response\.attestationObject\)/);
   assert.match(api,/requireRecentAuthentication/);
+  assert.match(api,/enforcePasskeyRateLimit/);
+  assert.match(api,/issueChallenge/);
+  assert.match(api,/consumeChallenge/);
   assert.match(api,/parseRegistrationAttestation/);
   assert.match(api,/createCustomToken/);
   assert.match(server,/format!=='none'/);
@@ -814,6 +817,8 @@ test('passkey sign-in is server-verified and keeps biometric data on the device'
   assert.match(server,/credentialId!==expectedCredentialId/);
   assert.match(server,/verifySignature\('sha256'/);
   assert.match(rules,/match \/passkeyCredentials\/\{credentialId\}[\s\S]*allow read, write: if false/);
+  assert.match(rules,/match \/passkeyChallenges\/\{challengeId\}[\s\S]*allow read, write: if false/);
+  assert.match(rules,/match \/authRateLimits\/\{bucketId\}[\s\S]*allow read, write: if false/);
 });
 
 test('messaging supports unread banners, edit/delete and rich in-app attachments without leaving chat',()=>{
