@@ -13,9 +13,9 @@ import {
   validateBillingTenantPlanCapacity, writeTenantAudit, type BillingTenantType, type TenantContext,
 } from '../tenant.js';
 import { requirePermission } from '../permissions.js';
-import { quoteAmountForCurrency, quoteSubscriptionPlanForTenant } from '../billing.js';
+import { organizationBillingProfile, quoteAmountForCurrency, quoteSubscriptionPlanForTenant } from '../billing.js';
 import {
-  getPaymentProvider, paymentProviderCatalog, providerSettlementCurrency, registeredPaymentProviderKeys,
+  getPaymentProvider, paymentProviderCatalog, providerSettlementCountry, providerSettlementCurrency, registeredPaymentProviderKeys,
   type ProviderVerification,
 } from './providers.js';
 
@@ -283,11 +283,30 @@ async function itemVisibleToUser(ctx:TenantContext,data:DocumentData){
   return Boolean(org&&profileOrg===org);
 }
 
+async function paymentCountryCode(
+  ctx:TenantContext,
+  billingTarget:{type:BillingTenantType;id:string}|null,
+  organizationId:string,
+){
+  if(billingTarget){
+    const target=await billingTenantRef(ctx.db,billingTarget.type,billingTarget.id).get();
+    if(target.exists)return organizationBillingProfile(target.data()).countryCode;
+  }
+  if(organizationId){
+    const organization=await ctx.db.doc('organizations/'+organizationId).get();
+    if(organization.exists)return organizationBillingProfile(organization.data()).countryCode;
+  }
+  const profileBilling=object(ctx.profile.billingProfile);
+  const explicit=text(profileBilling.countryCode||ctx.profile.countryCode).toUpperCase();
+  return /^[A-Z]{2}$/.test(explicit)?explicit:'';
+}
+
 async function consumerPaymentQuotes(
   db:Firestore,
   data:DocumentData,
   amountMinor:number,
   baseCurrency:string,
+  billingCountryCode='',
 ){
   const allowedMethods=stringArray(data.allowedMethods).filter(method=>PAYMENT_METHODS.includes(method as never));
   const configuredProviders=stringArray(data.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
@@ -307,7 +326,7 @@ async function consumerPaymentQuotes(
   const methodQuotes:Record<string,Record<string,unknown>>={};
   for(const method of candidates){
     try{
-      const {provider}=await selectProviderForMethod(db,data,method);
+      const {provider}=await selectProviderForMethod(db,data,method,billingCountryCode);
       const providerCurrency=providerSettlementCurrency(provider,method);
       if(method!=='card'&&!providerCurrency)continue;
       const quote=await quoteAmountForCurrency(db,amountMinor,baseCurrency,providerCurrency||baseCurrency);
@@ -334,6 +353,7 @@ async function consumerPayableItem(
   db:Firestore,id:string,data:DocumentData,
   billingTarget:{type:BillingTenantType;id:string}|null,
   organizationId='',
+  billingCountryCode='',
 ){
   let currency=text(data.currency),amountMinor=Number(data.amountMinor||0),amountDecimal=text(data.amountDecimal);
   let pricing:Record<string,unknown>={};
@@ -349,7 +369,7 @@ async function consumerPayableItem(
       exchangeRate:quote.exchangeRate,fxSource:quote.fxSource,fxUpdatedAt:quote.fxUpdatedAt,
     };
   }
-  const checkout=await consumerPaymentQuotes(db,data,amountMinor,currency);
+  const checkout=await consumerPaymentQuotes(db,data,amountMinor,currency,billingCountryCode);
   return {
     id,
     name:text(data.name),
@@ -381,8 +401,10 @@ export async function listPayableItems(ctx:TenantContext,admin=false){
         catch{continue;}
         if(!billingTarget)continue;
       }
+      const consumerOrganizationId=ctx.organizationId||text(ctx.profile.organizationId);
+      const countryCode=await paymentCountryCode(ctx,billingTarget,consumerOrganizationId);
       const consumerItem=await consumerPayableItem(
-        ctx.db,doc.id,data,billingTarget,ctx.organizationId||text(ctx.profile.organizationId),
+        ctx.db,doc.id,data,billingTarget,consumerOrganizationId,countryCode,
       );
       // Do not send unusable charges to consumers. The administrative catalog
       // remains intact, but users only see payment options that can complete now.
@@ -469,7 +491,9 @@ async function providerAllowed(db:Firestore,item:DocumentData,providerKey:string
   return getPaymentProvider(providerKey);
 }
 
-async function selectProviderForMethod(db:Firestore,item:DocumentData,method:PaymentMethod){
+async function selectProviderForMethod(
+  db:Firestore,item:DocumentData,method:PaymentMethod,billingCountryCode='',
+){
   const allowedProviders=stringArray(item.allowedProviders).filter(key=>registeredPaymentProviderKeys().includes(key));
   const candidates=allowedProviders.length?allowedProviders:registeredPaymentProviderKeys();
   const preferred=method==='airtel_money'?'airtel_money':method==='mtn_money'?'mtn_momo':method==='card'?'lenco':'';
@@ -479,10 +503,14 @@ async function selectProviderForMethod(db:Firestore,item:DocumentData,method:Pay
   for(const providerKey of ordered){
     try{
       const provider=await providerAllowed(db,item,providerKey,method);
+      if(method!=='card'&&billingCountryCode){
+        const providerCountry=providerSettlementCountry(provider,method);
+        if(providerCountry&&providerCountry!==billingCountryCode)continue;
+      }
       return {providerKey,provider};
     }catch{/* try the next configured provider */}
   }
-  throw new Error('The selected payment method is currently unavailable.');
+  throw new Error('The selected payment method is currently unavailable in this billing country.');
 }
 
 export async function createCheckout(ctx:TenantContext,input:Record<string,unknown>){
@@ -533,7 +561,9 @@ export async function createCheckout(ctx:TenantContext,input:Record<string,unkno
     }
   }
   if(!Number.isSafeInteger(amountMinor)||amountMinor<=0)throw new Error('The configured payment amount is invalid.');
-  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method);
+  const billingCountryCode=text(pricingSnapshot.billingCountryCode)
+    ||await paymentCountryCode(ctx,billingTarget,organizationId||text(ctx.profile.organizationId));
+  const {providerKey,provider}=await selectProviderForMethod(ctx.db,item,method,billingCountryCode);
   const checkoutBaseAmountMinor=amountMinor;
   const checkoutBaseCurrency=currency;
   const settlementCurrency=method==='card'
