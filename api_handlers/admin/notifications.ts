@@ -62,10 +62,25 @@ export default async function handler(req:Request,res:Response){
   try{
     const requestedOrganization=value(req,'organizationId');
     const action=value(req,'action')||'list';
-    const ownAction=['summary','list','markRead','markUnread','delete','markAllRead','clearAll'].includes(action);
+    const ownAction=['summary','list','capabilities','markRead','markUnread','delete','markAllRead','clearAll'].includes(action);
 
     if(ownAction){
       const account=await authenticateNotificationAccount(req);
+      if(action==='capabilities'){
+        const settings=await account.db.doc('system/settings').get();
+        const data=settings.data()||{};
+        const options=data.systemOptions&&typeof data.systemOptions==='object'
+          ?data.systemOptions as Record<string,unknown>:{};
+        const notifications=data.notifications&&typeof data.notifications==='object'
+          ?data.notifications as Record<string,unknown>:{};
+        const enabledByPlatform=options.enableEmailNotifications===true||notifications.emailEnabled===true;
+        const providerConfigured=Boolean(String(process.env.RESEND_API_KEY||'').trim()&&String(process.env.RESEND_FROM_EMAIL||'').trim());
+        return res.status(200).json({
+          ok:true,
+          email:{enabledByPlatform,providerConfigured,available:enabledByPlatform&&providerConfigured},
+          push:{available:false},
+        });
+      }
       if(action==='summary'){
         const unreadAggregate=await account.db.collection('notifications')
           .where('recipientId','==',account.auth.uid)
