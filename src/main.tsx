@@ -12,6 +12,7 @@ import './theme.css';
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     void loadPublicAuthPolicy().then(async policy => {
+      if(!policy.available)return;
       if (policy.pwa.enabled) {
         try {
           const registration=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
