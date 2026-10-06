@@ -99,7 +99,7 @@ class _ChatChannelSelectorModalState extends State<ChatChannelSelectorModal> {
     final uri = Uri.parse(whatsappUrl);
     try {
       if (await canLaunchUrl(uri)) {
-        Navigator.pop(context);
+        if (mounted) Navigator.pop(context);
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         if (mounted) {
