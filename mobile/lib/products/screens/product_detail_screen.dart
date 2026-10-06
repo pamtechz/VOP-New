@@ -7,6 +7,7 @@ import '../../cart/providers/cart_provider.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
 import '../../marketplace/services/recommendation_service.dart';
+import '../widgets/product_card.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
@@ -14,15 +15,26 @@ final productDetailProvider =
   final data = await SupabaseService.client
       .from('products')
       .select('''
-        id, title, description, price, compare_at_price, status, is_featured,
+        id, title, description, price, compare_at_price, status, is_featured, category_id,
         product_images(url, display_order),
         stores(id, name, slug, logo_url),
-        categories(name),
+        categories(id, name),
         inventory(quantity, reserved_quantity)
       ''')
       .eq('id', id)
       .maybeSingle();
   return data;
+});
+
+final similarProductsProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, ({String? categoryId, String currentProductId})>((ref, arg) async {
+  final list = await RecommendationService.getPersonalizedFeed(
+    categoryId: arg.categoryId,
+    limit: 8,
+    maxPerStore: 1,
+    exploreRatio: 0.10,
+  );
+  return list.where((p) => p['id'] != arg.currentProductId).toList();
 });
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -307,8 +319,74 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           style: TextStyle(
                               color: scheme.onSurfaceVariant, height: 1.5),
                         ),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 24),
                       ],
+
+                      // Similar Recommendations
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final categoryId = product['category_id'] as String?;
+                          final similarAsync = ref.watch(
+                            similarProductsProvider((
+                              categoryId: categoryId,
+                              currentProductId: widget.productId,
+                            )),
+                          );
+
+                          return similarAsync.when(
+                            data: (similarList) {
+                              if (similarList.isEmpty) return const SizedBox.shrink();
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Similar Recommendations',
+                                        style: theme.textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: scheme.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'Best Match',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: scheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 270,
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: similarList.length,
+                                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                      itemBuilder: (context, index) => ProductCard(
+                                        product: similarList[index],
+                                        width: 170,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                ],
+                              );
+                            },
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),

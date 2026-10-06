@@ -8,16 +8,16 @@ void main() {
       const config = CurrencyConfig();
       expect(config.code, 'ZMW');
       expect(config.symbol, 'K');
-      expect(config.format(125.50), 'K125.50');
-      expect(config.format(0), 'K0.00');
+      expect(config.format(125.50), 'K 125.50');
+      expect(config.format(0), 'K 0.00');
     });
 
     test('Custom currency formats correctly', () {
       const usdConfig = CurrencyConfig(code: 'USD', symbol: '\$');
-      expect(usdConfig.format(99.99), '\$99.99');
+      expect(usdConfig.format(99.99), '\$ 99.99');
 
       const zarConfig = CurrencyConfig(code: 'ZAR', symbol: 'R');
-      expect(zarConfig.format(1500), 'R1500.00');
+      expect(zarConfig.format(1500), 'R 1500.00');
     });
   });
 

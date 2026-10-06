@@ -6,17 +6,29 @@ import '../../core/services/supabase_service.dart';
 
 /// Stream of Supabase auth state changes.
 final authStateProvider = StreamProvider<AuthState>((ref) {
-  return SupabaseService.client.auth.onAuthStateChange;
+  try {
+    return SupabaseService.client.auth.onAuthStateChange;
+  } catch (_) {
+    return const Stream.empty();
+  }
 });
 
 /// Current session (null when signed out).
 final sessionProvider = Provider<Session?>((ref) {
-  return SupabaseService.client.auth.currentSession;
+  try {
+    return SupabaseService.client.auth.currentSession;
+  } catch (_) {
+    return null;
+  }
 });
 
 /// Current user (null when signed out).
 final currentUserProvider = Provider<User?>((ref) {
-  return SupabaseService.client.auth.currentUser;
+  try {
+    return SupabaseService.client.auth.currentUser;
+  } catch (_) {
+    return null;
+  }
 });
 
 // ── Profile Data ──────────────────────────────────────────────────────────────

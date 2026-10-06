@@ -37,7 +37,12 @@ GoRouter buildAppRouter(Ref ref) {
     debugLogDiagnostics: false,
     refreshListenable: GoRouterRefreshStream(authStream),
     redirect: (context, state) {
-      final user = Supabase.instance.client.auth.currentUser;
+      User? user;
+      try {
+        user = Supabase.instance.client.auth.currentUser;
+      } catch (_) {
+        user = null;
+      }
       final isLoggedIn = user != null;
       final loc = state.matchedLocation;
 
