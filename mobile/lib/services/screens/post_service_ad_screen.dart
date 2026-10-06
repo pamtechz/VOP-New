@@ -170,7 +170,7 @@ class _PostServiceAdScreenState extends ConsumerState<PostServiceAdScreen> {
                     child: TextFormField(
                       controller: _payRateController,
                       decoration: const InputDecoration(
-                        labelText: 'Pay Rate (e.g. $15/hr, $400/mo)',
+                        labelText: 'Pay Rate (e.g. \$15/hr, \$400/mo)',
                         border: OutlineInputBorder(),
                       ),
                     ),

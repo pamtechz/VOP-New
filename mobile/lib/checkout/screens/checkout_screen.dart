@@ -574,7 +574,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Promo Discount', style: TextStyle(color: Colors.green, fontWeight: FontWeight.semibold)),
+                                const Text('Promo Discount', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
                                 Text('- ${currency.format(discountAmount)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                               ],
                             ),

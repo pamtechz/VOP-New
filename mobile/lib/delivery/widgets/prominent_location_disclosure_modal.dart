@@ -151,7 +151,7 @@ class ProminentLocationDisclosureModal extends StatelessWidget {
                 onTap: () => _openPrivacyPolicy(context),
                 borderRadius: BorderRadius.circular(6),
                 child: Padding(
-                  padding: const EdgeInsets.vertical(4.0),
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
                   child: Row(
                     children: [
                       Icon(Icons.privacy_tip_outlined, size: 16, color: scheme.primary),
