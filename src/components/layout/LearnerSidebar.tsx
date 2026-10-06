@@ -1,7 +1,7 @@
 import {
   BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, HeartHandshake,
   House, LibraryBig, Megaphone, MessageCircle, Radio, ScrollText,
-  Settings, ShieldCheck, Swords, Brain, UserRound, Bell, UserPlus, WalletCards, type LucideIcon,
+  Settings, ShieldCheck, Swords, Brain, UserRound, Bell, UserPlus, type LucideIcon,
 } from 'lucide-react';
 import type { AppRoute, AppSettings, User } from '../../types';
 import { getTranslation, getUiLocale } from '../../services/i18n';
@@ -49,7 +49,6 @@ export function LearnerSidebar({currentRoute,currentUser,settings,collapsed,onTo
     {name:t('navigation.account','Account'),items:[
       {route:'notifications',label:t('navigation.notifications','Notifications'),icon:Bell},
       {route:'invites',label:t('navigation.invites','Invitations'),icon:UserPlus},
-      {route:'payments',label:t('navigation.payments','Payments & Billing'),icon:WalletCards},
       {route:'profile',label:t('navigation.profile','Profile'),icon:UserRound},
       {route:'personal-settings',label:t('navigation.personal_settings','Personal settings'),icon:Settings},
       ...(localizationAccess?[{route:'localization' as const,label:t('navigation.localization_console','Localization console'),icon:ScrollText}]:[]),
