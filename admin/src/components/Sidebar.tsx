@@ -19,6 +19,7 @@ import {
   Wallet,
   Tag,
   ChevronRight,
+  Truck,
 } from 'lucide-react';
 
 const menuGroups = [
@@ -37,9 +38,10 @@ const menuGroups = [
     ],
   },
   {
-    title: 'COMMERCE',
+    title: 'COMMERCE & LOGISTICS',
     items: [
       { label: 'Orders', href: '/orders', icon: ShoppingBag },
+      { label: 'Deliveries & Logistics', href: '/deliveries', icon: Truck },
       { label: 'Payout Requests', href: '/payouts', icon: Wallet },
       { label: 'Users', href: '/users', icon: Users },
     ],
