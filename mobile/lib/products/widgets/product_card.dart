@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../marketplace/services/recommendation_service.dart';
 
