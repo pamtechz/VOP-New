@@ -52,7 +52,6 @@ const CertificatesPage=React.lazy(()=>import('./pages/CertificatesPage'));
 const CertificateVerificationPage=React.lazy(()=>import('./pages/CertificateVerificationPage'));
 const AnnouncementsPage=React.lazy(()=>import('./pages/AnnouncementsPage'));
 const EventsPage=React.lazy(()=>import('./pages/EventsPage').then(module=>({default:module.EventsPage})));
-const PaymentsPage=React.lazy(()=>import('./pages/PaymentsPage'));
 const SupportPage=React.lazy(()=>import('./pages/SupportPage'));
 const PersonalSettingsPage=React.lazy(()=>import('./pages/PersonalSettingsPage').then(module=>({default:module.PersonalSettingsPage})));
 const NotificationsPage=React.lazy(()=>import('./pages/NotificationsPage'));
@@ -171,7 +170,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedRoute=String(params.get('route')||'') as AppRoute;
-    const publicRoutes:AppRoute[]=['home','resources','lessons','master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications','invites','support','certificates','payments'];
+    const publicRoutes:AppRoute[]=['home','resources','lessons','master-guide','scripture-memory','iron-duels','prayer','radio','announcements','events','notifications','invites','support','certificates'];
     const hasExplicitRoute = params.has('certificate') || params.has('certificateNumber')
       || params.get('radio') === '1' || params.get('announcements') === '1'
       || params.get('events') === '1' || params.get('support') === '1'
@@ -536,6 +535,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
 
   const applyLearnerLocation = useCallback((location:LearnerLocation):LearnerLocation|null => {
     if(isPortalRoute(location.route)&&!canAccessPortalRoute(currentUser,location.route))return null;
+    if(location.route==='payments'&&!hasAdminPortalAccess(currentUser))return null;
     if(isOrganizationPortalAccount(currentUser)&&location.route!=='admin'&&location.route!=='certificate-verification')return null;
     const guide=(location.guideId
       ?guides.find(item=>item.id===location.guideId
@@ -760,6 +760,12 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     setActiveLesson(null);
     setStudyError('');
     setIsMenuOpen(false);
+    if(route==='payments'&&!hasAdminPortalAccess(currentUser)){
+      setStudyNotice('Payments are currently available only inside authorized organization and administration workspaces.');
+      setCurrentRoute('home');
+      rememberLocation({route:'home'},true);
+      return;
+    }
     if(isPortalRoute(route)&&!canAccessPortalRoute(currentUser,route)){
       const fallback=defaultPortalRoute(currentUser);
       setStudyNotice('This account does not have access to the requested workspace.');
@@ -847,7 +853,6 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
           {currentRoute === 'radio' && <RadioPage broadcasts={radioBroadcasts} playlists={radioPlaylists} onBack={goBack} />}
           {currentRoute === 'announcements' && <AnnouncementsPage announcements={announcements} onBack={goBack} />}
           {currentRoute === 'events' && <EventsPage events={events} onBack={goBack} />}
-          {currentRoute === 'payments' && <PaymentsPage currentUser={currentUser} onBack={goBack} />}
           {currentRoute === 'notifications' && <NotificationsPage
             onBack={goBack} onNavigate={navigate}/>}
           {currentRoute === 'invites' && <InvitationsPage
