@@ -28,6 +28,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isLoadingSavedAddress = true;
   Map<String, double> _storeDeliveryFees = {};
   bool _allStoresAllowPickup = true;
+  final _couponController = TextEditingController();
+  Map<String, dynamic>? _appliedCoupon;
+  bool _isApplyingCoupon = false;
+  String? _couponError;
 
   @override
   void initState() {
@@ -120,7 +124,58 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _cityController.dispose();
     _areaController.dispose();
     _addressController.dispose();
+    _couponController.dispose();
     super.dispose();
+  }
+
+  Future<void> _applyCoupon() async {
+    final code = _couponController.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+
+    setState(() {
+      _isApplyingCoupon = true;
+      _couponError = null;
+    });
+
+    try {
+      final res = await SupabaseService.client
+          .from('promotions')
+          .select('id, code, discount_type, discount_value, min_order_amount, is_active')
+          .eq('code', code)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (res == null) {
+        if (mounted) setState(() => _couponError = 'Invalid or expired promo code.');
+        return;
+      }
+
+      final minAmount = (res['min_order_amount'] as num?)?.toDouble() ?? 0.0;
+      final cartSubtotal = ref.read(cartProvider.notifier).subtotal;
+      if (cartSubtotal < minAmount) {
+        if (mounted) {
+          setState(() => _couponError = 'Order subtotal must be at least K${minAmount.toStringAsFixed(2)} to use this coupon.');
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _appliedCoupon = res;
+          _couponError = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Coupon $code applied successfully!'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) setState(() => _couponError = 'Failed to validate promo code.');
+    } finally {
+      if (mounted) setState(() => _isApplyingCoupon = false);
+    }
   }
 
   Future<void> _submitOrder() async {
@@ -241,7 +296,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         calculatedShipping += (_storeDeliveryFees[storeId] ?? 25.0);
       }
     }
-    final totalToPay = subtotal + calculatedShipping;
+
+    double discountAmount = 0.0;
+    if (_appliedCoupon != null) {
+      final type = _appliedCoupon!['discount_type'] as String?;
+      final val = (_appliedCoupon!['discount_value'] as num?)?.toDouble() ?? 0.0;
+      if (type == 'percentage') {
+        discountAmount = subtotal * (val / 100.0);
+      } else {
+        discountAmount = val;
+      }
+      if (discountAmount > subtotal) discountAmount = subtotal;
+    }
+
+    final totalToPay = (subtotal - discountAmount + calculatedShipping).clamp(0.0, double.infinity);
 
     return Scaffold(
       appBar: AppBar(
@@ -426,6 +494,65 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     const SizedBox(height: 24),
 
+                    // Promo Code Redemption
+                    Text('Promo Code & Discount', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _couponController,
+                                    textCapitalization: TextCapitalization.characters,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter code (e.g. PAMTECHZ10)',
+                                      isDense: true,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: _isApplyingCoupon ? null : _applyCoupon,
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: _isApplyingCoupon
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                      : const Text('Apply'),
+                                ),
+                              ],
+                            ),
+                            if (_couponError != null) ...[
+                              const SizedBox(height: 6),
+                              Text(_couponError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                            ],
+                            if (_appliedCoupon != null) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Code ${_appliedCoupon!['code']} Applied!',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
                     // Summary
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -442,6 +569,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               Text(currency.format(subtotal), style: const TextStyle(fontWeight: FontWeight.w600)),
                             ],
                           ),
+                          if (discountAmount > 0) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Promo Discount', style: TextStyle(color: Colors.green, fontWeight: FontWeight.semibold)),
+                                Text('- ${currency.format(discountAmount)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
