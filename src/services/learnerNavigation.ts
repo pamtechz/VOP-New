@@ -71,6 +71,8 @@ function readState(value:unknown,uid:string):StoredNavigation|null{
 
 export function readLearnerLocation(uid:string):StoredNavigation|null{
   if(typeof window==='undefined'||!text(uid))return null;
+  // Browser history owns traversal depth. Session storage is only a resume
+  // bookmark and must never recreate stale Back/Forward depth in a new entry.
   const fromHistory=readState(window.history.state,uid);
   if(fromHistory)return fromHistory;
   try{
@@ -78,13 +80,13 @@ export function readLearnerLocation(uid:string):StoredNavigation|null{
     if(!raw)return null;
     const parsed=JSON.parse(raw) as Record<string,unknown>;
     const location=normalizeLearnerLocation(parsed.location);
-    return location?{location,depth:safeDepth(parsed.depth)}:null;
+    return location?{location,depth:0}:null;
   }catch{return null;}
 }
 
-function persist(uid:string,value:StoredNavigation){
+function persistResume(uid:string,location:LearnerLocation){
   if(typeof window==='undefined'||!text(uid))return;
-  try{sessionStorage.setItem(key(uid),JSON.stringify(value));}catch{/* storage unavailable */}
+  try{sessionStorage.setItem(key(uid),JSON.stringify({location}));}catch{/* storage unavailable */}
 }
 
 function historyEnvelope(uid:string,value:StoredNavigation){
@@ -104,7 +106,7 @@ export function replaceLearnerLocation(uid:string,location:LearnerLocation,depth
   const current=readState(window.history.state,uid);
   const value={location:normalized,depth:depth===undefined?(current?.depth||0):safeDepth(depth)};
   window.history.replaceState(historyEnvelope(uid,value),'',window.location.href);
-  persist(uid,value);
+  persistResume(uid,value.location);
 }
 
 export function pushLearnerLocation(uid:string,location:LearnerLocation){
@@ -116,16 +118,26 @@ export function pushLearnerLocation(uid:string,location:LearnerLocation){
     replaceLearnerLocation(uid,normalized,current.depth);
     return;
   }
-  const stored=readLearnerLocation(uid);
-  const depth=(current?.depth??stored?.depth??0)+1;
+  const depth=(current?.depth??0)+1;
   const value={location:normalized,depth};
   window.history.pushState(historyEnvelope(uid,value),'',window.location.href);
-  persist(uid,value);
+  persistResume(uid,value.location);
 }
 
 export function learnerLocationFromHistory(uid:string,state:unknown):StoredNavigation|null{
   if(typeof window==='undefined'||!text(uid))return null;
   return readState(state,uid);
+}
+
+/**
+ * Browser Back/Forward is authoritative when it fires. Update only the resume
+ * bookmark to the destination entry; never push/replace history from popstate.
+ */
+export function rememberLearnerLocationFromHistory(uid:string,state:unknown):StoredNavigation|null{
+  if(typeof window==='undefined'||!text(uid))return null;
+  const stored=readState(state,uid);
+  if(stored)persistResume(uid,stored.location);
+  return stored;
 }
 
 export function learnerHistoryHasPrevious(uid:string){

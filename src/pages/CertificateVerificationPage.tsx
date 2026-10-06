@@ -98,7 +98,7 @@ export const CertificateVerificationPage: React.FC<Props> = ({ onBack }) => {
       }
       const url = new URL(window.location.href);
       url.searchParams.set('certificate', certificateNumber);
-      window.history.replaceState({}, '', url);
+      window.history.replaceState(window.history.state, '', url);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('verification_failed','Certificate verification failed.'));
     } finally {
