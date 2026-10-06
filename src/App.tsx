@@ -16,8 +16,8 @@ import { initializeLocalization, setLocalizationOrganizationScope, setUiLocale, 
 import { loadPublicContent, loadPublicRouteData, type PublicContentLoadMode, type PublicRouteDataKind } from './services/publicFirestore';
 import { loadFirestoreUser, loadFirestoreGuides } from './services/firestoreData';
 import {
-  clearLearnerLocation, learnerHistoryHasPrevious, learnerLocationFromHistory, pushLearnerLocation,
-  readLearnerLocation, replaceLearnerLocation, type LearnerLocation,
+  clearLearnerLocation, learnerHistoryHasPrevious, pushLearnerLocation,
+  readLearnerLocation, rememberLearnerLocationFromHistory, replaceLearnerLocation, type LearnerLocation,
 } from './services/learnerNavigation';
 import { auth } from './lib/firebase';
 import { firebaseSignOut } from './services/firebaseAuth';
@@ -126,6 +126,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
   const appliedDeepLink = useRef(false);
   const explicitNavigation = useRef(false);
   const restoredNavigationUid = useRef('');
+  const pendingHistoryLocation = useRef<LearnerLocation|null>(null);
   useEffect(() => {
     // Public content is a large multi-collection snapshot. Refresh it only when
     // it can actually be stale instead of on every focus, visibility or route
@@ -269,7 +270,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
             });
             const result = await response.json().catch(()=>({}));
             if (response.ok) {
-              window.history.replaceState({}, '', window.location.pathname);
+              window.history.replaceState(window.history.state, '', window.location.pathname);
               sessionStorage.setItem('vop_share_enrollment_' + shareCode, '1');
               const refreshed = await loadFirestoreUser(firebaseUser.uid);
               if (refreshed) setCurrentUser(refreshed);
@@ -571,9 +572,24 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const uid=currentUser.uid;
     if(!uid){
       restoredNavigationUid.current='';
+      pendingHistoryLocation.current=null;
       return;
     }
-    if(!contentHydrated||explicitNavigation.current||restoredNavigationUid.current===uid)return;
+    if(!contentHydrated)return;
+
+    // A Back/Forward destination wins over session resume, even if the event
+    // arrived while curriculum data was still hydrating.
+    if(pendingHistoryLocation.current){
+      const pending=pendingHistoryLocation.current;
+      pendingHistoryLocation.current=null;
+      const restored=applyLearnerLocation(pending);
+      if(restored){
+        restoredNavigationUid.current=uid;
+        return;
+      }
+    }
+
+    if(explicitNavigation.current||restoredNavigationUid.current===uid)return;
     const stored=readLearnerLocation(uid);
     const restored=stored?applyLearnerLocation(stored.location):null;
     if(stored&&restored){
@@ -590,8 +606,17 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     const uid=currentUser.uid;
     if(!uid)return;
     const pop=(event:PopStateEvent)=>{
-      const stored=learnerLocationFromHistory(uid,event.state);
-      if(stored)applyLearnerLocation(stored.location);
+      // Back/Forward must follow the browser entry. Only update the resume
+      // bookmark; never replace/push history while handling popstate.
+      const stored=rememberLearnerLocationFromHistory(uid,event.state);
+      if(!stored)return;
+      const restored=applyLearnerLocation(stored.location);
+      if(restored){
+        pendingHistoryLocation.current=null;
+        restoredNavigationUid.current=uid;
+      }else{
+        pendingHistoryLocation.current=stored.location;
+      }
     };
     window.addEventListener('popstate',pop);
     return()=>window.removeEventListener('popstate',pop);
