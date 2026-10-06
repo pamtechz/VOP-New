@@ -18,16 +18,27 @@ final walletAccountProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
 
   if (store == null) return null;
 
-  final wallet = await SupabaseService.client
-      .from('wallet_accounts')
-      .select('id, store_id, balance_available, balance_pending, currency')
-      .eq('store_id', store['id'])
-      .maybeSingle();
+  Map<String, dynamic>? wallet;
+  try {
+    wallet = await SupabaseService.client
+        .from('wallet_accounts')
+        .select('id, store_id, balance_available, balance_pending, currency')
+        .eq('store_id', store['id'])
+        .maybeSingle();
+  } catch (_) {
+    // Fallback if database migration for currency column is still applying
+    wallet = await SupabaseService.client
+        .from('wallet_accounts')
+        .select('id, store_id, balance_available, balance_pending')
+        .eq('store_id', store['id'])
+        .maybeSingle();
+  }
 
   if (wallet == null) return null;
 
   return {
     ...wallet,
+    'currency': wallet['currency'] ?? 'ZMW',
     'store_name': store['name'],
   };
 });
