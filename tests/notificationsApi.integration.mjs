@@ -170,7 +170,7 @@ test('notification delivery enforces preferences, provider state and retry seman
       assert.equal(assignment.state,'sent');
     });
 
-    await t.test('email opt-out is enforced before contacting the provider',async()=>{
+    await t.test('email opt-out falls back to the in-app inbox without contacting the provider',async()=>{
       await db.doc('users/'+user.uid+'/settings/personal').set({
         notifications:{enabled:true,email:false,announcements:true,certificates:true},
       });
@@ -185,10 +185,49 @@ test('notification delivery enforces preferences, provider state and retry seman
         return originalFetch(input,init);
       };
       const result=await deliverNotification(db,{
-        recipientId:user.uid,title:'Email',body:'Do not send',type:'assignment',channel:'email',
+        recipientId:user.uid,title:'Email',body:'Use inbox fallback',type:'assignment',channel:'email',
       });
-      assert.equal(result.state,'suppressed_by_preference');
+      assert.equal(result.state,'fallback_in_app');
+      assert.equal(result.channel,'in_app');
+      assert.equal(result.fallbackReason,'email_notifications_disabled');
       assert.equal(resendCalls,0);
+      assert.ok(result.notificationId);
+      const inbox=(await db.doc('notifications/'+result.notificationId).get()).data();
+      assert.equal(inbox?.requestedChannel,'email');
+      assert.equal(inbox?.deliveryReason,'email_notifications_disabled');
+    });
+
+    await t.test('unavailable email infrastructure falls back to in-app while preserving delivery telemetry',async()=>{
+      await db.doc('users/'+user.uid+'/settings/personal').set({
+        notifications:{enabled:true,email:true,announcements:true,certificates:true},
+      });
+      await db.doc('system/settings').set({
+        notifications:{emailEnabled:false},
+        systemOptions:{enableEmailNotifications:false},
+      },{merge:true});
+      const disabled=await deliverNotification(db,{
+        recipientId:user.uid,title:'Platform email disabled',body:'Fallback message',type:'assignment',channel:'email',
+      });
+      assert.equal(disabled.state,'fallback_in_app');
+      assert.equal(disabled.fallbackReason,'platform_email_delivery_disabled');
+      assert.ok(disabled.notificationId);
+      assert.equal((await db.doc('notificationDeliveries/'+disabled.id).get()).data()?.state,'fallback_in_app');
+
+      await db.doc('system/settings').set({
+        notifications:{emailEnabled:true},
+        systemOptions:{enableEmailNotifications:false},
+      },{merge:true});
+      delete process.env.RESEND_API_KEY;
+      delete process.env.RESEND_FROM_EMAIL;
+      const unconfigured=await deliverNotification(db,{
+        recipientId:user.uid,title:'Provider missing',body:'Fallback message',type:'assignment',channel:'email',
+      });
+      assert.equal(unconfigured.state,'fallback_in_app');
+      assert.equal(unconfigured.fallbackReason,'email_provider_not_configured');
+      assert.ok(unconfigured.notificationId);
+      const delivery=(await db.doc('notificationDeliveries/'+unconfigured.id).get()).data();
+      assert.equal(delivery?.failureCode,'EMAIL_PROVIDER_NOT_CONFIGURED');
+      assert.equal(delivery?.fallbackNotificationId,unconfigured.notificationId);
     });
 
     await t.test('configured email delivery records provider success instead of pretending an email was sent',async()=>{
@@ -230,6 +269,9 @@ test('notification delivery enforces preferences, provider state and retry seman
         recipientId:user.uid,title:'Retry email',body:'Retry me',type:'assignment',channel:'email',
       });
       assert.equal(first.state,'retrying');
+      assert.ok(first.notificationId,'transient email failure should immediately create one in-app fallback');
+      const fallbackId=first.notificationId;
+      assert.equal((await db.doc('notifications/'+fallbackId).get()).exists,true);
       await db.doc('notificationDeliveries/'+first.id).set({nextAttemptAt:new Date(Date.now()-1000).toISOString()},{merge:true});
 
       globalThis.fetch=async(input,init)=>{
@@ -244,6 +286,9 @@ test('notification delivery enforces preferences, provider state and retry seman
       const final=(await db.doc('notificationDeliveries/'+first.id).get()).data();
       assert.equal(final?.state,'sent');
       assert.equal(final?.providerMessageId,'resend-retry-success');
+      assert.equal(final?.fallbackNotificationId,fallbackId);
+      assert.equal((await db.doc('notifications/'+fallbackId).get()).exists,true);
+      assert.equal((await db.collection('notifications').where('sourceDeliveryId','==',first.id).get()).size,1);
     });
 
     await t.test('publication fan-out tracks recipient preference suppression without creating inbox records',async()=>{
