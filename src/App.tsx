@@ -719,6 +719,7 @@ export const App: React.FC<AppProps> = ({initialUser=null}) => {
     ]);
     let route=String(target.searchParams.get('route')||defaultPortalRoute(account)) as AppRoute;
     if(!knownRoutes.has(route))route=defaultPortalRoute(account);
+    if(route==='payments'&&!hasAdminPortalAccess(account))route=defaultPortalRoute(account);
     if(isOrganizationPortalAccount(account)&&route!=='certificate-verification')route='admin';
     if(isPortalRoute(route)&&!canAccessPortalRoute(account,route))route=defaultPortalRoute(account);
 
