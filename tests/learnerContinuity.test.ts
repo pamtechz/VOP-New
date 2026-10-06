@@ -113,7 +113,8 @@ test('App restores route, guide, lesson and page and uses browser history for pr
   assert.match(app,/readLearnerLocation\(uid\)/);
   assert.match(app,/const restored=stored\?applyLearnerLocation\(stored\.location\):null/);
   assert.match(app,/replaceLearnerLocation\(uid,restored,stored\.depth\)/);
-  assert.match(app,/learnerLocationFromHistory\(uid,event\.state\)/);
+  assert.match(app,/rememberLearnerLocationFromHistory\(uid,event\.state\)/);
+  assert.match(app,/pendingHistoryLocation\.current=stored\.location/);
   assert.match(app,/pushLearnerLocation\(currentUser\.uid,location\)/);
   assert.match(app,/replaceLearnerLocation\(currentUser\.uid,location\)/);
   assert.match(app,/window\.history\.back\(\)/);
