@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { Store, ShieldCheck, CheckCircle2, Ban } from 'lucide-react';
+import { Store, ShieldCheck, CheckCircle2, Ban, Pencil } from 'lucide-react';
 
 interface StoreRow {
   id: string;
@@ -9,6 +9,10 @@ interface StoreRow {
   name: string;
   slug: string;
   status: string;
+  description: string | null;
+  province: string | null;
+  city: string | null;
+  area: string | null;
   total_sales: number;
   rating_avg: number;
   rating_count: number;
@@ -34,6 +38,31 @@ export default async function AdminStoresPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  async function editStoreAction(formData: FormData) {
+    'use server';
+    const client = await createServerSupabaseClient();
+    const storeId = String(formData.get('storeId') ?? '');
+    const name = String(formData.get('name') ?? '').trim();
+    const slug = String(formData.get('slug') ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (!storeId || !name || !slug) throw new Error('Store name and slug are required.');
+
+    const { error } = await client
+      .from('stores')
+      .update({
+        name,
+        slug,
+        description: String(formData.get('description') ?? '').trim() || null,
+        province: String(formData.get('province') ?? '').trim() || null,
+        city: String(formData.get('city') ?? '').trim() || null,
+        area: String(formData.get('area') ?? '').trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', storeId);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/stores');
+  }
+
   async function updateStoreStatusAction(formData: FormData) {
     'use server';
     const storeId = formData.get('storeId') as string;
@@ -50,7 +79,7 @@ export default async function AdminStoresPage() {
 
   const { data: storesData, error } = await supabase
     .from('stores')
-    .select('id, public_ref, name, slug, status, total_sales, rating_avg, rating_count, created_at, profiles!stores_owner_id_fkey(full_name)')
+    .select('id, public_ref, name, slug, status, description, province, city, area, total_sales, rating_avg, rating_count, created_at, profiles!stores_owner_id_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -116,7 +145,25 @@ export default async function AdminStoresPage() {
                     </span>
                   </td>
                   <td className="p-4">
-                    <form action={updateStoreStatusAction} className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <details className="relative">
+                        <summary className="list-none cursor-pointer rounded border border-slate-700 p-1.5 text-slate-300 hover:text-purple-300" title="Edit store">
+                          <Pencil className="w-4 h-4" />
+                        </summary>
+                        <form action={editStoreAction} className="absolute right-0 z-20 mt-2 w-80 space-y-2 rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+                          <input type="hidden" name="storeId" value={s.id} />
+                          <input name="name" required defaultValue={s.name} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <input name="slug" required defaultValue={s.slug} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <textarea name="description" defaultValue={s.description ?? ''} placeholder="Description" className="min-h-20 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <div className="grid grid-cols-3 gap-2">
+                            <input name="province" defaultValue={s.province ?? ''} placeholder="Province" className="min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-2 text-xs text-white" />
+                            <input name="city" defaultValue={s.city ?? ''} placeholder="City" className="min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-2 text-xs text-white" />
+                            <input name="area" defaultValue={s.area ?? ''} placeholder="Area" className="min-w-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-2 text-xs text-white" />
+                          </div>
+                          <button className="w-full rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white hover:bg-purple-500">Save store</button>
+                        </form>
+                      </details>
+                      <form action={updateStoreStatusAction} className="flex items-center gap-2">
                       <input type="hidden" name="storeId" value={s.id} />
                       {s.status === 'active' ? (
                         <button
@@ -137,7 +184,8 @@ export default async function AdminStoresPage() {
                           <CheckCircle2 className="w-3 h-3" /> Activate Store
                         </button>
                       )}
-                    </form>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))

@@ -72,9 +72,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const isPublicPage = isLoginPage || pathname.startsWith('/about') || pathname.startsWith('/policies/public');
-
-  if (!user && !isPublicPage) {
+  if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -91,6 +89,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|_next/|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|js|css|json)$).*)',
+    '/((?!_next/|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|js|css|json)$).*)',
   ],
 };

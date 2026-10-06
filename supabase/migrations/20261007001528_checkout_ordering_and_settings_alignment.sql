@@ -1,16 +1,11 @@
--- Migration: Fix create_server_checkout Foreign Key Order Execution
--- Ensures public.orders row exists before inventory_reservations references it
+-- Migration: apply corrected checkout ordering and canonical setting parsing to existing deployments
+BEGIN;
 
 CREATE OR REPLACE FUNCTION public.create_server_checkout(
   p_items jsonb,
   p_shipping_address jsonb,
-<<<<<<< HEAD
-  p_payment_method text DEFAULT 'card',
-  p_delivery_method text DEFAULT 'standard'
-=======
   p_delivery_method text DEFAULT 'delivery',
   p_payment_method text DEFAULT 'card'
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -38,15 +33,10 @@ DECLARE
   v_seller_order_id uuid;
   v_seller_order_ref text;
   v_store_subtotal numeric(12,2);
-<<<<<<< HEAD
-  v_commission_bps integer;
-  v_commission_rate numeric(6,4);
-=======
   v_commission_bps integer := 500;
   v_commission_rate numeric(6,4);
   v_default_delivery_fee numeric(12,2) := 25.00;
   v_currency text := 'ZMW';
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   v_store_commission numeric(12,2);
   v_store_proceeds numeric(12,2);
   v_expires_at timestamptz;
@@ -68,13 +58,6 @@ BEGIN
     RAISE EXCEPTION 'Cannot checkout with an empty cart';
   END IF;
 
-<<<<<<< HEAD
-  -- Read marketplace commission from configuration
-  SELECT COALESCE((value->>0)::integer, 500) INTO v_commission_bps
-  FROM public.platform_settings
-  WHERE key = 'marketplace_commission_bps';
-
-=======
   -- Read canonical marketplace settings using scalar-safe JSON parsing.
   SELECT COALESCE(
     CASE jsonb_typeof(value)
@@ -122,7 +105,6 @@ BEGIN
     RAISE EXCEPTION 'Unsupported delivery method: %', p_delivery_method;
   END IF;
 
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   v_commission_rate := v_commission_bps::numeric / 10000.0;
   v_expires_at := now() + interval '30 minutes';
 
@@ -284,11 +266,7 @@ BEGIN
     IF p_delivery_method = 'pickup' THEN
       v_store_shipping := 0.00;
     ELSE
-<<<<<<< HEAD
-      v_store_shipping := COALESCE(v_store_record.delivery_fee, 25.00);
-=======
       v_store_shipping := COALESCE(v_store_record.delivery_fee, v_default_delivery_fee);
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
     END IF;
     v_total_shipping := v_total_shipping + v_store_shipping;
   END LOOP;
@@ -315,11 +293,7 @@ BEGIN
     IF p_delivery_method = 'pickup' THEN
       v_store_shipping := 0.00;
     ELSE
-<<<<<<< HEAD
-      v_store_shipping := COALESCE(v_store_record.delivery_fee, 25.00);
-=======
       v_store_shipping := COALESCE(v_store_record.delivery_fee, v_default_delivery_fee);
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
     END IF;
 
     -- Calculate store subtotal
@@ -388,11 +362,7 @@ BEGIN
     'public_ref', v_parent_order_ref,
     'total_amount', v_total_amount,
     'shipping_amount', v_total_shipping,
-<<<<<<< HEAD
-    'currency', 'ZMW',
-=======
     'currency', v_currency,
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
     'status', 'pending',
     'payment_status', 'unpaid',
     'reservation_expires_at', v_expires_at
@@ -400,14 +370,8 @@ BEGIN
 END;
 $$;
 
-<<<<<<< HEAD
-GRANT EXECUTE ON FUNCTION public.create_server_checkout(jsonb, jsonb, text, text) TO authenticated;
-=======
 REVOKE ALL ON FUNCTION public.create_server_checkout(jsonb, jsonb, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_server_checkout(jsonb, jsonb, text, text) TO authenticated, service_role;
->>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
--- Add message editing columns to public.messages
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-
+NOTIFY pgrst, 'reload schema';
+COMMIT;

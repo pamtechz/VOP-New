@@ -16,7 +16,12 @@ CREATE TABLE IF NOT EXISTS public.service_listings (
     expires_at TIMESTAMPTZ NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     image_url TEXT,
+<<<<<<< HEAD
     created_at TIMESTAMPTZ DEFAULT NOW()
+=======
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 );
 
 -- Index for performant querying of active non-expired listings
@@ -49,6 +54,7 @@ CREATE POLICY "Users can delete own service listings"
 ON public.service_listings FOR DELETE
 USING (auth.uid() = user_id);
 
+<<<<<<< HEAD
 -- Admins can manage all service listings
 CREATE POLICY "Admins full access to service listings"
 ON public.service_listings FOR ALL
@@ -58,6 +64,13 @@ USING (
         WHERE id = auth.uid() AND role IN ('admin', 'master_admin')
     )
 );
+=======
+-- Authorized platform staff can manage all service listings.
+CREATE POLICY "Admins full access to service listings"
+ON public.service_listings FOR ALL
+USING (public.has_capability('services.manage'))
+WITH CHECK (public.has_capability('services.manage'));
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
 -- Ensure backward schema compatibility for messages table
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS skip_broadcast BOOLEAN DEFAULT FALSE;
@@ -80,4 +93,11 @@ BEGIN
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
 END;
+<<<<<<< HEAD
 $$;
+=======
+$;
+
+REVOKE ALL ON FUNCTION public.purge_expired_service_listings() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.purge_expired_service_listings() TO service_role;
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da

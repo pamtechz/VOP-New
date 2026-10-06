@@ -28,23 +28,10 @@ interface SettingRow {
   updated_at: string;
 }
 
-interface PlanRow {
-  id: string;
-  name: string;
-  code: string;
-  price_monthly: number;
-  max_products: number;
-  max_images_per_product: number;
-  featured_badge: boolean;
-  is_active: boolean;
-}
-
 export function SettingsClient({
   initialSettings,
-  initialPlans,
 }: {
   initialSettings: SettingRow[];
-  initialPlans: PlanRow[];
 }) {
   const supabase = createClient();
   const [activeTab, setActiveTab] = useState<'financial' | 'media' | 'plans' | 'lifecycle' | 'system'>('financial');
@@ -56,7 +43,6 @@ export function SettingsClient({
     return map;
   });
 
-  const [plans, setPlans] = useState<PlanRow[]>(initialPlans);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -87,30 +73,6 @@ export function SettingsClient({
       showToast(`Setting "${key}" updated successfully!`);
     } catch (err: any) {
       showToast(`Failed to update setting: ${err.message}`, 'error');
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleUpdatePlan = async (plan: PlanRow) => {
-    setSavingKey(`plan-${plan.id}`);
-    try {
-      const { error } = await supabase
-        .from('subscription_plans')
-        .update({
-          name: plan.name,
-          price_monthly: plan.price_monthly,
-          max_products: plan.max_products,
-          max_images_per_product: plan.max_images_per_product,
-          featured_badge: plan.featured_badge,
-          is_active: plan.is_active,
-        })
-        .eq('id', plan.id);
-
-      if (error) throw error;
-      showToast(`Plan "${plan.name}" updated successfully!`);
-    } catch (err: any) {
-      showToast(`Failed to update plan: ${err.message}`, 'error');
     } finally {
       setSavingKey(null);
     }
@@ -251,11 +213,11 @@ export function SettingsClient({
                 <input
                   type="number"
                   step="0.1"
-                  value={settings['marketplace_commission_percent'] ?? 5.0}
+                  value={Number(settings['marketplace_commission_bps'] ?? 500) / 100}
                   onChange={(e) =>
                     setSettings((prev) => ({
                       ...prev,
-                      marketplace_commission_percent: parseFloat(e.target.value) || 0,
+                      marketplace_commission_bps: Math.round((parseFloat(e.target.value) || 0) * 100),
                     }))
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
@@ -263,11 +225,11 @@ export function SettingsClient({
                 <button
                   onClick={() =>
                     handleUpdateSetting(
-                      'marketplace_commission_percent',
-                      settings['marketplace_commission_percent']
+                      'marketplace_commission_bps',
+                      settings['marketplace_commission_bps']
                     )
                   }
-                  disabled={savingKey === 'marketplace_commission_percent'}
+                  disabled={savingKey === 'marketplace_commission_bps'}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shrink-0"
                 >
                   <Save className="w-3.5 h-3.5" />
@@ -404,6 +366,44 @@ export function SettingsClient({
               </button>
             </div>
           </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4 md:col-span-2">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-violet-400" />
+              Message Edit Window
+            </h3>
+            <p className="text-xs text-slate-400">
+              How long a sender may edit their own sent message. The same limit is enforced by the database.
+            </p>
+            <div className="flex gap-3">
+              <input
+                type="number"
+                min="0"
+                max="1440"
+                value={settings['message_edit_window_minutes'] ?? 15}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    message_edit_window_minutes: Math.max(0, parseInt(e.target.value) || 0),
+                  }))
+                }
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() =>
+                  handleUpdateSetting(
+                    'message_edit_window_minutes',
+                    settings['message_edit_window_minutes'] ?? 15
+                  )
+                }
+                disabled={savingKey === 'message_edit_window_minutes'}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shrink-0"
+              >
+                <Save className="w-3.5 h-3.5" />
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -508,106 +508,24 @@ export function SettingsClient({
         </div>
       )}
 
-      {/* Tab 3: Subscription Plans & Admin Bypass */}
+      {/* Tab 3: Subscription Packages */}
       {activeTab === 'plans' && (
-        <div className="space-y-6">
-          {/* Admin Bypass Banner */}
-          <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-5 flex items-start gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+          <div className="flex items-start gap-4">
             <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-base font-bold text-emerald-200">
-                Admin Master Subscription Bypass Active
-              </h4>
-              <p className="text-xs text-emerald-300/80 mt-1 leading-relaxed">
-                As a platform administrator, your stores and actions are strictly exempt from all product listing caps, image quotas, and subscription billing triggers. You have full CRUD authority to create, update, and manage unlimited catalogue items.
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white">Subscription Packages</h3>
+              <p className="text-xs text-slate-400">
+                Package creation, limits, pricing, badges, commission discounts and activation are managed in one canonical workspace.
               </p>
+              <a
+                href="/subscriptions"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg"
+              >
+                Open Subscription Package Manager
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="font-bold text-white text-sm">Merchant Subscription Tiers</h3>
-              <span className="text-xs text-slate-400">{plans.length} configured plans</span>
-            </div>
-
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 text-xs uppercase border-b border-slate-800">
-                <tr>
-                  <th className="p-4">Plan Name</th>
-                  <th className="p-4">Code</th>
-                  <th className="p-4">Monthly Price (ZMW)</th>
-                  <th className="p-4">Max Products</th>
-                  <th className="p-4">Max Images</th>
-                  <th className="p-4">Featured Badge</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {plans.map((p, idx) => (
-                  <tr key={p.id} className="hover:bg-slate-800/40">
-                    <td className="p-4 font-bold text-white">{p.name}</td>
-                    <td className="p-4 font-mono text-xs text-slate-400">/{p.code}</td>
-                    <td className="p-4 font-bold text-blue-400">
-                      <input
-                        type="number"
-                        value={p.price_monthly}
-                        onChange={(e) => {
-                          const updated = [...plans];
-                          updated[idx].price_monthly = parseFloat(e.target.value) || 0;
-                          setPlans(updated);
-                        }}
-                        className="w-24 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-white"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <input
-                        type="number"
-                        value={p.max_products}
-                        onChange={(e) => {
-                          const updated = [...plans];
-                          updated[idx].max_products = parseInt(e.target.value) || 0;
-                          setPlans(updated);
-                        }}
-                        className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-white"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <input
-                        type="number"
-                        value={p.max_images_per_product}
-                        onChange={(e) => {
-                          const updated = [...plans];
-                          updated[idx].max_images_per_product = parseInt(e.target.value) || 0;
-                          setPlans(updated);
-                        }}
-                        className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-white"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <span
-                        className={`px-2 py-0.5 text-xs font-bold rounded ${
-                          p.featured_badge
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            : 'bg-slate-800 text-slate-500'
-                        }`}
-                      >
-                        {p.featured_badge ? 'YES' : 'NO'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => handleUpdatePlan(p)}
-                        disabled={savingKey === `plan-${p.id}`}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1"
-                      >
-                        <Save className="w-3 h-3" />
-                        Save
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
@@ -629,18 +547,26 @@ export function SettingsClient({
               <div className="flex gap-2">
                 <input
                   type="number"
-                  value={settings['auto_purge_days'] ?? 60}
+                  value={settings['inactivity_policy']?.period_days ?? 60}
                   onChange={(e) =>
                     setSettings((prev) => ({
                       ...prev,
-                      auto_purge_days: parseInt(e.target.value) || 60,
+                      inactivity_policy: {
+                        ...(prev.inactivity_policy ?? { warning_schedule: [14, 7, 3, 2, 1, 0] }),
+                        period_days: parseInt(e.target.value) || 60,
+                      },
                     }))
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
                 />
                 <button
-                  onClick={() => handleUpdateSetting('auto_purge_days', settings['auto_purge_days'])}
-                  disabled={savingKey === 'auto_purge_days'}
+                  onClick={() =>
+                    handleUpdateSetting('inactivity_policy', settings['inactivity_policy'] ?? {
+                      period_days: 60,
+                      warning_schedule: [14, 7, 3, 2, 1, 0],
+                    })
+                  }
+                  disabled={savingKey === 'inactivity_policy'}
                   className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shrink-0"
                 >
                   Save

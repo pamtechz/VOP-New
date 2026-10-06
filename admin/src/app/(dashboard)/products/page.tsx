@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { ShoppingBag, ShieldCheck, Star, Ban, CheckCircle2, Trash2 } from 'lucide-react';
+import { ShoppingBag, ShieldCheck, Star, Ban, CheckCircle2, Trash2, Pencil } from 'lucide-react';
 
 interface ProductRow {
   id: string;
@@ -18,6 +18,32 @@ export default async function AdminProductsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+
+  async function editProductAction(formData: FormData) {
+    'use server';
+    const productId = String(formData.get('productId') ?? '');
+    const title = String(formData.get('title') ?? '').trim();
+    const price = Number(formData.get('price') ?? 0);
+    const status = String(formData.get('status') ?? 'draft');
+    const allowedStatuses = ['draft', 'active', 'archived', 'out_of_stock'];
+    if (!productId || !title || !Number.isFinite(price) || price < 0 || !allowedStatuses.includes(status)) {
+      throw new Error('Invalid product update.');
+    }
+
+    const client = await createServerSupabaseClient();
+    const { error } = await client
+      .from('products')
+      .update({
+        title,
+        price,
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', productId);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/products');
+  }
 
   async function updateProductStatusAction(formData: FormData) {
     'use server';
@@ -52,7 +78,22 @@ export default async function AdminProductsPage() {
     const productId = formData.get('productId') as string;
     const client = await createServerSupabaseClient();
 
-    await client.from('products').delete().eq('id', productId);
+    const { count, error: countError } = await client
+      .from('order_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_id', productId);
+    if (countError) throw new Error(countError.message);
+
+    if ((count ?? 0) > 0) {
+      const { error } = await client
+        .from('products')
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
+        .eq('id', productId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await client.from('products').delete().eq('id', productId);
+      if (error) throw new Error(error.message);
+    }
     revalidatePath('/products');
   }
 
@@ -155,7 +196,24 @@ export default async function AdminProductsPage() {
                     </form>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <details className="relative">
+                        <summary className="list-none cursor-pointer p-1 text-slate-400 hover:text-blue-400" title="Edit product">
+                          <Pencil className="w-4 h-4" />
+                        </summary>
+                        <form action={editProductAction} className="absolute right-0 z-20 mt-2 w-72 space-y-2 rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+                          <input type="hidden" name="productId" value={p.id} />
+                          <input name="title" required defaultValue={p.title} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <input name="price" type="number" min="0" step="0.01" required defaultValue={p.price} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <select name="status" defaultValue={p.status} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white">
+                            <option value="draft">Draft</option>
+                            <option value="active">Active</option>
+                            <option value="archived">Archived</option>
+                            <option value="out_of_stock">Out of stock</option>
+                          </select>
+                          <button className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Save changes</button>
+                        </form>
+                      </details>
                       <form action={updateProductStatusAction}>
                         <input type="hidden" name="productId" value={p.id} />
                         {p.status === 'active' ? (

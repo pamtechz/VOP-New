@@ -38,10 +38,11 @@ export default async function AdminUsersPage() {
     const newRole = formData.get('newRole') as string;
     const client = await createServerSupabaseClient();
 
-    await client
-      .from('profiles')
-      .update({ role: newRole })
-      .eq('id', targetUserId);
+    const { error } = await client.rpc('set_platform_user_role', {
+      p_user_id: targetUserId,
+      p_role: newRole,
+    });
+    if (error) throw new Error(error.message);
 
     revalidatePath('/users');
   }

@@ -140,7 +140,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     try {
       final res = await SupabaseService.client
           .from('promotions')
+<<<<<<< HEAD
           .select('id, code, discount_type, discount_value, min_order_amount, is_active')
+=======
+          .select('id, code, discount_type, discount_value, min_order_amount, max_discount_amount, is_active')
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
           .eq('code', code)
           .eq('is_active', true)
           .maybeSingle();
@@ -214,6 +218,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       };
 
       // Call authoritative atomic server checkout RPC with inventory reservation
+<<<<<<< HEAD
       final response = await SupabaseService.client.rpc('create_server_checkout', params: {
         'p_items': itemsPayload,
         'p_shipping_address': shippingAddress,
@@ -223,6 +228,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       final orderData = response as Map<String, dynamic>;
       final publicRef = orderData['public_ref'] as String? ?? 'ORD';
+=======
+      final response = await SupabaseService.client.rpc(
+        'create_server_checkout_with_promotion',
+        params: {
+          'p_items': itemsPayload,
+          'p_shipping_address': shippingAddress,
+          'p_delivery_method': _deliveryMethod,
+          'p_payment_method': _selectedPaymentMethod,
+          'p_promotion_code': _appliedCoupon?['code'],
+        },
+      );
+
+      final orderData = response as Map<String, dynamic>;
+      final publicRef = orderData['public_ref'] as String? ?? 'ORD';
+      final serverDiscount =
+          (orderData['discount_amount'] as num?)?.toDouble() ?? 0.0;
+      final serverTotal =
+          (orderData['total_amount'] as num?)?.toDouble();
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
       // Clear local cart now that the server has recorded the order & inventory reservations
       cartNotifier.clear();
@@ -230,7 +254,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+<<<<<<< HEAD
             content: Text('Order $publicRef created! Reserved for 30 minutes.'),
+=======
+            content: Text(
+              serverDiscount > 0 && serverTotal != null
+                  ? 'Order $publicRef created. Promo saved ${currency.format(serverDiscount)} — total ${currency.format(serverTotal)}.'
+                  : 'Order $publicRef created! Reserved for 30 minutes.',
+            ),
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
             backgroundColor: const Color(0xFF10B981),
             duration: const Duration(seconds: 4),
           ),
@@ -306,6 +338,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       } else {
         discountAmount = val;
       }
+<<<<<<< HEAD
+=======
+      final maxDiscount =
+          (_appliedCoupon!['max_discount_amount'] as num?)?.toDouble();
+      if (maxDiscount != null && discountAmount > maxDiscount) {
+        discountAmount = maxDiscount;
+      }
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
       if (discountAmount > subtotal) discountAmount = subtotal;
     }
 

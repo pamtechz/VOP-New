@@ -44,19 +44,33 @@ class SupabaseService {
   static RealtimeChannel subscribeToConversation({
     required String conversationId,
     required void Function(Map<String, dynamic> messagePayload) onNewMessage,
+    void Function(Map<String, dynamic> messagePayload)? onUpdatedMessage,
   }) {
+    final filter = PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'conversation_id',
+      value: conversationId,
+    );
     final channel = client.channel('public:messages:conversation_id=eq.$conversationId');
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.insert,
-      schema: 'public',
-      table: 'messages',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'conversation_id',
-        value: conversationId,
-      ),
-      callback: (payload) => onNewMessage(payload.newRecord),
-    ).subscribe();
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          filter: filter,
+          callback: (payload) => onNewMessage(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'messages',
+          filter: filter,
+          callback: (payload) {
+            final handler = onUpdatedMessage;
+            if (handler != null) handler(payload.newRecord);
+          },
+        )
+        .subscribe();
     return channel;
   }
 }

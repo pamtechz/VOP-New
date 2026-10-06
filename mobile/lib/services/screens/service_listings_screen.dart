@@ -33,15 +33,24 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
   Future<void> _fetchListings() async {
     setState(() => _isLoading = true);
     try {
+<<<<<<< HEAD
       // 1. Purge expired listings past interview date
       await Supabase.instance.client.rpc('purge_expired_service_listings');
 
       // 2. Fetch active listings
+=======
+      // Fetch active, non-expired listings. Expiry cleanup is a server-only job.
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
       var query = Supabase.instance.client
           .from('service_listings')
           .select('*')
           .eq('is_active', true)
+<<<<<<< HEAD
           .gte('interview_date', DateTime.now().toIso8601String());
+=======
+          .gte('interview_date', DateTime.now().toIso8601String())
+          .gte('expires_at', DateTime.now().toIso8601String());
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
       if (_selectedCategory != 'all') {
         query = query.eq('category', _selectedCategory);
@@ -63,10 +72,58 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
     }
   }
 
+<<<<<<< HEAD
+=======
+  Future<void> _deleteOwnListing(Map<String, dynamic> item) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null || item['user_id'] != user.id) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete listing?'),
+        content: Text('Delete “${item['title'] ?? 'this listing'}”? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await Supabase.instance.client
+          .from('service_listings')
+          .delete()
+          .eq('id', item['id'])
+          .eq('user_id', user.id);
+      await _fetchListings();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Listing deleted.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete listing: $e')),
+        );
+      }
+    }
+  }
+
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+<<<<<<< HEAD
+=======
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
     return Scaffold(
       appBar: AppBar(
@@ -187,9 +244,40 @@ class _ServiceListingsScreenState extends ConsumerState<ServiceListingsScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 10),
+<<<<<<< HEAD
                                     Text(
                                       item['title'] as String? ?? 'Untitled Listing',
                                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+=======
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            item['title'] as String? ?? 'Untitled Listing',
+                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        if (item['user_id'] == currentUserId)
+                                          PopupMenuButton<String>(
+                                            tooltip: 'Your listing actions',
+                                            onSelected: (action) {
+                                              if (action == 'delete') {
+                                                _deleteOwnListing(item);
+                                              }
+                                            },
+                                            itemBuilder: (_) => const [
+                                              PopupMenuItem(
+                                                value: 'delete',
+                                                child: ListTile(
+                                                  dense: true,
+                                                  leading: Icon(Icons.delete_outline, color: Colors.redAccent),
+                                                  title: Text('Delete my listing'),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                      ],
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                                     ),
                                     const SizedBox(height: 6),
                                     Text(

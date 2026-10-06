@@ -18,6 +18,7 @@ final walletAccountProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
 
   if (store == null) return null;
 
+<<<<<<< HEAD
   Map<String, dynamic>? wallet;
   try {
     wallet = await SupabaseService.client
@@ -40,6 +41,28 @@ final walletAccountProvider = FutureProvider<Map<String, dynamic>?>((ref) async 
     ...wallet,
     'currency': wallet['currency'] ?? 'ZMW',
     'store_name': store['name'],
+=======
+  final wallet = await SupabaseService.client
+      .from('wallet_accounts')
+      .select('id, store_id, balance_available, balance_pending, currency')
+      .eq('store_id', store['id'])
+      .maybeSingle();
+
+  if (wallet == null) return null;
+
+  final payoutSetting = await SupabaseService.client
+      .from('platform_settings')
+      .select('value')
+      .eq('key', 'minimum_payout_amount')
+      .maybeSingle();
+  final minimumPayout =
+      double.tryParse(payoutSetting?['value']?.toString() ?? '') ?? 100.0;
+
+  return {
+    ...wallet,
+    'store_name': store['name'],
+    'minimum_payout': minimumPayout,
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   };
 });
 
@@ -84,7 +107,17 @@ class WalletLedgerScreen extends ConsumerStatefulWidget {
 class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
   bool _isRequestingPayout = false;
 
+<<<<<<< HEAD
   Future<void> _showPayoutDialog(BuildContext context, String storeId, double availableBalance, CurrencyConfig currency) async {
+=======
+  Future<void> _showPayoutDialog(
+    BuildContext context,
+    String storeId,
+    double availableBalance,
+    double minimumPayout,
+    CurrencyConfig currency,
+  ) async {
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
     final amountController = TextEditingController(text: availableBalance.toStringAsFixed(2));
     final phoneController = TextEditingController();
     String selectedProvider = 'airtel';
@@ -125,7 +158,11 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                   const Text('Request Wallet Payout', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   Text(
+<<<<<<< HEAD
                     'Available balance: ${currency.format(availableBalance)} (Minimum payout: K50.00)',
+=======
+                    'Available balance: ${currency.format(availableBalance)} (Minimum payout: ${currency.format(minimumPayout)})',
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 16),
@@ -180,6 +217,15 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                           );
                           return;
                         }
+<<<<<<< HEAD
+=======
+                        if (amt < minimumPayout) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Minimum payout is ${currency.format(minimumPayout)}')),
+                          );
+                          return;
+                        }
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                         if (amt > availableBalance) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Requested amount exceeds available balance')),
@@ -292,6 +338,10 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                   final storeId = wallet['store_id'] as String;
                   final available = double.tryParse(wallet['balance_available']?.toString() ?? '0') ?? 0.0;
                   final pending = double.tryParse(wallet['balance_pending']?.toString() ?? '0') ?? 0.0;
+<<<<<<< HEAD
+=======
+                  final minimumPayout = double.tryParse(wallet['minimum_payout']?.toString() ?? '100') ?? 100.0;
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
 
                   return Container(
                     padding: const EdgeInsets.all(20),
@@ -331,8 +381,19 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                                 backgroundColor: scheme.primary,
                                 foregroundColor: scheme.onPrimary,
                               ),
+<<<<<<< HEAD
                               onPressed: (available >= 50.0 && !_isRequestingPayout)
                                   ? () => _showPayoutDialog(context, storeId, available, currency)
+=======
+                              onPressed: (available >= minimumPayout && !_isRequestingPayout)
+                                  ? () => _showPayoutDialog(
+                                        context,
+                                        storeId,
+                                        available,
+                                        minimumPayout,
+                                        currency,
+                                      )
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                                   : null,
                               child: _isRequestingPayout
                                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -360,7 +421,10 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
                                 ],
                               ),
                             ),
+<<<<<<< HEAD
                             const SizedBox(width: 8),
+=======
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                             const Text('T+2 Settlement Engine', style: TextStyle(fontSize: 11, color: Colors.grey)),
                           ],
                         ),

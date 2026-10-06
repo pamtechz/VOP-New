@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/providers/currency_provider.dart';
 
@@ -34,6 +35,28 @@ class OrderTrackingScreen extends ConsumerWidget {
   final String orderId;
   const OrderTrackingScreen({super.key, required this.orderId});
 
+<<<<<<< HEAD
+=======
+  Future<void> _callCourier(BuildContext context, String? phone) async {
+    final normalized = phone?.replaceAll(RegExp(r'[^0-9+]'), '') ?? '';
+    if (normalized.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Courier phone number is not available.')),
+      );
+      return;
+    }
+
+    final uri = Uri(scheme: 'tel', path: normalized);
+    if (!await launchUrl(uri)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the phone dialer.')),
+        );
+      }
+    }
+  }
+
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
   void _showReviewDialog(
     BuildContext context,
     WidgetRef ref, {
@@ -374,6 +397,21 @@ class OrderTrackingScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
+<<<<<<< HEAD
+=======
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _callCourier(
+                                context,
+                                driver['phone']?.toString(),
+                              ),
+                              icon: const Icon(Icons.call_outlined, size: 18),
+                              label: const Text('Call Courier'),
+                            ),
+                          ),
+>>>>>>> 1babfb190376a67ce2ed11a361066ca33f8142da
                         ],
                       ),
                     ),

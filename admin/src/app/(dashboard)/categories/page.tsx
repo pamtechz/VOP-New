@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { Tag, Plus, FolderTree, ShieldCheck, CheckCircle2, Ban, Trash2 } from 'lucide-react';
+import { Tag, Plus, FolderTree, ShieldCheck, Trash2, Pencil } from 'lucide-react';
 
 interface CategoryRow {
   id: string;
@@ -34,6 +34,24 @@ export default async function AdminCategoriesPage() {
     revalidatePath('/categories');
   }
 
+  async function updateCategoryAction(formData: FormData) {
+    'use server';
+    const categoryId = String(formData.get('categoryId') ?? '');
+    const name = String(formData.get('name') ?? '').trim();
+    const slug = String(formData.get('slug') ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const displayOrder = Number.parseInt(String(formData.get('displayOrder') ?? '0'), 10);
+    if (!categoryId || !name || !slug) throw new Error('Category name and slug are required.');
+
+    const client = await createServerSupabaseClient();
+    const { error } = await client
+      .from('categories')
+      .update({ name, slug, display_order: Number.isFinite(displayOrder) ? displayOrder : 0 })
+      .eq('id', categoryId);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/categories');
+  }
+
   async function toggleCategoryActiveAction(formData: FormData) {
     'use server';
     const categoryId = formData.get('categoryId') as string;
@@ -53,7 +71,19 @@ export default async function AdminCategoriesPage() {
     const categoryId = formData.get('categoryId') as string;
     const client = await createServerSupabaseClient();
 
-    await client.from('categories').delete().eq('id', categoryId);
+    const { count, error: countError } = await client
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('category_id', categoryId);
+    if (countError) throw new Error(countError.message);
+
+    if ((count ?? 0) > 0) {
+      const { error } = await client.from('categories').update({ is_active: false }).eq('id', categoryId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await client.from('categories').delete().eq('id', categoryId);
+      if (error) throw new Error(error.message);
+    }
     revalidatePath('/categories');
   }
 
@@ -168,7 +198,19 @@ export default async function AdminCategoriesPage() {
                     </span>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <details className="relative">
+                        <summary className="list-none cursor-pointer p-1 text-slate-400 hover:text-blue-400" title="Edit category">
+                          <Pencil className="w-4 h-4" />
+                        </summary>
+                        <form action={updateCategoryAction} className="absolute right-0 z-20 mt-2 w-72 space-y-2 rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+                          <input type="hidden" name="categoryId" value={cat.id} />
+                          <input name="name" required defaultValue={cat.name} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <input name="slug" required defaultValue={cat.slug} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <input name="displayOrder" type="number" defaultValue={cat.display_order} className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white" />
+                          <button className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Save changes</button>
+                        </form>
+                      </details>
                       <form action={toggleCategoryActiveAction}>
                         <input type="hidden" name="categoryId" value={cat.id} />
                         <input type="hidden" name="currentActive" value={String(cat.is_active)} />

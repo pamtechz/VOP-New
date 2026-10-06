@@ -20,39 +20,32 @@ export default async function AdminPayoutsPage() {
 
   async function approvePayoutAction(formData: FormData) {
     'use server';
-    const payoutId = formData.get('payoutId') as string;
+    const payoutId = String(formData.get('payoutId') ?? '');
     const client = await createServerSupabaseClient();
-    const { data: { user: adminUser } } = await client.auth.getUser();
-    if (!adminUser) return;
 
-    await client
-      .from('payouts')
-      .update({
-        status: 'approved',
-        approved_by: adminUser.id,
-        approved_at: new Date().toISOString(),
-        processed_at: new Date().toISOString(),
-      })
-      .eq('id', payoutId);
+    const { error } = await client.rpc('review_payout', {
+      p_payout_id: payoutId,
+      p_action: 'approve',
+      p_reason: null,
+    });
+    if (error) throw new Error(error.message);
 
     revalidatePath('/payouts');
   }
 
   async function rejectPayoutAction(formData: FormData) {
     'use server';
-    const payoutId = formData.get('payoutId') as string;
-    const client = await createServerSupabaseClient();
-    const { data: { user: adminUser } } = await client.auth.getUser();
-    if (!adminUser) return;
+    const payoutId = String(formData.get('payoutId') ?? '');
+    const reason = String(formData.get('reason') ?? '').trim();
+    if (!reason) throw new Error('A rejection reason is required.');
 
-    await client
-      .from('payouts')
-      .update({
-        status: 'rejected',
-        approved_by: adminUser.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq('id', payoutId);
+    const client = await createServerSupabaseClient();
+    const { error } = await client.rpc('review_payout', {
+      p_payout_id: payoutId,
+      p_action: 'reject',
+      p_reason: reason,
+    });
+    if (error) throw new Error(error.message);
 
     revalidatePath('/payouts');
   }
@@ -114,9 +107,15 @@ export default async function AdminPayoutsPage() {
               </tr>
             ) : (
               payouts.map((p) => {
-                const destination = typeof p.destination_info === 'object'
-                  ? JSON.stringify(p.destination_info)
-                  : String(p.destination_info ?? '—');
+                const destinationInfo =
+                  p.destination_info && typeof p.destination_info === 'object'
+                    ? p.destination_info as Record<string, unknown>
+                    : {};
+                const destinationProvider = String(destinationInfo.provider ?? 'Payout account');
+                const destinationAccount = String(destinationInfo.account ?? destinationInfo.phone ?? '—');
+                const destinationName = destinationInfo.account_name
+                  ? String(destinationInfo.account_name)
+                  : null;
                 return (
                   <tr key={p.id} className="hover:bg-slate-800/50">
                     <td className="p-4 font-mono font-bold text-blue-400">
@@ -128,8 +127,10 @@ export default async function AdminPayoutsPage() {
                     <td className="p-4 font-bold text-emerald-400">
                       K{Number(p.amount ?? 0).toFixed(2)}
                     </td>
-                    <td className="p-4 text-xs text-slate-400 max-w-xs truncate">
-                      {destination}
+                    <td className="p-4 text-xs text-slate-400">
+                      <div className="font-semibold text-slate-300">{destinationProvider}</div>
+                      <div>{destinationAccount}</div>
+                      {destinationName && <div className="text-slate-500">{destinationName}</div>}
                     </td>
                     <td className="p-4 text-xs text-slate-400">
                       {new Date(p.created_at).toLocaleDateString()}
@@ -146,23 +147,34 @@ export default async function AdminPayoutsPage() {
                               <CheckCircle2 className="w-3.5 h-3.5" /> Approve
                             </button>
                           </form>
-                          <form action={rejectPayoutAction}>
-                            <input type="hidden" name="payoutId" value={p.id} />
-                            <button
-                              type="submit"
-                              className="px-2.5 py-1 text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded flex items-center gap-1 transition-colors"
-                            >
+                          <details className="relative">
+                            <summary className="list-none cursor-pointer px-2.5 py-1 text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded flex items-center gap-1 transition-colors">
                               <XCircle className="w-3.5 h-3.5" /> Reject
-                            </button>
-                          </form>
+                            </summary>
+                            <form action={rejectPayoutAction} className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+                              <input type="hidden" name="payoutId" value={p.id} />
+                              <label className="text-xs text-slate-400">
+                                Reason
+                                <textarea
+                                  name="reason"
+                                  required
+                                  className="mt-1 min-h-20 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white"
+                                  placeholder="Explain why this payout is being rejected"
+                                />
+                              </label>
+                              <button type="submit" className="mt-2 w-full rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white">
+                                Reject and restore balance
+                              </button>
+                            </form>
+                          </details>
                         </div>
-                      ) : p.status === 'approved' ? (
+                      ) : p.status === 'approved' || p.status === 'processing' || p.status === 'completed' ? (
                         <span className="px-2.5 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded flex items-center gap-1 w-fit">
-                          <CheckCircle2 className="w-3 h-3" /> APPROVED
+                          <CheckCircle2 className="w-3 h-3" /> {p.status.toUpperCase()}
                         </span>
                       ) : (
                         <span className="px-2.5 py-1 text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded flex items-center gap-1 w-fit">
-                          <XCircle className="w-3 h-3" /> REJECTED
+                          <XCircle className="w-3 h-3" /> {p.status.toUpperCase()}
                         </span>
                       )}
                     </td>
