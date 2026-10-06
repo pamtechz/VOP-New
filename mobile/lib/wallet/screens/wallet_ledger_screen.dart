@@ -209,7 +209,7 @@ class _WalletLedgerScreenState extends ConsumerState<WalletLedgerScreen> {
         final res = await SupabaseService.client.rpc('request_payout', params: {
           'p_store_id': storeId,
           'p_amount': amt,
-          'p_destination': {
+          'p_destination_info': {
             'provider': selectedProvider,
             'account': dest,
             'currency': currency.code,
