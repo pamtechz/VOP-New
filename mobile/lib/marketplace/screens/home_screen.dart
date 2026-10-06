@@ -523,7 +523,7 @@ class _HorizontalProductList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 270,
+    height: 290,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -550,7 +550,7 @@ class _ProductGrid extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 0.62,
+        childAspectRatio: 0.54,
       ),
     ),
   );

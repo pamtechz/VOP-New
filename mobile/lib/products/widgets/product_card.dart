@@ -73,7 +73,7 @@ class ProductCard extends ConsumerWidget {
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: AspectRatio(
-                aspectRatio: 1.05,
+                aspectRatio: 1.15,
                 child: AppNetworkImage(
                   imageUrlOrCode: imageUrl,
                   fit: BoxFit.cover,
@@ -93,69 +93,73 @@ class ProductCard extends ConsumerWidget {
             // Info
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (badgeLabel != null && badgeLabel.isNotEmpty) ...[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: badgeLabel == 'Best Match'
-                                  ? const Color(0xFF2563EB).withValues(alpha: 0.15)
-                                  : badgeLabel == 'Fresh Drop'
-                                      ? const Color(0xFF059669).withValues(alpha: 0.15)
-                                      : badgeLabel == 'Top Rated Seller'
-                                          ? const Color(0xFFD97706).withValues(alpha: 0.15)
-                                          : scheme.primaryContainer.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              badgeLabel,
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (badgeLabel != null && badgeLabel.isNotEmpty) ...[
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
                                 color: badgeLabel == 'Best Match'
-                                    ? const Color(0xFF2563EB)
+                                    ? const Color(0xFF2563EB).withValues(alpha: 0.15)
                                     : badgeLabel == 'Fresh Drop'
-                                        ? const Color(0xFF059669)
+                                        ? const Color(0xFF059669).withValues(alpha: 0.15)
                                         : badgeLabel == 'Top Rated Seller'
-                                            ? const Color(0xFFD97706)
-                                            : scheme.primary,
+                                            ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                                            : scheme.primaryContainer.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                badgeLabel,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: badgeLabel == 'Best Match'
+                                      ? const Color(0xFF2563EB)
+                                      : badgeLabel == 'Fresh Drop'
+                                          ? const Color(0xFF059669)
+                                          : badgeLabel == 'Top Rated Seller'
+                                              ? const Color(0xFFD97706)
+                                              : scheme.primary,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                        if (storeName.isNotEmpty) ...[
-                          Text(
-                            storeName,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: scheme.outline,
-                              fontWeight: FontWeight.w500,
+                          ],
+                          if (storeName.isNotEmpty) ...[
+                            Text(
+                              storeName,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: scheme.outline,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
+                            const SizedBox(height: 2),
+                          ],
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              height: 1.2,
+                            ),
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 2),
                         ],
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                      ),
                     ),
+                    const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
