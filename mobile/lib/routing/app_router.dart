@@ -26,6 +26,7 @@ import '../account/screens/wishlist_screen.dart';
 import '../delivery/screens/driver_console_screen.dart';
 import '../orders/screens/order_tracking_screen.dart';
 import '../messaging/screens/chat_screen.dart';
+import '../messaging/screens/chat_inbox_screen.dart';
 import '../subscriptions/screens/subscription_plans_screen.dart';
 import '../services/screens/service_listings_screen.dart';
 import '../services/screens/post_service_ad_screen.dart';
@@ -138,6 +139,7 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(path: '/services', builder: (_, __) => const ServiceListingsScreen()),
       GoRoute(path: '/services/add', builder: (_, __) => const PostServiceAdScreen()),
       GoRoute(path: '/about', builder: (_, __) => const AboutUsScreen()),
+      GoRoute(path: '/chats', builder: (_, __) => const ChatInboxScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page Not Found')),

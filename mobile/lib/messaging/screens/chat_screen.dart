@@ -154,6 +154,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
+  Future<void> _editMessage(Map<String, dynamic> msg) async {
+    final msgId = msg['id'] as String;
+    final currentContent = msg['content'] as String? ?? '';
+    final controller = TextEditingController(text: currentContent);
+
+    final updatedText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Message', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Enter updated message'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+
+    if (updatedText != null && updatedText.isNotEmpty && updatedText != currentContent) {
+      try {
+        await SupabaseService.client
+            .from('messages')
+            .update({'content': updatedText, 'is_edited': true})
+            .eq('id', msgId);
+
+        if (mounted) {
+          setState(() {
+            final idx = _messages.indexWhere((m) => m['id'] == msgId);
+            if (idx != -1) {
+              _messages[idx]['content'] = updatedText;
+              _messages[idx]['is_edited'] = true;
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to edit message: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _sendMessage([String? prefilledText]) async {
     final text = prefilledText ?? _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -310,42 +357,61 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 ? '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}'
                                 : '';
 
+                            final isEdited = msg['is_edited'] == true;
+
                             return Align(
                               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                constraints: BoxConstraints(
-                                  maxWidth: MediaQuery.of(context).size.width * 0.75,
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isMe ? scheme.primary : scheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(16).copyWith(
-                                    bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(16),
-                                    bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(16),
+                              child: GestureDetector(
+                                onLongPress: isMe ? () => _editMessage(msg) : null,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  constraints: BoxConstraints(
+                                    maxWidth: MediaQuery.of(context).size.width * 0.75,
                                   ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      msg['content'] as String? ?? '',
-                                      style: TextStyle(
-                                        color: isMe ? scheme.onPrimary : scheme.onSurfaceVariant,
-                                        fontSize: 14,
-                                      ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? scheme.primary : scheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(16).copyWith(
+                                      bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(16),
+                                      bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(16),
                                     ),
-                                    if (timeStr.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        timeStr,
+                                        msg['content'] as String? ?? '',
                                         style: TextStyle(
-                                          color: isMe ? scheme.onPrimary.withOpacity(0.7) : Colors.grey,
-                                          fontSize: 10,
+                                          color: isMe ? scheme.onPrimary : scheme.onSurfaceVariant,
+                                          fontSize: 14,
                                         ),
                                       ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (isEdited) ...[
+                                            Text(
+                                              '(edited) ',
+                                              style: TextStyle(
+                                                color: isMe ? scheme.onPrimary.withOpacity(0.7) : Colors.grey,
+                                                fontSize: 10,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                            ),
+                                          ],
+                                          if (timeStr.isNotEmpty)
+                                            Text(
+                                              timeStr,
+                                              style: TextStyle(
+                                                color: isMe ? scheme.onPrimary.withOpacity(0.7) : Colors.grey,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
                             );

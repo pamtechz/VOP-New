@@ -250,7 +250,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             'product_id': productId,
             'url': intercepted.shortCode.isNotEmpty ? intercepted.shortCode : intercepted.directDisplayUrl,
             'display_order': i + 1,
-            'file_size_bytes': null,
+            'file_size_bytes': 0,
           });
         }
       }

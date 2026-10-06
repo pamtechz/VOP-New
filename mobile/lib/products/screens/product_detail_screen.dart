@@ -8,6 +8,7 @@ import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
 import '../../marketplace/services/recommendation_service.dart';
 import '../widgets/product_card.dart';
+import '../../messaging/widgets/chat_channel_selector_modal.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
@@ -415,7 +416,22 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: const Text('Chat'),
                     onPressed: storeId.isNotEmpty
-                        ? () => context.push('/chat/$storeId')
+                        ? () {
+                            final title = product['title'] as String? ?? 'Product';
+                            final price = (product['price'] as num?)?.toDouble() ?? 0.0;
+                            final storeName = store?['name'] as String? ?? 'Seller';
+                            final storePhone = store?['phone'] as String? ?? store?['contact_phone'] as String?;
+
+                            ChatChannelSelectorModal.show(
+                              context: context,
+                              storeId: storeId,
+                              storeName: storeName,
+                              storePhone: storePhone,
+                              productId: widget.productId,
+                              productTitle: title,
+                              productPrice: price,
+                            );
+                          }
                         : null,
                     style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(

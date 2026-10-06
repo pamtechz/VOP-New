@@ -147,55 +147,6 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Quick presets / provider helpers
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.cloud_done, size: 14, color: Colors.blue),
-                        label: const Text('Cloudinary', style: TextStyle(fontSize: 11)),
-                        onPressed: () {
-                          _showGuideDialog(
-                            context,
-                            'Cloudinary Guide',
-                            '1. Visit console.cloudinary.com/app\n'
-                            '2. Upload your product photo into your Media Library\n'
-                            '3. Click "Copy URL" on the image\n'
-                            '4. Paste the URL here.',
-                          );
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.drive_folder_upload, size: 14, color: Color(0xFF10B981)),
-                        label: const Text('Google Drive', style: TextStyle(fontSize: 11)),
-                        onPressed: () {
-                          _showGuideDialog(
-                            context,
-                            'Google Drive Guide',
-                            '1. Upload your photo to Google Drive\n'
-                            '2. Right click file -> Share -> Change to "Anyone with the link"\n'
-                            '3. Copy the link and paste it here.\n'
-                            '4. Our system converts it automatically into a direct product image!',
-                          );
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.folder_shared, size: 14, color: Colors.cyan),
-                        label: const Text('Dropbox', style: TextStyle(fontSize: 11)),
-                        onPressed: () {
-                          _showGuideDialog(
-                            context,
-                            'Dropbox Guide',
-                            '1. Upload your image to Dropbox\n'
-                            '2. Click "Share" -> "Create Link" -> "Copy link"\n'
-                            '3. Paste it here.\n'
-                            '4. The system automatically routes raw streaming direct to your product.',
-                          );
-                        },
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 14),
 
                   // Live Preview Box
@@ -239,19 +190,6 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  void _showGuideDialog(BuildContext context, String title, String body) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
-        actions: [
-          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got It')),
-        ],
       ),
     );
   }
