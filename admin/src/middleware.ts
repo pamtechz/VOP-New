@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
   supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   supabaseResponse.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://yyscxqqiilpifogbktia.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://yyscxqqiilpifogbktia.supabase.co wss://yyscxqqiilpifogbktia.supabase.co;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://yyscxqqiilpifogbktia.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://yyscxqqiilpifogbktia.supabase.co wss://yyscxqqiilpifogbktia.supabase.co;"
   );
 
   const { pathname } = request.nextUrl;
