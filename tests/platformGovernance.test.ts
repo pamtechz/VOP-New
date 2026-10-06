@@ -1062,3 +1062,28 @@ test('notification actions preserve exact admin destinations',()=>{
   assert.match(admin,/validAdminTab\(target\)/);
   assert.match(admin,/navigateAdminTab\(target\)/);
 });
+
+
+test('student portal hides payments while institutional billing remains available',()=>{
+  const app=read('src/App.tsx');
+  const sidebar=read('src/components/layout/LearnerSidebar.tsx');
+  const drawer=read('src/components/layout/MenuDrawer.tsx');
+  const header=read('src/components/layout/Header.tsx');
+  const admin=read('src/pages/PaymentManagement.tsx');
+
+  assert.doesNotMatch(sidebar,/route:'payments'/);
+  assert.doesNotMatch(sidebar,/Payments & Billing/);
+  assert.doesNotMatch(drawer,/route: 'payments'/);
+  assert.doesNotMatch(header,/accountNav\('payments'\)/);
+  assert.doesNotMatch(app,/const PaymentsPage=React\.lazy/);
+  assert.doesNotMatch(app,/currentRoute === 'payments' && <PaymentsPage/);
+  assert.doesNotMatch(app,/publicRoutes:AppRoute\[\]=\[[^\]]*'payments'/);
+  assert.match(app,/route==='payments'&&!hasAdminPortalAccess\(currentUser\)/);
+  assert.match(app,/location\.route==='payments'&&!hasAdminPortalAccess\(currentUser\)/);
+  assert.match(app,/route==='payments'&&!hasAdminPortalAccess\(account\)/);
+
+  // Payments remain an institutional/admin capability, including organization
+  // subscription checkout, receipts, and Super Admin finance controls.
+  assert.match(admin,/PaymentsPage currentUser=\{currentUser\} embedded/);
+  assert.match(admin,/Plans & subscriptions/);
+});

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { User, LanguageCode, AppSettings, AppRoute } from '../../types';
 import { getAvailableLanguages, getTranslation, useLocalization, getUiLocale } from '../../services/i18n';
-import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, WalletCards, Settings as SettingsIcon } from 'lucide-react';
+import { Smartphone, Monitor, ShieldCheck, Menu, Moon, Sun, Award, Globe, BookOpen, Radio, HeartHandshake, Info, Megaphone, MessageCircle, CalendarDays, Brain, Swords, FileText, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { CommunicationTools } from './CommunicationTools';
 import { hasAdminPortalAccess } from '../../services/portalAccess';
 
@@ -111,7 +111,6 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, settings, activeLan
                   : (currentUser.displayName||currentUser.email||'V').charAt(0).toUpperCase()}</span>
                 <span><strong>{currentUser.displayName||'My account'}</strong><small>{currentUser.email||''}</small></span>
               </div>
-              <button role="menuitem" type="button" onClick={()=>accountNav('payments')}><WalletCards size={18}/>Payments & Billing</button>
               <button role="menuitem" type="button" onClick={()=>accountNav('personal-settings')}><SettingsIcon size={18}/>Account & Settings</button>
               <button role="menuitem" type="button" onClick={()=>{setAccountOpen(false);onLogout();}}><LogOut size={18}/>Sign out</button>
             </div>}
