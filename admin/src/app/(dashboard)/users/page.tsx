@@ -60,7 +60,7 @@ export default async function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-blue-400" />
-            User Access & Role-Based Access Control (RBAC)
+            User Access & RBAC Management
           </h1>
           <p className="text-slate-400 text-sm">
             {users.length} registered user{users.length !== 1 ? 's' : ''} — manage permissions for platform admins, catalog moderators, sellers, and buyers.

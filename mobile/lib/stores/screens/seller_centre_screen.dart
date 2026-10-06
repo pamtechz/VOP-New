@@ -334,7 +334,7 @@ class _SellerCentreScreenState extends ConsumerState<SellerCentreScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Zero-cost user-owned cloud media guide banner
+                  // Enterprise High-Performance Merchant Tip Banner
                   Card(
                     color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -348,21 +348,21 @@ class _SellerCentreScreenState extends ConsumerState<SellerCentreScreen> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                  color: const Color(0xFF2563EB).withValues(alpha: 0.15),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.cloud_done_rounded, color: Color(0xFF10B981), size: 20),
+                                child: const Icon(Icons.verified_sharp, color: Color(0xFF2563EB), size: 20),
                               ),
                               const SizedBox(width: 10),
                               const Text(
-                                'Zero-Cost Media Hosting',
+                                'High-Performance Merchant Standards',
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                             ],
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'To keep store listing completely free, product images are hosted on your own free personal Cloudinary, Google Drive, or Dropbox accounts. Simply paste your shared links when adding products!',
+                            'Maintain fast order fulfillment, update stock levels regularly, and attach high-quality product images to optimize your store rating and maximize customer trust.',
                             style: TextStyle(fontSize: 12, color: scheme.outline, height: 1.4),
                           ),
                         ],

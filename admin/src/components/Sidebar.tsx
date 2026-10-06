@@ -28,6 +28,7 @@ import {
   Building2,
   Globe,
   LifeBuoy,
+  FileText,
 } from 'lucide-react';
 
 const menuGroups = [
@@ -92,6 +93,7 @@ const menuGroups = [
   {
     title: '10. SYSTEM & PLATFORM',
     items: [
+      { label: 'Platform Policies', href: '/policies', icon: FileText },
       { label: 'Account Lifecycle', href: '/lifecycle', icon: ShieldAlert },
       { label: 'Usage & Capacity', href: '/usage', icon: Activity },
       { label: 'Settings & Controls', href: '/settings', icon: Settings },

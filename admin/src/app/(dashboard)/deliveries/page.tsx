@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { Truck, ShieldCheck, MapPin, UserCheck, KeyRound, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Truck, ShieldCheck, MapPin, UserCheck, KeyRound, CheckCircle2, Clock, AlertTriangle, ShieldAlert, Bike, Car, Building2 } from 'lucide-react';
 
 interface DriverRow {
   id: string;
@@ -11,6 +11,8 @@ interface DriverRow {
   is_online: boolean;
   rating: number;
   total_deliveries: number;
+  is_tracking_consented?: boolean;
+  has_active_sos?: boolean;
   profiles: { full_name: string; phone: string | null } | null;
 }
 
@@ -61,47 +63,90 @@ export default async function AdminDeliveriesPage() {
   const onlineCount = drivers.filter(d => d.is_online).length;
   const activeJobsCount = jobs.filter(j => j.status !== 'completed' && j.status !== 'cancelled').length;
 
+  const vehicleStats = {
+    bicycle: drivers.filter(d => d.vehicle_type === 'bicycle').length,
+    motorbike: drivers.filter(d => d.vehicle_type === 'motorbike').length,
+    car_van: drivers.filter(d => d.vehicle_type === 'car_van').length,
+    truck: drivers.filter(d => d.vehicle_type === 'truck').length,
+    delivery_company: drivers.filter(d => d.vehicle_type === 'delivery_company').length,
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Truck className="w-6 h-6 text-blue-400" />
-            Delivery Fleet & Real-Time Logistics
+            Multi-Modal Fleet & Anti-Robbery Telemetry
           </h1>
           <p className="text-slate-400 text-sm">
-            {drivers.length} registered drivers · {onlineCount} online now · {activeJobsCount} active dispatches
+            {drivers.length} registered couriers · {onlineCount} online now · {activeJobsCount} active dispatches
           </p>
         </div>
-        <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-lg flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          ZERO-TRUST HANDSHAKE ACTIVE
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold rounded-lg flex items-center gap-1.5">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            ANTI-ROBBERY SOS ACTIVE
+          </span>
+          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-lg flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            CONSENT & PIN HANDSHAKE
+          </span>
+        </div>
       </div>
 
-      {/* Driver Fleet Grid */}
+      {/* Fleet Vehicle Modes Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <Bike className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+          <p className="text-xs text-slate-400">Bicycles</p>
+          <p className="text-lg font-bold text-white">{vehicleStats.bicycle}</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+          <p className="text-xs text-slate-400">Motorbikes</p>
+          <p className="text-lg font-bold text-white">{vehicleStats.motorbike}</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <Car className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+          <p className="text-xs text-slate-400">Cars & Vans</p>
+          <p className="text-lg font-bold text-white">{vehicleStats.car_van}</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <Truck className="w-5 h-5 text-amber-400 mx-auto mb-1" />
+          <p className="text-xs text-slate-400">Trucks</p>
+          <p className="text-lg font-bold text-white">{vehicleStats.truck}</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+          <Building2 className="w-5 h-5 text-pink-400 mx-auto mb-1" />
+          <p className="text-xs text-slate-400">Delivery Companies</p>
+          <p className="text-lg font-bold text-white">{vehicleStats.delivery_company}</p>
+        </div>
+      </div>
+
+      {/* Driver Fleet Table */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <UserCheck className="w-5 h-5 text-purple-400" />
-          Driver Network Profiles
+          Courier Fleet Profiles & Safety Status
         </h2>
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-950 text-slate-400 text-xs uppercase border-b border-slate-800">
               <tr>
-                <th className="p-4">Driver Name</th>
+                <th className="p-4">Courier Name</th>
                 <th className="p-4">Phone</th>
-                <th className="p-4">Vehicle</th>
+                <th className="p-4">Vehicle Category</th>
                 <th className="p-4">Status</th>
-                <th className="p-4">Deliveries</th>
-                <th className="p-4">Verification Action</th>
+                <th className="p-4">Safety & Consent</th>
+                <th className="p-4">Verification</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {drivers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-500">
-                    No registered drivers in network. Drivers appear when users register as delivery agents.
+                    No registered couriers in network.
                   </td>
                 </tr>
               ) : (
@@ -113,8 +158,8 @@ export default async function AdminDeliveriesPage() {
                     <td className="p-4 text-xs text-slate-400">
                       {(d.profiles as any)?.phone ?? '—'}
                     </td>
-                    <td className="p-4 text-xs text-blue-400 font-mono">
-                      {d.vehicle_type.toUpperCase()} ({d.vehicle_number})
+                    <td className="p-4 text-xs font-mono font-bold text-blue-400">
+                      {d.vehicle_type.toUpperCase()} ({d.vehicle_number || 'N/A'})
                     </td>
                     <td className="p-4">
                       <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
@@ -125,8 +170,10 @@ export default async function AdminDeliveriesPage() {
                         {d.is_online ? 'ONLINE' : 'OFFLINE'}
                       </span>
                     </td>
-                    <td className="p-4 font-semibold text-white">
-                      {d.total_deliveries} trips (★ {d.rating.toFixed(1)})
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">
+                        Consent Granted
+                      </span>
                     </td>
                     <td className="p-4">
                       <form action={toggleDriverVerificationAction}>
@@ -140,7 +187,7 @@ export default async function AdminDeliveriesPage() {
                               : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
                           }`}
                         >
-                          {d.is_verified ? 'Revoke Verification' : 'Approve Driver'}
+                          {d.is_verified ? 'Revoke Verification' : 'Approve Courier'}
                         </button>
                       </form>
                     </td>
@@ -156,7 +203,7 @@ export default async function AdminDeliveriesPage() {
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <KeyRound className="w-5 h-5 text-amber-400" />
-          Active Dispatch Jobs & Security Handshakes
+          Active Dispatches & Security Handshakes
         </h2>
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <table className="w-full text-left text-sm text-slate-300">
@@ -174,7 +221,7 @@ export default async function AdminDeliveriesPage() {
               {jobs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-500">
-                    No active delivery jobs. Jobs appear when sellers dispatch items.
+                    No active delivery jobs.
                   </td>
                 </tr>
               ) : (

@@ -116,7 +116,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'User-Owned Media: Use your own free Cloudinary or Google Drive account. Zero platform hosting fees!',
+                            'Enter direct image CDN link or web address for optimal display.',
                             style: TextStyle(fontSize: 11, color: Color(0xFF047857), fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -124,7 +124,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                     ),
                   ),
                   const Text(
-                    'Paste an image link from your Cloudinary or Google Drive:',
+                    'Paste an image URL for your product listing:',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 12),
@@ -133,8 +133,8 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
                     autofocus: true,
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
-                      labelText: 'Cloudinary / Google Drive URL',
-                      hintText: 'https://res.cloudinary.com/... or Google Drive link',
+                      labelText: 'Product Image URL',
+                      hintText: 'https://images.example.com/item.jpg',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.link),
                     ),
@@ -269,7 +269,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
         Row(
           children: [
             Text(
-              'Product Images (Cloudinary & Google Drive)',
+              'Product Images & Media Gallery',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
@@ -298,7 +298,7 @@ class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
         ),
         const SizedBox(height: 6),
         const Text(
-          'Attach image links hosted on Cloudinary or Google Drive. Images are optimized and rendered dynamically.',
+          'Attach high-resolution product image links. CDN media and WebP images are optimized and rendered dynamically.',
           style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
         const SizedBox(height: 10),
