@@ -69,26 +69,43 @@ class ProductCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: AspectRatio(
-                aspectRatio: 1.15,
-                child: AppNetworkImage(
-                  imageUrlOrCode: imageUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: Container(
-                    color: scheme.surfaceContainerHighest,
-                    child: Center(
-                      child: Icon(
-                        Icons.shopping_bag_outlined,
-                        size: 32,
-                        color: scheme.outlineVariant,
+            // Image with Wishlist Heart Button
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: AspectRatio(
+                    aspectRatio: 1.15,
+                    child: AppNetworkImage(
+                      imageUrlOrCode: imageUrl,
+                      fit: BoxFit.cover,
+                      errorWidget: Container(
+                        color: scheme.surfaceContainerHighest,
+                        child: Center(
+                          child: Icon(
+                            Icons.shopping_bag_outlined,
+                            size: 32,
+                            color: scheme.outlineVariant,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      return _WishlistHeartButton(
+                        productId: productId,
+                        categoryId: categoryId,
+                        storeId: storeId,
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
             // Info
             Expanded(
@@ -231,3 +248,113 @@ class ProductCard extends ConsumerWidget {
     );
   }
 }
+
+class _WishlistHeartButton extends StatefulWidget {
+  final String productId;
+  final String? categoryId;
+  final String? storeId;
+
+  const _WishlistHeartButton({
+    required this.productId,
+    this.categoryId,
+    this.storeId,
+  });
+
+  @override
+  State<_WishlistHeartButton> createState() => _WishlistHeartButtonState();
+}
+
+class _WishlistHeartButtonState extends State<_WishlistHeartButton> {
+  bool _isLiked = false;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    final user = SupabaseService.client.auth.currentUser;
+    if (user == null || widget.productId.isEmpty) return;
+
+    try {
+      final res = await SupabaseService.client
+          .from('wishlists')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .eq('product_id', widget.productId)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _isLiked = res != null;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleWishlist() async {
+    final user = SupabaseService.client.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to save items to your wishlist.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLiked = !_isLiked;
+      _loading = true;
+    });
+
+    try {
+      if (_isLiked) {
+        await SupabaseService.client.from('wishlists').insert({
+          'user_id': user.id,
+          'product_id': widget.productId,
+        });
+        RecommendationService.recordInteraction(
+          eventType: 'wishlist',
+          productId: widget.productId,
+          categoryId: widget.categoryId,
+          storeId: widget.storeId,
+        );
+      } else {
+        await SupabaseService.client
+            .from('wishlists')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('product_id', widget.productId);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLiked = !_isLiked);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _loading ? null : _toggleWishlist,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          _isLiked ? Icons.favorite : Icons.favorite_border_rounded,
+          size: 15,
+          color: _isLiked ? const Color(0xFFEF4444) : Colors.white,
+        ),
+      ),
+    );
+  }
+}
+

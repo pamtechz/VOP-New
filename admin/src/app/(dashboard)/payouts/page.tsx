@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { Wallet, CheckCircle2, Clock, XCircle, ShieldCheck } from 'lucide-react';
 
 interface PayoutRow {
@@ -16,6 +17,45 @@ export default async function AdminPayoutsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+
+  async function approvePayoutAction(formData: FormData) {
+    'use server';
+    const payoutId = formData.get('payoutId') as string;
+    const client = await createServerSupabaseClient();
+    const { data: { user: adminUser } } = await client.auth.getUser();
+    if (!adminUser) return;
+
+    await client
+      .from('payouts')
+      .update({
+        status: 'approved',
+        approved_by: adminUser.id,
+        approved_at: new Date().toISOString(),
+        processed_at: new Date().toISOString(),
+      })
+      .eq('id', payoutId);
+
+    revalidatePath('/payouts');
+  }
+
+  async function rejectPayoutAction(formData: FormData) {
+    'use server';
+    const payoutId = formData.get('payoutId') as string;
+    const client = await createServerSupabaseClient();
+    const { data: { user: adminUser } } = await client.auth.getUser();
+    if (!adminUser) return;
+
+    await client
+      .from('payouts')
+      .update({
+        status: 'rejected',
+        approved_by: adminUser.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq('id', payoutId);
+
+    revalidatePath('/payouts');
+  }
 
   const { data: payoutsData, error } = await supabase
     .from('payouts')
@@ -62,7 +102,7 @@ export default async function AdminPayoutsPage() {
               <th className="p-4">Amount</th>
               <th className="p-4">Destination</th>
               <th className="p-4">Requested</th>
-              <th className="p-4">Status</th>
+              <th className="p-4">Status & Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
@@ -95,17 +135,32 @@ export default async function AdminPayoutsPage() {
                       {new Date(p.created_at).toLocaleDateString()}
                     </td>
                     <td className="p-4">
-                      {p.status === 'pending' && (
-                        <span className="px-2.5 py-1 text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded flex items-center gap-1 w-fit">
-                          <Clock className="w-3 h-3" /> PENDING
-                        </span>
-                      )}
-                      {p.status === 'approved' && (
+                      {p.status === 'pending' ? (
+                        <div className="flex items-center gap-2">
+                          <form action={approvePayoutAction}>
+                            <input type="hidden" name="payoutId" value={p.id} />
+                            <button
+                              type="submit"
+                              className="px-2.5 py-1 text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded flex items-center gap-1 transition-colors"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                            </button>
+                          </form>
+                          <form action={rejectPayoutAction}>
+                            <input type="hidden" name="payoutId" value={p.id} />
+                            <button
+                              type="submit"
+                              className="px-2.5 py-1 text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 rounded flex items-center gap-1 transition-colors"
+                            >
+                              <XCircle className="w-3.5 h-3.5" /> Reject
+                            </button>
+                          </form>
+                        </div>
+                      ) : p.status === 'approved' ? (
                         <span className="px-2.5 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded flex items-center gap-1 w-fit">
                           <CheckCircle2 className="w-3 h-3" /> APPROVED
                         </span>
-                      )}
-                      {p.status === 'rejected' && (
+                      ) : (
                         <span className="px-2.5 py-1 text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded flex items-center gap-1 w-fit">
                           <XCircle className="w-3 h-3" /> REJECTED
                         </span>

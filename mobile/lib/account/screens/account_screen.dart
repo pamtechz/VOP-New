@@ -211,10 +211,25 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ),
                 ListTile(
                   leading:
+                      Icon(Icons.favorite_border_rounded, color: const Color(0xFFEF4444)),
+                  title: const Text('Saved Items & Wishlist'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/wishlist'),
+                ),
+                ListTile(
+                  leading:
                       Icon(Icons.account_balance_wallet_outlined, color: scheme.primary),
                   title: const Text('My Wallet'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/wallet'),
+                ),
+                ListTile(
+                  leading:
+                      Icon(Icons.directions_bike_outlined, color: const Color(0xFF2563EB)),
+                  title: const Text('Delivery Driver Console'),
+                  subtitle: const Text('Live dispatch & GPS telemetry', style: TextStyle(fontSize: 11)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/driver'),
                 ),
                 ListTile(
                   leading: Icon(Icons.storefront_outlined, color: scheme.primary),

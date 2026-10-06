@@ -22,6 +22,8 @@ import '../wallet/screens/wallet_ledger_screen.dart';
 import '../account/screens/saved_addresses_screen.dart';
 import '../account/screens/notifications_screen.dart';
 import '../account/screens/security_screen.dart';
+import '../account/screens/wishlist_screen.dart';
+import '../delivery/screens/driver_console_screen.dart';
 import '../orders/screens/order_tracking_screen.dart';
 import '../messaging/screens/chat_screen.dart';
 import '../subscriptions/screens/subscription_plans_screen.dart';
@@ -95,6 +97,7 @@ GoRouter buildAppRouter(Ref ref) {
         ),
       ),
       GoRoute(path: '/cart', builder: (_, __) => const CartScreen()),
+      GoRoute(path: '/wishlist', builder: (_, __) => const WishlistScreen()),
 
       // ── Protected Checkout & Orders ───────────────────────────────────────
       GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),
@@ -126,6 +129,7 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
       GoRoute(path: '/security', builder: (_, __) => const SecurityScreen()),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletLedgerScreen()),
+      GoRoute(path: '/driver', builder: (_, __) => const DriverConsoleScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page Not Found')),
