@@ -27,6 +27,8 @@ import '../delivery/screens/driver_console_screen.dart';
 import '../orders/screens/order_tracking_screen.dart';
 import '../messaging/screens/chat_screen.dart';
 import '../subscriptions/screens/subscription_plans_screen.dart';
+import '../services/screens/service_listings_screen.dart';
+import '../services/screens/post_service_ad_screen.dart';
 
 final _routerKey = GlobalKey<NavigatorState>();
 
@@ -114,6 +116,8 @@ GoRouter buildAppRouter(Ref ref) {
         path: '/chat/:storeId',
         builder: (_, state) => ChatScreen(
           storeId: state.pathParameters['storeId'] ?? '',
+          productId: state.uri.queryParameters['productId'],
+          orderId: state.uri.queryParameters['orderId'],
         ),
       ),
 
@@ -130,6 +134,8 @@ GoRouter buildAppRouter(Ref ref) {
       GoRoute(path: '/security', builder: (_, __) => const SecurityScreen()),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletLedgerScreen()),
       GoRoute(path: '/driver', builder: (_, __) => const DriverConsoleScreen()),
+      GoRoute(path: '/services', builder: (_, __) => const ServiceListingsScreen()),
+      GoRoute(path: '/services/add', builder: (_, __) => const PostServiceAdScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       appBar: AppBar(title: const Text('Page Not Found')),

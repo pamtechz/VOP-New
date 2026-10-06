@@ -26,6 +26,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   
   String? _conversationId;
   String _storeName = 'Store Support';
+  Map<String, dynamic>? _attachedProduct;
   bool _isLoading = true;
   bool _isSending = false;
   RealtimeChannel? _realtimeChannel;
@@ -58,7 +59,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // 2. Find or create conversation
       var conv = await SupabaseService.client
           .from('conversations')
-          .select('id')
+          .select('id, product_id')
           .eq('buyer_id', user.id)
           .eq('store_id', widget.storeId)
           .maybeSingle();
@@ -72,13 +73,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               'product_id': widget.productId,
               'order_id': widget.orderId,
             })
-            .select('id')
+            .select('id, product_id')
             .single();
       }
 
       _conversationId = conv['id'] as String;
+      final targetProductId = widget.productId ?? conv['product_id'];
 
-      // 3. Load historical messages (paginated latest 50)
+      // 3. Fetch product details if attached
+      if (targetProductId != null) {
+        final prod = await SupabaseService.client
+            .from('products')
+            .select('id, title, price, primary_image_url')
+            .eq('id', targetProductId)
+            .maybeSingle();
+        if (prod != null) {
+          _attachedProduct = Map<String, dynamic>.from(prod);
+        }
+      }
+
+      // 4. Load historical messages
       final history = await SupabaseService.client
           .from('messages')
           .select('*')
@@ -95,7 +109,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _scrollToBottom();
       }
 
-      // 4. Subscribe to Realtime channel for this specific conversation only
+      // 5. Realtime channel subscription
       _realtimeChannel = SupabaseService.subscribeToConversation(
         conversationId: _conversationId!,
         onNewMessage: (msg) {
@@ -140,8 +154,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
+  Future<void> _sendMessage([String? prefilledText]) async {
+    final text = prefilledText ?? _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
     final user = Supabase.instance.client.auth.currentUser;
@@ -153,7 +167,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     setState(() => _isSending = true);
-    _messageController.clear();
+    if (prefilledText == null) _messageController.clear();
 
     try {
       final inserted = await SupabaseService.client
@@ -162,8 +176,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             'conversation_id': _conversationId,
             'sender_id': user.id,
             'content': text,
-            'attachment_url_type': 'none',
-            'skip_broadcast': false,
           })
           .select()
           .single();
@@ -206,7 +218,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_storeName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const Text('Official Store Messaging', style: TextStyle(fontSize: 11, color: Colors.grey)),
+            const Text('Official Marketplace Support & Chat', style: TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
       ),
@@ -214,6 +226,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                // Pinned Attached Product Card Banner
+                if (_attachedProduct != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    color: scheme.surfaceContainerHigh,
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            color: scheme.surfaceContainerHighest,
+                            child: _attachedProduct!['primary_image_url'] != null
+                                ? Image.network(_attachedProduct!['primary_image_url'], fit: BoxFit.cover)
+                                : Icon(Icons.shopping_bag, color: scheme.primary, size: 24),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _attachedProduct!['title'] ?? 'Attached Product',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                '\$${_attachedProduct!['price'] ?? '0.00'}',
+                                style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.send, size: 14),
+                          label: const Text('Inquire', style: TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            final title = _attachedProduct!['title'] ?? 'Product';
+                            _sendMessage('Hi! Is "$title" available for purchase?');
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
                 Expanded(
                   child: _messages.isEmpty
                       ? Center(
@@ -312,7 +377,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           icon: _isSending
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                               : Icon(Icons.send, color: scheme.primary),
-                          onPressed: _isSending ? null : _sendMessage,
+                          onPressed: _isSending ? null : () => _sendMessage(),
                         ),
                       ],
                     ),
