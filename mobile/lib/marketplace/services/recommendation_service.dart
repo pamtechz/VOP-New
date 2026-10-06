@@ -61,6 +61,9 @@ class RecommendationService {
       if (categoryId != null) {
         filterBuilder = filterBuilder.eq('category_id', categoryId);
       }
+      if (search != null && search.isNotEmpty) {
+        filterBuilder = filterBuilder.ilike('title', '%$search%');
+      }
 
       final fallbackData = await filterBuilder
           .order('created_at', ascending: false)

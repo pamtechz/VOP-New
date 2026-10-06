@@ -119,6 +119,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   @override
+  void didUpdateWidget(SearchScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialQuery != oldWidget.initialQuery && widget.initialQuery != null) {
+      _searchController.text = widget.initialQuery!;
+      _debouncedQuery = widget.initialQuery!;
+      _page = 0;
+    }
+    if (widget.initialCategory != oldWidget.initialCategory && widget.initialCategory != null) {
+      _selectedCategorySlug = widget.initialCategory;
+      _page = 0;
+    }
+  }
+
+  @override
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
