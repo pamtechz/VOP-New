@@ -6,6 +6,7 @@ import '../../core/services/supabase_service.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
 import '../../advertising/widgets/sponsored_ad_banner.dart';
+import '../services/recommendation_service.dart';
 
 // ── Search & Filter State ───────────────────────────────────────────────────
 
@@ -57,38 +58,33 @@ final searchResultsProvider =
     return [];
   }
 
-  var builder = SupabaseService.client
-      .from('products')
-      .select('''
-        id, title, price, compare_at_price, status,
-        product_images(url, display_order),
-        stores(name, slug),
-        categories(id, name, slug)
-      ''')
-      .eq('status', 'active');
+  // Record user search intent for recommendation ranker
+  if (query.isNotEmpty) {
+    RecommendationService.recordInteraction(
+      eventType: 'search',
+      searchTerm: query,
+    );
+  }
 
+  String? catId;
   if (catSlug != null && catSlug.isNotEmpty) {
     final cat = await SupabaseService.client
         .from('categories')
         .select('id')
         .eq('slug', catSlug)
         .maybeSingle();
-
-    if (cat != null) {
-      builder = builder.eq('category_id', cat['id']);
-    }
-  }
-
-  if (query.isNotEmpty) {
-    builder = builder.ilike('title', '%$query%');
+    catId = cat?['id'] as String?;
   }
 
   final offset = filter.page * filter.pageSize;
-  final data = await builder
-      .order('created_at', ascending: false)
-      .range(offset, offset + filter.pageSize - 1);
-
-  return List<Map<String, dynamic>>.from(data as List);
+  return RecommendationService.getPersonalizedFeed(
+    categoryId: catId,
+    search: query.isNotEmpty ? query : null,
+    limit: filter.pageSize,
+    offset: offset,
+    maxPerStore: 3,
+    exploreRatio: 0.10,
+  );
 });
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -294,7 +290,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           }
 
                           final p = products[i - 1];
-                          final images = (p['product_images'] as List? ?? [])
+                          final rawImages = p['images'] ?? p['product_images'];
+                          final images = (rawImages as List? ?? [])
                             ..sort((a, b) =>
                                 ((a['display_order'] as int?) ?? 0)
                                     .compareTo((b['display_order'] as int?) ?? 0));
@@ -302,7 +299,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               ? images.first['url'] as String?
                               : null;
                           final storeName =
-                              (p['stores'] as Map?)?['name'] as String? ?? '';
+                              (p['stores'] as Map?)?['name'] as String? ?? p['store_name'] as String? ?? '';
+                          final badgeLabel = p['badge_label'] as String?;
                           final price = (p['price'] as num?)?.toDouble() ?? 0.0;
                           final compareAt = (p['compare_at_price'] as num?)?.toDouble();
 
@@ -327,11 +325,47 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                   child: Icon(Icons.shopping_bag_outlined, color: scheme.outline),
                                 ),
                               ),
-                              title: Text(
-                                p['title'] as String? ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      p['title'] as String? ?? '',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                  ),
+                                  if (badgeLabel != null && badgeLabel.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: badgeLabel == 'Best Match'
+                                            ? const Color(0xFF2563EB).withValues(alpha: 0.15)
+                                            : badgeLabel == 'Fresh Drop'
+                                                ? const Color(0xFF059669).withValues(alpha: 0.15)
+                                                : badgeLabel == 'Top Rated Seller'
+                                                    ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                                                    : scheme.primaryContainer.withValues(alpha: 0.5),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        badgeLabel,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: badgeLabel == 'Best Match'
+                                              ? const Color(0xFF2563EB)
+                                              : badgeLabel == 'Fresh Drop'
+                                                  ? const Color(0xFF059669)
+                                                  : badgeLabel == 'Top Rated Seller'
+                                                      ? const Color(0xFFD97706)
+                                                      : scheme.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,7 +401,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                 ],
                               ),
                               trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/product/${p['id']}'),
+                              onTap: () {
+                                RecommendationService.recordInteraction(
+                                  eventType: 'click',
+                                  productId: p['id'] as String?,
+                                  categoryId: p['category_id'] as String?,
+                                  storeId: p['store_id'] as String?,
+                                );
+                                context.push('/product/${p['id']}');
+                              },
                             ),
                           );
                         },

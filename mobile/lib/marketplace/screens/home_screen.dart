@@ -7,6 +7,7 @@ import '../../cart/providers/cart_provider.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
 import '../../advertising/widgets/sponsored_ad_banner.dart';
+import '../services/recommendation_service.dart';
 
 // ── Category Icon & Visual Style Helper ─────────────────────────────────────
 
@@ -97,48 +98,16 @@ final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
 });
 
 final featuredProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  // Try querying explicit featured items first
-  var data = await SupabaseService.client
-      .from('products')
-      .select('''
-        id, title, price, compare_at_price, status, is_featured,
-        product_images(url, display_order),
-        stores(name, slug)
-      ''')
-      .eq('status', 'active')
-      .eq('is_featured', true)
-      .order('created_at', ascending: false)
-      .limit(10);
-
-  // If no featured flag is set, gracefully pull recent active products
-  if ((data as List).isEmpty) {
-    data = await SupabaseService.client
-        .from('products')
-        .select('''
-          id, title, price, compare_at_price, status, is_featured,
-          product_images(url, display_order),
-          stores(name, slug)
-        ''')
-        .eq('status', 'active')
-        .order('created_at', ascending: false)
-        .limit(10);
-  }
-
-  return List<Map<String, dynamic>>.from(data as List);
+  return RecommendationService.getPersonalizedFeed(
+    limit: 10,
+    maxPerStore: 1,
+    exploreRatio: 0.15,
+  );
 });
 
 final homeProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final selectedCatSlug = ref.watch(selectedHomeCategoryProvider);
-
-  var builder = SupabaseService.client
-      .from('products')
-      .select('''
-        id, title, price, compare_at_price, status,
-        product_images(url, display_order),
-        stores(name, slug),
-        categories(id, name, slug)
-      ''')
-      .eq('status', 'active');
+  String? categoryId;
 
   if (selectedCatSlug != null && selectedCatSlug.isNotEmpty) {
     final cat = await SupabaseService.client
@@ -146,14 +115,15 @@ final homeProductsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) as
         .select('id')
         .eq('slug', selectedCatSlug)
         .maybeSingle();
-
-    if (cat != null) {
-      builder = builder.eq('category_id', cat['id']);
-    }
+    categoryId = cat?['id'] as String?;
   }
 
-  final data = await builder.order('created_at', ascending: false).limit(30);
-  return List<Map<String, dynamic>>.from(data as List);
+  return RecommendationService.getPersonalizedFeed(
+    categoryId: categoryId,
+    limit: 50,
+    maxPerStore: 2,
+    exploreRatio: 0.20,
+  );
 });
 
 // ── Home Screen ─────────────────────────────────────────────────────────────
@@ -594,7 +564,8 @@ class _ProductCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final images = (product['product_images'] as List? ?? [])
+    final rawImages = product['images'] ?? product['product_images'];
+    final images = (rawImages as List? ?? [])
       ..sort((a, b) =>
           ((a['display_order'] as int?) ?? 0)
               .compareTo((b['display_order'] as int?) ?? 0));
@@ -603,12 +574,23 @@ class _ProductCard extends ConsumerWidget {
     final price = (product['price'] as num?)?.toDouble() ?? 0.0;
     final compareAt = (product['compare_at_price'] as num?)?.toDouble();
     final store = product['stores'] as Map<String, dynamic>?;
-    final storeName = store?['name'] as String? ?? '';
+    final storeName = (store?['name'] as String?) ?? (product['store_name'] as String?) ?? '';
+    final badgeLabel = product['badge_label'] as String?;
     final productId = product['id'] as String? ?? '';
+    final categoryId = product['category_id'] as String?;
+    final storeId = (product['store_id'] as String?) ?? (store?['id'] as String?);
     final currency = ref.watch(currencyProvider).valueOrNull ?? const CurrencyConfig();
 
     return GestureDetector(
-      onTap: () => context.push('/product/$productId'),
+      onTap: () {
+        RecommendationService.recordInteraction(
+          eventType: 'click',
+          productId: productId,
+          categoryId: categoryId,
+          storeId: storeId,
+        );
+        context.push('/product/$productId');
+      },
       child: Container(
         width: width,
         decoration: BoxDecoration(
@@ -649,6 +631,36 @@ class _ProductCard extends ConsumerWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (badgeLabel != null && badgeLabel.isNotEmpty) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: badgeLabel == 'Best Match'
+                                  ? const Color(0xFF2563EB).withValues(alpha: 0.15)
+                                  : badgeLabel == 'Fresh Drop'
+                                      ? const Color(0xFF059669).withValues(alpha: 0.15)
+                                      : badgeLabel == 'Top Rated Seller'
+                                          ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                                          : scheme.primaryContainer.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              badgeLabel,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: badgeLabel == 'Best Match'
+                                    ? const Color(0xFF2563EB)
+                                    : badgeLabel == 'Fresh Drop'
+                                        ? const Color(0xFF059669)
+                                        : badgeLabel == 'Top Rated Seller'
+                                            ? const Color(0xFFD97706)
+                                            : scheme.primary,
+                              ),
+                            ),
+                          ),
+                        ],
                         if (storeName.isNotEmpty) ...[
                           Text(
                             storeName,

@@ -220,19 +220,21 @@ class StoreScreen extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(12)),
-                                    child: AspectRatio(
-                                      aspectRatio: 1,
-                                      child: AppNetworkImage(
-                                        imageUrlOrCode: imgUrl,
-                                        fit: BoxFit.cover,
-                                        errorWidget: Container(
-                                          color: scheme.surfaceContainerHighest,
-                                          child: Icon(
-                                              Icons.image_outlined,
-                                              color: scheme.outline),
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(12)),
+                                      child: SizedBox(
+                                        width: double.infinity,
+                                        child: AppNetworkImage(
+                                          imageUrlOrCode: imgUrl,
+                                          fit: BoxFit.cover,
+                                          errorWidget: Container(
+                                            color: scheme.surfaceContainerHighest,
+                                            child: Icon(
+                                                Icons.image_outlined,
+                                                color: scheme.outline),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -274,7 +276,7 @@ class StoreScreen extends ConsumerWidget {
                         crossAxisCount: 2,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
-                        childAspectRatio: 0.75,
+                        childAspectRatio: 0.68,
                       ),
                     ),
                   );

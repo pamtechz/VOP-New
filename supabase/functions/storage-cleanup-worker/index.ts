@@ -42,11 +42,23 @@ serve(async (req: Request) => {
       console.log(`Settled ${settledProceeds ?? 0} seller orders to available balance.`);
     }
 
+    // 3. Prune old user interactions (>90 days) to keep Free plan database lightweight
+    const { data: prunedInteractions, error: pruneErr } = await supabase.rpc(
+      "purge_old_user_interactions"
+    );
+
+    if (pruneErr) {
+      console.error("Error pruning old interactions:", pruneErr);
+    } else {
+      console.log(`Pruned ${prunedInteractions ?? 0} user interactions older than 90 days.`);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         releasedReservations: releasedReservations ?? 0,
         settledOrders: settledProceeds ?? 0,
+        prunedInteractions: prunedInteractions ?? 0,
       }),
       {
         headers: { "Content-Type": "application/json" },

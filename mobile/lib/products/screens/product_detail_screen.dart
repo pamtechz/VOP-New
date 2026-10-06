@@ -6,6 +6,7 @@ import '../../cart/providers/cart_provider.dart';
 
 import '../../core/widgets/app_network_image.dart';
 import '../../core/providers/currency_provider.dart';
+import '../../marketplace/services/recommendation_service.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 final productDetailProvider =
@@ -37,6 +38,16 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int selectedQuantity = 1;
   int _imageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Real-time engagement signal for the personalized ranker
+    RecommendationService.recordInteraction(
+      eventType: 'view',
+      productId: widget.productId,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +355,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                               final price = (product['price'] as num?)?.toDouble() ?? 0.0;
                               final title = product['title'] as String? ?? 'Product';
                               final storeName = store?['name'] as String? ?? 'Seller';
+
+                              RecommendationService.recordInteraction(
+                                eventType: 'add_to_cart',
+                                productId: widget.productId,
+                              );
 
                               ref.read(cartProvider.notifier).addItem(
                                 productId: widget.productId,
