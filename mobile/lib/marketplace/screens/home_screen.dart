@@ -270,6 +270,54 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
 
+            // ── Quick Access Portals Bar ───────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _QuickPortalChip(
+                        label: 'Services & Jobs',
+                        icon: Icons.work_outline,
+                        color: const Color(0xFF0891B2),
+                        onTap: () => context.push('/services'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'Seller Hub',
+                        icon: Icons.storefront_outlined,
+                        color: const Color(0xFF7C3AED),
+                        onTap: () => context.push('/seller'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'Driver Console',
+                        icon: Icons.two_wheeler_outlined,
+                        color: const Color(0xFF2563EB),
+                        onTap: () => context.push('/driver'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'Escrow Wallet',
+                        icon: Icons.account_balance_wallet_outlined,
+                        color: const Color(0xFF10B981),
+                        onTap: () => context.push('/wallet'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickPortalChip(
+                        label: 'About & Terms',
+                        icon: Icons.info_outline,
+                        color: const Color(0xFFD97706),
+                        onTap: () => context.push('/about'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // ── Dynamic Categories with Distinct Visual Icons ─────────────
             SliverToBoxAdapter(
               child: categories.when(
@@ -602,3 +650,37 @@ class _ErrorTile extends StatelessWidget {
     ),
   );
 }
+
+class _QuickPortalChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickPortalChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: color),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+      backgroundColor: color.withOpacity(0.1),
+      side: BorderSide(color: color.withOpacity(0.25)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onPressed: onTap,
+    );
+  }
+}
+
